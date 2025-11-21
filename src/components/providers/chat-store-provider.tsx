@@ -512,7 +512,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
       // Only timeout if still waiting and not streaming
       if (currentState.waitingToStartStreaming && !currentState.isStreaming) {
-        // eslint-disable-next-line no-console -- User feedback for timeout
         console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming after 30s');
 
         // Clear the flag

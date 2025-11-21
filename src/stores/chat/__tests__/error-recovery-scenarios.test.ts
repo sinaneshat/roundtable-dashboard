@@ -30,6 +30,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   ChatModes,
+  ScreenModes,
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -385,7 +386,7 @@ describe('error Recovery Scenarios', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Analysis failed (FAILED is a terminal state)
       store.getState().addAnalysis(createMockAnalysis({
@@ -1178,7 +1179,7 @@ describe('error Recovery Scenarios', () => {
       const participants = [createMockParticipant(0), createMockParticipant(1)];
 
       store.getState().initializeThread(thread, participants, [createMockUserMessage(0)]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // PHASE 1: First attempt with errors
       store.getState().setIsStreaming(true);

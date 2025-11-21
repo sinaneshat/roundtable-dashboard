@@ -73,7 +73,7 @@ import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
-import type { AnalysisStatus, FeedbackType } from '@/api/core/enums';
+import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
 import { AnalysisStatuses, ChatModeSchema, ScreenModes } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
@@ -120,14 +120,12 @@ import type {
   OperationsSlice,
   ParticipantConfig,
   PreSearchSlice,
-  ScreenModeSchema,
   ScreenSlice,
   ThreadSlice,
   TrackingSlice,
   UISlice,
 } from './store-schemas';
 
-type ScreenMode = z.infer<typeof ScreenModeSchema>;
 type ChatMode = z.infer<typeof ChatModeSchema>;
 
 // ============================================================================
@@ -815,6 +813,38 @@ const createOperationsSlice: StateCreator<
       createdAnalysisRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
     }, false, 'operations/resetToNewChat');
+  },
+
+  /**
+   * ✅ STREAMING CONTROL: Stop ongoing streaming
+   *
+   * Calls the abort controller and sets streaming to false.
+   * Used when:
+   * - User clicks stop button
+   * - Component unmounts during streaming
+   * - Navigation away from thread
+   */
+  stopStreaming: () => {
+    const state = get();
+
+    // Call abort controller if set
+    state.stop?.();
+
+    // Reset streaming state and participant index
+    set({
+      isStreaming: false,
+      currentParticipantIndex: 0,
+    }, false, 'operations/stopStreaming');
+  },
+
+  /**
+   * ✅ SIMPLE RESET: Alias for resetToOverview
+   *
+   * Convenience function for resetting to overview state.
+   * Used in tests and simple reset scenarios.
+   */
+  reset: () => {
+    get().resetToOverview();
   },
 });
 

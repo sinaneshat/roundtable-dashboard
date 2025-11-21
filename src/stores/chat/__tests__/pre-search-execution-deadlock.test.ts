@@ -26,6 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
+  ScreenModes,
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -89,7 +90,7 @@ describe('pre-Search Execution Deadlock Prevention', () => {
       ];
 
       store.getState().initializeThread(thread, participants, messagesR0);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Complete round 0 analysis
       store.getState().markAnalysisCreated(0);
@@ -157,7 +158,7 @@ describe('pre-Search Execution Deadlock Prevention', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Pre-search created for round 1 but never executed
       // This simulates page refresh or component unmount during creation
@@ -222,7 +223,7 @@ describe('pre-Search Execution Deadlock Prevention', () => {
         createMockMessage(0, 0),
         createMockMessage(1, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().markAnalysisCreated(0);
       store.getState().addAnalysis(createMockAnalysis({
         roundNumber: 0,
@@ -569,7 +570,7 @@ describe('pre-Search Execution Deadlock Prevention', () => {
 
       // Initialize empty thread
       store.getState().initializeThread(thread, participants, []);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // === ROUND 0 ===
 
@@ -594,7 +595,7 @@ describe('pre-Search Execution Deadlock Prevention', () => {
       }));
 
       // Navigate to thread screen
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // === ROUND 1 ===
 
@@ -722,17 +723,17 @@ describe('pre-Search Execution Deadlock Prevention', () => {
       const participants = [createMockParticipant(0)];
 
       store.getState().initializeThread(thread, participants, [createMockUserMessage(0)]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Add pre-search
       store.getState().addPreSearch(createPendingPreSearch(0));
 
       // Change screen mode
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Pre-search should still exist
       expect(store.getState().preSearches).toHaveLength(1);
-      expect(store.getState().screenMode).toBe('thread');
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
   });
 });

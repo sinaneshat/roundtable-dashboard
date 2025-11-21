@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
+  ScreenModes,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -53,7 +54,7 @@ describe('overview Screen → Thread Screen Navigation', () => {
 
   it('should complete full journey: /chat → streaming → /chat/[slug]', () => {
     // === PHASE 1: Overview Screen Setup ===
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
     store.getState().setShowInitialUI(true);
 
     // User configures chat
@@ -113,10 +114,10 @@ describe('overview Screen → Thread Screen Navigation', () => {
 
     // === PHASE 5: Navigation ===
     store.getState().setIsStreaming(false);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // === VERIFY FINAL STATE ===
-    expect(store.getState().screenMode).toBe('thread');
+    expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     expect(store.getState().isStreaming).toBe(false);
     expect(store.getState().messages).toHaveLength(3);
     expect(store.getState().analyses).toHaveLength(1);
@@ -130,7 +131,7 @@ describe('overview Screen → Thread Screen Navigation', () => {
       enableWebSearch: true,
     });
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
     store.getState().prepareForNewMessage('Search question', ['model-1']);
 
     // === Pre-search flow ===
@@ -166,29 +167,29 @@ describe('overview Screen → Thread Screen Navigation', () => {
 
     // Navigate to thread
     store.getState().setIsStreaming(false);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // Verify
-    expect(store.getState().screenMode).toBe('thread');
+    expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     expect(store.getState().preSearches[0].searchData).not.toBeNull();
   });
 
   it('should stay on overview during streaming', () => {
     const thread = createMockThread({ id: 'thread-123' });
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
     // Start streaming
     store.getState().setIsStreaming(true);
 
     // Should stay on overview
-    expect(store.getState().screenMode).toBe('overview');
+    expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
 
     // Only navigate after streaming completes
     store.getState().setIsStreaming(false);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
-    expect(store.getState().screenMode).toBe('thread');
+    expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
   });
 });
 
@@ -212,7 +213,7 @@ describe('multi-Round Conversation Flow', () => {
   it('should complete 3-round conversation', () => {
     const thread = createMockThread({ id: 'thread-123' });
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // === ROUND 0 ===
     let messages: UIMessage[] = [

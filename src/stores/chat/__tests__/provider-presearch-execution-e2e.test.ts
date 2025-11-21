@@ -24,7 +24,7 @@
 import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -909,7 +909,7 @@ describe('complete E2E Journey with Pre-Search', () => {
 
     // 1. Initialize on overview
     store.getState().initializeThread(thread, participants);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
     // 2. User types message
     store.getState().prepareForNewMessage('First question', ['model-0', 'model-1']);
@@ -945,7 +945,7 @@ describe('complete E2E Journey with Pre-Search', () => {
 
     // 8. Streaming ends, navigate to thread
     store.getState().setIsStreaming(false);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // === ROUND 1: Thread Screen ===
 
@@ -996,7 +996,7 @@ describe('complete E2E Journey with Pre-Search', () => {
     expect(finalState.preSearches).toHaveLength(2);
     expect(finalState.analyses).toHaveLength(2);
     expect(finalState.isStreaming).toBe(false);
-    expect(finalState.screenMode).toBe('thread');
+    expect(finalState.screenMode).toBe(ScreenModes.THREAD);
 
     // All pre-searches complete
     expect(finalState.preSearches.every(ps => ps.status === AnalysisStatuses.COMPLETE)).toBe(true);
@@ -1011,7 +1011,7 @@ describe('complete E2E Journey with Pre-Search', () => {
       enableWebSearch: true,
     });
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // Round 0 complete
     store.getState().addPreSearch(createMockPreSearch({
@@ -1047,7 +1047,7 @@ describe('complete E2E Journey with Pre-Search', () => {
       enableWebSearch: true,
     });
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // Round 0 complete
     store.getState().setMessages([

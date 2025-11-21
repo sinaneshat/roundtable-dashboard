@@ -33,6 +33,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   ChatModes,
+  ScreenModes,
   ThreadStatuses,
 } from '@/api/core/enums';
 import type {
@@ -94,8 +95,8 @@ describe('multi-Round Web Search Flow', () => {
 
       // STEP 1.1: Initialize overview screen
       // Per docs: "User lands on /chat (ChatOverviewScreen)"
-      store.getState().setScreenMode('overview');
-      expect(store.getState().screenMode).toBe('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+      expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
       expect(store.getState().showInitialUI).toBe(true);
 
       // STEP 1.2: Configure chat with participants, mode, and web search
@@ -360,10 +361,10 @@ describe('multi-Round Web Search Flow', () => {
       expect(store.getState().analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
 
       // Simulate navigation complete
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Verify navigation
-      expect(store.getState().screenMode).toBe('thread');
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
 
       // ========================================================================
       // ROUND 2: THREAD SCREEN → CONFIGURATION CHANGES → NEW ROUND
@@ -590,7 +591,7 @@ describe('multi-Round Web Search Flow', () => {
       const finalState = store.getState();
 
       // Verify complete state after two rounds
-      expect(finalState.screenMode).toBe('thread');
+      expect(finalState.screenMode).toBe(ScreenModes.THREAD);
       expect(finalState.thread?.id).toBe('thread-ai-trends-2024');
       expect(finalState.thread?.isAiGeneratedTitle).toBe(true);
       expect(finalState.thread?.mode).toBe(ChatModes.DEBATING);
@@ -647,7 +648,7 @@ describe('multi-Round Web Search Flow', () => {
       const thread = createMockThread({ enableWebSearch: true });
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       store.getState().initializeThread(thread, participants, [createMockUserMessage(0)]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
 
       // Add pending pre-search
@@ -723,7 +724,7 @@ describe('multi-Round Web Search Flow', () => {
       const thread = createMockThread({ mode: ChatModes.ANALYZING });
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Initial state
       expect(store.getState().hasPendingConfigChanges).toBe(false);
@@ -881,12 +882,12 @@ describe('multi-Round Web Search Flow', () => {
       });
       const participants = [createMockParticipant(0)];
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
       store.getState().setCreatedThreadId(thread.id);
 
       // Condition 1: Screen mode must be overview
-      expect(store.getState().screenMode).toBe('overview');
+      expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
 
       // Condition 2: AI-generated title must be ready
       expect(store.getState().thread?.isAiGeneratedTitle).toBe(false); // Not ready yet
@@ -912,13 +913,13 @@ describe('multi-Round Web Search Flow', () => {
 
       // All conditions now met
       const state = store.getState();
-      expect(state.screenMode).toBe('overview');
+      expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
       expect(state.thread?.isAiGeneratedTitle).toBe(true);
       expect(state.analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
 
       // Navigation can proceed
-      store.getState().setScreenMode('thread');
-      expect(store.getState().screenMode).toBe('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
   });
 

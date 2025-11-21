@@ -32,7 +32,6 @@
  * Location: /src/stores/chat/__tests__/overview-submission-race-conditions.test.ts
  */
 
-import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
@@ -40,7 +39,6 @@ import { createChatStore } from '@/stores/chat/store';
 
 import {
   createMockMessage,
-  createMockParticipant,
   createMockParticipants,
   createMockPreSearch,
   createMockThread,
@@ -51,7 +49,7 @@ import {
 // RACE CONDITION 1: isCreatingThread cleared too early
 // ============================================================================
 
-describe('Race Condition 1: isCreatingThread cleared too early', () => {
+describe('race Condition 1: isCreatingThread cleared too early', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -315,7 +313,7 @@ describe('Race Condition 1: isCreatingThread cleared too early', () => {
 // RACE CONDITION 2: startRound returns early without starting
 // ============================================================================
 
-describe('Race Condition 2: startRound returns early without starting', () => {
+describe('race Condition 2: startRound returns early without starting', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -470,7 +468,7 @@ describe('Race Condition 2: startRound returns early without starting', () => {
     });
   });
 
-  describe('AI SDK status sync issues', () => {
+  describe('aI SDK status sync issues', () => {
     it('should detect when provider effect runs before AI SDK ready', () => {
       /**
        * RACE CONDITION TIMELINE:
@@ -526,7 +524,7 @@ describe('Race Condition 2: startRound returns early without starting', () => {
 // RACE CONDITION 3: Input missing waitingToStartStreaming check
 // ============================================================================
 
-describe('Race Condition 3: Input missing waitingToStartStreaming check', () => {
+describe('race Condition 3: Input missing waitingToStartStreaming check', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -539,7 +537,7 @@ describe('Race Condition 3: Input missing waitingToStartStreaming check', () => 
     vi.clearAllMocks();
   });
 
-  describe('ChatInput disabled state calculation', () => {
+  describe('chatInput disabled state calculation', () => {
     it('should demonstrate the incomplete disabled check', () => {
       /**
        * In ChatOverviewScreen, the ChatInput disabled prop is set to:
@@ -628,7 +626,7 @@ describe('Race Condition 3: Input missing waitingToStartStreaming check', () => 
     });
   });
 
-  describe('ChatOverviewScreen vs ChatThreadScreen disabled logic', () => {
+  describe('chatOverviewScreen vs ChatThreadScreen disabled logic', () => {
     it('should compare disabled logic between screens', () => {
       /**
        * ChatOverviewScreen ChatInput:
@@ -664,7 +662,7 @@ describe('Race Condition 3: Input missing waitingToStartStreaming check', () => 
 // STATE COHERENCY TESTS
 // ============================================================================
 
-describe('State coherency during thread creation to streaming transition', () => {
+describe('state coherency during thread creation to streaming transition', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -737,7 +735,7 @@ describe('State coherency during thread creation to streaming transition', () =>
     captureSnapshot('streaming_started');
 
     // Verify input is ALWAYS blocked during transition
-    const unblockedPhases = coherencySnapshots
+    const _unblockedPhases = coherencySnapshots
       .filter(s => s.phase !== 'streaming_started') // After streaming, it's fine
       .filter(s => !s.inputBlocked);
 
@@ -823,7 +821,7 @@ describe('State coherency during thread creation to streaming transition', () =>
 // RECOVERY AND TIMEOUT TESTS
 // ============================================================================
 
-describe('Recovery from stuck states', () => {
+describe('recovery from stuck states', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -942,7 +940,7 @@ describe('Recovery from stuck states', () => {
 // INTEGRATION TESTS
 // ============================================================================
 
-describe('Full flow integration', () => {
+describe('full flow integration', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {

@@ -41,6 +41,7 @@ import {
   ChatModes,
   FeedbackTypes,
   PreSearchStatuses,
+  ScreenModes,
 } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -136,7 +137,7 @@ describe('round Regeneration Flow', () => {
       const thread = createMockThread({ id: 'thread-123' });
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Complete round 0
       setupCompletedRound(store, 0, 2);
@@ -741,7 +742,7 @@ describe('round Regeneration Flow', () => {
         createMockParticipant(0, { modelId: 'original-model' }),
       ];
       store.getState().initializeThread(thread, originalParticipants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Complete round 0 with original config
       setupCompletedRound(store, 0, 1);

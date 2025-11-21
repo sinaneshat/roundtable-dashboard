@@ -12,7 +12,7 @@ import type { UIMessage } from 'ai';
 import { act } from 'react';
 
 import type { ChatMode } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModes } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModes, ScreenModes } from '@/api/core/enums';
 import {
   createTestAssistantMessage,
   createTestUserMessage,
@@ -300,14 +300,14 @@ describe('state Consistency', () => {
 
   it('should set screenMode to overview on resetToOverview', () => {
     act(() => {
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
     });
 
     act(() => {
       store.getState().resetToOverview();
     });
 
-    expect(store.getState().screenMode).toBe('overview');
+    expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
   it('should stop ongoing streams in resetToNewChat', () => {
@@ -1319,15 +1319,15 @@ describe('screen Mode Operations', () => {
 
   it('should set screen mode', () => {
     act(() => {
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
     });
 
-    expect(store.getState().screenMode).toBe('thread');
+    expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
   });
 
   it('should set isReadOnly to true for public mode', () => {
     act(() => {
-      store.getState().setScreenMode('public');
+      store.getState().setScreenMode(ScreenModes.PUBLIC);
     });
 
     expect(store.getState().isReadOnly).toBe(true);
@@ -1335,7 +1335,7 @@ describe('screen Mode Operations', () => {
 
   it('should set isReadOnly to false for non-public modes', () => {
     act(() => {
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
     });
 
     expect(store.getState().isReadOnly).toBe(false);
@@ -1343,11 +1343,11 @@ describe('screen Mode Operations', () => {
 
   it('should reset screen mode to defaults', () => {
     act(() => {
-      store.getState().setScreenMode('public');
+      store.getState().setScreenMode(ScreenModes.PUBLIC);
       store.getState().resetScreenMode();
     });
 
-    expect(store.getState().screenMode).toBeNull();
+    expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
     expect(store.getState().isReadOnly).toBe(false);
   });
 });
@@ -2228,7 +2228,7 @@ describe('boundary Conditions', () => {
     expect(state.analyses).toEqual([]);
     expect(state.preSearches).toEqual([]);
     expect(state.isStreaming).toBe(false);
-    expect(state.screenMode).toBeNull();
+    expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
   it('should handle multiple store instances independently', () => {

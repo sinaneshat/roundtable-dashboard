@@ -24,7 +24,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
@@ -391,7 +391,7 @@ describe('uRL Replace Flow', () => {
     });
 
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
     // URL replace happens but screen mode stays 'overview'
     window.history.replaceState(
@@ -401,7 +401,7 @@ describe('uRL Replace Flow', () => {
     );
 
     // Screen mode should NOT change - still on overview
-    expect(store.getState().screenMode).toBe('overview');
+    expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
   it('should use replaceState (not router.push) for URL update', () => {
@@ -458,7 +458,7 @@ describe('navigation After Analysis', () => {
     });
 
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
     // Add completed analysis
     store.getState().addAnalysis(createMockAnalysis({
@@ -476,7 +476,7 @@ describe('navigation After Analysis', () => {
     const analysis = state.analyses.find(a => a.roundNumber === 0);
 
     if (
-      state.screenMode === 'overview'
+      state.screenMode === ScreenModes.OVERVIEW
       && analysis?.status === AnalysisStatuses.COMPLETE
       && state.thread?.isAiGeneratedTitle
       && state.thread?.slug
@@ -602,28 +602,28 @@ describe('two-Step Process', () => {
     });
 
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
     // Step 1: URL replaced
     operations.push('replace-url');
 
     // Should still be on overview
-    expect(store.getState().screenMode).toBe('overview');
+    expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
   it('should navigate to ChatThreadScreen after Step 2', () => {
-    let currentScreen: 'overview' | 'thread' = 'overview';
+    let currentScreen = ScreenModes.OVERVIEW as typeof ScreenModes.OVERVIEW | typeof ScreenModes.THREAD;
 
     // Step 1
     operations.push('replace-url');
     // Still on overview
-    expect(currentScreen).toBe('overview');
+    expect(currentScreen).toBe(ScreenModes.OVERVIEW);
 
     // Step 2
-    currentScreen = 'thread';
+    currentScreen = ScreenModes.THREAD;
     operations.push('router-push');
 
-    expect(currentScreen).toBe('thread');
+    expect(currentScreen).toBe(ScreenModes.THREAD);
   });
 
   it('should use hasUpdatedThread flag to sequence steps', () => {
@@ -847,7 +847,7 @@ describe('edge Cases', () => {
     });
 
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
     // User can still submit messages
     const messages = [
@@ -1299,7 +1299,7 @@ describe('slug Polling and URL Transitions Integration', () => {
     ]);
     store.getState().setCreatedThreadId('thread-123');
     store.getState().setShowInitialUI(false);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
     timeline.push('thread-created');
 
     // Phase 2: Streaming starts

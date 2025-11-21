@@ -23,6 +23,7 @@ import {
   AnalysisStatuses,
   ChangelogTypes,
   ChatModes,
+  ScreenModes,
 } from '@/api/core/enums';
 import type {
   ChatParticipant,
@@ -168,7 +169,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, initialParticipants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Complete Round 1
       setupCompletedRound(store, thread, initialParticipants, 0, 'What is the best approach?');
@@ -244,7 +245,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Round 1 with only 2 participants (before adding)
       setupCompletedRound(
@@ -330,7 +331,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, initialParticipants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Set selected participants (mirrors DB participants)
       store.getState().setSelectedParticipants([
@@ -389,7 +390,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, remainingParticipants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Setup Round 1 messages (simulate 3 participants responded)
       const userMsgR1 = createMockUserMessage(0, 'Initial question');
@@ -505,7 +506,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, reorderedParticipants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Round 2 messages should follow new order
       const userMsg = createMockUserMessage(1, 'Question');
@@ -1152,7 +1153,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, initialParticipants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setSelectedParticipants([
         createMockParticipantConfig(0, { modelId: 'openai/gpt-4', role: 'Analyst' }),
         createMockParticipantConfig(1, { modelId: 'anthropic/claude-3', role: 'Critic' }),

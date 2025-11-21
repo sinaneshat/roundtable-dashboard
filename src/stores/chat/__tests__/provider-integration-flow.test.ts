@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
+  ScreenModes,
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -67,7 +68,7 @@ describe('provider Pre-Search Execution Triggering', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Setup pending message for round 1
       store.getState().prepareForNewMessage('Second question', ['model-0']);
@@ -314,7 +315,7 @@ describe('navigation Timing and Conditions', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Analysis complete
       store.getState().markAnalysisCreated(0);
@@ -396,14 +397,14 @@ describe('navigation Timing and Conditions', () => {
       const participants = [createMockParticipant(0)];
 
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Initially on overview
-      expect(store.getState().screenMode).toBe('overview');
+      expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
 
       // After navigation would set to thread
-      store.getState().setScreenMode('thread');
-      expect(store.getState().screenMode).toBe('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
 
     it('should reset screen mode on thread reset', () => {
@@ -411,13 +412,13 @@ describe('navigation Timing and Conditions', () => {
       const participants = [createMockParticipant(0)];
 
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Reset thread state
       store.getState().resetToNewChat();
 
       // Screen mode should be reset
-      expect(store.getState().screenMode).toBe('overview');
+      expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
     });
   });
 
@@ -427,14 +428,14 @@ describe('navigation Timing and Conditions', () => {
       const participants = [createMockParticipant(0)];
 
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
-      expect(store.getState().screenMode).toBe('overview');
+      expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
 
       // After navigation
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
-      expect(store.getState().screenMode).toBe('thread');
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
 
     it('should maintain state during screen mode change', () => {
@@ -446,14 +447,14 @@ describe('navigation Timing and Conditions', () => {
         createMockMessage(0, 0),
         createMockMessage(1, 0),
       ]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Add pre-search and analysis
       store.getState().addPreSearch(createMockPreSearch({ roundNumber: 0 }));
       store.getState().addAnalysis(createMockAnalysis({ roundNumber: 0 }));
 
       // Change screen mode
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // State should be preserved
       const state = store.getState();
@@ -461,7 +462,7 @@ describe('navigation Timing and Conditions', () => {
       expect(state.participants).toHaveLength(2);
       expect(state.preSearches).toHaveLength(1);
       expect(state.analyses).toHaveLength(1);
-      expect(state.screenMode).toBe('thread');
+      expect(state.screenMode).toBe(ScreenModes.THREAD);
     });
   });
 });
@@ -764,7 +765,7 @@ describe('error Recovery Scenarios', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Analysis fails
       store.getState().addAnalysis(createMockAnalysis({
@@ -1043,7 +1044,7 @@ describe('complete Chat Journey Integration', () => {
 
     // Initialize on overview
     store.getState().initializeThread(thread, participants);
-    store.getState().setScreenMode('overview');
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
     // User prepares message
     store.getState().prepareForNewMessage('First question', ['model-0', 'model-1']);
@@ -1092,7 +1093,7 @@ describe('complete Chat Journey Integration', () => {
     expect(canNavigate).toBe(true);
 
     // Navigate to thread screen
-    store.getState().setScreenMode('thread');
+    store.getState().setScreenMode(ScreenModes.THREAD);
     store.getState().setPendingMessage('');
     store.getState().setHasSentPendingMessage(false);
 
@@ -1165,7 +1166,7 @@ describe('complete Chat Journey Integration', () => {
     expect(finalState.analyses.every(a => a.status === AnalysisStatuses.COMPLETE)).toBe(true);
 
     // Screen mode
-    expect(finalState.screenMode).toBe('thread');
+    expect(finalState.screenMode).toBe(ScreenModes.THREAD);
 
     // Tracking
     expect(finalState.hasPreSearchBeenTriggered(0)).toBe(true);

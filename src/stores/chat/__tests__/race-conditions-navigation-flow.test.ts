@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
-  ChatModes,
+  ScreenModes,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -22,7 +22,6 @@ import {
   createMockAnalysis,
   createMockParticipant,
   createMockThread,
-  createMockUserMessage,
 } from './test-factories';
 
 // Mock global window history and router
@@ -42,7 +41,7 @@ function createTestStore() {
   return createChatStore();
 }
 
-describe('Race Conditions: Navigation Flow', () => {
+describe('race Conditions: Navigation Flow', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -60,7 +59,7 @@ describe('Race Conditions: Navigation Flow', () => {
   // RACE 1: URL UPDATE VS NAVIGATION
   // ==========================================================================
 
-  describe('RACE 1: URL Update vs Navigation', () => {
+  describe('rACE 1: URL Update vs Navigation', () => {
     it('should prevent navigation before AI title is ready', async () => {
       // Setup: Analysis complete BUT title not ready
       const thread = createMockThread({
@@ -69,10 +68,10 @@ describe('Race Conditions: Navigation Flow', () => {
         slug: 'temp-slug',
       });
       const participants = [createMockParticipant(0)];
-      
+
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('overview');
-      
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
       // Analysis completes
       store.getState().addAnalysis(createMockAnalysis({
         roundNumber: 0,
@@ -82,9 +81,9 @@ describe('Race Conditions: Navigation Flow', () => {
       // Check navigation conditions
       const state = store.getState();
       // Should NOT be ready to navigate because title is missing
-      // The component logic typically checks: 
+      // The component logic typically checks:
       // if (analysisComplete && isAiGeneratedTitle) -> navigate
-      
+
       expect(state.thread?.isAiGeneratedTitle).toBe(false);
       // In a real component, this would NOT trigger navigation
     });
@@ -97,7 +96,7 @@ describe('Race Conditions: Navigation Flow', () => {
       });
       store.getState().initializeThread(thread, [createMockParticipant(0)]);
       store.getState().addAnalysis(createMockAnalysis({ status: AnalysisStatuses.COMPLETE }));
-      
+
       // 2. Simulate polling finding the title later
       const updatedThread = {
         ...thread,
@@ -105,13 +104,13 @@ describe('Race Conditions: Navigation Flow', () => {
         slug: 'final-slug',
         title: 'Final Title',
       };
-      
+
       store.getState().setThread(updatedThread);
-      
+
       const state = store.getState();
       expect(state.thread?.isAiGeneratedTitle).toBe(true);
       expect(state.thread?.slug).toBe('final-slug');
-      
+
       // Now conditions are met for navigation
     });
   });
@@ -120,45 +119,45 @@ describe('Race Conditions: Navigation Flow', () => {
   // RACE 2: ANALYSIS COMPLETION DETECTION
   // ==========================================================================
 
-  describe('RACE 2: Analysis Completion Detection', () => {
+  describe('rACE 2: Analysis Completion Detection', () => {
     it('should timeout if analysis stays in streaming state too long', () => {
       // Setup: Analysis stuck in streaming
       const thread = createMockThread();
       store.getState().initializeThread(thread, [createMockParticipant(0)]);
-      
-      store.getState().addAnalysis(createMockAnalysis({ 
-        status: AnalysisStatuses.STREAMING 
+
+      store.getState().addAnalysis(createMockAnalysis({
+        status: AnalysisStatuses.STREAMING,
       }));
 
       // The store doesn't automatically timeout analysis status itself (that's usually component or effect logic),
       // BUT we can verify if the store allows forcing status updates or error handling.
-      
+
       // Simulate timeout handler in component calling updateAnalysisStatus
       store.getState().updateAnalysisStatus(0, AnalysisStatuses.FAILED);
-      
+
       expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.FAILED);
     });
 
     it('should correctly detect completion even if multiple updates arrive out of order', () => {
       store.getState().initializeThread(createMockThread(), [createMockParticipant(0)]);
       store.getState().addAnalysis(createMockAnalysis({ status: AnalysisStatuses.STREAMING }));
-      
+
       // Simulate "COMPLETE" arriving
       store.getState().updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
-      
+
       // Simulate a late "STREAMING" packet arriving afterwards (network race)
       // Store should ideally protect against regression or we rely on robust handling
       store.getState().updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
-      
-      // This test verifies current behavior - does it regress? 
+
+      // This test verifies current behavior - does it regress?
       // If strict state machine is enforced, it should stay COMPLETE.
       // If simple setter, it might regress. Let's check expectation.
       // Assuming simple setter for now, but ideally it should block.
-      
-      const state = store.getState();
+
+      const _state = store.getState();
       // If this fails, we know we have a race condition vulnerability where late packets revert status
       // For now, we just document the behavior.
-      // expect(state.analyses[0].status).toBe(AnalysisStatuses.COMPLETE); 
+      // expect(_state.analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
     });
   });
 
@@ -166,50 +165,49 @@ describe('Race Conditions: Navigation Flow', () => {
   // RACE 3: DUPLICATE NAVIGATION
   // ==========================================================================
 
-  describe('RACE 3: Duplicate Navigation Prevention', () => {
+  describe('rACE 3: Duplicate Navigation Prevention', () => {
     it('should clear showInitialUI flag to prevent re-triggering navigation', () => {
       const thread = createMockThread({ isAiGeneratedTitle: true });
       store.getState().initializeThread(thread, [createMockParticipant(0)]);
       store.getState().setShowInitialUI(true); // Starting state
-      
+
       // Simulate navigation effect triggering
       store.getState().setShowInitialUI(false);
-      
+
       expect(store.getState().showInitialUI).toBe(false);
       // The navigation effect depends on (showInitialUI && conditions)
       // Setting it to false prevents second trigger
     });
-    
+
     it('should change screen mode atomically', () => {
-      store.getState().setScreenMode('overview');
-      
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
       // Navigate
-      store.getState().setScreenMode('thread');
-      
-      expect(store.getState().screenMode).toBe('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
   });
 
   // ==========================================================================
   // RACE 4: HAS UPDATED THREAD FLAG
   // ==========================================================================
-  
-  describe('RACE 4: Has Updated Thread Flag', () => {
+
+  describe('rACE 4: Has Updated Thread Flag', () => {
     it('should detect when thread has been updated with AI title', () => {
-       const thread = createMockThread({ isAiGeneratedTitle: false });
-       store.getState().initializeThread(thread, [createMockParticipant(0)]);
-       
-       // Verify initial state
-       expect(store.getState().thread?.isAiGeneratedTitle).toBe(false);
-       
-       // Update
-       store.getState().setThread({
-         ...thread,
-         isAiGeneratedTitle: true
-       });
-       
-       expect(store.getState().thread?.isAiGeneratedTitle).toBe(true);
+      const thread = createMockThread({ isAiGeneratedTitle: false });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+
+      // Verify initial state
+      expect(store.getState().thread?.isAiGeneratedTitle).toBe(false);
+
+      // Update
+      store.getState().setThread({
+        ...thread,
+        isAiGeneratedTitle: true,
+      });
+
+      expect(store.getState().thread?.isAiGeneratedTitle).toBe(true);
     });
   });
 });
-

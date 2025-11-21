@@ -46,7 +46,7 @@ import {
  * This is the CORRECT comprehensive check that should be used by all input
  * components. The current implementation may be missing some of these checks.
  */
-const isInputBlocked = (state: ChatStore): boolean => {
+function isInputBlocked(state: ChatStore): boolean {
   // Core streaming/creation flags
   const coreBlocking = state.isStreaming
     || state.isCreatingThread
@@ -67,13 +67,13 @@ const isInputBlocked = (state: ChatStore): boolean => {
   );
 
   return coreBlocking || analysisStreaming || preSearchActive;
-};
+}
 
 // ============================================================================
 // INDIVIDUAL BLOCKING STATE TESTS
 // ============================================================================
 
-describe('Input Blocking: Individual State Conditions', () => {
+describe('input Blocking: Individual State Conditions', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -201,7 +201,7 @@ describe('Input Blocking: Individual State Conditions', () => {
 // ANALYSIS STREAMING BLOCKING TESTS
 // ============================================================================
 
-describe('Input Blocking: Analysis Streaming State', () => {
+describe('input Blocking: Analysis Streaming State', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -285,7 +285,7 @@ describe('Input Blocking: Analysis Streaming State', () => {
 // PRE-SEARCH BLOCKING TESTS
 // ============================================================================
 
-describe('Input Blocking: Pre-Search State', () => {
+describe('input Blocking: Pre-Search State', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -366,7 +366,7 @@ describe('Input Blocking: Pre-Search State', () => {
 // COMBINATION STATE TESTS
 // ============================================================================
 
-describe('Input Blocking: Combination States', () => {
+describe('input Blocking: Combination States', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -491,7 +491,7 @@ describe('Input Blocking: Combination States', () => {
 // RAPID INPUT ATTEMPTS TESTS
 // ============================================================================
 
-describe('Input Blocking: Rapid Input Prevention', () => {
+describe('input Blocking: Rapid Input Prevention', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -634,7 +634,7 @@ describe('Input Blocking: Rapid Input Prevention', () => {
 // EDGE CASE TESTS
 // ============================================================================
 
-describe('Input Blocking: Edge Cases', () => {
+describe('input Blocking: Edge Cases', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -752,7 +752,7 @@ describe('Input Blocking: Edge Cases', () => {
 // COMPREHENSIVE STATE MATRIX TEST
 // ============================================================================
 
-describe('Input Blocking: Complete State Matrix', () => {
+describe('input Blocking: Complete State Matrix', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {

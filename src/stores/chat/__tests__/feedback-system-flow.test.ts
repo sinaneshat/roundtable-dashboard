@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   FeedbackTypes,
+  ScreenModes,
 } from '@/api/core/enums';
 import type { RoundFeedbackData } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -82,7 +83,7 @@ function setupThreadWithRounds(
 
   store.getState().initializeThread(thread, participants, messages);
   store.getState().setAnalyses(analyses);
-  store.getState().setScreenMode('thread');
+  store.getState().setScreenMode(ScreenModes.THREAD);
 
   return { thread, participants, messages, analyses };
 }
@@ -577,7 +578,7 @@ describe('feedback System Flow', () => {
     it('should set read-only state for public threads', () => {
       setupThreadWithRounds(store, 1);
 
-      store.getState().setScreenMode('public');
+      store.getState().setScreenMode(ScreenModes.PUBLIC);
 
       expect(store.getState().isReadOnly).toBe(true);
     });
@@ -585,7 +586,7 @@ describe('feedback System Flow', () => {
     it('should not be read-only for private threads', () => {
       setupThreadWithRounds(store, 1);
 
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       expect(store.getState().isReadOnly).toBe(false);
     });
@@ -599,7 +600,7 @@ describe('feedback System Flow', () => {
       ]);
 
       // Set to read-only
-      store.getState().setScreenMode('public');
+      store.getState().setScreenMode(ScreenModes.PUBLIC);
 
       // Can still read feedback
       expect(store.getState().feedbackByRound.get(0)).toBe(FeedbackTypes.LIKE);

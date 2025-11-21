@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   ChatModes,
+  ScreenModes,
 } from '@/api/core/enums';
 import type {
   ChatParticipant,
@@ -113,8 +114,8 @@ describe('one Round Conversation Flow', () => {
     });
 
     it('should set screen mode to overview', () => {
-      store.getState().setScreenMode('overview');
-      expect(store.getState().screenMode).toBe('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+      expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
     });
 
     it('should allow configuring participants', () => {
@@ -215,7 +216,7 @@ describe('one Round Conversation Flow', () => {
       const thread = createMockThread({ enableWebSearch: true });
       const participants = [createMockParticipant(0)];
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
     });
 
     it('should add pending pre-search record when web search is enabled', () => {
@@ -273,7 +274,7 @@ describe('one Round Conversation Flow', () => {
 
       const userMessage = createMockUserMessage(0);
       store.getState().initializeThread(thread, participants, [userMessage]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
     });
 
@@ -391,7 +392,7 @@ describe('one Round Conversation Flow', () => {
       ];
 
       store.getState().initializeThread(thread, participants, messages);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
       store.getState().setIsStreaming(false);
     });
@@ -486,7 +487,7 @@ describe('one Round Conversation Flow', () => {
       const participants = [createMockParticipant(0)];
 
       store.getState().initializeThread(thread, participants);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
       store.getState().setCreatedThreadId('thread-123');
     });
@@ -548,7 +549,7 @@ describe('one Round Conversation Flow', () => {
         roundNumber: 0,
         status: AnalysisStatuses.COMPLETE,
       }));
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
       store.getState().setCreatedThreadId('thread-123');
     });
@@ -557,7 +558,7 @@ describe('one Round Conversation Flow', () => {
       const state = store.getState();
 
       // All navigation conditions
-      expect(state.screenMode).toBe('overview');
+      expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
       expect(state.thread?.isAiGeneratedTitle).toBe(true);
       expect(state.thread?.slug).toBeDefined();
       expect(state.analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
@@ -565,9 +566,9 @@ describe('one Round Conversation Flow', () => {
 
     it('should transition screen mode on navigation', () => {
       // Simulate navigation completing
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
-      expect(store.getState().screenMode).toBe('thread');
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
   });
 
@@ -578,7 +579,7 @@ describe('one Round Conversation Flow', () => {
   describe('complete Flow Integration', () => {
     it('should execute full flow from overview to thread navigation', async () => {
       // STEP 1: Configure chat on overview screen
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setSelectedMode(ChatModes.DEBATING);
       store.getState().setSelectedParticipants([
         createMockParticipantConfig(0, { modelId: 'openai/gpt-4' }),
@@ -679,7 +680,7 @@ describe('one Round Conversation Flow', () => {
 
       // STEP 7: Navigation ready - all conditions met
       const finalState = store.getState();
-      expect(finalState.screenMode).toBe('overview');
+      expect(finalState.screenMode).toBe(ScreenModes.OVERVIEW);
       expect(finalState.thread?.isAiGeneratedTitle).toBe(true);
       expect(finalState.thread?.slug).toBeDefined();
       expect(finalState.analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
@@ -687,13 +688,13 @@ describe('one Round Conversation Flow', () => {
       expect(finalState.isStreaming).toBe(false);
 
       // Simulate navigation complete
-      store.getState().setScreenMode('thread');
-      expect(store.getState().screenMode).toBe('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     });
 
     it('should handle flow with web search enabled', async () => {
       // Setup with web search
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setSelectedMode(ChatModes.ANALYZING);
       store.getState().setSelectedParticipants([
         createMockParticipantConfig(0, { modelId: 'openai/gpt-4' }),
@@ -752,7 +753,7 @@ describe('one Round Conversation Flow', () => {
       const userMessage = createMockUserMessage(0);
 
       store.getState().initializeThread(thread, participants, [userMessage]);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
       store.getState().setShowInitialUI(false);
 
       // Start streaming
@@ -834,13 +835,13 @@ describe('one Round Conversation Flow', () => {
       const participants = [createMockParticipant(0)];
       store.getState().initializeThread(thread, participants);
       store.getState().addAnalysis(createMockAnalysis({ status: AnalysisStatuses.COMPLETE }));
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setShowInitialUI(false);
 
       const state = store.getState();
       expect(state.thread?.isAiGeneratedTitle).toBe(true);
       expect(state.analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
-      expect(state.screenMode).toBe('thread');
+      expect(state.screenMode).toBe(ScreenModes.THREAD);
     });
   });
 
@@ -864,7 +865,7 @@ describe('one Round Conversation Flow', () => {
       expect(state.thread).toBeNull();
       expect(state.messages).toHaveLength(0);
       expect(state.analyses).toHaveLength(0);
-      expect(state.screenMode).toBe('overview');
+      expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
     });
 
     it('should reset to new chat correctly', () => {
@@ -879,7 +880,7 @@ describe('one Round Conversation Flow', () => {
       const state = store.getState();
       expect(state.thread).toBeNull();
       expect(state.isStreaming).toBe(false);
-      expect(state.screenMode).toBe('overview');
+      expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
       expect(state.showInitialUI).toBe(true);
     });
 

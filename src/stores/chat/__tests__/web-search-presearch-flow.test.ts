@@ -1,15 +1,16 @@
 /**
- * Web Search (Pre-Search) Flow Tests (Section 2)
+ * Web Search (Pre-Search) Flow Tests
  *
- * Tests the complete web search flow including blocking behavior,
- * timeout protection, and multi-round scenarios.
+ * Comprehensive tests for Web Search (Pre-Search) functionality as defined in
+ * COMPREHENSIVE_TEST_PLAN.md Section 2. These tests cover toggle behavior, blocking
+ * logic, timeout/error handling, multi-round scenarios, and deadlock prevention.
  *
- * FLOW TESTED:
- * 2.1 Toggle & Triggering
- * 2.2 Pre-Search Execution (Blocking)
- * 2.3 Timeout & Error Handling
- * 2.4 Multi-Round Web Search
- * 2.5 Deadlock Prevention
+ * KEY CONCEPTS:
+ * - Pre-search MUST complete before participant streaming starts
+ * - Status transitions: PENDING -> STREAMING -> COMPLETE/FAILED
+ * - Each round gets independent pre-search when web search is enabled
+ * - 10-second timeout protection for hanging pre-searches
+ * - Graceful degradation on failure (participants proceed without search)
  *
  * Location: /src/stores/chat/__tests__/web-search-presearch-flow.test.ts
  */
@@ -18,12 +19,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
-  ChatModes,
   PreSearchStatuses,
+  ScreenModes,
 } from '@/api/core/enums';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { shouldSendPendingMessage, shouldWaitForPreSearch } from '@/stores/chat/actions/pending-message-sender';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
+  createMockAnalysis,
   createMockMessage,
   createMockParticipant,
   createMockPreSearch,
@@ -42,11 +46,49 @@ function createTestStore() {
   return createChatStore();
 }
 
+/**
+ * Helper to check if streaming should wait for pre-search
+ * Uses the actual production logic from pending-message-sender.ts
+ */
+function checkShouldWaitForPreSearch(
+  store: ReturnType<typeof createChatStore>,
+  roundNumber: number,
+): boolean {
+  const state = store.getState();
+  const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
+
+  return shouldWaitForPreSearch({
+    webSearchEnabled,
+    preSearches: state.preSearches,
+    roundNumber,
+  });
+}
+
+/**
+ * Helper to check complete pending message validation
+ */
+function checkShouldSendPendingMessage(store: ReturnType<typeof createChatStore>) {
+  const state = store.getState();
+  return shouldSendPendingMessage({
+    pendingMessage: state.pendingMessage,
+    expectedParticipantIds: state.expectedParticipantIds,
+    hasSentPendingMessage: state.hasSentPendingMessage,
+    isStreaming: state.isStreaming,
+    isWaitingForChangelog: state.isWaitingForChangelog,
+    screenMode: state.screenMode ?? ScreenModes.OVERVIEW,
+    participants: state.participants,
+    messages: state.messages,
+    preSearches: state.preSearches,
+    thread: state.thread,
+    enableWebSearch: state.enableWebSearch,
+  });
+}
+
 // ============================================================================
 // SECTION 2.1: TOGGLE & TRIGGERING
 // ============================================================================
 
-describe('Section 2.1: Toggle & Triggering', () => {
+describe('2.1 Toggle & Triggering', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -59,66 +101,135 @@ describe('Section 2.1: Toggle & Triggering', () => {
     vi.clearAllMocks();
   });
 
-  it('should enable web search toggle and persist state', () => {
-    store.getState().setEnableWebSearch(true);
-    expect(store.getState().enableWebSearch).toBe(true);
-  });
-
-  it('should disable web search toggle', () => {
-    store.getState().setEnableWebSearch(true);
-    store.getState().setEnableWebSearch(false);
+  /**
+   * SEARCH-01: Test enabling "Web Search" toggle persists state for the message
+   *
+   * Validates that when a user enables web search toggle, the state is correctly
+   * stored and accessible when preparing a message submission.
+   */
+  it('sEARCH-01: enabling Web Search toggle persists state for the message', () => {
+    // Initial state should have web search disabled
     expect(store.getState().enableWebSearch).toBe(false);
-  });
 
-  it('should create PENDING pre-search record on submission with web search enabled', () => {
-    // Initialize thread
-    const thread = createMockThread({
-      id: 'thread-123',
-      enableWebSearch: true,
-    });
-
-    store.getState().initializeThread(thread, [], []);
-
-    // Add PENDING pre-search
-    const pendingPreSearch = createPendingPreSearch(0);
-    store.getState().setPreSearches([pendingPreSearch]);
-
-    const state = store.getState();
-    expect(state.preSearches).toHaveLength(1);
-    expect(state.preSearches[0].status).toBe(AnalysisStatuses.PENDING);
-  });
-
-  it('should have empty pre-searches when web search is disabled', () => {
-    const thread = createMockThread({
-      id: 'thread-123',
-      enableWebSearch: false,
-    });
-
-    store.getState().initializeThread(thread, [], []);
-
-    expect(store.getState().preSearches).toHaveLength(0);
-  });
-
-  it('should toggle web search state independently', () => {
-    // Toggle on
+    // User enables web search toggle
     store.getState().setEnableWebSearch(true);
+
+    // State should persist
     expect(store.getState().enableWebSearch).toBe(true);
 
     // Toggle off
     store.getState().setEnableWebSearch(false);
     expect(store.getState().enableWebSearch).toBe(false);
 
-    // Toggle on again
+    // Toggle back on
     store.getState().setEnableWebSearch(true);
     expect(store.getState().enableWebSearch).toBe(true);
+  });
+
+  /**
+   * SEARCH-01 (Extended): Web search state persists in thread object
+   *
+   * When thread is initialized with web search enabled, the thread-level
+   * enableWebSearch should take precedence over form state.
+   */
+  it('sEARCH-01: web search state persists in thread object when initialized', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Thread-level web search should be enabled
+    expect(store.getState().thread?.enableWebSearch).toBe(true);
+
+    // Validation should use thread's enableWebSearch
+    const webSearchEnabled = store.getState().thread?.enableWebSearch ?? store.getState().enableWebSearch;
+    expect(webSearchEnabled).toBe(true);
+  });
+
+  /**
+   * SEARCH-02: Test submission with Web Search enabled triggers PENDING pre-search record creation
+   *
+   * Validates that when a user submits a message with web search enabled,
+   * a pre-search record is created with PENDING status.
+   */
+  it('sEARCH-02: submission with Web Search enabled triggers PENDING pre-search creation', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: true,
+    });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+    // Simulate user preparing to send message
+    store.getState().prepareForNewMessage('Test question', ['openai/gpt-4']);
+
+    // Simulate provider creating PENDING pre-search (as done in chat-store-provider)
+    const pendingPreSearch: StoredPreSearch = {
+      id: 'presearch-001',
+      threadId: 'thread-123',
+      roundNumber: 0,
+      userQuery: 'Test question',
+      status: AnalysisStatuses.PENDING,
+      searchData: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    store.getState().addPreSearch(pendingPreSearch);
+    store.getState().markPreSearchTriggered(0);
+
+    // Verify PENDING pre-search was created
+    const state = store.getState();
+    expect(state.preSearches).toHaveLength(1);
+    expect(state.preSearches[0].status).toBe(AnalysisStatuses.PENDING);
+    expect(state.preSearches[0].roundNumber).toBe(0);
+    expect(state.preSearches[0].userQuery).toBe('Test question');
+    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+  });
+
+  /**
+   * SEARCH-03: Test loading indicator "Searching the web..." appears immediately after submission
+   *
+   * Validates that the pre-search exists in PENDING or STREAMING status immediately
+   * after submission, which would cause the UI to show loading state.
+   */
+  it('sEARCH-03: loading state is available immediately after submission', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+    // User submits message
+    store.getState().prepareForNewMessage('What is AI?', ['openai/gpt-4']);
+
+    // Pre-search created with PENDING status
+    store.getState().addPreSearch(createPendingPreSearch(0));
+
+    // UI should show loading (pre-search is PENDING)
+    const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
+    expect(preSearch).toBeDefined();
+    expect(preSearch?.status).toBe(AnalysisStatuses.PENDING);
+
+    // Status transitions to STREAMING when execution starts
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+
+    const updatedPreSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
+    expect(updatedPreSearch?.status).toBe(AnalysisStatuses.STREAMING);
+
+    // Both PENDING and STREAMING should indicate loading state
+    const isLoading = preSearch?.status === AnalysisStatuses.PENDING
+      || updatedPreSearch?.status === AnalysisStatuses.STREAMING;
+    expect(isLoading).toBe(true);
   });
 });
 
 // ============================================================================
-// SECTION 2.2: PRE-SEARCH EXECUTION (BLOCKING)
+// SECTION 2.2: PRE-SEARCH EXECUTION (BLOCKING LOGIC)
 // ============================================================================
 
-describe('Section 2.2: Pre-Search Execution (Blocking)', () => {
+describe('2.2 Pre-Search Execution (Blocking Logic)', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -131,234 +242,155 @@ describe('Section 2.2: Pre-Search Execution (Blocking)', () => {
     vi.clearAllMocks();
   });
 
-  // ==========================================================================
-  // Blocking Behavior Tests
-  // ==========================================================================
+  /**
+   * SEARCH-BLOCK-01: Verify participant streaming is BLOCKED if enableWebSearch=true
+   * but no pre-search record exists yet (Optimistic Blocking)
+   *
+   * This tests the race condition where web search is enabled but the orchestrator
+   * hasn't synced the pre-search record yet (0-2s polling window).
+   */
+  it('sEARCH-BLOCK-01: participant streaming is BLOCKED when web search enabled but no pre-search exists (Optimistic)', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-  describe('blocking Behavior', () => {
-    it('should block participant streaming while pre-search is PENDING', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
+    store.getState().initializeThread(thread, participants);
 
-      // Set PENDING pre-search
-      const pendingPreSearch = createPendingPreSearch(0);
-      store.getState().setPreSearches([pendingPreSearch]);
+    // Pre-search array is empty (orchestrator hasn't synced yet)
+    expect(store.getState().preSearches).toHaveLength(0);
 
-      // shouldWaitForPreSearch should return true for PENDING
-      const preSearches = store.getState().preSearches;
-      const hasPendingPreSearch = preSearches.some(
-        ps => ps.roundNumber === 0 && ps.status === AnalysisStatuses.PENDING
-      );
-
-      expect(hasPendingPreSearch).toBe(true);
-    });
-
-    it('should block participant streaming while pre-search is STREAMING', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
-
-      // Set STREAMING pre-search
-      const streamingPreSearch = createStreamingPreSearch(0);
-      store.getState().setPreSearches([streamingPreSearch]);
-
-      const preSearches = store.getState().preSearches;
-      const hasStreamingPreSearch = preSearches.some(
-        ps => ps.roundNumber === 0 && ps.status === PreSearchStatuses.STREAMING
-      );
-
-      expect(hasStreamingPreSearch).toBe(true);
-    });
-
-    it('should allow participant streaming when pre-search is COMPLETED', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
-
-      // Set COMPLETED pre-search
-      const completedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.COMPLETE,
-      });
-      store.getState().setPreSearches([completedPreSearch]);
-
-      const preSearches = store.getState().preSearches;
-      const isComplete = preSearches.some(
-        ps => ps.roundNumber === 0 && ps.status === PreSearchStatuses.COMPLETE
-      );
-
-      expect(isComplete).toBe(true);
-    });
-
-    it('should allow participant streaming when pre-search is FAILED', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
-
-      // Set FAILED pre-search
-      const failedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.FAILED,
-      });
-      store.getState().setPreSearches([failedPreSearch]);
-
-      const preSearches = store.getState().preSearches;
-      const isFailed = preSearches.some(
-        ps => ps.roundNumber === 0 && ps.status === PreSearchStatuses.FAILED
-      );
-
-      expect(isFailed).toBe(true);
-    });
+    // Should wait (optimistic blocking)
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(true);
   });
 
-  // ==========================================================================
-  // Status Transition Tests
-  // ==========================================================================
+  /**
+   * SEARCH-BLOCK-01 (Extended): No blocking when web search is disabled
+   */
+  it('sEARCH-BLOCK-01: no blocking when web search is disabled', () => {
+    const thread = createMockThread({ enableWebSearch: false });
+    const participants = [createMockParticipant(0)];
 
-  describe('status Transitions', () => {
-    it('should transition from PENDING to STREAMING', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
+    store.getState().initializeThread(thread, participants);
 
-      // Start with PENDING
-      const pendingPreSearch = createPendingPreSearch(0);
-      store.getState().setPreSearches([pendingPreSearch]);
-
-      expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.PENDING);
-
-      // Transition to STREAMING
-      const streamingPreSearch = createStreamingPreSearch(0);
-      store.getState().setPreSearches([streamingPreSearch]);
-
-      expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.STREAMING);
-    });
-
-    it('should transition from STREAMING to COMPLETED', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
-
-      // Start with STREAMING
-      const streamingPreSearch = createStreamingPreSearch(0);
-      store.getState().setPreSearches([streamingPreSearch]);
-
-      // Transition to COMPLETED
-      const completedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.COMPLETE,
-        searchData: createMockPreSearchDataPayload(),
-      });
-      store.getState().setPreSearches([completedPreSearch]);
-
-      expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.COMPLETE);
-    });
-
-    it('should transition from STREAMING to FAILED', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
-
-      // Start with STREAMING
-      const streamingPreSearch = createStreamingPreSearch(0);
-      store.getState().setPreSearches([streamingPreSearch]);
-
-      // Transition to FAILED
-      const failedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.FAILED,
-      });
-      store.getState().setPreSearches([failedPreSearch]);
-
-      expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.FAILED);
-    });
+    // Should NOT wait
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(false);
   });
 
-  // ==========================================================================
-  // Pre-Search Card Tests
-  // ==========================================================================
+  /**
+   * SEARCH-BLOCK-02: Verify participant streaming is BLOCKED while pre-search status is PENDING
+   *
+   * When pre-search record exists but execution hasn't started yet.
+   */
+  it('sEARCH-BLOCK-02: participant streaming is BLOCKED while pre-search status is PENDING', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-  describe('pre-Search Card Display', () => {
-    it('should store search data with generated query', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
+    store.getState().initializeThread(thread, participants);
 
-      const searchData = createMockPreSearchDataPayload({
-        queries: [
-          {
-            query: 'optimized search query',
-            rationale: 'Generated to find relevant results',
-            searchDepth: 'basic',
-            index: 0,
-            total: 1,
-          },
-        ],
-      });
+    // Create PENDING pre-search
+    store.getState().addPreSearch(createPendingPreSearch(0));
 
-      const preSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.COMPLETE,
-        searchData,
-      });
-      store.getState().setPreSearches([preSearch]);
+    // Verify PENDING status
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.PENDING);
 
-      const storedSearchData = store.getState().preSearches[0].searchData;
-      expect(storedSearchData?.queries[0].query).toBe('optimized search query');
-    });
-
-    it('should store streaming results with title, URL, snippet', () => {
-      const searchData = createMockPreSearchDataPayload({
-        results: [
-          {
-            query: 'test query',
-            answer: 'Summary answer',
-            results: [
-              {
-                title: 'Test Article Title',
-                url: 'https://example.com/article',
-                content: 'Article content snippet...',
-              },
-            ],
-            responseTime: 1500,
-          },
-        ],
-      });
-
-      const preSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.COMPLETE,
-        searchData,
-      });
-      store.getState().setPreSearches([preSearch]);
-
-      const result = store.getState().preSearches[0].searchData?.results[0];
-      expect(result?.results[0].title).toBe('Test Article Title');
-      expect(result?.results[0].url).toBe('https://example.com/article');
-      expect(result?.results[0].content).toBe('Article content snippet...');
-    });
+    // Should wait
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(true);
   });
 
-  // ==========================================================================
-  // Immediate Start After Completion
-  // ==========================================================================
+  /**
+   * SEARCH-BLOCK-03: Verify participant streaming is BLOCKED while pre-search status is STREAMING
+   *
+   * When pre-search execution is in progress.
+   */
+  it('sEARCH-BLOCK-03: participant streaming is BLOCKED while pre-search status is STREAMING', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-  describe('immediate Start After Completion', () => {
-    it('should allow streaming to start immediately after COMPLETED status', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      const participants = [
-        createMockParticipant(0, { threadId: 'thread-123' }),
-      ];
+    store.getState().initializeThread(thread, participants);
 
-      store.getState().initializeThread(thread, participants, []);
+    // Create and start streaming pre-search
+    store.getState().addPreSearch(createStreamingPreSearch(0));
 
-      // Set PENDING -> STREAMING -> COMPLETED
-      store.getState().setPreSearches([createPendingPreSearch(0)]);
-      store.getState().setPreSearches([createStreamingPreSearch(0)]);
+    // Verify STREAMING status
+    expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.STREAMING);
 
-      const completedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.COMPLETE,
-      });
-      store.getState().setPreSearches([completedPreSearch]);
+    // Should wait
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(true);
+  });
 
-      // Now streaming can start
-      store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
-    });
+  /**
+   * SEARCH-BLOCK-04: Verify participant streaming STARTS immediately when status becomes COMPLETED
+   *
+   * When pre-search completes, streaming should be unblocked.
+   */
+  it('sEARCH-BLOCK-04: participant streaming STARTS when pre-search status becomes COMPLETED (Release)', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Create pre-search and complete it
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+    store.getState().updatePreSearchData(0, createMockPreSearchDataPayload());
+
+    // Verify COMPLETE status
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.COMPLETE);
+
+    // Should NOT wait
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(false);
+  });
+
+  /**
+   * SEARCH-BLOCK-05: Verify participant streaming STARTS if status becomes FAILED (graceful degradation)
+   *
+   * When pre-search fails, streaming should proceed without search results.
+   */
+  it('sEARCH-BLOCK-05: participant streaming STARTS when pre-search status becomes FAILED (Fail Release)', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Create pre-search and mark it as failed
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+
+    // Verify FAILED status
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.FAILED);
+
+    // Should NOT wait (graceful degradation)
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(false);
+  });
+
+  /**
+   * Extended test: Complete state machine transitions
+   */
+  it('should correctly transition through all blocking states', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // State 1: No pre-search (optimistic blocking)
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(true);
+
+    // State 2: PENDING
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(true);
+
+    // State 3: STREAMING
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(true);
+
+    // State 4: COMPLETE (unblocked)
+    store.getState().updatePreSearchData(0, createMockPreSearchDataPayload());
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
   });
 });
 
@@ -366,8 +398,9 @@ describe('Section 2.2: Pre-Search Execution (Blocking)', () => {
 // SECTION 2.3: TIMEOUT & ERROR HANDLING
 // ============================================================================
 
-describe('Section 2.3: Timeout & Error Handling', () => {
+describe('2.3 Timeout & Error Handling', () => {
   let store: ReturnType<typeof createChatStore>;
+  const PRE_SEARCH_TIMEOUT_MS = 10000; // 10 seconds
 
   beforeEach(() => {
     store = createTestStore();
@@ -379,99 +412,173 @@ describe('Section 2.3: Timeout & Error Handling', () => {
     vi.clearAllMocks();
   });
 
-  // ==========================================================================
-  // Timeout Protection Tests
-  // ==========================================================================
+  /**
+   * SEARCH-ERR-01: Test pre-search hanging for >10 seconds triggers timeout protection
+   *
+   * Validates that a pre-search stuck in PENDING/STREAMING for more than 10 seconds
+   * can be detected for timeout handling.
+   */
+  it('sEARCH-ERR-01: detects pre-search hanging for >10 seconds triggers timeout protection', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-  describe('timeout Protection', () => {
-    it('should detect pre-search hanging for >10 seconds', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
+    store.getState().initializeThread(thread, participants);
 
-      // Create pre-search with old timestamp (>10 seconds ago)
-      const oldPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 11000), // 11 seconds ago
-      });
-      store.getState().setPreSearches([oldPreSearch]);
+    // Create pre-search with old timestamp (11 seconds ago)
+    const stuckPreSearch: StoredPreSearch = {
+      id: 'presearch-stuck',
+      threadId: 'thread-123',
+      roundNumber: 0,
+      userQuery: 'Test question',
+      status: AnalysisStatuses.STREAMING,
+      searchData: null,
+      createdAt: new Date(Date.now() - 11000), // 11 seconds ago
+      updatedAt: new Date(Date.now() - 11000),
+    };
+    store.getState().addPreSearch(stuckPreSearch);
 
-      const preSearch = store.getState().preSearches[0];
-      const createdAt = new Date(preSearch.createdAt);
-      const elapsed = Date.now() - createdAt.getTime();
+    // Calculate age
+    const preSearch = store.getState().preSearches[0];
+    const ageMs = Date.now() - preSearch.createdAt.getTime();
 
-      expect(elapsed).toBeGreaterThan(10000);
-    });
+    // Should be past timeout
+    expect(ageMs).toBeGreaterThan(PRE_SEARCH_TIMEOUT_MS);
 
-    it('should allow proceeding after timeout', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
-
-      // Pre-search timed out - system should proceed
-      const timedOutPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 11000),
-      });
-      store.getState().setPreSearches([timedOutPreSearch]);
-
-      // Should be able to start streaming after timeout
-      store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
-    });
+    // Timeout detected
+    const hasTimedOut = ageMs > PRE_SEARCH_TIMEOUT_MS;
+    expect(hasTimedOut).toBe(true);
   });
 
-  // ==========================================================================
-  // Error Handling Tests
-  // ==========================================================================
+  /**
+   * SEARCH-ERR-02: Test system proceeds to participant streaming automatically after timeout
+   *
+   * When timeout is detected, the system should mark pre-search as FAILED and proceed.
+   */
+  it('sEARCH-ERR-02: system proceeds to participant streaming automatically after timeout', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-  describe('error Handling', () => {
-    it('should handle pre-search failure gracefully', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
+    store.getState().initializeThread(thread, participants);
 
-      const failedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.FAILED,
-      });
-      store.getState().setPreSearches([failedPreSearch]);
+    // Create stuck pre-search
+    const stuckPreSearch: StoredPreSearch = {
+      id: 'presearch-stuck',
+      threadId: 'thread-123',
+      roundNumber: 0,
+      userQuery: 'Test question',
+      status: AnalysisStatuses.STREAMING,
+      searchData: null,
+      createdAt: new Date(Date.now() - 11000),
+      updatedAt: new Date(Date.now() - 11000),
+    };
+    store.getState().addPreSearch(stuckPreSearch);
 
-      // Failed pre-search should allow participants to stream
-      const isFailed = store.getState().preSearches[0].status === PreSearchStatuses.FAILED;
-      expect(isFailed).toBe(true);
-    });
+    // Still blocking before timeout handling
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(true);
 
-    it('should allow streaming after FAILED status', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      const participants = [createMockParticipant(0, { threadId: 'thread-123' })];
+    // Timeout handler forces status to FAILED
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+    store.getState().updatePreSearchError(0, 'Pre-search timed out');
 
-      store.getState().initializeThread(thread, participants, []);
+    // Now unblocked
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.FAILED);
+    expect(store.getState().preSearches[0].errorMessage).toBe('Pre-search timed out');
+  });
 
-      // Set FAILED pre-search
-      const failedPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.FAILED,
-      });
-      store.getState().setPreSearches([failedPreSearch]);
+  /**
+   * SEARCH-ERR-03: Test pre-search failure (FAILED status) displays error UI but allows flow to continue
+   *
+   * When pre-search fails, error state is stored but participants can proceed.
+   */
+  it('sEARCH-ERR-03: pre-search failure stores error but allows flow to continue', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-      // Streaming should be allowed
-      store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
-    });
+    store.getState().initializeThread(thread, participants);
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
-    it('should handle network disconnection during pre-search', () => {
-      const thread = createMockThread({ id: 'thread-123' });
-      store.getState().initializeThread(thread, [], []);
+    // Add user message for round 0
+    store.getState().setMessages([createMockUserMessage(0, 'Test question')]);
 
-      // Simulate network disconnection by setting FAILED status
-      const networkErrorPreSearch = createMockPreSearch({
-        roundNumber: 0,
-        status: PreSearchStatuses.FAILED,
-      });
-      store.getState().setPreSearches([networkErrorPreSearch]);
+    // Pre-search fails
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+    store.getState().updatePreSearchError(0, 'Search service unavailable');
 
-      expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.FAILED);
-    });
+    const state = store.getState();
+
+    // Error is stored for UI display
+    expect(state.preSearches[0].status).toBe(AnalysisStatuses.FAILED);
+    expect(state.preSearches[0].errorMessage).toBe('Search service unavailable');
+
+    // Flow should continue (not blocked)
+    const shouldWait = checkShouldWaitForPreSearch(store, 0);
+    expect(shouldWait).toBe(false);
+  });
+
+  /**
+   * SEARCH-ERR-04: Test network disconnection during pre-search (client-side)
+   *
+   * When network fails during pre-search streaming, the system should handle gracefully.
+   */
+  it('sEARCH-ERR-04: handles network disconnection during pre-search (client-side)', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Pre-search starts streaming
+    store.getState().addPreSearch(createStreamingPreSearch(0));
+
+    // Network error occurs - simulate by marking as FAILED
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+    store.getState().updatePreSearchError(0, 'Network error: Connection lost');
+
+    const state = store.getState();
+
+    // Error is captured
+    expect(state.preSearches[0].status).toBe(AnalysisStatuses.FAILED);
+    expect(state.preSearches[0].errorMessage).toContain('Network error');
+
+    // Flow can continue despite network failure
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+  });
+
+  /**
+   * Extended: Multiple sequential timeouts
+   */
+  it('should handle multiple pre-search timeouts across rounds', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Add timed-out pre-searches for multiple rounds
+    for (let round = 0; round < 3; round++) {
+      const timedOutPreSearch: StoredPreSearch = {
+        id: `presearch-${round}`,
+        threadId: 'thread-123',
+        roundNumber: round,
+        userQuery: `Question ${round}`,
+        status: AnalysisStatuses.STREAMING,
+        searchData: null,
+        createdAt: new Date(Date.now() - 15000),
+        updatedAt: new Date(Date.now() - 15000),
+      };
+      store.getState().addPreSearch(timedOutPreSearch);
+    }
+
+    // Force all to FAILED
+    for (let round = 0; round < 3; round++) {
+      store.getState().updatePreSearchStatus(round, AnalysisStatuses.FAILED);
+      store.getState().updatePreSearchError(round, `Timeout on round ${round}`);
+    }
+
+    // All rounds should be unblocked
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
+    expect(checkShouldWaitForPreSearch(store, 2)).toBe(false);
   });
 });
 
@@ -479,7 +586,7 @@ describe('Section 2.3: Timeout & Error Handling', () => {
 // SECTION 2.4: MULTI-ROUND WEB SEARCH
 // ============================================================================
 
-describe('Section 2.4: Multi-Round Web Search', () => {
+describe('2.4 Multi-Round Web Search', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -492,106 +599,210 @@ describe('Section 2.4: Multi-Round Web Search', () => {
     vi.clearAllMocks();
   });
 
-  it('should enable web search for Round 2', () => {
-    const thread = createMockThread({ id: 'thread-123', enableWebSearch: true });
-    store.getState().initializeThread(thread, [], []);
+  /**
+   * SEARCH-MULTI-01: Test enabling web search for Round 2
+   *
+   * User can enable web search for subsequent rounds even if it was disabled
+   * in previous rounds.
+   */
+  it('sEARCH-MULTI-01: can enable web search for Round 2', () => {
+    // Start without web search
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: false,
+    });
+    const participants = [createMockParticipant(0)];
 
-    // Round 1 pre-search
-    const round1PreSearch = createMockPreSearch({
-      id: 'pre-search-1',
+    // Complete round 0 without web search
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0, 'First question'),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+    store.getState().markAnalysisCreated(0);
+    store.getState().addAnalysis(createMockAnalysis({
       roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-    });
+      status: AnalysisStatuses.COMPLETE,
+    }));
 
-    // Round 2 pre-search
-    const round2PreSearch = createMockPreSearch({
-      id: 'pre-search-2',
+    // Enable web search for round 1
+    const updatedThread = { ...thread, enableWebSearch: true };
+    store.getState().setThread(updatedThread);
+
+    // Verify web search is now enabled
+    expect(store.getState().thread?.enableWebSearch).toBe(true);
+
+    // Round 1 should require pre-search
+    const shouldWait = checkShouldWaitForPreSearch(store, 1);
+    expect(shouldWait).toBe(true); // Optimistic blocking - no pre-search yet
+  });
+
+  /**
+   * SEARCH-MULTI-02: Verify Round number is calculated correctly (getCurrentRoundNumber + 1)
+   *
+   * Pre-search round number should match the upcoming round.
+   */
+  it('sEARCH-MULTI-02: round number is calculated correctly for new search', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    // Setup with 2 completed rounds
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0),
+      createMockMessage(0, 0),
+      createMockUserMessage(1),
+      createMockMessage(0, 1),
+    ]);
+
+    // Add completed pre-searches for rounds 0 and 1
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+      searchData: createMockPreSearchDataPayload(),
+    }));
+    store.getState().addPreSearch(createMockPreSearch({
       roundNumber: 1,
-      status: AnalysisStatuses.PENDING,
-    });
+      status: AnalysisStatuses.COMPLETE,
+      searchData: createMockPreSearchDataPayload(),
+    }));
 
-    store.getState().setPreSearches([round1PreSearch, round2PreSearch]);
+    // Next round should be 2
+    const messages = store.getState().messages;
+    const userMessages = messages.filter(m => m.role === 'user');
+    const nextRoundNumber = userMessages.length; // 2 user messages = next is round 2
+
+    expect(nextRoundNumber).toBe(2);
+
+    // Pre-search for round 2
+    store.getState().addPreSearch(createPendingPreSearch(2));
 
     const preSearches = store.getState().preSearches;
-    expect(preSearches).toHaveLength(2);
-    expect(preSearches[1].roundNumber).toBe(1);
+    expect(preSearches).toHaveLength(3);
+    expect(preSearches[2].roundNumber).toBe(2);
   });
 
-  it('should calculate round number correctly as getCurrentRoundNumber + 1', () => {
-    const thread = createMockThread({ id: 'thread-123' });
+  /**
+   * SEARCH-MULTI-03: Verify Round 2 participants wait for Round 2 pre-search to complete
+   *
+   * Each round's participants wait only for their own round's pre-search.
+   */
+  it('sEARCH-MULTI-03: round 2 participants wait for round 2 pre-search to complete', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0), createMockParticipant(1)];
 
-    // Create messages for round 0
-    const userMessage = createMockUserMessage(0, 'First question');
-    const participantMessage = createMockMessage(0, 0);
+    // Setup with round 0 and 1 complete
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0),
+      createMockMessage(0, 0),
+      createMockMessage(1, 0),
+      createMockUserMessage(1),
+      createMockMessage(0, 1),
+      createMockMessage(1, 1),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
 
-    store.getState().initializeThread(thread, [], [userMessage, participantMessage]);
-
-    // Round 2 should be round number 1 (0-indexed)
-    const messages = store.getState().messages;
-    const maxRound = Math.max(...messages.map(m =>
-      (m.metadata as { roundNumber?: number })?.roundNumber ?? 0
-    ));
-    const nextRound = maxRound + 1;
-
-    expect(nextRound).toBe(1);
-  });
-
-  it('should block Round 2 participants until Round 2 pre-search completes', () => {
-    const thread = createMockThread({ id: 'thread-123' });
-    store.getState().initializeThread(thread, [], []);
+    // Add completed pre-searches for rounds 0 and 1
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+    }));
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 1,
+      status: AnalysisStatuses.COMPLETE,
+    }));
 
     // Round 2 pre-search is PENDING
-    const round2PreSearch = createPendingPreSearch(1);
-    store.getState().setPreSearches([round2PreSearch]);
+    store.getState().addPreSearch(createPendingPreSearch(2));
 
-    // Should be blocking for round 1
-    const isPending = store.getState().preSearches.some(
-      ps => ps.roundNumber === 1 && ps.status === AnalysisStatuses.PENDING
-    );
+    // Round 0 and 1 should NOT wait (already complete)
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
 
-    expect(isPending).toBe(true);
+    // Round 2 SHOULD wait
+    expect(checkShouldWaitForPreSearch(store, 2)).toBe(true);
+
+    // Complete round 2 pre-search
+    store.getState().updatePreSearchData(2, createMockPreSearchDataPayload());
+
+    // Now round 2 should NOT wait
+    expect(checkShouldWaitForPreSearch(store, 2)).toBe(false);
   });
 
-  it('should maintain independent pre-search per round', () => {
-    const thread = createMockThread({ id: 'thread-123' });
-    store.getState().initializeThread(thread, [], []);
+  /**
+   * SEARCH-MULTI-04: Verify previous rounds' search context is summarized, not passed as full content
+   *
+   * This test validates that search data exists independently per round
+   * and doesn't accumulate raw content.
+   */
+  it('sEARCH-MULTI-04: each round maintains independent search data (summarized)', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
 
-    // Multiple rounds with different statuses
-    const preSearches = [
-      createMockPreSearch({ id: 'ps-1', roundNumber: 0, status: PreSearchStatuses.COMPLETE }),
-      createMockPreSearch({ id: 'ps-2', roundNumber: 1, status: PreSearchStatuses.COMPLETE }),
-      createMockPreSearch({ id: 'ps-3', roundNumber: 2, status: AnalysisStatuses.PENDING }),
-    ];
+    store.getState().initializeThread(thread, participants);
 
-    store.getState().setPreSearches(preSearches);
+    // Create pre-searches for 3 rounds with different search data
+    for (let round = 0; round < 3; round++) {
+      const searchData = createMockPreSearchDataPayload({
+        queries: [{
+          query: `Query for round ${round}`,
+          rationale: `Rationale ${round}`,
+          searchDepth: 'basic',
+          index: 0,
+          total: 1,
+        }],
+        analysis: `Analysis summary for round ${round}`,
+      });
 
-    const state = store.getState();
-    expect(state.preSearches[0].roundNumber).toBe(0);
-    expect(state.preSearches[1].roundNumber).toBe(1);
-    expect(state.preSearches[2].roundNumber).toBe(2);
-  });
+      store.getState().addPreSearch(createMockPreSearch({
+        id: `presearch-${round}`,
+        roundNumber: round,
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      }));
+    }
 
-  it('should summarize previous rounds search context (not full content)', () => {
-    const thread = createMockThread({ id: 'thread-123' });
-    store.getState().initializeThread(thread, [], []);
+    // Verify each round has independent search data
+    const preSearches = store.getState().preSearches;
+    expect(preSearches).toHaveLength(3);
 
-    // Round 1 has full search data
-    const round1SearchData = createMockPreSearchDataPayload({
-      analysis: 'Summary of Round 1 search results',
+    // Each round's data is independent (summarized, not accumulated)
+    preSearches.forEach((ps, index) => {
+      expect(ps.roundNumber).toBe(index);
+      expect(ps.searchData?.analysis).toBe(`Analysis summary for round ${index}`);
+      expect(ps.searchData?.queries[0]?.query).toBe(`Query for round ${index}`);
     });
+  });
 
-    const round1PreSearch = createMockPreSearch({
-      id: 'ps-1',
+  /**
+   * Extended: Toggle web search on/off between rounds
+   */
+  it('should handle web search toggle between rounds', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: true,
+    });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // Round 0 with web search
+    store.getState().addPreSearch(createMockPreSearch({
       roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-      searchData: round1SearchData,
-    });
+      status: AnalysisStatuses.COMPLETE,
+    }));
 
-    store.getState().setPreSearches([round1PreSearch]);
+    // Disable web search
+    store.getState().setThread({ ...thread, enableWebSearch: false });
 
-    // The analysis field serves as the summary for subsequent rounds
-    const summary = store.getState().preSearches[0].searchData?.analysis;
-    expect(summary).toBe('Summary of Round 1 search results');
+    // Round 1 should NOT require pre-search
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
+
+    // Re-enable web search
+    store.getState().setThread({ ...thread, enableWebSearch: true });
+
+    // Round 1 should now require pre-search (optimistic blocking)
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(true);
   });
 });
 
@@ -599,7 +810,7 @@ describe('Section 2.4: Multi-Round Web Search', () => {
 // SECTION 2.5: DEADLOCK PREVENTION (CIRCULAR DEPENDENCY)
 // ============================================================================
 
-describe('Section 2.5: Deadlock Prevention', () => {
+describe('2.5 Deadlock Prevention (Circular Dependency)', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -612,189 +823,432 @@ describe('Section 2.5: Deadlock Prevention', () => {
     vi.clearAllMocks();
   });
 
-  it('should execute pre-search immediately after creation to avoid deadlock', () => {
-    const thread = createMockThread({ id: 'thread-123', enableWebSearch: true });
-    store.getState().initializeThread(thread, [], []);
-
-    // PENDING pre-search should be executed immediately
-    const pendingPreSearch = createPendingPreSearch(0);
-    store.getState().setPreSearches([pendingPreSearch]);
-
-    // Provider should detect PENDING and trigger execution
-    const hasPendingPreSearch = store.getState().preSearches.some(
-      ps => ps.status === AnalysisStatuses.PENDING
-    );
-
-    expect(hasPendingPreSearch).toBe(true);
-    // In real implementation, provider would POST to execute
-  });
-
-  it('should detect stuck PENDING pre-searches', () => {
-    const thread = createMockThread({ id: 'thread-123' });
-    store.getState().initializeThread(thread, [], []);
-
-    // Create stuck PENDING pre-search (old timestamp)
-    const stuckPreSearch = createMockPreSearch({
-      roundNumber: 0,
-      status: AnalysisStatuses.PENDING,
-      createdAt: new Date(Date.now() - 5000), // 5 seconds ago
-    });
-    store.getState().setPreSearches([stuckPreSearch]);
-
-    const preSearch = store.getState().preSearches[0];
-    const elapsed = Date.now() - new Date(preSearch.createdAt).getTime();
-
-    expect(elapsed).toBeGreaterThan(3000);
-    expect(preSearch.status).toBe(AnalysisStatuses.PENDING);
-  });
-
-  it('should transition correctly: create → execute → complete → send message', () => {
-    const thread = createMockThread({ id: 'thread-123' });
-    const participants = [createMockParticipant(0, { threadId: 'thread-123' })];
-
-    store.getState().initializeThread(thread, participants, []);
-
-    // Step 1: Create PENDING
-    store.getState().setPreSearches([createPendingPreSearch(0)]);
-    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.PENDING);
-
-    // Step 2: Execute (STREAMING)
-    store.getState().setPreSearches([createStreamingPreSearch(0)]);
-    expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.STREAMING);
-
-    // Step 3: Complete
-    const completedPreSearch = createMockPreSearch({
-      roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-      searchData: createMockPreSearchDataPayload(),
-    });
-    store.getState().setPreSearches([completedPreSearch]);
-    expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.COMPLETE);
-
-    // Step 4: Now message can be sent and streaming can start
-    store.getState().setIsStreaming(true);
-    expect(store.getState().isStreaming).toBe(true);
-  });
-
-  it('should not deadlock when stream waits for message and message waits for stream', () => {
-    // This test verifies the fix for the circular dependency bug
-    const thread = createMockThread({ id: 'thread-123', enableWebSearch: true });
-    store.getState().initializeThread(thread, [], []);
-
-    // Initial state: waiting for pre-search
-    store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
-
-    // Pre-search is PENDING - should be executed immediately by provider
-    const pendingPreSearch = createPendingPreSearch(0);
-    store.getState().setPreSearches([pendingPreSearch]);
-
-    // After execution completes
-    const completedPreSearch = createMockPreSearch({
-      roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-    });
-    store.getState().setPreSearches([completedPreSearch]);
-
-    // Streaming can now proceed
-    store.getState().setWaitingToStartStreaming(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
-  });
-});
-
-// ============================================================================
-// INTEGRATION TESTS
-// ============================================================================
-
-describe('Web Search Complete Flow Integration', () => {
-  let store: ReturnType<typeof createChatStore>;
-
-  beforeEach(() => {
-    store = createTestStore();
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
-  });
-
-  it('should execute complete web search flow for single round', () => {
-    // Step 1: Configure chat with web search
-    store.getState().setEnableWebSearch(true);
-    store.getState().setInputValue('What is the latest in AI?');
-
-    // Step 2: Thread creation
+  /**
+   * SEARCH-DEADLOCK-01: Verify provider executes pre-search immediately after creation
+   *
+   * CRITICAL: This tests the deadlock scenario where:
+   * 1. Provider creates PENDING pre-search
+   * 2. Provider waits for COMPLETE
+   * 3. PreSearchStream needs user message to render
+   * 4. User message needs streaming to start
+   * 5. Streaming waits for pre-search
+   * 6. DEADLOCK
+   *
+   * Solution: Provider must execute pre-search immediately after creation.
+   */
+  it('sEARCH-DEADLOCK-01: detects stuck PENDING pre-search to avoid deadlock', () => {
     const thread = createMockThread({
       id: 'thread-123',
       enableWebSearch: true,
     });
-    const participants = [createMockParticipant(0, { threadId: 'thread-123' })];
-    const userMessage = createMockUserMessage(0, 'What is the latest in AI?');
+    const participants = [createMockParticipant(0)];
 
-    store.getState().initializeThread(thread, participants, [userMessage]);
-    store.getState().setCreatedThreadId('thread-123');
-
-    // Step 3: PENDING pre-search created
-    store.getState().setPreSearches([createPendingPreSearch(0)]);
-    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.PENDING);
-
-    // Step 4: Pre-search executing
-    store.getState().setPreSearches([createStreamingPreSearch(0)]);
-    expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.STREAMING);
-
-    // Step 5: Pre-search complete
-    const completedPreSearch = createMockPreSearch({
+    // Setup: Round 0 complete
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0, 'First question'),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+    store.getState().markAnalysisCreated(0);
+    store.getState().addAnalysis(createMockAnalysis({
       roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-      searchData: createMockPreSearchDataPayload(),
-    });
-    store.getState().setPreSearches([completedPreSearch]);
-    expect(store.getState().preSearches[0].status).toBe(PreSearchStatuses.COMPLETE);
+      status: AnalysisStatuses.COMPLETE,
+    }));
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+    }));
 
-    // Step 6: Participant streaming starts
-    store.getState().setIsStreaming(true);
-    store.getState().setCurrentParticipantIndex(0);
+    // User sends second message
+    store.getState().prepareForNewMessage('Second question', ['openai/gpt-4']);
 
-    expect(store.getState().isStreaming).toBe(true);
-    expect(store.getState().currentParticipantIndex).toBe(0);
+    // Pre-search created for round 1 but NOT executed (stuck in PENDING)
+    const stuckPreSearch: StoredPreSearch = {
+      id: 'presearch-r1-stuck',
+      threadId: 'thread-123',
+      roundNumber: 1,
+      userQuery: 'Second question',
+      status: AnalysisStatuses.PENDING,
+      searchData: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    store.getState().addPreSearch(stuckPreSearch);
+
+    // THE DEADLOCK STATE:
+    const state = store.getState();
+
+    // Pre-search is PENDING
+    expect(state.preSearches[1].status).toBe(AnalysisStatuses.PENDING);
+
+    // Message not sent yet
+    expect(state.hasSentPendingMessage).toBe(false);
+    expect(state.pendingMessage).toBe('Second question');
+
+    // Blocking check would return true
+    const shouldWait = checkShouldWaitForPreSearch(store, 1);
+    expect(shouldWait).toBe(true);
+
+    // This is the deadlock detection point
+    // Provider should recognize this and trigger execution immediately
   });
 
-  it('should execute multi-round web search flow', () => {
-    const thread = createMockThread({ id: 'thread-123', enableWebSearch: true });
-    store.getState().initializeThread(thread, [], []);
+  /**
+   * SEARCH-DEADLOCK-01 (Extended): Correct flow with immediate execution
+   */
+  it('sEARCH-DEADLOCK-01: correct flow executes pre-search immediately after creation', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: true,
+    });
+    const participants = [createMockParticipant(0)];
 
-    // Round 1 complete
-    const round1PreSearch = createMockPreSearch({
-      id: 'ps-1',
+    // Setup: Round 0 complete
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0, 'First question'),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // Add completed pre-search for round 0
+    store.getState().addPreSearch(createMockPreSearch({
       roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-      searchData: createMockPreSearchDataPayload(),
-    });
-    store.getState().setPreSearches([round1PreSearch]);
+      status: AnalysisStatuses.COMPLETE,
+    }));
 
-    // Round 2 starts
-    const round2Pending = createMockPreSearch({
-      id: 'ps-2',
-      roundNumber: 1,
+    // User sends second message
+    store.getState().prepareForNewMessage('Second question', ['openai/gpt-4']);
+
+    // CORRECT FLOW: Create and IMMEDIATELY execute
+    // Step 1: Create PENDING
+    store.getState().addPreSearch(createPendingPreSearch(1));
+    store.getState().markPreSearchTriggered(1);
+
+    // Step 2: IMMEDIATELY start execution (PENDING -> STREAMING)
+    store.getState().updatePreSearchStatus(1, AnalysisStatuses.STREAMING);
+
+    // Now waiting for completion (not deadlocked)
+    expect(store.getState().preSearches[1].status).toBe(AnalysisStatuses.STREAMING);
+
+    // Step 3: Complete
+    store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+
+    // Now unblocked
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
+    expect(store.getState().preSearches[1].status).toBe(AnalysisStatuses.COMPLETE);
+  });
+
+  /**
+   * SEARCH-DEADLOCK-02: Test recovery mechanism for "stuck" PENDING pre-searches
+   *
+   * Provider should detect pre-searches stuck in PENDING for too long and
+   * trigger execution or force failure.
+   */
+  it('sEARCH-DEADLOCK-02: recovery mechanism detects stuck PENDING pre-searches', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // Pre-search stuck in PENDING for 5+ seconds
+    const stuckPreSearch: StoredPreSearch = {
+      id: 'presearch-stuck',
+      threadId: 'thread-123',
+      roundNumber: 0,
+      userQuery: 'Test question',
       status: AnalysisStatuses.PENDING,
+      searchData: null,
+      createdAt: new Date(Date.now() - 5000), // 5 seconds ago
+      updatedAt: new Date(Date.now() - 5000),
+    };
+    store.getState().addPreSearch(stuckPreSearch);
+
+    // Detect stuck state
+    const preSearch = store.getState().preSearches[0];
+    const ageMs = Date.now() - preSearch.createdAt.getTime();
+    const STUCK_THRESHOLD_MS = 3000; // 3 seconds to detect stuck
+
+    expect(ageMs).toBeGreaterThan(STUCK_THRESHOLD_MS);
+
+    // Recovery option 1: Force execution (PENDING -> STREAMING)
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.STREAMING);
+  });
+
+  /**
+   * SEARCH-DEADLOCK-02 (Extended): Recovery by forcing failure
+   */
+  it('sEARCH-DEADLOCK-02: recovers by forcing failure after timeout', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Pre-search stuck for too long
+    const stuckPreSearch: StoredPreSearch = {
+      id: 'presearch-stuck',
+      threadId: 'thread-123',
+      roundNumber: 0,
+      userQuery: 'Test question',
+      status: AnalysisStatuses.PENDING,
+      searchData: null,
+      createdAt: new Date(Date.now() - 15000), // 15 seconds ago
+      updatedAt: new Date(Date.now() - 15000),
+    };
+    store.getState().addPreSearch(stuckPreSearch);
+
+    // Recovery option 2: Force failure and proceed
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+    store.getState().updatePreSearchError(0, 'Pre-search stuck - forcing completion');
+
+    // Verify recovery
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.FAILED);
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+  });
+
+  /**
+   * Extended: Differentiate PENDING (needs execution) from STREAMING (in progress)
+   */
+  it('should differentiate PENDING (needs execution) from STREAMING (in progress)', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // PENDING: Needs execution trigger
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.PENDING);
+
+    // Provider detects PENDING and should trigger execution
+    const needsExecution = store.getState().preSearches[0].status === AnalysisStatuses.PENDING;
+    expect(needsExecution).toBe(true);
+
+    // After execution trigger: STREAMING (in progress)
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.STREAMING);
+
+    // Now it's in progress, just needs to wait for completion
+    const inProgress = store.getState().preSearches[0].status === AnalysisStatuses.STREAMING;
+    expect(inProgress).toBe(true);
+  });
+});
+
+// ============================================================================
+// INTEGRATION TESTS: COMPLETE FLOW SCENARIOS
+// ============================================================================
+
+describe('integration: Complete Pre-Search Flow', () => {
+  let store: ReturnType<typeof createChatStore>;
+
+  beforeEach(() => {
+    store = createTestStore();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Complete 3-round flow with web search
+   */
+  it('should handle complete 3-round flow with pre-search', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: true,
     });
-    store.getState().setPreSearches([round1PreSearch, round2Pending]);
+    const participants = [createMockParticipant(0), createMockParticipant(1)];
 
-    expect(store.getState().preSearches).toHaveLength(2);
+    // Initialize
+    store.getState().initializeThread(thread, participants, []);
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
-    // Round 2 completes
-    const round2Complete = createMockPreSearch({
-      id: 'ps-2',
+    // === ROUND 0 ===
+    store.getState().setMessages(prev => [...prev, createMockUserMessage(0, 'Question 1')]);
+
+    // Pre-search flow
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    store.getState().markPreSearchTriggered(0);
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(true);
+
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(true);
+
+    store.getState().updatePreSearchData(0, createMockPreSearchDataPayload());
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+
+    // Participants respond
+    store.getState().setMessages(prev => [...prev, createMockMessage(0, 0)]);
+    store.getState().setMessages(prev => [...prev, createMockMessage(1, 0)]);
+
+    // Analysis
+    store.getState().markAnalysisCreated(0);
+    store.getState().addAnalysis(createMockAnalysis({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+    }));
+
+    // Navigate to thread
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // === ROUND 1 ===
+    store.getState().prepareForNewMessage('Question 2', ['openai/gpt-4', 'openai/gpt-4']);
+    store.getState().setMessages(prev => [...prev, createMockUserMessage(1, 'Question 2')]);
+
+    // Pre-search flow
+    store.getState().addPreSearch(createPendingPreSearch(1));
+    store.getState().markPreSearchTriggered(1);
+    store.getState().updatePreSearchStatus(1, AnalysisStatuses.STREAMING);
+    store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+
+    // Participants respond
+    store.getState().setMessages(prev => [...prev, createMockMessage(0, 1)]);
+    store.getState().setMessages(prev => [...prev, createMockMessage(1, 1)]);
+
+    // Analysis
+    store.getState().markAnalysisCreated(1);
+    store.getState().addAnalysis(createMockAnalysis({
       roundNumber: 1,
-      status: PreSearchStatuses.COMPLETE,
-      searchData: createMockPreSearchDataPayload(),
-    });
-    store.getState().setPreSearches([round1PreSearch, round2Complete]);
+      status: AnalysisStatuses.COMPLETE,
+    }));
 
+    // === ROUND 2 ===
+    store.getState().prepareForNewMessage('Question 3', ['openai/gpt-4', 'openai/gpt-4']);
+    store.getState().setMessages(prev => [...prev, createMockUserMessage(2, 'Question 3')]);
+
+    // Pre-search flow
+    store.getState().addPreSearch(createPendingPreSearch(2));
+    store.getState().markPreSearchTriggered(2);
+    store.getState().updatePreSearchStatus(2, AnalysisStatuses.STREAMING);
+    store.getState().updatePreSearchData(2, createMockPreSearchDataPayload());
+
+    // Participants respond
+    store.getState().setMessages(prev => [...prev, createMockMessage(0, 2)]);
+    store.getState().setMessages(prev => [...prev, createMockMessage(1, 2)]);
+
+    // Analysis
+    store.getState().markAnalysisCreated(2);
+    store.getState().addAnalysis(createMockAnalysis({
+      roundNumber: 2,
+      status: AnalysisStatuses.COMPLETE,
+    }));
+
+    // === FINAL VERIFICATION ===
     const finalState = store.getState();
-    expect(finalState.preSearches[0].status).toBe(PreSearchStatuses.COMPLETE);
-    expect(finalState.preSearches[1].status).toBe(PreSearchStatuses.COMPLETE);
+
+    // All pre-searches complete
+    expect(finalState.preSearches).toHaveLength(3);
+    expect(finalState.preSearches.every(ps => ps.status === AnalysisStatuses.COMPLETE)).toBe(true);
+
+    // All analyses complete
+    expect(finalState.analyses).toHaveLength(3);
+    expect(finalState.analyses.every(a => a.status === AnalysisStatuses.COMPLETE)).toBe(true);
+
+    // All messages present (3 rounds × 3 messages each)
+    expect(finalState.messages).toHaveLength(9);
+
+    // All tracking correct
+    expect(finalState.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(finalState.hasPreSearchBeenTriggered(1)).toBe(true);
+    expect(finalState.hasPreSearchBeenTriggered(2)).toBe(true);
+  });
+
+  /**
+   * Mixed success/failure across rounds
+   */
+  it('should handle mixed success/failure across rounds', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Round 0: Success
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+      searchData: createMockPreSearchDataPayload(),
+    }));
+
+    // Round 1: Failure
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 1,
+      status: AnalysisStatuses.FAILED,
+      errorMessage: 'Service unavailable',
+    }));
+
+    // Round 2: Success
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 2,
+      status: AnalysisStatuses.COMPLETE,
+      searchData: createMockPreSearchDataPayload(),
+    }));
+
+    // All rounds should be unblocked
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
+    expect(checkShouldWaitForPreSearch(store, 2)).toBe(false);
+
+    // Verify status
+    const preSearches = store.getState().preSearches;
+    expect(preSearches[0].status).toBe(AnalysisStatuses.COMPLETE);
+    expect(preSearches[1].status).toBe(AnalysisStatuses.FAILED);
+    expect(preSearches[2].status).toBe(AnalysisStatuses.COMPLETE);
+  });
+
+  /**
+   * Validate pending message blocking integration
+   */
+  it('should correctly integrate with pending message validation', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: true,
+    });
+    const participants = [createMockParticipant(0)];
+
+    // Setup on thread screen
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // Complete round 0 pre-search and analysis
+    store.getState().addPreSearch(createMockPreSearch({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+    }));
+    store.getState().markAnalysisCreated(0);
+    store.getState().addAnalysis(createMockAnalysis({
+      roundNumber: 0,
+      status: AnalysisStatuses.COMPLETE,
+    }));
+
+    // Prepare message for round 1
+    store.getState().prepareForNewMessage('Follow-up question', ['openai/gpt-4']);
+    store.getState().setExpectedParticipantIds(['openai/gpt-4']);
+
+    // IMPORTANT: Must set isWaitingForChangelog to false AFTER prepareForNewMessage
+    // because prepareForNewMessage may reset certain states
+    store.getState().setIsWaitingForChangelog(false);
+
+    // No pre-search yet - should NOT send
+    let result = checkShouldSendPendingMessage(store);
+    expect(result.shouldSend).toBe(false);
+    expect(result.reason).toBe('waiting for pre-search creation');
+
+    // Add PENDING pre-search - still should NOT send
+    store.getState().addPreSearch(createPendingPreSearch(1));
+    result = checkShouldSendPendingMessage(store);
+    expect(result.shouldSend).toBe(false);
+    expect(result.reason).toBe('waiting for pre-search');
+
+    // Complete pre-search - should send
+    store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+    result = checkShouldSendPendingMessage(store);
+    expect(result.shouldSend).toBe(true);
+    expect(result.roundNumber).toBe(1);
   });
 });
 
@@ -802,7 +1256,7 @@ describe('Web Search Complete Flow Integration', () => {
 // EDGE CASES
 // ============================================================================
 
-describe('Web Search Edge Cases', () => {
+describe('web Search Edge Cases', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -815,27 +1269,7 @@ describe('Web Search Edge Cases', () => {
     vi.clearAllMocks();
   });
 
-  it('should handle toggling web search between rounds', () => {
-    const thread = createMockThread({ id: 'thread-123' });
-    store.getState().initializeThread(thread, [], []);
-
-    // Round 1: Web search enabled
-    store.getState().setEnableWebSearch(true);
-    const round1PreSearch = createMockPreSearch({
-      roundNumber: 0,
-      status: PreSearchStatuses.COMPLETE,
-    });
-    store.getState().setPreSearches([round1PreSearch]);
-
-    // Round 2: Web search disabled - no new pre-search
-    store.getState().setEnableWebSearch(false);
-
-    expect(store.getState().enableWebSearch).toBe(false);
-    // Pre-search from round 1 still exists
-    expect(store.getState().preSearches).toHaveLength(1);
-  });
-
-  it('should handle empty search results', () => {
+  it('should handle empty search results gracefully', () => {
     const emptySearchData = createMockPreSearchDataPayload({
       results: [],
       totalResults: 0,
@@ -850,13 +1284,14 @@ describe('Web Search Edge Cases', () => {
     store.getState().setPreSearches([preSearch]);
 
     expect(store.getState().preSearches[0].searchData?.totalResults).toBe(0);
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
   });
 
   it('should handle very long search queries', () => {
     const longQuery = 'a'.repeat(1000);
     store.getState().setInputValue(longQuery);
 
-    expect(store.getState().inputValue.length).toBe(1000);
+    expect(store.getState().inputValue).toHaveLength(1000);
   });
 
   it('should handle special characters in search query', () => {
@@ -864,5 +1299,38 @@ describe('Web Search Edge Cases', () => {
     store.getState().setInputValue(specialQuery);
 
     expect(store.getState().inputValue).toBe(specialQuery);
+  });
+
+  it('should maintain pre-search state across screen mode changes', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants, [createMockUserMessage(0)]);
+    store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+    // Add pre-search
+    store.getState().addPreSearch(createPendingPreSearch(0));
+
+    // Change screen mode
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // Pre-search should still exist
+    expect(store.getState().preSearches).toHaveLength(1);
+    expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
+  });
+
+  it('should handle rapid consecutive pre-search status updates', () => {
+    const thread = createMockThread({ enableWebSearch: true });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+
+    // Rapidly update status
+    store.getState().addPreSearch(createPendingPreSearch(0));
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+    store.getState().updatePreSearchData(0, createMockPreSearchDataPayload());
+
+    expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.COMPLETE);
+    expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
   });
 });

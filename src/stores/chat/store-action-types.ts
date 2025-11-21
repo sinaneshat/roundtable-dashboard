@@ -36,7 +36,7 @@
 
 import type { UIMessage } from 'ai';
 
-import type { AnalysisStatus, FeedbackType } from '@/api/core/enums';
+import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
@@ -244,8 +244,6 @@ export type SetOnComplete = (callback?: OnComplete) => void;
 // SCREEN ACTIONS (Screen mode and read-only state)
 // ============================================================================
 
-export type ScreenMode = 'overview' | 'thread' | 'public';
-
 export type SetScreenMode = (mode: ScreenMode | null) => void;
 export type ResetScreenMode = () => void;
 
@@ -316,6 +314,25 @@ export type CompleteRegeneration = (roundNumber: number) => void;
  * - Direct navigation to /chat route
  */
 export type ResetToNewChat = () => void;
+
+/**
+ * ✅ STREAMING CONTROL: Stop ongoing streaming
+ *
+ * Calls the abort controller and sets streaming to false.
+ * Used when:
+ * - User clicks stop button
+ * - Component unmounts during streaming
+ * - Navigation away from thread
+ */
+export type StopStreaming = () => void;
+
+/**
+ * ✅ SIMPLE RESET: Alias for resetToOverview
+ *
+ * Convenience function for resetting to overview state.
+ * Used in tests and simple reset scenarios.
+ */
+export type Reset = () => void;
 
 // ============================================================================
 // AGGREGATED ACTION TYPES BY SLICE
@@ -429,6 +446,8 @@ export type OperationsActionsType = {
   completeStreaming: CompleteStreaming;
   startRegeneration: StartRegeneration;
   completeRegeneration: CompleteRegeneration;
+  stopStreaming: StopStreaming;
+  reset: Reset;
 };
 
 // ============================================================================

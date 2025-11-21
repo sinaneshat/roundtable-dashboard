@@ -15,7 +15,7 @@
 import type { UIMessage } from 'ai';
 
 import type { FeedbackType } from '@/api/core/enums';
-import { ChatModes } from '@/api/core/enums';
+import { ChatModes, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -139,7 +139,7 @@ export const CALLBACKS_DEFAULTS = {
 // ============================================================================
 
 export const SCREEN_DEFAULTS = {
-  screenMode: null as ScreenMode | null,
+  screenMode: ScreenModes.OVERVIEW as ScreenMode,
   isReadOnly: false,
 } as const;
 

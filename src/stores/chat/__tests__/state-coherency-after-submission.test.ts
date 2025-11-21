@@ -45,7 +45,7 @@ import {
 // MESSAGE ARRAY COHERENCY
 // ============================================================================
 
-describe('State Coherency: Messages Array', () => {
+describe('state Coherency: Messages Array', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -121,8 +121,12 @@ describe('State Coherency: Messages Array', () => {
       const p1r1 = createMockMessage(1, 1);
 
       store.getState().initializeThread(thread, participants, [
-        userMsg0, p0r0, p1r0,
-        userMsg1, p0r1, p1r1,
+        userMsg0,
+        p0r0,
+        p1r0,
+        userMsg1,
+        p0r1,
+        p1r1,
       ]);
 
       const state = store.getState();
@@ -178,7 +182,7 @@ describe('State Coherency: Messages Array', () => {
 // PARTICIPANT STATE COHERENCY
 // ============================================================================
 
-describe('State Coherency: Participants', () => {
+describe('state Coherency: Participants', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -258,7 +262,7 @@ describe('State Coherency: Participants', () => {
 // THREAD STATE COHERENCY
 // ============================================================================
 
-describe('State Coherency: Thread State', () => {
+describe('state Coherency: Thread State', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -334,7 +338,7 @@ describe('State Coherency: Thread State', () => {
 // FLAG COHERENCY AFTER STREAMING
 // ============================================================================
 
-describe('State Coherency: Flags After Streaming Completes', () => {
+describe('state Coherency: Flags After Streaming Completes', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -443,7 +447,7 @@ describe('State Coherency: Flags After Streaming Completes', () => {
 // ANALYSIS STATE COHERENCY
 // ============================================================================
 
-describe('State Coherency: Analysis State', () => {
+describe('state Coherency: Analysis State', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -563,7 +567,7 @@ describe('State Coherency: Analysis State', () => {
 // PRE-SEARCH STATE COHERENCY
 // ============================================================================
 
-describe('State Coherency: Pre-Search State', () => {
+describe('state Coherency: Pre-Search State', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -683,7 +687,7 @@ describe('State Coherency: Pre-Search State', () => {
 // ERROR STATE RECOVERY
 // ============================================================================
 
-describe('State Coherency: Error State Recovery', () => {
+describe('state Coherency: Error State Recovery', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -838,7 +842,7 @@ describe('State Coherency: Error State Recovery', () => {
 // MULTI-ROUND COHERENCY
 // ============================================================================
 
-describe('State Coherency: Multi-Round Conversations', () => {
+describe('state Coherency: Multi-Round Conversations', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -942,7 +946,7 @@ describe('State Coherency: Multi-Round Conversations', () => {
 // SCREEN MODE COHERENCY
 // ============================================================================
 
-describe('State Coherency: Screen Mode', () => {
+describe('state Coherency: Screen Mode', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -992,8 +996,8 @@ describe('State Coherency: Screen Mode', () => {
      */
     const state = store.getState();
 
-    // screenMode is nullable initially
-    expect(state.screenMode).toBeNull();
+    // screenMode defaults to 'overview' to prevent race conditions
+    expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
 
     // isReadOnly should be false by default
     expect(state.isReadOnly).toBe(false);

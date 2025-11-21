@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
+  ScreenModes,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -69,7 +70,7 @@ describe('thread Screen Second Message Flow', () => {
       ];
 
       store.getState().initializeThread(thread, participants, messagesR0);
-      store.getState().setScreenMode('overview');
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
       // Complete analysis for round 0
       store.getState().markAnalysisCreated(0);
@@ -87,7 +88,7 @@ describe('thread Screen Second Message Flow', () => {
       // The thread screen calls resetThreadState() or screen initialization
 
       // Thread screen initialization should reset tracking but keep thread data
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Important: Check what flags are set after "navigation"
       const stateAfterNav = store.getState();
@@ -98,7 +99,7 @@ describe('thread Screen Second Message Flow', () => {
       expect(stateAfterNav.messages).toHaveLength(3);
 
       // Screen mode should be thread
-      expect(stateAfterNav.screenMode).toBe('thread');
+      expect(stateAfterNav.screenMode).toBe(ScreenModes.THREAD);
     });
   });
 
@@ -119,7 +120,7 @@ describe('thread Screen Second Message Flow', () => {
       ];
 
       store.getState().initializeThread(thread, participants, messagesR0);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().markAnalysisCreated(0);
       store.getState().addAnalysis(createMockAnalysis({
         roundNumber: 0,
@@ -191,7 +192,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().markAnalysisCreated(0);
       store.getState().addAnalysis(createMockAnalysis({
         roundNumber: 0,
@@ -311,7 +312,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().markAnalysisCreated(0);
       store.getState().addAnalysis(createMockAnalysis({
         roundNumber: 0,
@@ -397,7 +398,7 @@ describe('thread Screen Second Message Flow', () => {
       ];
 
       store.getState().initializeThread(thread, participants, messages);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().markAnalysisCreated(0);
       store.getState().addAnalysis(createMockAnalysis({
         roundNumber: 0,
@@ -544,7 +545,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(1),
         createMockMessage(0, 1),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setIsStreaming(false);
 
       // Round 0 complete
@@ -590,7 +591,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(1),
         createMockMessage(0, 1),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setIsStreaming(false);
 
       // Round 0 complete
@@ -630,7 +631,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Rapid state changes (simulating fast operations)
       for (let i = 0; i < 10; i++) {
@@ -656,7 +657,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Set some flags from previous round
       store.getState().setHasSentPendingMessage(true);
@@ -682,7 +683,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(0),
         createMockMessage(0, 0),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Round 0 tracking set
       store.getState().markAnalysisCreated(0);
@@ -709,7 +710,7 @@ describe('thread Screen Second Message Flow', () => {
         createMockUserMessage(1),
         createMockMessage(0, 1),
       ]);
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       store.getState().markAnalysisCreated(0);
       store.getState().addAnalysis(createMockAnalysis({

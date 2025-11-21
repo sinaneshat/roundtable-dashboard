@@ -20,10 +20,10 @@ import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 import { getMessageStatus } from '@/lib/utils/message-status';
 import { getMessageMetadata } from '@/lib/utils/message-transforms';
 import { getRoundNumber, getUserMetadata, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
 const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];

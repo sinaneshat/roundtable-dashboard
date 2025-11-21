@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   ChatModes,
+  ScreenModes,
 } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -211,7 +212,7 @@ describe('round Two Analysis Status Bug', () => {
         roundNumber: 0,
         status: AnalysisStatuses.COMPLETE,
       }));
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Start round 1
       store.getState().setMessages(prev => [...prev, createMockUserMessage(1)]);
@@ -369,7 +370,7 @@ describe('round Two Analysis Status Bug', () => {
         roundNumber: 0,
         status: AnalysisStatuses.COMPLETE,
       }));
-      store.getState().setScreenMode('thread');
+      store.getState().setScreenMode(ScreenModes.THREAD);
 
       // State should be idle
       let state = store.getState();
