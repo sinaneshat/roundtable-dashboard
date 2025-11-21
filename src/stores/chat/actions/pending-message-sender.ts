@@ -107,7 +107,10 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   // BUG FIXES:
   // 1. Added PENDING status check (was only checking STREAMING)
   // 2. Added optimistic wait when pre-search doesn't exist yet (race condition fix)
-  const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
+  // 3. ✅ FIX: Use form state as sole source of truth for web search enabled
+  //    Form state is synced with thread on load, then user can toggle
+  //    This allows both enabling AND disabling web search mid-conversation
+  const webSearchEnabled = state.enableWebSearch;
 
   if (webSearchEnabled) {
     const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === newRoundNumber);

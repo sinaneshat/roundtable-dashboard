@@ -20,6 +20,8 @@ import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSea
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
+import type { StreamResumptionState } from './store-action-types';
+
 // ============================================================================
 // FORM SLICE DEFAULTS
 // ============================================================================
@@ -142,6 +144,16 @@ export const SCREEN_DEFAULTS = {
 } as const;
 
 // ============================================================================
+// STREAM RESUMPTION SLICE DEFAULTS
+// ============================================================================
+
+export const STREAM_RESUMPTION_DEFAULTS = {
+  streamResumptionState: null as StreamResumptionState | null,
+  resumptionAttempts: new Set<string>(),
+  nextParticipantToTrigger: null as number | null,
+};
+
+// ============================================================================
 // TYPE-SAFE STATE RESET GROUPS
 // ============================================================================
 // These groups ensure that when resetting related state, ALL fields are included.
@@ -251,6 +263,10 @@ export const COMPLETE_RESET_STATE = {
   // Screen state
   screenMode: SCREEN_DEFAULTS.screenMode,
   isReadOnly: SCREEN_DEFAULTS.isReadOnly,
+  // Stream resumption state
+  streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
+  resumptionAttempts: new Set<string>(),
+  nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
 } as const;
 
 /**
@@ -287,6 +303,10 @@ export const THREAD_RESET_STATE = {
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   // Callbacks (included in thread reset)
   onComplete: CALLBACKS_DEFAULTS.onComplete,
+  // Stream resumption state
+  streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
+  resumptionAttempts: new Set<string>(),
+  nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
 } as const;
 
 /**

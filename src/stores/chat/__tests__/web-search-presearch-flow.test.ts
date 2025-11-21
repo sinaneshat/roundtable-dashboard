@@ -49,13 +49,19 @@ function createTestStore() {
 /**
  * Helper to check if streaming should wait for pre-search
  * Uses the actual production logic from pending-message-sender.ts
+ *
+ * ✅ FIX: Use form state as sole source of truth for web search enabled
+ * Form state represents user's current intention and should always be synced
+ * when thread is loaded. This allows both enabling AND disabling mid-conversation.
  */
 function checkShouldWaitForPreSearch(
   store: ReturnType<typeof createChatStore>,
   roundNumber: number,
 ): boolean {
   const state = store.getState();
-  const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
+  // ✅ FIX: Use form state as sole source of truth
+  // Form state is synced with thread on load, then user can toggle
+  const webSearchEnabled = state.enableWebSearch;
 
   return shouldWaitForPreSearch({
     webSearchEnabled,
@@ -137,12 +143,16 @@ describe('2.1 Toggle & Triggering', () => {
     const participants = [createMockParticipant(0)];
 
     store.getState().initializeThread(thread, participants);
+    // ✅ FIX: Sync form state with thread state on initialization
+    // In real app, this is done by UI components that load thread data
+    store.getState().setEnableWebSearch(thread.enableWebSearch);
 
     // Thread-level web search should be enabled
     expect(store.getState().thread?.enableWebSearch).toBe(true);
 
-    // Validation should use thread's enableWebSearch
-    const webSearchEnabled = store.getState().thread?.enableWebSearch ?? store.getState().enableWebSearch;
+    // Form state is now synced with thread on initialization
+    // Validation uses form's enableWebSearch (source of truth)
+    const webSearchEnabled = store.getState().enableWebSearch;
     expect(webSearchEnabled).toBe(true);
   });
 
@@ -784,6 +794,8 @@ describe('2.4 Multi-Round Web Search', () => {
     const participants = [createMockParticipant(0)];
 
     store.getState().initializeThread(thread, participants);
+    // ✅ FIX: Sync form state with thread
+    store.getState().setEnableWebSearch(true);
     store.getState().setScreenMode(ScreenModes.THREAD);
 
     // Round 0 with web search
@@ -792,14 +804,16 @@ describe('2.4 Multi-Round Web Search', () => {
       status: AnalysisStatuses.COMPLETE,
     }));
 
-    // Disable web search
+    // Disable web search - ✅ FIX: Also sync form state
     store.getState().setThread({ ...thread, enableWebSearch: false });
+    store.getState().setEnableWebSearch(false);
 
     // Round 1 should NOT require pre-search
     expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
 
-    // Re-enable web search
+    // Re-enable web search - ✅ FIX: Also sync form state
     store.getState().setThread({ ...thread, enableWebSearch: true });
+    store.getState().setEnableWebSearch(true);
 
     // Round 1 should now require pre-search (optimistic blocking)
     expect(checkShouldWaitForPreSearch(store, 1)).toBe(true);
@@ -848,6 +862,8 @@ describe('2.5 Deadlock Prevention (Circular Dependency)', () => {
       createMockUserMessage(0, 'First question'),
       createMockMessage(0, 0),
     ]);
+    // ✅ FIX: Sync form state with thread
+    store.getState().setEnableWebSearch(true);
     store.getState().setScreenMode(ScreenModes.THREAD);
     store.getState().markAnalysisCreated(0);
     store.getState().addAnalysis(createMockAnalysis({
@@ -1332,5 +1348,168 @@ describe('web Search Edge Cases', () => {
 
     expect(store.getState().preSearches[0].status).toBe(AnalysisStatuses.COMPLETE);
     expect(checkShouldWaitForPreSearch(store, 0)).toBe(false);
+  });
+});
+
+// ============================================================================
+// SECTION 2.7: MID-CONVERSATION WEB SEARCH ENABLE
+// ============================================================================
+
+describe('2.7 Mid-Conversation Web Search Enable', () => {
+  let store: ReturnType<typeof createChatStore>;
+
+  beforeEach(() => {
+    store = createTestStore();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  /**
+   * SEARCH-MID-01: BUG TEST - Enabling web search mid-conversation should use form state
+   *
+   * When thread.enableWebSearch is false but user toggles enableWebSearch to true
+   * in the form, the validation should use the form state.
+   *
+   * BUG: The ?? operator returns thread.enableWebSearch (false) instead of
+   * falling back to enableWebSearch (true) because false is not null/undefined.
+   */
+  it('[SEARCH-MID-01] enabling web search mid-conversation should wait for pre-search', () => {
+    // Setup: Thread created with web search disabled
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: false, // Thread has web search disabled
+    });
+    const participants = [createMockParticipant(0)];
+
+    // Initialize thread (round 0 already complete)
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0, 'First question'),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // User enables web search in form mid-conversation
+    store.getState().setEnableWebSearch(true);
+
+    // Verify state: thread.enableWebSearch = false, form enableWebSearch = true
+    expect(store.getState().thread?.enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBe(true);
+
+    // BUG: This should return true because user enabled web search in form
+    // But it returns false because thread.enableWebSearch (false) ?? enableWebSearch (true)
+    // evaluates to false (the ?? only checks for null/undefined, not false)
+    const shouldWait = checkShouldWaitForPreSearch(store, 1);
+    expect(shouldWait).toBe(true); // This will FAIL with current bug
+  });
+
+  /**
+   * SEARCH-MID-01 (Extended): Form state should take precedence over thread state
+   * when user has pending config changes
+   */
+  it('[SEARCH-MID-01] form enableWebSearch should take precedence over thread enableWebSearch', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: false,
+    });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // User toggles web search ON
+    store.getState().setEnableWebSearch(true);
+    store.getState().setHasPendingConfigChanges(true);
+
+    // Prepare to send message
+    store.getState().prepareForNewMessage('Second question', ['openai/gpt-4']);
+    // ✅ FIX: Clear isWaitingForChangelog so we can test web search blocking
+    // In real flow, changelog completes and clears this flag
+    store.getState().setIsWaitingForChangelog(false);
+
+    // shouldSendPendingMessage should detect web search is enabled
+    const result = checkShouldSendPendingMessage(store);
+
+    // Should be blocked waiting for pre-search creation
+    // If form state is properly used, it should wait for pre-search
+    expect(result.shouldSend).toBe(false);
+    expect(result.reason).toBe('waiting for pre-search creation');
+  });
+
+  /**
+   * SEARCH-MID-02: Disabling web search mid-conversation should not wait for pre-search
+   *
+   * When thread.enableWebSearch is true but user toggles to false,
+   * the validation should use the form state (false).
+   */
+  it('[SEARCH-MID-02] disabling web search mid-conversation should not wait for pre-search', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: true, // Thread has web search enabled
+    });
+    const participants = [createMockParticipant(0)];
+
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0, 'First question'),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // User disables web search in form mid-conversation
+    store.getState().setEnableWebSearch(false);
+    store.getState().setHasPendingConfigChanges(true);
+
+    // Should NOT wait because form has web search disabled
+    const shouldWait = checkShouldWaitForPreSearch(store, 1);
+    expect(shouldWait).toBe(false);
+  });
+
+  /**
+   * SEARCH-MID-03: Complete flow with mid-conversation web search enable
+   *
+   * Tests the full flow from enabling web search to pre-search completion
+   */
+  it('[SEARCH-MID-03] complete flow with mid-conversation web search enable', () => {
+    const thread = createMockThread({
+      id: 'thread-123',
+      enableWebSearch: false,
+    });
+    const participants = [createMockParticipant(0)];
+
+    // Round 0 complete without web search
+    store.getState().initializeThread(thread, participants, [
+      createMockUserMessage(0, 'First question'),
+      createMockMessage(0, 0),
+    ]);
+    store.getState().setScreenMode(ScreenModes.THREAD);
+
+    // User enables web search for round 1
+    store.getState().setEnableWebSearch(true);
+
+    // User prepares message
+    store.getState().prepareForNewMessage('Second question', ['openai/gpt-4']);
+
+    // Step 1: Should wait for pre-search creation (optimistic blocking)
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(true);
+
+    // Step 2: Pre-search created by backend
+    store.getState().addPreSearch(createPendingPreSearch(1));
+
+    // Step 3: Should wait for pre-search to complete
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(true);
+
+    // Step 4: Pre-search starts streaming
+    store.getState().updatePreSearchStatus(1, AnalysisStatuses.STREAMING);
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(true);
+
+    // Step 5: Pre-search completes
+    store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+
+    // Step 6: Should proceed
+    expect(checkShouldWaitForPreSearch(store, 1)).toBe(false);
+    expect(store.getState().preSearches.find(ps => ps.roundNumber === 1)?.status).toBe(AnalysisStatuses.COMPLETE);
   });
 });

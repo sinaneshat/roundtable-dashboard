@@ -200,6 +200,7 @@
     "tailwindcss-animate": "^1.0.7",
     "ulid": "^3.0.1",
     "use-stick-to-bottom": "^1.1.1",
+    "vaul": "^1.1.2",
     "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },

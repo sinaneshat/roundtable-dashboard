@@ -74,7 +74,7 @@ import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
 import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModeSchema, ScreenModes } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
@@ -103,6 +103,7 @@ import {
   PRESEARCH_DEFAULTS,
   REGENERATION_STATE_RESET,
   SCREEN_DEFAULTS,
+  STREAM_RESUMPTION_DEFAULTS,
   STREAMING_STATE_RESET,
   THREAD_DEFAULTS,
   THREAD_RESET_STATE,
@@ -121,6 +122,7 @@ import type {
   ParticipantConfig,
   PreSearchSlice,
   ScreenSlice,
+  StreamResumptionSlice,
   ThreadSlice,
   TrackingSlice,
   UISlice,
@@ -532,7 +534,12 @@ const createThreadSlice: StateCreator<
   ...THREAD_DEFAULTS,
 
   setThread: (thread: ChatThread | null) =>
-    set({ thread }, false, 'thread/setThread'),
+    set({
+      thread,
+      // ✅ FIX: Sync form state when thread is set
+      // Form state is the sole source of truth for web search enabled
+      ...(thread ? { enableWebSearch: thread.enableWebSearch } : {}),
+    }, false, 'thread/setThread'),
   setParticipants: (participants: ChatParticipant[]) =>
     set({ participants }, false, 'thread/setParticipants'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) =>
@@ -678,10 +685,137 @@ const createScreenSlice: StateCreator<
   setScreenMode: (mode: ScreenMode | null) =>
     set({
       screenMode: mode,
-      isReadOnly: mode === 'public',
+      isReadOnly: mode === ScreenModes.PUBLIC,
     }, false, 'screen/setScreenMode'),
   resetScreenMode: () =>
     set(SCREEN_DEFAULTS, false, 'screen/resetScreenMode'),
+});
+
+/**
+ * Stream Resumption Slice - Background stream continuation
+ * Manages state for resuming streams when user navigates away
+ */
+const createStreamResumptionSlice: StateCreator<
+  ChatStore,
+  [['zustand/devtools', never]],
+  [],
+  StreamResumptionSlice
+> = (set, get) => ({
+  ...STREAM_RESUMPTION_DEFAULTS,
+
+  setStreamResumptionState: state =>
+    set({ streamResumptionState: state }, false, 'streamResumption/setStreamResumptionState'),
+
+  getStreamResumptionState: () => get().streamResumptionState,
+
+  needsStreamResumption: () => {
+    const state = get();
+    const resumptionState = state.streamResumptionState;
+
+    // No resumption state
+    if (!resumptionState)
+      return false;
+
+    // Stream must be ACTIVE to need resumption
+    if (resumptionState.state !== StreamStatuses.ACTIVE)
+      return false;
+
+    // Must match current thread
+    const currentThreadId = state.thread?.id || state.createdThreadId;
+    if (!currentThreadId || resumptionState.threadId !== currentThreadId)
+      return false;
+
+    // Check if stale (>1 hour old)
+    if (state.isStreamResumptionStale())
+      return false;
+
+    // Check if valid (participant index in bounds)
+    if (!state.isStreamResumptionValid())
+      return false;
+
+    return true;
+  },
+
+  isStreamResumptionStale: () => {
+    const resumptionState = get().streamResumptionState;
+    if (!resumptionState)
+      return false;
+
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const age = Date.now() - resumptionState.createdAt.getTime();
+    return age > ONE_HOUR_MS;
+  },
+
+  isStreamResumptionValid: () => {
+    const state = get();
+    const resumptionState = state.streamResumptionState;
+    if (!resumptionState)
+      return false;
+
+    // Check if participant index is valid
+    const participantCount = state.participants.length;
+    if (resumptionState.participantIndex >= participantCount)
+      return false;
+
+    // Check if thread ID matches
+    const currentThreadId = state.thread?.id || state.createdThreadId;
+    if (!currentThreadId || resumptionState.threadId !== currentThreadId)
+      return false;
+
+    return true;
+  },
+
+  handleResumedStreamComplete: (roundNumber, participantIndex) => {
+    const state = get();
+    const participantCount = state.participants.length;
+    const nextIndex = participantIndex + 1;
+
+    // Clear resumption state
+    set({
+      streamResumptionState: null,
+      nextParticipantToTrigger: nextIndex < participantCount ? nextIndex : null,
+    }, false, 'streamResumption/handleResumedStreamComplete');
+  },
+
+  handleStreamResumptionFailure: (_error) => {
+    set({
+      streamResumptionState: null,
+      nextParticipantToTrigger: null,
+      resumptionAttempts: new Set<string>(),
+    }, false, 'streamResumption/handleStreamResumptionFailure');
+  },
+
+  getNextParticipantToTrigger: () => get().nextParticipantToTrigger,
+
+  markResumptionAttempted: (roundNumber, participantIndex) => {
+    const key = `${roundNumber}_${participantIndex}`;
+    const attempts = get().resumptionAttempts;
+
+    if (attempts.has(key)) {
+      return false; // Already attempted
+    }
+
+    const newAttempts = new Set(attempts);
+    newAttempts.add(key);
+    set({ resumptionAttempts: newAttempts }, false, 'streamResumption/markResumptionAttempted');
+    return true;
+  },
+
+  needsMessageSync: () => {
+    const resumptionState = get().streamResumptionState;
+    if (!resumptionState)
+      return false;
+
+    // Need to sync if stream completed but we don't have the message
+    return resumptionState.state === StreamStatuses.COMPLETED;
+  },
+
+  clearStreamResumption: () =>
+    set({
+      streamResumptionState: null,
+      resumptionAttempts: new Set<string>(),
+      nextParticipantToTrigger: null,
+    }, false, 'streamResumption/clearStreamResumption'),
 });
 
 /**
@@ -722,6 +856,10 @@ const createOperationsSlice: StateCreator<
       messages: messagesToSet,
       error: null,
       isStreaming: false,
+      // ✅ FIX: Sync form state with thread state on initialization
+      // Form state is the sole source of truth for web search enabled
+      // This ensures form state reflects thread settings when loaded
+      enableWebSearch: thread.enableWebSearch,
     }, false, 'operations/initializeThread');
   },
 
@@ -734,6 +872,7 @@ const createOperationsSlice: StateCreator<
       // This prevents bugs where individual fields are forgotten
       ...STREAMING_STATE_RESET,
       ...REGENERATION_STATE_RESET,
+      ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
       isCreatingAnalysis: false,
       // Prepare new message state
       isWaitingForChangelog: true,
@@ -763,6 +902,7 @@ const createOperationsSlice: StateCreator<
       ...STREAMING_STATE_RESET,
       ...ANALYSIS_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
+      ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
       // Then set regeneration-specific state
       isRegenerating: true,
       regeneratingRoundNumber: roundNumber,
@@ -875,6 +1015,7 @@ export function createChatStore() {
         ...createTrackingSlice(...args),
         ...createCallbacksSlice(...args),
         ...createScreenSlice(...args),
+        ...createStreamResumptionSlice(...args),
         ...createOperationsSlice(...args),
       }),
       {

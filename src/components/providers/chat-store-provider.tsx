@@ -230,7 +230,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // 4. Only when COMPLETE, proceed with sendMessage()
     //
     // REFERENCE: WEB_SEARCH_ORDERING_FIX_STRATEGY.md
-    const webSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
+    // ✅ FIX: Use form state as sole source of truth for web search enabled
+    // Form state is synced with thread on load, then user can toggle
+    const webSearchEnabled = enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
@@ -277,9 +279,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 break;
             }
           }
-          // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
-          // Without this, the orchestrator won't know the pre-search completed
-          // and the effect won't re-run to send the message
+          // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
+          // This ensures the streaming trigger effect sees COMPLETE status immediately
+          // Without this, orchestrator sync (which may be disabled) is the only path
+          // and streaming would be blocked forever
+          store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
+
+          // Also invalidate query for orchestrator sync when enabled
           queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.threads.preSearches(effectiveThreadId),
           });
@@ -290,7 +296,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         });
       });
 
-      return; // Wait for pre-search to complete (query invalidation will sync it, effect will re-run)
+      return; // Wait for pre-search to complete (direct store update will trigger effect re-run)
     }
 
     // ✅ STEP 2: Handle pre-search execution state
@@ -330,7 +336,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                   break;
               }
             }
-            // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
+            // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
+            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
+
+            // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
               queryKey: queryKeys.threads.preSearches(effectiveThreadId),
             });
@@ -389,7 +398,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     participants,
     messages,
     mode: thread?.mode,
-    enableWebSearch: (thread?.enableWebSearch ?? enableWebSearch) || false,
+    // ✅ FIX: Use form state as sole source of truth for web search enabled
+    enableWebSearch,
     onError: handleError,
     onComplete: handleComplete,
   });
@@ -717,7 +727,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ============================================================================
     // ✅ CRITICAL FIX: Create pre-search BEFORE participant streaming (SAME AS FIRST EFFECT)
     // ============================================================================
-    const webSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
+    // ✅ FIX: Use form state as sole source of truth for web search enabled
+    const webSearchEnabled = enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
@@ -773,9 +784,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                   break;
               }
             }
-            // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
-            // Without this, the orchestrator won't know the pre-search completed
-            // and the effect won't re-run to send the message
+            // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
+            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
+
+            // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
               queryKey: queryKeys.threads.preSearches(effectiveThreadId),
             });
@@ -783,7 +795,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
           });
         });
-        return; // Wait for pre-search to complete (query invalidation will sync it, effect will re-run)
+        return; // Wait for pre-search to complete (direct store update will trigger effect re-run)
       }
       // If already attempted and failed, fall through to send message without pre-search
     }
@@ -824,7 +836,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                   break;
               }
             }
-            // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
+            // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
+            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
+
+            // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
               queryKey: queryKeys.threads.preSearches(effectiveThreadId),
             });

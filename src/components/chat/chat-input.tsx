@@ -245,7 +245,7 @@ export const ChatInput = memo(({
             )}
           >
             {/* Textarea */}
-            <div className="relative flex items-end px-2 sm:px-4 py-2 sm:py-2.5">
+            <div className="relative flex items-end px-3 sm:px-4 py-3 sm:py-4">
               <textarea
                 ref={textareaRef}
                 value={value}
@@ -270,16 +270,16 @@ export const ChatInput = memo(({
 
             {/* Toolbar and submit */}
             <div>
-              <div className="px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2">
+              <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
                 {/* Left side: Toolbar (AI Models + Mode + WebSearch) */}
                 {toolbar && (
-                  <div className="flex-1 flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
                     {toolbar}
                   </div>
                 )}
 
                 {/* Right side: Speech + Submit buttons */}
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {/* Speech recognition button */}
                   {enableSpeech && isSpeechSupported && (
                     <Button
@@ -289,12 +289,12 @@ export const ChatInput = memo(({
                       onClick={toggleSpeech}
                       disabled={isDisabled && !isListening}
                       className={cn(
-                        'size-9 shrink-0 rounded-full',
+                        'size-8 sm:size-9 shrink-0 rounded-full',
                         isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
                       )}
                       title={isListening ? 'Stop recording' : t('chat.input.voiceInput')}
                     >
-                      {isListening ? <StopCircle className="size-4" /> : <Mic className="size-4" />}
+                      {isListening ? <StopCircle className="size-3.5 sm:size-4" /> : <Mic className="size-3.5 sm:size-4" />}
                     </Button>
                   )}
 
@@ -305,10 +305,10 @@ export const ChatInput = memo(({
                           type="button"
                           size="icon"
                           onClick={onStop}
-                          className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
+                          className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
                           aria-label={t('chat.input.stopStreaming')}
                         >
-                          <Square className="size-4" />
+                          <Square className="size-4 sm:size-5" />
                         </Button>
                       )
                     : (
@@ -316,9 +316,9 @@ export const ChatInput = memo(({
                           type="submit"
                           size="icon"
                           disabled={isDisabled || !hasValidInput}
-                          className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
+                          className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
                         >
-                          <ArrowUp className="size-4" />
+                          <ArrowUp className="size-4 sm:size-5" />
                         </Button>
                       )}
                 </div>

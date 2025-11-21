@@ -49,7 +49,7 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
-import type { ParticipantConfig } from './store-schemas';
+import type { ParticipantConfig, StreamResumptionState } from './store-schemas';
 
 // ============================================================================
 // FORM ACTIONS
@@ -246,6 +246,74 @@ export type SetOnComplete = (callback?: OnComplete) => void;
 
 export type SetScreenMode = (mode: ScreenMode | null) => void;
 export type ResetScreenMode = () => void;
+
+// ============================================================================
+// STREAM RESUMPTION ACTIONS (Background stream continuation)
+// ============================================================================
+
+// NOTE: StreamResumptionState type is defined in store-schemas.ts using Zod-first pattern
+// It uses StreamStatusSchema from @/api/core/enums for the state field
+export type { StreamResumptionState };
+
+/**
+ * Set the stream resumption state (when active stream detected)
+ */
+export type SetStreamResumptionState = (state: StreamResumptionState | null) => void;
+
+/**
+ * Get the current stream resumption state
+ */
+export type GetStreamResumptionState = () => StreamResumptionState | null;
+
+/**
+ * Check if stream resumption is needed (active stream exists for current thread)
+ */
+export type NeedsStreamResumption = () => boolean;
+
+/**
+ * Check if stream resumption state is stale (too old to resume)
+ */
+export type IsStreamResumptionStale = () => boolean;
+
+/**
+ * Check if stream resumption state is valid (correct thread, valid participant index)
+ */
+export type IsStreamResumptionValid = () => boolean;
+
+/**
+ * Handle completion of a resumed stream
+ * Triggers next participant or marks round complete
+ */
+export type HandleResumedStreamComplete = (roundNumber: number, participantIndex: number) => void;
+
+/**
+ * Handle failure of stream resumption
+ * Clears resumption state and allows normal flow
+ */
+export type HandleStreamResumptionFailure = (error: Error) => void;
+
+/**
+ * Get the next participant index to trigger after resumption
+ * Returns null if round is complete
+ */
+export type GetNextParticipantToTrigger = () => number | null;
+
+/**
+ * Mark a resumption attempt as started (prevents duplicates)
+ * Returns true if first attempt, false if already attempted
+ */
+export type MarkResumptionAttempted = (roundNumber: number, participantIndex: number) => boolean;
+
+/**
+ * Check if we need to sync a completed message from the database
+ * Used when stream completed but frontend missed the final message
+ */
+export type NeedsMessageSync = () => boolean;
+
+/**
+ * Clear stream resumption state (on navigation cleanup)
+ */
+export type ClearStreamResumption = () => void;
 
 // ============================================================================
 // OPERATIONS ACTIONS (Composite multi-slice operations)

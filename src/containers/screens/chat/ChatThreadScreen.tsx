@@ -631,7 +631,7 @@ export default function ChatThreadScreen({
         <div className="flex flex-col min-h-dvh relative">
           <div
             id="chat-scroll-container"
-            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-[240px] flex-1"
+            className="container max-w-3xl mx-auto px-4 md:px-6 pt-0 pb-[240px] flex-1"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
@@ -706,10 +706,10 @@ export default function ChatThreadScreen({
             ref={inputContainerRef}
             className="sticky z-30 w-full will-change-[bottom] bg-background"
             style={{
-              bottom: `${keyboardOffset + 16}px`,
+              bottom: `${keyboardOffset + 20}px`,
             }}
           >
-            <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+            <div className="container max-w-3xl mx-auto px-4 md:px-6">
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}

@@ -64,13 +64,13 @@ export const ModelMessageCard = memo(({
         <MessageContent variant="flat" className={hasError ? 'text-destructive' : undefined}>
           <>
             {!hideInlineHeader && (
-              <div className="flex items-center gap-2 mb-3 -mt-1 flex-wrap">
-                <span className="text-base font-medium text-foreground">
+              <div className="flex items-center gap-3 mb-6 flex-wrap">
+                <span className="text-xl font-semibold text-muted-foreground">
                   {modelName}
                 </span>
                 {role && (
                   <Badge
-                    className="text-[10px] px-2 py-0.5 h-5 font-semibold border rounded-full"
+                    className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border"
                     style={getRoleBadgeStyle(role)}
                   >
                     {String(role)}
@@ -102,7 +102,7 @@ export const ModelMessageCard = memo(({
                 return (
                   <Streamdown
                     key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
-                    className="size-full text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 leading-relaxed"
+                    className="size-full text-foreground text-sm leading-relaxed whitespace-pre-wrap [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                   >
                     {part.text}
                   </Streamdown>

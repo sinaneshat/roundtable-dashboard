@@ -386,9 +386,10 @@ describe('race Conditions: Comprehensive Test Suite (COMPREHENSIVE_TEST_PLAN Sec
 
   describe('10.3 Pre-Search Synchronization', () => {
     // Helper for checking blocking status
+    // ✅ FIX: Use form state as sole source of truth for web search enabled
     function checkShouldWait(roundNumber: number) {
       const state = store.getState();
-      const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
+      const webSearchEnabled = state.enableWebSearch;
       return shouldWaitForPreSearch({
         webSearchEnabled,
         preSearches: state.preSearches,

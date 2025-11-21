@@ -713,6 +713,37 @@ export const ScreenModes = {
 } as const;
 
 // ============================================================================
+// FLOW STATE (Chat conversation flow lifecycle)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for flow state values
+export const FLOW_STATES = ['idle', 'creating_thread', 'streaming_participants', 'creating_analysis', 'streaming_analysis', 'completing', 'navigating', 'complete'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_FLOW_STATE: FlowState = 'idle';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const FlowStateSchema = z.enum(FLOW_STATES).openapi({
+  description: 'Chat conversation flow lifecycle state',
+  example: 'streaming_participants',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type FlowState = z.infer<typeof FlowStateSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const FlowStates = {
+  IDLE: 'idle' as const,
+  CREATING_THREAD: 'creating_thread' as const,
+  STREAMING_PARTICIPANTS: 'streaming_participants' as const,
+  CREATING_ANALYSIS: 'creating_analysis' as const,
+  STREAMING_ANALYSIS: 'streaming_analysis' as const,
+  COMPLETING: 'completing' as const,
+  NAVIGATING: 'navigating' as const,
+  COMPLETE: 'complete' as const,
+} as const;
+
+// ============================================================================
 // PENDING MESSAGE VALIDATION REASON
 // ============================================================================
 

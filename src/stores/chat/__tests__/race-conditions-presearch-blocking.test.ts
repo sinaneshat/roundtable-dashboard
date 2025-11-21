@@ -8,16 +8,16 @@
  * Location: /src/stores/chat/__tests__/race-conditions-presearch-blocking.test.ts
  */
 
+import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  AnalysisStatuses,
-} from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { shouldWaitForPreSearch } from '@/stores/chat/actions/pending-message-sender';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
   createMockParticipant,
+  createMockPreSearch,
   createMockThread,
   createPendingPreSearch,
 } from './test-factories';
@@ -39,9 +39,10 @@ describe('race Conditions: Pre-Search Blocking', () => {
   });
 
   // Helper to check blocking status using the actual logic function
+  // ✅ FIX: Use form state as sole source of truth for web search enabled
   function checkShouldWait(roundNumber: number) {
     const state = store.getState();
-    const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
+    const webSearchEnabled = state.enableWebSearch;
 
     return shouldWaitForPreSearch({
       webSearchEnabled,
@@ -171,6 +172,189 @@ describe('race Conditions: Pre-Search Blocking', () => {
 
       // Check for Round 1 (should wait)
       expect(checkShouldWait(1)).toBe(true); // R1 is pending/exists
+    });
+  });
+
+  // ==========================================================================
+  // RACE 5: OVERVIEW SCREEN PRE-SEARCH COMPLETION SYNC
+  // ==========================================================================
+
+  describe('rACE 5: Overview Screen Pre-Search Completion Sync', () => {
+    // Helper to create a user message
+    function createUserMessage(content: string, roundNumber = 0): UIMessage {
+      return {
+        id: `msg-user-${roundNumber}`,
+        role: MessageRoles.USER,
+        parts: [{ type: MessagePartTypes.TEXT, text: content }],
+        createdAt: new Date(),
+        metadata: {
+          role: MessageRoles.USER,
+          roundNumber,
+          createdAt: new Date().toISOString(),
+        },
+      };
+    }
+
+    it('should unblock streaming when pre-search status transitions from PENDING to COMPLETE', () => {
+      // Setup: Exact state from user's bug report
+      const thread = createMockThread({
+        id: '01KAKMMZRY2E7R5V0WD6KFKPHN',
+        enableWebSearch: true,
+      });
+
+      const participant = createMockParticipant(0, {
+        id: '01KAKMMZSABQAZVET0P502M8CH',
+        threadId: '01KAKMMZRY2E7R5V0WD6KFKPHN',
+        modelId: 'google/gemini-2.5-flash-lite',
+      });
+
+      store.getState().initializeThread(thread, [participant]);
+
+      // Set form state to enable web search (sole source of truth)
+      store.getState().setEnableWebSearch(true);
+
+      // Add user message
+      const userMessage = createUserMessage('say hi, no analysis needed. 1 word. just say hi,. thats all', 0);
+      store.getState().setMessages([userMessage]);
+
+      // Set waitingToStartStreaming flag (as set by handleCreateThread)
+      store.getState().setWaitingToStartStreaming(true);
+
+      // Add pre-search in PENDING state (backend created it during thread creation)
+      const preSearch = createPendingPreSearch(0);
+      preSearch.threadId = '01KAKMMZRY2E7R5V0WD6KFKPHN';
+      preSearch.userQuery = 'say hi, no analysis needed. 1 word. just say hi,. thats all';
+      store.getState().addPreSearch(preSearch);
+
+      // Verify initial state - should be waiting
+      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(checkShouldWait(0)).toBe(true);
+      expect(store.getState().preSearches[0]?.status).toBe(AnalysisStatuses.PENDING);
+
+      // KEY TEST: When pre-search completes, store must be DIRECTLY updated
+      // This simulates what the fix should do after reading the stream
+      store.getState().updatePreSearchStatus(0, AnalysisStatuses.COMPLETE);
+
+      // Now streaming should be unblocked
+      expect(checkShouldWait(0)).toBe(false);
+      expect(store.getState().preSearches[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+    });
+
+    it('should remain blocked if pre-search status is stuck in PENDING', () => {
+      // This test shows the BUG - if updatePreSearchStatus is never called,
+      // the streaming trigger effect will keep returning early
+
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      store.getState().setEnableWebSearch(true);
+
+      const userMessage = createUserMessage('test query', 0);
+      store.getState().setMessages([userMessage]);
+
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().addPreSearch(createPendingPreSearch(0));
+
+      // BUG: Pre-search never gets updated from PENDING
+      // This simulates the race condition where:
+      // 1. Provider reads stream to completion
+      // 2. Provider only invalidates query
+      // 3. Orchestrator is disabled (hasActivePreSearch = true)
+      // 4. Store never gets COMPLETE status
+
+      // Streaming stays blocked forever
+      expect(checkShouldWait(0)).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBe(true);
+    });
+
+    it('should immediately unblock when updatePreSearchStatus is called directly', () => {
+      // This test shows the FIX - calling updatePreSearchStatus directly
+      // ensures the streaming trigger effect can proceed immediately
+
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      store.getState().setEnableWebSearch(true);
+
+      const userMessage = createUserMessage('test query', 0);
+      store.getState().setMessages([userMessage]);
+
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().addPreSearch(createPendingPreSearch(0));
+
+      // Initially blocked
+      expect(checkShouldWait(0)).toBe(true);
+
+      // STREAMING transition
+      store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+      expect(checkShouldWait(0)).toBe(true); // Still blocked during streaming
+
+      // COMPLETE transition - this is what the fix should do
+      store.getState().updatePreSearchStatus(0, AnalysisStatuses.COMPLETE);
+
+      // Immediately unblocked - no orchestrator sync needed!
+      expect(checkShouldWait(0)).toBe(false);
+    });
+
+    it('should handle the exact state from bug report', () => {
+      // Reproduce the exact state from the user's dump
+      const thread = createMockThread({
+        id: '01KAKMMZRY2E7R5V0WD6KFKPHN',
+        userId: '5cc85ab9-afe9-4b29-9cf4-829143183272',
+        title: 'Hi',
+        slug: 'hi-ebz971',
+        mode: 'analyzing' as const,
+        enableWebSearch: true,
+        isAiGeneratedTitle: true,
+      });
+
+      const participant = createMockParticipant(0, {
+        id: '01KAKMMZSABQAZVET0P502M8CH',
+        threadId: '01KAKMMZRY2E7R5V0WD6KFKPHN',
+        modelId: 'google/gemini-2.5-flash-lite',
+        priority: 0,
+      });
+
+      store.getState().initializeThread(thread, [participant]);
+      store.getState().setEnableWebSearch(true);
+
+      // Set the exact state flags from the dump
+      store.getState().setWaitingToStartStreaming(true);
+      store.getState().setScreenMode('overview');
+
+      // Add user message
+      const userMessage = createUserMessage(
+        'say hi, no analysis needed. 1 word. just say hi,. thats all',
+        0,
+      );
+      store.getState().setMessages([userMessage]);
+
+      // Add completed pre-search (as shown in dump - status: 'complete')
+      const completedPreSearch = createMockPreSearch({
+        id: '01KAKMMZVPNVBS90ZFEDSSZY63',
+        threadId: '01KAKMMZRY2E7R5V0WD6KFKPHN',
+        roundNumber: 0,
+        userQuery: 'say hi, no analysis needed. 1 word. just say hi,. thats all',
+        status: AnalysisStatuses.COMPLETE,
+      });
+      store.getState().addPreSearch(completedPreSearch);
+
+      // Verify state matches dump
+      const state = store.getState();
+      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.isStreaming).toBe(false);
+      expect(state.messages).toHaveLength(1);
+      expect(state.participants).toHaveLength(1);
+      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(state.screenMode).toBe('overview');
+
+      // With COMPLETE status, streaming should NOT be blocked
+      expect(checkShouldWait(0)).toBe(false);
+
+      // The issue in the bug was that even with COMPLETE status,
+      // the streaming trigger effect wasn't firing.
+      // This suggests the effect dependency wasn't updating,
+      // OR the startRound function wasn't available.
+      // The fix ensures updatePreSearchStatus is called directly
+      // so the effect re-runs with the updated preSearches array.
     });
   });
 });

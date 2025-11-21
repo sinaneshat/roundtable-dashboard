@@ -21,7 +21,8 @@ import type { TextPart, UIMessage } from 'ai';
 import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
-import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import type { FlowState, ScreenMode } from '@/api/core/enums';
+import { AnalysisStatuses, FlowStates, MessagePartTypes, MessageRoles, ScreenModes } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -32,21 +33,8 @@ import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 // ============================================================================
 
 /**
- * Flow states represent the current stage of the conversation flow
- * Each state has clear entry/exit conditions and determines loading indicators
- */
-export type FlowState
-  = | 'idle' // No active operations
-    | 'creating_thread' // POST /threads in progress
-    | 'streaming_participants' // AI SDK streaming responses
-    | 'creating_analysis' // Creating pending analysis record
-    | 'streaming_analysis' // Analysis SSE streaming
-    | 'completing' // Cleanup and finalization
-    | 'navigating' // Router transition to thread screen
-    | 'complete'; // Flow finished successfully
-
-/**
  * Flow context contains all data needed to determine state transitions
+ * FlowState type is imported from @/api/core/enums (5-part enum pattern)
  */
 export type FlowContext = {
   // Thread state
@@ -58,7 +46,7 @@ export type FlowContext = {
   currentRound: number;
   hasMessages: boolean;
   participantCount: number;
-  allParticipantsResponded: boolean; // ✅ NEW: All participants responded for current round
+  allParticipantsResponded: boolean; // All participants responded for current round
 
   // Analysis state
   analysisStatus: typeof AnalysisStatuses[keyof typeof AnalysisStatuses] | null;
@@ -73,7 +61,7 @@ export type FlowContext = {
   hasNavigated: boolean;
 
   // Screen mode
-  screenMode: 'overview' | 'thread' | 'public' | null;
+  screenMode: ScreenMode | null;
 };
 
 /**
@@ -100,57 +88,57 @@ export type FlowAction
 function determineFlowState(context: FlowContext): FlowState {
   // Priority 1: Navigation complete
   if (context.hasNavigated) {
-    return 'complete';
+    return FlowStates.COMPLETE;
   }
 
   // Priority 2: Ready to navigate (analysis done + title ready)
-  // ✅ FIX: Only navigate in overview mode - thread screen already at destination
+  // Only navigate in overview mode - thread screen already at destination
   if (
-    context.screenMode === 'overview'
+    context.screenMode === ScreenModes.OVERVIEW
     && context.analysisStatus === AnalysisStatuses.COMPLETE
     && context.hasAiGeneratedTitle
     && context.threadSlug
   ) {
-    return 'navigating';
+    return FlowStates.NAVIGATING;
   }
 
   // Priority 3: Analysis streaming
-  // ✅ FIX: Also consider analysis streaming if analysis exists and AI SDK is streaming
+  // Also consider analysis streaming if analysis exists and AI SDK is streaming
   // This handles race condition where status hasn't been updated to 'streaming' yet
   if (
     context.analysisStatus === AnalysisStatuses.STREAMING
     || (context.analysisExists && context.isAiSdkStreaming)
   ) {
-    return 'streaming_analysis';
+    return FlowStates.STREAMING_ANALYSIS;
   }
 
   // Priority 4: Creating analysis (participants done, no analysis yet)
-  // ✅ FIX: Check if all participants responded for CURRENT round before creating analysis
+  // Check if all participants responded for CURRENT round before creating analysis
   if (
     !context.isAiSdkStreaming
-    && context.allParticipantsResponded // ✅ NEW: All participants must respond for current round
+    && context.allParticipantsResponded // All participants must respond for current round
     && context.participantCount > 0
-    && !context.analysisExists // ✅ Already fixed: Checks current round
+    && !context.analysisExists // Checks current round
     && !context.isCreatingAnalysis
   ) {
-    return 'creating_analysis';
+    return FlowStates.CREATING_ANALYSIS;
   }
 
   // Priority 5: Participants streaming
-  // ✅ FIX: Only return streaming_participants if no analysis exists yet
+  // Only return streaming_participants if no analysis exists yet
   // Once analysis exists and isAiSdkStreaming is true, that's analysis streaming (Priority 3),
   // not participant streaming. This prevents falling back to streaming_participants during analysis.
   if (context.isAiSdkStreaming && !context.analysisExists) {
-    return 'streaming_participants';
+    return FlowStates.STREAMING_PARTICIPANTS;
   }
 
   // Priority 6: Thread creation
   if (context.isCreatingThread) {
-    return 'creating_thread';
+    return FlowStates.CREATING_THREAD;
   }
 
   // Default: Idle
-  return 'idle';
+  return FlowStates.IDLE;
 }
 
 /**
@@ -158,7 +146,7 @@ function determineFlowState(context: FlowContext): FlowState {
  * SINGLE SOURCE OF TRUTH for loading state
  */
 function shouldShowLoading(state: FlowState): boolean {
-  return state !== 'idle' && state !== 'complete';
+  return state !== FlowStates.IDLE && state !== FlowStates.COMPLETE;
 }
 
 /**
@@ -166,17 +154,17 @@ function shouldShowLoading(state: FlowState): boolean {
  */
 function getLoadingMessage(state: FlowState): string {
   switch (state) {
-    case 'creating_thread':
+    case FlowStates.CREATING_THREAD:
       return 'Creating conversation...';
-    case 'streaming_participants':
+    case FlowStates.STREAMING_PARTICIPANTS:
       return 'AI models responding...';
-    case 'creating_analysis':
+    case FlowStates.CREATING_ANALYSIS:
       return 'Preparing analysis...';
-    case 'streaming_analysis':
+    case FlowStates.STREAMING_ANALYSIS:
       return 'Analyzing responses...';
-    case 'completing':
+    case FlowStates.COMPLETING:
       return 'Finalizing...';
-    case 'navigating':
+    case FlowStates.NAVIGATING:
       return 'Opening conversation...';
     default:
       return '';
@@ -198,11 +186,11 @@ function getNextAction(
   // No action needed here
 
   // Transition: * → creating_analysis
-  // ✅ FIX: Trigger CREATE_ANALYSIS from any previous state (not just streaming_participants)
+  // Trigger CREATE_ANALYSIS from any previous state (not just streaming_participants)
   // This handles race condition where streaming finishes before component mounts
   if (
-    currentState === 'creating_analysis'
-    && prevState !== 'creating_analysis'
+    currentState === FlowStates.CREATING_ANALYSIS
+    && prevState !== FlowStates.CREATING_ANALYSIS
     && context.threadId
   ) {
     return { type: 'CREATE_ANALYSIS' };
@@ -212,10 +200,10 @@ function getNextAction(
   // No action needed here
 
   // Transition: streaming_analysis → navigating (cache invalidation)
-  // ✅ PRIORITY 1: Invalidate cache BEFORE navigating
+  // PRIORITY 1: Invalidate cache BEFORE navigating
   if (
-    prevState === 'streaming_analysis'
-    && currentState === 'navigating'
+    prevState === FlowStates.STREAMING_ANALYSIS
+    && currentState === FlowStates.NAVIGATING
     && context.threadSlug
     && !context.hasNavigated
   ) {
@@ -223,13 +211,13 @@ function getNextAction(
   }
 
   // Transition: * → navigating (navigation execution)
-  // ✅ PRIORITY 2: Execute navigation when in navigating state and not yet navigated
+  // PRIORITY 2: Execute navigation when in navigating state and not yet navigated
   // Handles both:
-  // 1. Direct jump to navigating (prevState !== 'navigating')
-  // 2. After cache invalidation (prevState === 'navigating', currentState === 'navigating')
-  if (currentState === 'navigating' && !context.hasNavigated && context.threadSlug) {
+  // 1. Direct jump to navigating (prevState !== FlowStates.NAVIGATING)
+  // 2. After cache invalidation (prevState === FlowStates.NAVIGATING, currentState === FlowStates.NAVIGATING)
+  if (currentState === FlowStates.NAVIGATING && !context.hasNavigated && context.threadSlug) {
     // Skip if we just returned INVALIDATE_CACHE (will be handled in next effect run)
-    if (prevState === 'streaming_analysis') {
+    if (prevState === FlowStates.STREAMING_ANALYSIS) {
       return null;
     }
     return { type: 'NAVIGATE', slug: context.threadSlug };
@@ -244,7 +232,7 @@ function getNextAction(
 
 export type UseFlowOrchestratorOptions = {
   /** Screen mode - determines which transitions are active */
-  mode: 'overview' | 'thread' | 'public';
+  mode: ScreenMode;
 };
 
 export type UseFlowOrchestratorReturn = {
@@ -359,10 +347,10 @@ export function useFlowStateMachine(
   // ============================================================================
 
   const flowState = useMemo(() => determineFlowState(context), [context]);
-  // ✅ FIX: Initialize prevState as 'idle' instead of current flowState
+  // Initialize prevState as idle instead of current flowState
   // This ensures we detect the transition TO creating_analysis even if component
   // mounts after streaming has finished (fast streaming race condition)
-  const prevStateRef = useRef<FlowState>('idle');
+  const prevStateRef = useRef<FlowState>(FlowStates.IDLE);
 
   // ============================================================================
   // STATE TRANSITION SIDE EFFECTS
@@ -427,7 +415,7 @@ export function useFlowStateMachine(
 
           // After invalidating cache, execute navigation in same effect run
           // This handles the streaming_analysis → navigating transition where we need both actions
-          if (mode === 'overview' && context.threadSlug && !context.hasNavigated) {
+          if (mode === ScreenModes.OVERVIEW && context.threadSlug && !context.hasNavigated) {
             const slug = context.threadSlug; // Capture for closure
             startTransition(() => {
               setHasNavigated(true);
@@ -441,7 +429,7 @@ export function useFlowStateMachine(
 
         case 'NAVIGATE': {
           // Execute navigation
-          if (mode === 'overview' && action.slug) {
+          if (mode === ScreenModes.OVERVIEW && action.slug) {
             startTransition(() => {
               setHasNavigated(true);
               queueMicrotask(() => {

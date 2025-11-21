@@ -31,7 +31,7 @@ import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 import { getStatusPriority, MODERATOR_ANALYSIS_COMPARE_KEYS } from '../store-constants';
 import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
-import type { AnalysesCacheData } from './types';
+import type { AnalysesCacheData, AnalysisDeduplicationOptions } from './types';
 
 // ✅ TYPE-SAFE: Use cache data type which matches query return (accepts unknown for analysisData)
 // The query merges server data with cache, so response type must accommodate both
@@ -59,10 +59,12 @@ export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
 /**
  * Deduplication wrapper that uses regeneratingRoundNumber from options
  * The regeneratingRoundNumber is passed from the React component context
+ *
+ * ✅ TYPE-SAFE: Uses AnalysisDeduplicationOptions instead of Record<string, unknown>
  */
-function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?: Record<string, unknown>) {
+function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?: AnalysisDeduplicationOptions) {
   // The regeneratingRoundNumber is passed as an option from the component context
-  return deduplicateAnalyses(items, options || {});
+  return deduplicateAnalyses(items, options);
 }
 
 export const useAnalysisOrchestrator = createOrchestrator<

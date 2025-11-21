@@ -13,7 +13,7 @@ import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatInputEnhancedToolbar } from '@/components/chat/chat-input-enhanced-toolbar';
+import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
@@ -593,7 +593,7 @@ export default function ChatOverviewScreen() {
                       quotaCheckType="threads"
                       onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
                       toolbar={(
-                        <ChatInputEnhancedToolbar
+                        <ChatInputToolbarMenu
                           selectedParticipants={selectedParticipants}
                           allModels={allEnabledModels}
                           onOpenModelModal={() => modelModal.onTrue()}
@@ -723,10 +723,10 @@ export default function ChatOverviewScreen() {
               ref={inputContainerRef}
               className="sticky z-30 w-full will-change-[bottom] bg-background"
               style={{
-                bottom: `${keyboardOffset + 16}px`,
+                bottom: `${keyboardOffset + 20}px`,
               }}
             >
-              <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+              <div className="container max-w-3xl mx-auto px-4 md:px-6">
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
@@ -738,7 +738,7 @@ export default function ChatOverviewScreen() {
                   quotaCheckType="threads"
                   onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
                   toolbar={(
-                    <ChatInputEnhancedToolbar
+                    <ChatInputToolbarMenu
                       selectedParticipants={selectedParticipants}
                       allModels={allEnabledModels}
                       onOpenModelModal={() => modelModal.onTrue()}

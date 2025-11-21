@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -69,8 +69,8 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const [hasUpdatedThread, setHasUpdatedThread] = useState(false);
   const [aiGeneratedSlug, setAiGeneratedSlug] = useState<string | null>(null);
 
-  // ✅ FIX: Disable controller if screen mode changed (navigated away)
-  const isActive = enabled && streamingState.screenMode === 'overview';
+  // Disable controller if screen mode changed (navigated away)
+  const isActive = enabled && streamingState.screenMode === ScreenModes.OVERVIEW;
 
   // Reset flags when returning to initial UI
   useEffect(() => {

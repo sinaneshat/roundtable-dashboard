@@ -24,7 +24,7 @@ export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './acti
 export { useFeedbackActions } from './actions/feedback-actions';
 export type { UseFlowControllerOptions } from './actions/flow-controller';
 export { useFlowController } from './actions/flow-controller';
-export type { FlowAction, FlowContext, FlowState, UseFlowOrchestratorOptions, UseFlowOrchestratorReturn } from './actions/flow-state-machine';
+export type { FlowAction, FlowContext, UseFlowOrchestratorOptions, UseFlowOrchestratorReturn } from './actions/flow-state-machine';
 export { useFlowStateMachine } from './actions/flow-state-machine';
 export type { UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
@@ -39,7 +39,7 @@ export { useThreadActions } from './actions/thread-actions';
 // Store
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
-export type { ScreenMode } from '@/api/core/enums';
+export type { FlowState, ScreenMode } from '@/api/core/enums';
 
 // Re-export commonly used types for tests
 export type { ChatThread } from '@/db/validation';

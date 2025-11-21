@@ -9,12 +9,11 @@ import { z } from 'zod';
 
 import { AiSdkStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import { DEFAULT_PARTICIPANT_INDEX, ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
-import { getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
+import { getAssistantMetadata, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
 import { deduplicateParticipants } from '@/lib/utils/participant';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
@@ -591,8 +590,9 @@ export function useMultiParticipantChat(
                 if (msg.id !== receivedId)
                   return true; // Keep messages with different IDs
 
-                const msgMetadata = msg.metadata as DbAssistantMessageMetadata | undefined;
-                const msgRoundNumber = getRoundNumber(msgMetadata);
+                // ✅ TYPE-SAFE: Use extraction utility instead of force casting
+                const msgMetadata = getAssistantMetadata(msg.metadata);
+                const msgRoundNumber = getRoundNumber(msg.metadata);
 
                 // Remove ONLY if it's from the same participant AND same round
                 // This prevents removing legitimate messages from other rounds with the same ID pattern
@@ -625,7 +625,8 @@ export function useMultiParticipantChat(
               if (msg.id !== idToSearchFor)
                 return false;
 
-              const msgMetadata = msg.metadata as DbAssistantMessageMetadata | undefined;
+              // ✅ TYPE-SAFE: Use extraction utility instead of force casting
+              const msgMetadata = getAssistantMetadata(msg.metadata);
 
               // If message has no metadata, it's unclaimed - safe to use
               if (!msgMetadata)
@@ -645,7 +646,8 @@ export function useMultiParticipantChat(
               // This prevents edge cases where messages might have been refetched
               const duplicateMsg = prev.find(msg => msg.id === completeMessage.id);
               if (duplicateMsg) {
-                const dupMetadata = duplicateMsg.metadata as DbAssistantMessageMetadata | undefined;
+                // ✅ TYPE-SAFE: Use extraction utility instead of force casting
+                const dupMetadata = getAssistantMetadata(duplicateMsg.metadata);
                 const dupParticipantId = dupMetadata?.participantId;
 
                 // Only replace if it's the same participant (prevents overwriting different participant's message)

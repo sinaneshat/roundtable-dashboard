@@ -14,6 +14,30 @@ import { z } from 'zod';
 import { AnalysisStatusSchema, ChatModeSchema } from '@/api/core/enums';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
+// ============================================================================
+// DEDUPLICATION OPTIONS SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for analysis deduplication options
+ *
+ * **SINGLE SOURCE OF TRUTH**: Replaces `Record<string, unknown>` in orchestrators.
+ * Provides type-safe options for deduplicateAnalyses() function.
+ *
+ * @see deduplicateAnalyses in @/lib/utils/analysis-utils.ts
+ */
+export const AnalysisDeduplicationOptionsSchema = z.object({
+  /** Round being regenerated (filtered out during deduplication) */
+  regeneratingRoundNumber: z.number().nullable().optional(),
+  /** Whether to exclude failed analyses (default: true) */
+  excludeFailed: z.boolean().optional(),
+});
+
+/**
+ * Type for analysis deduplication options (inferred from schema)
+ */
+export type AnalysisDeduplicationOptions = z.infer<typeof AnalysisDeduplicationOptionsSchema>;
+
 /**
  * Schema for analyses cache data structure
  *
@@ -103,6 +127,56 @@ export type ThreadDetailCacheData = z.infer<typeof ThreadDetailCacheDataSchema>;
  */
 export function validateThreadDetailCache(data: unknown): ThreadDetailCacheData | undefined {
   const result = ThreadDetailCacheDataSchema.safeParse(data);
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Schema for full thread detail API response cache
+ *
+ * **SINGLE SOURCE OF TRUTH**: Validates complete API response for thread details.
+ * Replaces unsafe type assertions like `old.data as { participants: Array<Record<string, unknown>> }`
+ *
+ * Used when reading/writing thread detail cache in React Query setQueryData callbacks.
+ */
+export const ThreadDetailResponseCacheSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    participants: z.array(chatParticipantSelectSchema),
+  }).passthrough(), // Allow additional properties in data object
+});
+
+/**
+ * Type for full thread detail response cache (inferred from schema)
+ */
+export type ThreadDetailResponseCache = z.infer<typeof ThreadDetailResponseCacheSchema>;
+
+/**
+ * Helper function to safely validate full thread detail response cache
+ *
+ * **USE THIS INSTEAD OF**: Manual type guards + `old.data as { participants: Array<Record<string, unknown>> }`
+ *
+ * @param data - Raw cache data from React Query
+ * @returns Validated response cache or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * queryClient.setQueryData(queryKey, (old: unknown) => {
+ *   const cache = validateThreadDetailResponseCache(old);
+ *   if (!cache) return old;
+ *
+ *   // Type-safe access to cache.data.participants
+ *   return {
+ *     ...cache,
+ *     data: {
+ *       ...cache.data,
+ *       participants: cache.data.participants.map(p => ...),
+ *     },
+ *   };
+ * });
+ * ```
+ */
+export function validateThreadDetailResponseCache(data: unknown): ThreadDetailResponseCache | undefined {
+  const result = ThreadDetailResponseCacheSchema.safeParse(data);
   return result.success ? result.data : undefined;
 }
 

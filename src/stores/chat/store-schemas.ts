@@ -19,6 +19,8 @@ import type { FeedbackType } from '@/api/core/enums';
 import {
   ChatModeSchema,
   FeedbackTypeSchema,
+  ScreenModeSchema,
+  StreamStatusSchema,
 } from '@/api/core/enums';
 import {
   ChatParticipantSchema,
@@ -39,15 +41,24 @@ import type {
   ClearAnalysisTracking,
   ClearFeedback,
   ClearPreSearchTracking,
+  ClearStreamResumption,
   CompleteRegeneration,
   CompleteStreaming,
   CreatePendingAnalysis,
+  GetNextParticipantToTrigger,
+  HandleResumedStreamComplete,
+  HandleStreamResumptionFailure,
   HasAnalysisBeenCreated,
   HasPreSearchBeenTriggered,
   InitializeThread,
+  IsStreamResumptionStale,
+  IsStreamResumptionValid,
   LoadFeedbackFromServer,
   MarkAnalysisCreated,
   MarkPreSearchTriggered,
+  MarkResumptionAttempted,
+  NeedsMessageSync,
+  NeedsStreamResumption,
   OnComplete,
   PrepareForNewMessage,
   RemoveAnalysis,
@@ -127,11 +138,7 @@ export { ParticipantConfigSchema };
 // Re-export type from participant-schemas (not duplicate)
 export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 
-// ============================================================================
-// SCREEN MODE SCHEMA
-// ============================================================================
-
-export const ScreenModeSchema = z.enum(['overview', 'thread', 'public']);
+// ScreenModeSchema is imported from @/api/core/enums (single source of truth)
 
 // ============================================================================
 // AI SDK FUNCTION SCHEMAS (for type safety)
@@ -382,6 +389,51 @@ export const ScreenActionsSchema = z.object({
 export const ScreenSliceSchema = z.intersection(ScreenStateSchema, ScreenActionsSchema);
 
 // ============================================================================
+// STREAM RESUMPTION SLICE SCHEMAS
+// ============================================================================
+
+/**
+ * Stream resumption state entity - Zod-first pattern
+ * Uses StreamStatusSchema from enums for type safety
+ */
+export const StreamResumptionStateEntitySchema = z.object({
+  streamId: z.string().min(1),
+  threadId: z.string().min(1),
+  roundNumber: z.number().int().nonnegative(),
+  participantIndex: z.number().int().nonnegative(),
+  state: StreamStatusSchema,
+  createdAt: z.date(),
+  updatedAt: z.date().optional(),
+});
+
+/**
+ * Stream resumption state type - inferred from Zod schema
+ */
+export type StreamResumptionState = z.infer<typeof StreamResumptionStateEntitySchema>;
+
+export const StreamResumptionSliceStateSchema = z.object({
+  streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
+  resumptionAttempts: z.custom<Set<string>>(),
+  nextParticipantToTrigger: z.number().nullable(),
+});
+
+export const StreamResumptionActionsSchema = z.object({
+  setStreamResumptionState: z.custom<(state: StreamResumptionState | null) => void>(),
+  getStreamResumptionState: z.custom<() => StreamResumptionState | null>(),
+  needsStreamResumption: z.custom<NeedsStreamResumption>(),
+  isStreamResumptionStale: z.custom<IsStreamResumptionStale>(),
+  isStreamResumptionValid: z.custom<IsStreamResumptionValid>(),
+  handleResumedStreamComplete: z.custom<HandleResumedStreamComplete>(),
+  handleStreamResumptionFailure: z.custom<HandleStreamResumptionFailure>(),
+  getNextParticipantToTrigger: z.custom<GetNextParticipantToTrigger>(),
+  markResumptionAttempted: z.custom<MarkResumptionAttempted>(),
+  needsMessageSync: z.custom<NeedsMessageSync>(),
+  clearStreamResumption: z.custom<ClearStreamResumption>(),
+});
+
+export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);
+
+// ============================================================================
 // OPERATIONS SLICE SCHEMAS
 // ============================================================================
 
@@ -412,24 +464,27 @@ export const ChatStoreSchema = z.intersection(
             z.intersection(
               z.intersection(
                 z.intersection(
-                  z.intersection(FormSliceSchema, FeedbackSliceSchema),
-                  UISliceSchema,
+                  z.intersection(
+                    z.intersection(FormSliceSchema, FeedbackSliceSchema),
+                    UISliceSchema,
+                  ),
+                  AnalysisSliceSchema,
                 ),
-                AnalysisSliceSchema,
+                PreSearchSliceSchema,
               ),
-              PreSearchSliceSchema,
+              ThreadSliceSchema,
             ),
-            ThreadSliceSchema,
+            FlagsSliceSchema,
           ),
-          FlagsSliceSchema,
+          DataSliceSchema,
         ),
-        DataSliceSchema,
+        TrackingSliceSchema,
       ),
-      TrackingSliceSchema,
+      CallbacksSliceSchema,
     ),
-    CallbacksSliceSchema,
+    ScreenSliceSchema,
   ),
-  z.intersection(ScreenSliceSchema, OperationsSliceSchema),
+  z.intersection(StreamResumptionSliceSchema, OperationsSliceSchema),
 );
 
 // ============================================================================
@@ -493,3 +548,7 @@ export type ScreenSlice = z.infer<typeof ScreenSliceSchema>;
 
 export type OperationsActions = z.infer<typeof OperationsActionsSchema>;
 export type OperationsSlice = z.infer<typeof OperationsSliceSchema>;
+
+export type StreamResumptionSliceState = z.infer<typeof StreamResumptionSliceStateSchema>;
+export type StreamResumptionActions = z.infer<typeof StreamResumptionActionsSchema>;
+export type StreamResumptionSlice = z.infer<typeof StreamResumptionSliceSchema>;

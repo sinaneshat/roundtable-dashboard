@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, MessagesSquare, MoreHorizontal, Sparkles } from 'lucide-react';
+import { Globe, Mic, MoreHorizontal, Sparkles, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useState } from 'react';
 
@@ -10,13 +10,12 @@ import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
 import { useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
@@ -35,6 +34,11 @@ type ChatInputToolbarMenuProps = {
   enableWebSearch: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
 
+  // Speech recognition (mobile only)
+  isListening?: boolean;
+  onToggleSpeech?: () => void;
+  isSpeechSupported?: boolean;
+
   // State
   disabled?: boolean;
 };
@@ -47,6 +51,9 @@ export const ChatInputToolbarMenu = memo(({
   onOpenModeModal,
   enableWebSearch,
   onWebSearchToggle,
+  isListening = false,
+  onToggleSpeech,
+  isSpeechSupported = false,
   disabled = false,
 }: ChatInputToolbarMenuProps) => {
   const t = useTranslations();
@@ -114,102 +121,146 @@ export const ChatInputToolbarMenu = memo(({
 
   // Mobile version (default during SSR and for mobile devices)
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
+    <Drawer>
+      <DrawerTrigger asChild>
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
           disabled={disabled}
           className={cn(
-            'h-9 w-9 rounded-full p-0',
-            'hover:bg-white/10',
+            'flex items-center justify-center size-8 rounded-full',
+            'bg-white/5 hover:bg-white/10 active:bg-white/15',
+            'transition-colors disabled:opacity-50',
           )}
         >
-          <MoreHorizontal className="size-5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        side="top"
-        sideOffset={8}
-        className="w-56 bg-card border-border"
-      >
-        <DropdownMenuLabel className="text-white/60">
-          {t('chat.toolbar.options')}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-white/10" />
+          <MoreHorizontal className="size-4" />
+        </button>
+      </DrawerTrigger>
+      <DrawerContent glass>
+        <DrawerHeader className="pb-4">
+          <DrawerTitle className="text-base font-semibold text-foreground">
+            {t('chat.toolbar.options')}
+          </DrawerTitle>
+        </DrawerHeader>
 
-        {/* AI Models */}
-        <DropdownMenuItem
-          onClick={onOpenModelModal}
-          className="cursor-pointer hover:bg-white/10 focus:bg-white/10"
-        >
-          <Sparkles className="size-4" />
-          <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-sm font-medium text-white">
-              {t('chat.models.aiModels')}
-            </span>
-            <span className="text-xs text-white/60 truncate">
-              {selectedParticipants.length}
-              {' '}
-              {t('chat.toolbar.selected')}
-            </span>
-          </div>
-          <AvatarGroup
-            participants={selectedParticipants}
-            allModels={allModels}
-            size="sm"
-            maxVisible={2}
-          />
-        </DropdownMenuItem>
+        <div className="px-5 pb-20 space-y-3" style={{ paddingBottom: '20px' }}>
+          {/* AI Models */}
+          <button
+            type="button"
+            onClick={onOpenModelModal}
+            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors"
+          >
+            <div className="flex items-center justify-center size-10 rounded-full bg-cyan-500/10">
+              <Sparkles className="size-5 text-cyan-400" />
+            </div>
+            <div className="flex flex-col flex-1 min-w-0 text-left">
+              <span className="text-sm font-medium text-foreground">
+                {t('chat.models.aiModels')}
+              </span>
+              <span className="text-xs text-muted-foreground truncate">
+                {selectedParticipants.length}
+                {' '}
+                {t('chat.toolbar.selected')}
+              </span>
+            </div>
+            <AvatarGroup
+              participants={selectedParticipants}
+              allModels={allModels}
+              size="sm"
+              maxVisible={3}
+            />
+          </button>
 
-        {/* Conversation Mode */}
-        <DropdownMenuItem
-          onClick={onOpenModeModal}
-          className="cursor-pointer hover:bg-white/10 focus:bg-white/10"
-        >
-          {ModeIcon && <ModeIcon className="size-4" />}
-          <div className="flex flex-col flex-1">
-            <span className="text-sm font-medium text-white">
-              {t('chat.modes.mode')}
-            </span>
-            <span className="text-xs text-white/60">
-              {currentMode?.label}
-            </span>
-          </div>
-        </DropdownMenuItem>
+          {/* Conversation Mode */}
+          <button
+            type="button"
+            onClick={onOpenModeModal}
+            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors"
+          >
+            <div className="flex items-center justify-center size-10 rounded-full bg-purple-500/10">
+              {ModeIcon && <ModeIcon className="size-5 text-purple-400" />}
+            </div>
+            <div className="flex flex-col flex-1 text-left">
+              <span className="text-sm font-medium text-foreground">
+                {t('chat.modes.mode')}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {currentMode?.label}
+              </span>
+            </div>
+          </button>
 
-        <DropdownMenuSeparator className="bg-white/10" />
-
-        {/* Web Search Toggle */}
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onWebSearchToggle?.(!enableWebSearch);
-          }}
-          className="cursor-pointer hover:bg-white/10 focus:bg-white/10"
-        >
-          <MessagesSquare className="size-4" />
-          <span className="text-sm font-medium text-white flex-1">
-            {t('chat.webSearch.toggle')}
-          </span>
-          <div
+          {/* Web Search Toggle */}
+          <button
+            type="button"
+            onClick={() => onWebSearchToggle?.(!enableWebSearch)}
             className={cn(
-              'size-5 rounded-full border-2 flex items-center justify-center transition-colors',
+              'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
               enableWebSearch
-                ? 'bg-primary border-primary'
-                : 'bg-transparent border-white/20',
+                ? 'bg-blue-500/20 hover:bg-blue-500/25 active:bg-blue-500/30'
+                : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
             )}
           >
-            {enableWebSearch && (
-              <div className="size-2 rounded-full bg-white" />
+            <div className={cn(
+              'flex items-center justify-center size-10 rounded-full transition-colors',
+              enableWebSearch ? 'bg-blue-500/20' : 'bg-blue-500/10',
             )}
-          </div>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            >
+              <Globe className={cn(
+                'size-5 transition-colors',
+                enableWebSearch ? 'text-blue-300' : 'text-blue-400',
+              )}
+              />
+            </div>
+            <span className={cn(
+              'text-sm font-medium flex-1 text-left transition-colors',
+              enableWebSearch ? 'text-blue-100' : 'text-foreground',
+            )}
+            >
+              {t('chat.webSearch.toggle')}
+            </span>
+            {enableWebSearch && (
+              <div className="size-2 rounded-full bg-blue-400" />
+            )}
+          </button>
+
+          {/* Voice Input - Mobile only */}
+          {onToggleSpeech && (
+            <button
+              type="button"
+              onClick={onToggleSpeech}
+              disabled={!isSpeechSupported}
+              className={cn(
+                'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                !isSpeechSupported && 'opacity-50 cursor-not-allowed',
+                isListening
+                  ? 'bg-red-500/20 hover:bg-red-500/25 active:bg-red-500/30'
+                  : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+              )}
+            >
+              <div className={cn(
+                'flex items-center justify-center size-10 rounded-full',
+                isListening ? 'bg-red-500/20' : 'bg-green-500/10',
+              )}
+              >
+                {isListening
+                  ? <StopCircle className="size-5 text-red-400" />
+                  : <Mic className="size-5 text-green-400" />}
+              </div>
+              <span className={cn(
+                'text-sm font-medium flex-1 text-left transition-colors',
+                isListening ? 'text-red-100' : 'text-foreground',
+              )}
+              >
+                {isListening ? t('chat.input.stopRecording') : t('chat.input.voiceInput')}
+              </span>
+              {isListening && (
+                <div className="size-2 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </button>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 });
 

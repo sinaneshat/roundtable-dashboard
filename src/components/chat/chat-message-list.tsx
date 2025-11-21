@@ -120,7 +120,7 @@ function AssistantGroupCard({
     >
       <div className="w-full sm:max-w-[85%]">
         {/* Header at top of message box */}
-        <div className="flex items-center gap-3 py-3">
+        <div className="flex items-center gap-3 mb-6">
           <Avatar className={cn(
             'size-8',
             `drop-shadow-[0_0_12px_hsl(var(--${colorClass})/0.3)]`,
@@ -136,23 +136,19 @@ function AssistantGroupCard({
             </AvatarFallback>
           </Avatar>
           <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-            <span className={cn(
-              'text-base font-semibold tracking-tight truncate',
-              `text-${colorClass}`,
-            )}
-            >
+            <span className="text-xl font-semibold text-muted-foreground">
               {group.headerInfo.displayName}
             </span>
             {group.headerInfo.role && (
               <span
-                className="px-2 py-0.5 text-[10px] font-semibold rounded-full truncate border h-5 inline-flex items-center"
+                className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border"
                 style={getRoleBadgeStyle(group.headerInfo.role)}
               >
                 {String(group.headerInfo.role)}
               </span>
             )}
             {!group.headerInfo.isAccessible && group.headerInfo.requiredTierName && (
-              <span className="px-2 py-0.5 text-xs font-medium rounded-md bg-muted/50 text-muted-foreground border border-border/50 truncate">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border bg-muted/50 text-muted-foreground border-border/50">
                 {group.headerInfo.requiredTierName}
                 {' '}
                 required
@@ -633,14 +629,14 @@ export const ChatMessageList = memo(
                 >
                   <div className="w-full sm:max-w-[80%]">
                     {/* Header at top of message box */}
-                    <div className="flex items-center gap-2 py-3 flex-row-reverse">
+                    <div className="flex items-center gap-3 mb-6 flex-row-reverse">
                       <div className="relative flex-shrink-0 drop-shadow-[0_0_12px_hsl(var(--white)/0.3)]">
                         <Avatar className="size-8">
                           <AvatarImage alt="" className="mt-0 mb-0" src={group.headerInfo.avatarSrc} />
                           <AvatarFallback>{group.headerInfo.avatarName?.slice(0, 2) || 'ME'}</AvatarFallback>
                         </Avatar>
                       </div>
-                      <span className="text-base font-semibold tracking-tight truncate text-white">
+                      <span className="text-xl font-semibold text-muted-foreground">
                         {group.headerInfo.displayName}
                       </span>
                     </div>
@@ -649,7 +645,7 @@ export const ChatMessageList = memo(
                       {group.messages.map(({ message, index }) => {
                         const messageKey = keyForMessage(message, index);
                         return (
-                          <div key={messageKey} className="text-sm text-foreground">
+                          <div key={messageKey} className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
                             {message.parts.map((part) => {
                               if (part.type === MessagePartTypes.TEXT) {
                                 return (

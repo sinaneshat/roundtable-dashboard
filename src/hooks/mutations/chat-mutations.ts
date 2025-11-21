@@ -24,7 +24,7 @@ import {
   updateParticipantService,
   updateThreadService,
 } from '@/services/api';
-import { validateThreadDetailCache, validateThreadsListPages } from '@/stores/chat/actions/types';
+import { validateThreadDetailCache, validateThreadDetailResponseCache, validateThreadsListPages } from '@/stores/chat/actions/types';
 
 // ============================================================================
 // Validation Schemas - Type-safe cache updates
@@ -866,24 +866,18 @@ export function useAddParticipantMutation() {
       queryClient.setQueryData(
         queryKeys.threads.detail(threadId),
         (old: unknown) => {
-          if (!old || typeof old !== 'object')
+          // ✅ TYPE-SAFE: Use Zod validation instead of manual type guards
+          const cache = validateThreadDetailResponseCache(old);
+          if (!cache)
             return old;
-          if (!('success' in old) || !old.success)
-            return old;
-          if (!('data' in old) || !old.data || typeof old.data !== 'object')
-            return old;
-          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
-            return old;
-
-          const oldData = old.data as { participants: Array<Record<string, unknown>> };
 
           // Replace temporary participant with real server data
           return {
-            ...old,
+            ...cache,
             data: {
-              ...oldData,
-              participants: oldData.participants.map(p =>
-                typeof p.id === 'string' && p.id.startsWith('temp-')
+              ...cache.data,
+              participants: cache.data.participants.map(p =>
+                p.id.startsWith('temp-')
                   ? (data.success && data.data ? data.data : p)
                   : p,
               ),

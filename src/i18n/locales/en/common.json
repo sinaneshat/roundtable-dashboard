@@ -712,6 +712,7 @@
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation...",
       "voiceInput": "Voice input",
+      "stopRecording": "Stop recording",
       "label": "Message input",
       "streamingLabel": "Message input (disabled while AI responds)",
       "stopStreaming": "Stop streaming"
