@@ -755,11 +755,21 @@ export function useMultiParticipantChat(
 
     // Guard: Prevent concurrent rounds - check both manual flag AND AI SDK status
     if (isExplicitlyStreaming || status !== AiSdkStatuses.READY) {
+      // ✅ DEBUG: Log when startRound returns early due to status
+      // eslint-disable-next-line no-console -- Debug logging for streaming issues
+      console.warn('[startRound] Blocked - AI SDK not ready', {
+        status,
+        isExplicitlyStreaming,
+        threadId: callbackRefs.threadId.current,
+        participantCount: currentParticipants.length,
+      });
       return;
     }
 
     // Guard: Prevent concurrent calls using triggering lock
     if (isTriggeringRef.current) {
+      // eslint-disable-next-line no-console -- Debug logging for streaming issues
+      console.warn('[startRound] Blocked - already triggering');
       return;
     }
 
@@ -841,11 +851,21 @@ export function useMultiParticipantChat(
     async (content: string) => {
       // ✅ ENUM PATTERN: Use AiSdkStatuses constant instead of hardcoded 'ready'
       if (status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
+        // ✅ DEBUG: Log when sendMessage returns early due to status
+        // eslint-disable-next-line no-console -- Debug logging for streaming issues
+        console.warn('[sendMessage] Blocked - AI SDK not ready', {
+          status,
+          isExplicitlyStreaming,
+          threadId: callbackRefs.threadId.current,
+          content: content.slice(0, 50),
+        });
         return;
       }
 
       // Guard: Prevent concurrent calls using triggering lock
       if (isTriggeringRef.current) {
+        // eslint-disable-next-line no-console -- Debug logging for streaming issues
+        console.warn('[sendMessage] Blocked - already triggering');
         return;
       }
 

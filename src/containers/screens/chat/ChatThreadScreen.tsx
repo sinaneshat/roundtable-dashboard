@@ -605,12 +605,15 @@ export default function ChatThreadScreen({
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!inputValue.trim() || selectedParticipants.length === 0) {
+      // ✅ FIX: Include comprehensive guards to prevent double submission
+      // - isRoundInProgress: Streaming or analysis in progress
+      // - pendingMessage: Message already queued for sending
+      if (!inputValue.trim() || selectedParticipants.length === 0 || isRoundInProgress || state.data.pendingMessage) {
         return;
       }
       await formActions.handleUpdateThreadAndSend(thread.id);
     },
-    [inputValue, selectedParticipants, formActions, thread.id],
+    [inputValue, selectedParticipants, formActions, thread.id, isRoundInProgress, state.data.pendingMessage],
   );
 
   // Timeline grouping

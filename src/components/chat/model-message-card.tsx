@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
-import { cn } from '@/lib/ui/cn';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
 type ModelMessageCardProps = {
   model?: EnhancedModelResponse;
@@ -32,47 +32,6 @@ type ModelMessageCardProps = {
   hideAvatar?: boolean;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
-
-// Helper function to get role badge styling based on role text
-function getRoleBadgeVariant(role: string | null | undefined): {
-  variant: 'default' | 'secondary' | 'outline';
-  className: string;
-} {
-  if (!role)
-    return { variant: 'secondary', className: '' };
-
-  const roleLower = role.toLowerCase();
-
-  // Primary roles - Blue
-  if (roleLower.includes('primary') || roleLower.includes('main') || roleLower.includes('lead')) {
-    return {
-      variant: 'default',
-      className: 'bg-blue-500/90 text-white border-blue-500/20',
-    };
-  }
-
-  // Creative roles - Purple
-  if (roleLower.includes('creative') || roleLower.includes('artist') || roleLower.includes('designer')) {
-    return {
-      variant: 'default',
-      className: 'bg-purple-500/90 text-white border-purple-500/20',
-    };
-  }
-
-  // Research/Analysis roles - Green
-  if (roleLower.includes('research') || roleLower.includes('analyst') || roleLower.includes('scientist')) {
-    return {
-      variant: 'default',
-      className: 'bg-green-500/90 text-white border-green-500/20',
-    };
-  }
-
-  // Default - Secondary gray
-  return {
-    variant: 'secondary',
-    className: 'bg-muted text-muted-foreground',
-  };
-}
 
 export const ModelMessageCard = memo(({
   model,
@@ -98,7 +57,6 @@ export const ModelMessageCard = memo(({
   const hasError = isError || assistantMetadata?.hasError;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;
-  const roleBadgeStyle = getRoleBadgeVariant(role);
 
   return (
     <div className={`space-y-1 ${className || ''}`}>
@@ -112,8 +70,8 @@ export const ModelMessageCard = memo(({
                 </span>
                 {role && (
                   <Badge
-                    variant={roleBadgeStyle.variant}
-                    className={cn('text-xs font-medium px-2 py-0.5', roleBadgeStyle.className)}
+                    className="text-[10px] px-2 py-0.5 h-5 font-semibold border rounded-full"
+                    style={getRoleBadgeStyle(role)}
                   >
                     {String(role)}
                   </Badge>

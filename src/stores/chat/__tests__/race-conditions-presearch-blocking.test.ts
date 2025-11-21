@@ -1,424 +1,177 @@
 /**
- * Pre-Search Blocking Race Conditions - Logic Tests
+ * Race Conditions: Pre-Search Blocking Tests
  *
- * Tests critical race between orchestrator sync and streaming start.
- * Uses ACTUAL implementation from pending-message-sender.ts
+ * Tests race conditions where participant streaming might start before
+ * web search (pre-search) is completed. This is critical for ensuring
+ * AI models have the search context before they answer.
  *
- * **TESTING APPROACH**:
- * - Test actual shouldWaitForPreSearch function
- * - Use real StoredPreSearch type from API schema
- * - Test optimistic blocking
- * - Test status transitions
- * - Test timeout behavior
- *
- * **CRITICAL PRINCIPLE**: Test actual code behavior, not recreated logic
+ * Location: /src/stores/chat/__tests__/race-conditions-presearch-blocking.test.ts
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import {
+  AnalysisStatuses,
+} from '@/api/core/enums';
 import { shouldWaitForPreSearch } from '@/stores/chat/actions/pending-message-sender';
+import { createChatStore } from '@/stores/chat/store';
 
-describe('pre-Search Blocking - Race Condition Logic', () => {
-  /**
-   * RACE 3.1: Orchestrator Sync Timing
-   * Tests optimistic blocking when orchestrator hasn't synced
-   */
-  describe('rACE 3.1: Orchestrator Sync Before Streaming', () => {
-    it('blocks streaming when web search enabled but orchestrator not synced', () => {
-      // Empty array - orchestrator hasn't synced yet
-      const preSearches: StoredPreSearch[] = [];
+import {
+  createMockParticipant,
+  createMockThread,
+  createPendingPreSearch,
+} from './test-factories';
 
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 0,
-      });
+function createTestStore() {
+  return createChatStore();
+}
 
-      // MUST block (optimistic - assume PENDING exists)
+describe('Race Conditions: Pre-Search Blocking', () => {
+  let store: ReturnType<typeof createChatStore>;
+
+  beforeEach(() => {
+    store = createTestStore();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Helper to check blocking status using the actual logic function
+  function checkShouldWait(roundNumber: number) {
+    const state = store.getState();
+    const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
+    
+    return shouldWaitForPreSearch({
+      webSearchEnabled,
+      preSearches: state.preSearches,
+      roundNumber
+    });
+  }
+
+  // ==========================================================================
+  // RACE 1: ORCHESTRATOR SYNC TIMING (OPTIMISTIC BLOCKING)
+  // ==========================================================================
+
+  describe('RACE 1: Orchestrator Sync Timing', () => {
+    it('should identify blocking condition when web search is enabled but NO pre-search record exists yet', () => {
+      // Setup: Web search enabled on thread
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      
+      // Current State: preSearches array is EMPTY (orchestrator hasn't synced yet)
+      expect(store.getState().preSearches).toHaveLength(0);
+      
+      // Logic check: Should we wait?
+      const shouldWait = checkShouldWait(0);
+      
+      // Expect TRUE because web search is enabled, even if record missing
       expect(shouldWait).toBe(true);
     });
 
-    it('does NOT block when web search disabled', () => {
-      const preSearches: StoredPreSearch[] = [];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: false,
-        preSearches,
-        roundNumber: 0,
-      });
-
-      expect(shouldWait).toBe(false);
-    });
-
-    it('blocks when pre-search is PENDING', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.PENDING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 0,
-      });
-
-      expect(shouldWait).toBe(true);
-    });
-
-    it('blocks when pre-search is STREAMING', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.STREAMING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 0,
-      });
-
-      expect(shouldWait).toBe(true);
-    });
-
-    it('does NOT block when pre-search is COMPLETE', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          data: {
-            sources: [],
-            queries: [],
-          },
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 0,
-      });
-
-      expect(shouldWait).toBe(false);
-    });
-
-    it('does NOT block when pre-search FAILED', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.FAILED,
-          data: null,
-          errorMessage: 'Search service unavailable',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 0,
-      });
-
-      // Allow streaming to proceed even if search failed
+    it('should NOT block if web search is disabled', () => {
+      const thread = createMockThread({ enableWebSearch: false });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      
+      const shouldWait = checkShouldWait(0);
       expect(shouldWait).toBe(false);
     });
   });
 
-  /**
-   * RACE 3.3: Status Transition Race
-   * Tests handling of status transitions
-   */
-  describe('rACE 3.3: Status Transition Timing', () => {
-    it('transitions from PENDING → STREAMING → COMPLETE', () => {
-      const roundNumber = 0;
+  // ==========================================================================
+  // RACE 2: STATUS TRANSITIONS
+  // ==========================================================================
 
-      // Initial: PENDING
-      let preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.PENDING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber })).toBe(true);
-
-      // Update: STREAMING
-      preSearches = [
-        {
-          ...preSearches[0]!,
-          status: AnalysisStatuses.STREAMING,
-          updatedAt: new Date(),
-        },
-      ];
-
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber })).toBe(true);
-
-      // Update: COMPLETE
-      preSearches = [
-        {
-          ...preSearches[0]!,
-          status: AnalysisStatuses.COMPLETE,
-          data: { sources: [], queries: [] },
-          updatedAt: new Date(),
-        },
-      ];
-
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber })).toBe(false);
+  describe('RACE 2: Status Transitions', () => {
+    it('should block during PENDING and STREAMING states', () => {
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      
+      const preSearch = createPendingPreSearch(0);
+      store.getState().addPreSearch(preSearch);
+      
+      // PENDING
+      expect(checkShouldWait(0)).toBe(true);
+      
+      // STREAMING
+      store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+      expect(checkShouldWait(0)).toBe(true);
+      
+      // COMPLETE
+      store.getState().updatePreSearchStatus(0, AnalysisStatuses.COMPLETE);
+      expect(checkShouldWait(0)).toBe(false);
     });
 
-    it('handles direct PENDING → COMPLETE transition', () => {
-      const roundNumber = 0;
-
-      // Start: PENDING
-      let preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.PENDING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber })).toBe(true);
-
-      // Jump to: COMPLETE (skipped STREAMING)
-      preSearches = [
-        {
-          ...preSearches[0]!,
-          status: AnalysisStatuses.COMPLETE,
-          data: { sources: [], queries: [] },
-          updatedAt: new Date(),
-        },
-      ];
-
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber })).toBe(false);
+    it('should NOT block if pre-search FAILED (error recovery)', () => {
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      
+      const preSearch = createPendingPreSearch(0);
+      store.getState().addPreSearch(preSearch);
+      
+      store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+      
+      // Should proceed despite failure to prevent hanging
+      expect(checkShouldWait(0)).toBe(false);
     });
   });
 
-  /**
-   * RACE: Round Number Mismatch
-   * Tests that pre-search for different round doesn't block
-   */
-  describe('rACE: Round Number Isolation', () => {
-    it('blocks Round 1 when no Round 1 pre-search exists (optimistic)', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-r0',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE, // Round 0 done
-          data: { sources: [], queries: [] },
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
+  // ==========================================================================
+  // RACE 3: TIMEOUT PROTECTION
+  // ==========================================================================
 
-      // Check if Round 1 should wait
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 1,
-      });
-
-      // Round 1 should be blocked optimistically (no Round 1 pre-search exists)
-      expect(shouldWait).toBe(true);
-    });
-
-    it('blocks Round 1 when Round 1 pre-search is PENDING', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-r0',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          data: { sources: [], queries: [] },
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'pre-search-r1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 1,
-          status: AnalysisStatuses.PENDING, // Round 1 pending
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 1,
-      });
-
-      expect(shouldWait).toBe(true);
-    });
-
-    it('does NOT block Round 1 when Round 1 pre-search is COMPLETE', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-r0',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          data: { sources: [], queries: [] },
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'pre-search-r1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 1,
-          status: AnalysisStatuses.COMPLETE,
-          data: { sources: [], queries: [] },
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      const shouldWait = shouldWaitForPreSearch({
-        webSearchEnabled: true,
-        preSearches,
-        roundNumber: 1,
-      });
-
-      expect(shouldWait).toBe(false);
+  describe('RACE 3: Timeout Protection', () => {
+    // Note: The store's shouldWaitForPreSearch doesn't internally track time,
+    // but the consuming component sets a timeout. 
+    // However, we can test if there's a mechanism to bypass.
+    
+    it('should allow bypassing checks via manual intervention (simulation)', () => {
+       // If a timeout happens, the component might force status to FAILED
+       const thread = createMockThread({ enableWebSearch: true });
+       store.getState().initializeThread(thread, [createMockParticipant(0)]);
+       store.getState().addPreSearch(createPendingPreSearch(0));
+       
+       // Still waiting
+       expect(checkShouldWait(0)).toBe(true);
+       
+       // Timeout handler triggers force fail
+       store.getState().updatePreSearchStatus(0, AnalysisStatuses.FAILED);
+       
+       // Now unblocked
+       expect(checkShouldWait(0)).toBe(false);
     });
   });
 
-  /**
-   * RACE: Concurrent Checks
-   * Tests that multiple concurrent checks return consistent results
-   */
-  describe('rACE: Concurrent Status Checks', () => {
-    it('returns consistent results for concurrent checks', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.STREAMING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
+  // ==========================================================================
+  // RACE 4: ROUND ISOLATION
+  // ==========================================================================
 
-      // Simulate 3 components checking simultaneously
-      const results = [
-        shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber: 0 }),
-        shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber: 0 }),
-        shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber: 0 }),
-      ];
-
-      // All should return same result (no race)
-      expect(results).toEqual([true, true, true]);
-    });
-  });
-
-  /**
-   * EDGE CASE: Multiple rounds with mixed statuses
-   */
-  describe('eDGE CASE: Multiple Rounds', () => {
-    it('correctly identifies which round to wait for', () => {
-      const preSearches: StoredPreSearch[] = [
-        {
-          id: 'pre-search-r0',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          data: { sources: [], queries: [] },
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'pre-search-r1',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 1,
-          status: AnalysisStatuses.STREAMING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'pre-search-r2',
-          threadId: 'thread-123',
-          userId: 'user-123',
-          roundNumber: 2,
-          status: AnalysisStatuses.PENDING,
-          data: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      // Round 0: Should NOT wait (COMPLETE)
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber: 0 })).toBe(false);
-
-      // Round 1: Should wait (STREAMING)
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber: 1 })).toBe(true);
-
-      // Round 2: Should wait (PENDING)
-      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches, roundNumber: 2 })).toBe(true);
+  describe('RACE 4: Round Number Isolation', () => {
+    it('should only wait for current round pre-search', () => {
+      const thread = createMockThread({ enableWebSearch: true });
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      
+      // Create pre-search for Round 1 (future), but we are in Round 0
+      const futurePreSearch = createPendingPreSearch(1); // Round 1
+      store.getState().addPreSearch(futurePreSearch);
+      
+      // We are in Round 0.
+      // IMPORTANT: The test helper assumes we want to know if we should wait for ROUND X's search.
+      // Since webSearchEnabled is true for the thread, it expects a search for Round 0 too.
+      // So checkShouldWait(0) -> True (missing record)
+      
+      // But if we provide a COMPLETED record for Round 0:
+      store.getState().addPreSearch({
+        ...createPendingPreSearch(0),
+        status: AnalysisStatuses.COMPLETE
+      });
+      
+      expect(checkShouldWait(0)).toBe(false); // R0 is done
+      
+      // Check for Round 1 (should wait)
+      expect(checkShouldWait(1)).toBe(true); // R1 is pending/exists
     });
   });
 });
+

@@ -20,6 +20,7 @@ import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 import { getMessageStatus } from '@/lib/utils/message-status';
 import { getMessageMetadata } from '@/lib/utils/message-transforms';
 import { getRoundNumber, getUserMetadata, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
@@ -121,7 +122,7 @@ function AssistantGroupCard({
         {/* Header at top of message box */}
         <div className="flex items-center gap-3 py-3">
           <Avatar className={cn(
-            'size-8 ring-2 ring-card bg-card',
+            'size-8',
             `drop-shadow-[0_0_12px_hsl(var(--${colorClass})/0.3)]`,
           )}
           >
@@ -143,10 +144,9 @@ function AssistantGroupCard({
               {group.headerInfo.displayName}
             </span>
             {group.headerInfo.role && (
-              <span className={cn(
-                'px-2 py-0.5 text-xs font-medium rounded-md truncate',
-                'bg-white/10 text-white border border-white/20',
-              )}
+              <span
+                className="px-2 py-0.5 text-[10px] font-semibold rounded-full truncate border h-5 inline-flex items-center"
+                style={getRoleBadgeStyle(group.headerInfo.role)}
               >
                 {String(group.headerInfo.role)}
               </span>
@@ -635,7 +635,7 @@ export const ChatMessageList = memo(
                     {/* Header at top of message box */}
                     <div className="flex items-center gap-2 py-3 flex-row-reverse">
                       <div className="relative flex-shrink-0 drop-shadow-[0_0_12px_hsl(var(--white)/0.3)]">
-                        <Avatar className="size-8 ring-1 ring-border">
+                        <Avatar className="size-8">
                           <AvatarImage alt="" className="mt-0 mb-0" src={group.headerInfo.avatarSrc} />
                           <AvatarFallback>{group.headerInfo.avatarName?.slice(0, 2) || 'ME'}</AvatarFallback>
                         </Avatar>

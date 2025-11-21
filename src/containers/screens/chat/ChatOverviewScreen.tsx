@@ -81,11 +81,12 @@ export default function ChatOverviewScreen() {
   );
 
   // UI state
-  const { showInitialUI, isCreatingThread, createdThreadId } = useChatStore(
+  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming } = useChatStore(
     useShallow(s => ({
       showInitialUI: s.showInitialUI,
       isCreatingThread: s.isCreatingThread,
       createdThreadId: s.createdThreadId,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
@@ -332,12 +333,18 @@ export default function ChatOverviewScreen() {
     ),
   });
 
+  // ✅ FIX: Comprehensive input blocking check
+  // Prevents race condition where user can submit during the gap between
+  // isCreatingThread=false and isStreaming=true
+  const isInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming;
+
   // Handle form submission
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!inputValue.trim() || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
+      // ✅ FIX: Include waitingToStartStreaming in guard to prevent double submission
+      if (!inputValue.trim() || selectedParticipants.length === 0 || isCreatingThread || isStreaming || waitingToStartStreaming) {
         return;
       }
 
@@ -348,7 +355,7 @@ export default function ChatOverviewScreen() {
         showApiErrorToast('Error creating thread', error);
       }
     },
-    [inputValue, selectedParticipants, isCreatingThread, isStreaming, formActions],
+    [inputValue, selectedParticipants, isCreatingThread, isStreaming, waitingToStartStreaming, formActions],
   );
 
   // Check if first round is incomplete
@@ -579,12 +586,12 @@ export default function ChatOverviewScreen() {
                       value={inputValue}
                       onChange={setInputValue}
                       onSubmit={handlePromptSubmit}
-                      status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
+                      status={isInputBlocked ? 'submitted' : 'ready'}
                       onStop={stopStreaming}
                       placeholder={t('chat.input.placeholder')}
                       participants={selectedParticipants}
                       quotaCheckType="threads"
-                      onRemoveParticipant={isStreaming ? undefined : removeParticipant}
+                      onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
                       toolbar={(
                         <ChatInputEnhancedToolbar
                           selectedParticipants={selectedParticipants}
@@ -594,7 +601,7 @@ export default function ChatOverviewScreen() {
                           onOpenModeModal={() => modeModal.onTrue()}
                           enableWebSearch={enableWebSearch}
                           onWebSearchToggle={setEnableWebSearch}
-                          disabled={isStreaming}
+                          disabled={isInputBlocked}
                         />
                       )}
                     />
@@ -724,12 +731,12 @@ export default function ChatOverviewScreen() {
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handlePromptSubmit}
-                  status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
+                  status={isInputBlocked ? 'submitted' : 'ready'}
                   onStop={stopStreaming}
                   placeholder={t('chat.input.placeholder')}
                   participants={selectedParticipants}
                   quotaCheckType="threads"
-                  onRemoveParticipant={isStreaming ? undefined : removeParticipant}
+                  onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
                   toolbar={(
                     <ChatInputEnhancedToolbar
                       selectedParticipants={selectedParticipants}
@@ -739,7 +746,7 @@ export default function ChatOverviewScreen() {
                       onOpenModeModal={() => modeModal.onTrue()}
                       enableWebSearch={enableWebSearch}
                       onWebSearchToggle={setEnableWebSearch}
-                      disabled={isStreaming}
+                      disabled={isInputBlocked}
                     />
                   )}
                 />

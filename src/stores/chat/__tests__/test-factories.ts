@@ -24,6 +24,8 @@ import {
 import type {
   ChatParticipant,
   ChatThread,
+  ModeratorAnalysisPayload,
+  PreSearchDataPayload,
   StoredModeratorAnalysis,
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
@@ -146,13 +148,14 @@ export function createMockPreSearch(
 
 /**
  * Create mock pre-search in PENDING status
+ * NOTE: Backend uses AnalysisStatuses.PENDING for pre-search records
  */
 export function createPendingPreSearch(
   roundNumber = 0,
 ): StoredPreSearch {
   return createMockPreSearch({
     roundNumber,
-    status: PreSearchStatuses.IDLE,
+    status: AnalysisStatuses.PENDING,
   });
 }
 
@@ -294,4 +297,132 @@ export function createMockRoundMessages(
     ...Array.from({ length: participantCount }, (_, i) =>
       createMockMessage(i, roundNumber)),
   ];
+}
+
+// ============================================================================
+// Payload Factories - Type-Safe Data for Store Updates
+// ============================================================================
+
+/**
+ * Create mock PreSearchDataPayload with all required fields
+ * Matches the schema structure exactly for type safety
+ */
+export function createMockPreSearchDataPayload(
+  overrides?: Partial<PreSearchDataPayload>,
+): PreSearchDataPayload {
+  return {
+    queries: [
+      {
+        query: 'test search query',
+        rationale: 'Test rationale',
+        searchDepth: 'basic',
+        index: 0,
+        total: 1,
+      },
+    ],
+    results: [
+      {
+        query: 'test search query',
+        answer: 'Test answer from search',
+        results: [
+          {
+            title: 'Test Result',
+            url: 'https://example.com',
+            content: 'Test content snippet',
+          },
+        ],
+        responseTime: 500,
+      },
+    ],
+    analysis: 'Test analysis summary',
+    successCount: 1,
+    failureCount: 0,
+    totalResults: 1,
+    totalTime: 500,
+    ...overrides,
+  };
+}
+
+/**
+ * Create mock ModeratorAnalysisPayload with all required fields
+ * Matches the schema structure exactly for type safety
+ */
+export function createMockAnalysisPayload(
+  roundNumber = 0,
+  overrides?: Partial<ModeratorAnalysisPayload>,
+): ModeratorAnalysisPayload {
+  return {
+    roundNumber,
+    mode: ChatModes.DEBATING,
+    userQuestion: 'Test question?',
+    participantAnalyses: [
+      {
+        participantIndex: 0,
+        model: 'openai/gpt-4',
+        role: null,
+        overallScore: 85,
+        keyInsights: ['Key insight 1', 'Key insight 2'],
+        strengths: ['Strength 1'],
+        weaknesses: ['Weakness 1'],
+        uniqueContributions: ['Unique contribution 1'],
+        reasoning: {
+          clarity: 8,
+          depth: 7,
+          evidence: 8,
+          creativity: 7,
+        },
+        communication: {
+          engagement: 8,
+          tone: 8,
+          structure: 7,
+        },
+        factualAccuracy: {
+          score: 8,
+          concerns: [],
+        },
+        summary: 'Test participant summary',
+      },
+    ],
+    leaderboard: [
+      {
+        rank: 1,
+        participantIndex: 0,
+        model: 'openai/gpt-4',
+        score: 85,
+        badges: ['Top Performer'],
+      },
+    ],
+    roundSummary: {
+      consensusPoints: ['Consensus point 1'],
+      keyDebatePoints: ['Debate point 1'],
+      comparativeAnalysis: {
+        strengthsByCategory: [
+          {
+            category: 'Technical Depth',
+            participants: ['participant-0'],
+          },
+        ],
+        tradeoffs: ['Tradeoff 1'],
+      },
+      decisionFramework: {
+        criteriaToConsider: ['Criterion 1', 'Criterion 2'],
+        scenarioRecommendations: [
+          {
+            scenario: 'Default scenario',
+            recommendation: 'Default recommendation',
+          },
+        ],
+      },
+      overallSummary: 'Test overall summary providing a comprehensive overview of the analysis results and key findings from the debate.',
+      conclusion: 'Test conclusion with final recommendation.',
+      recommendedActions: [
+        {
+          action: 'Test action',
+          rationale: 'Test rationale',
+          priority: 'high',
+        },
+      ],
+    },
+    ...overrides,
+  };
 }

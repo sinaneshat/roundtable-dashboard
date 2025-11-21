@@ -498,6 +498,39 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
   }, [waitingToStart, chatIsStreaming, store]);
 
+  // ✅ TIMEOUT PROTECTION: Clear waitingToStartStreaming if streaming fails to start
+  // Prevents system from getting stuck forever if AI SDK never becomes ready
+  useEffect(() => {
+    if (!waitingToStart) {
+      return;
+    }
+
+    const STREAMING_START_TIMEOUT_MS = 30000; // 30 seconds
+
+    const timeoutId = setTimeout(() => {
+      const currentState = store.getState();
+
+      // Only timeout if still waiting and not streaming
+      if (currentState.waitingToStartStreaming && !currentState.isStreaming) {
+        // eslint-disable-next-line no-console -- User feedback for timeout
+        console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming after 30s');
+
+        // Clear the flag
+        currentState.setWaitingToStartStreaming(false);
+
+        // Reset to allow retry
+        currentState.resetToOverview();
+
+        // Show error to user
+        showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
+      }
+    }, STREAMING_START_TIMEOUT_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [waitingToStart, store]);
+
   // ✅ CRITICAL FIX: Sync AI SDK hook messages to store during streaming
   // The hook's internal messages get updated during streaming, but the store's messages don't
   // This causes the overview screen to show only the user message while streaming
@@ -654,6 +687,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // Check the ref directly to ensure AI SDK hook has initialized
     const { sendMessage } = store.getState();
     if (!sendMessage || !sendMessageRef.current) {
+      // eslint-disable-next-line no-console -- Debug logging for streaming issues
+      console.warn('[Provider:pendingMessage] Blocked - sendMessage not available', {
+        hasSendMessage: !!sendMessage,
+        hasRef: !!sendMessageRef.current,
+      });
       return; // Wait for sendMessage to be available
     }
 

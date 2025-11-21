@@ -1020,13 +1020,67 @@ The chat overview screen orchestrates multiple async operations that must coordi
 | | Concurrent reset and navigation | race-conditions-unmount-safety.test.ts | 2 | ✅ PASSING |
 | | Memory leak prevention | race-conditions-unmount-safety.test.ts | 2 | ✅ PASSING |
 
-**Total Coverage**: 57 tests across 4 test files - All passing ✅
+**Total Coverage**: 185 tests across 8 test files - All passing ✅
 
 **Test File Locations**:
-- `src/stores/chat/__tests__/race-conditions-navigation-flow.test.ts`
-- `src/stores/chat/__tests__/race-conditions-presearch-blocking.test.ts`
-- `src/stores/chat/__tests__/race-conditions-stop-button.test.ts`
-- `src/stores/chat/__tests__/race-conditions-unmount-safety.test.ts`
+- `src/stores/chat/__tests__/one-round-conversation-flow.test.ts` (50 tests)
+- `src/stores/chat/__tests__/provider-integration-flow.test.ts` (39 tests)
+- `src/stores/chat/__tests__/provider-presearch-execution-e2e.test.ts` (33 tests) ✨ NEW
+- `src/stores/chat/__tests__/thread-screen-second-message-flow.test.ts` (17 tests)
+- `src/stores/chat/__tests__/pre-search-execution-deadlock.test.ts` (16 tests)
+- `src/stores/chat/__tests__/reset-functions-completeness.test.ts` (12 tests)
+- `src/stores/chat/__tests__/multi-round-web-search-flow.test.ts` (11 tests)
+- `src/stores/chat/__tests__/round-two-analysis-status-bug.test.ts` (7 tests)
+
+**Critical Bug Coverage Added (v2.5)**:
+| Race Category | Specific Test | File | Tests | Status |
+|---|---|---|---|---|
+| **Pre-Search Execution Deadlock** | Circular dependency detection | pre-search-execution-deadlock.test.ts | 3 | ✅ PASSING |
+| | Subsequent round execution flow | pre-search-execution-deadlock.test.ts | 2 | ✅ PASSING |
+| | Blocking with timeout protection | pre-search-execution-deadlock.test.ts | 3 | ✅ PASSING |
+| | Web search disabled bypass | pre-search-execution-deadlock.test.ts | 2 | ✅ PASSING |
+| | Error recovery (FAILED status) | pre-search-execution-deadlock.test.ts | 2 | ✅ PASSING |
+| | Multi-round integration | pre-search-execution-deadlock.test.ts | 1 | ✅ PASSING |
+| | Edge cases (rapid submissions, etc.) | pre-search-execution-deadlock.test.ts | 3 | ✅ PASSING |
+
+**Provider Pre-Search Execution E2E Coverage Added (v2.7)**:
+| Race Category | Specific Test | File | Tests | Status |
+|---|---|---|---|---|
+| **Successful Execution Flow** | Stream reading to completion | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **409 Conflict Handling** | Already executing scenarios | provider-presearch-execution-e2e.test.ts | 4 | ✅ PASSING |
+| **Error Scenarios** | Network/stream failures | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **Store State Transitions** | PENDING → STREAMING → COMPLETE | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **Multi-Round Toggling** | Web search ON/OFF between rounds | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **Stop Button During Pre-Search** | Stop at various states | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **Timeout Protection** | Stuck pre-search detection | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **Race Conditions** | Concurrent operations | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+| **Edge Cases** | Special characters, long queries | provider-presearch-execution-e2e.test.ts | 5 | ✅ PASSING |
+| **Complete E2E Journeys** | Full 2-round flows | provider-presearch-execution-e2e.test.ts | 3 | ✅ PASSING |
+
+**Provider Integration Flow Coverage Added (v2.6)**:
+| Race Category | Specific Test | File | Tests | Status |
+|---|---|---|---|---|
+| **Provider Execution Conditions** | When to execute pre-search (PENDING) | provider-integration-flow.test.ts | 4 | ✅ PASSING |
+| | When to create pre-search (missing) | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | When to send message (COMPLETE/FAILED) | provider-integration-flow.test.ts | 4 | ✅ PASSING |
+| **Navigation Timing** | Analysis completion detection | provider-integration-flow.test.ts | 3 | ✅ PASSING |
+| | Screen mode transitions | provider-integration-flow.test.ts | 4 | ✅ PASSING |
+| **Stop Button Races** | Stop during pre-search | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | Stop during streaming | provider-integration-flow.test.ts | 3 | ✅ PASSING |
+| | Stop between participants | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Stop during analysis | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| **Error Recovery** | Pre-search failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | Participant streaming failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | Analysis failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | Timeout protection | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| **Documented Race Conditions** | Thread ID availability | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Orchestrator sync timing | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Sequential participant coordination | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Stop during participant switch | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Multi-layer analysis completion | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| **Complete Journey Integration** | 2-round with web search | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Stop mid-round | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Pre-search failure recovery | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 
 ---
 
@@ -1109,6 +1163,86 @@ Use this checklist when adding new async features:
 ---
 
 ## VERSION HISTORY
+
+**Version 2.7** - Provider Pre-Search Execution E2E Tests
+**Last Updated:** November 20, 2025
+**Changes:**
+- Added 33 new tests in `provider-presearch-execution-e2e.test.ts` for comprehensive E2E coverage
+- Fixed critical circular dependency bug in `chat-store-provider.tsx`
+- Bug: Provider created PENDING pre-search but waited for COMPLETE before sending message
+- Fix: Provider now executes pre-search immediately after creation via POST request
+- Fix: Provider detects stuck PENDING pre-searches and triggers execution
+- Test coverage: Stream reading, 409 handling, error scenarios, multi-round toggling, timeouts
+- Complete E2E journey tests for 2-round flows with web search
+- Total test coverage now 185 tests across 8 test files
+
+**Test Categories Added**:
+- ✅ Successful execution flow with stream reading (3 tests)
+- ✅ 409 Conflict handling (4 tests)
+- ✅ Error scenarios (network/stream failures) (3 tests)
+- ✅ Store state transitions (3 tests)
+- ✅ Multi-round web search toggling (3 tests)
+- ✅ Stop button during pre-search (3 tests)
+- ✅ Timeout protection (3 tests)
+- ✅ Race conditions (3 tests)
+- ✅ Edge cases (5 tests)
+- ✅ Complete E2E journeys (3 tests)
+
+---
+
+**Version 2.6** - Provider Integration Flow Tests & Comprehensive Coverage
+**Last Updated:** November 20, 2025
+**Changes:**
+- Added 39 new tests in `provider-integration-flow.test.ts` for comprehensive coverage
+- Test coverage: Provider execution conditions, navigation timing, stop button races, error recovery
+- Covers all documented race conditions from Part 14
+- Complete journey integration tests for 2-round web search flows
+- Total test coverage now 152 tests across 7 test files
+
+**Test Categories Added**:
+- ✅ Provider-level pre-search execution triggering (10 tests)
+- ✅ Navigation timing and analysis completion detection (7 tests)
+- ✅ Stop button during all states (7 tests)
+- ✅ Error recovery scenarios (8 tests)
+- ✅ Documented race conditions (5 tests)
+- ✅ Complete journey integration (3 tests)
+
+---
+
+**Version 2.5** - Pre-Search Execution Deadlock Fix & Test Coverage
+**Last Updated:** November 20, 2025
+**Changes:**
+- Fixed critical circular dependency bug in subsequent round pre-search execution
+- Added 16 new tests in `pre-search-execution-deadlock.test.ts`
+- Updated provider to immediately execute pre-search after creation (breaks deadlock)
+- Added stuck PENDING pre-search recovery logic
+
+**Bug Fixed**:
+The circular dependency where:
+1. Provider creates PENDING pre-search → waits for COMPLETE
+2. PreSearchStream executes pre-search → only renders after user message exists
+3. User message only exists after message sent → DEADLOCK
+
+**Fix Applied**:
+- Provider now executes pre-search immediately after creation (POST request)
+- Provider detects stuck PENDING pre-searches and triggers execution
+- Breaks circular dependency: create → execute → complete → send message
+
+**New Test Coverage** (`pre-search-execution-deadlock.test.ts`):
+- ✅ Circular dependency detection (3 tests)
+- ✅ Subsequent round pre-search execution flow (2 tests)
+- ✅ Pre-search blocking with timeout (3 tests)
+- ✅ Web search disabled scenarios (2 tests)
+- ✅ Error recovery scenarios (2 tests)
+- ✅ Complete multi-round integration (1 test)
+- ✅ Edge cases (3 tests)
+
+**Test Coverage Gap Addressed**:
+Previous tests tested store state transitions but NOT the provider's pre-search execution logic.
+The bug was in `chat-store-provider.tsx` - the logic that creates and executes pre-searches.
+New tests cover the full flow from pending message to pre-search completion to message sending.
+
+---
 
 **Version 2.4** - Stream Completion Detection Documentation
 **Last Updated:** January 19, 2025
