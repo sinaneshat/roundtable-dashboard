@@ -209,6 +209,14 @@ function Sidebar({
     )
   }
 
+  // Calculate collapsed width for floating/inset variants
+  const isFloatingOrInset = variant === "floating" || variant === "inset"
+  const isCollapsed = state === "collapsed" && collapsible === "icon"
+
+  // For floating/inset collapsed: icon width (3rem) + left/right padding (2rem) = 5rem
+  // Gap needs same width as container for proper layout flow
+  const collapsedWidth = "calc(var(--sidebar-width-icon) + 2rem)"
+
   return (
     <div
       className="group peer text-sidebar-foreground hidden md:block"
@@ -222,28 +230,28 @@ function Sidebar({
       <div
         data-slot="sidebar-gap"
         className={cn(
-          "relative w-[var(--sidebar-width)] bg-transparent transition-[width] duration-200 ease-linear",
+          "relative bg-transparent transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
-          "group-data-[side=end]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+theme(spacing.5))]"
-            : "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]"
+          "group-data-[side=end]:rotate-180"
         )}
+        style={{
+          width: isCollapsed && isFloatingOrInset ? collapsedWidth : isCollapsed ? "var(--sidebar-width-icon)" : "var(--sidebar-width)"
+        }}
       />
       <div
         data-slot="sidebar-container"
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width,padding] duration-200 ease-linear md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh transition-[left,right,width,padding] duration-200 ease-linear md:flex",
           side === "start"
             ? "start-0 group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]"
             : "end-0 group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]",
-          // Adjust the padding for floating and inset variants.
-          // p-4 expanded, p-2 collapsed with extra room for icon buttons
-          variant === "floating" || variant === "inset"
-            ? "p-4 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+theme(spacing.5)+2px)]"
-            : "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)] group-data-[side=start]:border-e group-data-[side=end]:border-s",
+          !isFloatingOrInset && "group-data-[side=start]:border-e group-data-[side=end]:border-s",
           className
         )}
+        style={{
+          width: isCollapsed && isFloatingOrInset ? collapsedWidth : isCollapsed ? "var(--sidebar-width-icon)" : "var(--sidebar-width)",
+          padding: isFloatingOrInset ? "1rem" : undefined
+        }}
         {...props}
       >
         <div

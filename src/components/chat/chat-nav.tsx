@@ -24,6 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
@@ -252,11 +253,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* User Account - Expanded */}
-              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <NavUser />
-              </SidebarMenuItem>
-
               {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
@@ -290,11 +286,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     <Sparkles />
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* User Account - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <NavUser />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarHeader>
@@ -398,6 +389,13 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </div>
             </ScrollArea>
           </SidebarContent>
+          <SidebarFooter>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <NavUser />
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
         <CommandSearch

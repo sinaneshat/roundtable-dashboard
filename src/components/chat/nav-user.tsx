@@ -1,5 +1,5 @@
 'use client';
-import { CreditCard, Key, Loader2, LogOut } from 'lucide-react';
+import { ChevronUp, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
@@ -25,10 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  SidebarMenuButton,
-  useSidebar,
-} from '@/components/ui/sidebar';
+import { SidebarMenuButton } from '@/components/ui/sidebar';
 import {
   useCancelSubscriptionMutation,
   useCreateCustomerPortalSessionMutation,
@@ -42,7 +39,6 @@ import { showApiErrorToast } from '@/lib/toast';
 export function NavUser() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { isMobile } = useSidebar();
   const t = useTranslations();
   const { data: usageData } = useUsageStatsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
@@ -115,28 +111,30 @@ export function NavUser() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
+            size="lg"
             tooltip={user?.name || t('user.defaultName')}
-            className="data-[state=open]:bg-sidebar-accent"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
-            <Avatar className="size-4 shrink-0">
+            <Avatar className="h-8 w-8 rounded-lg">
               <AvatarImage
                 src={user?.image || undefined}
                 alt={user?.name || t('user.defaultName')}
               />
-              <AvatarFallback>{userInitials}</AvatarFallback>
+              <AvatarFallback className="rounded-lg">{userInitials}</AvatarFallback>
             </Avatar>
-            <span
-              className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap group-data-[collapsible=icon]:hidden"
-              style={{ maxWidth: '12rem' }}
-            >
-              {user?.name || t('user.defaultName')}
-            </span>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">
+                {user?.name || t('user.defaultName')}
+              </span>
+              <span className="truncate text-xs">{user?.email}</span>
+            </div>
+            <ChevronUp className="ml-auto size-4" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-56 rounded-lg"
-          side={isMobile ? 'bottom' : 'right'}
-          align="start"
+          className="w-[--radix-popper-anchor-width] min-w-56 rounded-lg"
+          side="top"
+          align="end"
           sideOffset={4}
         >
           <DropdownMenuLabel className="p-0 font-normal">
