@@ -93,11 +93,11 @@ export const createPreSearchHandler: RouteHandler<typeof createPreSearchRoute, A
       throw createError.badRequest('Invalid round number');
     }
 
-    // Verify thread ownership and web search enabled
-    const thread = await verifyThreadOwnership(threadId, user.id, db);
-    if (!thread.enableWebSearch) {
-      throw createError.badRequest('Web search is not enabled for this thread');
-    }
+    // Verify thread ownership
+    // ✅ FIX: Removed thread.enableWebSearch check - users can enable web search mid-conversation
+    // The act of calling this endpoint IS the user's intent to use web search for this round
+    // The thread's enableWebSearch is now a default/preference, not a hard restriction
+    await verifyThreadOwnership(threadId, user.id, db);
 
     // ✅ IDEMPOTENT: Check if record already exists
     const existingSearch = await db.query.chatPreSearch.findFirst({
@@ -184,13 +184,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       throw createError.badRequest('Invalid round number');
     }
 
-    // Verify thread ownership and web search enabled
-    const thread = await verifyThreadOwnership(threadId, user.id, db);
-    if (!thread.enableWebSearch) {
-      throw createError.badRequest('Web search is not enabled for this thread');
-    }
+    // Verify thread ownership
+    // ✅ FIX: Removed thread.enableWebSearch check - users can enable web search mid-conversation
+    // The act of calling this endpoint IS the user's intent to use web search for this round
+    // The thread's enableWebSearch is now a default/preference, not a hard restriction
+    await verifyThreadOwnership(threadId, user.id, db);
 
-    // ✅ DATABASE-FIRST: Record must already exist from thread creation
+    // ✅ DATABASE-FIRST: Record must already exist from thread creation or mid-conversation creation
     // Frontend should never create database records - that's backend's job
     const existingSearch = await db.query.chatPreSearch.findFirst({
       where: (fields, { and, eq: eqOp }) => and(

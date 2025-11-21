@@ -72,10 +72,44 @@ Roundtable enables users to create conversations where multiple AI models collab
 
 ### Web Search Overview
 
-**When Enabled:** Users can enable "Web Search" toggle before submitting questions
+**When Enabled:** Users can enable "Web Search" toggle before submitting ANY question (not just the first)
+**Mid-Conversation Toggle:** Users can enable/disable web search at ANY point during a conversation
 **Purpose:** Execute web search BEFORE AI participants respond, providing search results as context
 **Impact:** Adds 8-12 second delay before participant streaming begins
 **Frequency:** Executes on EVERY round when enabled (not just initial round)
+
+### Mid-Conversation Web Search Toggle
+
+**✅ KEY BEHAVIOR (November 2025):**
+
+Users can toggle web search ON or OFF at any point during a conversation, regardless of the initial thread settings.
+
+**Flow When Enabling Mid-Conversation:**
+```
+1. User is in existing thread (web search was OFF)
+2. User toggles web search ON
+3. User types next message and submits
+4. System creates PENDING pre-search record for the new round
+5. Pre-search executes (PENDING → STREAMING → COMPLETE)
+6. Participants receive search results as context
+7. Participant streaming begins
+```
+
+**Flow When Disabling Mid-Conversation:**
+```
+1. User is in existing thread (web search was ON)
+2. User toggles web search OFF
+3. User types next message and submits
+4. No pre-search created for this round
+5. Participant streaming begins immediately
+```
+
+**Technical Details:**
+- Form state (`enableWebSearch`) is the sole source of truth for current round
+- Thread's stored `enableWebSearch` is a default/preference synced on load
+- Backend accepts pre-search requests regardless of thread's stored setting
+- Changelog entry created when web search is toggled between rounds
+- Per-round decision: each round can have different web search setting
 
 ### Pre-Search Flow
 
@@ -1163,6 +1197,29 @@ Use this checklist when adding new async features:
 ---
 
 ## VERSION HISTORY
+
+**Version 2.8** - Mid-Conversation Web Search Toggle Support
+**Last Updated:** November 21, 2025
+**Changes:**
+- Fixed bug preventing web search from being enabled mid-conversation
+- Backend no longer checks `thread.enableWebSearch` as a hard gate
+- Users can now toggle web search ON/OFF at any point during a conversation
+- Form state is sole source of truth for current round's web search setting
+- Added comprehensive documentation for mid-conversation toggle flow
+- Thread's `enableWebSearch` is now a default/preference, not a restriction
+
+**Bug Fixed:**
+The `BAD_REQUEST: "Web search is not enabled for this thread"` error when trying to enable web search mid-conversation.
+
+**Root Cause:**
+Backend pre-search handlers were checking `thread.enableWebSearch` (set at thread creation) before allowing pre-search operations.
+
+**Fix Applied:**
+- Removed `thread.enableWebSearch` check from `createPreSearchHandler`
+- Removed `thread.enableWebSearch` check from `executePreSearchHandler`
+- Frontend form state now controls whether pre-search is created per-round
+
+---
 
 **Version 2.7** - Provider Pre-Search Execution E2E Tests
 **Last Updated:** November 20, 2025
