@@ -651,7 +651,7 @@ export default function ChatThreadScreen({
               pendingFeedback={pendingFeedback}
               getFeedbackHandler={getFeedbackHandler}
               onAnalysisStreamStart={(roundNumber) => {
-                updateAnalysisStatus(roundNumber, 'streaming');
+                updateAnalysisStatus(roundNumber, AnalysisStatuses.STREAMING);
 
                 // ✅ Invalidate usage quota immediately when analysis streaming starts
                 queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });

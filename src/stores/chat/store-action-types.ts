@@ -253,7 +253,7 @@ export type ResetScreenMode = () => void;
 
 // NOTE: StreamResumptionState type is defined in store-schemas.ts using Zod-first pattern
 // It uses StreamStatusSchema from @/api/core/enums for the state field
-export type { StreamResumptionState };
+// Import from store-schemas.ts directly - do NOT re-export to maintain single source of truth
 
 /**
  * Set the stream resumption state (when active stream detected)

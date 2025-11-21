@@ -13,6 +13,7 @@ import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { Badge } from '@/components/ui/badge';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
@@ -138,16 +139,8 @@ export const ModelMessageCard = memo(({
                   />
                 );
               }
-              // Type guard for custom data parts
-              const isCustomDataPart = (p: unknown): p is { type: string; data: unknown } =>
-                typeof p === 'object'
-                && p !== null
-                && 'type' in p
-                && typeof p.type === 'string'
-                && p.type.startsWith('data-')
-                && 'data' in p;
-
-              if (isCustomDataPart(part)) {
+              // ✅ TYPE-SAFE: Use Zod-validated type guard from custom-data-part
+              if (isDataPart(part)) {
                 return (
                   <CustomDataPart
                     key={messageId ? `${messageId}-data-${partIndex}` : `data-${partIndex}`}

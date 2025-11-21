@@ -33,7 +33,7 @@ import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles, ScreenModes } from '@/api/core/enums';
 import { useCreatePreSearchMutation } from '@/hooks/mutations';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -179,7 +179,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // This ensures effect re-runs when state changes (like pre-search status)
 
     // Guard: Only send on overview/thread screens (not public)
-    if (screenMode === 'public') {
+    if (screenMode === ScreenModes.PUBLIC) {
       return;
     }
 
@@ -682,7 +682,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // This ensures effect re-runs when state changes
 
     // Guard: Only send on overview/thread screens (not public)
-    if (screenMode === 'public') {
+    if (screenMode === ScreenModes.PUBLIC) {
       return;
     }
 

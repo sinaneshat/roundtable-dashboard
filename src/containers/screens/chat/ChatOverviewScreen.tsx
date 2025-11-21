@@ -666,7 +666,7 @@ export default function ChatOverviewScreen() {
                         threadId={createdThreadId}
                         isLatest={true}
                         onStreamStart={() => {
-                          updateAnalysisStatus(firstAnalysis.roundNumber, 'streaming');
+                          updateAnalysisStatus(firstAnalysis.roundNumber, AnalysisStatuses.STREAMING);
                         }}
                         onStreamComplete={(completedData) => {
                           const roundNumber = firstAnalysis.roundNumber;
@@ -679,7 +679,7 @@ export default function ChatOverviewScreen() {
                               completedData as ModeratorAnalysisPayload,
                             );
                           }
-                          updateAnalysisStatus(roundNumber, 'complete');
+                          updateAnalysisStatus(roundNumber, AnalysisStatuses.COMPLETE);
 
                           // ✅ PROPER FIX: Don't invalidate query on overview screen
                           // The orchestrator merge logic already prefers higher-priority client status

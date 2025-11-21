@@ -1,10 +1,8 @@
 'use client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-type DataPart = {
-  type: string;
-  data: unknown;
-};
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { DataPart } from '@/lib/schemas/data-part-schema';
+
 type CustomDataPartProps = {
   part: DataPart;
   className?: string;

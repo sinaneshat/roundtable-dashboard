@@ -258,7 +258,7 @@ export const ChatInput = memo(({
                   isStreaming
                     ? t('chat.input.streamingPlaceholder')
                     : isListening
-                      ? 'Listening... speak now'
+                      ? t('chat.input.listeningPlaceholder')
                       : placeholder || t('chat.input.placeholder')
                 }
                 className="flex-1 bg-transparent border-0 text-sm sm:text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"

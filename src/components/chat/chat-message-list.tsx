@@ -9,7 +9,7 @@ import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -376,7 +376,9 @@ export const ChatMessageList = memo(
     // Consolidated model lookup hook
     const { findModel } = useModelLookup();
     const { data: usageData } = useUsageStatsQuery();
-    const userTier = (usageData?.data?.subscription?.tier || 'free') as SubscriptionTier;
+    // ✅ TYPE-SAFE: Use Zod validation instead of type casting
+    const tierResult = subscriptionTierSchema.safeParse(usageData?.data?.subscription?.tier);
+    const userTier: SubscriptionTier = tierResult.success ? tierResult.data : 'free';
     const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;

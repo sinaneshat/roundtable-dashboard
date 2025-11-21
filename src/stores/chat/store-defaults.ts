@@ -20,7 +20,7 @@ import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSea
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
-import type { StreamResumptionState } from './store-action-types';
+import type { StreamResumptionState } from './store-schemas';
 
 // ============================================================================
 // FORM SLICE DEFAULTS
