@@ -870,6 +870,7 @@ export const AnalysisAcceptedPayloadSchema = z.object({
 export const AnalysisAcceptedResponseSchema = AnalysisAcceptedPayloadSchema.openapi('AnalysisAcceptedResponse');
 
 // ✅ TYPE-SAFE: Stored moderator analysis with properly typed analysis data
+// ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
 export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
   .extend({
     analysisData: z.object({
@@ -877,6 +878,9 @@ export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
       participantAnalyses: z.array(ParticipantAnalysisSchema),
       roundSummary: RoundSummarySchema,
     }).nullable().optional(),
+    // Override date fields to accept both string and Date (transform handles conversion)
+    createdAt: z.union([z.string(), z.date()]),
+    completedAt: z.union([z.string(), z.date()]).nullable(),
   })
   .openapi('StoredModeratorAnalysis');
 

@@ -5,13 +5,13 @@ import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { ComponentProps, ReactNode } from 'react';
-import { Children, createContext, use, useCallback, useMemo, useState } from 'react';
+import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { fadeIn, staggerContainer } from '@/lib/ui/animations';
+import { staggerContainer } from '@/lib/ui/animations';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -154,9 +154,9 @@ export function ChainOfThoughtContent({
 }: ChainOfThoughtContentProps) {
   const { open } = useChainOfThought();
 
-  // When staggerChildren is enabled, wrap each child in motion.div for sequenced animations
+  // When staggerChildren is enabled, wrap children in motion container for sequenced animations
+  // Note: Individual child staggering relies on parent motion container with staggerChildren
   if (staggerChildren && open) {
-    const childArray = Children.toArray(children);
     return (
       <CollapsibleContent
         className={cn(
@@ -171,11 +171,7 @@ export function ChainOfThoughtContent({
           initial="hidden"
           animate="visible"
         >
-          {childArray.map((child, index) => (
-            <motion.div key={index} variants={fadeIn}>
-              {child}
-            </motion.div>
-          ))}
+          {children}
         </motion.div>
       </CollapsibleContent>
     );

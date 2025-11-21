@@ -839,7 +839,7 @@ export function useMultiParticipantChat(
     requestAnimationFrame(() => {
       isTriggeringRef.current = false;
     });
-  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage, status]);
+  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage, status, callbackRefs.threadId]);
   // Note: participantsOverride comes from caller, not deps
 
   /**
@@ -960,7 +960,7 @@ export function useMultiParticipantChat(
         isTriggeringRef.current = false;
       });
     },
-    [participants, status, aiSendMessage, messages, resetErrorTracking, isExplicitlyStreaming],
+    [participants, status, aiSendMessage, messages, resetErrorTracking, isExplicitlyStreaming, callbackRefs.threadId],
   );
 
   /**

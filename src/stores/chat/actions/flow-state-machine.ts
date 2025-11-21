@@ -21,7 +21,7 @@ import type { TextPart, UIMessage } from 'ai';
 import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -319,8 +319,9 @@ export function useFlowStateMachine(
 
     // ✅ FIX: Count participant messages for CURRENT round only
     // ✅ TYPE-SAFE: Use extraction utility instead of manual metadata access
+    // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
     const participantMessagesInRound = messages.filter((m) => {
-      return m.role === 'assistant' && getRoundNumber(m.metadata) === currentRound;
+      return m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === currentRound;
     });
     const allParticipantsResponded = participantMessagesInRound.length >= participants.length && participants.length > 0;
 
@@ -385,15 +386,17 @@ export function useFlowStateMachine(
               break; // Analysis already created, skip
             }
 
-            const userMessage = messages.findLast((m: UIMessage) => m.role === 'user');
+            // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
+            const userMessage = messages.findLast((m: UIMessage) => m.role === MessageRoles.USER);
             // ✅ TYPE-SAFE: Use AI SDK TextPart type for text content extraction
+            // ✅ ENUM PATTERN: Use MessagePartTypes constant instead of hardcoded string
             const userQuestion = userMessage?.parts
               ?.find((p): p is TextPart => {
                 return (
                   typeof p === 'object'
                   && p !== null
                   && 'type' in p
-                  && p.type === 'text'
+                  && p.type === MessagePartTypes.TEXT
                   && 'text' in p
                   && typeof p.text === 'string'
                 );

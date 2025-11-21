@@ -31,6 +31,14 @@ import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 import { getStatusPriority, MODERATOR_ANALYSIS_COMPARE_KEYS } from '../store-constants';
 import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
+import type { AnalysesCacheData } from './types';
+
+// ✅ TYPE-SAFE: Use cache data type which matches query return (accepts unknown for analysisData)
+// The query merges server data with cache, so response type must accommodate both
+type AnalysesApiResponse = AnalysesCacheData;
+
+// ✅ TYPE-SAFE: Raw item type from query response (with unknown analysisData)
+type RawAnalysisItem = AnalysesCacheData['data']['items'][number];
 
 export type UseAnalysisOrchestratorOptions = OrchestratorOptions;
 export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
@@ -57,12 +65,22 @@ function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?:
   return deduplicateAnalyses(items, options || {});
 }
 
-export const useAnalysisOrchestrator = createOrchestrator<StoredModeratorAnalysis, StoredModeratorAnalysis, number>({
+export const useAnalysisOrchestrator = createOrchestrator<
+  RawAnalysisItem,
+  StoredModeratorAnalysis,
+  number,
+  AnalysesApiResponse
+>({
   queryHook: useThreadAnalysesQuery,
   useStoreHook: useChatStore,
   storeSelector: s => s.analyses,
   storeSetter: s => s.setAnalyses,
-  extractItems: response => (response as { data?: { items?: StoredModeratorAnalysis[] } })?.data?.items || [],
+  extractItems: (response) => {
+    if (!response || !response.success) {
+      return [];
+    }
+    return response.data.items;
+  },
   transformItems: transformModeratorAnalyses,
   getItemKey: item => item.roundNumber,
   getItemPriority: item => getStatusPriority(item.status),

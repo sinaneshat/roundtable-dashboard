@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 
-import { AnalysisStatusSchema } from '@/api/core/enums';
+import { AnalysisStatusSchema, ChatModeSchema } from '@/api/core/enums';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
 /**
@@ -31,13 +31,16 @@ export const AnalysesCacheDataSchema = z.object({
         threadId: z.string(),
         roundNumber: z.number(),
         status: AnalysisStatusSchema,
-        analysisData: z.unknown().nullable(),
+        // ✅ TYPE-SAFE: Match server schema - optional and nullable with proper type
+        analysisData: z.unknown().nullable().optional(),
         participantMessageIds: z.array(z.string()),
-        mode: z.string(),
+        // ✅ ENUM PATTERN: Use ChatModeSchema for type-safe enum literals
+        mode: ChatModeSchema,
         userQuestion: z.string(),
         createdAt: z.union([z.date(), z.string()]),
-        completedAt: z.union([z.date(), z.string()]).nullable().optional(),
-        errorMessage: z.string().nullable().optional(),
+        // Match server response type: nullable but not optional
+        completedAt: z.union([z.date(), z.string()]).nullable(),
+        errorMessage: z.string().nullable(),
       }),
     ),
   }),
