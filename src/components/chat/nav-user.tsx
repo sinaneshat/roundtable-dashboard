@@ -1,5 +1,5 @@
 'use client';
-import { ChevronUp, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
+import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
@@ -115,25 +115,25 @@ export function NavUser() {
             tooltip={user?.name || t('user.defaultName')}
             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
-            <Avatar className="h-8 w-8 rounded-lg">
+            <Avatar className="h-8 w-8 rounded-full">
               <AvatarImage
                 src={user?.image || undefined}
                 alt={user?.name || t('user.defaultName')}
               />
-              <AvatarFallback className="rounded-lg">{userInitials}</AvatarFallback>
+              <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
             </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
+            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate font-semibold">
                 {user?.name || t('user.defaultName')}
               </span>
               <span className="truncate text-xs">{user?.email}</span>
             </div>
-            <ChevronUp className="ml-auto size-4" />
+            <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-[--radix-popper-anchor-width] min-w-56 rounded-lg"
-          side="top"
+          className="min-w-56 rounded-lg"
+          side="right"
           align="end"
           sideOffset={4}
         >
