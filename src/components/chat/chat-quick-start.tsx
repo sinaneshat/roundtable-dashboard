@@ -315,7 +315,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   }, [userTier, accessibleModels, selectUniqueProviderModels]);
   const getModeConfig = (mode: ChatModeId) => {
     switch (mode) {
-      case 'debating':
+      case ChatModes.DEBATING:
         return {
           icon: Users,
           label: 'Debating',
@@ -323,7 +323,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           bgColor: 'bg-white/10',
           borderColor: 'border-white/20',
         };
-      case 'analyzing':
+      case ChatModes.ANALYZING:
         return {
           icon: MessageSquare,
           label: 'Analyzing',

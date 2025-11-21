@@ -16,7 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Lightbulb, Scale, Search, Target } from 'lucide-react';
 
 import type { ChatMode } from '@/api/core/enums';
-import { DEFAULT_CHAT_MODE as DEFAULT_MODE_FROM_ENUM } from '@/api/core/enums';
+import { ChatModes, DEFAULT_CHAT_MODE as DEFAULT_MODE_FROM_ENUM } from '@/api/core/enums';
 
 // ============================================================================
 // Type Alias for Chat Mode ID
@@ -59,10 +59,10 @@ export type ChatModeConfig = {
  * These are used in the prompt engineering for multi-participant sessions
  */
 export const CHAT_MODE_SYSTEM_PROMPTS: Record<ChatModeId, string> = {
-  analyzing: 'You are participating in a multi-participant analytical discussion. Each participant brings their unique perspective. Reference other participants by their number (e.g., "As Participant 2 mentioned...") and build on the insights shared. Respond to both the user\'s query and other participants\' contributions.',
-  brainstorming: 'You are participating in a multi-participant brainstorming session. Each participant contributes creative ideas. Reference other participants by their number (e.g., "Building on Participant 3\'s idea...") and add your unique perspective. Respond to both the user\'s query and other participants\' ideas.',
-  debating: 'You are participating in a multi-participant debate. Each participant presents their arguments. Reference other participants by their number (e.g., "I disagree with Participant 1 because...") and engage critically. Respond to both the user\'s query and other participants\' arguments.',
-  solving: 'You are participating in a multi-participant problem-solving discussion. Each participant proposes solutions. Reference other participants by their number (e.g., "Participant 2\'s approach is solid, but...") and build logically. Respond to both the user\'s query and other participants\' solutions.',
+  [ChatModes.ANALYZING]: 'You are participating in a multi-participant analytical discussion. Each participant brings their unique perspective. Reference other participants by their number (e.g., "As Participant 2 mentioned...") and build on the insights shared. Respond to both the user\'s query and other participants\' contributions.',
+  [ChatModes.BRAINSTORMING]: 'You are participating in a multi-participant brainstorming session. Each participant contributes creative ideas. Reference other participants by their number (e.g., "Building on Participant 3\'s idea...") and add your unique perspective. Respond to both the user\'s query and other participants\' ideas.',
+  [ChatModes.DEBATING]: 'You are participating in a multi-participant debate. Each participant presents their arguments. Reference other participants by their number (e.g., "I disagree with Participant 1 because...") and engage critically. Respond to both the user\'s query and other participants\' arguments.',
+  [ChatModes.SOLVING]: 'You are participating in a multi-participant problem-solving discussion. Each participant proposes solutions. Reference other participants by their number (e.g., "Participant 2\'s approach is solid, but...") and build logically. Respond to both the user\'s query and other participants\' solutions.',
 };
 
 /**
@@ -74,9 +74,9 @@ export const CHAT_MODE_SYSTEM_PROMPTS: Record<ChatModeId, string> = {
  */
 export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
   {
-    id: 'brainstorming',
+    id: ChatModes.BRAINSTORMING,
     label: 'Brainstorming',
-    value: 'brainstorming',
+    value: ChatModes.BRAINSTORMING,
     icon: Lightbulb,
     isEnabled: true,
     order: 1,
@@ -89,9 +89,9 @@ export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
     },
   },
   {
-    id: 'analyzing',
+    id: ChatModes.ANALYZING,
     label: 'Analyzing',
-    value: 'analyzing',
+    value: ChatModes.ANALYZING,
     icon: Search,
     isEnabled: true,
     order: 2,
@@ -104,9 +104,9 @@ export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
     },
   },
   {
-    id: 'debating',
+    id: ChatModes.DEBATING,
     label: 'Debating',
-    value: 'debating',
+    value: ChatModes.DEBATING,
     icon: Scale,
     isEnabled: true,
     order: 3,
@@ -119,9 +119,9 @@ export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
     },
   },
   {
-    id: 'solving',
+    id: ChatModes.SOLVING,
     label: 'Problem Solving',
-    value: 'solving',
+    value: ChatModes.SOLVING,
     icon: Target,
     isEnabled: true,
     order: 4,
