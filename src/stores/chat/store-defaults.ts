@@ -14,13 +14,11 @@
 
 import type { UIMessage } from 'ai';
 
-import type { FeedbackType } from '@/api/core/enums';
+import type { FeedbackType, ScreenMode } from '@/api/core/enums';
 import { ChatModes, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-
-import type { ScreenMode } from './actions/screen-initialization';
 
 // ============================================================================
 // FORM SLICE DEFAULTS

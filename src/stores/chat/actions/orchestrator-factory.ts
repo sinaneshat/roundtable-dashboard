@@ -133,6 +133,8 @@ export type OrchestratorOptions<TQueryArgs extends readonly unknown[] = readonly
   enabled?: boolean;
   /** Additional query arguments */
   queryArgs?: TQueryArgs;
+  /** Optional options to pass to deduplication hook at runtime */
+  deduplicationOptions?: Record<string, unknown>;
 };
 
 /**
@@ -218,8 +220,15 @@ export function createOrchestrator<
   ): OrchestratorReturn {
     // ✅ TYPE SAFETY: Extract queryArgs with proper generic type inference
     // TypeScript infers TQueryArgs correctly from readonly unknown[] default
-    const { threadId, enabled = true } = options;
+    const { threadId, enabled = true, deduplicationOptions: runtimeDeduplicationOptions } = options;
     const queryArgs = (options.queryArgs ?? []) as TQueryArgs;
+
+    // Merge config and runtime deduplication options (runtime takes precedence)
+    // ✅ MEMOIZE: Prevent useMemo dependency from changing on every render
+    const mergedDeduplicationOptions = useMemo(
+      () => ({ ...deduplicationOptions, ...runtimeDeduplicationOptions }),
+      [runtimeDeduplicationOptions],
+    );
 
     // Get store state and actions using injected hook
     // ✅ DEPENDENCY INJECTION: useStoreHook passed as config parameter
@@ -243,10 +252,10 @@ export function createOrchestrator<
     // Apply optional deduplication
     const processedItems = useMemo(() => {
       if (deduplicationHook) {
-        return deduplicationHook(rawItems, deduplicationOptions);
+        return deduplicationHook(rawItems, mergedDeduplicationOptions);
       }
       return rawItems;
-    }, [rawItems]);
+    }, [rawItems, mergedDeduplicationOptions]);
 
     // Track previous state for change detection
     const prevItemsRef = useRef<TItem[]>([]);

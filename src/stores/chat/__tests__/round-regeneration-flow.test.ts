@@ -55,6 +55,7 @@ import {
   createMockPreSearchDataPayload,
   createMockThread,
   createMockUserMessage,
+  getPartText,
 } from './test-factories';
 
 // ============================================================================
@@ -275,7 +276,7 @@ describe('round Regeneration Flow', () => {
 
       // Complete round 0
       const { userMessage } = setupCompletedRound(store, 0, 1);
-      const originalQuestion = (userMessage.parts[0] as { text: string }).text;
+      const originalQuestion = getPartText(userMessage);
 
       // Clear AI responses only
       const messagesWithoutAI = store.getState().messages.filter(
@@ -285,7 +286,7 @@ describe('round Regeneration Flow', () => {
 
       // Verify user message preserved
       expect(store.getState().messages).toHaveLength(1);
-      expect((store.getState().messages[0].parts[0] as { text: string }).text).toBe(originalQuestion);
+      expect(getPartText(store.getState().messages[0])).toBe(originalQuestion);
     });
   });
 

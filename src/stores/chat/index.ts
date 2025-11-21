@@ -32,14 +32,14 @@ export type { UseOverviewActionsReturn } from './actions/overview-actions';
 export { useOverviewActions } from './actions/overview-actions';
 export type { UseRecommendedActionsOptions, UseRecommendedActionsReturn } from './actions/recommended-actions';
 export { useRecommendedActions } from './actions/recommended-actions';
-export type { ScreenMode, UseScreenInitializationOptions } from './actions/screen-initialization';
+export type { UseScreenInitializationOptions } from './actions/screen-initialization';
 export { useScreenInitialization } from './actions/screen-initialization';
 export type { UseThreadActionsOptions, UseThreadActionsReturn } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
-
 // Store
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
+export type { ScreenMode } from '@/api/core/enums';
 
 // Re-export commonly used types for tests
 export type { ChatThread } from '@/db/validation';

@@ -36,9 +36,6 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { useAnalysisOrchestrator } from './analysis-orchestrator';
 import { usePreSearchOrchestrator } from './pre-search-orchestrator';
 
-// Re-export ScreenMode for other modules
-export type { ScreenMode } from '@/api/core/enums';
-
 export type UseScreenInitializationOptions = {
   /**
    * Screen mode determines behavior:
@@ -176,13 +173,11 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // Get regeneratingRoundNumber from store for deduplication
   const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
 
-  // Type assertion needed because useAnalysisOrchestrator extends OrchestratorOptions with mode
-  // but the factory doesn't know about domain-specific extensions
   useAnalysisOrchestrator({
     threadId: thread?.id || '',
     enabled: shouldEnableOrchestrator,
     deduplicationOptions: { regeneratingRoundNumber },
-  } as Parameters<typeof useAnalysisOrchestrator>[0]);
+  });
 
   // ============================================================================
   // PRE-SEARCH ORCHESTRATION (All modes when web search enabled)

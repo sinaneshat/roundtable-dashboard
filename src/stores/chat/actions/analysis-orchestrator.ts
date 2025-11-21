@@ -25,7 +25,6 @@
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import { deduplicateAnalyses } from '@/lib/utils/analysis-utils';
 import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 
@@ -33,9 +32,7 @@ import { getStatusPriority, MODERATOR_ANALYSIS_COMPARE_KEYS } from '../store-con
 import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
 
-export type UseAnalysisOrchestratorOptions = OrchestratorOptions & {
-  mode: ChatModeId;
-};
+export type UseAnalysisOrchestratorOptions = OrchestratorOptions;
 export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
 
 /**

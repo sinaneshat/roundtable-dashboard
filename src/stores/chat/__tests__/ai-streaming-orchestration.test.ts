@@ -1181,7 +1181,7 @@ describe('3.5 Stream Completion Detection (KV)', () => {
     expect(hasCompleteAnalysis).toBe(false);
 
     // Resume is not used - no resume flag in store
-    expect((store.getState() as Record<string, unknown>).resumeStream).toBeUndefined();
+    expect('resumeStream' in store.getState()).toBe(false);
   });
 });
 

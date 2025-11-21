@@ -20,6 +20,7 @@ import {
   ChatModes,
   PreSearchStatuses,
   ThreadStatuses,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type {
   ChatParticipant,
@@ -225,7 +226,7 @@ export function createMockMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: 'assistant',
+    role: UIMessageRoles.ASSISTANT,
     parts: [
       {
         type: 'text',
@@ -253,7 +254,7 @@ export function createMockUserMessage(
 ): UIMessage {
   return {
     id: `user-msg-${roundNumber}`,
-    role: 'user',
+    role: UIMessageRoles.USER,
     parts: [
       {
         type: 'text',
@@ -261,7 +262,7 @@ export function createMockUserMessage(
       },
     ],
     metadata: {
-      role: 'user',
+      role: UIMessageRoles.USER,
       roundNumber,
     },
   };
@@ -425,4 +426,41 @@ export function createMockAnalysisPayload(
     },
     ...overrides,
   };
+}
+
+// ============================================================================
+// Type-Safe Part Extraction Helpers
+// ============================================================================
+
+/**
+ * Type guard for text parts in UIMessage
+ * Follows discriminated union pattern from type-inference-patterns.md
+ */
+export function isTextPart(part: { type: string }): part is { type: 'text'; text: string } {
+  return part.type === 'text';
+}
+
+/**
+ * Extract text from message parts safely without force casting
+ * Returns the text content from the first text part, or empty string if none
+ */
+export function getMessageText(message: UIMessage): string {
+  if (!message.parts || message.parts.length === 0) {
+    return '';
+  }
+
+  const textPart = message.parts.find(isTextPart);
+  return textPart?.text ?? '';
+}
+
+/**
+ * Extract text from a specific part index
+ * Returns empty string if the part doesn't exist or isn't a text part
+ */
+export function getPartText(message: UIMessage, index = 0): string {
+  const part = message.parts?.[index];
+  if (!part || !isTextPart(part)) {
+    return '';
+  }
+  return part.text;
 }

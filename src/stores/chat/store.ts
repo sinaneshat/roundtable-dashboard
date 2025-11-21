@@ -85,7 +85,7 @@ import type {
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
-import { getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
+import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
@@ -133,7 +133,6 @@ type ChatMode = z.infer<typeof ChatModeSchema>;
 // ============================================================================
 
 export type { ChatStore } from './store-schemas';
-export type { ScreenMode };
 
 // ============================================================================
 // SLICE IMPLEMENTATIONS - Using Zustand v5 StateCreator Pattern
@@ -404,9 +403,7 @@ const createAnalysisSlice: StateCreator<
 
       // Verify ID matches metadata
       const msgRound = getRoundNumber(msg.metadata);
-      const msgParticipantIndex = msg.metadata && typeof msg.metadata === 'object' && msg.metadata !== null && 'participantIndex' in msg.metadata
-        ? (msg.metadata.participantIndex as number | undefined)
-        : undefined;
+      const msgParticipantIndex = getParticipantIndex(msg.metadata);
 
       // Check if round and participant index match
       return roundFromId !== msgRound || participantIndexFromId !== msgParticipantIndex;
@@ -698,7 +695,7 @@ const createOperationsSlice: StateCreator<
   OperationsSlice
 > = (set, get) => ({
   resetThreadState: () =>
-    set(THREAD_RESET_STATE as Partial<ChatStore>, false, 'operations/resetThreadState'),
+    set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
 
   resetToOverview: () =>
     set({

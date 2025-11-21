@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AnalysisStatuses,
+  ChatModes,
   ScreenModes,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
@@ -362,14 +363,14 @@ describe('configuration Changes Between Rounds', () => {
   it('should track mode changes', () => {
     const thread = createMockThread({
       id: 'thread-123',
-      mode: 'debating',
+      mode: ChatModes.DEBATING,
     });
     store.getState().initializeThread(thread, [createMockParticipant(0)]);
 
     // Change mode
-    store.getState().setSelectedMode('analyzing');
+    store.getState().setSelectedMode(ChatModes.ANALYZING);
 
-    expect(store.getState().selectedMode).toBe('analyzing');
+    expect(store.getState().selectedMode).toBe(ChatModes.ANALYZING);
   });
 
   it('should track web search toggle', () => {

@@ -40,6 +40,7 @@ import {
   createMockPreSearch,
   createMockThread,
   createMockUserMessage,
+  getPartText,
 } from './test-factories';
 
 // ============================================================================
@@ -219,7 +220,7 @@ describe('section 7.1: Regeneration Trigger & Cleanup', () => {
 
     // Complete round 0
     const { userMessage } = setupCompletedRound(store, 0, 1);
-    const originalQuestion = (userMessage.parts[0] as { text: string }).text;
+    const originalQuestion = getPartText(userMessage);
 
     // Start regeneration
     store.getState().startRegeneration(0);
@@ -233,7 +234,7 @@ describe('section 7.1: Regeneration Trigger & Cleanup', () => {
     // Verify user message preserved
     expect(store.getState().messages).toHaveLength(1);
     expect(store.getState().messages[0].role).toBe('user');
-    expect((store.getState().messages[0].parts[0] as { text: string }).text).toBe(originalQuestion);
+    expect(getPartText(store.getState().messages[0])).toBe(originalQuestion);
   });
 
   /**

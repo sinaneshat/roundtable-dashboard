@@ -40,6 +40,7 @@ import {
   createMockPreSearch,
   createMockThread,
   createMockUserMessage,
+  getPartText,
 } from './test-factories';
 
 // ============================================================================
@@ -152,8 +153,7 @@ describe('section 15.1: Input Sanitization', () => {
 
       // Verify content is stored as-is (sanitization happens at render)
       messages.forEach((msg, index) => {
-        const textPart = msg.parts[0] as { type: 'text'; text: string };
-        expect(textPart.text).toBe(xssPayloads[index]);
+        expect(getPartText(msg)).toBe(xssPayloads[index]);
       });
     });
 
@@ -216,8 +216,7 @@ describe('section 15.1: Input Sanitization', () => {
 
       // Verify SQL payloads stored as plain text
       messages.forEach((msg, index) => {
-        const textPart = msg.parts[0] as { type: 'text'; text: string };
-        expect(textPart.text).toBe(sqlPayloads[index]);
+        expect(getPartText(msg)).toBe(sqlPayloads[index]);
       });
     });
 
@@ -270,8 +269,7 @@ describe('section 15.1: Input Sanitization', () => {
       const message = createMessageWithContent(0, largeContent);
       store.getState().setMessages([message]);
 
-      const storedContent = (store.getState().messages[0].parts[0] as { text: string }).text;
-      expect(storedContent).toHaveLength(50000);
+      expect(getPartText(store.getState().messages[0])).toHaveLength(50000);
     });
 
     it('should handle binary-like data in messages', () => {
@@ -480,12 +478,10 @@ describe('input Validation Edge Cases', () => {
     store.getState().setMessages([message]);
 
     // Content should be stored as plain string
-    const storedContent = (store.getState().messages[0].parts[0] as { text: string }).text;
-    expect(storedContent).toBe(pollutionPayload);
+    expect(getPartText(store.getState().messages[0])).toBe(pollutionPayload);
 
     // Prototype should not be polluted
-    // eslint-disable-next-line ts/no-explicit-any
-    expect((Object.prototype as any).polluted).toBeUndefined();
+    expect('polluted' in Object.prototype).toBe(false);
   });
 
   /**
@@ -740,9 +736,9 @@ describe('data Integrity & Privacy', () => {
 
     // Order preserved
     const storedMessages = store.getState().messages;
-    expect((storedMessages[0].parts[0] as { text: string }).text).toBe('First');
-    expect((storedMessages[1].parts[0] as { text: string }).text).toBe('Second');
-    expect((storedMessages[2].parts[0] as { text: string }).text).toBe('Third');
+    expect(getPartText(storedMessages[0])).toBe('First');
+    expect(getPartText(storedMessages[1])).toBe('Second');
+    expect(getPartText(storedMessages[2])).toBe('Third');
   });
 });
 
