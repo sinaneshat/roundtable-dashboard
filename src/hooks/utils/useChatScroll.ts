@@ -167,7 +167,7 @@ export function useChatScroll({
     };
   }, [enableNearBottomDetection, autoScrollThreshold, scrollThrottleMs]);
 
-  // Effect 2: Auto-scroll on new analyses or during streaming
+  // Effect 2: Auto-scroll on new analyses or state changes
   // ✅ FIX: Also trigger on participant turn-taking by depending on currentParticipantIndex
   useEffect(() => {
     if (messages.length === 0) {
@@ -196,11 +196,38 @@ export function useChatScroll({
       }
 
       // Use requestAnimationFrame to ensure DOM updates have completed
+      // Always use smooth scrolling to avoid jumpy behavior
       requestAnimationFrame(() => {
-        scrollToBottom(isStreaming ? 'smooth' : 'auto');
+        scrollToBottom('smooth');
       });
     }
   }, [messages.length, analyses, isStreaming, currentParticipantIndex, scrollToBottom]);
+
+  // Effect 3: Auto-scroll on content resize during streaming
+  // ✅ FIX: Watch for height changes when streaming to follow new content
+  // This handles the case where message content updates without changing messages.length
+  useEffect(() => {
+    if (!isStreaming)
+      return;
+
+    const contentContainer = document.getElementById(scrollContainerId);
+    if (!contentContainer)
+      return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (isNearBottomRef.current) {
+        requestAnimationFrame(() => {
+          scrollToBottom('smooth');
+        });
+      }
+    });
+
+    resizeObserver.observe(contentContainer);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [isStreaming, scrollContainerId, scrollToBottom]);
 
   return {
     isNearBottomRef,

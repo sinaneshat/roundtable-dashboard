@@ -509,9 +509,9 @@ export const GeneratedSearchQuerySchema = z.object({
   query: z.string().describe('The generated search query'),
   rationale: z.string().describe('Explanation for why this query will help answer the user question'),
   searchDepth: WebSearchDepthSchema.describe('Recommended search depth for this query'),
-  complexity: WebSearchComplexitySchema.optional().describe('Query complexity level: BASIC (2-3 sources), MODERATE (4-6 sources), DEEP (7-10 sources)'),
+  complexity: WebSearchComplexitySchema.optional().describe('Query complexity level: BASIC (2-3 sources), MODERATE (4-6 sources), DEEP (6-8 sources)'),
   // ✅ DYNAMIC SOURCE COUNT: AI determines optimal source count based on query complexity
-  sourceCount: z.number().min(1).max(10).optional().describe('Dynamic source count: BASIC=2-3, MODERATE=4-6, DEEP=7-10 (AI-determined based on complexity)'),
+  sourceCount: z.number().min(1).max(10).optional().describe('Dynamic source count: BASIC=2-3, MODERATE=4-6, DEEP=6-8 (AI-determined based on complexity)'),
   // ✅ TAVILY-STYLE: AI-driven advanced parameters
   requiresFullContent: z.boolean().optional().describe('Whether full content extraction is needed'),
   chunksPerSource: z.number().int().min(1).max(3).optional().describe('Number of content chunks per source for deep research (1-3)'),
@@ -525,6 +525,19 @@ export const GeneratedSearchQuerySchema = z.object({
 }).openapi('GeneratedSearchQuery');
 
 export type GeneratedSearchQuery = z.infer<typeof GeneratedSearchQuerySchema>;
+
+/**
+ * Multi-query generation response schema
+ * ✅ DYNAMIC QUERY COUNT: AI determines optimal number of queries (1-5)
+ * Used by web-search.service.ts for multi-query generation
+ */
+export const MultiQueryGenerationSchema = z.object({
+  totalQueries: z.number().min(1).max(5).describe('Total number of queries to execute (1-5)'),
+  analysisRationale: z.string().describe('Explanation for why this many queries are needed'),
+  queries: z.array(GeneratedSearchQuerySchema).min(1).max(5).describe('Array of generated search queries'),
+}).openapi('MultiQueryGeneration');
+
+export type MultiQueryGeneration = z.infer<typeof MultiQueryGenerationSchema>;
 
 // ============================================================================
 // SERVICE LAYER SCHEMAS (Moved from services - Single Source of Truth)

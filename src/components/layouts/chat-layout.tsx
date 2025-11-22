@@ -125,16 +125,13 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
             <AppSidebar />
           </Suspense>
 
-          <SidebarInset className="min-h-svh relative">
+          <SidebarInset className="h-svh flex flex-col relative">
             <ChatHeaderSwitch />
 
-            {/* ✅ WINDOW-LEVEL SCROLLING: Content scrolls at window level, not in a nested div */}
-            {/* Header is fixed via absolute positioning, content flows naturally below it */}
-            <div id="chat-scroll-container">
-              <Suspense fallback={<ContentLoadingFallback />}>
-                {children}
-              </Suspense>
-            </div>
+            {/* Screen components manage their own scroll via StickToBottom Conversation */}
+            <Suspense fallback={<ContentLoadingFallback />}>
+              {children}
+            </Suspense>
           </SidebarInset>
         </SidebarProvider>
       </ThreadHeaderProvider>

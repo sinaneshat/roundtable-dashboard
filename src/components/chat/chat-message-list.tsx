@@ -118,7 +118,7 @@ function AssistantGroupCard({
       key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
       className="mb-4 flex justify-start"
     >
-      <div className="w-full sm:max-w-[85%]">
+      <div className="w-full">
         {/* Header at top of message box */}
         <div className="flex items-center gap-3 mb-6">
           <Avatar className={cn(
@@ -629,7 +629,7 @@ export const ChatMessageList = memo(
                   key={`user-group-${group.messages[0]?.index}`}
                   className="mb-4 flex justify-end"
                 >
-                  <div className="w-full sm:max-w-[80%]">
+                  <div className="w-full">
                     {/* Header at top of message box */}
                     <div className="flex items-center gap-3 mb-6 flex-row-reverse">
                       <div className="relative flex-shrink-0 drop-shadow-[0_0_12px_hsl(var(--white)/0.3)]">

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
+import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 
@@ -21,49 +22,43 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
   const t = useTranslations();
 
   return (
-    <div className="grid min-h-svh md:grid-cols-2">
-      {/* Left Column - Auth Form */}
-      <div className="relative flex flex-col items-center justify-center gap-6 p-6 md:p-10 overflow-hidden">
-        {/* Radial glow background - positioned from bottom, projecting upward */}
-        <div className="absolute inset-0 -z-10 pointer-events-none">
-          <div
-            className="absolute left-1/2 -translate-x-1/2"
-            style={{
-              bottom: '200px',
-            }}
-          >
-            {/* Mobile portrait (<640px wide) */}
-            <div className="block sm:hidden">
-              <RadialGlow
-                size={1200}
-                offsetY={0}
-                duration={18}
-                animate={true}
-                useLogoColors={true}
-              />
-            </div>
-            {/* Tablet (640px-1024px) */}
-            <div className="hidden sm:block lg:hidden">
-              <RadialGlow
-                size={1600}
-                offsetY={0}
-                duration={18}
-                animate={true}
-                useLogoColors={true}
-              />
-            </div>
-            {/* Desktop (1024px+) */}
-            <div className="hidden lg:block">
-              <RadialGlow
-                size={2000}
-                offsetY={0}
-                duration={18}
-                animate={true}
-                useLogoColors={true}
-              />
-            </div>
-          </div>
+    <div className="relative grid h-svh md:grid-cols-2 overflow-hidden">
+      {/* Radial glow background - centered on page, projecting outwards */}
+      <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center">
+        {/* Mobile portrait (<640px wide) */}
+        <div className="block sm:hidden">
+          <RadialGlow
+            size={1200}
+            offsetY={0}
+            duration={18}
+            animate={true}
+            useLogoColors={true}
+          />
         </div>
+        {/* Tablet (640px-1024px) */}
+        <div className="hidden sm:block lg:hidden">
+          <RadialGlow
+            size={1800}
+            offsetY={0}
+            duration={18}
+            animate={true}
+            useLogoColors={true}
+          />
+        </div>
+        {/* Desktop (1024px+) */}
+        <div className="hidden lg:block">
+          <RadialGlow
+            size={2400}
+            offsetY={0}
+            duration={18}
+            animate={true}
+            useLogoColors={true}
+          />
+        </div>
+      </div>
+
+      {/* Left Column - Auth Form */}
+      <div className="relative flex flex-col items-center justify-center gap-6 p-6 md:p-10">
 
         {/* Content */}
         <div className="flex w-full max-w-sm flex-col gap-6">
@@ -90,8 +85,14 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
       </div>
 
       {/* Right Column - Chat Showcase (Tablet & Desktop) */}
-      <div className="relative hidden md:flex md:flex-col border-l">
-        <LiveChatDemo />
+      <div className="relative hidden md:flex md:flex-col p-6 lg:p-10 overflow-hidden">
+        {/* Floating glass card */}
+        <Card
+          variant="glass"
+          className="w-full h-full min-h-0 shadow-2xl ring-1 ring-white/10 overflow-hidden py-0"
+        >
+          <LiveChatDemo />
+        </Card>
       </div>
     </div>
   );

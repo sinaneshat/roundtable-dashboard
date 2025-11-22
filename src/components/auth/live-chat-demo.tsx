@@ -1113,9 +1113,9 @@ export function LiveChatDemo() {
   const isStreaming = currentStreamingIndex !== null;
 
   return (
-    <div className="flex flex-col h-svh relative">
-      <ScrollArea className="h-full" ref={scrollViewportRef}>
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-6 pb-[240px]">
+    <div className="flex flex-col h-full min-h-0 relative">
+      <ScrollArea className="h-full min-h-0 flex-1" ref={scrollViewportRef}>
+        <div className="w-full px-4 sm:px-6 pt-6 pb-6">
           {stage !== 'idle' && (
             <ThreadTimeline
               timelineItems={timelineItems}

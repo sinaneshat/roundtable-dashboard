@@ -275,7 +275,7 @@ export function ChatShowcaseLive() {
 
   // Simplified render without animation wrappers
   return (
-    <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-6 pb-[240px] flex-1">
+    <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-6 pb-[140px] flex-1">
       <div>
         <ThreadTimeline
           timelineItems={timelineItems}

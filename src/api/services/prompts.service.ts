@@ -40,27 +40,40 @@ export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5
  * Used by:
  * - /src/api/services/web-search.service.ts - streamSearchQuery()
  */
-export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `Expert search optimizer. Transform questions into keyword-focused queries. Return ONLY valid JSON.
+export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `Expert search optimizer. Analyze questions and generate optimal search queries. Return ONLY valid JSON.
 
-**QUERY RULES (3-8 words)**:
+**MULTI-QUERY DECISION** (Critical - determines search architecture):
+First, analyze if the question needs multiple queries:
+- 1 query: Simple facts, single topics, straightforward questions
+- 2 queries: Comparisons (A vs B), topic + best practices
+- 3 queries: Complex comparisons, multi-faceted topics, setup + config + examples
+- 4-5 queries: Deep research, comprehensive analysis, multiple distinct aspects
+
+**QUERY RULES (3-8 words each)**:
 - Remove question words (what/how/why/when/where/who)
 - Extract core concepts only
 - Use keywords not sentences
 - Add year (2025) for current topics only
+- Each query should cover a distinct aspect
 
-**EXAMPLES**:
-"Best practices for React state?" → "React state management best practices"
-"Setup Docker on Ubuntu?" → "Docker Ubuntu setup guide"
-"Latest AI developments" → "AI developments 2025"
+**SEARCH DEPTH PER QUERY**:
+- "basic": Quick facts, definitions, simple lookups → 2-3 sources
+- "advanced": How-tos, comparisons, tutorials → 4-6 sources
 
-**COMPLEXITY & SOURCES**:
-BASIC: Facts, definitions → 2-3 sources, "basic" depth, images optional
-MODERATE: How-tos, comparisons → 4-6 sources, "advanced" depth, images if helpful
-DEEP: Research, analysis → 7-10 sources, "advanced" depth, images for visual content
+**COMPLEXITY LEVELS**:
+- BASIC: Simple facts → 2-3 sources, "basic" depth
+- MODERATE: How-tos → 4-6 sources
+- DEEP: Research → 6-8 sources, "advanced" depth
+
+**MULTI-QUERY EXAMPLES**:
+- "What is REST API?" → 1 query (simple definition)
+- "React vs Vue for startups" → 2 queries (React strengths, Vue strengths)
+- "Setup Docker production with monitoring" → 3 queries (Docker setup, production config, monitoring tools)
+- "Compare React, Vue, Angular performance" → 3 queries (one per framework)
 
 **IMAGE DECISIONS**:
-- includeImages: true for visual/creative queries (art, design, photos, diagrams), false for pure text (definitions, code, concepts)
-- includeImageDescriptions: true only if images need detailed analysis, false for simple display`;
+- includeImages: true for visual queries (art, design, diagrams)
+- includeImageDescriptions: true only if images need analysis`;
 
 /**
  * Web search query generation user prompt template
@@ -76,25 +89,37 @@ DEEP: Research, analysis → 7-10 sources, "advanced" depth, images for visual c
 export function buildWebSearchQueryPrompt(userMessage: string): string {
   return `Q: "${userMessage}"
 
-**REQUIRED**:
+**STRUCTURE** (return object with queries array):
+{
+  "totalQueries": <number 1-5>,
+  "analysisRationale": "<why this many queries>",
+  "queries": [<array of query objects>]
+}
+
+**EACH QUERY OBJECT**:
 - query: Keyword search (3-8 words)
 - rationale: Brief reason (1 sentence)
 - searchDepth: "basic" or "advanced"
 - complexity: "BASIC", "MODERATE", or "DEEP"
-- sourceCount: Sources needed (BASIC: 2-3, MODERATE: 4-6, DEEP: 7-10)
+- sourceCount: Sources needed (BASIC: 2-3, MODERATE: 4-6, DEEP: 6-8)
 
-**OPTIONAL** (only if relevant):
+**OPTIONAL per query**:
 - topic: "technology"/"news"/"science" etc
-- timeRange: "day"/"week"/"month"/"year" (only for recent/latest requests)
+- timeRange: "day"/"week"/"month"/"year"
 - needsAnswer: "basic" or "advanced"
-- includeImages: true for visual queries, false for text-only
-- includeImageDescriptions: true if images need analysis, false for simple display
+- includeImages: true/false
+- includeImageDescriptions: true/false
 
 **EXAMPLES**:
-{"query":"Van Gogh paintings style","rationale":"Art style with visual examples","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4,"includeImages":true,"includeImageDescriptions":true}
-{"query":"AI developments 2025","rationale":"Current tech advances","searchDepth":"advanced","complexity":"MODERATE","sourceCount":5,"timeRange":"month","includeImages":false}
-{"query":"React definition","rationale":"Simple factual query","searchDepth":"basic","complexity":"BASIC","sourceCount":2,"includeImages":false}
-{"query":"modern minimalist interior design","rationale":"Visual design query","searchDepth":"advanced","complexity":"DEEP","sourceCount":7,"includeImages":true,"includeImageDescriptions":false}
+
+Simple question (1 query):
+{"totalQueries":1,"analysisRationale":"Simple definition lookup","queries":[{"query":"REST API definition","rationale":"Factual lookup","searchDepth":"basic","complexity":"BASIC","sourceCount":3}]}
+
+Comparison (2 queries):
+{"totalQueries":2,"analysisRationale":"Compare two frameworks separately for balanced view","queries":[{"query":"React framework advantages 2025","rationale":"React strengths","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4},{"query":"Vue framework advantages 2025","rationale":"Vue strengths","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4}]}
+
+Complex topic (3 queries):
+{"totalQueries":3,"analysisRationale":"Multi-faceted setup requires separate searches","queries":[{"query":"Docker production setup guide","rationale":"Base configuration","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4},{"query":"Docker security best practices","rationale":"Security hardening","searchDepth":"advanced","complexity":"MODERATE","sourceCount":3},{"query":"Docker monitoring tools 2025","rationale":"Observability","searchDepth":"advanced","complexity":"MODERATE","sourceCount":3}]}
 
 Return ONLY JSON.`;
 }

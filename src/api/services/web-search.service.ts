@@ -36,7 +36,7 @@ import type { WebSearchParameters, WebSearchResult, WebSearchResultItem } from '
 // Zod Schemas
 // ============================================================================
 // Import schema from route definitions for consistency
-import { GeneratedSearchQuerySchema } from '@/api/routes/chat/schema';
+import { MultiQueryGenerationSchema } from '@/api/routes/chat/schema';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { buildWebSearchQueryPrompt, WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT } from '@/api/services/prompts.service';
 // ============================================================================
@@ -58,7 +58,7 @@ import type { TypedLogger } from '@/api/types/logger';
 // Re-export types for external use
 export type { WebSearchDepth } from '@/api/core/enums';
 export type { WebSearchResult, WebSearchResultItem };
-export type { GeneratedSearchQuery } from '@/api/routes/chat/schema';
+export type { GeneratedSearchQuery, MultiQueryGeneration } from '@/api/routes/chat/schema';
 
 // Schema consolidated into GeneratedSearchQuerySchema in route schema file
 
@@ -142,12 +142,12 @@ export function streamSearchQuery(
     initializeOpenRouter(env);
     const client = openRouterService.getClient();
 
-    // ✅ AI SDK v5: streamObject for gradual query generation
+    // ✅ AI SDK v5: streamObject for gradual multi-query generation
     // Pattern from /src/api/routes/chat/handlers/analysis.handler.ts:91
-    // Using internal schema that matches API contract
+    // ✅ MULTI-QUERY: Now uses MultiQueryGenerationSchema for dynamic query count
     return streamObject({
       model: client.chat(AIModels.WEB_SEARCH),
-      schema: GeneratedSearchQuerySchema, // Use API schema for consistency
+      schema: MultiQueryGenerationSchema, // ✅ UPDATED: Multi-query schema
       mode: 'json', // ✅ CRITICAL: Force JSON mode for OpenRouter compatibility
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),

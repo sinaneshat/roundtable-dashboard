@@ -38,12 +38,12 @@ import type { UIMessage } from 'ai';
 
 import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
 import type {
-  ModeratorAnalysisPayload,
-  PreSearchDataPayload,
-  RecommendedAction,
-  RoundFeedbackData,
-  StoredModeratorAnalysis,
-  StoredPreSearch,
+    ModeratorAnalysisPayload,
+    PreSearchDataPayload,
+    RecommendedAction,
+    RoundFeedbackData,
+    StoredModeratorAnalysis,
+    StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -132,6 +132,7 @@ export type UpdatePreSearchStatus = (roundNumber: number, status: AnalysisStatus
 export type UpdatePreSearchError = (roundNumber: number, errorMessage: string | null) => void;
 export type RemovePreSearch = (roundNumber: number) => void;
 export type ClearAllPreSearches = () => void;
+export type CheckStuckPreSearches = () => void;
 
 // ============================================================================
 // THREAD ACTIONS - AI SDK Method Bindings
@@ -172,6 +173,7 @@ export type SetSendMessage = (fn?: SendMessage) => void;
 export type SetStartRound = (fn?: StartRound) => void;
 export type SetStop = (fn?: Stop) => void;
 export type SetChatSetMessages = (fn?: ChatSetMessages) => void;
+export type CheckStuckStreams = () => void;
 
 // ============================================================================
 // FLAGS ACTIONS (UI re-render triggers)
@@ -455,6 +457,7 @@ export type PreSearchActionsType = {
   updatePreSearchError: UpdatePreSearchError;
   removePreSearch: RemovePreSearch;
   clearAllPreSearches: ClearAllPreSearches;
+  checkStuckPreSearches: CheckStuckPreSearches;
 };
 
 export type ThreadActionsType = {
@@ -468,6 +471,7 @@ export type ThreadActionsType = {
   setStartRound: SetStartRound;
   setStop: SetStop;
   setChatSetMessages: SetChatSetMessages;
+  checkStuckStreams: CheckStuckStreams;
 };
 
 export type FlagsActionsType = {

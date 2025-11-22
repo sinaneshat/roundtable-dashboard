@@ -237,6 +237,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {
+      // ✅ RACE CONDITION FIX: Check if pre-search already triggered for this round
+      // This prevents duplicate triggers from both handleComplete and pendingMessage effects
+      const currentState = store.getState();
+      if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
+        return; // Already triggered by another effect - wait for it to complete
+      }
+
+      // Mark as triggered BEFORE async operation to prevent race conditions
+      currentState.markPreSearchTriggered(newRoundNumber);
+
       // Create PENDING pre-search record AND immediately execute it
       // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
       // PreSearchStream only renders after user message exists, but message waits for pre-search
@@ -291,6 +301,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           });
         }).catch((error) => {
           console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
+          // Clear the trigger tracking on failure so retry is possible
+          store.getState().clearPreSearchTracking(newRoundNumber);
           // If pre-search creation fails, continue with message anyway (degraded UX)
           // This prevents total failure - participants will stream without search context
         });
@@ -310,6 +322,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // This handles the case where pre-search was created but never executed
       // (e.g., due to component unmount, page refresh, or the circular dependency bug)
       if (preSearchForRound.status === AnalysisStatuses.PENDING) {
+        // ✅ RACE CONDITION FIX: Check if pre-search already triggered for this round
+        const currentState = store.getState();
+        if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
+          return; // Already triggered by another effect - wait for it to complete
+        }
+
+        // Mark as triggered BEFORE async operation
+        currentState.markPreSearchTriggered(newRoundNumber);
+
         const effectiveThreadId = thread?.id || '';
         queueMicrotask(() => {
           // Trigger pre-search execution
@@ -345,6 +366,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
+            // Clear tracking on failure so retry is possible
+            store.getState().clearPreSearchTracking(newRoundNumber);
           });
         });
         return; // Wait for pre-search to complete
@@ -540,6 +563,34 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     };
   }, [waitingToStart, store]);
 
+  // ✅ SAFETY MECHANISM: Auto-complete stuck pre-searches after timeout
+  // Prevents pre-searches stuck at 'streaming' or 'pending' from blocking messages
+  // This handles cases where the backend fails to respond or the stream disconnects
+  const stuckPreSearchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Note: Timeout is handled internally by store.checkStuckPreSearches()
+    // Clear any existing interval before creating new one
+    if (stuckPreSearchIntervalRef.current) {
+      clearInterval(stuckPreSearchIntervalRef.current);
+      stuckPreSearchIntervalRef.current = null;
+    }
+
+    const checkStuckPreSearches = () => {
+      store.getState().checkStuckPreSearches();
+    };
+
+    // Check every 5 seconds
+    stuckPreSearchIntervalRef.current = setInterval(checkStuckPreSearches, 5000);
+
+    return () => {
+      if (stuckPreSearchIntervalRef.current) {
+        clearInterval(stuckPreSearchIntervalRef.current);
+        stuckPreSearchIntervalRef.current = null;
+      }
+    };
+  }, [store]);
+
   // ✅ CRITICAL FIX: Sync AI SDK hook messages to store during streaming
   // The hook's internal messages get updated during streaming, but the store's messages don't
   // This causes the overview screen to show only the user message while streaming
@@ -548,6 +599,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ MEMORY LEAK FIX: Use lightweight comparison to prevent excessive re-renders
   const prevChatMessagesRef = useRef<UIMessage[]>([]);
   const prevMessageCountRef = useRef<number>(0);
+  
+  // ✅ SAFETY: Track last stream activity to detect stuck streams
+  const lastStreamActivityRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const currentStoreMessages = store.getState().messages;
@@ -585,6 +639,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // Simple reference check - if parts array is different, content changed
       // This is lightweight but catches all streaming updates (parts is a new array each stream chunk)
       contentChanged = hookParts !== storeParts;
+      
+      // ✅ SAFETY: Update activity timestamp if content changed
+      if (contentChanged) {
+        lastStreamActivityRef.current = Date.now();
+      }
     }
 
     const shouldSync = countChanged || contentChanged;
@@ -593,8 +652,43 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       prevMessageCountRef.current = chat.messages.length;
       prevChatMessagesRef.current = chat.messages;
       store.getState().setMessages(chat.messages);
+      
+      // Update activity on any sync
+      lastStreamActivityRef.current = Date.now();
     }
   }, [chat.messages, chat.isStreaming, store]); // Store included for exhaustive deps
+
+  // ✅ SAFETY MECHANISM: Auto-stop stuck streams
+  // Prevents system from getting stuck in isStreaming=true state if backend hangs
+  // Checks for 60 seconds of silence (no message updates)
+  useEffect(() => {
+    if (!chatIsStreaming) return;
+
+    // Reset activity timer when streaming starts
+    lastStreamActivityRef.current = Date.now();
+
+    const STREAM_TIMEOUT_MS = 60000; // 60 seconds
+
+    const checkInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - lastStreamActivityRef.current;
+
+      if (elapsed > STREAM_TIMEOUT_MS) {
+        console.error('[ChatStoreProvider] Stream stuck detected - force stopping', {
+          elapsed,
+          timeout: STREAM_TIMEOUT_MS,
+        });
+
+        // Force stop streaming using store action
+        // Note: chat.stop was removed for resumable streams compatibility
+        store.getState().checkStuckStreams();
+
+        showApiErrorToast('Stream timed out', new Error('The connection timed out. Please try again.'));
+      }
+    }, 5000);
+
+    return () => clearInterval(checkInterval);
+  }, [chatIsStreaming, store]);
 
   // Sync other reactive values from hook to store for component access
   useEffect(() => {
@@ -733,6 +827,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {
+      // ✅ RACE CONDITION FIX: Check if pre-search already triggered for this round
+      // This prevents duplicate triggers from both handleComplete and pendingMessage effects
+      const currentState = store.getState();
+      if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
+        return; // Already triggered by another effect - wait for it to complete
+      }
+
       // ✅ FIX: Check if we've already attempted to create pre-search for this round
       // This prevents infinite retry loops when creation fails (e.g., 500 error)
       if (preSearchCreationAttemptedRef.current.has(newRoundNumber)) {
@@ -741,6 +842,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       } else {
         // Mark this round as attempted BEFORE trying
         preSearchCreationAttemptedRef.current.add(newRoundNumber);
+
+        // Mark as triggered BEFORE async operation to prevent race conditions
+        currentState.markPreSearchTriggered(newRoundNumber);
 
         // Create PENDING pre-search record AND immediately execute it
         // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
@@ -793,6 +897,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
+            // Clear the trigger tracking on failure so retry is possible
+            store.getState().clearPreSearchTracking(newRoundNumber);
           });
         });
         return; // Wait for pre-search to complete (direct store update will trigger effect re-run)
@@ -810,6 +916,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // ✅ CRITICAL FIX: If pre-search is stuck in PENDING, trigger execution
       // This handles the case where pre-search was created but never executed
       if (preSearchForRound.status === AnalysisStatuses.PENDING) {
+        // ✅ RACE CONDITION FIX: Check if pre-search already triggered for this round
+        const currentState = store.getState();
+        if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
+          return; // Already triggered by another effect - wait for it to complete
+        }
+
+        // Mark as triggered BEFORE async operation
+        currentState.markPreSearchTriggered(newRoundNumber);
+
         const effectiveThreadId = thread?.id || '';
         queueMicrotask(() => {
           // Trigger pre-search execution
@@ -845,6 +960,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
+            // Clear tracking on failure so retry is possible
+            store.getState().clearPreSearchTracking(newRoundNumber);
           });
         });
         return; // Wait for pre-search to complete

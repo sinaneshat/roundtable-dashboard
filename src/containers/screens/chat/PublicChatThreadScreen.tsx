@@ -67,13 +67,11 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     analyses,
   });
 
-  // ✅ ADD: Auto-scroll management for public chat view
-  // Matches ChatThreadScreen behavior but without streaming (public is read-only)
-  // Auto-scrolls when user is near bottom during analysis rendering
+  // Scroll management for window-level scrolling
   useChatScroll({
     messages,
     analyses,
-    isStreaming: false, // Public view never streams (read-only)
+    isStreaming: false, // Public threads are read-only
     scrollContainerId: 'public-chat-scroll-container',
     enableNearBottomDetection: true,
   });
@@ -134,82 +132,80 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const signUpUrl = `/auth/sign-up?utm_source=public_chat&utm_medium=cta&utm_campaign=thread_${thread.slug}&utm_content=inline`;
 
   return (
-    <div className="relative flex flex-1 flex-col min-h-0 h-full">
+    <div className="flex flex-col min-h-dvh relative">
       <UnifiedErrorBoundary context="chat">
-        <div className="flex flex-col min-h-dvh relative">
-          <div
-            id="public-chat-scroll-container"
-            className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32 flex-1"
-          >
-            {timeline.length === 0
-              ? (
-                  <div className="flex items-center justify-center min-h-[50vh]">
-                    <div className="text-center space-y-4 max-w-md px-4">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
-                        <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-muted-foreground" />
+        <div
+          id="public-chat-scroll-container"
+          className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32"
+        >
+          {timeline.length === 0
+            ? (
+                <div className="flex items-center justify-center min-h-[50vh]">
+                  <div className="text-center space-y-4 max-w-md px-4">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
+                      <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-base sm:text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {t('chat.public.noMessagesDescription')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            : (
+                <>
+                  <ThreadTimeline
+                    timelineItems={timeline}
+                    scrollContainerId="public-chat-scroll-container"
+                    user={user || { name: t('user.defaultName'), image: null }}
+                    participants={participants}
+                    threadId={thread.id}
+                    feedbackByRound={feedbackByRound}
+                    isReadOnly={true}
+                    preSearches={preSearches}
+                  />
+
+                  <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">
+                    <div className="rounded-2xl sm:rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 sm:p-8 md:p-10 text-center space-y-4 sm:space-y-6">
+                      <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 mb-1 sm:mb-2">
+                        <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                       </div>
-                      <div className="space-y-2">
-                        <h3 className="text-base sm:text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {t('chat.public.noMessagesDescription')}
+                      <div className="space-y-2 sm:space-y-3">
+                        <h3 className="text-xl sm:text-2xl md:text-3xl font-bold">
+                          {tPublic('tryRoundtable')}
+                        </h3>
+                        <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
+                          {tPublic('experiencePower')}
+                          {' '}
+                          {BRAND.displayName}
+                          {' '}
+                          {tPublic('description')}
                         </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
+                        <Button
+                          size="lg"
+                          onClick={() => window.location.href = signUpUrl}
+                          className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
+                        >
+                          {tPublic('tryRoundtable')}
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
+                          className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
+                        >
+                          {tPublic('learnMore')}
+                        </Button>
                       </div>
                     </div>
                   </div>
-                )
-              : (
-                  <>
-                    <ThreadTimeline
-                      timelineItems={timeline}
-                      scrollContainerId="public-chat-scroll-container"
-                      user={user || { name: t('user.defaultName'), image: null }}
-                      participants={participants}
-                      threadId={thread.id}
-                      feedbackByRound={feedbackByRound}
-                      isReadOnly={true}
-                      preSearches={preSearches}
-                    />
-
-                    <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">
-                      <div className="rounded-2xl sm:rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 sm:p-8 md:p-10 text-center space-y-4 sm:space-y-6">
-                        <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 mb-1 sm:mb-2">
-                          <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-                        </div>
-                        <div className="space-y-2 sm:space-y-3">
-                          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold">
-                            {tPublic('tryRoundtable')}
-                          </h3>
-                          <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-                            {tPublic('experiencePower')}
-                            {' '}
-                            {BRAND.displayName}
-                            {' '}
-                            {tPublic('description')}
-                          </p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
-                          <Button
-                            size="lg"
-                            onClick={() => window.location.href = signUpUrl}
-                            className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
-                          >
-                            {tPublic('tryRoundtable')}
-                            <ArrowRight className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="lg"
-                            onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
-                            className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
-                          >
-                            {tPublic('learnMore')}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-          </div>
+                </>
+              )}
         </div>
       </UnifiedErrorBoundary>
     </div>

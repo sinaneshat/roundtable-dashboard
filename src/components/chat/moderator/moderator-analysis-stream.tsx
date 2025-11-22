@@ -6,7 +6,6 @@ import type { StreamErrorType } from '@/api/core/enums';
 import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
-import { ChatLoading } from '@/components/chat/chat-loading';
 import { useAutoScroll, useBoolean } from '@/hooks/utils';
 import { hasAnalysisData, hasParticipantContent, hasRoundSummaryContent } from '@/lib/utils/analysis-utils';
 
@@ -265,9 +264,9 @@ function ModeratorAnalysisStreamComponent({
 
   const hasData = hasAnalysisData(displayData);
 
-  // Show loading indicator for PENDING/STREAMING analyses with no stream data yet
+  // Don't show internal loading - unified loading indicator handles this
   if ((analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return <ChatLoading text="Analyzing responses..." />;
+    return null;
   }
 
   // Don't render if no data

@@ -14,10 +14,10 @@ import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
-import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
+import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -524,7 +524,6 @@ export default function ChatThreadScreen({
   }, [selectedParticipants, threadActions]);
 
   // Unified scroll management using useChatScroll hook
-  // ✅ FIX: Pass currentParticipantIndex to trigger auto-scroll on participant turn-taking
   const { scrolledToAnalysesRef } = useChatScroll({
     messages,
     analyses,
@@ -536,7 +535,6 @@ export default function ChatThreadScreen({
 
   // Streaming loader state calculation
   const { showLoader, loadingDetails } = useFlowLoading({ mode: 'thread' });
-  const isAnalyzing = loadingDetails.isStreamingAnalysis;
 
   // Visual viewport positioning for mobile keyboard handling
   // Returns bottom offset to adjust for keyboard (0 when no keyboard, >0 when keyboard open)
@@ -631,7 +629,7 @@ export default function ChatThreadScreen({
         <div className="flex flex-col min-h-dvh relative">
           <div
             id="chat-scroll-container"
-            className="container max-w-3xl mx-auto px-4 md:px-6 pt-0 pb-[240px] flex-1"
+            className="container max-w-3xl mx-auto px-4 md:px-6 pt-0 pb-[140px] flex-1"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
@@ -683,64 +681,59 @@ export default function ChatThreadScreen({
               preSearches={preSearches}
             />
 
-            {showLoader && (
-              <div className="mt-8 sm:mt-12">
-                <StreamingParticipantsLoader
-                  participants={contextParticipants.map(p => ({
-                    id: p.id,
-                    modelId: p.modelId,
-                    role: p.role,
-                    customRoleId: p.customRoleId ?? undefined,
-                    priority: p.priority,
-                    settings: p.settings ?? undefined,
-                  }))}
-                  currentParticipantIndex={currentParticipantIndex}
-                  isAnalyzing={isAnalyzing}
-                />
-              </div>
-            )}
+            {/* Unified loading indicator - at bottom left of content */}
+            <UnifiedLoadingIndicator
+              showLoader={showLoader}
+              loadingDetails={loadingDetails}
+              preSearches={preSearches}
+            />
           </div>
+
+          {/* Gradient fade overlay - fixed at bottom of screen */}
+          <div className="fixed bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-20" />
 
           {/* Chat input container - sticky positioning with visual viewport support for keyboard */}
           <div
             ref={inputContainerRef}
-            className="sticky z-30 w-full will-change-[bottom] bg-background"
+            className="sticky z-30 w-full will-change-[bottom]"
             style={{
               bottom: `${keyboardOffset + 20}px`,
             }}
           >
-            <div className="container max-w-3xl mx-auto px-4 md:px-6">
-              <ChatInput
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handlePromptSubmit}
-                status={isRoundInProgress ? 'submitted' : 'ready'}
-                onStop={stopStreaming}
-                placeholder={t('input.placeholder')}
-                participants={selectedParticipants}
-                quotaCheckType="messages"
-                onRemoveParticipant={isRoundInProgress
-                  ? undefined
-                  : (participantId) => {
-                      if (selectedParticipants.length <= 1)
-                        return;
-                      removeParticipant(participantId);
-                      // ✅ REACT 19 PATTERN: Mark config changes
-                      actions.setHasPendingConfigChanges(true);
-                    }}
-                toolbar={(
-                  <ChatInputToolbarMenu
-                    selectedParticipants={selectedParticipants}
-                    allModels={allEnabledModels}
-                    onOpenModelModal={isModelModalOpen.onTrue}
-                    selectedMode={selectedMode || (thread.mode as ChatModeId)}
-                    onOpenModeModal={isModeModalOpen.onTrue}
-                    enableWebSearch={enableWebSearch}
-                    onWebSearchToggle={threadActions.handleWebSearchToggle}
-                    disabled={isRoundInProgress}
-                  />
-                )}
-              />
+            <div className="bg-background">
+              <div className="container max-w-3xl mx-auto px-4 md:px-6">
+                <ChatInput
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSubmit={handlePromptSubmit}
+                  status={isRoundInProgress ? 'submitted' : 'ready'}
+                  onStop={stopStreaming}
+                  placeholder={t('input.placeholder')}
+                  participants={selectedParticipants}
+                  quotaCheckType="messages"
+                  onRemoveParticipant={isRoundInProgress
+                    ? undefined
+                    : (participantId) => {
+                        if (selectedParticipants.length <= 1)
+                          return;
+                        removeParticipant(participantId);
+                        // ✅ REACT 19 PATTERN: Mark config changes
+                        actions.setHasPendingConfigChanges(true);
+                      }}
+                  toolbar={(
+                    <ChatInputToolbarMenu
+                      selectedParticipants={selectedParticipants}
+                      allModels={allEnabledModels}
+                      onOpenModelModal={isModelModalOpen.onTrue}
+                      selectedMode={selectedMode || (thread.mode as ChatModeId)}
+                      onOpenModeModal={isModeModalOpen.onTrue}
+                      enableWebSearch={enableWebSearch}
+                      onWebSearchToggle={threadActions.handleWebSearchToggle}
+                      disabled={isRoundInProgress}
+                    />
+                  )}
+                />
+              </div>
             </div>
           </div>
         </div>

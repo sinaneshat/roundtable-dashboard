@@ -2,19 +2,19 @@
 
 import { motion } from 'framer-motion';
 import {
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  ExternalLink,
-  FileText,
-  Hash,
+    ChevronDown,
+    ChevronUp,
+    Copy,
+    ExternalLink,
+    FileText,
+    Hash,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 
 import type { WebSearchResultItem } from '@/api/routes/chat/schema';
+import { webContentMarkdownComponents } from '@/components/markdown/unified-markdown-components';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -26,81 +26,6 @@ type WebSearchContentPreviewProps = {
   result: WebSearchResultItem;
   className?: string;
   defaultExpanded?: boolean;
-};
-
-// Custom markdown components for content rendering
-const markdownComponents: Partial<Components> = {
-  a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-primary hover:text-primary/80 underline decoration-primary/30 underline-offset-2 transition-colors inline-flex items-center gap-0.5"
-      {...props}
-    >
-      {children}
-      <ExternalLink className="size-2.5 opacity-50" />
-    </a>
-  ),
-  p: ({ children }: { children?: React.ReactNode }) => (
-    <p className="leading-relaxed mb-3 last:mb-0 text-sm">
-      {children}
-    </p>
-  ),
-  ul: ({ children }: { children?: React.ReactNode }) => (
-    <ul className="list-disc list-inside space-y-1 my-2 ml-2">
-      {children}
-    </ul>
-  ),
-  ol: ({ children }: { children?: React.ReactNode }) => (
-    <ol className="list-decimal list-inside space-y-1 my-2 ml-2">
-      {children}
-    </ol>
-  ),
-  li: ({ children }: { children?: React.ReactNode }) => (
-    <li className="text-sm text-foreground/90">
-      {children}
-    </li>
-  ),
-  code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) => {
-    if (inline) {
-      return (
-        <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-          {children}
-        </code>
-      );
-    }
-    return (
-      <code className="block bg-muted p-3 rounded-lg text-xs font-mono my-2 overflow-x-auto" {...props}>
-        {children}
-      </code>
-    );
-  },
-  blockquote: ({ children }: { children?: React.ReactNode }) => (
-    <blockquote className="border-l-4 border-primary/30 pl-4 py-1 my-3 italic text-foreground/80">
-      {children}
-    </blockquote>
-  ),
-  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-lg font-bold mt-4 mb-2 first:mt-0">{children}</h1>,
-  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0">{children}</h2>,
-  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-sm font-semibold mt-2 mb-1 first:mt-0">{children}</h3>,
-  table: ({ children }: { children?: React.ReactNode }) => (
-    <div className="overflow-x-auto my-3">
-      <table className="min-w-full border-collapse border border-border">
-        {children}
-      </table>
-    </div>
-  ),
-  th: ({ children }: { children?: React.ReactNode }) => (
-    <th className="border border-border bg-muted px-3 py-2 text-left text-xs font-semibold">
-      {children}
-    </th>
-  ),
-  td: ({ children }: { children?: React.ReactNode }) => (
-    <td className="border border-border px-3 py-2 text-sm">
-      {children}
-    </td>
-  ),
 };
 
 export function WebSearchContentPreview({
@@ -257,11 +182,11 @@ export function WebSearchContentPreview({
             <div className="p-4 rounded-lg bg-muted/10 border border-border/30 max-h-[500px] overflow-y-auto">
               {isMarkdown
                 ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <ReactMarkdown components={markdownComponents}>
-                        {content}
-                      </ReactMarkdown>
-                    </div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown components={webContentMarkdownComponents}>
+                      {content}
+                    </ReactMarkdown>
+                  </div>
                   )
                 : (
                     <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">

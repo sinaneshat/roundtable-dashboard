@@ -399,6 +399,28 @@ export function useMultiParticipantChat(
       new DefaultChatTransport({
         api: '/api/v1/chat',
         prepareSendMessagesRequest,
+        // ✅ RESUMABLE STREAMS: Configure resume endpoint for stream reconnection
+        // When resume: true, AI SDK calls this on mount to check for active streams
+        // Returns the GET endpoint that serves buffered SSE chunks from Cloudflare KV
+        prepareReconnectToStreamRequest: ({ id }) => {
+          // Guard: Don't attempt resume if no thread ID
+          // This prevents 404 errors on overview page where threadId is empty
+          if (!id || id.trim() === '') {
+            return {}; // AI SDK will skip resume attempt (no api property)
+          }
+
+          // Extract thread ID and construct stream ID for current participant
+          // Stream ID format: {threadId}_r{roundNumber}_p{participantIndex}
+          const roundNumber = currentRoundRef.current;
+          const participantIndex = currentIndexRef.current;
+          const streamId = `${id}_r${roundNumber}_p${participantIndex}`;
+
+          return {
+            // Resume endpoint serves buffered chunks from KV
+            api: `/api/v1/chat/threads/${id}/streams/${streamId}/resume`,
+            credentials: 'include', // Required for session auth
+          };
+        },
       }),
     [prepareSendMessagesRequest],
   );
@@ -416,6 +438,12 @@ export function useMultiParticipantChat(
   } = useChat({
     id: threadId,
     transport,
+    // ✅ RESUMABLE STREAMS: Enable automatic stream resumption after page reload
+    // ONLY when we have a valid threadId (prevents 404s on overview page)
+    // When true, useChat automatically checks for and reconnects to active streams on mount
+    // Backend buffers SSE chunks to Cloudflare KV via consumeSseStream callback
+    // GET endpoint at /api/v1/chat/{threadId}/stream serves buffered chunks
+    resume: !!threadId && threadId.trim() !== '',
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -755,12 +783,14 @@ export function useMultiParticipantChat(
     // Subscription can pass participants directly from store.getState()
     const currentParticipants = participantsOverride || participantsRef.current;
 
-    // Guard: Prevent concurrent rounds - check both manual flag AND AI SDK status
-    if (isExplicitlyStreaming || status !== AiSdkStatuses.READY) {
-      // ✅ DEBUG: Log when startRound returns early due to status
+    // Guard: Prevent concurrent rounds - only check isExplicitlyStreaming
+    // ✅ CRITICAL FIX: Removed status !== AiSdkStatuses.READY check
+    // The AI SDK status may not be 'ready' immediately when threadId changes,
+    // but store subscription guards ensure we have valid messages/participants
+    // This was causing 30s timeouts on thread creation
+    if (isExplicitlyStreaming) {
       // eslint-disable-next-line no-console -- Debug logging for streaming issues
-      console.warn('[startRound] Blocked - AI SDK not ready', {
-        status,
+      console.warn('[startRound] Blocked - already streaming', {
         isExplicitlyStreaming,
         threadId: callbackRefs.threadId.current,
         participantCount: currentParticipants.length,
@@ -841,8 +871,9 @@ export function useMultiParticipantChat(
     requestAnimationFrame(() => {
       isTriggeringRef.current = false;
     });
-  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage, status, callbackRefs.threadId]);
+  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage, callbackRefs.threadId]);
   // Note: participantsOverride comes from caller, not deps
+  // Note: status removed from deps since we no longer check it in startRound
 
   /**
    * Send a user message and start a new round

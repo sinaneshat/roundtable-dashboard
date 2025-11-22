@@ -1,7 +1,6 @@
 'use client';
 
-import { Loader2, Search } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { Search } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
@@ -10,7 +9,6 @@ import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
@@ -53,7 +51,6 @@ function PreSearchStreamComponent({
   onStreamComplete,
   onStreamStart,
 }: PreSearchStreamProps) {
-  const t = useTranslations('chat.preSearch');
   const is409Conflict = useBoolean(false);
 
   // Local streaming state
@@ -321,51 +318,9 @@ function PreSearchStreamComponent({
     return null;
   }
 
-  // Progressive Streaming Stages - Show clear stages like Tavily
-  const getStreamingStage = () => {
-    const hasQueries = displayData?.queries && displayData.queries.length > 0;
-    const hasResults = displayData?.results && displayData.results.length > 0;
-    const queriesCount = displayData?.queries?.length || 0;
-    const resultsCount = displayData?.results?.length || 0;
-
-    if (!hasQueries) {
-      return { stage: 'plan', label: t('steps.generatingQueries'), progress: 0 };
-    }
-    if (!hasResults) {
-      return { stage: 'search', label: t('steps.executingSearch'), progress: queriesCount > 0 ? 33 : 0 };
-    }
-    if (hasResults && resultsCount < queriesCount) {
-      return {
-        stage: 'extracting',
-        label: t('steps.extractingContent'),
-        progress: 33 + ((resultsCount / queriesCount) * 34),
-      };
-    }
-    return { stage: 'answer', label: t('steps.generatingAnswer'), progress: 67 };
-  };
-
-  const streamingStage = getStreamingStage();
-
-  // Show loading indicator for PENDING/STREAMING with no stream data yet
+  // Don't show internal loading - unified loading indicator handles this
   if ((preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return (
-      <div className="flex flex-col gap-3 py-3">
-        <div className="flex items-center gap-2">
-          <Loader2 className="size-4 text-primary animate-spin" />
-          <span className="text-sm font-medium text-foreground">{streamingStage.label}</span>
-        </div>
-        <Progress value={streamingStage.progress} className="h-1.5" />
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Stage:</span>
-          <Badge variant="outline" className="text-xs">
-            {streamingStage.stage === 'plan' && 'Generating Plan'}
-            {streamingStage.stage === 'search' && 'Searching Web'}
-            {streamingStage.stage === 'extracting' && 'Extracting Content'}
-            {streamingStage.stage === 'answer' && 'Generating Summary'}
-          </Badge>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Don't render if no data
@@ -446,9 +401,6 @@ function PreSearchStreamComponent({
                       {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
                     </Badge>
                   )}
-                  {isStreamingNow && !hasResult && (
-                    <Loader2 className="size-3 animate-spin text-primary/60" />
-                  )}
                   {hasResult && searchResult.responseTime && (
                     <Badge variant="outline" className="text-xs text-muted-foreground">
                       {Math.round(searchResult.responseTime)}
@@ -457,13 +409,6 @@ function PreSearchStreamComponent({
                   )}
                 </div>
               </div>
-
-              {/* Result count or searching indicator */}
-              {!hasResult && (
-                <p className="text-xs text-muted-foreground pl-6">
-                  {t('steps.searchingDesc')}
-                </p>
-              )}
               {hasResult && (
                 <p className="text-xs text-muted-foreground pl-6">
                   {searchResult.results.length}
