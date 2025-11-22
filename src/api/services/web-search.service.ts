@@ -25,7 +25,7 @@
  * @module api/services/web-search
  */
 
-import { generateId, generateText, streamObject, streamText } from 'ai';
+import { generateId, generateObject, generateText, streamObject, streamText } from 'ai';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core/ai-models';
@@ -142,16 +142,23 @@ export function streamSearchQuery(
     initializeOpenRouter(env);
     const client = openRouterService.getClient();
 
+    const modelId = AIModels.WEB_SEARCH;
+
     // ✅ AI SDK v5: streamObject for gradual multi-query generation
     // Pattern from /src/api/routes/chat/handlers/analysis.handler.ts:91
     // ✅ MULTI-QUERY: Now uses MultiQueryGenerationSchema for dynamic query count
     return streamObject({
-      model: client.chat(AIModels.WEB_SEARCH),
+      model: client.chat(modelId),
       schema: MultiQueryGenerationSchema, // ✅ UPDATED: Multi-query schema
       mode: 'json', // ✅ CRITICAL: Force JSON mode for OpenRouter compatibility
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3, // Increased retries for better reliability
+      onFinish: ({ error }) => {
+        if (error && logger) {
+          logger.error('Stream generation error', { error: normalizeError(error) });
+        }
+      },
     });
   } catch (error) {
     // ✅ LOG: Query generation failure
@@ -169,6 +176,66 @@ export function streamSearchQuery(
         errorType: 'external_service',
         service: 'openrouter',
         operation: 'query_generation',
+      },
+    );
+  }
+}
+
+/**
+ * Non-streaming search query generation (fallback)
+ *
+ * Uses generateObject for single-shot query generation when streaming fails.
+ * More reliable than streaming but doesn't provide progressive updates.
+ *
+ * @param userMessage - User's question to generate query for
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger for error tracking
+ * @returns Generated query result
+ * @throws HttpException with error context if query generation fails
+ */
+export async function generateSearchQuery(
+  userMessage: string,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+) {
+  try {
+    initializeOpenRouter(env);
+    const client = openRouterService.getClient();
+
+    const modelId = AIModels.WEB_SEARCH;
+
+    // ✅ AI SDK v5: generateObject for single-shot generation (fallback)
+    const result = await generateObject({
+      model: client.chat(modelId),
+      schema: MultiQueryGenerationSchema,
+      mode: 'json',
+      system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
+      prompt: buildWebSearchQueryPrompt(userMessage),
+      maxRetries: 3,
+    });
+
+    return result.object;
+  } catch (error) {
+    // ✅ DEBUG: Log the actual error details
+    console.error('[Web Search] Non-streaming generation failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    // ✅ LOG: Query generation failure
+    if (logger) {
+      logger.error('Search query generation failed (non-streaming)', {
+        error: normalizeError(error),
+        userMessage: userMessage.substring(0, 100),
+      });
+    }
+
+    // ✅ ERROR CONTEXT: External service error for AI query generation
+    throw createError.internal(
+      'Failed to generate search query',
+      {
+        errorType: 'external_service',
+        service: 'openrouter',
+        operation: 'query_generation_sync',
       },
     );
   }

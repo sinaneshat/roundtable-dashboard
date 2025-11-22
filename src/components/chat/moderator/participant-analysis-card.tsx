@@ -96,7 +96,7 @@ export function ParticipantAnalysisCard({ analysis, rank, isStreaming = false }:
                 <li className="flex items-start gap-1.5">
                   <span className="text-green-500 flex-shrink-0 text-xs mt-0.5">✓</span>
                   <span className="flex-1 leading-relaxed text-xs">
-                    <TypingText text={pro} speed={5} delay={50 * idx} enabled={isStreaming} />
+                    <TypingText text={pro} speed={0} delay={0} enabled={isStreaming} />
                   </span>
                 </li>
               </FadeInText>
@@ -126,7 +126,7 @@ export function ParticipantAnalysisCard({ analysis, rank, isStreaming = false }:
                 <li className="flex items-start gap-1.5">
                   <span className="text-orange-500 flex-shrink-0 text-xs mt-0.5">!</span>
                   <span className="flex-1 leading-relaxed text-xs">
-                    <TypingText text={con} speed={5} delay={50 * idx} enabled={isStreaming} />
+                    <TypingText text={con} speed={0} delay={0} enabled={isStreaming} />
                   </span>
                 </li>
               </FadeInText>
@@ -146,11 +146,11 @@ export function ParticipantAnalysisCard({ analysis, rank, isStreaming = false }:
       </div>
       {analysis.summary && (
         <div className="space-y-1">
-          <FadeInText delay={0.5}>
+          <FadeInText delay={0.2}>
             <h4 className="text-xs font-medium text-muted-foreground">{t('summary')}</h4>
           </FadeInText>
           <p className="text-xs text-foreground/80 leading-relaxed">
-            <TypingText text={analysis.summary} speed={8} delay={550} enabled={isStreaming} />
+            <TypingText text={analysis.summary} speed={0} delay={0} enabled={isStreaming} />
           </p>
         </div>
       )}

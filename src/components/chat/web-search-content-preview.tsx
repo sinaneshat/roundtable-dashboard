@@ -2,12 +2,12 @@
 
 import { motion } from 'framer-motion';
 import {
-    ChevronDown,
-    ChevronUp,
-    Copy,
-    ExternalLink,
-    FileText,
-    Hash,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  FileText,
+  Hash,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -182,11 +182,11 @@ export function WebSearchContentPreview({
             <div className="p-4 rounded-lg bg-muted/10 border border-border/30 max-h-[500px] overflow-y-auto">
               {isMarkdown
                 ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <ReactMarkdown components={webContentMarkdownComponents}>
-                      {content}
-                    </ReactMarkdown>
-                  </div>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown components={webContentMarkdownComponents}>
+                        {content}
+                      </ReactMarkdown>
+                    </div>
                   )
                 : (
                     <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">

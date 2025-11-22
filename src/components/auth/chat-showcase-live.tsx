@@ -279,7 +279,7 @@ export function ChatShowcaseLive() {
       <div>
         <ThreadTimeline
           timelineItems={timelineItems}
-          scrollContainerId="chat-scroll-container"
+          scrollContainerId="main-scroll-container"
           user={MOCK_USER}
           participants={MOCK_PARTICIPANTS.map((p, idx) => ({
             id: `participant-${idx}`,

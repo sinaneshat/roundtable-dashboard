@@ -24,7 +24,7 @@ import {
   createMockUserMessage,
 } from './test-factories';
 
-describe('Web Search Toggle Race Conditions', () => {
+describe('web Search Toggle Race Conditions', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -106,9 +106,9 @@ describe('Web Search Toggle Race Conditions', () => {
       // The store should have marked pre-search as COMPLETE (or FAILED)
       // And sent the message
       const updatedPreSearch = store.getState().preSearches.find((ps: { roundNumber: number }) => ps.roundNumber === 1);
-      
+
       expect(updatedPreSearch?.status).toBe(AnalysisStatuses.COMPLETE);
-      
+
       // Note: hasSentPendingMessage won't be true because the Provider effect isn't running in this unit test.
       // But in the real app, the Provider observes the status change and triggers the message.
     });

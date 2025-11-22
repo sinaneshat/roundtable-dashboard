@@ -170,6 +170,7 @@ function extractErrorMetadata(
   finishReason: string,
   usage?: { inputTokens?: number; outputTokens?: number },
   text?: string,
+  reasoning?: string,
 ): ErrorMetadata {
   return ErrorMetadataService.extractErrorMetadata({
     providerMetadata,
@@ -177,6 +178,7 @@ function extractErrorMetadata(
     finishReason,
     usage,
     text,
+    reasoning,
   });
 }
 
@@ -228,12 +230,16 @@ export async function saveStreamedMessage(
     const usageData = finishResult.usage || (finishResult as { totalUsage?: { inputTokens?: number; outputTokens?: number } }).totalUsage;
 
     // Extract error metadata
+    // ✅ CRITICAL FIX: Pass reasoning to error detection for o1/o3 models
+    // These models output content as reasoning instead of text, which was causing
+    // false empty_response errors when text was empty but reasoning had content
     const errorMetadata = extractErrorMetadata(
       finishResult.providerMetadata,
       finishResult.response,
       finishResult.finishReason,
       usageData,
       text,
+      reasoningText || undefined,
     );
 
     // Build parts[] array (AI SDK v5 pattern)

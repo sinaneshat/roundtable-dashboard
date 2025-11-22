@@ -44,6 +44,66 @@ export function simpleOptimizeQuery(userQuery: string): string {
   }
 
   // ============================================================================
+  // STEP 0: Handle Long Instructional Messages
+  // ============================================================================
+  // Detect if input is a long instructional message (not a search query)
+  // These are typically > 200 chars or > 30 words and contain instruction patterns
+  const initialWordCount = optimized.split(/\s+/).length;
+  const isLongMessage = optimized.length > 200 || initialWordCount > 30;
+
+  // Detect instructional patterns
+  const instructionPatterns = /\b(?:continue|fix|make sure|ensure|always|never|don't|do not|must|should not|avoid|follow|learn|refactor|clean up|update|migrate|check|verify|run|test|write|implement|add|remove|delete|create)\b/i;
+  const hasInstructionPatterns = instructionPatterns.test(optimized);
+
+  if (isLongMessage && hasInstructionPatterns) {
+    // Extract technical terms from the long instructional message
+    const technicalTerms: string[] = [];
+
+    // Extract capitalized words (likely proper nouns/technologies)
+    const capitalizedWords = optimized.match(/\b[A-Z][a-zA-Z]+(?:\.[a-zA-Z]+)?\b/g) || [];
+    technicalTerms.push(...capitalizedWords);
+
+    // Extract common technical terms (case-insensitive)
+    const techTermPatterns = [
+      /\b(typescript|javascript|eslint|react|vue|angular|next\.?js|node\.?js|python|java|rust|go)\b/gi,
+      /\b(api|rest|graphql|database|sql|nosql|mongodb|postgres|mysql)\b/gi,
+      /\b(test|tests|testing|unit|integration|e2e|jest|vitest|cypress)\b/gi,
+      /\b(type|types|interface|interfaces|enum|enums|schema|schemas|zod)\b/gi,
+      /\b(error|errors|bug|bugs|fix|fixes|issue|issues)\b/gi,
+      /\b(pattern|patterns|practice|practices|convention|conventions)\b/gi,
+      /\b(store|state|hook|hooks|component|components|service|services)\b/gi,
+    ];
+
+    techTermPatterns.forEach((pattern) => {
+      const matches = optimized.match(pattern) || [];
+      technicalTerms.push(...matches);
+    });
+
+    // Deduplicate and normalize
+    const uniqueTerms = [...new Set(technicalTerms.map(t => t.toLowerCase()))];
+
+    // If we found technical terms, use them as the query
+    if (uniqueTerms.length >= 2) {
+      // Take top 8 terms max for a focused query
+      const queryTerms = uniqueTerms.slice(0, 8);
+      return `${queryTerms.join(' ')} best practices`;
+    }
+
+    // Fallback: extract any remaining meaningful words
+    // Remove all instruction words and filler, then take first 10 words
+    const stripped = optimized
+      .replace(/\b(continue|fix|make sure|ensure|always|never|don't|do not|must|should not|avoid|follow|learn|refactor|clean up|update|migrate|check|verify|run|write|implement|add|remove|delete|create|and|or|the|a|an|to|for|in|on|at|of|with|that|this|these|those|any|all|no|not|is|are|was|were|be|been|being|have|has|had|will|would|could|should|can|may|might)\b/gi, ' ')
+      .replace(/[^a-z0-9\s.-]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const words = stripped.split(/\s+/).filter(w => w.length > 2);
+    if (words.length > 0) {
+      return words.slice(0, 10).join(' ');
+    }
+  }
+
+  // ============================================================================
   // STEP 1: Profanity and Informal Slang Removal
   // ============================================================================
   // Remove profanity first to ensure clean output
@@ -325,4 +385,200 @@ export function isOptimizedQuery(query: string): boolean {
   }
 
   return true;
+}
+
+/**
+ * Check if a query is suitable for web search
+ *
+ * Detects non-searchable queries to skip AI generation and use fallback:
+ * - Greetings (hi, hello, hey)
+ * - Commands without context (do this, run that)
+ * - Single filler words (ok, yes, no)
+ * - Very short queries with no meaningful content
+ *
+ * @param query - User's input query
+ * @returns true if query is suitable for web search, false otherwise
+ *
+ * @example
+ * ```ts
+ * isQuerySearchable('say hi, 1 word onyl') // false
+ * isQuerySearchable('React hooks best practices') // true
+ * isQuerySearchable('hi') // false
+ * isQuerySearchable('TypeScript') // true
+ * ```
+ */
+export function isQuerySearchable(query: string): boolean {
+  const trimmed = query.trim().toLowerCase();
+
+  // Empty or very short (less than 2 chars)
+  if (!trimmed || trimmed.length < 2) {
+    return false;
+  }
+
+  // Common greetings - never searchable
+  const greetings = new Set(['hi', 'hello', 'hey', 'yo', 'sup', 'howdy', 'hiya', 'hola', 'bonjour']);
+  if (greetings.has(trimmed)) {
+    return false;
+  }
+
+  // Single common words that aren't searchable
+  const nonSearchableWords = new Set([
+    'ok',
+    'okay',
+    'yes',
+    'no',
+    'sure',
+    'thanks',
+    'thank',
+    'thx',
+    'please',
+    'pls',
+    'help',
+    'hmm',
+    'um',
+    'uh',
+    'eh',
+    'ah',
+  ]);
+  if (nonSearchableWords.has(trimmed)) {
+    return false;
+  }
+
+  // Define filler/command words that don't contribute to search meaning
+  const fillerWords = new Set([
+    'say',
+    'tell',
+    'give',
+    'show',
+    'do',
+    'run',
+    'make',
+    'just',
+    'let',
+    'get',
+    'me',
+    'i',
+    'my',
+    'you',
+    'your',
+    'the',
+    'a',
+    'an',
+    'it',
+    'this',
+    'that',
+    'word',
+    'words',
+    'only',
+    'onyl',
+    'one',
+    'please',
+    'pls',
+    'now',
+    'here',
+    'something',
+    'anything',
+    'nothing',
+    'thing',
+    'stuff',
+    'things',
+    'want',
+    'need',
+    'like',
+    'know',
+    'think',
+    'go',
+    'going',
+    'be',
+    'am',
+    'is',
+    'are',
+    'can',
+    'could',
+    'would',
+    'should',
+    'will',
+    'shall',
+    'may',
+    'might',
+    'to',
+    'for',
+    'of',
+    'in',
+    'on',
+    'at',
+    'by',
+    'with',
+    'from',
+    'about',
+    'and',
+    'or',
+    'but',
+    'so',
+    'if',
+    'then',
+    'else',
+    'when',
+    'where',
+    'what',
+    'how',
+    'why',
+    'who',
+  ]);
+
+  // Split into words and remove punctuation
+  const words = trimmed
+    .replace(/[,;:.!?'"]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 0);
+
+  // Find meaningful words (not in filler list and > 2 chars, OR is a known tech term)
+  const techTerms = new Set([
+    'ai',
+    'ml',
+    'api',
+    'css',
+    'sql',
+    'aws',
+    'gcp',
+    'npm',
+    'git',
+    'cli',
+    'gui',
+    'ui',
+    'ux',
+    'db',
+    'os',
+    'vm',
+    'ci',
+    'cd',
+    'qa',
+    'js',
+    'ts',
+    'py',
+    'go',
+    'c',
+  ]);
+
+  const meaningfulWords = words.filter((w) => {
+    // Tech terms are always meaningful
+    if (techTerms.has(w)) {
+      return true;
+    }
+    // Otherwise, must not be filler and > 2 chars
+    return !fillerWords.has(w) && w.length > 2;
+  });
+
+  // Check for capitalized words (likely proper nouns/technologies)
+  const capitalizedInOriginal = query.match(/\b[A-Z][a-zA-Z]+\b/g) || [];
+  const hasTechTerms = capitalizedInOriginal.some(word =>
+    !fillerWords.has(word.toLowerCase())
+    && !greetings.has(word.toLowerCase())
+    && !nonSearchableWords.has(word.toLowerCase()),
+  );
+
+  // Query is searchable if:
+  // 1. Has at least one meaningful word, OR
+  // 2. Has capitalized words that look like tech terms
+  return meaningfulWords.length > 0 || hasTechTerms;
 }

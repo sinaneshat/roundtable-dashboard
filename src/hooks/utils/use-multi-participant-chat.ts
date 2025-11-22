@@ -68,6 +68,10 @@ type UseMultiParticipantChatOptions = {
   onPreSearchComplete?: (data: { successfulSearches: number; totalResults: number }) => void;
   /** Callback when pre-search encounters an error */
   onPreSearchError?: (data: { error: string }) => void;
+  /** Animation tracking: wait for animation completion */
+  waitForAnimation?: (participantIndex: number) => Promise<void>;
+  /** Animation tracking: clear all pending animations */
+  clearAnimations?: () => void;
 };
 
 /**
@@ -85,6 +89,11 @@ type UseMultiParticipantChatReturn = {
   startRound: (participantsOverride?: ChatParticipant[]) => void;
   /** Whether participants are currently streaming responses */
   isStreaming: boolean;
+  /**
+   * Ref to check streaming state synchronously (for use in async callbacks/microtasks)
+   * Avoids race conditions between store state and hook state
+   */
+  isStreamingRef: React.MutableRefObject<boolean>;
   /** The index of the currently active participant */
   currentParticipantIndex: number;
   /** Any error that occurred during the chat */
@@ -174,6 +183,8 @@ export function useMultiParticipantChat(
     onPreSearchResult,
     onPreSearchComplete,
     onPreSearchError,
+    waitForAnimation,
+    clearAnimations,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -216,6 +227,10 @@ export function useMultiParticipantChat(
   // Simple participant state - index-based iteration
   const [currentParticipantIndex, setCurrentParticipantIndex] = useState(0);
   const [isExplicitlyStreaming, setIsExplicitlyStreaming] = useState(false);
+
+  // ✅ RACE CONDITION FIX: Ref to track streaming state for synchronous checks in microtasks
+  // This prevents race conditions where store.isStreaming and hook.isExplicitlyStreaming are out of sync
+  const isStreamingRef = useRef<boolean>(false);
 
   // Participant refs for round stability
   const participantsRef = useRef<ChatParticipant[]>(participants);
@@ -706,14 +721,25 @@ export function useMultiParticipantChat(
         markAsResponded(responseKey);
       }
 
-      // CRITICAL: Wait for browser paint before triggering next participant
+      // CRITICAL: Wait for animation to complete before triggering next participant
+      // This ensures the typing animation finishes before starting the next one
       // flushSync above ensures React commits the metadata update
-      // requestAnimationFrame ensures the browser paints the update
+      // waitForAnimation resolves when ModelMessageCard signals animation complete
       // THEN we trigger the next participant
-      // This prevents the second participant from showing before the first participant's metadata is visible
-      requestAnimationFrame(() => {
+      const triggerWithAnimationWait = async () => {
+        // Wait for browser paint first
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        // Wait for animation to complete (resolves immediately if no animation registered)
+        if (waitForAnimation) {
+          await waitForAnimation(currentIndex);
+        }
+
+        // Now trigger next participant
         triggerNextParticipantWithRefs();
-      });
+      };
+
+      triggerWithAnimationWait();
     },
 
     /**
@@ -848,6 +874,7 @@ export function useMultiParticipantChat(
     setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
     setCurrentRound(roundNumber);
     resetErrorTracking();
+    clearAnimations?.(); // Clear any pending animations from previous round
 
     // React 18+ automatically batches updates, no need for flushSync here
     // State updates will be committed synchronously within this callback
@@ -871,7 +898,7 @@ export function useMultiParticipantChat(
     requestAnimationFrame(() => {
       isTriggeringRef.current = false;
     });
-  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage, callbackRefs.threadId]);
+  }, [messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, callbackRefs.threadId]);
   // Note: participantsOverride comes from caller, not deps
   // Note: status removed from deps since we no longer check it in startRound
 
@@ -962,6 +989,7 @@ export function useMultiParticipantChat(
       setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
       setCurrentRound(newRoundNumber);
       resetErrorTracking();
+      clearAnimations?.(); // Clear any pending animations from previous round
 
       // CRITICAL FIX: Use flushSync to ensure state updates are committed synchronously
       // before the API call is made. This prevents the first participant's response
@@ -993,7 +1021,7 @@ export function useMultiParticipantChat(
         isTriggeringRef.current = false;
       });
     },
-    [participants, status, aiSendMessage, messages, resetErrorTracking, isExplicitlyStreaming, callbackRefs.threadId],
+    [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming, callbackRefs.threadId],
   );
 
   /**
@@ -1076,6 +1104,7 @@ export function useMultiParticipantChat(
     setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
 
     resetErrorTracking();
+    clearAnimations?.(); // Clear any pending animations before retry
     isTriggeringRef.current = false;
 
     // STEP 5: Send message to start regeneration (as if user just sent the message)
@@ -1085,7 +1114,7 @@ export function useMultiParticipantChat(
     sendMessage(userPromptText);
     // Note: callbackRefs not in deps - we use callbackRefs.onRetry.current to always get latest value
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, sendMessage, status, setMessages, resetErrorTracking]);
+  }, [messages, sendMessage, status, setMessages, resetErrorTracking, clearAnimations]);
 
   // ✅ RESUMABLE STREAMS: Stop functionality removed
   // Stream resumption is incompatible with abort signals
@@ -1099,11 +1128,16 @@ export function useMultiParticipantChat(
   // ✅ ENUM PATTERN: Use AiSdkStatuses.READY instead of hardcoded 'ready'
   const isActuallyStreaming = isExplicitlyStreaming || status !== AiSdkStatuses.READY;
 
+  // ✅ RACE CONDITION FIX: Keep ref in sync with streaming state
+  // This allows synchronous checks in microtasks to use the latest value
+  isStreamingRef.current = isActuallyStreaming;
+
   return {
     messages,
     sendMessage,
     startRound,
     isStreaming: isActuallyStreaming,
+    isStreamingRef,
     currentParticipantIndex,
     error: chatError || null,
     retry,

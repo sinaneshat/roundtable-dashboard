@@ -15,6 +15,12 @@ type TypingTextProps = {
 /**
  * Reusable typing text animation component
  * Animates text character by character with configurable speed
+ *
+ * Speed options:
+ * - speed={0}: Instant display (for real streaming - matches actual stream speed)
+ * - speed={1-10}: Fast typing (for streaming UI elements)
+ * - speed={10-30}: Normal typing (for demos/showcases)
+ *
  * Default delay of 250ms ensures parent element is mounted and visible before typing starts
  */
 export function TypingText({
@@ -29,8 +35,10 @@ export function TypingText({
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    if (!enabled) {
+    // If not enabled or speed is 0, display instantly
+    if (!enabled || speed === 0) {
       setDisplayedText(text);
+      setCurrentIndex(text.length);
       onComplete?.();
       return undefined;
     }
@@ -65,7 +73,7 @@ export function TypingText({
   return (
     <span className={className}>
       {displayedText}
-      {enabled && currentIndex < text.length && (
+      {enabled && speed > 0 && currentIndex < text.length && (
         <motion.span
           className="inline-block w-0.5 h-[1em] ml-0.5 bg-current align-middle"
           animate={{ opacity: [0, 1, 0] }}

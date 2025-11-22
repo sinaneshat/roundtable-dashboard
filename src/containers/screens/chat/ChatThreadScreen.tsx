@@ -528,7 +528,7 @@ export default function ChatThreadScreen({
     messages,
     analyses,
     isStreaming,
-    scrollContainerId: 'chat-scroll-container',
+    scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
     currentParticipantIndex,
   });
@@ -626,14 +626,13 @@ export default function ChatThreadScreen({
   return (
     <>
       <UnifiedErrorBoundary context="chat">
-        <div className="flex flex-col min-h-dvh relative">
+        <div className="flex flex-col relative flex-1 min-h-0">
           <div
-            id="chat-scroll-container"
-            className="container max-w-3xl mx-auto px-4 md:px-6 pt-0 pb-[140px] flex-1"
+            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4 flex-1"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
-              scrollContainerId="chat-scroll-container"
+              scrollContainerId="main-scroll-container"
               user={user}
               participants={contextParticipants}
               threadId={thread.id}
@@ -689,51 +688,50 @@ export default function ChatThreadScreen({
             />
           </div>
 
-          {/* Gradient fade overlay - fixed at bottom of screen */}
-          <div className="fixed bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-20" />
+          {/* Bottom shadow gradient - creates depth effect */}
+          <div
+            className="sticky bottom-0 left-0 right-0 h-8 z-20 pointer-events-none bg-gradient-to-t from-black/40 to-transparent"
+            style={{ marginBottom: `-${keyboardOffset}px` }}
+          />
 
-          {/* Chat input container - sticky positioning with visual viewport support for keyboard */}
+          {/* Chat input - sticky at bottom */}
           <div
             ref={inputContainerRef}
-            className="sticky z-30 w-full will-change-[bottom]"
-            style={{
-              bottom: `${keyboardOffset + 20}px`,
-            }}
+            className="sticky z-30 bg-gradient-to-t from-background via-background to-transparent pt-10"
+            style={{ bottom: `${keyboardOffset + 16}px` }}
           >
-            <div className="bg-background">
-              <div className="container max-w-3xl mx-auto px-4 md:px-6">
-                <ChatInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onSubmit={handlePromptSubmit}
-                  status={isRoundInProgress ? 'submitted' : 'ready'}
-                  onStop={stopStreaming}
-                  placeholder={t('input.placeholder')}
-                  participants={selectedParticipants}
-                  quotaCheckType="messages"
-                  onRemoveParticipant={isRoundInProgress
-                    ? undefined
-                    : (participantId) => {
-                        if (selectedParticipants.length <= 1)
-                          return;
-                        removeParticipant(participantId);
-                        // ✅ REACT 19 PATTERN: Mark config changes
-                        actions.setHasPendingConfigChanges(true);
-                      }}
-                  toolbar={(
-                    <ChatInputToolbarMenu
-                      selectedParticipants={selectedParticipants}
-                      allModels={allEnabledModels}
-                      onOpenModelModal={isModelModalOpen.onTrue}
-                      selectedMode={selectedMode || (thread.mode as ChatModeId)}
-                      onOpenModeModal={isModeModalOpen.onTrue}
-                      enableWebSearch={enableWebSearch}
-                      onWebSearchToggle={threadActions.handleWebSearchToggle}
-                      disabled={isRoundInProgress}
-                    />
-                  )}
-                />
-              </div>
+            <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+              <ChatInput
+                value={inputValue}
+                onChange={setInputValue}
+                onSubmit={handlePromptSubmit}
+                status={isRoundInProgress ? 'submitted' : 'ready'}
+                onStop={stopStreaming}
+                placeholder={t('input.placeholder')}
+                participants={selectedParticipants}
+                quotaCheckType="messages"
+                onRemoveParticipant={isRoundInProgress
+                  ? undefined
+                  : (participantId) => {
+                      if (selectedParticipants.length <= 1)
+                        return;
+                      removeParticipant(participantId);
+                      // ✅ REACT 19 PATTERN: Mark config changes
+                      actions.setHasPendingConfigChanges(true);
+                    }}
+                toolbar={(
+                  <ChatInputToolbarMenu
+                    selectedParticipants={selectedParticipants}
+                    allModels={allEnabledModels}
+                    onOpenModelModal={isModelModalOpen.onTrue}
+                    selectedMode={selectedMode || (thread.mode as ChatModeId)}
+                    onOpenModeModal={isModeModalOpen.onTrue}
+                    enableWebSearch={enableWebSearch}
+                    onWebSearchToggle={threadActions.handleWebSearchToggle}
+                    disabled={isRoundInProgress}
+                  />
+                )}
+              />
             </div>
           </div>
         </div>

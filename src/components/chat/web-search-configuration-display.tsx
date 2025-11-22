@@ -89,7 +89,7 @@ export function WebSearchConfigurationDisplay({
             </div>
           </FadeInText>
           <div className="text-sm text-foreground/80 leading-relaxed">
-            <TypingText text={searchPlan} speed={15} delay={100} enabled={isStreamingPlan} />
+            <TypingText text={searchPlan} speed={0} delay={0} enabled={isStreamingPlan} />
           </div>
         </div>
       )}

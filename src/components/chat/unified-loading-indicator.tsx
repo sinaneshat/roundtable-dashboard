@@ -9,6 +9,43 @@ import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 import { EncryptedText } from '../ui/encrypted-text';
 
+// Default empty array for preSearches prop to avoid unstable default
+const EMPTY_PRESEARCHES: StoredPreSearch[] = [];
+
+/**
+ * Inner component that cycles through messages
+ * Separated to allow React to reset state when messageSet changes via key prop
+ */
+function CyclingMessage({ messages }: { messages: string[] }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const currentMessage = messages[currentIndex] || 'Processing...';
+
+  // Cycle through messages every 2.5 seconds
+  useEffect(() => {
+    if (messages.length <= 1) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCurrentIndex(prev => (prev + 1) % messages.length);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <EncryptedText
+      text={currentMessage}
+      className="font-medium"
+      revealDelayMs={30}
+      flipDelayMs={40}
+      encryptedClassName="text-muted-foreground/40"
+      revealedClassName="text-muted-foreground"
+      continuous
+    />
+  );
+}
+
 /**
  * Animated bouncing dots for loading indicator
  */
@@ -64,7 +101,7 @@ export type UnifiedLoadingIndicatorProps = {
 export function UnifiedLoadingIndicator({
   showLoader,
   loadingDetails,
-  preSearches = [],
+  preSearches = EMPTY_PRESEARCHES,
 }: UnifiedLoadingIndicatorProps) {
   const t = useTranslations('chat.streaming');
 
@@ -109,25 +146,8 @@ export function UnifiedLoadingIndicator({
     return ['Processing...'];
   }, [loadingDetails, hasActivePreSearch, t]);
 
-  // Cycle through messages
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-  const currentMessage = messageSet[currentMessageIndex] || messageSet[0] || 'Processing...';
-
-  // Reset message index when message set changes
-  useEffect(() => {
-    setCurrentMessageIndex(0);
-  }, [messageSet]);
-
-  // Cycle through messages every 2.5 seconds
-  useEffect(() => {
-    if (messageSet.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setCurrentMessageIndex(prev => (prev + 1) % messageSet.length);
-    }, 2500);
-
-    return () => clearInterval(interval);
-  }, [messageSet]);
+  // Create a stable key for the message set to detect changes
+  const messageSetKey = useMemo(() => messageSet.join('|'), [messageSet]);
 
   // Determine if we should show the indicator
   const shouldShow = showLoader || hasActivePreSearch;
@@ -146,16 +166,8 @@ export function UnifiedLoadingIndicator({
       >
         <div className="flex items-center gap-3 text-sm">
           <LoadingDots />
-          <EncryptedText
-            key={currentMessage}
-            text={currentMessage}
-            className="font-medium"
-            revealDelayMs={30}
-            flipDelayMs={40}
-            encryptedClassName="text-muted-foreground/40"
-            revealedClassName="text-muted-foreground"
-            continuous
-          />
+          {/* Key ensures component remounts and resets cycling when message set changes */}
+          <CyclingMessage key={messageSetKey} messages={messageSet} />
         </div>
       </motion.div>
     </AnimatePresence>

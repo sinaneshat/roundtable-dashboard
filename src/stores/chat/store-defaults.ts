@@ -20,6 +20,7 @@ import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSea
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
+import type { AnimationResolver } from './store-action-types';
 import type { StreamResumptionState } from './store-schemas';
 
 // ============================================================================
@@ -154,6 +155,15 @@ export const STREAM_RESUMPTION_DEFAULTS = {
 };
 
 // ============================================================================
+// ANIMATION SLICE DEFAULTS
+// ============================================================================
+
+export const ANIMATION_DEFAULTS = {
+  pendingAnimations: new Set<number>(), // Set of participant indices with pending animations
+  animationResolvers: new Map<number, AnimationResolver>(), // Resolve functions for animation completion promises
+};
+
+// ============================================================================
 // TYPE-SAFE STATE RESET GROUPS
 // ============================================================================
 // These groups ensure that when resetting related state, ALL fields are included.
@@ -267,6 +277,9 @@ export const COMPLETE_RESET_STATE = {
   streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
   resumptionAttempts: new Set<string>(),
   nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
+  // Animation state
+  pendingAnimations: new Set<number>(),
+  animationResolvers: new Map<number, AnimationResolver>(),
 } as const;
 
 /**
@@ -307,6 +320,9 @@ export const THREAD_RESET_STATE = {
   streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
   resumptionAttempts: new Set<string>(),
   nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
+  // Animation state
+  pendingAnimations: new Set<number>(),
+  animationResolvers: new Map<number, AnimationResolver>(),
 } as const;
 
 /**
@@ -325,3 +341,4 @@ export type CallbacksDefaults = typeof CALLBACKS_DEFAULTS;
 export type ScreenDefaults = typeof SCREEN_DEFAULTS;
 export type CompleteResetState = typeof COMPLETE_RESET_STATE;
 export type ThreadResetState = typeof THREAD_RESET_STATE;
+export type AnimationDefaults = typeof ANIMATION_DEFAULTS;

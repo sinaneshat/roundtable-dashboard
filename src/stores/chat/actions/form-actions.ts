@@ -150,6 +150,15 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
+      // ✅ CRITICAL FIX: Set pending message so provider can trigger participants
+      // BUG FIX: Without this, pendingMessage stays null after pre-search completes
+      // and participants never start streaming (provider effect exits immediately)
+      //
+      // This is the same pattern used by handleUpdateThreadAndSend in thread detail page
+      // Now overview page will work correctly with web search enabled
+      const participantIds = participants.map(p => p.id);
+      actions.prepareForNewMessage(prompt, participantIds);
+
       // ✅ REMOVED: Duplicate pre-search creation
       // Backend already creates PENDING pre-search record during thread creation (thread.handler.ts:265-274)
       // PreSearchOrchestrator will sync it from server automatically

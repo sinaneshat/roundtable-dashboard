@@ -97,9 +97,11 @@ export const TITLE_GENERATION_MODEL_ID = shouldUseDevModels()
  * - /src/api/services/web-search.service.ts - Query generation
  * - /src/api/routes/chat/handlers/pre-search.handler.ts - Pre-search operations
  */
+// ✅ CHANGED: Using Claude Sonnet 4 instead of Opus for better JSON mode compatibility
+// Opus has issues with structured output through OpenRouter
 export const WEB_SEARCH_MODEL_ID = shouldUseDevModels()
   ? FREE_DEV_MODEL
-  : ModelIdEnum.enum['anthropic/claude-opus-4'];
+  : ModelIdEnum.enum['anthropic/claude-sonnet-4'];
 
 // ============================================================================
 // EXPORTS

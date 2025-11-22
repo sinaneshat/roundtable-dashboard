@@ -1,5 +1,5 @@
 'use client';
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
@@ -10,6 +10,7 @@ import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -37,7 +38,7 @@ const DEFAULT_PARTS: MessagePart[] = [];
 export const ModelMessageCard = memo(({
   model,
   role,
-  participantIndex: _participantIndex,
+  participantIndex,
   status,
   parts = DEFAULT_PARTS,
   avatarSrc,
@@ -52,6 +53,43 @@ export const ModelMessageCard = memo(({
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
   const isError = status === MessageStatuses.FAILED;
+  const isStreaming = status === MessageStatuses.STREAMING;
+
+  // Animation tracking for sequential participant streaming
+  const registerAnimation = useChatStore(s => s.registerAnimation);
+  const completeAnimation = useChatStore(s => s.completeAnimation);
+  const hasRegisteredRef = useRef(false);
+  const prevStatusRef = useRef(status);
+
+  // Register animation when streaming starts
+  useEffect(() => {
+    if (isStreaming && !hasRegisteredRef.current && participantIndex >= 0) {
+      registerAnimation(participantIndex);
+      hasRegisteredRef.current = true;
+    }
+  }, [isStreaming, participantIndex, registerAnimation]);
+
+  // Complete animation when streaming finishes
+  // Uses a small delay to let Streamdown finish its animation
+  useEffect(() => {
+    const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
+    const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
+
+    if (wasStreaming && nowComplete && hasRegisteredRef.current && participantIndex >= 0) {
+      // Small delay to let Streamdown animation settle
+      // Use minimal delay (16ms = 1 frame) to maximize speed
+      const timer = setTimeout(() => {
+        completeAnimation(participantIndex);
+        hasRegisteredRef.current = false;
+      }, 16);
+
+      prevStatusRef.current = status;
+      return () => clearTimeout(timer);
+    }
+
+    prevStatusRef.current = status;
+    return undefined;
+  }, [status, participantIndex, completeAnimation]);
 
   // ✅ STRICT TYPING: Only assistant messages have error fields
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;

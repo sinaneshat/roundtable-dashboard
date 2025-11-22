@@ -219,7 +219,8 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
     hr: () => <hr className="my-4 border-border" />,
 
     // Images
-    img: ({ src, alt, ...props }: any) => (
+    img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => (
+      // eslint-disable-next-line next/no-img-element -- markdown images don't benefit from next/image optimization
       <img
         src={src}
         alt={alt || ''}

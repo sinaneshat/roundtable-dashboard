@@ -214,7 +214,7 @@ export const ChatInput = memo(({
           'bg-card',
           'shadow-lg',
           'transition-opacity duration-200',
-          isDisabled && !isQuotaExceeded && 'opacity-60 cursor-not-allowed',
+          isDisabled && !isQuotaExceeded && 'cursor-not-allowed',
           isStreaming && 'ring-2 ring-primary/20', // Visual indicator during streaming
           className,
         )}

@@ -2,9 +2,10 @@
 
 import { ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { Streamdown } from 'streamdown';
 
 import { defaultMarkdownComponents } from '@/components/markdown/unified-markdown-components';
-import { FadeInText, TypingText } from '@/components/ui/typing-text';
+import { FadeInText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
 
 type LLMAnswerDisplayProps = {
@@ -29,19 +30,21 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
         </div>
       </FadeInText>
 
-      {/* Markdown content - streaming uses typing effect, complete uses proper markdown */}
+      {/* Markdown content - uses Streamdown for proper streaming animation */}
       <div className="text-sm">
-        {isStreaming ? (
-          <div className="leading-relaxed whitespace-pre-wrap">
-            <TypingText text={answer} speed={5} delay={100} enabled={isStreaming} />
-          </div>
-        ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown components={defaultMarkdownComponents}>
-              {answer}
-            </ReactMarkdown>
-          </div>
-        )}
+        {isStreaming
+          ? (
+              <Streamdown className="leading-relaxed whitespace-pre-wrap text-foreground">
+                {answer}
+              </Streamdown>
+            )
+          : (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown components={defaultMarkdownComponents}>
+                  {answer}
+                </ReactMarkdown>
+              </div>
+            )}
       </div>
 
       {/* Compact source list - no border */}

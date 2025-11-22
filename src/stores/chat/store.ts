@@ -76,12 +76,12 @@ import { createStore } from 'zustand/vanilla';
 import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
 import { AnalysisStatuses, ChatModeSchema, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
-    ModeratorAnalysisPayload,
-    PreSearchDataPayload,
-    RecommendedAction,
-    RoundFeedbackData,
-    StoredModeratorAnalysis,
-    StoredPreSearch,
+  ModeratorAnalysisPayload,
+  PreSearchDataPayload,
+  RecommendedAction,
+  RoundFeedbackData,
+  StoredModeratorAnalysis,
+  StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
@@ -91,41 +91,43 @@ import type { ApplyRecommendedActionOptions } from './actions/recommended-action
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
 import type { SendMessage, StartRound } from './store-action-types';
 import {
-    ANALYSIS_DEFAULTS,
-    ANALYSIS_STATE_RESET,
-    CALLBACKS_DEFAULTS,
-    COMPLETE_RESET_STATE,
-    DATA_DEFAULTS,
-    FEEDBACK_DEFAULTS,
-    FLAGS_DEFAULTS,
-    FORM_DEFAULTS,
-    PENDING_MESSAGE_STATE_RESET,
-    PRESEARCH_DEFAULTS,
-    REGENERATION_STATE_RESET,
-    SCREEN_DEFAULTS,
-    STREAM_RESUMPTION_DEFAULTS,
-    STREAMING_STATE_RESET,
-    THREAD_DEFAULTS,
-    THREAD_RESET_STATE,
-    TRACKING_DEFAULTS,
-    UI_DEFAULTS,
+  ANALYSIS_DEFAULTS,
+  ANALYSIS_STATE_RESET,
+  ANIMATION_DEFAULTS,
+  CALLBACKS_DEFAULTS,
+  COMPLETE_RESET_STATE,
+  DATA_DEFAULTS,
+  FEEDBACK_DEFAULTS,
+  FLAGS_DEFAULTS,
+  FORM_DEFAULTS,
+  PENDING_MESSAGE_STATE_RESET,
+  PRESEARCH_DEFAULTS,
+  REGENERATION_STATE_RESET,
+  SCREEN_DEFAULTS,
+  STREAM_RESUMPTION_DEFAULTS,
+  STREAMING_STATE_RESET,
+  THREAD_DEFAULTS,
+  THREAD_RESET_STATE,
+  TRACKING_DEFAULTS,
+  UI_DEFAULTS,
 } from './store-defaults';
 import type {
-    AnalysisSlice,
-    CallbacksSlice,
-    ChatStore,
-    DataSlice,
-    FeedbackSlice,
-    FlagsSlice,
-    FormSlice,
-    OperationsSlice,
-    ParticipantConfig,
-    PreSearchSlice,
-    ScreenSlice,
-    StreamResumptionSlice,
-    ThreadSlice,
-    TrackingSlice,
-    UISlice,
+  AnalysisSlice,
+  AnimationSlice,
+  CallbacksSlice,
+  ChatStore,
+  DataSlice,
+  FeedbackSlice,
+  FlagsSlice,
+  FormSlice,
+  OperationsSlice,
+  ParticipantConfig,
+  PreSearchSlice,
+  ScreenSlice,
+  StreamResumptionSlice,
+  ThreadSlice,
+  TrackingSlice,
+  UISlice,
 } from './store-schemas';
 
 type ChatMode = z.infer<typeof ChatModeSchema>;
@@ -533,7 +535,7 @@ const createPreSearchSlice: StateCreator<
         const createdTime = ps.createdAt instanceof Date
           ? ps.createdAt.getTime()
           : new Date(ps.createdAt).getTime();
-        
+
         if (now - createdTime > PRESEARCH_TIMEOUT_MS) {
           hasChanges = true;
           // Mark as complete to unblock message sending
@@ -597,50 +599,51 @@ const createThreadSlice: StateCreator<
   checkStuckStreams: () =>
     set((state) => {
       // Only check if streaming
-      if (!state.isStreaming) return state;
+      if (!state.isStreaming)
+        return state;
 
-      // We need to track activity. Since we can't easily store a timestamp in the store 
+      // We need to track activity. Since we can't easily store a timestamp in the store
       // without causing re-renders, we'll rely on the Provider to call this action
       // ONLY when it detects a timeout.
-      
+
       // Actually, the Provider logic I wrote earlier handles the detection.
       // This action is just the "Force Stop" command.
       // But to make it testable, we should probably move the logic here?
       // No, the timestamp tracking is best done in the Provider/Effect to avoid store updates on every message chunk.
-      
+
       // So this action is effectively "Force Stop Streaming"
-      
+
       // If we want to test the TIMEOUT logic in unit tests, we need the timestamp in the store.
       // But updating the store on every message chunk is bad for performance.
-      
+
       // Compromise: The Provider tracks the timestamp. When it detects timeout, it calls this action.
       // BUT, for the unit test to fail/pass based on logic, the logic needs to be here?
-      
+
       // Let's make this action accept a "lastActivityTimestamp" and "currentTimestamp"
       // No, that's messy.
-      
+
       // Let's stick to the plan: Provider detects timeout -> Calls this action to stop.
       // The unit test will simulate the "Provider detected timeout" by calling this action.
       // Wait, that doesn't test the detection logic.
-      
+
       // To test the detection logic in unit tests, we need the detection logic in the store.
       // We can add a `lastStreamActivity` to the store, but only update it periodically?
       // Or update it on every message?
-      
+
       // Let's go with: This action simply stops streaming.
       // The Provider handles the detection.
       // The unit test will verify that IF this action is called, streaming stops.
       // AND we will add a separate test for the Provider logic (if possible) or just rely on the integration.
-      
+
       // Actually, the user wants "more tests to catch those problems".
       // If the detection logic is in a useEffect, it's hard to unit test.
-      
+
       // Let's move the detection state to a ref in the store? No, store is state.
-      
+
       // OK, I will implement this action as "force stop" and update the Provider to use it.
       // I will also update the test to manually call this action to verify it stops streaming.
       // This verifies the "recovery" part.
-      
+
       return { isStreaming: false };
     }, false, 'thread/checkStuckStreams'),
 });
@@ -902,6 +905,66 @@ const createStreamResumptionSlice: StateCreator<
 });
 
 /**
+ * Animation Slice - Animation completion tracking
+ * Tracks pending animations per participant to ensure sequential completion
+ */
+const createAnimationSlice: StateCreator<
+  ChatStore,
+  [['zustand/devtools', never]],
+  [],
+  AnimationSlice
+> = (set, get) => ({
+  ...ANIMATION_DEFAULTS,
+
+  registerAnimation: (participantIndex: number) =>
+    set((state) => {
+      const newPending = new Set(state.pendingAnimations);
+      newPending.add(participantIndex);
+      return { pendingAnimations: newPending };
+    }, false, 'animation/registerAnimation'),
+
+  completeAnimation: (participantIndex: number) =>
+    set((state) => {
+      const newPending = new Set(state.pendingAnimations);
+      newPending.delete(participantIndex);
+
+      // Resolve any waiting promises
+      const resolver = state.animationResolvers.get(participantIndex);
+      if (resolver) {
+        resolver();
+        const newResolvers = new Map(state.animationResolvers);
+        newResolvers.delete(participantIndex);
+        return { pendingAnimations: newPending, animationResolvers: newResolvers };
+      }
+
+      return { pendingAnimations: newPending };
+    }, false, 'animation/completeAnimation'),
+
+  waitForAnimation: (participantIndex: number) => {
+    const state = get();
+
+    // If animation is not pending, resolve immediately
+    if (!state.pendingAnimations.has(participantIndex)) {
+      return Promise.resolve();
+    }
+
+    // Create a promise that will be resolved when completeAnimation is called
+    return new Promise<void>((resolve) => {
+      set((current) => {
+        const newResolvers = new Map(current.animationResolvers);
+        newResolvers.set(participantIndex, resolve);
+        return { animationResolvers: newResolvers };
+      }, false, 'animation/waitForAnimation');
+    });
+  },
+
+  clearAnimations: () =>
+    set({
+      ...ANIMATION_DEFAULTS,
+    }, false, 'animation/clearAnimations'),
+});
+
+/**
  * Operations Slice - Composite operations
  * Complex multi-slice operations (reset, initialization, streaming lifecycle)
  */
@@ -1099,6 +1162,7 @@ export function createChatStore() {
         ...createCallbacksSlice(...args),
         ...createScreenSlice(...args),
         ...createStreamResumptionSlice(...args),
+        ...createAnimationSlice(...args),
         ...createOperationsSlice(...args),
       }),
       {

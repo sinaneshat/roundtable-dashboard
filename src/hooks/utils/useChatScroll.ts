@@ -98,18 +98,22 @@ export function useChatScroll({
    */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
+      // Find the scroll container - either the specified element or its closest scrollable parent
       const contentContainer = document.getElementById(scrollContainerId);
 
-      if (contentContainer) {
-        const contentBottom = contentContainer.offsetTop + contentContainer.scrollHeight;
-        const targetScroll = contentBottom - window.innerHeight;
+      // Find the actual scrollable element (element with overflow-y-auto)
+      const scrollContainer = contentContainer?.closest('[class*="overflow-y-auto"]') as HTMLElement
+        || contentContainer?.closest('main') as HTMLElement
+        || contentContainer;
 
-        window.scrollTo({
-          top: Math.max(0, targetScroll),
+      if (scrollContainer && scrollContainer !== document.documentElement) {
+        // Scroll within the container
+        scrollContainer.scrollTo({
+          top: scrollContainer.scrollHeight,
           behavior,
         });
       } else {
-        // Fallback: Scroll to document bottom if container not found
+        // Fallback: Scroll to document bottom
         const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
 
         window.scrollTo({
@@ -130,6 +134,17 @@ export function useChatScroll({
       return undefined;
     }
 
+    // Find the scroll container
+    const contentContainer = document.getElementById(scrollContainerId);
+    const scrollContainer = contentContainer?.closest('[class*="overflow-y-auto"]') as HTMLElement
+      || contentContainer?.closest('main') as HTMLElement
+      || null;
+
+    if (!scrollContainer) {
+      isNearBottomRef.current = true;
+      return undefined;
+    }
+
     // ✅ MEMORY LEAK FIX: AbortController ensures listener is removed even during fast unmounts
     const abortController = new AbortController();
     let cleanedUp = false;
@@ -146,13 +161,14 @@ export function useChatScroll({
       }
       lastScrollTimeRef.current = now;
 
-      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       isNearBottomRef.current = distanceFromBottom < autoScrollThreshold;
     };
 
     // ✅ MEMORY LEAK FIX: Use AbortController signal for automatic cleanup
-    window.addEventListener('scroll', handleScroll, {
+    // Listen on the scroll container instead of window
+    scrollContainer.addEventListener('scroll', handleScroll, {
       passive: true,
       signal: abortController.signal,
     });
@@ -165,7 +181,7 @@ export function useChatScroll({
       cleanedUp = true;
       abortController.abort();
     };
-  }, [enableNearBottomDetection, autoScrollThreshold, scrollThrottleMs]);
+  }, [enableNearBottomDetection, autoScrollThreshold, scrollThrottleMs, scrollContainerId]);
 
   // Effect 2: Auto-scroll on new analyses or state changes
   // ✅ FIX: Also trigger on participant turn-taking by depending on currentParticipantIndex

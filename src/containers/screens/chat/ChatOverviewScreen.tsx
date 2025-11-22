@@ -452,7 +452,7 @@ export default function ChatOverviewScreen() {
     messages,
     analyses,
     isStreaming,
-    scrollContainerId: 'chat-scroll-container',
+    scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
     currentParticipantIndex,
   });
@@ -468,7 +468,7 @@ export default function ChatOverviewScreen() {
 
   return (
     <UnifiedErrorBoundary context="chat">
-      <div className={`flex flex-col relative ${showInitialUI ? '' : 'flex-1 min-h-0 pt-14'}`}>
+      <div className={`flex flex-col relative ${showInitialUI ? 'min-h-full' : 'min-h-full pt-14'}`}>
         {/* Radial glow - fixed positioning, doesn't affect layout */}
         <AnimatePresence mode="wait">
           {showInitialUI && (
@@ -601,12 +601,11 @@ export default function ChatOverviewScreen() {
           </div>
         )}
 
-        {/* Chat UI with window-level scrolling */}
+        {/* Chat UI with container scrolling */}
         {!showInitialUI && currentThread && (
           <>
             <div
-              id="chat-scroll-container"
-              className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-[140px] flex-1"
+              className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4 flex-1"
             >
               <UnifiedErrorBoundary context="message-list">
                 {/* Split messages for correct ordering: user → pre-search → assistant */}
@@ -698,16 +697,19 @@ export default function ChatOverviewScreen() {
               />
             </div>
 
-            {/* Gradient fade overlay - fixed at bottom of screen */}
-            <div className="fixed bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent pointer-events-none z-20" />
+            {/* Bottom shadow gradient - creates depth effect */}
+            <div
+              className="sticky bottom-0 left-0 right-0 h-8 z-20 pointer-events-none bg-gradient-to-t from-black/40 to-transparent"
+              style={{ marginBottom: `-${keyboardOffset}px` }}
+            />
 
-            {/* Chat input - sticky at bottom */}
+            {/* Chat input - sticky at bottom within scroll container */}
             <div
               ref={inputContainerRef}
-              className="sticky z-30 w-full will-change-[bottom]"
-              style={{ bottom: `${keyboardOffset + 20}px` }}
+              className="sticky z-30 bg-gradient-to-t from-background via-background to-transparent pt-10"
+              style={{ bottom: `${keyboardOffset + 16}px` }}
             >
-              <div className="container max-w-3xl mx-auto px-4 md:px-6">
+              <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}

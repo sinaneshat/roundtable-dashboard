@@ -1,9 +1,10 @@
 /**
  * Error Metadata Service - Unified Error Extraction and Categorization
  *
- * ✅ SINGLE SOURCE OF TRUTH: Consolidates all error handling logic from streaming handlers
+ * ✅ SINGLE SOURCE OF TRUTH: Uses schemas from @/lib/schemas/error-schemas.ts
  * ✅ ZERO-CASTING PRINCIPLE: All type validations via Zod schemas
  * ✅ TYPE-SAFE: No any types, strict null checks, comprehensive error metadata
+ * ✅ ENUM-BASED PATTERNS: Uses ErrorCategorySchema.enum.* for constants
  *
  * This service provides:
  * - Unified error metadata extraction from AI provider responses
@@ -12,18 +13,16 @@
  * - Empty response error building with context-aware messages
  * - Provider-specific error extraction (OpenRouter, OpenAI, etc.)
  *
- * Replaces scattered error handling in:
- * - src/api/services/message-persistence.service.ts (extractErrorMetadata)
- * - src/api/routes/chat/handlers/streaming.handler.ts (error detection)
- * - src/lib/utils/message-transforms.ts (error message building)
- *
  * @see /docs/backend-patterns.md - Service layer patterns
- * @see /src/lib/schemas/error-schemas.ts - Error category schemas
+ * @see /src/lib/schemas/error-schemas.ts - Error category schemas (SINGLE SOURCE OF TRUTH)
  * @see /src/lib/schemas/message-metadata.ts - Finish reason schemas
  */
 
 import type { ErrorCategory } from '@/lib/schemas/error-schemas';
-import { ErrorCategorySchema } from '@/lib/schemas/error-schemas';
+import {
+  categorizeErrorMessage,
+  ErrorCategorySchema,
+} from '@/lib/schemas/error-schemas';
 import { FinishReasonSchema } from '@/lib/schemas/message-metadata';
 import { isObject } from '@/lib/utils/type-guards';
 
@@ -80,6 +79,9 @@ export type ExtractErrorMetadataParams = {
 
   /** Generated text content (to detect partial responses) */
   text?: string;
+
+  /** Generated reasoning content (for o1/o3 models that output reasoning instead of text) */
+  reasoning?: string;
 };
 
 /**
@@ -116,8 +118,8 @@ export type ProviderErrorResult = {
 /**
  * Categorize error based on error message content
  *
- * ✅ ZERO-CASTING: Uses Zod enum values for type safety
- * ✅ SINGLE SOURCE OF TRUTH: All categorization logic centralized
+ * ✅ DELEGATED: Uses categorizeErrorMessage from @/lib/schemas/error-schemas.ts
+ * ✅ SINGLE SOURCE OF TRUTH: No duplicate logic
  *
  * @param errorMessage - Raw error message from provider
  * @returns Typed error category from ErrorCategorySchema
@@ -129,44 +131,7 @@ export type ProviderErrorResult = {
  * ```
  */
 export function categorizeError(errorMessage: string): ErrorCategory {
-  const errorLower = errorMessage.toLowerCase();
-
-  // Model availability errors
-  if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
-    return ErrorCategorySchema.enum.model_not_found;
-  }
-
-  // Content moderation errors
-  if (
-    errorLower.includes('filter')
-    || errorLower.includes('safety')
-    || errorLower.includes('moderation')
-  ) {
-    return ErrorCategorySchema.enum.content_filter;
-  }
-
-  // Rate limiting errors
-  if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
-    return ErrorCategorySchema.enum.rate_limit;
-  }
-
-  // Network/connectivity errors
-  if (errorLower.includes('timeout') || errorLower.includes('connection')) {
-    return ErrorCategorySchema.enum.network;
-  }
-
-  // Authentication errors
-  if (errorLower.includes('unauthorized') || errorLower.includes('authentication')) {
-    return ErrorCategorySchema.enum.authentication;
-  }
-
-  // Validation errors
-  if (errorLower.includes('validation') || errorLower.includes('invalid')) {
-    return ErrorCategorySchema.enum.validation;
-  }
-
-  // Default to generic provider error
-  return ErrorCategorySchema.enum.provider_error;
+  return categorizeErrorMessage(errorMessage);
 }
 
 // ============================================================================
@@ -428,6 +393,7 @@ export function extractErrorMetadata(
     finishReason,
     usage,
     text,
+    reasoning,
   } = params;
 
   // Extract provider-specific errors
@@ -443,8 +409,14 @@ export function extractErrorMetadata(
   const inputTokens = usage?.inputTokens || 0;
   const hasGeneratedText = (text?.trim().length || 0) > 0;
 
-  // Empty response detection: no output tokens AND no generated text
-  const isEmptyResponse = outputTokens === 0 && !hasGeneratedText;
+  // ✅ CRITICAL FIX: Check reasoning content for o1/o3 models
+  // These models may output all content as reasoning instead of text
+  // Both text OR reasoning should count as generated content
+  const hasGeneratedReasoning = (reasoning?.trim().length || 0) > 0;
+  const hasGeneratedContent = hasGeneratedText || hasGeneratedReasoning;
+
+  // Empty response detection: no output tokens AND no generated content (text or reasoning)
+  const isEmptyResponse = outputTokens === 0 && !hasGeneratedContent;
 
   // Error occurred if we have provider error OR empty response
   const hasError = isEmptyResponse || !!rawError;
@@ -470,7 +442,7 @@ export function extractErrorMetadata(
       errorMessage: rawError,
       providerMessage: rawError,
       isTransientError: isTransientError(errorCategory, finishReason),
-      isPartialResponse: hasGeneratedText || outputTokens > 0, // Partial = error with some content
+      isPartialResponse: hasGeneratedContent || outputTokens > 0, // Partial = error with some content
     };
   }
 

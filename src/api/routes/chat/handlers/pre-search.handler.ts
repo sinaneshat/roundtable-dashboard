@@ -28,9 +28,10 @@ import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AnalysisStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
-import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
+import { isQuerySearchable, simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
 import {
   createSearchCache,
+  generateSearchQuery,
   performWebSearch,
   streamAnswerSummary,
   streamSearchQuery,
@@ -255,78 +256,30 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // ✅ MULTI-QUERY: Stream query generation and get all queries
         let multiQueryResult: MultiQueryGeneration | null = null;
 
-        try {
-          const queryStream = streamSearchQuery(body.userQuery, c.env);
+        // ✅ EARLY CHECK: Skip AI generation for non-searchable queries
+        // Prevents AI_NoObjectGeneratedError for greetings, commands, etc.
+        const queryIsSearchable = isQuerySearchable(body.userQuery);
 
-          // ✅ INCREMENTAL STREAMING: Stream each query update as it's generated
-          const lastSentQueries: string[] = [];
-          let lastTotalQueries = 0;
-
-          for await (const partialResult of queryStream.partialObjectStream) {
-            // Send start event once we know totalQueries
-            if (partialResult.totalQueries && partialResult.totalQueries !== lastTotalQueries) {
-              lastTotalQueries = partialResult.totalQueries;
-              await stream.writeSSE({
-                event: PreSearchSseEvents.START,
-                data: JSON.stringify({
-                  timestamp: Date.now(),
-                  userQuery: body.userQuery,
-                  totalQueries: partialResult.totalQueries,
-                  analysisRationale: partialResult.analysisRationale || '',
-                }),
-              });
-            }
-
-            // Stream each query as it becomes available
-            if (partialResult.queries && partialResult.queries.length > 0) {
-              for (let i = 0; i < partialResult.queries.length; i++) {
-                const query = partialResult.queries[i];
-                if (query?.query && query.query !== lastSentQueries[i]) {
-                  await stream.writeSSE({
-                    event: PreSearchSseEvents.QUERY,
-                    data: JSON.stringify({
-                      timestamp: Date.now(),
-                      query: query.query || '',
-                      rationale: query.rationale || '',
-                      searchDepth: query.searchDepth || WebSearchDepths.BASIC,
-                      index: i,
-                      total: partialResult.totalQueries || 1,
-                    }),
-                  });
-                  lastSentQueries[i] = query.query;
-                }
-              }
-            }
-          }
-
-          // Get final complete result
-          multiQueryResult = await queryStream.object;
-
-          // Validate generation succeeded
-          if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
-            throw new Error('Query generation failed - no queries produced');
-          }
-        } catch (error) {
-          // ✅ FALLBACK: If AI fails, use single optimized query
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error('[Pre-Search] Query generation failed:', errorMessage);
+        if (!queryIsSearchable) {
+          // Skip AI generation entirely and use optimized fallback
+          console.error('[Pre-Search] Query not searchable, using fallback:', body.userQuery.substring(0, 50));
 
           const optimizedQuery = simpleOptimizeQuery(body.userQuery);
 
           // Create fallback with single query
           multiQueryResult = {
             totalQueries: 1,
-            analysisRationale: 'Fallback: AI generation unavailable',
+            analysisRationale: 'Fallback: Query not suitable for complex search',
             queries: [{
               query: optimizedQuery,
               searchDepth: WebSearchDepths.BASIC,
-              complexity: WebSearchComplexities.MODERATE,
-              rationale: 'Simple query optimization (AI generation unavailable)',
-              sourceCount: 4,
+              complexity: WebSearchComplexities.BASIC,
+              rationale: 'Simple query optimization (non-searchable content detected)',
+              sourceCount: 3,
               requiresFullContent: false,
               chunksPerSource: 1,
               needsAnswer: 'basic',
-              analysis: `Fallback: Using simplified query transformation from "${body.userQuery}"`,
+              analysis: `Fallback: Query "${body.userQuery}" simplified to "${optimizedQuery}"`,
             }],
           };
 
@@ -337,27 +290,183 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               timestamp: Date.now(),
               userQuery: body.userQuery,
               totalQueries: 1,
-              analysisRationale: 'Fallback mode',
+              analysisRationale: 'Fallback mode - non-searchable query',
             }),
           });
 
           // Notify frontend about fallback
-          const fallbackQuery = multiQueryResult.queries[0];
-          if (fallbackQuery) {
-            await stream.writeSSE({
-              event: PreSearchSseEvents.QUERY,
-              data: JSON.stringify({
-                timestamp: Date.now(),
-                query: fallbackQuery.query,
-                rationale: fallbackQuery.rationale,
-                searchDepth: WebSearchDepths.BASIC,
-                index: 0,
-                total: 1,
-                fallback: true,
-              }),
-            });
+          await stream.writeSSE({
+            event: PreSearchSseEvents.QUERY,
+            data: JSON.stringify({
+              timestamp: Date.now(),
+              query: optimizedQuery,
+              rationale: 'Simple query optimization (non-searchable content detected)',
+              searchDepth: WebSearchDepths.BASIC,
+              index: 0,
+              total: 1,
+              fallback: true,
+            }),
+          });
+        } else {
+          // ✅ NORMAL FLOW: Attempt AI generation for searchable queries
+          try {
+            const queryStream = streamSearchQuery(body.userQuery, c.env);
+
+            // ✅ INCREMENTAL STREAMING: Stream each query update as it's generated
+            const lastSentQueries: string[] = [];
+            let lastTotalQueries = 0;
+
+            for await (const partialResult of queryStream.partialObjectStream) {
+            // Send start event once we know totalQueries
+              if (partialResult.totalQueries && partialResult.totalQueries !== lastTotalQueries) {
+                lastTotalQueries = partialResult.totalQueries;
+                await stream.writeSSE({
+                  event: PreSearchSseEvents.START,
+                  data: JSON.stringify({
+                    timestamp: Date.now(),
+                    userQuery: body.userQuery,
+                    totalQueries: partialResult.totalQueries,
+                    analysisRationale: partialResult.analysisRationale || '',
+                  }),
+                });
+              }
+
+              // Stream each query as it becomes available
+              if (partialResult.queries && partialResult.queries.length > 0) {
+                for (let i = 0; i < partialResult.queries.length; i++) {
+                  const query = partialResult.queries[i];
+                  if (query?.query && query.query !== lastSentQueries[i]) {
+                    await stream.writeSSE({
+                      event: PreSearchSseEvents.QUERY,
+                      data: JSON.stringify({
+                        timestamp: Date.now(),
+                        query: query.query || '',
+                        rationale: query.rationale || '',
+                        searchDepth: query.searchDepth || WebSearchDepths.BASIC,
+                        index: i,
+                        total: partialResult.totalQueries || 1,
+                      }),
+                    });
+                    lastSentQueries[i] = query.query;
+                  }
+                }
+              }
+            }
+
+            // Get final complete result
+            multiQueryResult = await queryStream.object;
+
+            // Validate generation succeeded
+            if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
+              throw new Error('Query generation failed - no queries produced');
+            }
+          } catch (streamingError) {
+          // ✅ FALLBACK LEVEL 1: Try non-streaming generation
+            const streamErrorMessage = streamingError instanceof Error ? streamingError.message : 'Unknown error';
+            console.error('[Pre-Search] Streaming generation failed, trying non-streaming fallback:', streamErrorMessage);
+
+            try {
+            // Try non-streaming approach
+              multiQueryResult = await generateSearchQuery(body.userQuery, c.env);
+
+              // Validate generation succeeded
+              if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
+                throw new Error('Non-streaming query generation failed - no queries produced');
+              }
+
+              // Send start event for non-streaming result
+              await stream.writeSSE({
+                event: PreSearchSseEvents.START,
+                data: JSON.stringify({
+                  timestamp: Date.now(),
+                  userQuery: body.userQuery,
+                  totalQueries: multiQueryResult.totalQueries,
+                  analysisRationale: multiQueryResult.analysisRationale || '',
+                }),
+              });
+
+              // Send all queries at once (non-streaming)
+              for (let i = 0; i < multiQueryResult.queries.length; i++) {
+                const query = multiQueryResult.queries[i];
+                if (query) {
+                  await stream.writeSSE({
+                    event: PreSearchSseEvents.QUERY,
+                    data: JSON.stringify({
+                      timestamp: Date.now(),
+                      query: query.query || '',
+                      rationale: query.rationale || '',
+                      searchDepth: query.searchDepth || WebSearchDepths.BASIC,
+                      index: i,
+                      total: multiQueryResult.totalQueries,
+                    }),
+                  });
+                }
+              }
+            } catch (nonStreamingError) {
+            // ✅ FALLBACK LEVEL 2: If all AI fails, use simple query optimizer
+              const errorMessage = nonStreamingError instanceof Error ? nonStreamingError.message : 'Unknown error';
+              const errorStack = nonStreamingError instanceof Error ? nonStreamingError.stack : undefined;
+              const errorCause = nonStreamingError instanceof Error && 'cause' in nonStreamingError ? (nonStreamingError as Error & { cause?: unknown }).cause : undefined;
+
+              // ✅ DEBUG: Log full error details to understand AI generation failure
+              console.error('[Pre-Search] All AI generation attempts failed:', {
+                streamingError: streamErrorMessage,
+                nonStreamingError: errorMessage,
+                stack: errorStack,
+                cause: errorCause,
+                errorType: nonStreamingError?.constructor?.name,
+                fullError: JSON.stringify(nonStreamingError, Object.getOwnPropertyNames(nonStreamingError ?? {}), 2),
+              });
+
+              const optimizedQuery = simpleOptimizeQuery(body.userQuery);
+
+              // Create fallback with single query
+              multiQueryResult = {
+                totalQueries: 1,
+                analysisRationale: 'Fallback: AI generation unavailable',
+                queries: [{
+                  query: optimizedQuery,
+                  searchDepth: WebSearchDepths.BASIC,
+                  complexity: WebSearchComplexities.MODERATE,
+                  rationale: 'Simple query optimization (AI generation unavailable)',
+                  sourceCount: 4,
+                  requiresFullContent: false,
+                  chunksPerSource: 1,
+                  needsAnswer: 'basic',
+                  analysis: `Fallback: Using simplified query transformation from "${body.userQuery}"`,
+                }],
+              };
+
+              // Send start event for fallback
+              await stream.writeSSE({
+                event: PreSearchSseEvents.START,
+                data: JSON.stringify({
+                  timestamp: Date.now(),
+                  userQuery: body.userQuery,
+                  totalQueries: 1,
+                  analysisRationale: 'Fallback mode',
+                }),
+              });
+
+              // Notify frontend about fallback
+              const fallbackQuery = multiQueryResult.queries[0];
+              if (fallbackQuery) {
+                await stream.writeSSE({
+                  event: PreSearchSseEvents.QUERY,
+                  data: JSON.stringify({
+                    timestamp: Date.now(),
+                    query: fallbackQuery.query,
+                    rationale: fallbackQuery.rationale,
+                    searchDepth: WebSearchDepths.BASIC,
+                    index: 0,
+                    total: 1,
+                    fallback: true,
+                  }),
+                });
+              }
+            }
           }
-        }
+        } // Close the else block for queryIsSearchable
 
         // Type guard
         if (!multiQueryResult) {

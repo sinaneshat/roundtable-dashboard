@@ -122,7 +122,7 @@ export function BillingSuccessClient() {
 
   if (isLoadingData) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+      <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16">
         <StaggerContainer
           className="flex flex-col items-center gap-6 text-center max-w-md"
           staggerDelay={0.15}
@@ -130,17 +130,17 @@ export function BillingSuccessClient() {
         >
           <StaggerItem>
             <ScaleIn duration={0.3} delay={0}>
-              <div className="flex size-20 items-center justify-center rounded-full bg-blue-500/10 ring-4 ring-blue-500/20 md:size-24">
-                <Loader2 className="size-10 text-blue-500 md:size-12 animate-spin" strokeWidth={2} />
+              <div className="flex size-20 items-center justify-center rounded-full bg-blue-500/10 ring-4 ring-blue-500/20">
+                <Loader2 className="size-10 text-blue-500 animate-spin" strokeWidth={2} />
               </div>
             </ScaleIn>
           </StaggerItem>
 
           <StaggerItem className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight">
               {t('billing.success.activatingSubscription')}
             </h1>
-            <p className="text-sm text-muted-foreground md:text-base">
+            <p className="text-sm text-muted-foreground">
               {t('billing.success.confirmingPayment')}
             </p>
           </StaggerItem>
@@ -151,7 +151,7 @@ export function BillingSuccessClient() {
 
   if (syncMutation.isError) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+      <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16">
         <StaggerContainer
           className="flex flex-col items-center gap-6 text-center max-w-md"
           staggerDelay={0.15}
@@ -159,17 +159,17 @@ export function BillingSuccessClient() {
         >
           <StaggerItem>
             <ScaleIn duration={0.3} delay={0}>
-              <div className="flex size-20 items-center justify-center rounded-full bg-destructive/10 ring-4 ring-destructive/20 md:size-24">
-                <AlertCircle className="size-10 text-destructive md:size-12" strokeWidth={2} />
+              <div className="flex size-20 items-center justify-center rounded-full bg-destructive/10 ring-4 ring-destructive/20">
+                <AlertCircle className="size-10 text-destructive" strokeWidth={2} />
               </div>
             </ScaleIn>
           </StaggerItem>
 
           <StaggerItem className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight">
               {t('billing.failure.syncFailed')}
             </h1>
-            <p className="text-sm text-muted-foreground md:text-base">
+            <p className="text-sm text-muted-foreground">
               {t('billing.failure.syncFailedDescription')}
             </p>
           </StaggerItem>
@@ -215,7 +215,7 @@ export function BillingSuccessClient() {
   const isDowngrade = validTiers.indexOf(currentTier) < validTiers.indexOf(previousTier);
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16">
       <StaggerContainer
         className="flex flex-col items-center gap-8 text-center max-w-2xl w-full"
         staggerDelay={0.15}
@@ -223,17 +223,17 @@ export function BillingSuccessClient() {
       >
         <StaggerItem>
           <ScaleIn duration={0.3} delay={0}>
-            <div className="flex size-20 items-center justify-center rounded-full bg-green-500/10 ring-4 ring-green-500/20 md:size-24">
-              <CheckCircle className="size-10 text-green-500 md:size-12" strokeWidth={2} />
+            <div className="flex size-20 items-center justify-center rounded-full bg-green-500/10 ring-4 ring-green-500/20">
+              <CheckCircle className="size-10 text-green-500" strokeWidth={2} />
             </div>
           </ScaleIn>
         </StaggerItem>
 
         <StaggerItem className="space-y-3">
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight">
             {t('billing.success.title')}
           </h1>
-          <p className="text-sm text-muted-foreground md:text-base">
+          <p className="text-sm text-muted-foreground">
             {t('billing.success.description')}
           </p>
           <div className="pt-2 px-4 py-2 bg-primary/10 rounded-lg border border-primary/20">
@@ -300,7 +300,7 @@ export function BillingSuccessClient() {
                 <CardDescription>{t(`subscription.tiers.${currentTier}.description`)}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <div className="grid grid-cols-1 gap-4 text-left">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.concurrentModels')}</p>
                     <p className="text-2xl font-bold text-primary">{maxModels}</p>
@@ -353,7 +353,7 @@ export function BillingSuccessClient() {
           </StaggerItem>
         )}
 
-        <StaggerItem className="flex flex-col sm:flex-row items-center gap-4">
+        <StaggerItem className="flex flex-col items-center gap-4">
           <Button
             onClick={() => router.replace('/chat')}
             size="lg"

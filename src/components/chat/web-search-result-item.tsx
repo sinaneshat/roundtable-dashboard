@@ -159,10 +159,10 @@ export function WebSearchResultItem({
           )}
         </div>
 
-        {/* Description Preview - Animated */}
+        {/* Description Preview - Instant display to match streaming */}
         {result.metadata?.description && (
           <p className="text-xs text-muted-foreground italic line-clamp-2 pt-0.5">
-            <TypingText text={result.metadata.description} speed={5} delay={150} />
+            <TypingText text={result.metadata.description} speed={0} delay={0} />
           </p>
         )}
 
@@ -182,11 +182,11 @@ export function WebSearchResultItem({
           </div>
         )}
 
-        {/* Content preview - Animated typing */}
+        {/* Content preview - Instant display to match streaming */}
         {displayContent && (
           <div className="text-xs text-foreground/70 leading-relaxed">
             <div className={cn(!isExpanded && isLongContent && 'line-clamp-3')}>
-              <TypingText text={displayContent} speed={3} delay={200} />
+              <TypingText text={displayContent} speed={0} delay={0} />
             </div>
 
             {isLongContent && (
@@ -224,13 +224,13 @@ export function WebSearchResultItem({
           </FadeInText>
         )}
 
-        {/* Key Points - Animated list */}
+        {/* Key Points - Instant display to match streaming */}
         {result.keyPoints && result.keyPoints.length > 0 && (
           <ul className="space-y-0.5 pl-4 pt-1">
             {result.keyPoints.map((point, idx) => (
-              <FadeInText key={point} delay={0.4 + (idx * 0.05)}>
+              <FadeInText key={point} delay={0.1 + (idx * 0.02)}>
                 <li className="text-xs text-muted-foreground list-disc">
-                  <TypingText text={point} speed={5} delay={50 * idx} />
+                  <TypingText text={point} speed={0} delay={0} />
                 </li>
               </FadeInText>
             ))}

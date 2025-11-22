@@ -17,11 +17,11 @@ import { ScreenModes } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
-    createMockParticipants,
-    createMockThread
+  createMockParticipants,
+  createMockThread,
 } from './test-factories';
 
-describe('Backend/Frontend Race Conditions', () => {
+describe('backend/Frontend Race Conditions', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -34,7 +34,7 @@ describe('Backend/Frontend Race Conditions', () => {
     vi.clearAllMocks();
   });
 
-  describe('Web Search Toggle Timing', () => {
+  describe('web Search Toggle Timing', () => {
     it('should ensure pre-search is created when toggled ON immediately before send', async () => {
       // 1. Setup: Thread with web search OFF
       const thread = createMockThread({ id: 't1', enableWebSearch: false });
@@ -56,12 +56,12 @@ describe('Backend/Frontend Race Conditions', () => {
       // 5. Simulate Provider Logic (which reads store state)
       // The provider should see enableWebSearch=true and trigger pre-search
       const state = store.getState();
-      const nextRoundNumber = 0; // First message
-      
+      const _nextRoundNumber = 0; // First message
+
       // In the real app, the Provider effect runs here.
       // We verify that the inputs to that effect are correct.
       expect(state.enableWebSearch).toBe(true);
-      
+
       // If the store update was async or batched incorrectly, this might fail
     });
 
@@ -82,7 +82,7 @@ describe('Backend/Frontend Race Conditions', () => {
     });
   });
 
-  describe('Stream Completion & KV Consistency', () => {
+  describe('stream Completion & KV Consistency', () => {
     it('should handle "stuck" active stream state (KV lag)', () => {
       // 1. Setup: Thread in streaming state
       const thread = createMockThread({ id: 't1' });
@@ -95,45 +95,45 @@ describe('Backend/Frontend Race Conditions', () => {
 
       // 3. Simulate Timeout/Safety Check
       // The store should have a mechanism to clear isStreaming if no updates occur
-      
+
       // Advance time significantly
       vi.advanceTimersByTime(60000); // 60s
 
       // Manually trigger the check (since interval doesn't run in test without provider)
       store.getState().checkStuckStreams();
 
-      // Ideally, we want the store to auto-recover. 
+      // Ideally, we want the store to auto-recover.
       // Currently, does the store have a timeout for isStreaming?
       // Let's check the store implementation.
       // If not, this test documents a missing safety feature.
-      
+
       // Expectation: System should NOT be stuck in streaming forever
       // This assertion might fail if we don't have a safety timeout
-      expect(store.getState().isStreaming).toBe(false); 
+      expect(store.getState().isStreaming).toBe(false);
     });
   });
 
-  describe('Navigation Race Conditions', () => {
+  describe('navigation Race Conditions', () => {
     it('should not reset store if navigating to SAME thread URL', () => {
       // 1. Setup: Active thread
       const thread = createMockThread({ id: 't1' });
       store.getState().initializeThread(thread, [], []);
       store.getState().setScreenMode(ScreenModes.THREAD);
-      
+
       // 2. Simulate navigation event (e.g. slug update)
       // The resetToOverview logic checks pathname.
       // If we update the slug, the pathname changes.
       // We need to ensure we don't reset the store when just changing slugs for the SAME thread.
-      
+
       // This logic is in ChatOverviewScreen.tsx, hard to test in unit test without mocking router.
       // But we can test the store's reset actions.
-      
-      const initialThreadId = store.getState().thread?.id;
-      
+
+      const _initialThreadId = store.getState().thread?.id;
+
       // Simulate "Reset if navigating from different route" logic
       // If we call resetToOverview(), it clears everything.
       store.getState().resetToOverview();
-      
+
       expect(store.getState().thread).toBeNull();
     });
   });

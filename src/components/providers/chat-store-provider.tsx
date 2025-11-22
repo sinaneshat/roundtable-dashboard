@@ -38,6 +38,7 @@ import { useCreatePreSearchMutation } from '@/hooks/mutations';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
+import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
@@ -261,7 +262,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           json: {
             userQuery: pendingMessage,
           },
-        }).then(() => {
+        }).then((createResponse) => {
+          // ✅ CRITICAL FIX: Add pre-search to store immediately after creation
+          // Without this, updatePreSearchStatus operates on empty array and UI never updates
+          if (createResponse && createResponse.data) {
+            const preSearchWithDates = transformPreSearch(createResponse.data);
+            store.getState().addPreSearch(preSearchWithDates);
+          }
+
           // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
           // This replaces the PreSearchStream component's POST request
           return fetch(
@@ -416,6 +424,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ CRITICAL FIX: Only initialize hook when we have a valid threadId
   // This prevents hook from initializing with empty string, which causes startRound to never be available
   const effectiveThreadId = thread?.id || createdThreadId || '';
+
+  // Animation tracking functions from store
+  const waitForAnimation = useStore(store, s => s.waitForAnimation);
+  const clearAnimations = useStore(store, s => s.clearAnimations);
+
   const chat = useMultiParticipantChat({
     threadId: effectiveThreadId,
     participants,
@@ -425,6 +438,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     enableWebSearch,
     onError: handleError,
     onComplete: handleComplete,
+    // Animation tracking for sequential participant streaming
+    waitForAnimation,
+    clearAnimations,
   });
 
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
@@ -599,7 +615,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ MEMORY LEAK FIX: Use lightweight comparison to prevent excessive re-renders
   const prevChatMessagesRef = useRef<UIMessage[]>([]);
   const prevMessageCountRef = useRef<number>(0);
-  
+
   // ✅ SAFETY: Track last stream activity to detect stuck streams
   const lastStreamActivityRef = useRef<number>(Date.now());
 
@@ -639,7 +655,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // Simple reference check - if parts array is different, content changed
       // This is lightweight but catches all streaming updates (parts is a new array each stream chunk)
       contentChanged = hookParts !== storeParts;
-      
+
       // ✅ SAFETY: Update activity timestamp if content changed
       if (contentChanged) {
         lastStreamActivityRef.current = Date.now();
@@ -652,7 +668,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       prevMessageCountRef.current = chat.messages.length;
       prevChatMessagesRef.current = chat.messages;
       store.getState().setMessages(chat.messages);
-      
+
       // Update activity on any sync
       lastStreamActivityRef.current = Date.now();
     }
@@ -662,7 +678,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // Prevents system from getting stuck in isStreaming=true state if backend hangs
   // Checks for 60 seconds of silence (no message updates)
   useEffect(() => {
-    if (!chatIsStreaming) return;
+    if (!chatIsStreaming)
+      return;
 
     // Reset activity timer when streaming starts
     lastStreamActivityRef.current = Date.now();
@@ -786,13 +803,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // ✅ CRITICAL FIX: Guard against sendMessage being undefined
-    // The sendMessage callback wrapper always exists, but the underlying ref might not be ready
     // Check the ref directly to ensure AI SDK hook has initialized
-    const { sendMessage } = store.getState();
-    if (!sendMessage || !sendMessageRef.current) {
+    if (!sendMessageRef.current) {
       // eslint-disable-next-line no-console -- Debug logging for streaming issues
       console.warn('[Provider:pendingMessage] Blocked - sendMessage not available', {
-        hasSendMessage: !!sendMessage,
         hasRef: !!sendMessageRef.current,
       });
       return; // Wait for sendMessage to be available
@@ -860,7 +874,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             json: {
               userQuery: pendingMessage,
             },
-          }).then(() => {
+          }).then((createResponse) => {
+            // ✅ CRITICAL FIX: Add pre-search to store immediately after creation
+            // Without this, updatePreSearchStatus operates on empty array and UI never updates
+            if (createResponse && createResponse.data) {
+              const preSearchWithDates = transformPreSearch(createResponse.data);
+              store.getState().addPreSearch(preSearchWithDates);
+            }
+
             // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
             // This replaces the PreSearchStream component's POST request
             return fetch(
@@ -979,11 +1000,26 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // Send message in next tick (prevents blocking)
     queueMicrotask(() => {
+      // ✅ RACE CONDITION FIX: Check streaming ref before calling sendMessage
+      // The store's isStreaming might be stale, but the hook's ref is always current
+      // This prevents duplicate sends when startRound and pendingMessage effects race
+      if (chat.isStreamingRef.current) {
+        // eslint-disable-next-line no-console -- Debug logging for race condition
+        console.warn('[Provider:pendingMessage] Blocked in microtask - streaming already started', {
+          isStreamingRef: chat.isStreamingRef.current,
+        });
+        // Reset flag since we didn't actually send
+        store.getState().setHasSentPendingMessage(false);
+        return;
+      }
+
       // Call sendMessage and handle potential errors
       // NOTE: We do NOT reset hasSentPendingMessage on error to prevent infinite retry loops
       // The flag is only reset when user submits a new message via prepareForNewMessage
       try {
-        const result = sendMessage(pendingMessage);
+        // ✅ CRITICAL FIX: Use sendMessageRef.current instead of store's sendMessage
+        // The store's sendMessage is never set (setSendMessage is never called)
+        const result = sendMessageRef.current?.(pendingMessage);
 
         // If sendMessage returns a promise, log rejection but don't reset flag
         if (result && typeof result.catch === 'function') {

@@ -38,12 +38,12 @@ import type { UIMessage } from 'ai';
 
 import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
 import type {
-    ModeratorAnalysisPayload,
-    PreSearchDataPayload,
-    RecommendedAction,
-    RoundFeedbackData,
-    StoredModeratorAnalysis,
-    StoredPreSearch,
+  ModeratorAnalysisPayload,
+  PreSearchDataPayload,
+  RecommendedAction,
+  RoundFeedbackData,
+  StoredModeratorAnalysis,
+  StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -318,6 +318,40 @@ export type NeedsMessageSync = () => boolean;
 export type ClearStreamResumption = () => void;
 
 // ============================================================================
+// ANIMATION ACTIONS (Animation completion tracking)
+// ============================================================================
+
+/**
+ * Animation resolver function type
+ * Called to resolve a pending animation completion promise
+ */
+export type AnimationResolver = () => void;
+
+/**
+ * Register an animation as pending for a participant
+ * Called when streaming starts for a participant
+ */
+export type RegisterAnimation = (participantIndex: number) => void;
+
+/**
+ * Mark an animation as complete for a participant
+ * Called when streaming finishes and animation settles
+ */
+export type CompleteAnimation = (participantIndex: number) => void;
+
+/**
+ * Wait for an animation to complete
+ * Returns a promise that resolves when the animation is done
+ */
+export type WaitForAnimation = (participantIndex: number) => Promise<void>;
+
+/**
+ * Clear all pending animations
+ * Used when starting a new round or during cleanup
+ */
+export type ClearAnimations = () => void;
+
+// ============================================================================
 // OPERATIONS ACTIONS (Composite multi-slice operations)
 // ============================================================================
 
@@ -509,6 +543,13 @@ export type ScreenActionsType = {
   resetScreenMode: ResetScreenMode;
 };
 
+export type AnimationActionsType = {
+  registerAnimation: RegisterAnimation;
+  completeAnimation: CompleteAnimation;
+  waitForAnimation: WaitForAnimation;
+  clearAnimations: ClearAnimations;
+};
+
 export type OperationsActionsType = {
   resetThreadState: ResetThreadState;
   resetToOverview: ResetToOverview;
@@ -538,4 +579,5 @@ export type AllChatStoreActions
     & TrackingActionsType
     & CallbacksActionsType
     & ScreenActionsType
+    & AnimationActionsType
     & OperationsActionsType;

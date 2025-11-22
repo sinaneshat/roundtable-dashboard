@@ -125,7 +125,7 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
             <AppSidebar />
           </Suspense>
 
-          <SidebarInset className="h-svh flex flex-col relative">
+          <SidebarInset id="main-scroll-container" className="h-svh flex flex-col relative overflow-y-auto">
             <ChatHeaderSwitch />
 
             {/* Screen components manage their own scroll via StickToBottom Conversation */}

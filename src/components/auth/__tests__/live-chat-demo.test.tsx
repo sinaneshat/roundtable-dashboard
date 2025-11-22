@@ -93,11 +93,23 @@ async function advanceTimers(ms: number): Promise<void> {
 
 /**
  * Run all pending timers to completion
+ * Uses runOnlyPendingTimers to avoid infinite loops with setInterval
+ * in ChatStoreProvider (which checks stuck pre-searches every 5s)
  */
 async function runAllTimers(): Promise<void> {
-  await act(async () => {
-    vi.runAllTimers();
-  });
+  // Run pending timers multiple times to complete all animation stages
+  // Each iteration processes currently scheduled timers without infinite loops
+  for (let i = 0; i < 100; i++) {
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
+    // Check if all timers have been processed (no more pending)
+    const pendingTimers = vi.getTimerCount();
+    // Allow intervals to remain (stuck check interval) but stop if only intervals
+    if (pendingTimers <= 1) {
+      break;
+    }
+  }
 }
 
 // ============================================================================

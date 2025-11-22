@@ -61,7 +61,7 @@ export function RoundSummarySection({
               <AnimatedListItem key={insight} index={index} className="flex items-start gap-2">
                 <span className="shrink-0 mt-0.5 text-primary">•</span>
                 <p className="text-sm leading-relaxed text-foreground/90 flex-1">
-                  <TypingText text={insight} speed={8} delay={index * 50 + 100} enabled={isStreaming} />
+                  <TypingText text={insight} speed={0} delay={0} enabled={isStreaming} />
                 </p>
               </AnimatedListItem>
             ))}
@@ -80,7 +80,7 @@ export function RoundSummarySection({
               <AnimatedListItem key={point} index={index} className="flex items-start gap-2">
                 <span className="shrink-0 mt-0.5 text-primary">•</span>
                 <p className="text-sm leading-relaxed text-foreground/90 flex-1">
-                  <TypingText text={point} speed={8} delay={index * 50 + 200} enabled={isStreaming} />
+                  <TypingText text={point} speed={0} delay={0} enabled={isStreaming} />
                 </p>
               </AnimatedListItem>
             ))}
@@ -212,11 +212,11 @@ export function RoundSummarySection({
       {/* Overall Summary */}
       {overallSummary && (
         <div className="space-y-1.5">
-          <FadeInText delay={0.25}>
+          <FadeInText delay={0.1}>
             <h4 className="text-xs font-medium text-muted-foreground">{t('summary')}</h4>
           </FadeInText>
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
-            <TypingText text={overallSummary} speed={10} delay={300} enabled={isStreaming} />
+            <TypingText text={overallSummary} speed={0} delay={0} enabled={isStreaming} />
           </p>
         </div>
       )}
@@ -224,11 +224,11 @@ export function RoundSummarySection({
       {/* Conclusion */}
       {conclusion && (
         <div className="space-y-1.5">
-          <FadeInText delay={0.35}>
+          <FadeInText delay={0.15}>
             <h4 className="text-xs font-medium text-primary">{t('conclusion')}</h4>
           </FadeInText>
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
-            <TypingText text={conclusion} speed={10} delay={400} enabled={isStreaming} />
+            <TypingText text={conclusion} speed={0} delay={0} enabled={isStreaming} />
           </p>
         </div>
       )}

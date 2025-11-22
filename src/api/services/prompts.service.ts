@@ -60,10 +60,10 @@ First, analyze if the question needs multiple queries:
 - "basic": Quick facts, definitions, simple lookups → 2-3 sources
 - "advanced": How-tos, comparisons, tutorials → 4-6 sources
 
-**COMPLEXITY LEVELS**:
-- BASIC: Simple facts → 2-3 sources, "basic" depth
-- MODERATE: How-tos → 4-6 sources
-- DEEP: Research → 6-8 sources, "advanced" depth
+**COMPLEXITY LEVELS** (use lowercase):
+- "basic": Simple facts → 2-3 sources, "basic" depth
+- "moderate": How-tos → 4-6 sources
+- "deep": Research → 6-8 sources, "advanced" depth
 
 **MULTI-QUERY EXAMPLES**:
 - "What is REST API?" → 1 query (simple definition)
@@ -100,8 +100,8 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 - query: Keyword search (3-8 words)
 - rationale: Brief reason (1 sentence)
 - searchDepth: "basic" or "advanced"
-- complexity: "BASIC", "MODERATE", or "DEEP"
-- sourceCount: Sources needed (BASIC: 2-3, MODERATE: 4-6, DEEP: 6-8)
+- complexity: "basic", "moderate", or "deep" (lowercase)
+- sourceCount: Sources needed (basic: 2-3, moderate: 4-6, deep: 6-8)
 
 **OPTIONAL per query**:
 - topic: "technology"/"news"/"science" etc
@@ -113,13 +113,13 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 **EXAMPLES**:
 
 Simple question (1 query):
-{"totalQueries":1,"analysisRationale":"Simple definition lookup","queries":[{"query":"REST API definition","rationale":"Factual lookup","searchDepth":"basic","complexity":"BASIC","sourceCount":3}]}
+{"totalQueries":1,"analysisRationale":"Simple definition lookup","queries":[{"query":"REST API definition","rationale":"Factual lookup","searchDepth":"basic","complexity":"basic","sourceCount":3}]}
 
 Comparison (2 queries):
-{"totalQueries":2,"analysisRationale":"Compare two frameworks separately for balanced view","queries":[{"query":"React framework advantages 2025","rationale":"React strengths","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4},{"query":"Vue framework advantages 2025","rationale":"Vue strengths","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4}]}
+{"totalQueries":2,"analysisRationale":"Compare two frameworks separately for balanced view","queries":[{"query":"React framework advantages 2025","rationale":"React strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"Vue framework advantages 2025","rationale":"Vue strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":4}]}
 
 Complex topic (3 queries):
-{"totalQueries":3,"analysisRationale":"Multi-faceted setup requires separate searches","queries":[{"query":"Docker production setup guide","rationale":"Base configuration","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4},{"query":"Docker security best practices","rationale":"Security hardening","searchDepth":"advanced","complexity":"MODERATE","sourceCount":3},{"query":"Docker monitoring tools 2025","rationale":"Observability","searchDepth":"advanced","complexity":"MODERATE","sourceCount":3}]}
+{"totalQueries":3,"analysisRationale":"Multi-faceted setup requires separate searches","queries":[{"query":"Docker production setup guide","rationale":"Base configuration","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"Docker security best practices","rationale":"Security hardening","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Docker monitoring tools 2025","rationale":"Observability","searchDepth":"advanced","complexity":"moderate","sourceCount":3}]}
 
 Return ONLY JSON.`;
 }
