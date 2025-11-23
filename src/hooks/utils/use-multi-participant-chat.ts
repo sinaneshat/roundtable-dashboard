@@ -834,7 +834,7 @@ export function useMultiParticipantChat(
         // Wait for browser paint first
         await new Promise(resolve => requestAnimationFrame(resolve));
 
-        // Wait for animation to complete (resolves immediately if no animation registered)
+        // ✅ FIX: Wait for current participant's animation
         if (waitForAnimation) {
           await waitForAnimation(currentIndex);
         }

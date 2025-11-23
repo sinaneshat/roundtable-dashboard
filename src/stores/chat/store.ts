@@ -958,6 +958,23 @@ const createAnimationSlice: StateCreator<
     });
   },
 
+  // ✅ FIX: Wait for ALL pending animations to complete
+  // This ensures sequential execution with no overlapping animations
+  // Used by provider handleComplete to wait for all participant animations before creating analysis
+  waitForAllAnimations: async () => {
+    const state = get();
+    const pendingIndices = Array.from(state.pendingAnimations);
+
+    if (pendingIndices.length === 0) {
+      return Promise.resolve();
+    }
+
+    // Wait for all pending animations in parallel
+    await Promise.all(
+      pendingIndices.map(index => state.waitForAnimation(index)),
+    );
+  },
+
   clearAnimations: () =>
     set({
       ...ANIMATION_DEFAULTS,

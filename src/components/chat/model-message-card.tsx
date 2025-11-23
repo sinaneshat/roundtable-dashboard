@@ -1,5 +1,5 @@
 'use client';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
@@ -61,30 +61,32 @@ export const ModelMessageCard = memo(({
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(status);
 
-  // Register animation when streaming starts
-  useEffect(() => {
+  // ✅ FIX: Use useLayoutEffect for synchronous animation registration
+  // This ensures animations are registered BEFORE any callbacks fire
+  // useLayoutEffect runs synchronously after DOM mutations, before browser paint
+  useLayoutEffect(() => {
     if (isStreaming && !hasRegisteredRef.current && participantIndex >= 0) {
       registerAnimation(participantIndex);
       hasRegisteredRef.current = true;
     }
   }, [isStreaming, participantIndex, registerAnimation]);
 
-  // Complete animation when streaming finishes
-  // Uses a small delay to let Streamdown finish its animation
-  useEffect(() => {
+  // ✅ FIX: Use requestAnimationFrame instead of setTimeout for deterministic timing
+  // RAF aligns with browser paint cycle, more reliable than arbitrary 16ms delay
+  useLayoutEffect(() => {
     const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
     const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
 
     if (wasStreaming && nowComplete && hasRegisteredRef.current && participantIndex >= 0) {
-      // Small delay to let Streamdown animation settle
-      // Use minimal delay (16ms = 1 frame) to maximize speed
-      const timer = setTimeout(() => {
+      // Use RAF to complete animation on next frame
+      // This is more deterministic than setTimeout and aligns with browser rendering
+      const rafId = requestAnimationFrame(() => {
         completeAnimation(participantIndex);
         hasRegisteredRef.current = false;
-      }, 16);
+      });
 
       prevStatusRef.current = status;
-      return () => clearTimeout(timer);
+      return () => cancelAnimationFrame(rafId);
     }
 
     prevStatusRef.current = status;

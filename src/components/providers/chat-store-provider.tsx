@@ -138,16 +138,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const userMessage = sdkMessages.findLast(m => m.role === MessageRoles.USER);
           const userQuestion = userMessage?.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p)?.text || '';
 
-          // ✅ ANIMATION COORDINATION: Wait for all participant animations to complete
-          // This ensures analysis doesn't appear while the last participant's message is still animating
-          // The hook's onFinish already waits between participants, but we need to wait for the LAST one too
-          const enabledParticipants = storeParticipants.filter(p => p.isEnabled);
-          const lastParticipantIndex = enabledParticipants.length - 1;
-
-          if (lastParticipantIndex >= 0) {
-            // Wait for last participant's animation (resolves immediately if no animation pending)
-            await currentState.waitForAnimation(lastParticipantIndex);
-          }
+          // ✅ FIX: Wait for ALL participant animations to complete
+          // This ensures analysis doesn't appear while ANY participant's message is still animating
+          // Previously only waited for last participant, but parallel participants could still be animating
+          // waitForAllAnimations ensures sequential execution with no overlapping animations
+          await currentState.waitForAllAnimations();
 
           // Mark as created first (prevents race conditions)
           currentState.markAnalysisCreated(roundNumber);
@@ -538,11 +533,29 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return; // Don't trigger participants yet - pre-search still running
       }
 
-      // ✅ ANIMATION COORDINATION: Wait for pre-search animation to complete
+      // ✅ FIX: Check animation status - multiple defensive layers
       // Pre-search uses AnimationIndices.PRE_SEARCH for animation tracking
       // This ensures participants don't start while pre-search UI is still animating
-      if (storePendingAnimations.has(AnimationIndices.PRE_SEARCH)) {
+      const isPreSearchAnimating = storePendingAnimations.has(AnimationIndices.PRE_SEARCH);
+
+      if (isPreSearchAnimating) {
         return; // Don't trigger participants yet - pre-search animation still running
+      }
+
+      // ✅ FIX: Defensive timing guard - if just completed, wait one cycle
+      // When status changes to COMPLETE, component needs time to register animation
+      // This prevents race where provider checks before component's useLayoutEffect runs
+      if (currentRoundPreSearch.status === AnalysisStatuses.COMPLETE && currentRoundPreSearch.completedAt) {
+        const completedTime = currentRoundPreSearch.completedAt instanceof Date
+          ? currentRoundPreSearch.completedAt.getTime()
+          : new Date(currentRoundPreSearch.completedAt).getTime();
+        const timeSinceComplete = Date.now() - completedTime;
+
+        // If completed less than 50ms ago, wait for component registration
+        // This gives PreSearchCard's useLayoutEffect time to run
+        if (timeSinceComplete < 50) {
+          return; // Wait another effect cycle for animation registration
+        }
       }
 
       // If pre-search failed, continue anyway - participants can work without it

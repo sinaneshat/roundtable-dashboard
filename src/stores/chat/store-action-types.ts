@@ -547,6 +547,8 @@ export type AnimationActionsType = {
   registerAnimation: RegisterAnimation;
   completeAnimation: CompleteAnimation;
   waitForAnimation: WaitForAnimation;
+  /** ✅ FIX: Wait for ALL pending animations to complete */
+  waitForAllAnimations: () => Promise<void>;
   clearAnimations: ClearAnimations;
 };
 

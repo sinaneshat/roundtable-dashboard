@@ -459,6 +459,7 @@ export const AnimationActionsSchema = z.object({
   registerAnimation: z.custom<RegisterAnimation>(),
   completeAnimation: z.custom<CompleteAnimation>(),
   waitForAnimation: z.custom<WaitForAnimation>(),
+  waitForAllAnimations: z.custom<() => Promise<void>>(),
   clearAnimations: z.custom<ClearAnimations>(),
 });
 

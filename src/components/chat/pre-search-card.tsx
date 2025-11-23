@@ -2,7 +2,7 @@
 
 import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -68,9 +68,10 @@ export function PreSearchCard({
     }
   }, [streamingRoundNumber, isLatest, preSearch.roundNumber]);
 
-  // ✅ ANIMATION COORDINATION: Register animation when streaming starts
-  // Pattern from ModelMessageCard.tsx:64-70
-  useEffect(() => {
+  // ✅ FIX: Use useLayoutEffect for synchronous animation registration
+  // This ensures animations are registered BEFORE any callbacks fire
+  // useLayoutEffect runs synchronously after DOM mutations, before browser paint
+  useLayoutEffect(() => {
     const isStreaming = preSearch.status === AnalysisStatuses.STREAMING;
     if (isStreaming && !hasRegisteredRef.current) {
       registerAnimation(AnimationIndices.PRE_SEARCH);
@@ -78,24 +79,23 @@ export function PreSearchCard({
     }
   }, [preSearch.status, registerAnimation]);
 
-  // ✅ ANIMATION COORDINATION: Complete animation when streaming finishes
-  // Pattern from ModelMessageCard.tsx:72-92
-  // Uses delay to let accordion animation settle before proceeding
-  useEffect(() => {
+  // ✅ FIX: Use requestAnimationFrame instead of setTimeout for deterministic timing
+  // RAF aligns with browser paint cycle, more reliable than arbitrary 16ms delay
+  useLayoutEffect(() => {
     const wasStreaming = prevStatusRef.current === AnalysisStatuses.STREAMING;
     const nowComplete = preSearch.status !== AnalysisStatuses.STREAMING
       && preSearch.status !== AnalysisStatuses.PENDING;
 
     if (wasStreaming && nowComplete && hasRegisteredRef.current) {
-      // Small delay to let accordion/content animations settle
-      // Use 16ms (1 frame) to maximize speed while ensuring visual smoothness
-      const timer = setTimeout(() => {
+      // Use RAF to complete animation on next frame
+      // This is more deterministic than setTimeout and aligns with browser rendering
+      const rafId = requestAnimationFrame(() => {
         completeAnimation(AnimationIndices.PRE_SEARCH);
         hasRegisteredRef.current = false;
-      }, 16);
+      });
 
       prevStatusRef.current = preSearch.status;
-      return () => clearTimeout(timer);
+      return () => cancelAnimationFrame(rafId);
     }
 
     prevStatusRef.current = preSearch.status;
