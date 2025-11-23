@@ -6,6 +6,7 @@ import { cva } from 'class-variance-authority'
 import { useTranslations } from 'next-intl'
 import { z } from 'zod'
 
+import { OperationStatuses } from '@/api/core/enums'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/ui/cn'
 
@@ -130,7 +131,7 @@ export function StatusBadge({
     lg: 'h-4 w-4',
   }[iconSize]
 
-  const shouldPulse = pulse || normalizedStatus === 'pending' || normalizedStatus === 'processing'
+  const shouldPulse = pulse || normalizedStatus === OperationStatuses.PENDING || normalizedStatus === 'processing'
 
   return (
     <Badge

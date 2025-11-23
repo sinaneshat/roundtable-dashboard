@@ -20,7 +20,7 @@ import type { TypedLogger } from '@/api/types/logger';
 // ZOD SCHEMAS (Single Source of Truth)
 // ============================================================================
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
-import { DEFAULT_ROLES, extractModelName } from '@/lib/utils/ai-display';
+import { DEFAULT_ROLES } from '@/lib/utils/ai-display';
 
 export type ModeratorAnalysis = ModeratorAnalysisPayload;
 
@@ -482,5 +482,3 @@ export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string 
 
   return sections.join('\n');
 }
-
-export { extractModelName as extractModelNameForModerator };

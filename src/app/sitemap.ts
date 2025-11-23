@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
 
+import { ThreadStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import { chatThread } from '@/db/schema';
 import { getBaseUrl } from '@/utils/helpers';
@@ -35,7 +36,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     // Filter out archived and deleted threads for SEO optimization
     const activeThreads = publicThreads.filter(
-      thread => thread.status === 'active',
+      thread => thread.status === ThreadStatuses.ACTIVE,
     );
 
     publicThreadPages = activeThreads.map(thread => ({

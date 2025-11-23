@@ -579,20 +579,29 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         },
       );
     }
-    const userMessages = await db.query.chatMessage.findMany({
+    // ✅ FIX: Use roundNumber matching instead of timestamp comparison to find user's question
+    const userMessage = await db.query.chatMessage.findFirst({
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
           eqOp(fields.threadId, threadId),
           eqOp(fields.role, 'user'),
+          eqOp(fields.roundNumber, roundNum),
         ),
-      orderBy: [desc(tables.chatMessage.createdAt)],
-      limit: 10,
+      orderBy: [asc(tables.chatMessage.createdAt)],
     });
+
+    if (!userMessage) {
+      throw createError.badRequest(
+        `No user message found for round ${roundNum}`,
+        {
+          errorType: 'validation',
+          field: 'roundNumber',
+        },
+      );
+    }
+
+    const userQuestion = extractTextFromParts(userMessage.parts);
     const earliestParticipantTime = Math.min(...participantMessages.map(m => m.createdAt.getTime()));
-    const relevantUserMessage = userMessages.find(
-      m => m.createdAt.getTime() < earliestParticipantTime,
-    );
-    const userQuestion = relevantUserMessage ? extractTextFromParts(relevantUserMessage.parts) : 'N/A';
     const changelogEntries = await db.query.chatThreadChangelog.findMany({
       where: (fields, { and: andOp, eq: eqOp, lte: lteOp }) =>
         andOp(
