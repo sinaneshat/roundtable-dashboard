@@ -21,7 +21,7 @@ import { extractModelName, getModelIconInfo } from '@/lib/utils/ai-display';
  */
 
 const modelBadgeVariants = cva(
-  'flex items-center gap-2 rounded-md border border-border/50 bg-muted/30',
+  'flex items-center gap-2 rounded-full border border-border/50 bg-muted/30',
   {
     variants: {
       size: {

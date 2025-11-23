@@ -122,14 +122,14 @@ export function ThreadTimeline({
   // ✅ VIRTUALIZATION: Window-level virtualization with streaming protection
   // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
   // ✅ MOBILE OPTIMIZED: Hook automatically increases overscan to 25+ on touch devices
-  // ✅ OFFICIAL PATTERN: Use paddingEnd option - getTotalSize() includes this automatically
-  const ESTIMATE_SIZE = 400; // Estimated height per timeline item
+  // ✅ HEIGHT FIX: Zero estimates/padding - height matches content exactly
+  const ESTIMATE_SIZE = 1; // Near-zero - forces immediate measurement
   const { virtualItems, totalSize, scrollMargin, measureElement } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
     estimateSize: ESTIMATE_SIZE,
     overscan: 15, // Desktop: 15 items | Mobile: 25+ (auto-adjusted by hook)
-    paddingEnd: 200, // ✅ Built-in padding option (not manual paddingBottom)
+    paddingEnd: 0, // Zero padding - content fits exactly
     streamingRounds, // Pass streaming rounds to prevent unmounting during streams
   });
 

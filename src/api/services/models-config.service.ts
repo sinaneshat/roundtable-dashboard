@@ -182,6 +182,11 @@ export const HardcodedModelSchema = z.object({
   is_free: z.boolean(),
   supports_vision: z.boolean(),
   is_reasoning_model: z.boolean(),
+
+  // ✅ MODEL-SPECIFIC CONFIG FLAGS (Single Source of Truth)
+  // These flags control behavior in streaming handler without hardcoded model ID checks
+  supports_temperature: z.boolean(), // Some reasoning models don't support temperature (o4-mini, o4-deep, o1)
+  supports_reasoning_stream: z.boolean(), // Whether model exposes reasoning tokens via stream (o1 does NOT - reasoning is internal)
 });
 
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
@@ -246,6 +251,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -285,6 +292,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -323,7 +332,9 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: true,
-    is_reasoning_model: false,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   // ========== PREMIUM MODELS (Rank 6-12) ==========
@@ -365,6 +376,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -404,6 +417,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -443,6 +458,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: false,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -482,6 +499,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -521,6 +540,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -560,6 +581,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   // ========== ANTHROPIC MODELS ==========
@@ -601,6 +624,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -640,6 +665,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -679,6 +706,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: true,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -718,6 +747,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: true,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -757,6 +788,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: true,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   // ========== SPECIALIZED MODELS (Rank 13-20) ==========
@@ -797,7 +830,9 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: false,
-    is_reasoning_model: false,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -837,6 +872,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -876,6 +913,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -914,7 +953,9 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: true,
-    is_reasoning_model: false,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -954,6 +995,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -993,6 +1036,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1032,6 +1077,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: false,
+    supports_reasoning_stream: false, // o1 does NOT stream reasoning - it's internal
   },
 
   {
@@ -1071,6 +1118,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   // ========== NEW MODELS - NOVEMBER 2025 UPDATE ==========
@@ -1113,6 +1162,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1152,6 +1203,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1191,6 +1244,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   // OpenAI o-series Reasoning Models
@@ -1231,6 +1286,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: false,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -1270,6 +1327,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: false,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -1309,6 +1368,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: false,
+    supports_reasoning_stream: true,
   },
 
   // Anthropic Claude Models
@@ -1349,6 +1410,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1388,6 +1451,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1427,6 +1492,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1466,6 +1533,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: true,
     is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true, // Claude thinking models DO stream reasoning
   },
 
   // xAI Grok Models
@@ -1505,7 +1574,9 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: false,
-    is_reasoning_model: false,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   {
@@ -1544,7 +1615,9 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: false,
-    is_reasoning_model: false,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   // DeepSeek Models
@@ -1585,6 +1658,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1624,6 +1699,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: true,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1663,6 +1740,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1702,6 +1781,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   {
@@ -1741,6 +1822,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
 
   // Qwen Models
@@ -1781,6 +1864,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   // Meta Llama Models
@@ -1821,6 +1906,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 
   // MoonshotAI Kimi Models
@@ -1861,6 +1948,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_free: false,
     supports_vision: false,
     is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
   },
 ] as const;
 

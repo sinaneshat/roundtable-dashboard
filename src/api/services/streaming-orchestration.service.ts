@@ -89,7 +89,7 @@ export type CloudflareAiBinding = {
 
 export type BuildSystemPromptParams = {
   participant: ChatParticipant;
-  thread: Pick<ChatThread, 'projectId' | 'enableWebSearch'>;
+  thread: Pick<ChatThread, 'projectId' | 'enableWebSearch' | 'mode'>;
   userQuery: string;
   previousDbMessages: ChatMessage[];
   currentRoundNumber: number;
@@ -200,9 +200,9 @@ export async function buildSystemPromptWithContext(
 ): Promise<string> {
   const { participant, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger } = params;
 
-  // Start with base system prompt
+  // Start with base system prompt (pass mode for mode-specific interaction styles)
   let systemPrompt = participant.settings?.systemPrompt
-    || buildParticipantSystemPrompt(participant.role);
+    || buildParticipantSystemPrompt(participant.role, thread.mode);
 
   // Add project-based context
   if (thread.projectId && userQuery.trim()) {

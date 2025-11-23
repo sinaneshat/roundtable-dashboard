@@ -55,17 +55,6 @@ export type ChatModeConfig = {
 // ============================================================================
 
 /**
- * System prompt descriptions for each mode
- * These are used in the prompt engineering for multi-participant sessions
- */
-export const CHAT_MODE_SYSTEM_PROMPTS: Record<ChatModeId, string> = {
-  [ChatModes.ANALYZING]: 'You are participating in a multi-participant analytical discussion. Each participant brings their unique perspective. Reference other participants by their number (e.g., "As Participant 2 mentioned...") and build on the insights shared. Respond to both the user\'s query and other participants\' contributions.',
-  [ChatModes.BRAINSTORMING]: 'You are participating in a multi-participant brainstorming session. Each participant contributes creative ideas. Reference other participants by their number (e.g., "Building on Participant 3\'s idea...") and add your unique perspective. Respond to both the user\'s query and other participants\' ideas.',
-  [ChatModes.DEBATING]: 'You are participating in a multi-participant debate. Each participant presents their arguments. Reference other participants by their number (e.g., "I disagree with Participant 1 because...") and engage critically. Respond to both the user\'s query and other participants\' arguments.',
-  [ChatModes.SOLVING]: 'You are participating in a multi-participant problem-solving discussion. Each participant proposes solutions. Reference other participants by their number (e.g., "Participant 2\'s approach is solid, but...") and build logically. Respond to both the user\'s query and other participants\' solutions.',
-};
-
-/**
  * Chat Modes Configuration
  * All available conversation modes with their UI and behavior settings
  *
@@ -167,13 +156,6 @@ export function getChatModeLabel(modeId: ChatModeId): string {
 export function getChatModeIcon(modeId: ChatModeId): LucideIcon | undefined {
   const mode = getChatModeById(modeId);
   return mode?.icon;
-}
-
-/**
- * Get chat mode system prompt by ID
- */
-export function getChatModeSystemPrompt(modeId: ChatModeId): string {
-  return CHAT_MODE_SYSTEM_PROMPTS[modeId];
 }
 
 /**

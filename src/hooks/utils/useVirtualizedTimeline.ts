@@ -29,7 +29,7 @@ export type UseVirtualizedTimelineOptions = {
   /**
    * Estimated size per timeline item in pixels
    * This is a starting estimate - actual sizes will be measured dynamically
-   * Default: 400px (covers most message groups)
+   * Default: 1px (near-zero forces immediate measurement)
    */
   estimateSize?: number;
 
@@ -72,7 +72,7 @@ export type UseVirtualizedTimelineOptions = {
    * Extra padding at end of scroll area (in pixels)
    * Prevents content from being hidden behind sticky elements (like input box)
    * Uses virtualizer's built-in paddingEnd option
-   * Default: 200px
+   * Default: 0px (no padding - content fits exactly)
    */
   paddingEnd?: number;
 
@@ -176,13 +176,13 @@ export type UseVirtualizedTimelineResult = {
 export function useVirtualizedTimeline({
   timelineItems,
   scrollContainerId = 'chat-scroll-container',
-  estimateSize = 400,
+  estimateSize = 1, // Near-zero - forces immediate measurement
   overscan = 10, // ✅ INCREASED from 1 to 10 for smoother fast scrolling (25+ on mobile)
   enabled = true,
   onScrollOffsetChange,
   enableSmoothScroll = true,
   smoothScrollDuration = 1000,
-  paddingEnd = 200,
+  paddingEnd = 0, // Zero padding - content fits exactly
   streamingRounds,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // ✅ MOBILE FIX: Detect touch devices for mobile-specific optimizations

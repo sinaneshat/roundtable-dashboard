@@ -77,3 +77,63 @@ export const PRE_SEARCH_COMPARE_KEYS = [
   'errorMessage',
   'completedAt',
 ] as const satisfies ReadonlyArray<keyof StoredPreSearch>;
+
+// ============================================================================
+// ANIMATION INDICES - Type-safe animation tracking indices
+// ============================================================================
+
+/**
+ * Animation indices enum for animation coordination
+ *
+ * Participant animations use indices 0, 1, 2, etc. (based on participant index)
+ * Non-participant animations use negative indices to avoid collisions
+ *
+ * ✅ PATTERN: Enum-based approach for type safety and consistency
+ * ✅ SINGLE SOURCE OF TRUTH: All animation indices defined here
+ *
+ * Usage:
+ * - PreSearchCard: Uses PRE_SEARCH for pre-search animation tracking
+ * - ModelMessageCard: Uses participant indices directly (0, 1, 2, ...)
+ * - Provider: Checks animation completion before proceeding to next step
+ */
+export const AnimationIndices = {
+  /**
+   * Pre-search animation index (-1)
+   * Used by PreSearchCard to register/complete animations
+   */
+  PRE_SEARCH: -1,
+
+  /**
+   * Analysis animation index (-2)
+   * Reserved for future analysis animation tracking
+   */
+  ANALYSIS: -2,
+} as const;
+
+/**
+ * Type for animation indices (union of participant indices and special indices)
+ * Participant indices: 0, 1, 2, 3, ... (non-negative integers)
+ * Special indices: AnimationIndices.PRE_SEARCH, AnimationIndices.ANALYSIS, etc.
+ */
+export type AnimationIndex = number;
+
+/**
+ * Type guard to check if an index is a participant animation
+ */
+export function isParticipantAnimation(index: number): boolean {
+  return index >= 0;
+}
+
+/**
+ * Type guard to check if an index is a pre-search animation
+ */
+export function isPreSearchAnimation(index: number): boolean {
+  return index === AnimationIndices.PRE_SEARCH;
+}
+
+/**
+ * Type guard to check if an index is an analysis animation
+ */
+export function isAnalysisAnimation(index: number): boolean {
+  return index === AnimationIndices.ANALYSIS;
+}

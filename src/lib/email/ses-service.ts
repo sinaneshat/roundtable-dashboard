@@ -2,6 +2,7 @@ import { render } from '@react-email/components';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
+import { MagicLink } from '@/emails/templates';
 
 type EmailConfig = {
   accessKeyId?: string;
@@ -127,10 +128,6 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
-    // Dynamic import to avoid Next.js build issues with React Email components
-    // Works with Cloudflare Workers when serverExternalPackages is configured in next.config.ts
-    const { MagicLink } = await import('@/emails/templates');
-
     // Render React Email template to HTML
     // Note: Using @react-email/components instead of @react-email/render
     // to avoid edge runtime export resolution issues in Cloudflare Workers

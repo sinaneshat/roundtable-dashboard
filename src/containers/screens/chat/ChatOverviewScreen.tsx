@@ -448,6 +448,8 @@ export default function ChatOverviewScreen() {
   }, [showInitialUI, isStreaming, stopStreaming]);
 
   // Scroll management for window-level scrolling
+  // bottomOffset accounts for: sticky input (pt-10 + ~80px input) + shadow gradient (h-8) + bottom margin (16px)
+  // ✅ FIX: Pass preSearches for auto-scroll during pre-search object generation
   useChatScroll({
     messages,
     analyses,
@@ -455,6 +457,8 @@ export default function ChatOverviewScreen() {
     scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
     currentParticipantIndex,
+    bottomOffset: 180,
+    preSearches,
   });
 
   // Streaming loader state calculation
@@ -468,7 +472,7 @@ export default function ChatOverviewScreen() {
 
   return (
     <UnifiedErrorBoundary context="chat">
-      <div className={`flex flex-col relative ${showInitialUI ? 'min-h-full' : 'min-h-full pt-14'}`}>
+      <div className={`flex flex-col relative flex-1 ${showInitialUI ? 'min-h-full' : 'min-h-full pt-14'}`}>
         {/* Radial glow - fixed positioning, doesn't affect layout */}
         <AnimatePresence mode="wait">
           {showInitialUI && (
@@ -504,7 +508,7 @@ export default function ChatOverviewScreen() {
 
         {/* Initial UI - standard layout without scroll wrapper */}
         {showInitialUI && (
-          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative z-10 !flex !flex-col !justify-start !items-center pt-4">
+          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative z-10 !flex !flex-col !justify-between !items-center pt-4">
             <motion.div
               key="initial-ui"
               initial={{ opacity: 0 }}
@@ -563,49 +567,49 @@ export default function ChatOverviewScreen() {
                 >
                   <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
                 </motion.div>
-
-                {/* Chat input - positioned below suggestions in initial UI */}
-                <motion.div
-                  className="w-full mt-6 sm:mt-8"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
-                >
-                  <ChatInput
-                    value={inputValue}
-                    onChange={setInputValue}
-                    onSubmit={handlePromptSubmit}
-                    status={isInputBlocked ? 'submitted' : 'ready'}
-                    onStop={stopStreaming}
-                    placeholder={t('chat.input.placeholder')}
-                    participants={selectedParticipants}
-                    quotaCheckType="threads"
-                    onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
-                    toolbar={(
-                      <ChatInputToolbarMenu
-                        selectedParticipants={selectedParticipants}
-                        allModels={allEnabledModels}
-                        onOpenModelModal={() => modelModal.onTrue()}
-                        selectedMode={selectedMode || getDefaultChatMode()}
-                        onOpenModeModal={() => modeModal.onTrue()}
-                        enableWebSearch={enableWebSearch}
-                        onWebSearchToggle={setEnableWebSearch}
-                        disabled={isInputBlocked}
-                      />
-                    )}
-                  />
-                </motion.div>
               </div>
+            </motion.div>
+
+            {/* Chat input - pushed to bottom with mt-auto for proper spacing */}
+            <motion.div
+              className="w-full mt-auto pb-4"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+            >
+              <ChatInput
+                value={inputValue}
+                onChange={setInputValue}
+                onSubmit={handlePromptSubmit}
+                status={isInputBlocked ? 'submitted' : 'ready'}
+                onStop={stopStreaming}
+                placeholder={t('chat.input.placeholder')}
+                participants={selectedParticipants}
+                quotaCheckType="threads"
+                onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
+                toolbar={(
+                  <ChatInputToolbarMenu
+                    selectedParticipants={selectedParticipants}
+                    allModels={allEnabledModels}
+                    onOpenModelModal={() => modelModal.onTrue()}
+                    selectedMode={selectedMode || getDefaultChatMode()}
+                    onOpenModeModal={() => modeModal.onTrue()}
+                    enableWebSearch={enableWebSearch}
+                    onWebSearchToggle={setEnableWebSearch}
+                    disabled={isInputBlocked}
+                  />
+                )}
+              />
             </motion.div>
           </div>
         )}
 
-        {/* Chat UI with container scrolling */}
+        {/* Chat UI with body-based scrolling */}
         {!showInitialUI && currentThread && (
           <>
             <div
-              className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4 flex-1"
+              className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4"
             >
               <UnifiedErrorBoundary context="message-list">
                 {/* Split messages for correct ordering: user → pre-search → assistant */}
@@ -689,24 +693,19 @@ export default function ChatOverviewScreen() {
                 </div>
               )}
 
-              {/* Unified loading indicator - at bottom left of content */}
-              <UnifiedLoadingIndicator
-                showLoader={showLoader}
-                loadingDetails={loadingDetails}
-                preSearches={preSearches}
-              />
             </div>
 
-            {/* Bottom shadow gradient - creates depth effect */}
-            <div
-              className="sticky bottom-0 left-0 right-0 h-8 z-20 pointer-events-none bg-gradient-to-t from-black/40 to-transparent"
-              style={{ marginBottom: `-${keyboardOffset}px` }}
+            {/* Unified loading indicator - sticky positioned above input */}
+            <UnifiedLoadingIndicator
+              showLoader={showLoader}
+              loadingDetails={loadingDetails}
+              preSearches={preSearches}
             />
 
-            {/* Chat input - sticky at bottom within scroll container */}
+            {/* Chat input - sticky at bottom, mt-auto pushes to bottom when content is small */}
             <div
               ref={inputContainerRef}
-              className="sticky z-30 bg-gradient-to-t from-background via-background to-transparent pt-10"
+              className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-10 relative"
               style={{ bottom: `${keyboardOffset + 16}px` }}
             >
               <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
@@ -734,6 +733,8 @@ export default function ChatOverviewScreen() {
                   )}
                 />
               </div>
+              {/* Bottom fill - covers gap to screen bottom */}
+              <div className="absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
             </div>
           </>
         )}

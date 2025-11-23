@@ -13,6 +13,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
+import { OperationStatuses } from '@/api/core/enums';
 import { getStreamState } from '@/api/services/resumable-stream-kv.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -98,7 +99,7 @@ export const getStreamStatusHandler: RouteHandler<typeof getStreamStatusRoute, A
 
     // Stream is still active - return 204 No Content
     // Frontend should continue polling or wait
-    if (streamState.status === 'active') {
+    if (streamState.status === OperationStatuses.ACTIVE) {
       return c.body(null, HttpStatusCodes.NO_CONTENT);
     }
 

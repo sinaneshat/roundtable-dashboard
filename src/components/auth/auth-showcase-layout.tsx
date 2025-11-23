@@ -88,8 +88,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
       <div className="relative hidden md:flex md:flex-col p-6 lg:p-10 overflow-hidden">
         {/* Floating glass card */}
         <Card
-          variant="glass"
-          className="w-full h-full min-h-0 shadow-2xl ring-1 ring-white/10 overflow-hidden py-0"
+          className="w-full h-full min-h-0 shadow-2xl overflow-hidden py-0"
         >
           <LiveChatDemo />
         </Card>

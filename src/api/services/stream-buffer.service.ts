@@ -295,6 +295,36 @@ export async function failStreamBuffer(
     metadata.completedAt = Date.now();
     metadata.errorMessage = errorMessage;
 
+    // ✅ FIX: Append error chunk so frontend receives error event on resume
+    // AI SDK v5 error format: 3:{"error":"..."}
+    try {
+      const chunksKey = getChunksKey(streamId);
+      const existingChunks = await env.KV.get(chunksKey, 'json') as StreamChunk[] | null;
+
+      if (existingChunks) {
+        const errorChunk: StreamChunk = {
+          data: `3:${JSON.stringify({ error: errorMessage })}`,
+          timestamp: Date.now(),
+        };
+
+        const updatedChunks = [...existingChunks, errorChunk];
+
+        await env.KV.put(
+          chunksKey,
+          JSON.stringify(updatedChunks),
+          { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
+        );
+
+        metadata.chunkCount = updatedChunks.length;
+      }
+    } catch (chunkError) {
+      logger?.warn('Failed to append error chunk', {
+        logType: 'edge_case',
+        streamId,
+        error: chunkError instanceof Error ? chunkError.message : 'Unknown error',
+      });
+    }
+
     await env.KV.put(
       metadataKey,
       JSON.stringify(metadata),
@@ -483,6 +513,10 @@ export async function deleteStreamBuffer(
 /**
  * Convert buffered chunks to SSE format for transmission
  * Returns ReadableStream of SSE-formatted data
+ *
+ * ✅ IMPORTANT: Chunks are stored as raw SSE data strings (e.g., "0:\"text\"\n\n")
+ * from the AI SDK stream. We pass them through as-is without wrapping.
+ * The chunks already contain the complete SSE protocol format.
  */
 export function chunksToSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -490,9 +524,11 @@ export function chunksToSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Ar
   return new ReadableStream({
     start(controller) {
       for (const chunk of chunks) {
-        // Format as SSE: data: {chunk.data}\n\n
-        const sseData = `data: ${chunk.data}\n\n`;
-        controller.enqueue(encoder.encode(sseData));
+        // ✅ FIX: Pass chunk data through as-is
+        // Chunks are already in SSE format from AI SDK stream
+        // Previously was double-wrapping: `data: ${chunk.data}\n\n`
+        // which produced malformed SSE like `data: 0:"text"\n\n\n\n`
+        controller.enqueue(encoder.encode(chunk.data));
       }
       controller.close();
     },

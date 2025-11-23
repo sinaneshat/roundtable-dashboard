@@ -48,9 +48,9 @@ const statusVariants = cva(
         primary: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/10",
       },
       size: {
-        sm: "text-xs px-2 py-0.5 rounded-md",
-        md: "text-sm px-2.5 py-0.5 rounded-md",
-        lg: "text-sm px-3 py-1 rounded-lg",
+        sm: "text-xs px-2 py-0.5 rounded-full",
+        md: "text-sm px-2.5 py-0.5 rounded-full",
+        lg: "text-sm px-3 py-1 rounded-full",
       }
     },
     defaultVariants: {

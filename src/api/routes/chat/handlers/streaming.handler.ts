@@ -14,6 +14,7 @@ import { and, asc, eq } from 'drizzle-orm';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
+import { extractAISdkError, getErrorMessage, getErrorName, getErrorStatusCode } from '@/api/common/error-types';
 import { createHandler } from '@/api/core';
 import { UIMessageRoles } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
@@ -33,7 +34,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
-import { markStreamActive, markStreamCompleted, markStreamFailed } from '@/api/services/resumable-stream-kv.service';
+import { clearThreadActiveStream, markStreamActive, markStreamCompleted, markStreamFailed, setThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
 import { appendStreamChunk, completeStreamBuffer, failStreamBuffer, initializeStreamBuffer } from '@/api/services/stream-buffer.service';
 import type { CloudflareAiBinding } from '@/api/services/streaming-orchestration.service';
@@ -352,7 +353,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Build system prompt with RAG context
     const userQuery = extractUserQuery([...previousMessages, message as UIMessage]);
     const baseSystemPrompt = participant.settings?.systemPrompt
-      || buildParticipantSystemPrompt(participant.role);
+      || buildParticipantSystemPrompt(participant.role, thread.mode);
+
+    // ✅ AI BINDING: Pass Cloudflare AI for RAG-enhanced prompts
+    // Type cast needed because Cloudflare Ai type is more general than CloudflareAiBinding
+    // Safe because: autorag() exists on actual Cloudflare AI binding at runtime
+    // Service handles undefined AI gracefully (falls back to non-RAG prompt)
     const systemPrompt = await buildSystemPromptWithContext({
       participant,
       thread,
@@ -388,10 +394,30 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // CUSTOMIZATION: Multi-participant routing via participantIndex (application-specific)
     //
 
-    // ✅ TEMPERATURE SUPPORT: Some models (like o4-mini) don't support temperature parameter
-    // Check if model supports temperature before including it
-    const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
+    // ✅ TEMPERATURE SUPPORT: Use config flag from model definition (Single Source of Truth)
+    // Some reasoning models (o1, o3-mini, o4-mini) don't support temperature parameter
+    const modelSupportsTemperature = modelInfo?.supports_temperature ?? true;
     const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
+
+    // ✅ REASONING MODEL SUPPORT: Use config flag from model definition (Single Source of Truth)
+    // Reference: https://openrouter.ai/docs/use-cases/reasoning-tokens
+    // Reference: https://github.com/OpenRouterTeam/ai-sdk-provider
+    const supportsReasoningStream = modelInfo?.supports_reasoning_stream ?? false;
+
+    // Build providerOptions for reasoning models ONLY if they support streaming reasoning
+    // - OpenAI o3-mini/o4-mini: Support streaming reasoning with effort-based config
+    // - OpenAI o1: Does NOT stream reasoning (internal) - don't configure reasoning options
+    // - DeepSeek R1: Enable reasoning mode
+    // - Claude :thinking models: Handled automatically by model ID suffix
+    const providerOptions = supportsReasoningStream
+      ? {
+          openrouter: {
+            reasoning: {
+              effort: 'medium',
+            },
+          },
+        }
+      : undefined;
 
     // ✅ STREAMING APPROACH: Direct streamText() without validation
     //
@@ -408,6 +434,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       messages: modelMessages,
       maxOutputTokens,
       ...(modelSupportsTemperature && { temperature: temperatureValue }),
+      // ✅ REASONING: Add providerOptions for o1/o3/o4/DeepSeek R1 models
+      ...(providerOptions && { providerOptions }),
       maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
       abortSignal: AbortSignal.any([
         c.req.raw.signal,
@@ -451,6 +479,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           rag_enabled: systemPrompt !== baseSystemPrompt,
           has_custom_system_prompt: !!participant.settings?.systemPrompt,
 
+          // Reasoning model context
+          is_reasoning_model: modelInfo?.is_reasoning_model ?? false,
+          reasoning_enabled: !!providerOptions,
+
           // Performance expectations
           estimated_input_tokens: estimatedInputTokens,
 
@@ -463,10 +495,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ CONDITIONAL RETRY: Don't retry validation errors (400), authentication errors (401, 403)
       // These are permanent errors that won't be fixed by retrying
       shouldRetry: ({ error }: { error: unknown }) => {
-        // Extract status code and error name from error
-        const err = error as Error & { statusCode?: number; responseBody?: string; name?: string };
-        const statusCode = err?.statusCode;
-        const errorName = err?.name || '';
+        // ✅ TYPE-SAFE ERROR EXTRACTION: Use utility functions instead of unsafe casting
+        const statusCode = getErrorStatusCode(error);
+        const errorName = getErrorName(error) || '';
+        const aiError = extractAISdkError(error);
 
         // Don't retry AI SDK type validation errors - these are provider response format issues
         // that won't be fixed by retrying. The stream already partially succeeded.
@@ -477,8 +509,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // Don't retry validation errors (400) - malformed requests
         if (statusCode === 400) {
           // Check for specific non-retryable error messages
-          const errorMessage = err?.message || '';
-          const responseBody = err?.responseBody || '';
+          const errorMessage = getErrorMessage(error);
+          const responseBody = aiError?.responseBody || '';
 
           // Don't retry "Multi-turn conversations are not supported" errors
           if (errorMessage.includes('Multi-turn conversations are not supported')
@@ -636,6 +668,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
     await markStreamActive(
       threadId,
+      currentRoundNumber,
+      participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+      c.env,
+    );
+
+    // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
+    // This enables the frontend to detect and resume this stream after page reload
+    await setThreadActiveStream(
+      threadId,
+      streamMessageId,
       currentRoundNumber,
       participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
       c.env,
@@ -826,6 +868,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           messageId,
           c.env,
         );
+
+        // ✅ RESUMABLE STREAMS: Clear thread-level active stream on completion
+        // This signals that no stream is active and prevents stale resume attempts
+        await clearThreadActiveStream(threadId, c.env);
       },
     });
 
@@ -938,12 +984,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // =========================================================================
         // ✅ RESUMABLE STREAMS: Mark stream as failed for resume detection
         // =========================================================================
-        const errorMessage = error instanceof Error ? error.message : 'Unknown streaming error';
+        // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utility for consistent error handling
+        const streamErrorMessage = getErrorMessage(error);
         markStreamFailed(
           threadId,
           currentRoundNumber,
           participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-          errorMessage,
+          streamErrorMessage,
           c.env,
         ).catch(() => {
           // Silently fail - don't break error handling
@@ -973,8 +1020,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // ✅ DEEPSEEK R1 WORKAROUND: Suppress logprobs validation errors
         // These are non-fatal errors from DeepSeek R1's non-conforming logprobs structure
         // Reference: https://github.com/vercel/ai/issues/9087
-        const err = error as Error & { name?: string };
-        if (err?.name === 'AI_TypeValidationError' && err?.message?.includes('logprobs')) {
+        const errorName = getErrorName(error);
+        if (errorName === 'AI_TypeValidationError' && streamErrorMessage.includes('logprobs')) {
           // Return empty string to indicate error was handled and stream should continue
           return '';
         }

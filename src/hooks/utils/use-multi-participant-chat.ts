@@ -9,11 +9,12 @@ import { z } from 'zod';
 
 import { AiSdkStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
+import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import { DEFAULT_PARTICIPANT_INDEX, ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
-import { getAssistantMetadata, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
+import { getAssistantMetadata, getParticipantIndex, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
 import { deduplicateParticipants } from '@/lib/utils/participant';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
@@ -254,7 +255,8 @@ export function useMultiParticipantChat(
 
   // Refs to hold values needed for triggering (to avoid closure issues in callbacks)
   const messagesRef = useRef<UIMessage[]>([]);
-  const aiSendMessageRef = useRef<((message: { text: string; metadata?: Record<string, unknown> }) => void) | null>(null);
+  // ✅ TYPE-SAFE: Use DbUserMessageMetadata (without createdAt which is added by backend)
+  const aiSendMessageRef = useRef<((message: { text: string; metadata?: Omit<DbUserMessageMetadata, 'createdAt'> }) => void) | null>(null);
 
   /**
    * Trigger the next participant using refs (safe to call from useChat callbacks)
@@ -266,7 +268,29 @@ export function useMultiParticipantChat(
     }
 
     const nextIndex = currentIndexRef.current + 1;
-    const totalParticipants = roundParticipantsRef.current.length;
+    let totalParticipants = roundParticipantsRef.current.length;
+
+    // ✅ CRITICAL GUARD: Prevent premature round completion
+    // If roundParticipantsRef is empty but we have participants, populate it first
+    // This can happen during resumed streams or race conditions
+    if (totalParticipants === 0 && participantsRef.current.length > 0) {
+      const enabled = participantsRef.current.filter(p => p.isEnabled);
+      roundParticipantsRef.current = enabled;
+      totalParticipants = enabled.length;
+      // eslint-disable-next-line no-console -- Debug logging
+      console.debug('[triggerNextParticipant] Populated roundParticipantsRef:', {
+        count: totalParticipants,
+        nextIndex,
+      });
+    }
+
+    // ✅ SAFETY CHECK: Don't complete round if we have no participants at all
+    // This prevents triggering onComplete when participants haven't loaded yet
+    if (totalParticipants === 0) {
+      // eslint-disable-next-line no-console -- Debug logging
+      console.warn('[triggerNextParticipant] No participants available, skipping transition');
+      return;
+    }
 
     // Round complete - reset state
     // Analysis triggering now handled automatically by store subscription
@@ -361,7 +385,8 @@ export function useMultiParticipantChat(
    * queue drainage when AI SDK retries or calls multiple times per participant.
    */
   const prepareSendMessagesRequest = useCallback(
-    ({ id, messages }: { id: string; messages: unknown[] }) => {
+    // ✅ TYPE-SAFE: Properly typed AI SDK transport message format
+    ({ id, messages }: { id: string; messages: Array<{ role?: string; content?: string; id?: string; parts?: Array<{ type: string; text?: string }> }> }) => {
       // ✅ CRITICAL FIX: Prevent queue drainage on retries/duplicate calls
       // AI SDK transport may call this function multiple times for the same message
       // (retries, preflight, etc.). We only shift from queue when processing a NEW participant.
@@ -417,6 +442,9 @@ export function useMultiParticipantChat(
         // ✅ RESUMABLE STREAMS: Configure resume endpoint for stream reconnection
         // When resume: true, AI SDK calls this on mount to check for active streams
         // Returns the GET endpoint that serves buffered SSE chunks from Cloudflare KV
+        //
+        // Following AI SDK documentation pattern: Backend tracks active stream per thread
+        // Frontend doesn't need to construct stream ID - backend looks it up
         prepareReconnectToStreamRequest: ({ id }) => {
           // Guard: Don't attempt resume if no thread ID
           // This prevents 404 errors on overview page where threadId is empty
@@ -424,15 +452,11 @@ export function useMultiParticipantChat(
             return {}; // AI SDK will skip resume attempt (no api property)
           }
 
-          // Extract thread ID and construct stream ID for current participant
-          // Stream ID format: {threadId}_r{roundNumber}_p{participantIndex}
-          const roundNumber = currentRoundRef.current;
-          const participantIndex = currentIndexRef.current;
-          const streamId = `${id}_r${roundNumber}_p${participantIndex}`;
-
           return {
-            // Resume endpoint serves buffered chunks from KV
-            api: `/api/v1/chat/threads/${id}/streams/${streamId}/resume`,
+            // ✅ SIMPLIFIED: Resume endpoint looks up active stream by thread ID
+            // Backend determines which stream to resume (round/participant)
+            // No need to construct stream ID on frontend
+            api: `/api/v1/chat/threads/${id}/stream`,
             credentials: 'include', // Required for session auth
           };
         },
@@ -466,6 +490,17 @@ export function useMultiParticipantChat(
      * Handle participant errors - create error UI and continue to next participant
      */
     onError: (error) => {
+      // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
+      // This prevents premature round completion when totalParticipants is 0
+      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+        const enabled = participantsRef.current.filter(p => p.isEnabled);
+        roundParticipantsRef.current = enabled;
+        // eslint-disable-next-line no-console -- Debug logging
+        console.debug('[onError] Populated roundParticipantsRef as safety fallback:', {
+          count: enabled.length,
+        });
+      }
+
       // CRITICAL: Use ref for current index to avoid stale closure
       const currentIndex = currentIndexRef.current;
       const participant = roundParticipantsRef.current[currentIndex];
@@ -519,8 +554,59 @@ export function useMultiParticipantChat(
      * AI SDK v5 Pattern: Trust the SDK's built-in deduplication
      */
     onFinish: async (data) => {
-      // CRITICAL: Use ref for current index to avoid stale closure
-      const currentIndex = currentIndexRef.current;
+      // ✅ RESUMABLE STREAMS: Detect and handle resumed stream completion
+      // After page reload, refs are reset but message metadata has correct values
+      // Check if this is a resumed stream by looking at the message metadata
+      // ✅ TYPE-SAFE: Use metadata utility functions instead of Record<string, unknown>
+      const metadataRoundNumber = getRoundNumber(data.message?.metadata);
+      const metadataParticipantIndex = getParticipantIndex(data.message?.metadata);
+
+      // Determine the actual participant index - prefer metadata for resumed streams
+      let currentIndex = currentIndexRef.current;
+
+      // ✅ CRITICAL FIX: Detect resumed stream when roundParticipantsRef is empty
+      // After page reload, roundParticipantsRef is [] but we receive onFinish from resumed stream
+      // Detection: roundParticipantsRef is empty AND we have valid metadata
+      const isResumedStream = roundParticipantsRef.current.length === 0
+        && metadataParticipantIndex !== null
+        && participantsRef.current.length > 0;
+
+      if (isResumedStream) {
+        // Update refs from metadata for resumed stream
+        currentIndex = metadataParticipantIndex;
+        currentIndexRef.current = currentIndex;
+
+        if (metadataRoundNumber !== null) {
+          currentRoundRef.current = metadataRoundNumber;
+        }
+
+        // ✅ CRITICAL: Populate roundParticipantsRef from participantsRef
+        // This MUST happen before triggerNextParticipantWithRefs checks totalParticipants
+        const enabled = participantsRef.current.filter(p => p.isEnabled);
+        roundParticipantsRef.current = enabled;
+
+        // Also set streaming state since we're in the middle of a round
+        setIsExplicitlyStreaming(true);
+
+        // eslint-disable-next-line no-console -- Debug logging for resume flow
+        console.debug('[onFinish] Detected resumed stream, updated refs from metadata:', {
+          participantIndex: currentIndex,
+          roundNumber: metadataRoundNumber,
+          participantCount: roundParticipantsRef.current.length,
+        });
+      }
+
+      // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
+      // This prevents premature round completion when totalParticipants is 0
+      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+        const enabled = participantsRef.current.filter(p => p.isEnabled);
+        roundParticipantsRef.current = enabled;
+        // eslint-disable-next-line no-console -- Debug logging
+        console.debug('[onFinish] Populated roundParticipantsRef as safety fallback:', {
+          count: enabled.length,
+        });
+      }
+
       const participant = roundParticipantsRef.current[currentIndex];
 
       // Handle silent failure (no message object from AI SDK)
@@ -576,6 +662,23 @@ export function useMultiParticipantChat(
         // 🐛 DEBUG: Log message ID received from AI SDK
         const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
 
+        // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
+        // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
+        // But finishReason='stop' indicates successful completion with content
+        // ✅ ENUM PATTERN: Use MessagePartTypes constant instead of string literal
+        const textParts = data.message.parts?.filter(p => p.type === MessagePartTypes.TEXT) || [];
+        const hasTextInParts = textParts.some(
+          part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
+        );
+        const metadata = data.message.metadata;
+        const hasSuccessfulFinish = Boolean(
+          metadata
+          && typeof metadata === 'object'
+          && 'finishReason' in metadata
+          && metadata.finishReason === 'stop',
+        );
+        const hasGeneratedText = hasTextInParts || hasSuccessfulFinish;
+
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
         const completeMetadata = mergeParticipantMetadata(
@@ -583,6 +686,7 @@ export function useMultiParticipantChat(
           participant,
           currentIndex,
           finalRoundNumber, // REQUIRED: Pass round number explicitly
+          { hasGeneratedText: Boolean(hasGeneratedText) }, // REQUIRED: Tell it we have content to avoid false empty_response errors
         );
 
         // Use flushSync to force React to commit metadata update synchronously

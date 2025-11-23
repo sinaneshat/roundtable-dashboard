@@ -62,6 +62,176 @@ function getStreamStateKey(threadId: string, roundNumber: number, participantInd
 }
 
 /**
+ * Generate KV key for thread-level active stream tracking
+ * ✅ RESUMABLE STREAMS: Track ONE active stream per thread for AI SDK resume pattern
+ */
+function getThreadActiveStreamKey(threadId: string): string {
+  return `stream:thread:${threadId}:active`;
+}
+
+/**
+ * Active stream info stored at thread level
+ * ✅ RESUMABLE STREAMS: Following AI SDK documentation pattern
+ */
+export type ThreadActiveStream = {
+  streamId: string;
+  roundNumber: number;
+  participantIndex: number;
+  createdAt: string;
+};
+
+/**
+ * Set thread-level active stream
+ * Called when participant stream starts to enable resume detection
+ *
+ * ✅ RESUMABLE STREAMS: AI SDK pattern - one active stream per thread
+ *
+ * @param threadId - Thread ID
+ * @param streamId - Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})
+ * @param roundNumber - Round number
+ * @param participantIndex - Participant index
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ */
+export async function setThreadActiveStream(
+  threadId: string,
+  streamId: string,
+  roundNumber: number,
+  participantIndex: number,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  // ✅ LOCAL DEV: Skip tracking if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
+  try {
+    const activeStream: ThreadActiveStream = {
+      streamId,
+      roundNumber,
+      participantIndex,
+      createdAt: new Date().toISOString(),
+    };
+
+    await env.KV.put(
+      getThreadActiveStreamKey(threadId),
+      JSON.stringify(activeStream),
+      { expirationTtl: STREAM_STATE_TTL },
+    );
+
+    if (logger) {
+      logger.info('Set thread active stream', {
+        logType: 'operation',
+        threadId,
+        streamId,
+        roundNumber,
+        participantIndex,
+      });
+    }
+  } catch (error) {
+    if (logger) {
+      logger.warn('Failed to set thread active stream', {
+        logType: 'edge_case',
+        threadId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+    // Don't throw - tracking failures shouldn't break streaming
+  }
+}
+
+/**
+ * Get thread-level active stream
+ * Returns null if no active stream exists for the thread
+ *
+ * ✅ RESUMABLE STREAMS: AI SDK pattern - check for active stream on mount
+ *
+ * @param threadId - Thread ID
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ * @returns Active stream info or null
+ */
+export async function getThreadActiveStream(
+  threadId: string,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<ThreadActiveStream | null> {
+  // ✅ LOCAL DEV: Return null if KV not available
+  if (!env?.KV) {
+    return null;
+  }
+
+  try {
+    const activeStream = await env.KV.get(
+      getThreadActiveStreamKey(threadId),
+      'json',
+    ) as ThreadActiveStream | null;
+
+    if (activeStream && logger) {
+      logger.info('Retrieved thread active stream', {
+        logType: 'operation',
+        threadId,
+        streamId: activeStream.streamId,
+        roundNumber: activeStream.roundNumber,
+        participantIndex: activeStream.participantIndex,
+      });
+    }
+
+    return activeStream;
+  } catch (error) {
+    if (logger) {
+      logger.error('Failed to get thread active stream', {
+        logType: 'error',
+        threadId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+    return null;
+  }
+}
+
+/**
+ * Clear thread-level active stream
+ * Called when stream completes, fails, or is no longer needed
+ *
+ * ✅ RESUMABLE STREAMS: AI SDK pattern - clear when stream finishes
+ *
+ * @param threadId - Thread ID
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ */
+export async function clearThreadActiveStream(
+  threadId: string,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  // ✅ LOCAL DEV: Skip if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
+  try {
+    await env.KV.delete(getThreadActiveStreamKey(threadId));
+
+    if (logger) {
+      logger.info('Cleared thread active stream', {
+        logType: 'operation',
+        threadId,
+      });
+    }
+  } catch (error) {
+    if (logger) {
+      logger.warn('Failed to clear thread active stream', {
+        logType: 'edge_case',
+        threadId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+}
+
+/**
  * Mark stream as active
  * Called when participant stream starts
  *

@@ -27,6 +27,23 @@ export {
   type ErrorCode,
   normalizeError,
 } from './error-handling';
+export {
+  type AISdkError,
+  extractAISdkError,
+  extractErrorInfo,
+  extractGenericError,
+  extractNetworkError,
+  type GenericError,
+  getErrorCause,
+  getErrorMessage,
+  getErrorName,
+  getErrorStack,
+  getErrorStatusCode,
+  hasErrorName,
+  hasErrorStatusCode,
+  isError,
+  type NetworkError,
+} from './error-types';
 
 // ============================================================================
 // BATCH OPERATIONS

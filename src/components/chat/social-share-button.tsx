@@ -182,7 +182,7 @@ export function SocialShareButton({
           onClick={handleCopyLink}
         >
           <span className="mr-2">
-            {copySuccess.value ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
+            {copySuccess.value ? <Check className="size-4 text-green-500 animate-in zoom-in-75 duration-300" /> : <Copy className="size-4" />}
           </span>
           <span className={cn(copySuccess.value && 'text-green-500')}>
             {copySuccess.value ? t('linkCopied') : t('copyLink')}

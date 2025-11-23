@@ -141,14 +141,14 @@ function AssistantGroupCard({
             </span>
             {group.headerInfo.role && (
               <span
-                className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border"
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
                 style={getRoleBadgeStyle(group.headerInfo.role)}
               >
                 {String(group.headerInfo.role)}
               </span>
             )}
             {!group.headerInfo.isAccessible && group.headerInfo.requiredTierName && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border bg-muted/50 text-muted-foreground border-border/50">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/50 text-muted-foreground border-border/50">
                 {group.headerInfo.requiredTierName}
                 {' '}
                 required

@@ -593,6 +593,11 @@ export function mergeParticipantMetadata(
   const hasToolCalls = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
   const hasAnyContent = skipPartsCheck ? true : (hasTextContent || hasToolCalls);
 
+  // ✅ CRITICAL FIX: Don't mark as error if finishReason='stop' even if parts not populated yet
+  // For fast models, onFinish fires before parts are fully populated in React state
+  // finishReason='stop' indicates successful completion
+  const hasSuccessfulFinish = validatedMetadata?.finishReason === 'stop';
+
   // Determine hasError with proper priority
   const hasError = hasBackendErrorFlag
     ? true
@@ -600,9 +605,11 @@ export function mergeParticipantMetadata(
       ? false
       : skipPartsCheck
         ? false
-        : hasExplicitErrorMetadata
-          ? true
-          : !hasAnyContent;
+        : hasSuccessfulFinish
+          ? false // ✅ Don't mark as error if finished successfully
+          : hasExplicitErrorMetadata
+            ? true
+            : !hasAnyContent;
 
   // Generate error message if needed
   let errorMessage: string | undefined;

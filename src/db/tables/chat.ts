@@ -59,14 +59,14 @@ export const chatThread = sqliteTable('chat_thread', {
   metadata: text('metadata', { mode: 'json' }).$type<DbThreadMetadata>(),
   // Optimistic locking - prevents lost updates in concurrent modifications
   version: integer('version').notNull().default(1),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  lastMessageAt: integer('last_message_at', { mode: 'timestamp' }),
+  lastMessageAt: integer('last_message_at', { mode: 'timestamp_ms' }),
 }, table => [
   index('chat_thread_user_idx').on(table.userId),
   index('chat_thread_project_idx').on(table.projectId),
@@ -93,10 +93,10 @@ export const chatCustomRole = sqliteTable('chat_custom_role', {
   systemPrompt: text('system_prompt').notNull(), // The actual prompt that defines the role behavior
   // ✅ TYPE-SAFE: Strictly typed metadata for custom roles
   metadata: text('metadata', { mode: 'json' }).$type<DbCustomRoleMetadata>(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
@@ -125,10 +125,10 @@ export const chatParticipant = sqliteTable('chat_participant', {
     .default(true),
   // ✅ TYPE-SAFE: Strictly typed settings (temperature, maxTokens, systemPrompt)
   settings: text('settings', { mode: 'json' }).$type<DbParticipantSettings>(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
@@ -181,7 +181,7 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
   // ✅ TYPE-SAFE: Discriminated union by 'type' field - no escape hatches
   // Four change types: 'participant', 'participant_role', 'mode_change', 'participant_reorder'
   changeData: text('change_data', { mode: 'json' }).$type<DbChangelogData>().notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
 }, table => [
@@ -357,8 +357,8 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   // ✅ Error tracking for failed analyses
   errorMessage: text('error_message'),
   // ✅ Completion timestamp (null until status = 'complete')
-  completedAt: integer('completed_at', { mode: 'timestamp' }),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
 }, table => [
@@ -383,10 +383,10 @@ export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
     .references(() => user.id, { onDelete: 'cascade' }),
   roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
   feedbackType: text('feedback_type', { enum: FEEDBACK_TYPES }), // null = no feedback
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
@@ -478,8 +478,8 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   // ✅ Error tracking for failed searches
   errorMessage: text('error_message'),
   // ✅ Completion timestamp (null until status = 'complete')
-  completedAt: integer('completed_at', { mode: 'timestamp' }),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
 }, table => [

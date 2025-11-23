@@ -8,27 +8,16 @@ import { cn } from '@/lib/ui/cn';
 type ChatScrollButtonProps = {
   variant?: 'floating' | 'header';
   className?: string;
-  scrollContainerId?: string;
 };
 
 export function ChatScrollButton({
   variant = 'floating',
   className,
-  scrollContainerId = 'main-scroll-container',
 }: ChatScrollButtonProps) {
   const [showButton, setShowButton] = useState(false);
 
   useEffect(() => {
-    // Find the scroll container
-    const contentContainer = document.getElementById(scrollContainerId);
-    const scrollContainer = contentContainer?.closest('[class*="overflow-y-auto"]') as HTMLElement
-      || contentContainer?.closest('main') as HTMLElement
-      || null;
-
-    if (!scrollContainer) {
-      return undefined;
-    }
-
+    // Use window-based scrolling for native OS scroll behavior
     let rafId: number | null = null;
     let lastScrollTime = 0;
     const throttleMs = 100;
@@ -41,7 +30,9 @@ export function ChatScrollButton({
       }
       lastScrollTime = now;
 
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: updating state based on scroll position
       setShowButton(distanceFromBottom > 200);
@@ -55,29 +46,23 @@ export function ChatScrollButton({
     };
 
     checkScrollPosition();
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }
     };
-  }, [scrollContainerId]);
+  }, []);
 
   const scrollToBottom = () => {
-    // Find the scroll container
-    const contentContainer = document.getElementById(scrollContainerId);
-    const scrollContainer = contentContainer?.closest('[class*="overflow-y-auto"]') as HTMLElement
-      || contentContainer?.closest('main') as HTMLElement
-      || null;
-
-    if (scrollContainer) {
-      scrollContainer.scrollTo({
-        top: scrollContainer.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
+    // Use window-based scrolling for native OS scroll behavior
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({
+      top: maxScroll,
+      behavior: 'smooth',
+    });
   };
 
   if (!showButton)

@@ -39,6 +39,17 @@ export { useThreadActions } from './actions/thread-actions';
 // Store
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
+
+// Store Constants
+export type { AnimationIndex } from './store-constants';
+export {
+  AnimationIndices,
+  isAnalysisAnimation,
+  isParticipantAnimation,
+  isPreSearchAnimation,
+} from './store-constants';
+
+// Re-exported enums
 export type { FlowState, ScreenMode } from '@/api/core/enums';
 
 // Re-export commonly used types for tests

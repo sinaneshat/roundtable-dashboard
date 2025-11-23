@@ -31,6 +31,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { requireParticipantMetadata } from '@/lib/utils/metadata';
@@ -300,34 +301,35 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       : existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETE);
     if (existingAnalysis) {
       if (existingAnalysis.status === AnalysisStatuses.COMPLETE && existingAnalysis.analysisData) {
-        return Responses.ok(c, {
-          object: {
-            ...existingAnalysis.analysisData,
-            mode: existingAnalysis.mode,
-            roundNumber: existingAnalysis.roundNumber,
-            userQuestion: existingAnalysis.userQuestion,
-          },
-        });
+        // ✅ CRITICAL FIX: Return raw JSON for useObject compatibility
+        // useObject hook expects raw object data, not wrapped in API response
+        // Must match the format that streamObject returns
+        const completeAnalysisData = {
+          ...existingAnalysis.analysisData,
+          mode: existingAnalysis.mode,
+          roundNumber: existingAnalysis.roundNumber,
+          userQuestion: existingAnalysis.userQuestion,
+        };
+        return c.json(completeAnalysisData);
       }
       if (existingAnalysis.status === AnalysisStatuses.STREAMING) {
-        const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
-
-        // ✅ TIMEOUT PROTECTION: If stream has been running > threshold, consider it failed
-        // SSE connections can get interrupted (navigation, network issues) without backend knowing
-        // Mark stale streaming analyses as failed so new streams can start
-        if (ageMs > STREAMING_CONFIG.STREAM_TIMEOUT_MS) {
+        // Check if stream has timed out using clean timestamp utilities
+        if (hasTimestampExceededTimeout(existingAnalysis.createdAt, STREAMING_CONFIG.STREAM_TIMEOUT_MS)) {
+          // SSE connections can get interrupted without backend knowing
+          // Mark stale streaming analyses as failed so new streams can start
           await db.update(tables.chatModeratorAnalysis)
             .set({
               status: AnalysisStatuses.FAILED,
-              errorMessage: `Stream timeout after ${Math.round(ageMs / 1000)}s - SSE connection likely interrupted`,
+              errorMessage: `Stream timeout after ${formatAgeMs(getTimestampAge(existingAnalysis.createdAt))} - SSE connection likely interrupted`,
             })
             .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
 
           // Continue to create new analysis below
         } else {
           // Still within timeout window - reject duplicate request
+          const ageMs = getTimestampAge(existingAnalysis.createdAt);
           throw createError.conflict(
-            `Analysis is already being generated (age: ${Math.round(ageMs / 1000)}s). Please wait for it to complete.`,
+            `Analysis is already being generated (age: ${formatAgeMs(ageMs)}). Please wait for it to complete.`,
             {
               errorType: 'resource',
               resource: 'moderator_analysis',
@@ -681,12 +683,11 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       where: eq(tables.chatModeratorAnalysis.threadId, threadId),
       orderBy: [desc(tables.chatModeratorAnalysis.roundNumber), desc(tables.chatModeratorAnalysis.createdAt)],
     });
-    const now = Date.now();
     const orphanedAnalyses = allAnalyses.filter((analysis) => {
       if (analysis.status !== AnalysisStatuses.STREAMING && analysis.status !== AnalysisStatuses.PENDING)
         return false;
-      const ageMs = now - analysis.createdAt.getTime();
-      return ageMs > STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS;
+      // Check if timestamp has exceeded orphan cleanup timeout
+      return hasTimestampExceededTimeout(analysis.createdAt, STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS);
     });
     if (orphanedAnalyses.length > 0) {
       for (const analysis of orphanedAnalyses) {

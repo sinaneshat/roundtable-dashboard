@@ -41,7 +41,7 @@ import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
-import { createChatStore } from '@/stores/chat';
+import { AnimationIndices, createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // CONTEXT (Official Pattern)
@@ -103,14 +103,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // ✅ AI SDK v5 PATTERN: onComplete orchestration  // Called AFTER each round completes (all participants finished streaming)
   // Handles two critical tasks:
-  // 1. Analysis trigger: Create pending analysis for moderator review
+  // 1. Analysis trigger: Create pending analysis for moderator review (after animations)
   // 2. Pending message check: Send next message if waiting for changelog/pre-search
 
-  const handleComplete = useCallback((sdkMessages: UIMessage[]) => {
+  const handleComplete = useCallback(async (sdkMessages: UIMessage[]) => {
     const currentState = store.getState();
 
     // ============================================================================
-    // TASK 1: ANALYSIS TRIGGER (after participant streaming)
+    // TASK 1: ANALYSIS TRIGGER (after participant streaming AND animations)
     // ============================================================================
     // Moved from store subscription (store.ts:865-963)
     // Provider has direct access to chat hook state without stale closures
@@ -137,6 +137,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
           const userMessage = sdkMessages.findLast(m => m.role === MessageRoles.USER);
           const userQuestion = userMessage?.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p)?.text || '';
+
+          // ✅ ANIMATION COORDINATION: Wait for all participant animations to complete
+          // This ensures analysis doesn't appear while the last participant's message is still animating
+          // The hook's onFinish already waits between participants, but we need to wait for the LAST one too
+          const enabledParticipants = storeParticipants.filter(p => p.isEnabled);
+          const lastParticipantIndex = enabledParticipants.length - 1;
+
+          if (lastParticipantIndex >= 0) {
+            // Wait for last participant's animation (resolves immediately if no animation pending)
+            await currentState.waitForAnimation(lastParticipantIndex);
+          }
 
           // Mark as created first (prevents race conditions)
           currentState.markAnalysisCreated(roundNumber);
@@ -463,13 +474,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger
   // Watches waitingToStartStreaming and calls FRESH startRound
   // Avoids stale closure issues from store subscription
-  // ✅ PRE-SEARCH BLOCKING: Waits for pre-search completion before triggering participants
+  // ✅ PRE-SEARCH BLOCKING: Waits for pre-search completion AND animation before triggering participants
   const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
   const storeParticipants = useStore(store, s => s.participants);
   const storeMessages = useStore(store, s => s.messages);
   const storePreSearches = useStore(store, s => s.preSearches);
   const storeThread = useStore(store, s => s.thread);
   const storeScreenMode = useStore(store, s => s.screenMode); // ✅ FIX: Subscribe to screenMode changes
+  const storePendingAnimations = useStore(store, s => s.pendingAnimations); // ✅ ANIMATION COORDINATION: Subscribe to animation state
 
   useEffect(() => {
     if (!waitingToStart) {
@@ -526,6 +538,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return; // Don't trigger participants yet - pre-search still running
       }
 
+      // ✅ ANIMATION COORDINATION: Wait for pre-search animation to complete
+      // Pre-search uses AnimationIndices.PRE_SEARCH for animation tracking
+      // This ensures participants don't start while pre-search UI is still animating
+      if (storePendingAnimations.has(AnimationIndices.PRE_SEARCH)) {
+        return; // Don't trigger participants yet - pre-search animation still running
+      }
+
       // If pre-search failed, continue anyway - participants can work without it
     }
 
@@ -535,7 +554,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // The flag is only cleared when isStreaming becomes true (see effect below)
     chat.startRound(storeParticipants);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only depend on chat.startRound, not entire chat object to avoid unnecessary re-renders
-  }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, store, effectiveThreadId]);
+  }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
 
   // ✅ CRITICAL FIX: Clear waitingToStartStreaming flag when streaming actually begins
   // This separate effect watches for successful stream start and clears the flag
@@ -1033,6 +1052,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         // Don't reset flag - prevents infinite retry loop
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chat.isStreamingRef is a ref and doesn't need to be in dependencies
   }, [
     // ✅ CRITICAL FIX: Include all subscribed state in dependencies
     // This ensures effect re-runs when any of these values change

@@ -13,12 +13,13 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
+import { getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
 import { chunksToSSEStream, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
-import type { resumeStreamRoute } from '../route';
+import type { resumeStreamRoute, resumeThreadStreamRoute } from '../route';
 
 // ============================================================================
 // Stream Resume Handler
@@ -107,6 +108,98 @@ export const resumeStreamHandler: RouteHandler<typeof resumeStreamRoute, ApiEnv>
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no', // Disable nginx buffering
+      },
+    });
+  },
+);
+
+// ============================================================================
+// Thread Stream Resume Handler (AI SDK Documentation Pattern)
+// ============================================================================
+
+/**
+ * GET /chat/threads/:threadId/stream
+ *
+ * Resume active stream for a thread - follows AI SDK documentation pattern
+ * Automatically looks up the active stream and returns buffered chunks
+ *
+ * This is the preferred endpoint for stream resumption. The frontend doesn't
+ * need to construct the stream ID - the backend determines which stream to resume.
+ *
+ * Returns:
+ * - 204 No Content: No active stream for this thread
+ * - 200 OK: SSE stream with buffered chunks
+ *
+ * @pattern Following AI SDK Chatbot Resume Streams documentation
+ */
+export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    operationName: 'resumeThreadStream',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId } = c.req.param();
+
+    // Type guard: Verify threadId exists
+    if (!threadId) {
+      throw createError.badRequest('Thread ID is required', { errorType: 'validation' });
+    }
+
+    // Verify thread ownership
+    const db = await getDbAsync();
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, threadId),
+      columns: { id: true, userId: true },
+    });
+
+    if (!thread) {
+      throw createError.notFound('Thread not found');
+    }
+
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized('Not authorized to access this thread');
+    }
+
+    // Get thread-level active stream
+    const activeStream = await getThreadActiveStream(threadId, c.env);
+
+    // No active stream - return 204 No Content
+    if (!activeStream) {
+      return c.body(null, HttpStatusCodes.NO_CONTENT);
+    }
+
+    // Get stream buffer metadata
+    const metadata = await getStreamMetadata(activeStream.streamId, c.env);
+
+    // No buffer exists - return 204 No Content
+    if (!metadata) {
+      return c.body(null, HttpStatusCodes.NO_CONTENT);
+    }
+
+    // Get buffered chunks
+    const chunks = await getStreamChunks(activeStream.streamId, c.env);
+
+    // No chunks available - return 204 No Content
+    if (!chunks || chunks.length === 0) {
+      return c.body(null, HttpStatusCodes.NO_CONTENT);
+    }
+
+    // Convert chunks to SSE stream
+    const sseStream = chunksToSSEStream(chunks);
+
+    // Return SSE stream with metadata headers
+    return new Response(sseStream, {
+      status: HttpStatusCodes.OK,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        // Include stream metadata in headers for frontend to update state
+        'X-Stream-Id': activeStream.streamId,
+        'X-Round-Number': String(activeStream.roundNumber),
+        'X-Participant-Index': String(activeStream.participantIndex),
       },
     });
   },

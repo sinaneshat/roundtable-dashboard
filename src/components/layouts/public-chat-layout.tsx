@@ -55,8 +55,8 @@ export default function PublicChatLayout({ children, thread, slug }: PublicChatL
         }
       />
 
-      {/* Content area with scroll */}
-      <div className="flex flex-1 flex-col w-full min-w-0 relative overflow-y-auto" data-public-content>
+      {/* Content area - body-based scrolling for native OS scroll behavior */}
+      <div className="flex flex-1 flex-col w-full min-w-0 relative" data-public-content>
         {children}
       </div>
     </div>

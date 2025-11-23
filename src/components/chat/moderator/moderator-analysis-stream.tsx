@@ -159,7 +159,9 @@ function ModeratorAnalysisStreamComponent({
             errorType = StreamErrorTypes.VALIDATION;
           } else if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
             errorType = StreamErrorTypes.CONFLICT;
+            // ✅ CRITICAL FIX: Don't call onStreamComplete on 409 - polling will handle completion
             is409Conflict.onTrue();
+            return; // Exit early - polling effect will handle completion
           } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
             errorType = StreamErrorTypes.NETWORK;
           }
@@ -187,6 +189,59 @@ function ModeratorAnalysisStreamComponent({
   useEffect(() => {
     submitRef.current = submit;
   }, [submit]);
+
+  // ✅ CRITICAL FIX: Polling for 409 Conflict - stream already in progress
+  // When page refreshes during streaming, backend returns 409
+  // Instead of retrying POST, poll GET endpoint for completion
+  useEffect(() => {
+    if (!is409Conflict.value)
+      return undefined;
+
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/v1/chat/threads/${threadId}/analyses`);
+        if (!res.ok)
+          throw new Error('Failed to fetch analyses');
+
+        const json = (await res.json()) as { data: StoredModeratorAnalysis[] };
+        const analyses = json.data;
+        const current = analyses.find(a => a.roundNumber === analysis.roundNumber);
+
+        if (current) {
+          if (current.status === AnalysisStatuses.COMPLETE && current.analysisData) {
+            // ✅ TYPE FIX: analysisData is ModeratorAnalysisPayload which matches onStreamComplete signature
+            onStreamCompleteRef.current?.(current.analysisData as ModeratorAnalysisPayload);
+            if (isMounted)
+              is409Conflict.onFalse(); // Stop polling
+            return;
+          } else if (current.status === AnalysisStatuses.FAILED) {
+            onStreamCompleteRef.current?.(null, new Error(current.errorMessage || 'Analysis failed'));
+            if (isMounted)
+              is409Conflict.onFalse(); // Stop polling
+            return;
+          }
+          // If still STREAMING or PENDING, continue polling
+        }
+      } catch (err) {
+        // Silent failure on polling error, retry next interval
+        console.error('[ModeratorAnalysisStream] Polling failed:', err);
+      }
+
+      if (isMounted) {
+        timeoutId = setTimeout(poll, 2000); // Poll every 2s
+      }
+    };
+
+    poll();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [is409Conflict.value, threadId, analysis.roundNumber, is409Conflict]);
 
   // Cleanup on unmount: stop streaming
   useEffect(() => {

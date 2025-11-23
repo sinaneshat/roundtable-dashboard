@@ -539,8 +539,12 @@ while (true) {
 See [API Streaming Guide](/docs/api-streaming-guide.md) for complete implementation.`,
       content: {
         'text/event-stream; charset=utf-8': {
+          // ✅ JUSTIFIED z.any(): SSE streams have dynamic format (AI SDK UIMessageStream protocol)
+          // Multiple event types with different structures - cannot be represented with single static Zod schema
+          // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-ui/stream-protocol
+          // Event types: text chunks, metadata, finish reason, errors
           schema: z.any().openapi({
-            description: 'AI SDK UI Message Stream format. Includes text chunks, metadata (token usage, finish reason), and error information. Use AI SDK client libraries for automatic parsing or implement manual SSE parsing.',
+            description: 'AI SDK UIMessageStream format. Dynamic SSE protocol with multiple event types: text chunks (0:), metadata (2:), errors (e:), finish reason, token usage. Use AI SDK client libraries (useChat, streamText) for automatic parsing. Cannot be represented with static schema due to protocol dynamism.',
             example: 'data: 0:"Hello"\ndata: 0:" World"\ndata: 2:[{"finishReason":"stop","usage":{"promptTokens":150,"completionTokens":45}}]\ndata: e:{"finishReason":"stop"}\n\n',
           }),
         },
@@ -896,14 +900,75 @@ export const resumeStreamRoute = createRoute({
       description: 'Buffered stream chunks returned as SSE',
       content: {
         'text/event-stream': {
+          // ✅ JUSTIFIED z.any(): SSE streams have dynamic format (AI SDK protocol)
+          // Cannot be represented with static Zod schema - each event has different structure
+          // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
           schema: z.any().openapi({
-            description: 'Server-Sent Events stream',
+            description: 'Server-Sent Events (SSE) stream following AI SDK Stream Protocol. Dynamic format - cannot be statically typed. See AI SDK documentation for event structure.',
           }),
         },
       },
     },
     [HttpStatusCodes.NO_CONTENT]: {
       description: 'No stream buffer exists or stream has no chunks',
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET /chat/threads/:threadId/stream
+ * ✅ RESUMABLE STREAMS: Resume active stream (AI SDK documentation pattern)
+ */
+export const resumeThreadStreamRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/stream',
+  tags: ['chat'],
+  summary: 'Resume active stream for thread (AI SDK pattern)',
+  description: `Resume the active stream for a thread. Follows the AI SDK Chatbot Resume Streams documentation pattern.
+
+This is the **preferred endpoint** for stream resumption. The frontend doesn't need to construct the stream ID - the backend automatically looks up which stream is active and returns it.
+
+**Response Types**:
+- text/event-stream: SSE stream with buffered chunks (if active stream exists)
+- 204 No Content: No active stream for this thread
+
+**Response Headers** (on 200 OK):
+- X-Stream-Id: The stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})
+- X-Round-Number: The round number of the active stream
+- X-Participant-Index: The participant index of the active stream
+
+**Usage Pattern** (AI SDK):
+1. useChat mounts with resume: true
+2. AI SDK calls GET /chat/threads/{id}/stream
+3. If 204: No active stream, proceed normally
+4. If 200: Stream found, process SSE and trigger next participant on completion
+
+**Example**: GET /chat/threads/thread_123/stream`,
+  request: {
+    params: z.object({
+      threadId: z.string().openapi({
+        description: 'Thread ID',
+        example: 'thread_abc123',
+      }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Active stream found - returning buffered SSE chunks',
+      content: {
+        'text/event-stream': {
+          // ✅ JUSTIFIED z.any(): SSE streams have dynamic format (AI SDK protocol)
+          // Cannot be represented with static Zod schema - each event has different structure
+          // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+          schema: z.any().openapi({
+            description: 'Server-Sent Events (SSE) stream with buffered chunks. Dynamic format following AI SDK Stream Protocol.',
+          }),
+        },
+      },
+    },
+    [HttpStatusCodes.NO_CONTENT]: {
+      description: 'No active stream for this thread',
     },
     ...createProtectedRouteResponses(),
   },

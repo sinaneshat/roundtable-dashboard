@@ -2,7 +2,7 @@
 
 import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { cn } from '@/lib/ui/cn';
+import { AnimationIndices } from '@/stores/chat';
 
 import { PreSearchStream } from './pre-search-stream';
 
@@ -44,6 +45,12 @@ export function PreSearchCard({
   const updatePreSearchStatus = useChatStore(s => s.updatePreSearchStatus);
   const updatePreSearchData = useChatStore(s => s.updatePreSearchData);
 
+  // ✅ ANIMATION COORDINATION: Track animation lifecycle (pattern from ModelMessageCard)
+  const registerAnimation = useChatStore(s => s.registerAnimation);
+  const completeAnimation = useChatStore(s => s.completeAnimation);
+  const hasRegisteredRef = useRef(false);
+  const prevStatusRef = useRef(preSearch.status);
+
   // Manual control state for accordion (follows RoundAnalysisCard pattern)
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
@@ -60,6 +67,40 @@ export function PreSearchCard({
       });
     }
   }, [streamingRoundNumber, isLatest, preSearch.roundNumber]);
+
+  // ✅ ANIMATION COORDINATION: Register animation when streaming starts
+  // Pattern from ModelMessageCard.tsx:64-70
+  useEffect(() => {
+    const isStreaming = preSearch.status === AnalysisStatuses.STREAMING;
+    if (isStreaming && !hasRegisteredRef.current) {
+      registerAnimation(AnimationIndices.PRE_SEARCH);
+      hasRegisteredRef.current = true;
+    }
+  }, [preSearch.status, registerAnimation]);
+
+  // ✅ ANIMATION COORDINATION: Complete animation when streaming finishes
+  // Pattern from ModelMessageCard.tsx:72-92
+  // Uses delay to let accordion animation settle before proceeding
+  useEffect(() => {
+    const wasStreaming = prevStatusRef.current === AnalysisStatuses.STREAMING;
+    const nowComplete = preSearch.status !== AnalysisStatuses.STREAMING
+      && preSearch.status !== AnalysisStatuses.PENDING;
+
+    if (wasStreaming && nowComplete && hasRegisteredRef.current) {
+      // Small delay to let accordion/content animations settle
+      // Use 16ms (1 frame) to maximize speed while ensuring visual smoothness
+      const timer = setTimeout(() => {
+        completeAnimation(AnimationIndices.PRE_SEARCH);
+        hasRegisteredRef.current = false;
+      }, 16);
+
+      prevStatusRef.current = preSearch.status;
+      return () => clearTimeout(timer);
+    }
+
+    prevStatusRef.current = preSearch.status;
+    return undefined;
+  }, [preSearch.status, completeAnimation]);
 
   // Stream start callback: Update status to STREAMING when backend starts processing
   // This ensures the UI reflects the actual streaming state and maintains loading indicator visibility

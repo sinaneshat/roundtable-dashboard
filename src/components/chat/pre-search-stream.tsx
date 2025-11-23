@@ -248,15 +248,79 @@ function PreSearchStreamComponent({
       // triggeredSearchIds.delete(preSearch.id); // REMOVED - causes double fetching
       // triggeredRounds cleanup // REMOVED - causes double fetching
 
-      // Clean up the ref but DON'T abort the fetch
-      // Let it complete in background - results will sync via orchestrator
-      abortControllerRef.current = null;
+      // ✅ DEFENSIVE: Abort fetch on unmount and handle controller errors gracefully
+      // "Controller is already closed" errors are expected during navigation/refresh
+      if (abortControllerRef.current) {
+        try {
+          abortControllerRef.current.abort();
+        } catch (err) {
+          // Silently ignore "Controller is already closed" and similar errors
+          // These are expected when user navigates away or refreshes
+          if (err instanceof Error && !err.message.includes('Controller') && !err.message.includes('closed')) {
+            console.error('[PreSearchStream] Cleanup error:', err);
+          }
+        }
+        abortControllerRef.current = null;
+      }
     };
     // ✅ FIX: Removed preSearch.status from dependencies to prevent effect re-run when backend updates status
     // The effect should only run once per unique search (id + roundNumber)
     // Status changes (pending→streaming→completed) should NOT re-trigger the effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery]);
+
+  // ✅ POLLING RECOVERY: Handle 409 Conflict (Stream already active)
+  // If we reconnect to a stream that's already running (e.g. after reload),
+  // we poll the status until it completes, then sync the data.
+  useEffect(() => {
+    if (!is409Conflict.value)
+      return;
+
+    let timeoutId: NodeJS.Timeout;
+    let isMounted = true;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/v1/chat/threads/${threadId}/pre-searches`);
+        if (!res.ok)
+          throw new Error('Failed to fetch pre-searches');
+
+        const json = (await res.json()) as { data: StoredPreSearch[] };
+        const preSearches = json.data;
+        const current = preSearches.find(ps => ps.id === preSearch.id);
+
+        if (current) {
+          if (current.status === AnalysisStatuses.COMPLETE && current.searchData) {
+            setPartialSearchData(current.searchData);
+            onStreamCompleteRef.current?.(current.searchData);
+            if (isMounted)
+              is409Conflict.onFalse(); // Stop polling
+            return;
+          } else if (current.status === AnalysisStatuses.FAILED) {
+            setError(new Error(current.errorMessage || 'Pre-search failed'));
+            if (isMounted)
+              is409Conflict.onFalse(); // Stop polling
+            return;
+          }
+          // If still STREAMING or PENDING, continue polling
+        }
+      } catch (err) {
+        // Silent failure on polling error, retry next interval
+        console.error('[PreSearchStream] Polling failed:', err);
+      }
+
+      if (isMounted) {
+        timeoutId = setTimeout(poll, 2000); // Poll every 2s
+      }
+    };
+
+    poll();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [is409Conflict.value, threadId, preSearch.id, is409Conflict]);
 
   // Mark completed/failed/streaming pre-searches as triggered to prevent re-streaming
   // ✅ FIX: Also mark STREAMING status to prevent duplicate triggers during status transitions

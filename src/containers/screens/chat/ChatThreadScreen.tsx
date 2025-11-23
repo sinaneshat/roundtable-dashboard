@@ -524,6 +524,8 @@ export default function ChatThreadScreen({
   }, [selectedParticipants, threadActions]);
 
   // Unified scroll management using useChatScroll hook
+  // bottomOffset accounts for: sticky input (pt-10 + ~80px input) + shadow gradient (h-8) + bottom margin (16px)
+  // ✅ FIX: Pass preSearches for auto-scroll during pre-search object generation
   const { scrolledToAnalysesRef } = useChatScroll({
     messages,
     analyses,
@@ -531,6 +533,8 @@ export default function ChatThreadScreen({
     scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
     currentParticipantIndex,
+    bottomOffset: 180,
+    preSearches,
   });
 
   // Streaming loader state calculation
@@ -626,9 +630,9 @@ export default function ChatThreadScreen({
   return (
     <>
       <UnifiedErrorBoundary context="chat">
-        <div className="flex flex-col relative flex-1 min-h-0">
+        <div className="flex flex-col relative flex-1 min-h-full">
           <div
-            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4 flex-1"
+            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
@@ -679,25 +683,19 @@ export default function ChatThreadScreen({
               onActionClick={recommendedActions.handleActionClick}
               preSearches={preSearches}
             />
-
-            {/* Unified loading indicator - at bottom left of content */}
-            <UnifiedLoadingIndicator
-              showLoader={showLoader}
-              loadingDetails={loadingDetails}
-              preSearches={preSearches}
-            />
           </div>
 
-          {/* Bottom shadow gradient - creates depth effect */}
-          <div
-            className="sticky bottom-0 left-0 right-0 h-8 z-20 pointer-events-none bg-gradient-to-t from-black/40 to-transparent"
-            style={{ marginBottom: `-${keyboardOffset}px` }}
+          {/* Unified loading indicator - sticky positioned above input */}
+          <UnifiedLoadingIndicator
+            showLoader={showLoader}
+            loadingDetails={loadingDetails}
+            preSearches={preSearches}
           />
 
-          {/* Chat input - sticky at bottom */}
+          {/* Chat input - sticky at bottom, mt-auto pushes to bottom when content is small */}
           <div
             ref={inputContainerRef}
-            className="sticky z-30 bg-gradient-to-t from-background via-background to-transparent pt-10"
+            className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-10 relative"
             style={{ bottom: `${keyboardOffset + 16}px` }}
           >
             <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
@@ -733,6 +731,8 @@ export default function ChatThreadScreen({
                 )}
               />
             </div>
+            {/* Bottom fill - covers gap to screen bottom */}
+            <div className="absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
           </div>
         </div>
       </UnifiedErrorBoundary>

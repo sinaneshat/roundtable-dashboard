@@ -151,18 +151,31 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                     variant="ghost"
                     size="sm"
                     aria-label={t('shareThread')}
-                    className="gap-2 transition-all duration-200"
+                    className={cn(
+                      'gap-2 transition-all duration-200',
+                      copySuccess && 'text-green-500',
+                    )}
                     disabled={togglePublicMutation.isPending}
                   >
                     {togglePublicMutation.isPending && !displayIsPublic
                       ? <Loader2 className="size-4 animate-spin" />
-                      : <Share2 className="size-4" />}
-                    <span className="hidden sm:inline">Share</span>
+                      : copySuccess
+                        ? <Check className="size-4 animate-in zoom-in-75 duration-300" />
+                        : <Share2 className="size-4" />}
+                    <span className="hidden sm:inline">
+                      {copySuccess ? t('linkCopied') : 'Share'}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p className="text-sm">{displayIsPublic ? t('shareThread') : t('makePublicAndShare')}</p>
+                <p className="text-sm">
+                  {copySuccess
+                    ? t('linkCopied')
+                    : displayIsPublic
+                      ? t('shareThread')
+                      : t('makePublicAndShare')}
+                </p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent side="bottom" align="end" className="w-56">
@@ -199,7 +212,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                       ))}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
-                        {copySuccess ? <Check className="size-4" /> : <Copy className="size-4" />}
+                        {copySuccess ? <Check className="size-4 text-green-500 animate-in zoom-in-75 duration-300" /> : <Copy className="size-4" />}
                         <span className={cn(copySuccess && 'text-green-500')}>
                           {copySuccess ? t('linkCopied') : t('copyLink')}
                         </span>

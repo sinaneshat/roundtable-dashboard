@@ -23,9 +23,10 @@ import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
+import { getErrorCause, getErrorMessage, getErrorStack } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
-import { AnalysisStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { isQuerySearchable, simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
@@ -39,6 +40,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 
 import type { createPreSearchRoute, executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
 import type { GeneratedSearchQuery, MultiQueryGeneration, WebSearchResult } from '../schema';
@@ -210,25 +212,24 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       return Responses.ok(c, existingSearch);
     }
 
-    // ✅ TIMEOUT PROTECTION: Check for stale STREAMING status (matches analysis.handler.ts pattern)
+    // Check for stale STREAMING status
     if (existingSearch.status === AnalysisStatuses.STREAMING) {
-      const ageMs = Date.now() - existingSearch.createdAt.getTime();
-
-      // If stream has been running > threshold, mark as failed and allow new stream
-      // SSE connections can get interrupted without backend knowing
-      if (ageMs > STREAMING_CONFIG.STREAM_TIMEOUT_MS) {
+      // Check if stream has timed out using clean timestamp utilities
+      if (hasTimestampExceededTimeout(existingSearch.createdAt, STREAMING_CONFIG.STREAM_TIMEOUT_MS)) {
+        // SSE connections can get interrupted without backend knowing
         await db.update(tables.chatPreSearch)
           .set({
             status: AnalysisStatuses.FAILED,
-            errorMessage: `Stream timeout after ${Math.round(ageMs / 1000)}s - SSE connection likely interrupted`,
+            errorMessage: `Stream timeout after ${formatAgeMs(getTimestampAge(existingSearch.createdAt))} - SSE connection likely interrupted`,
           })
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
         // Continue to create new search below
       } else {
         // Still within timeout window - reject duplicate request
+        const ageMs = getTimestampAge(existingSearch.createdAt);
         throw createError.conflict(
-          `Pre-search is already in progress (age: ${Math.round(ageMs / 1000)}s). Please wait for it to complete.`,
+          `Pre-search is already in progress (age: ${formatAgeMs(ageMs)}). Please wait for it to complete.`,
           {
             errorType: 'resource',
             resource: 'pre_search',
@@ -259,6 +260,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // ✅ EARLY CHECK: Skip AI generation for non-searchable queries
         // Prevents AI_NoObjectGeneratedError for greetings, commands, etc.
         const queryIsSearchable = isQuerySearchable(body.userQuery);
+
+        // ✅ DEBUG: Log searchability check
+        console.error('[Pre-Search] Query searchability check:', {
+          userQuery: body.userQuery.substring(0, 100),
+          isSearchable: queryIsSearchable,
+        });
 
         if (!queryIsSearchable) {
           // Skip AI generation entirely and use optimized fallback
@@ -356,21 +363,42 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // Get final complete result
             multiQueryResult = await queryStream.object;
 
+            // ✅ DEBUG: Log AI-generated queries
+            console.error('[Pre-Search] AI query generation SUCCESS:', {
+              totalQueries: multiQueryResult?.totalQueries,
+              analysisRationale: multiQueryResult?.analysisRationale,
+              queries: multiQueryResult?.queries?.map(q => ({
+                query: q?.query,
+                rationale: q?.rationale,
+                searchDepth: q?.searchDepth,
+                complexity: q?.complexity,
+                sourceCount: q?.sourceCount,
+              })),
+            });
+
             // Validate generation succeeded
             if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
+              console.error('[Pre-Search] AI generation produced NO queries - triggering fallback');
               throw new Error('Query generation failed - no queries produced');
             }
           } catch (streamingError) {
           // ✅ FALLBACK LEVEL 1: Try non-streaming generation
             const streamErrorMessage = streamingError instanceof Error ? streamingError.message : 'Unknown error';
-            console.error('[Pre-Search] Streaming generation failed, trying non-streaming fallback:', streamErrorMessage);
+            console.error('[Pre-Search] ❌ FALLBACK LEVEL 1: Streaming generation failed, trying non-streaming approach:', streamErrorMessage);
 
             try {
             // Try non-streaming approach
               multiQueryResult = await generateSearchQuery(body.userQuery, c.env);
 
+              // ✅ DEBUG: Log non-streaming result
+              console.error('[Pre-Search] Non-streaming query generation SUCCESS:', {
+                totalQueries: multiQueryResult?.totalQueries,
+                queries: multiQueryResult?.queries?.map(q => q?.query),
+              });
+
               // Validate generation succeeded
               if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
+                console.error('[Pre-Search] Non-streaming generation produced NO queries - triggering final fallback');
                 throw new Error('Non-streaming query generation failed - no queries produced');
               }
 
@@ -404,12 +432,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }
             } catch (nonStreamingError) {
             // ✅ FALLBACK LEVEL 2: If all AI fails, use simple query optimizer
-              const errorMessage = nonStreamingError instanceof Error ? nonStreamingError.message : 'Unknown error';
-              const errorStack = nonStreamingError instanceof Error ? nonStreamingError.stack : undefined;
-              const errorCause = nonStreamingError instanceof Error && 'cause' in nonStreamingError ? (nonStreamingError as Error & { cause?: unknown }).cause : undefined;
+              // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utilities instead of unsafe casting
+              const errorMessage = getErrorMessage(nonStreamingError);
+              const errorStack = getErrorStack(nonStreamingError);
+              const errorCause = getErrorCause(nonStreamingError);
 
               // ✅ DEBUG: Log full error details to understand AI generation failure
-              console.error('[Pre-Search] All AI generation attempts failed:', {
+              console.error('[Pre-Search] ❌❌ FALLBACK LEVEL 2: All AI generation attempts FAILED, using simple query optimizer:', {
                 streamingError: streamErrorMessage,
                 nonStreamingError: errorMessage,
                 stack: errorStack,
@@ -419,6 +448,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               });
 
               const optimizedQuery = simpleOptimizeQuery(body.userQuery);
+
+              // ✅ DEBUG: Log fallback query
+              console.error('[Pre-Search] Simple optimizer fallback result:', {
+                userQuery: body.userQuery.substring(0, 100),
+                optimizedQuery,
+              });
 
               // Create fallback with single query
               multiQueryResult = {
@@ -476,11 +511,26 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         const totalQueries = multiQueryResult.totalQueries;
         const generatedQueries = multiQueryResult.queries;
 
+        // ✅ DEBUG: Log final query execution plan
+        console.error('[Pre-Search] Executing search queries:', {
+          totalQueries,
+          queries: generatedQueries.map((q, idx) => ({
+            index: idx,
+            query: q?.query,
+            complexity: q?.complexity,
+            sourceCount: q?.sourceCount,
+            searchDepth: q?.searchDepth,
+          })),
+        });
+
         // ✅ MULTI-QUERY EXECUTION: Execute all queries and collect results
         const allResults: Array<{ query: GeneratedSearchQuery; result: WebSearchResult | null; duration: number }> = [];
 
         for (let queryIndex = 0; queryIndex < generatedQueries.length; queryIndex++) {
           const generatedQuery = generatedQueries[queryIndex];
+
+          // ✅ DEBUG: Log each query execution
+          console.error(`[Pre-Search] Executing query ${queryIndex + 1}/${totalQueries}:`, generatedQuery?.query);
 
           // Type guard - skip if query is undefined (shouldn't happen but TypeScript requires this)
           if (!generatedQuery) {
@@ -598,7 +648,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 responseTime: searchDuration,
                 index: queryIndex,
                 total: totalQueries,
-                status: 'complete',
+                status: PreSearchQueryStatuses.COMPLETE,
               }),
             });
 
@@ -851,14 +901,14 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       orderBy: (fields, { asc }) => [asc(fields.roundNumber)],
     });
 
-    // ✅ ORPHAN CLEANUP: Mark stale STREAMING/PENDING searches as FAILED (matches analysis.handler.ts pattern)
-    const now = Date.now();
+    // Mark stale STREAMING/PENDING searches as FAILED
     const orphanedSearches = allPreSearches.filter((search) => {
       if (search.status !== AnalysisStatuses.STREAMING && search.status !== AnalysisStatuses.PENDING) {
         return false;
       }
-      const ageMs = now - search.createdAt.getTime();
-      return ageMs > STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS;
+
+      // Check if timestamp has exceeded orphan cleanup timeout
+      return hasTimestampExceededTimeout(search.createdAt, STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS);
     });
 
     if (orphanedSearches.length > 0) {

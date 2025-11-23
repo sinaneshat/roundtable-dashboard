@@ -32,6 +32,7 @@ export {
 } from './handlers/role.handler';
 export {
   resumeStreamHandler,
+  resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';
 export {
   getStreamStatusHandler,
