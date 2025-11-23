@@ -19,6 +19,7 @@ import type { TypedLogger } from '@/api/types/logger';
 // ============================================================================
 // ZOD SCHEMAS (Single Source of Truth)
 // ============================================================================
+import { DbChangelogDataSchema } from '@/db/schemas/chat-metadata';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 import { DEFAULT_ROLES } from '@/lib/utils/ai-display';
 
@@ -39,11 +40,19 @@ const ParticipantResponseSchema = z.object({
  * Changelog entry schema
  * Tracks changes that occurred before the current round
  * (participant additions/removals, role changes, mode changes, etc.)
+ *
+ * ✅ ENUM-BASED PATTERN: Uses DbChangelogDataSchema discriminated union
+ * Discriminates by 'type' field with values: 'participant', 'participant_role',
+ * 'mode_change', 'participant_reorder', 'web_search_toggle'
+ *
+ * Reference: /src/db/schemas/chat-metadata.ts:315-321
  */
 const ChangelogEntrySchema = z.object({
   changeType: z.string(),
   description: z.string(),
-  metadata: z.record(z.string(), z.unknown()).nullable(),
+  // ✅ TYPE-SAFE: Uses existing DbChangelogDataSchema (discriminated union)
+  // Replaces Record<string, unknown> with proper type safety
+  metadata: DbChangelogDataSchema.nullable(),
   createdAt: z.date(),
 });
 

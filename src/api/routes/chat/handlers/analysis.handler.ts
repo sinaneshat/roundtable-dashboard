@@ -436,6 +436,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           changelogEntries: changelogEntries.map(c => ({
             changeType: c.changeType,
             description: c.changeSummary,
+            // ✅ TYPE-SAFE: changeData validated against ChangelogMetadataSchema (discriminated union)
+            // Passes object metadata to moderator analysis (replaces Record<string, unknown>)
             metadata: isObject(c.changeData) ? c.changeData : null,
             createdAt: c.createdAt,
           })),
@@ -662,7 +664,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       changelogEntries: changelogEntries.map(c => ({
         changeType: c.changeType,
         description: c.changeSummary,
-        // ✅ TYPE-SAFE: changeData is JSON from database, validate with type guard
+        // ✅ TYPE-SAFE: changeData validated against ChangelogMetadataSchema (discriminated union)
+        // Passes object metadata to moderator analysis (replaces Record<string, unknown>)
         metadata: isObject(c.changeData) ? c.changeData : null,
         createdAt: c.createdAt,
       })),

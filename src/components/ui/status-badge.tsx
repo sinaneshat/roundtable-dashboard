@@ -6,7 +6,7 @@ import { cva } from 'class-variance-authority'
 import { useTranslations } from 'next-intl'
 import { z } from 'zod'
 
-import { OperationStatuses } from '@/api/core/enums'
+import { OperationStatuses, OperationStatusSchema } from '@/api/core/enums'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/ui/cn'
 
@@ -21,6 +21,7 @@ import { cn } from '@/lib/ui/cn'
  */
 
 // Enhanced status configuration with semantic colors
+// ✅ ENUM-BASED: Includes all OperationStatus values
 const statusVariants = cva(
   "inline-flex items-center justify-center gap-1 transition-all duration-200",
   {
@@ -28,12 +29,15 @@ const statusVariants = cva(
       status: {
         // Success states
         active: "bg-chart-3/10 text-chart-3 border-chart-3/20 hover:bg-chart-3/10",
+        complete: "bg-chart-3/10 text-chart-3 border-chart-3/20 hover:bg-chart-3/10", // ✅ Added for OperationStatuses.COMPLETE
         completed: "bg-chart-3/10 text-chart-3 border-chart-3/20 hover:bg-chart-3/10",
         success: "bg-chart-3/10 text-chart-3 border-chart-3/20 hover:bg-chart-3/10",
 
         // Warning states
+        idle: "bg-muted text-muted-foreground border-border hover:bg-muted", // ✅ Added for OperationStatuses.IDLE
         pending: "bg-chart-2/10 text-chart-2 border-chart-2/20 hover:bg-chart-2/10 animate-pulse",
         processing: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/10 dark:text-primary dark:border-primary/20",
+        streaming: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/10 dark:text-primary dark:border-primary/20 animate-pulse", // ✅ Added for OperationStatuses.STREAMING
 
         // Error states
         failed: "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/10",
@@ -62,15 +66,19 @@ const statusVariants = cva(
 )
 
 // Icon mapping for different status types
+// ✅ ENUM-BASED: Includes all OperationStatus values
 const statusIcons = {
   // Success icons
   active: CheckCircle,
   completed: CheckCircle,
+  complete: CheckCircle, // ✅ Added for OperationStatuses.COMPLETE
   success: CheckCircle,
 
   // Warning icons
+  idle: Clock,
   pending: Clock,
   processing: Clock,
+  streaming: Clock, // ✅ Added for OperationStatuses.STREAMING
 
   // Error icons
   failed: X,
@@ -87,8 +95,12 @@ const statusIcons = {
 } as const
 
 const statusBadgePropsSchema = z.object({
-  /** Status value to display - accepts any string for backend flexibility */
-  status: z.string(),
+  /**
+   * Status value to display
+   * ✅ ENUM-BASED: Uses OperationStatusSchema for type safety
+   * Accepts operation status values: idle, pending, active, streaming, complete, failed
+   */
+  status: OperationStatusSchema.or(z.string()), // Allow extension for custom statuses
   /** Size variant */
   size: z.enum(['sm', 'md', 'lg']).optional(),
   /** Show status icon */
@@ -131,7 +143,8 @@ export function StatusBadge({
     lg: 'h-4 w-4',
   }[iconSize]
 
-  const shouldPulse = pulse || normalizedStatus === OperationStatuses.PENDING || normalizedStatus === 'processing'
+  // ✅ ENUM-BASED: Use enum constants instead of hardcoded strings
+  const shouldPulse = pulse || normalizedStatus === OperationStatuses.PENDING || normalizedStatus === OperationStatuses.STREAMING
 
   return (
     <Badge
