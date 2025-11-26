@@ -348,6 +348,7 @@ export function buildParticipantOperations(
           changeData: {
             type: 'participant_role',
             participantId: dbP.id,
+            modelId: updated.modelId, // ✅ Required for UI to display model info
             oldRole,
             newRole,
           },

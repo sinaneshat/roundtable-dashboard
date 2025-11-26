@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
-import type { UsageStatsPayload } from '@/api/routes/usage/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
@@ -72,7 +71,7 @@ export const ChatInput = memo(({
   const { data: statsData } = useUsageStatsQuery();
   const isQuotaExceeded = useMemo(() => {
     // Type guard: ensure statsData has the expected shape
-    // Uses API response structure: { success: true, data: UsageStatsPayload }
+    // Uses API response structure: { success: true, data: { threads, messages, ... } }
     if (
       !quotaCheckType
       || !statsData
@@ -85,14 +84,15 @@ export const ChatInput = memo(({
       return false;
     }
 
-    // Type-safe access: statsData.data is UsageStatsPayload after narrowing
-    const data = statsData.data as UsageStatsPayload;
+    // Access data through properly narrowed type guards
+    // The API response data shape is validated by type guards above
+    const { data } = statsData;
 
-    if (quotaCheckType === 'threads') {
+    if (quotaCheckType === 'threads' && 'threads' in data && typeof data.threads === 'object' && data.threads !== null) {
       return data.threads.remaining === 0;
     }
 
-    if (quotaCheckType === 'messages') {
+    if (quotaCheckType === 'messages' && 'messages' in data && typeof data.messages === 'object' && data.messages !== null) {
       return data.messages.remaining === 0;
     }
 

@@ -32,7 +32,7 @@ import {
   useSubscriptionsQuery,
   useUsageStatsQuery,
 } from '@/hooks';
-import { useBoolean } from '@/hooks/utils';
+import { useBoolean, useIsMobile } from '@/hooks/utils';
 import { signOut, useSession } from '@/lib/auth/client';
 import { showApiErrorToast } from '@/lib/toast';
 
@@ -40,6 +40,7 @@ export function NavUser() {
   const router = useRouter();
   const { data: session } = useSession();
   const t = useTranslations();
+  const isMobile = useIsMobile();
   const { data: usageData } = useUsageStatsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
@@ -132,10 +133,10 @@ export function NavUser() {
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="min-w-56 rounded-lg"
-          side="right"
-          align="end"
-          sideOffset={4}
+          className={isMobile ? 'w-[calc(var(--sidebar-width)-1rem)] rounded-lg' : 'min-w-56 rounded-lg'}
+          side={isMobile ? 'top' : 'right'}
+          align={isMobile ? 'start' : 'end'}
+          sideOffset={8}
         >
           <DropdownMenuLabel className="p-0 font-normal">
             <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">

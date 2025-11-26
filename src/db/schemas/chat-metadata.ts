@@ -270,6 +270,7 @@ const DbParticipantChangeDataSchema = z.object({
 const DbParticipantRoleChangeDataSchema = z.object({
   type: z.literal('participant_role'),
   participantId: z.string(),
+  modelId: z.string(), // ✅ Required for UI to display model info
   oldRole: z.string().nullable().optional(),
   newRole: z.string().nullable().optional(),
 });
@@ -397,6 +398,15 @@ export function isParticipantReorder(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'participant_reorder' }> {
   return data.type === 'participant_reorder';
+}
+
+/**
+ * Type guard: Check if changelog data is web search toggle change
+ */
+export function isWebSearchChange(
+  data: DbChangelogData,
+): data is Extract<DbChangelogData, { type: 'web_search' }> {
+  return data.type === 'web_search';
 }
 
 // ============================================================================

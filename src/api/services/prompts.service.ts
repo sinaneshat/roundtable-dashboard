@@ -354,101 +354,102 @@ ${basePrompt}`;
 /**
  * Multi-AI Deliberation Framework - New Schema
  * ✅ BREAKING CHANGE: Replaced leaderboard/participantAnalyses with contributorPerspectives + consensusAnalysis
+ * ✅ ALL VALUES ARE PLACEHOLDERS - AI must compute actual values from conversation
  */
 export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
-  roundNumber: 0, // ✅ 0-BASED: Example showing first round
-  mode: ChatModes.ANALYZING,
-  userQuestion: 'string',
+  roundNumber: '<FROM_CONTEXT: 0-based round number>',
+  mode: '<FROM_CONTEXT: analyzing|brainstorming|debating|solving>',
+  userQuestion: '<FROM_CONTEXT: actual user question>',
 
   // Round Confidence Header - Overall confidence metrics
-  roundConfidence: 78, // 0-100: Overall confidence based on vote distribution and evidence strength
-  confidenceWeighting: 'balanced', // 'balanced' | 'evidence_heavy' | 'consensus_heavy' | 'expertise_weighted'
+  roundConfidence: '<COMPUTE: 0-100 based on vote distribution and evidence strength>',
+  confidenceWeighting: '<COMPUTE: balanced|evidence_heavy|consensus_heavy|expertise_weighted>',
 
   // Consensus Evolution - Timeline showing how consensus evolved through debate phases
+  // ✅ CRITICAL: Percentages must be CALCULATED based on actual agreement in discussion
   consensusEvolution: [
-    { phase: 'opening', percentage: 32, label: 'Opening' },
-    { phase: 'rebuttal', percentage: 58, label: 'Rebuttal' },
-    { phase: 'cross_exam', percentage: 65, label: 'Cross-Exam' },
-    { phase: 'synthesis', percentage: 72, label: 'Synthesis' },
-    { phase: 'final_vote', percentage: 78, label: 'Final Vote' }, // Should match roundConfidence
+    { phase: 'opening', percentage: '<COMPUTE: initial consensus %>', label: 'Opening' },
+    { phase: 'rebuttal', percentage: '<COMPUTE: after rebuttals %>', label: 'Rebuttal' },
+    { phase: 'cross_exam', percentage: '<COMPUTE: after examination %>', label: 'Cross-Exam' },
+    { phase: 'synthesis', percentage: '<COMPUTE: after synthesis %>', label: 'Synthesis' },
+    { phase: 'final_vote', percentage: '<MUST_MATCH: roundConfidence>', label: 'Final Vote' },
   ],
 
-  summary: 'string', // Overall analysis summary
+  summary: '<COMPUTE: synthesis of key findings from discussion>',
   recommendations: [{
-    title: 'string', // Short action title
-    description: 'string', // Why this recommendation matters
-    suggestedPrompt: 'string', // Actual user prompt to continue the conversation (required)
-    suggestedModels: ['string'], // OpenRouter model IDs like "anthropic/claude-sonnet-4" (optional)
-    suggestedRoles: ['string'], // Roles for each model (optional)
-    suggestedMode: 'string', // Chat mode (optional)
+    title: '<COMPUTE: actionable title from gaps identified>',
+    description: '<COMPUTE: why this matters based on analysis>',
+    suggestedPrompt: '<COMPUTE: follow-up question to address gaps>',
+    suggestedModels: ['<FROM_AVAILABLE_MODELS: model ID>'],
+    suggestedRoles: ['<FROM_AVAILABLE_ROLES: role name>'],
+    suggestedMode: '<COMPUTE: appropriate chat mode>',
   }],
   contributorPerspectives: [{
-    participantIndex: 0,
-    role: 'string',
-    modelId: 'string',
-    modelName: 'string',
+    participantIndex: '<FROM_CONTEXT: participant index>',
+    role: '<FROM_CONTEXT: participant role>',
+    modelId: '<FROM_CONTEXT: model ID>',
+    modelName: '<FROM_CONTEXT: model name>',
     scorecard: {
-      logic: 85, // 0-100
-      riskAwareness: 75, // 0-100
-      creativity: 70, // 0-100
-      evidence: 80, // 0-100
-      consensus: 75, // 0-100 (optional)
+      logic: '<COMPUTE: 0-100 based on response quality>',
+      riskAwareness: '<COMPUTE: 0-100 based on response>',
+      creativity: '<COMPUTE: 0-100 based on response>',
+      evidence: '<COMPUTE: 0-100 based on response>',
+      consensus: '<COMPUTE: 0-100 based on response>',
     },
-    stance: 'string', // Participant\'s main position/argument
-    evidence: ['string'], // Key points supporting their stance
-    vote: 'approve', // 'approve' | 'caution' | 'reject'
+    stance: '<COMPUTE: summarize their actual position>',
+    evidence: ['<EXTRACT: key points from their response>'],
+    vote: '<COMPUTE: approve|caution|reject based on stance>',
   }],
   consensusAnalysis: {
     alignmentSummary: {
-      totalClaims: 10,
-      majorAlignment: 7,
-      contestedClaims: 3,
+      totalClaims: '<COUNT: claims identified in discussion>',
+      majorAlignment: '<COUNT: claims where majority agrees>',
+      contestedClaims: '<COUNT: disputed claims>',
       contestedClaimsList: [{
-        claim: 'string',
+        claim: '<EXTRACT: actual contested claim>',
         status: 'contested',
       }],
     },
     agreementHeatmap: [{
-      claim: 'string',
+      claim: '<EXTRACT: key claim from discussion>',
       perspectives: {
-        role1: 'agree', // 'agree' | 'disagree' | 'neutral' | 'caution'
-        role2: 'disagree',
+        '<PARTICIPANT_ROLE>': '<COMPUTE: agree|disagree|neutral|caution>',
       },
     }],
     argumentStrengthProfile: {
-      role1: {
-        logic: 85,
-        evidence: 80,
-        riskAwareness: 75,
-        consensus: 70,
-        creativity: 75,
+      '<PARTICIPANT_ROLE>': {
+        logic: '<COMPUTE: 0-100>',
+        evidence: '<COMPUTE: 0-100>',
+        riskAwareness: '<COMPUTE: 0-100>',
+        consensus: '<COMPUTE: 0-100>',
+        creativity: '<COMPUTE: 0-100>',
       },
     },
   },
   evidenceAndReasoning: {
     reasoningThreads: [{
-      claim: 'string',
-      synthesis: 'string',
+      claim: '<EXTRACT: key claim>',
+      synthesis: '<COMPUTE: how participants reasoned about this>',
     }],
     evidenceCoverage: [{
-      claim: 'string',
-      strength: 'strong', // 'strong' | 'moderate' | 'weak'
-      percentage: 85,
+      claim: '<EXTRACT: claim from discussion>',
+      strength: '<COMPUTE: strong|moderate|weak based on support>',
+      percentage: '<COMPUTE: 0-100 evidence strength>',
     }],
   },
   alternatives: [{
-    scenario: 'string',
-    confidence: 75, // 0-100
+    scenario: '<EXTRACT: alternative approach mentioned>',
+    confidence: '<COMPUTE: 0-100 viability>',
   }],
   roundSummary: {
     participation: {
-      approved: 2,
-      cautioned: 1,
-      rejected: 0,
+      approved: '<COUNT: approve votes>',
+      cautioned: '<COUNT: caution votes>',
+      rejected: '<COUNT: reject votes>',
     },
-    keyThemes: 'string', // Main themes/conclusions from the discussion
-    unresolvedQuestions: ['string'],
-    generated: 'ISO 8601 timestamp string',
+    keyThemes: '<COMPUTE: main discussion outcomes>',
+    unresolvedQuestions: ['<EXTRACT: questions needing further discussion>'],
+    generated: '<CURRENT_TIMESTAMP>',
   },
 };
 
@@ -456,6 +457,7 @@ export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
  * Build moderator analysis enhanced user prompt
  * ✅ SINGLE SOURCE: Creates user prompt with JSON structure instructions
  * ✅ REPLACES: Inline prompt construction in analysis.handler.ts:88-95
+ * ✅ DYNAMIC VALUES: All numeric values must be computed from actual conversation
  *
  * Used by:
  * - /src/api/routes/chat/handlers/analysis.handler.ts - generateModeratorAnalysis()
@@ -464,7 +466,21 @@ export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
  * @returns Enhanced prompt with JSON structure guidance
  */
 export function buildModeratorAnalysisEnhancedPrompt(userPrompt: string): string {
-  return `${userPrompt}\n\nIMPORTANT: Respond with a valid JSON object matching this exact structure. Use null for missing values:\n${JSON.stringify(MODERATOR_ANALYSIS_JSON_STRUCTURE, null, 2)}`;
+  return `${userPrompt}
+
+CRITICAL REQUIREMENTS FOR YOUR RESPONSE:
+1. Respond with a valid JSON object matching the structure below
+2. ALL values marked with <COMPUTE:...> MUST be calculated from the ACTUAL conversation above
+3. ALL values marked with <FROM_CONTEXT:...> MUST come from the participant data provided
+4. ALL values marked with <EXTRACT:...> MUST be extracted from actual responses
+5. ALL values marked with <COUNT:...> MUST be counted from actual data
+6. NEVER use template/example values - every number must reflect real analysis
+7. consensusEvolution percentages must show ACTUAL progression based on discussion flow
+8. final_vote percentage MUST equal roundConfidence
+9. Use null for missing values
+
+JSON STRUCTURE (replace all <...> placeholders with computed values):
+${JSON.stringify(MODERATOR_ANALYSIS_JSON_STRUCTURE, null, 2)}`;
 }
 
 /**

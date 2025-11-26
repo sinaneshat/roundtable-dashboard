@@ -187,6 +187,7 @@ export async function logParticipantUpdated(
     changeData: {
       type: 'participant_role',
       participantId,
+      modelId, // ✅ Required for UI to display model info
       oldRole,
       newRole,
     },

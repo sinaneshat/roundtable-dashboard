@@ -11,6 +11,14 @@ import {
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { DbChangelogData } from '@/db/schemas/chat-metadata';
+import {
+  isModeChange,
+  isParticipantChange,
+  isParticipantRoleChange,
+  isWebSearchChange,
+  safeParseChangelogData,
+} from '@/db/schemas/chat-metadata';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
@@ -118,68 +126,45 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
     </div>
   );
 }
-// Simplified change data structure - discriminated by 'type' field
-type ChangeDataBase = {
-  type: 'participant' | 'participant_role' | 'mode_change' | 'web_search';
-};
 
-type ParticipantChangeData = ChangeDataBase & {
-  type: 'participant';
-  modelId: string;
-  role?: string | null;
-  participantId?: string;
-};
-
-type ParticipantRoleChangeData = ChangeDataBase & {
-  type: 'participant_role';
-  modelId: string;
-  oldRole?: string | null;
-  newRole?: string | null;
-  participantId?: string;
-};
-
-type ModeChangeData = ChangeDataBase & {
-  type: 'mode_change';
-  oldMode: string;
-  newMode: string;
-};
-
-type WebSearchChangeData = ChangeDataBase & {
-  type: 'web_search';
-  enabled: boolean;
-};
-
-type ChangeData = ParticipantChangeData | ParticipantRoleChangeData | ModeChangeData | WebSearchChangeData;
-
+/**
+ * ChangeItem - Renders individual changelog entries
+ * ✅ TYPE-SAFE: Uses DbChangelogData from @/db/schemas/chat-metadata (single source of truth)
+ * ✅ TYPE GUARDS: Uses discriminated union type guards instead of unsafe type casts
+ */
 function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }) }) {
   const t = useTranslations('chat.configuration');
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
 
-  // Parse changeData with type discrimination
-  const changeData = change.changeData as ChangeData | null;
+  // ✅ TYPE-SAFE: Validate changeData using Zod schema (single source of truth)
+  const changeData: DbChangelogData | undefined = safeParseChangelogData(change.changeData);
 
-  if (!changeData?.type) {
-    return null; // Invalid data
+  if (!changeData) {
+    return null; // Invalid data - Zod validation failed
   }
 
-  // Extract relevant data based on type
-  const isParticipant = changeData.type === 'participant';
-  const isParticipantRole = changeData.type === 'participant_role';
-  const isModeChange = changeData.type === 'mode_change';
-  const isWebSearchChange = changeData.type === 'web_search';
-
-  const modelId = (isParticipant || isParticipantRole) ? (changeData as ParticipantChangeData | ParticipantRoleChangeData).modelId : undefined;
-  const role = isParticipant ? (changeData as ParticipantChangeData).role : undefined;
-  const oldRole = isParticipantRole ? (changeData as ParticipantRoleChangeData).oldRole : undefined;
-  const newRole = isParticipantRole ? (changeData as ParticipantRoleChangeData).newRole : undefined;
-  const oldMode = isModeChange ? (changeData as ModeChangeData).oldMode : undefined;
-  const newMode = isModeChange ? (changeData as ModeChangeData).newMode : undefined;
-  const enabled = isWebSearchChange ? (changeData as WebSearchChangeData).enabled : undefined;
+  // ✅ TYPE-SAFE: Extract data using type guards (no unsafe type casts)
+  // TypeScript automatically narrows the type based on type guard results
+  const modelId = isParticipantChange(changeData) || isParticipantRoleChange(changeData)
+    ? changeData.modelId
+    : undefined;
+  const role = isParticipantChange(changeData) ? changeData.role : undefined;
+  const oldRole = isParticipantRoleChange(changeData) ? changeData.oldRole : undefined;
+  const newRole = isParticipantRoleChange(changeData) ? changeData.newRole : undefined;
+  const oldMode = isModeChange(changeData) ? changeData.oldMode : undefined;
+  const newMode = isModeChange(changeData) ? changeData.newMode : undefined;
+  const enabled = isWebSearchChange(changeData) ? changeData.enabled : undefined;
 
   const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
   const showMissingModelFallback = (change.changeType === ChangelogTypes.ADDED || change.changeType === ChangelogTypes.REMOVED) && modelId && !model;
-  // Simplified rendering - single pattern for participants, simpler mode display
+
+  // ✅ TYPE-SAFE: Use type guards for conditional rendering
+  const isParticipantType = isParticipantChange(changeData);
+  const isParticipantRoleType = isParticipantRoleChange(changeData);
+  const isModeChangeType = isModeChange(changeData);
+  const isWebSearchChangeType = isWebSearchChange(changeData);
+
   return (
     <>
       {/* Missing model fallback */}
@@ -200,7 +185,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
       )}
 
       {/* Participant changes (added/removed) */}
-      {isParticipant && model && (
+      {isParticipantType && model && (
         <div
           className={cn(
             'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
@@ -233,7 +218,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
       )}
 
       {/* Participant role changes */}
-      {isParticipantRole && model && (oldRole || newRole) && (
+      {isParticipantRoleType && model && (oldRole || newRole) && (
         <div
           className={cn(
             'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
@@ -271,7 +256,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
       )}
 
       {/* Mode changes */}
-      {isModeChange && (oldMode || newMode) && (
+      {isModeChangeType && (oldMode || newMode) && (
         <div
           className={cn(
             'flex items-center gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
@@ -290,7 +275,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
       )}
 
       {/* Web search toggle changes */}
-      {isWebSearchChange && enabled !== undefined && (
+      {isWebSearchChangeType && enabled !== undefined && (
         <div
           className={cn(
             'flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
