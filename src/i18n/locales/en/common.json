@@ -1103,7 +1103,8 @@
       "corruptedState": "The analysis state appears to be corrupted. Please retry the analysis.",
       "invalidData": "Invalid analysis data received. Please regenerate the analysis.",
       "networkError": "Network error occurred. Please check your connection and try again.",
-      "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists."
+      "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists.",
+      "emptyResponseError": "Analysis generation failed. The AI model did not return a response. Please try again."
     },
     "thinkingMessages": [
       "Evaluating participant insights...",

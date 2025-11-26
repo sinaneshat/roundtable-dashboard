@@ -75,6 +75,7 @@ import type {
   ReorderParticipants,
   ResetFeedback,
   ResetForm,
+  ResetForThreadNavigation,
   ResetScreenMode,
   ResetThreadState,
   ResetToNewChat,
@@ -89,6 +90,7 @@ import type {
   SetError,
   SetExpectedParticipantIds,
   SetFeedback,
+  SetHasEarlyOptimisticMessage,
   SetHasInitiallyLoaded,
   SetHasPendingConfigChanges,
   SetHasSentPendingMessage,
@@ -362,6 +364,8 @@ export const TrackingStateSchema = z.object({
   hasSentPendingMessage: z.boolean(),
   createdAnalysisRounds: z.custom<Set<number>>(),
   triggeredPreSearchRounds: z.custom<Set<number>>(),
+  /** ✅ IMMEDIATE UI FEEDBACK: Flag to track early optimistic message from handleUpdateThreadAndSend */
+  hasEarlyOptimisticMessage: z.boolean(),
 });
 
 export const TrackingActionsSchema = z.object({
@@ -372,6 +376,8 @@ export const TrackingActionsSchema = z.object({
   markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
   clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
+  /** ✅ IMMEDIATE UI FEEDBACK: Set when early optimistic message added by handleUpdateThreadAndSend */
+  setHasEarlyOptimisticMessage: z.custom<SetHasEarlyOptimisticMessage>(),
 });
 
 export const TrackingSliceSchema = z.intersection(TrackingStateSchema, TrackingActionsSchema);
@@ -481,6 +487,7 @@ export const AnimationSliceSchema = z.intersection(AnimationStateSchema, Animati
 
 export const OperationsActionsSchema = z.object({
   resetThreadState: z.custom<ResetThreadState>(),
+  resetForThreadNavigation: z.custom<ResetForThreadNavigation>(),
   resetToOverview: z.custom<ResetToOverview>(),
   resetToNewChat: z.custom<ResetToNewChat>(),
   initializeThread: z.custom<InitializeThread>(),

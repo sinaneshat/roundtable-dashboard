@@ -467,13 +467,16 @@ describe('useChatScroll', () => {
     it('should track scrolled analyses', () => {
       mockWindowScroll(1000, 2000, 1000);
 
-      const analysis = createTestAnalysis('a1', 0, AnalysisStatuses.COMPLETE);
+      // ✅ FIX: Use STREAMING status since analysis tracking only happens during active streaming
+      // The hook was updated to only track analyses when isAnyStreaming is true
+      // This prevents unwanted scroll jumps when analyses appear after streaming completes
+      const analysis = createTestAnalysis('a1', 0, AnalysisStatuses.STREAMING);
 
       const { result } = renderHook(() =>
         useChatScroll({
           messages: [createTestMessage('m1', 0)],
           analyses: [analysis],
-          isStreaming: false,
+          isStreaming: true, // ✅ FIX: Must be streaming for analysis tracking to work
         }),
       );
 

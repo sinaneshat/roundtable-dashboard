@@ -559,9 +559,9 @@ describe('pre-Search Data Integrity', () => {
       expect(metadataOnlyResult.metadata?.faviconUrl).toContain('google.com/s2/favicons');
       expect(metadataOnlyResult.metadata?.description).toBe('Test description');
 
-      // No content extraction fields
-      expect((metadataOnlyResult as Record<string, unknown>).fullContent).toBeUndefined();
-      expect((metadataOnlyResult as Record<string, unknown>).rawContent).toBeUndefined();
+      // No content extraction fields - use 'in' operator for type-safe property check
+      expect('fullContent' in metadataOnlyResult).toBe(false);
+      expect('rawContent' in metadataOnlyResult).toBe(false);
     });
 
     it('should correctly combine metadata-only and full results in same payload', () => {

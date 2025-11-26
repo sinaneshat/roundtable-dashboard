@@ -750,15 +750,15 @@ describe('error Scenarios and Edge Cases', () => {
       participants.filter(p => p.isEnabled),
     );
 
-    // DEFENSIVE BEHAVIOR: Malformed metadata causes message to be ignored
-    // - Schema validation fails due to model: '' (min(1) constraint)
-    // - getParticipantMetadata returns null for the entire message
-    // - getParticipantIndex returns null, so message isn't counted
-    // - This is SAFE: malformed data doesn't cause incorrect resumption
-    expect(result.respondedCount).toBe(0); // Message ignored due to schema failure
+    // RESILIENT BEHAVIOR: Valid participantIndex extracted via fallback
+    // - Full schema validation fails due to model: '' (min(1) constraint)
+    // - BUT getParticipantIndex fallback extracts participantIndex: 0 successfully
+    // - Message is correctly counted because participantIndex is valid
+    // - This prevents false ID/metadata mismatch errors during analysis creation
+    expect(result.respondedCount).toBe(1); // Message counted via fallback extraction
     expect(result.participantsChanged).toBe(false);
-    expect(result.isIncomplete).toBe(true); // Still incomplete (0 < 2 participants)
-    expect(result.nextParticipantIndex).toBe(0); // Would start from beginning
+    expect(result.isIncomplete).toBe(true); // Still incomplete (1 < 2 participants)
+    expect(result.nextParticipantIndex).toBe(1); // Next participant to respond
   });
 
   it('should handle empty participants array', () => {

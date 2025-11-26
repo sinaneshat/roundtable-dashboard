@@ -48,8 +48,10 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
     setFailedImages(prev => new Set([...prev, url]));
   };
 
-  // Filter out failed images
-  const visibleImages = allImages.filter(img => !failedImages.has(img.url));
+  // Deduplicate by URL and filter out failed images
+  const visibleImages = allImages
+    .filter((img, idx, arr) => arr.findIndex(i => i.url === img.url) === idx)
+    .filter(img => !failedImages.has(img.url));
 
   if (visibleImages.length === 0) {
     return null;

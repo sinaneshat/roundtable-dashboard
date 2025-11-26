@@ -22,6 +22,7 @@ import {
   AnalysisStatuses,
   ChatModes,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -437,7 +438,7 @@ describe('round Regeneration', () => {
     expect(store.getState().analyses).toHaveLength(1);
 
     // Regenerate - clear assistant messages and analysis for round 0
-    const userMessages = store.getState().messages.filter(m => m.role === 'user');
+    const userMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.USER);
     store.getState().setMessages(userMessages);
     store.getState().removeAnalysis(0);
 
@@ -485,7 +486,7 @@ describe('round Regeneration', () => {
 
     // Clear round 1 responses
     const messagesWithoutRound1Responses = store.getState().messages.filter(
-      m => !(m.role === 'assistant' && m.metadata?.roundNumber === 1),
+      m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 1),
     );
     store.getState().setMessages(messagesWithoutRound1Responses);
 

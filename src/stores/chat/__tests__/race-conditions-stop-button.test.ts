@@ -10,6 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { UIMessageRoles } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
@@ -102,7 +103,7 @@ describe('race Conditions: Stop Button', () => {
 
       // Check analysis trigger condition
       // Condition: All participants have responded?
-      const responses = store.getState().messages.filter(m => m.role === 'assistant');
+      const responses = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(responses).toHaveLength(1); // Only P0
 
       // Should trigger analysis? NO.

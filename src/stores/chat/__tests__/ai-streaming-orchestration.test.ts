@@ -27,6 +27,7 @@ import {
   ChatModes,
   ScreenModes,
   StreamStatuses,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -190,7 +191,7 @@ describe('3.1 Sequential Flow & Context', () => {
 
     // Previous messages exist
     const messages = store.getState().messages;
-    expect(messages.filter(m => m.role === 'assistant')).toHaveLength(2);
+    expect(messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
   });
 
   /**
@@ -221,8 +222,8 @@ describe('3.1 Sequential Flow & Context', () => {
     // 2. Model 1's complete response
     const messages = store.getState().messages;
     expect(messages).toHaveLength(2);
-    expect(messages[0].role).toBe('user');
-    expect(messages[1].role).toBe('assistant');
+    expect(messages[0].role).toBe(UIMessageRoles.USER);
+    expect(messages[1].role).toBe(UIMessageRoles.ASSISTANT);
     expect(messages[1].metadata?.participantIndex).toBe(0);
 
     // Model 2 can now reference Model 1's content
@@ -321,7 +322,7 @@ describe('3.1 Sequential Flow & Context', () => {
     store.getState().setCurrentParticipantIndex(0); // Reset for next round
 
     expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().messages.filter(m => m.role === 'assistant')).toHaveLength(3);
+    expect(store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(3);
   });
 });
 
@@ -709,7 +710,7 @@ describe('3.3 Technical Edge Cases (Hook Internals)', () => {
     );
 
     // Verify ID was corrected
-    const correctedMessage = store.getState().messages.find(m => m.role === 'assistant');
+    const correctedMessage = store.getState().messages.find(m => m.role === UIMessageRoles.ASSISTANT);
     expect(correctedMessage?.id).toBe('thread-abc123_r0_p0');
     expect(store.getState().messages.find(m => m.id === 'temp-id-12345')).toBeUndefined();
   });
@@ -798,10 +799,10 @@ describe('3.3 Technical Edge Cases (Hook Internals)', () => {
 
     // All indices should be processed in order
     expect(processedIndices).toEqual([0, 1, 2]);
-    expect(store.getState().messages.filter(m => m.role === 'assistant')).toHaveLength(3);
+    expect(store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(3);
 
     // Messages should maintain correct order
-    const assistantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+    const assistantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
     expect(assistantMessages[0].metadata?.participantIndex).toBe(0);
     expect(assistantMessages[1].metadata?.participantIndex).toBe(1);
     expect(assistantMessages[2].metadata?.participantIndex).toBe(2);
@@ -849,7 +850,7 @@ describe('3.3 Technical Edge Cases (Hook Internals)', () => {
     store.getState().setMessages(prev => [...prev, createMockMessage(2, 0)]);
 
     // All 3 participants processed (including failed one)
-    expect(store.getState().messages.filter(m => m.role === 'assistant')).toHaveLength(3);
+    expect(store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(3);
 
     // P1 should be marked as error
     const p1Message = store.getState().messages.find(m => m.metadata?.participantIndex === 1);
@@ -927,7 +928,7 @@ describe('3.4 Stop Functionality', () => {
     expect(store.getState().isStreaming).toBe(false);
 
     // Only P0's message exists
-    expect(store.getState().messages.filter(m => m.role === 'assistant')).toHaveLength(1);
+    expect(store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(1);
   });
 
   /**
@@ -961,7 +962,7 @@ describe('3.4 Stop Functionality', () => {
     store.getState().setIsStreaming(false);
 
     // Partial content is preserved
-    const savedMessage = store.getState().messages.find(m => m.role === 'assistant');
+    const savedMessage = store.getState().messages.find(m => m.role === UIMessageRoles.ASSISTANT);
     const textPart = savedMessage?.parts.find(p => p.type === 'text');
     expect(textPart && 'text' in textPart ? textPart.text : '').toBe('This is a partial respon...');
   });
@@ -1023,7 +1024,7 @@ describe('3.4 Stop Functionality', () => {
     expect(finalState.currentParticipantIndex).toBe(1);
 
     // Only P0's message exists
-    expect(finalState.messages.filter(m => m.role === 'assistant')).toHaveLength(1);
+    expect(finalState.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(1);
   });
 
   /**

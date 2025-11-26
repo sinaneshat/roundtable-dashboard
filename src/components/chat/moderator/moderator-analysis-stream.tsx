@@ -1,8 +1,8 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useRef } from 'react';
-import type { z } from 'zod';
 
 import type { StreamErrorType } from '@/api/core/enums';
 import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
@@ -23,9 +23,10 @@ import {
   RoundSummarySchema,
 } from '@/api/routes/chat/schema';
 import { LoaderFive } from '@/components/ui/loader';
-import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
+import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useAutoScroll, useBoolean } from '@/hooks/utils';
 import { hasAnalysisData } from '@/lib/utils/analysis-utils';
+import { filterArrayWithSchema, safeParse } from '@/lib/utils/type-guards';
 
 // ✅ NEW COMPONENTS: Multi-AI Deliberation Framework
 import { AlternativesSection } from './alternatives-section';
@@ -117,6 +118,14 @@ function ModeratorAnalysisStreamComponent({
   // → triggers re-render → useEffect runs again → infinite loop
   const hasStartedStreamingRef = useRef(false);
 
+  // ✅ CRITICAL FIX: Store partial analysis in ref for fallback in onFinish
+  // AI SDK's onFinish may receive object=undefined due to stream termination issues
+  // even when valid data was successfully streamed (visible in partialAnalysis)
+  // This ref captures the latest streamed data to use as fallback
+  // NOTE: Using 'unknown' because AI SDK's PartialObject<T> type differs from Partial<T>
+  // The hasAnalysisData() util handles the type checking at runtime
+  const partialAnalysisRef = useRef<unknown>(null);
+
   // ✅ Unified auto-scroll: Only scrolls if user is at bottom
   const isStreaming = analysis.status === AnalysisStatuses.STREAMING;
   const bottomRef = useAutoScroll(isStreaming);
@@ -124,6 +133,7 @@ function ModeratorAnalysisStreamComponent({
   // ✅ Reset the streaming flag when analysis ID changes (new analysis)
   useEffect(() => {
     hasStartedStreamingRef.current = false;
+    partialAnalysisRef.current = null; // Reset fallback data for new analysis
   }, [analysis.id]);
 
   // ✅ MOCK MODE: Mock streaming effect (disabled in favor of real API)
@@ -163,8 +173,33 @@ function ModeratorAnalysisStreamComponent({
         let errorType: StreamErrorType = StreamErrorTypes.UNKNOWN;
         const errorMessage = streamError?.message || String(streamError || 'Unknown error');
 
+        // ✅ CRITICAL FIX: Detect empty/undefined response from AI model
+        // When path is [] and error is "expected object, received undefined", the AI returned nothing
+        // This happens due to: model timeout, rate limiting, empty response, or network interruption
+        const isEmptyResponse = errorMessage.includes('expected object, received undefined')
+          || errorMessage.includes('Invalid input: expected object, received undefined')
+          || (errorMessage.includes('invalid_type') && errorMessage.includes('path": []'));
+
         // ✅ Enum Pattern: Classify error type
-        if (streamError instanceof Error) {
+        if (isEmptyResponse) {
+          // ✅ CRITICAL FIX: Check if we have valid partial data from streaming
+          // AI SDK may report "empty response" due to stream termination issues
+          // even when valid data was successfully streamed and displayed
+          // Use the partial data as fallback instead of failing
+          const fallbackData = partialAnalysisRef.current;
+          if (fallbackData && hasAnalysisData(fallbackData)) {
+            // We have valid streamed data - treat as success
+            onStreamCompleteRef.current?.(fallbackData as ModeratorAnalysisPayload);
+            return;
+          }
+
+          // ✅ NEW: Empty response detection - AI model returned no valid data
+          errorType = StreamErrorTypes.EMPTY_RESPONSE;
+          streamErrorTypeRef.current = errorType;
+          // User-friendly error message instead of raw Zod validation error
+          onStreamCompleteRef.current?.(null, new Error(t('errors.emptyResponseError')));
+          return;
+        } else if (streamError instanceof Error) {
           if (streamError.name === 'AbortError' || errorMessage.includes('aborted')) {
             errorType = StreamErrorTypes.ABORT;
           } else if (streamError.name === 'TypeValidationError' || errorMessage.includes('validation')) {
@@ -201,6 +236,16 @@ function ModeratorAnalysisStreamComponent({
   useEffect(() => {
     submitRef.current = submit;
   }, [submit]);
+
+  // ✅ CRITICAL FIX: Keep partialAnalysisRef in sync with streaming data
+  // AI SDK's onFinish may receive object=undefined due to stream termination issues
+  // even when valid data was successfully streamed. This effect captures the latest
+  // streamed data so we can use it as fallback in onFinish callback.
+  useEffect(() => {
+    if (partialAnalysis) {
+      partialAnalysisRef.current = partialAnalysis;
+    }
+  }, [partialAnalysis]);
 
   // ✅ CRITICAL FIX: Polling for 409 Conflict - stream already in progress
   // When page refreshes during streaming, backend returns 409
@@ -347,75 +392,42 @@ function ModeratorAnalysisStreamComponent({
 
   const hasData = hasAnalysisData(displayData);
 
-  // ✅ EAGER RENDERING: Show loading UI when PENDING/STREAMING with no data
-  // This provides immediate visual feedback that analysis is coming
-  if ((analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return (
-      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <LoaderFive text={t('pendingAnalysis')} />
-      </div>
-    );
-  }
+  // ✅ Determine loading state for AnimatePresence
+  const isPendingWithNoData = (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) && !hasData;
 
   // Don't render if no data and not pending/streaming
-  if (!hasData) {
+  if (!hasData && !isPendingWithNoData) {
     return null;
   }
 
+  // ✅ TYPE-SAFE DISPLAY DATA: Define union type for streaming + completed data
+  // Uses optional chaining to safely access properties from either:
+  // 1. StoredModeratorAnalysis['analysisData'] - omits roundNumber, mode, userQuestion
+  // 2. DeepPartial<ModeratorAnalysisPayload> - streaming partial data from AI SDK
   // ✅ NEW SCHEMA: Multi-AI Deliberation Framework
   // Sections ordered to match visual top-to-bottom flow AND backend generation order
-  const {
-    // Header section (generated first by backend)
-    roundConfidence,
-    confidenceWeighting,
-    consensusEvolution,
-    // Key insights (generated second)
-    summary,
-    recommendations,
-    // Detail sections (generated in visual order)
-    contributorPerspectives,
-    consensusAnalysis,
-    evidenceAndReasoning,
-    alternatives,
-    roundSummary,
-  } = displayData;
+  const roundConfidence = displayData?.roundConfidence;
+  const confidenceWeighting = displayData?.confidenceWeighting;
+  const consensusEvolution = displayData?.consensusEvolution;
+  const summary = displayData?.summary;
+  const recommendations = displayData?.recommendations;
+  const contributorPerspectives = displayData?.contributorPerspectives;
+  const consensusAnalysis = displayData?.consensusAnalysis;
+  const evidenceAndReasoning = displayData?.evidenceAndReasoning;
+  const alternatives = displayData?.alternatives;
+  const roundSummary = displayData?.roundSummary;
 
-  // ✅ ZOD-BASED ARRAY VALIDATION: Use schema validation for array elements
-  // Following established pattern: Use Zod safeParse for runtime type validation
-  // This validates each element and filters out invalid/incomplete ones during streaming
-  const validContributorPerspectives = (contributorPerspectives ?? [])
-    .map(p => ContributorPerspectiveSchema.safeParse(p))
-    .filter((result): result is { success: true; data: z.infer<typeof ContributorPerspectiveSchema> } => result.success)
-    .map(result => result.data);
+  // ✅ ZOD-BASED ARRAY VALIDATION: Use filterArrayWithSchema for streaming data
+  // Type inference flows from schema - no inline type definitions needed
+  const validContributorPerspectives = filterArrayWithSchema(contributorPerspectives, ContributorPerspectiveSchema);
+  const validAlternatives = filterArrayWithSchema(alternatives, AlternativeScenarioSchema);
+  const validConsensusEvolution = filterArrayWithSchema(consensusEvolution, ConsensusEvolutionPhaseSchema);
+  const validRecommendations = filterArrayWithSchema(recommendations, RecommendationSchema);
 
-  const validAlternatives = (alternatives ?? [])
-    .map(a => AlternativeScenarioSchema.safeParse(a))
-    .filter((result): result is { success: true; data: z.infer<typeof AlternativeScenarioSchema> } => result.success)
-    .map(result => result.data);
-
-  // ✅ VALIDATE CONSENSUS EVOLUTION: Filter incomplete phases during streaming
-  const validConsensusEvolution = (consensusEvolution ?? [])
-    .map(p => ConsensusEvolutionPhaseSchema.safeParse(p))
-    .filter((result): result is { success: true; data: z.infer<typeof ConsensusEvolutionPhaseSchema> } => result.success)
-    .map(result => result.data);
-
-  // ✅ VALIDATE RECOMMENDATIONS: Filter incomplete recommendations during streaming
-  const validRecommendations = (recommendations ?? [])
-    .map(r => RecommendationSchema.safeParse(r))
-    .filter((result): result is { success: true; data: z.infer<typeof RecommendationSchema> } => result.success)
-    .map(result => result.data);
-
-  // ✅ ZOD-BASED TYPE GUARDS: Use schema validation instead of manual type guards
-  // Following established pattern: Use Zod safeParse for runtime type validation
-  // This is type-safe and reuses existing schema definitions
-  const consensusResult = ConsensusAnalysisSchema.safeParse(consensusAnalysis);
-  const validConsensusAnalysis = consensusResult.success ? consensusResult.data : null;
-
-  const evidenceResult = EvidenceAndReasoningSchema.safeParse(evidenceAndReasoning);
-  const validEvidenceAndReasoning = evidenceResult.success ? evidenceResult.data : null;
-
-  const roundSummaryResult = RoundSummarySchema.safeParse(roundSummary);
-  const validRoundSummary = roundSummaryResult.success ? roundSummaryResult.data : null;
+  // ✅ ZOD-BASED OBJECT VALIDATION: Use safeParse for single object validation
+  const validConsensusAnalysis = safeParse(ConsensusAnalysisSchema, consensusAnalysis) ?? null;
+  const validEvidenceAndReasoning = safeParse(EvidenceAndReasoningSchema, evidenceAndReasoning) ?? null;
+  const validRoundSummary = safeParse(RoundSummarySchema, roundSummary) ?? null;
 
   // Content checking
   const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING;
@@ -430,113 +442,143 @@ function ModeratorAnalysisStreamComponent({
   let sectionIndex = 0;
 
   return (
-    <AnimatedStreamingList groupId={`analysis-stream-${analysis.id}`} className="space-y-6">
-      {/* 1. Round Outcome Header - Generated FIRST by backend, shown at TOP */}
-      {hasHeaderData && (
-        <AnimatedStreamingItem
-          key="round-outcome-header"
-          itemKey="round-outcome-header"
-          index={sectionIndex++}
-        >
-          <RoundOutcomeHeader
-            roundConfidence={roundConfidence}
-            confidenceWeighting={confidenceWeighting}
-            consensusEvolution={validConsensusEvolution.length > 0 ? validConsensusEvolution : undefined}
-            contributors={validContributorPerspectives}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+    <AnimatePresence mode="wait" initial={false}>
+      {isPendingWithNoData
+        ? (
+            <motion.div
+              key="analysis-loader"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{
+                duration: ANIMATION_DURATION.fast,
+                ease: ANIMATION_EASE.standard,
+              }}
+              className="flex items-center justify-center py-8 text-muted-foreground text-sm"
+            >
+              <LoaderFive text={t('pendingAnalysis')} />
+            </motion.div>
+          )
+        : (
+            <motion.div
+              key="analysis-content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: ANIMATION_DURATION.normal,
+                ease: ANIMATION_EASE.enter,
+              }}
+            >
+              <AnimatedStreamingList groupId={`analysis-stream-${analysis.id}`} className="space-y-6">
+                {/* 1. Round Outcome Header - Generated FIRST by backend, shown at TOP */}
+                {hasHeaderData && (
+                  <AnimatedStreamingItem
+                    key="round-outcome-header"
+                    itemKey="round-outcome-header"
+                    index={sectionIndex++}
+                  >
+                    <RoundOutcomeHeader
+                      roundConfidence={roundConfidence}
+                      confidenceWeighting={confidenceWeighting}
+                      consensusEvolution={validConsensusEvolution.length > 0 ? validConsensusEvolution : undefined}
+                      contributors={validContributorPerspectives}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      {/* 2. Key Insights - Generated SECOND by backend */}
-      {hasKeyInsights && (
-        <AnimatedStreamingItem
-          key="key-insights"
-          itemKey="key-insights"
-          index={sectionIndex++}
-        >
-          <KeyInsightsSection
-            summary={summary}
-            recommendations={validRecommendations.length > 0 ? validRecommendations : undefined}
-            onActionClick={stableOnActionClick}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+                {/* 2. Key Insights - Generated SECOND by backend */}
+                {hasKeyInsights && (
+                  <AnimatedStreamingItem
+                    key="key-insights"
+                    itemKey="key-insights"
+                    index={sectionIndex++}
+                  >
+                    <KeyInsightsSection
+                      summary={summary}
+                      recommendations={validRecommendations.length > 0 ? validRecommendations : undefined}
+                      onActionClick={stableOnActionClick}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      {/* 3. Contributor Perspectives */}
-      {validContributorPerspectives.length > 0 && (
-        <AnimatedStreamingItem
-          key="contributor-perspectives"
-          itemKey="contributor-perspectives"
-          index={sectionIndex++}
-        >
-          <ContributorPerspectivesSection
-            perspectives={validContributorPerspectives}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+                {/* 3. Contributor Perspectives */}
+                {validContributorPerspectives.length > 0 && (
+                  <AnimatedStreamingItem
+                    key="contributor-perspectives"
+                    itemKey="contributor-perspectives"
+                    index={sectionIndex++}
+                  >
+                    <ContributorPerspectivesSection
+                      perspectives={validContributorPerspectives}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      {/* 4. Consensus Analysis */}
-      {validConsensusAnalysis && (
-        <AnimatedStreamingItem
-          key="consensus-analysis"
-          itemKey="consensus-analysis"
-          index={sectionIndex++}
-        >
-          <ConsensusAnalysisSection
-            analysis={validConsensusAnalysis}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+                {/* 4. Consensus Analysis */}
+                {validConsensusAnalysis && (
+                  <AnimatedStreamingItem
+                    key="consensus-analysis"
+                    itemKey="consensus-analysis"
+                    index={sectionIndex++}
+                  >
+                    <ConsensusAnalysisSection
+                      analysis={validConsensusAnalysis}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      {/* 5. Evidence & Reasoning */}
-      {validEvidenceAndReasoning && (
-        <AnimatedStreamingItem
-          key="evidence-reasoning"
-          itemKey="evidence-reasoning"
-          index={sectionIndex++}
-        >
-          <EvidenceReasoningSection
-            evidenceAndReasoning={validEvidenceAndReasoning}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+                {/* 5. Evidence & Reasoning */}
+                {validEvidenceAndReasoning && (
+                  <AnimatedStreamingItem
+                    key="evidence-reasoning"
+                    itemKey="evidence-reasoning"
+                    index={sectionIndex++}
+                  >
+                    <EvidenceReasoningSection
+                      evidenceAndReasoning={validEvidenceAndReasoning}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      {/* 6. Alternative Scenarios */}
-      {validAlternatives.length > 0 && (
-        <AnimatedStreamingItem
-          key="alternatives"
-          itemKey="alternatives"
-          index={sectionIndex++}
-        >
-          <AlternativesSection
-            alternatives={validAlternatives}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+                {/* 6. Alternative Scenarios */}
+                {validAlternatives.length > 0 && (
+                  <AnimatedStreamingItem
+                    key="alternatives"
+                    itemKey="alternatives"
+                    index={sectionIndex++}
+                  >
+                    <AlternativesSection
+                      alternatives={validAlternatives}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      {/* 7. Round Summary - Generated LAST by backend, shown at BOTTOM */}
-      {validRoundSummary && (
-        <AnimatedStreamingItem
-          key="round-summary"
-          itemKey="round-summary"
-          index={sectionIndex++}
-        >
-          <RoundSummarySection
-            roundSummary={validRoundSummary}
-            onActionClick={stableOnActionClick}
-            isStreaming={isCurrentlyStreaming}
-          />
-        </AnimatedStreamingItem>
-      )}
+                {/* 7. Round Summary - Generated LAST by backend, shown at BOTTOM */}
+                {validRoundSummary && (
+                  <AnimatedStreamingItem
+                    key="round-summary"
+                    itemKey="round-summary"
+                    index={sectionIndex++}
+                  >
+                    <RoundSummarySection
+                      roundSummary={validRoundSummary}
+                      onActionClick={stableOnActionClick}
+                      isStreaming={isCurrentlyStreaming}
+                    />
+                  </AnimatedStreamingItem>
+                )}
 
-      <div ref={bottomRef} />
-    </AnimatedStreamingList>
+                <div ref={bottomRef} />
+              </AnimatedStreamingList>
+            </motion.div>
+          )}
+    </AnimatePresence>
   );
 }
 export const ModeratorAnalysisStream = memo(ModeratorAnalysisStreamComponent, (prevProps, nextProps) => {

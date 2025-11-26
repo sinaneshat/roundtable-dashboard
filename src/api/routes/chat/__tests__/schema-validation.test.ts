@@ -282,4 +282,160 @@ describe('schema-validation - AI output_format compatibility', () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe('null vote handling - insufficient content scenarios', () => {
+    /**
+     * BUG REGRESSION TEST: Null vote validation failure
+     *
+     * When AI analyzes a discussion with insufficient content (e.g., participant only said "Greetings"),
+     * the AI may return `vote: null` to indicate no meaningful vote could be formed.
+     *
+     * Error from production:
+     * "Type validation failed: ...\"vote\":null... Invalid option: expected one of \"approve\"|\"caution\"|\"reject\""
+     *
+     * Root cause: ContributorPerspectiveSchema.vote was z.enum(VOTE_TYPES) without .nullable()
+     * Fix: Add .nullable() to vote field to handle AI responses for insufficient content
+     */
+    it('should accept ContributorPerspective with null vote for insufficient content', () => {
+      const perspectiveWithNullVote = {
+        participantIndex: 0,
+        role: null,
+        modelId: 'google/gemini-2.5-flash-lite',
+        modelName: 'Gemini 2.5 Flash Lite',
+        scorecard: {
+          logic: 0,
+          riskAwareness: 0,
+          creativity: 0,
+          evidence: 0,
+          consensus: 0,
+        },
+        stance: 'No clear position taken - only provided greeting',
+        evidence: [],
+        vote: null, // AI returns null when insufficient content to vote
+      };
+
+      const result = ContributorPerspectiveSchema.safeParse(perspectiveWithNullVote);
+
+      if (!result.success) {
+        console.error('ContributorPerspective null vote validation failed:', result.error.errors);
+      }
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept full ModeratorAnalysisPayload with null votes', () => {
+      const analysisWithNullVotes = {
+        roundNumber: 1,
+        mode: 'debating',
+        userQuestion: 'retry',
+        roundConfidence: 10,
+        confidenceWeighting: 'balanced',
+        consensusEvolution: [
+          { phase: 'opening', percentage: 10, label: 'Opening' },
+          { phase: 'rebuttal', percentage: 10, label: 'Rebuttal' },
+          { phase: 'cross_exam', percentage: 10, label: 'Cross-Exam' },
+          { phase: 'synthesis', percentage: 10, label: 'Synthesis' },
+          { phase: 'final_vote', percentage: 10, label: 'Final Vote' },
+        ],
+        summary: 'Insufficient participation and content to form meaningful discussion.',
+        recommendations: [
+          {
+            title: 'Restart discussion with clear question',
+            description: 'Current question lacks context needed for meaningful debate',
+            suggestedPrompt: 'What specific problem are we trying to address?',
+            suggestedModels: ['anthropic/claude-sonnet-4', 'google/gemini-2.5-pro'],
+            suggestedRoles: ['The Ideator', 'Practical Evaluator'],
+            suggestedMode: 'brainstorming',
+          },
+        ],
+        contributorPerspectives: [
+          {
+            participantIndex: 0,
+            role: null,
+            modelId: 'google/gemini-2.5-flash-lite',
+            modelName: 'Gemini 2.5 Flash Lite',
+            scorecard: {
+              logic: 0,
+              riskAwareness: 0,
+              creativity: 0,
+              evidence: 0,
+              consensus: 0,
+            },
+            stance: 'No clear position taken - only provided greeting',
+            evidence: [],
+            vote: null, // Key: null vote for insufficient content
+          },
+        ],
+        consensusAnalysis: {
+          alignmentSummary: {
+            totalClaims: 0,
+            majorAlignment: 0,
+            contestedClaims: 0,
+            contestedClaimsList: [],
+          },
+          agreementHeatmap: [],
+          argumentStrengthProfile: {
+            'Gemini 2.5 Flash Lite': {
+              logic: 0,
+              evidence: 0,
+              riskAwareness: 0,
+              consensus: 0,
+              creativity: 0,
+            },
+          },
+        },
+        evidenceAndReasoning: {
+          reasoningThreads: [],
+          evidenceCoverage: [],
+        },
+        alternatives: [],
+        roundSummary: {
+          participation: {
+            approved: 0,
+            cautioned: 0,
+            rejected: 0,
+          },
+          keyThemes: 'Discussion did not progress beyond initial greeting',
+          unresolvedQuestions: [
+            'What is the actual question or topic for debate?',
+          ],
+          generated: '2024-03-26T10:30:00Z',
+        },
+      };
+
+      const result = ModeratorAnalysisPayloadSchema.safeParse(analysisWithNullVotes);
+
+      if (!result.success) {
+        console.error('ModeratorAnalysisPayload null vote validation failed:', result.error.errors);
+      }
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should still accept valid votes (approve, caution, reject)', () => {
+      const validVotes = ['approve', 'caution', 'reject'] as const;
+
+      for (const vote of validVotes) {
+        const perspective = {
+          participantIndex: 0,
+          role: 'Practical Evaluator',
+          modelId: 'google/gemini-2.5-pro',
+          modelName: 'Gemini 2.5 Pro',
+          scorecard: {
+            logic: 85,
+            riskAwareness: 90,
+            creativity: 70,
+            evidence: 88,
+            consensus: 80,
+          },
+          stance: 'Clear position with evidence',
+          evidence: ['Point 1', 'Point 2'],
+          vote,
+        };
+
+        const result = ContributorPerspectiveSchema.safeParse(perspective);
+        expect(result.success).toBe(true);
+      }
+    });
+  });
 });

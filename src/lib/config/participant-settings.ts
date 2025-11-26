@@ -88,12 +88,12 @@ export type ParticipantSettings = z.infer<typeof ParticipantSettingsSchema>;
  *
  * Provides sensible defaults for AI model configuration:
  * - Balanced creativity (0.7 temperature)
- * - Standard response length (4096 tokens)
+ * - Optimized response length (1024 tokens - matches starter tier)
  * - No custom system prompt
  */
 export const DEFAULT_PARTICIPANT_SETTINGS: Required<NonNullable<ParticipantSettings>> = {
   temperature: 0.7,
-  maxTokens: 4096,
+  maxTokens: 1024,
   systemPrompt: '',
 } as const;
 

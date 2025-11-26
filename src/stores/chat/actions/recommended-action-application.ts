@@ -17,8 +17,8 @@ import type { Recommendation } from '@/api/routes/chat/schema';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 export type ApplyRecommendedActionOptions = {
   maxModels?: number;

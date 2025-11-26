@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import { MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -314,14 +314,27 @@ function getParticipantInfoForMessage({
   // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
 
-  // AI SDK v5 Pattern: A message is complete once it has model metadata
+  // AI SDK v5 Pattern: A message is complete once it has model metadata AND visible content
   // The onFinish callback in useMultiParticipantChat adds metadata.model via mergeParticipantMetadata
   // This happens AFTER streaming completes and BEFORE the next participant starts (via flushSync)
-  const isComplete = !!assistantMetadata?.model;
+  //
+  // ✅ BUG FIX: Also check for visible content, not just model metadata
+  // With "eager rendering", backend sends metadata (including model) before streaming starts.
+  // A message with only 'step-start' part should NOT be considered complete - it's still streaming.
+  // Without this check, the streaming participant's placeholder shows as "complete" with no content,
+  // and pending participants appear to stream from bottom to top.
+  const hasVisibleContent = message.parts?.some(
+    p =>
+      (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
+      || p.type === MessagePartTypes.TOOL_CALL
+      || p.type === MessagePartTypes.REASONING,
+  ) ?? false;
+
+  const isComplete = !!assistantMetadata?.model && hasVisibleContent;
 
   if (isComplete && assistantMetadata) {
     // ✅ CRITICAL FIX: Use saved metadata for completed messages
-    // Once a message has metadata.model, it should NEVER revert to streaming state
+    // Once a message has metadata.model AND visible content, it should NEVER revert to streaming state
     // This prevents the first participant's message from "disappearing" when the second starts
     return {
       participantIndex: assistantMetadata.participantIndex,
@@ -750,6 +763,131 @@ export const ChatMessageList = memo(
                     demoShowContent={demoPreSearchOpen ? preSearch.searchData !== undefined : undefined}
                   />
                 )}
+
+                {/* ✅ EAGER RENDERING: Show pending participant placeholders when waiting for pre-search or streaming
+                    This provides immediate visual feedback showing all participants with "Waiting for response..."
+                    The shimmer loading shows until each participant begins streaming and receives content */}
+                {(() => {
+                  // ✅ CRITICAL FIX: Determine if we should show pending cards
+                  // Show pending cards when:
+                  // 1. Pre-search is active (PENDING or STREAMING)
+                  // 2. Streaming is active
+                  // 3. Pre-search just completed but streaming hasn't started yet (waitForStream phase)
+                  const preSearchActive = preSearch
+                    && (preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING);
+                  const preSearchComplete = preSearch && preSearch.status === AnalysisStatuses.COMPLETE;
+
+                  // ✅ FIX: Check if this is the round that's about to stream
+                  // After pre-search completes, there's a brief gap before isStreaming becomes true
+                  // During this gap, we still want to show pending cards
+                  const isStreamingRound = roundNumber === _streamingRoundNumber;
+                  const isLatestRound = isStreamingRound || preSearchActive || preSearchComplete;
+
+                  if (!isLatestRound || participants.length === 0) {
+                    return null;
+                  }
+
+                  // ✅ CRITICAL FIX: Show pending cards during ALL these phases:
+                  // - Pre-search PENDING/STREAMING: Show all participants as pending
+                  // - Pre-search COMPLETE but not streaming yet: Keep showing pending (transition phase)
+                  // - Streaming: Show participants who haven't started streaming yet
+                  //
+                  // The key insight: We should show pending cards whenever we're in the "current round"
+                  // that is expected to stream, regardless of exact timing between pre-search and streaming
+                  const shouldShowPendingCards = preSearchActive || preSearchComplete || isStreaming;
+
+                  if (!shouldShowPendingCards) {
+                    return null;
+                  }
+
+                  // Get participant indices that already have COMPLETED messages (with metadata) for this round
+                  // ✅ FIX: Only count messages that have final metadata (not streaming messages)
+                  const assistantMessagesForRound = messages.filter((m) => {
+                    if (m.role === MessageRoles.USER)
+                      return false;
+                    const msgRound = getRoundNumber(m.metadata);
+                    return msgRound === roundNumber;
+                  });
+
+                  const respondedParticipantIndices = new Set<number>();
+                  assistantMessagesForRound.forEach((m) => {
+                    const metadata = getMessageMetadata(m.metadata);
+                    const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
+                    // ✅ FIX: Only mark as "responded" if message has participantIndex, model, AND visible content
+                    // With "eager rendering", metadata (including model) is sent before streaming starts.
+                    // A message with only 'step-start' part has no visible content and should NOT mark as responded.
+                    // This ensures the streaming participant shows with shimmer/loading state, not as pending below.
+                    const hasVisibleContent = m.parts?.some(
+                      p =>
+                        (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
+                        || p.type === MessagePartTypes.TOOL_CALL
+                        || p.type === MessagePartTypes.REASONING,
+                    ) ?? false;
+                    if (assistantMetadata?.participantIndex !== undefined && assistantMetadata?.model && hasVisibleContent) {
+                      respondedParticipantIndices.add(assistantMetadata.participantIndex);
+                    }
+                  });
+
+                  // Find participants that haven't responded yet
+                  const pendingParticipants = participants.filter((_, index) => {
+                    // Skip if already responded (has completed message with full metadata)
+                    if (respondedParticipantIndices.has(index))
+                      return false;
+                    // ✅ CRITICAL FIX: ALWAYS skip current streaming participant
+                    // AssistantGroupCard handles the loading state (LoaderFive) for streaming messages
+                    // Don't check hasStreamingContent - that causes duplication when content is empty
+                    // The ModelMessageCard inside AssistantGroupCard shows shimmer via isPendingWithNoParts
+                    if (isStreaming && index === currentParticipantIndex)
+                      return false;
+                    return true;
+                  });
+
+                  if (pendingParticipants.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <div className="space-y-4 mt-4">
+                      {pendingParticipants.map((participant) => {
+                        // ✅ FIX: Get original participant index for ModelMessageCard
+                        const participantIndex = participants.findIndex(p => p.id === participant.id);
+                        const model = findModel(participant.modelId);
+                        const avatarProps = getAvatarPropsFromModelId(
+                          MessageRoles.ASSISTANT,
+                          participant.modelId,
+                          null,
+                          'AI',
+                        );
+                        const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
+
+                        // ✅ SEAMLESS TRANSITION: Use ModelMessageCard directly for pending participants
+                        // This ensures the same component type handles both pending and streaming states:
+                        // - PENDING: Shows shimmer with "Generating response from {model}..."
+                        // - STREAMING: AnimatePresence smoothly transitions to content
+                        // - No component remount = no visual flash
+                        return (
+                          <div
+                            key={`pending-${participant.id}`}
+                            className="mb-4 flex justify-start"
+                          >
+                            <div className="w-full">
+                              <ModelMessageCard
+                                model={model}
+                                role={participant.role}
+                                participantIndex={participantIndex}
+                                status={MessageStatuses.PENDING}
+                                parts={[]}
+                                avatarSrc={avatarProps.src}
+                                avatarName={avatarProps.name}
+                                isAccessible={isAccessible}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             );
           }
@@ -793,6 +931,40 @@ export const ChatMessageList = memo(
       return false;
     }
 
+    // ✅ CRITICAL FIX: During streaming, check if last message content changed
+    // This ensures pending cards properly transition to streaming content
+    // Without this check, the memo might skip re-renders when streaming updates
+    // the same message's parts array, causing pending cards to remain visible
+    if (nextProps.isStreaming && nextProps.messages.length > 0) {
+      const prevLast = prevProps.messages[prevProps.messages.length - 1];
+      const nextLast = nextProps.messages[nextProps.messages.length - 1];
+
+      // Check if parts array reference changed (indicates content update)
+      if (prevLast?.parts !== nextLast?.parts) {
+        return false;
+      }
+
+      // Deep check: if parts reference is same but content differs
+      // This handles edge cases where the array is mutated in place
+      if (prevLast?.parts && nextLast?.parts) {
+        // Calculate total text length for comparison without type predicates
+        const getTextLength = (parts: typeof prevLast.parts): number => {
+          let length = 0;
+          for (const p of parts) {
+            if (p.type === 'text' && 'text' in p) {
+              const text = (p as { type: 'text'; text: string }).text;
+              length += text?.length || 0;
+            }
+          }
+          return length;
+        };
+
+        if (getTextLength(prevLast.parts) !== getTextLength(nextLast.parts)) {
+          return false;
+        }
+      }
+    }
+
     // Only re-render if currentParticipantIndex changes AND we're currently streaming
     // If not streaming, completed messages don't care about currentParticipantIndex
     if (
@@ -812,6 +984,16 @@ export const ChatMessageList = memo(
       prevProps.currentStreamingParticipant !== nextProps.currentStreamingParticipant
       && nextProps.isStreaming
     ) {
+      return false;
+    }
+
+    // Re-render if preSearches change (for pending participant cards and PreSearchCard)
+    if (prevProps.preSearches !== nextProps.preSearches) {
+      return false;
+    }
+
+    // Re-render if streamingRoundNumber changes
+    if (prevProps.streamingRoundNumber !== nextProps.streamingRoundNumber) {
       return false;
     }
 

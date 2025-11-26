@@ -150,6 +150,12 @@ export const chatParticipant = sqliteTable('chat_participant', {
   // ✅ PRIORITY CONSTRAINT: Ensure priority is non-negative
   // Rationale: Priority determines response order, must be >= 0
   check('check_priority_non_negative', sql`${table.priority} >= 0`),
+
+  // ✅ UNIQUE CONSTRAINT: Prevent duplicate participants per thread
+  // BUG FIX: Without this, race conditions between PATCH and streaming handlers
+  // could create multiple participants with the same modelId in one thread.
+  // This is the database-level protection to ensure data integrity.
+  uniqueIndex('chat_participant_thread_model_unique').on(table.threadId, table.modelId),
 ]);
 
 /**
@@ -329,7 +335,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
       };
       stance: string;
       evidence: string[];
-      vote: VoteType;
+      vote: VoteType | null; // ✅ FIX: Allow null vote for insufficient content (AI may return null when vote can't be determined)
     }>;
 
     // Consensus Analysis

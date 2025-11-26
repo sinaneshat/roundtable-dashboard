@@ -26,7 +26,6 @@ export { useMultiParticipantChat } from './use-multi-participant-chat';
 export { useSelectedParticipants } from './use-selected-participants';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
-export { useSyncedMessageRefs } from './use-synced-message-refs';
 export { useSyncedRefs } from './use-synced-refs';
 export { toast, useToast } from './use-toast';
 export { useTouchDevice } from './use-touch-device';
@@ -36,4 +35,4 @@ export type { TimelineItem, UseThreadTimelineOptions } from './useThreadTimeline
 export { useThreadTimeline } from './useThreadTimeline';
 export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './useVirtualizedTimeline';
 export { useVirtualizedTimeline } from './useVirtualizedTimeline';
-export { getMessageParts } from '@/lib/utils/message-status';
+// Note: getMessageParts should be imported directly from '@/lib/utils/message-status'

@@ -439,10 +439,10 @@ export function useUpdateThreadMutation() {
       }
     },
     onSuccess: async (_data, variables) => {
-      // ✅ CRITICAL FIX: Invalidate changelog when participants/mode changes
+      // ✅ CRITICAL FIX: Invalidate changelog when participants/mode/enableWebSearch changes
       // The backend creates changelog entries, so we need to refetch to show them
-      // Only invalidate if participants or mode was updated
-      if ('participants' in variables.json || 'mode' in variables.json) {
+      // Only invalidate if participants, mode, or enableWebSearch was updated
+      if ('participants' in variables.json || 'mode' in variables.json || 'enableWebSearch' in variables.json) {
         await queryClient.invalidateQueries({
           queryKey: queryKeys.threads.changelog(variables.param.id),
         });

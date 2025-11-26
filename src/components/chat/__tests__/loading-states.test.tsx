@@ -48,10 +48,20 @@ vi.mock('motion/react', () => ({
   LayoutGroup: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-// Mock animated streaming components
+// Mock animated streaming components and animation constants
 vi.mock('@/components/ui/motion', () => ({
   AnimatedStreamingList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   AnimatedStreamingItem: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ANIMATION_DURATION: {
+    fast: 0.15,
+    normal: 0.3,
+    slow: 0.5,
+  },
+  ANIMATION_EASE: {
+    standard: [0.4, 0, 0.2, 1],
+    enter: [0, 0, 0.2, 1],
+    exit: [0.4, 0, 1, 1],
+  },
 }));
 
 // Mock UI components to simplify testing

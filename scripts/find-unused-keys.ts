@@ -20,19 +20,33 @@ interface UnusedKeysResult {
   usageCount: Record<string, number>;
 }
 
-function flattenObject(obj: any, prefix = ''): string[] {
+/**
+ * Type-safe JSON value representation for translation files.
+ * Follows the established pattern of explicit typing over `any`.
+ */
+type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
+type JsonObject = { [key: string]: JsonValue };
+type JsonArray = JsonValue[];
+
+/** Type guard to check if a JSON value is a JsonObject (nested object) */
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function flattenObject(obj: JsonObject, prefix = ''): string[] {
   const result: string[] = [];
-  
+
   for (const key in obj) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
-    
-    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-      result.push(...flattenObject(obj[key], fullKey));
+    const value = obj[key];
+
+    if (isJsonObject(value)) {
+      result.push(...flattenObject(value, fullKey));
     } else {
       result.push(fullKey);
     }
   }
-  
+
   return result;
 }
 

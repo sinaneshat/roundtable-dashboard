@@ -75,14 +75,15 @@ export const subscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS);
 export const subscriptionTierSchemaOpenAPI = zOpenAPI.enum(SUBSCRIPTION_TIERS);
 
 /**
- * Maximum output tokens by tier
+ * Maximum output tokens by tier (per participant)
  * These are AI model limits, not subscription quotas
+ * Reduced to optimize cost efficiency while maintaining response quality
  */
 export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number> = {
-  free: 2048,
-  starter: 4096,
-  pro: 8192,
-  power: 16384,
+  free: 512,
+  starter: 1024,
+  pro: 2048,
+  power: 4096,
 } as const;
 
 /**
@@ -669,10 +670,11 @@ export function getFlagshipModels(models: BaseModelResponse[]): BaseModelRespons
 
 /**
  * Default AI parameters used across all modes unless overridden
+ * maxTokens reduced to match tier limits (starter tier baseline)
  */
 export const DEFAULT_AI_PARAMS = {
   temperature: 0.7,
-  maxTokens: 4096,
+  maxTokens: 1024,
   topP: 0.9,
 } as const;
 
@@ -684,22 +686,22 @@ export const MODE_SPECIFIC_AI_PARAMS: Record<string, { temperature: number; topP
   analyzing: {
     temperature: 0.3,
     topP: 0.7,
-    maxTokens: 4096,
+    maxTokens: 1024,
   },
   brainstorming: {
     temperature: 0.6,
     topP: 0.85,
-    maxTokens: 4096,
+    maxTokens: 1024,
   },
   debating: {
     temperature: 0.5,
     topP: 0.8,
-    maxTokens: 4096,
+    maxTokens: 1024,
   },
   solving: {
     temperature: 0.4,
     topP: 0.75,
-    maxTokens: 4096,
+    maxTokens: 1024,
   },
 } as const;
 

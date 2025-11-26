@@ -27,19 +27,33 @@ interface MissingTranslationsResult {
   missingKeys: MissingKey[];
 }
 
-function flattenObject(obj: any, prefix = ''): Set<string> {
+/**
+ * Type-safe JSON value representation for translation files.
+ * Follows the established pattern of explicit typing over `any`.
+ */
+type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
+type JsonObject = { [key: string]: JsonValue };
+type JsonArray = JsonValue[];
+
+/** Type guard to check if a JSON value is a JsonObject (nested object) */
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function flattenObject(obj: JsonObject, prefix = ''): Set<string> {
   const result = new Set<string>();
-  
+
   for (const key in obj) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
-    
-    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-      flattenObject(obj[key], fullKey).forEach(k => result.add(k));
+    const value = obj[key];
+
+    if (isJsonObject(value)) {
+      flattenObject(value, fullKey).forEach(k => result.add(k));
     } else {
       result.add(fullKey);
     }
   }
-  
+
   return result;
 }
 

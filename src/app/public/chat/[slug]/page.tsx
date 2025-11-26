@@ -2,11 +2,12 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessageRoles } from '@/api/core/enums';
 import { BRAND } from '@/constants';
 import { PublicChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { getPublicThreadService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
@@ -49,20 +50,18 @@ export async function generateMetadata({
 
     // Generate description from first user message or thread title
     const firstUserMessage = messages?.find(m => m.role === MessageRoles.USER);
-    const firstUserText = firstUserMessage?.parts
-      .filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
-      .map(p => (p as { type: 'text'; text: string }).text)
-      .join(' ');
+    const firstUserText = extractTextFromMessage(firstUserMessage);
     const description = firstUserText
       ? `${firstUserText.slice(0, 150)}${firstUserText.length > 150 ? '...' : ''}`
       : `A ${thread.mode} conversation with ${participants.length} AI ${participants.length === 1 ? 'participant' : 'participants'}.`;
 
     // Extract keywords from thread title, mode, and participant roles
+    const participantRoles = participants?.map(p => p.role).filter((role): role is string => typeof role === 'string' && role.length > 0) ?? [];
     const keywords: string[] = [
       thread.mode,
       'AI chat',
       'conversation',
-      ...(participants?.map(p => p.role).filter(Boolean) as string[] || []),
+      ...participantRoles,
     ];
 
     return createMetadata({
@@ -123,15 +122,20 @@ export default async function PublicChatThreadPage({
       redirect(`/auth/sign-in?${params.toString()}`);
     }
   } catch (error: unknown) {
-    // Type-safe error handling
-    const isDetailedError = error && typeof error === 'object' && 'detail' in error;
-    const statusCode = isDetailedError && 'statusCode' in error ? (error as { statusCode: number }).statusCode : null;
-    const errorContext = isDetailedError && 'detail' in error ? (error as { detail?: unknown }).detail : null;
+    // Type-safe error handling using proper narrowing
+    const isErrorObject = error && typeof error === 'object';
+    const statusCode = isErrorObject && 'statusCode' in error && typeof error.statusCode === 'number'
+      ? error.statusCode
+      : null;
+    const errorContext = isErrorObject && 'detail' in error ? error.detail : null;
 
     // Extract reason from error context
     let reason = 'unavailable';
     if (errorContext && typeof errorContext === 'object' && 'unavailabilityReason' in errorContext) {
-      reason = String((errorContext as { unavailabilityReason: string }).unavailabilityReason);
+      const unavailabilityReason = errorContext.unavailabilityReason;
+      if (typeof unavailabilityReason === 'string') {
+        reason = unavailabilityReason;
+      }
     }
 
     // Determine user-friendly message based on error type

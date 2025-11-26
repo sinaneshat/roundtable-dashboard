@@ -81,7 +81,10 @@ export function RoundAnalysisCard({
   // React 19 Pattern: Effect runs when streamingRoundNumber changes (dependency array handles detection)
   // No need for ref to track previous value - effect dependencies already do this
   useEffect(() => {
-    if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
+    // ✅ FIX: Remove !isLatest check - when a new round starts streaming,
+    // collapse this analysis even if timeline hasn't updated yet.
+    // streamingRoundNumber > analysis.roundNumber is sufficient to know this is not the current round.
+    if (streamingRoundNumber != null && streamingRoundNumber > analysis.roundNumber) {
       // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
       // This schedules state updates in the microtask queue, more efficient than timer queue
       queueMicrotask(() => {
@@ -89,7 +92,7 @@ export function RoundAnalysisCard({
         setManuallyOpen(false);
       });
     }
-  }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
+  }, [streamingRoundNumber, analysis.roundNumber]);
 
   // Demo mode override: If demoOpen is provided, use it instead of computed state
   const isOpen = demoOpen !== undefined

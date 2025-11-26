@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -300,7 +301,7 @@ describe('pre-Search Execution Deadlock Prevention', () => {
 
       // Calculate next round number
       const messages = store.getState().messages;
-      const userMessages = messages.filter(m => m.role === 'user');
+      const userMessages = messages.filter(m => m.role === UIMessageRoles.USER);
       const currentRoundNumber = userMessages.length; // Next round would be 2
 
       expect(currentRoundNumber).toBe(2);

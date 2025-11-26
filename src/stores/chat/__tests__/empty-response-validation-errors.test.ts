@@ -29,6 +29,7 @@ import {
   ErrorTypes,
   FinishReasons,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -276,7 +277,7 @@ describe('empty Response and Validation Errors', () => {
         m => m.metadata?.isEmptyResponse === true,
       ).length;
       const successCount = store.getState().messages.filter(
-        m => m.role === 'assistant' && !m.metadata?.hasError,
+        m => m.role === UIMessageRoles.ASSISTANT && !m.metadata?.hasError,
       ).length;
 
       expect(emptyResponseCount).toBe(2);
@@ -303,7 +304,7 @@ describe('empty Response and Validation Errors', () => {
 
       const state = store.getState();
       const allEmpty = state.messages
-        .filter(m => m.role === 'assistant')
+        .filter(m => m.role === UIMessageRoles.ASSISTANT)
         .every(m => m.metadata?.isEmptyResponse);
 
       expect(allEmpty).toBe(true);
@@ -689,7 +690,7 @@ describe('empty Response and Validation Errors', () => {
       const state = store.getState();
       expect(state.isRegenerating).toBe(false);
       expect(state.messages).toHaveLength(3);
-      expect(state.messages.every(m => m.role === 'user' || !m.metadata?.hasError)).toBe(true);
+      expect(state.messages.every(m => m.role === UIMessageRoles.USER || !m.metadata?.hasError)).toBe(true);
       expect(state.analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
     });
 

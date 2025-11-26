@@ -785,6 +785,7 @@ export const STREAM_ERROR_TYPES = [
   'validation',
   'conflict',
   'network',
+  'empty_response',
   'unknown',
 ] as const;
 
@@ -800,6 +801,7 @@ export const StreamErrorTypes = {
   VALIDATION: 'validation' as const,
   CONFLICT: 'conflict' as const,
   NETWORK: 'network' as const,
+  EMPTY_RESPONSE: 'empty_response' as const,
   UNKNOWN: 'unknown' as const,
 } as const;
 

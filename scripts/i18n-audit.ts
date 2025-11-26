@@ -19,59 +19,67 @@ const REPORT_FILE = path.join(process.cwd(), 'i18n-audit-report.md');
 
 interface AuditResults {
   timestamp: string;
-  validation: {
-    isValid: boolean;
-    errors: string[];
-    warnings: string[];
-    totalKeys: number;
-  };
-  unusedKeys: {
-    count: number;
-    keys: string[];
-  };
-  hardcodedStrings: {
-    count: number;
-    filesAffected: number;
-  };
-  missingKeys: {
-    count: number;
-    keys: string[];
-  };
+  validation: ValidationResult;
+  unusedKeys: UnusedKeysResult;
+  hardcodedStrings: HardcodedStringsResult;
+  missingKeys: MissingKeysResult;
   recommendations: string[];
 }
 
-async function runValidation(): Promise<any> {
+interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  totalKeys: number;
+}
+
+interface UnusedKeysResult {
+  count: number;
+  keys: string[];
+}
+
+interface HardcodedStringsResult {
+  count: number;
+  filesAffected: number;
+}
+
+interface MissingKeysResult {
+  count: number;
+  keys: string[];
+}
+
+async function runValidation(): Promise<ValidationResult> {
   try {
     execSync('tsx scripts/validate-translations.ts', { stdio: 'inherit' });
     return { isValid: true, errors: [], warnings: [], totalKeys: 0 };
-  } catch (error) {
+  } catch {
     return { isValid: false, errors: ['Validation failed'], warnings: [], totalKeys: 0 };
   }
 }
 
-async function runUnusedKeysCheck(): Promise<any> {
+async function runUnusedKeysCheck(): Promise<UnusedKeysResult> {
   try {
     execSync('tsx scripts/find-unused-keys.ts', { stdio: 'inherit' });
     return { count: 0, keys: [] };
-  } catch (error) {
+  } catch {
     return { count: 0, keys: [] };
   }
 }
 
-async function runHardcodedStringsCheck(): Promise<any> {
+async function runHardcodedStringsCheck(): Promise<HardcodedStringsResult> {
   try {
     execSync('tsx scripts/find-hardcoded-strings.ts', { stdio: 'inherit' });
     return { count: 0, filesAffected: 0 };
-  } catch (error) {
+  } catch {
     return { count: 0, filesAffected: 0 };
   }
 }
 
-async function runMissingKeysCheck(): Promise<any> {
+async function runMissingKeysCheck(): Promise<MissingKeysResult> {
   try {
     execSync('tsx scripts/check-missing-translations.ts', { stdio: 'inherit' });
     return { count: 0, keys: [] };
-  } catch (error) {
+  } catch {
     return { count: 0, keys: [] };
   }
 }
@@ -266,18 +274,31 @@ function generateMarkdownReport(results: AuditResults): string {
 }
 
 async function runAudit() {
-  const results: Partial<AuditResults> = {
+  const validation = await runValidation();
+  const unusedKeys = await runUnusedKeysCheck();
+  const hardcodedStrings = await runHardcodedStringsCheck();
+  const missingKeys = await runMissingKeysCheck();
+
+  const partialResults: Partial<AuditResults> = {
     timestamp: new Date().toISOString(),
+    validation,
+    unusedKeys,
+    hardcodedStrings,
+    missingKeys,
   };
 
-  results.validation = await runValidation();
-  results.unusedKeys = await runUnusedKeysCheck();
-  results.hardcodedStrings = await runHardcodedStringsCheck();
-  results.missingKeys = await runMissingKeysCheck();
+  const recommendations = generateRecommendations(partialResults);
 
-  results.recommendations = generateRecommendations(results);
+  const results: AuditResults = {
+    timestamp: new Date().toISOString(),
+    validation,
+    unusedKeys,
+    hardcodedStrings,
+    missingKeys,
+    recommendations,
+  };
 
-  const report = generateMarkdownReport(results as AuditResults);
+  const report = generateMarkdownReport(results);
   fs.writeFileSync(REPORT_FILE, report, 'utf-8');
 }
 

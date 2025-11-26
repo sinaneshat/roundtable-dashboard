@@ -31,6 +31,7 @@ import {
   AnalysisStatuses,
   ChatModes,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -297,10 +298,10 @@ describe('error Recovery Scenarios', () => {
 
       const state = store.getState();
       const successCount = state.messages.filter(
-        m => m.role === 'assistant' && !m.metadata?.hasError,
+        m => m.role === UIMessageRoles.ASSISTANT && !m.metadata?.hasError,
       ).length;
       const errorCount = state.messages.filter(
-        m => m.role === 'assistant' && m.metadata?.hasError,
+        m => m.role === UIMessageRoles.ASSISTANT && m.metadata?.hasError,
       ).length;
 
       expect(successCount).toBe(2);
@@ -694,7 +695,7 @@ describe('error Recovery Scenarios', () => {
       ]);
 
       const successCount = store.getState().messages.filter(
-        m => m.role === 'assistant' && !m.metadata?.hasError,
+        m => m.role === UIMessageRoles.ASSISTANT && !m.metadata?.hasError,
       ).length;
 
       expect(successCount).toBe(1);
@@ -816,7 +817,7 @@ describe('error Recovery Scenarios', () => {
       ]);
 
       // All failed - retry is available
-      const allFailed = store.getState().messages.filter(m => m.role === 'assistant').every(m => m.metadata?.hasError);
+      const allFailed = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT).every(m => m.metadata?.hasError);
 
       expect(allFailed).toBe(true);
 
@@ -1089,7 +1090,7 @@ describe('error Recovery Scenarios', () => {
       ]);
 
       const successCount = store.getState().messages.filter(
-        m => m.role === 'assistant' && !m.metadata?.hasError,
+        m => m.role === UIMessageRoles.ASSISTANT && !m.metadata?.hasError,
       ).length;
 
       expect(successCount).toBe(2);

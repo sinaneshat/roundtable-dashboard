@@ -237,6 +237,13 @@ export type HasPreSearchBeenTriggered = (roundNumber: number) => boolean;
  */
 export type ClearPreSearchTracking = (roundNumber: number) => void;
 
+/**
+ * ✅ IMMEDIATE UI FEEDBACK: Set flag when early optimistic message is added
+ * Used by handleUpdateThreadAndSend to indicate it already added an optimistic message
+ * so prepareForNewMessage can skip adding a duplicate
+ */
+export type SetHasEarlyOptimisticMessage = (value: boolean) => void;
+
 // ============================================================================
 // CALLBACKS ACTIONS (Event handlers)
 // ============================================================================
@@ -379,6 +386,20 @@ export type ResetThreadState = () => void;
  * Used when navigating back to overview
  */
 export type ResetToOverview = () => void;
+
+/**
+ * ✅ CRITICAL FIX: Reset for thread-to-thread navigation
+ *
+ * Called when navigating BETWEEN threads (e.g., /chat/thread-1 → /chat/thread-2)
+ * Unlike ResetThreadState which only clears flags, this ALSO clears:
+ * - thread, participants, messages (previous thread data)
+ * - analyses, preSearches (previous thread content)
+ * - AI SDK hook's internal messages (via chatSetMessages)
+ *
+ * This prevents the critical bug where stale messages/participants from
+ * a previous thread leak into a new thread, causing participant ID mismatches.
+ */
+export type ResetForThreadNavigation = () => void;
 
 /**
  * Initialize thread with data from server

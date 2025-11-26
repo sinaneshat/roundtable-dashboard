@@ -204,10 +204,33 @@ export function getRoundNumber(metadata: unknown): number | null {
  * Returns null if not a participant message
  *
  * **REPLACES**: `(metadata as Record<string, unknown>)?.participantId`
+ *
+ * **FALLBACK**: If full schema validation fails but participantId exists,
+ * returns the value anyway. This handles race conditions where metadata
+ * is partially populated during streaming.
  */
 export function getParticipantId(metadata: unknown): string | null {
+  // Try full validation first
   const validated = getParticipantMetadata(metadata);
-  return validated?.participantId ?? null;
+  if (validated?.participantId) {
+    return validated.participantId;
+  }
+
+  // Fallback: Extract participantId even when full schema validation fails
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const PartialParticipantIdSchema = z.object({
+    participantId: z.string().min(1),
+  });
+
+  const partialResult = PartialParticipantIdSchema.partial().safeParse(metadata);
+  if (partialResult.success && partialResult.data.participantId) {
+    return partialResult.data.participantId;
+  }
+
+  return null;
 }
 
 /**
@@ -215,10 +238,34 @@ export function getParticipantId(metadata: unknown): string | null {
  * Returns null if not a participant message
  *
  * **REPLACES**: `(metadata as Record<string, unknown>)?.participantIndex`
+ *
+ * **FALLBACK**: If full schema validation fails but participantIndex exists,
+ * returns the value anyway. This handles race conditions where metadata
+ * is partially populated during streaming.
  */
 export function getParticipantIndex(metadata: unknown): number | null {
+  // Try full validation first
   const validated = getParticipantMetadata(metadata);
-  return validated?.participantIndex ?? null;
+  if (validated?.participantIndex !== undefined) {
+    return validated.participantIndex;
+  }
+
+  // Fallback: Extract participantIndex even when full schema validation fails
+  // This handles race conditions where metadata is partially populated
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const PartialParticipantIndexSchema = z.object({
+    participantIndex: z.number().int().nonnegative(),
+  });
+
+  const partialResult = PartialParticipantIndexSchema.partial().safeParse(metadata);
+  if (partialResult.success && partialResult.data.participantIndex !== undefined) {
+    return partialResult.data.participantIndex;
+  }
+
+  return null;
 }
 
 /**

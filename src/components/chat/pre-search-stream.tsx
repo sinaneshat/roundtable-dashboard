@@ -1,6 +1,7 @@
 'use client';
 
 import { Search } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 
@@ -9,7 +10,7 @@ import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/sc
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { LoaderFive } from '@/components/ui/loader';
-import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
+import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
@@ -431,22 +432,20 @@ function PreSearchStreamComponent({
     return null;
   }
 
-  // ✅ EAGER RENDERING: Show loading UI when PENDING/STREAMING with no data
-  // This provides immediate visual feedback that search is coming
-  if ((preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return (
-      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <LoaderFive text={t('pendingSearch')} />
-      </div>
-    );
-  }
+  // ✅ Determine loading state for AnimatePresence
+  const isPendingWithNoData = (preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData;
 
   // Don't render if no data and not pending/streaming
-  if (!hasData) {
+  if (!hasData && !isPendingWithNoData) {
     return null;
   }
 
-  const { queries = [], results = [], analysis, totalResults, totalTime } = displayData;
+  // ✅ Safe access with optional chaining when displayData could be undefined
+  const queries = displayData?.queries ?? [];
+  const results = displayData?.results ?? [];
+  const analysis = displayData?.analysis;
+  const totalResults = displayData?.totalResults;
+  const totalTime = displayData?.totalTime;
   const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
   const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
 
@@ -456,85 +455,115 @@ function PreSearchStreamComponent({
   let sectionIndex = 0;
 
   return (
-    <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-4">
-      {/* Search Summary - only show if we have analysis text */}
-      {analysis && (
-        <AnimatedStreamingItem
-          key="search-config"
-          itemKey="search-config"
-          index={sectionIndex++}
-        >
-          <WebSearchConfigurationDisplay
-            queries={validQueries.filter(q => q?.query).map(q => ({
-              query: q.query,
-              rationale: q.rationale,
-              searchDepth: q.searchDepth,
-              index: q.index,
-            }))}
-            results={validResults.flatMap(r => r.results || [])}
-            searchPlan={analysis}
-            isStreamingPlan={isStreamingNow && !analysis}
-            totalResults={totalResults}
-            totalTime={totalTime}
-          />
-        </AnimatedStreamingItem>
-      )}
-
-      {validQueries.map((query, queryIndex) => {
-        if (!query?.query) {
-          return null;
-        }
-
-        const searchResult = validResults.find(r => r?.query === query?.query);
-        const hasResult = !!searchResult;
-        const uniqueKey = `query-${query?.query || queryIndex}`;
-        const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
-        const currentIndex = sectionIndex++;
-
-        return (
-          <AnimatedStreamingItem
-            key={uniqueKey}
-            itemKey={uniqueKey}
-            index={currentIndex}
-          >
-            <div className="space-y-2">
-              {/* Query header - minimal */}
-              <div className="flex items-start gap-2">
-                <Search className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground">{query?.query}</p>
-                  {hasResult && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {searchResult.results.length}
-                      {' '}
-                      {searchResult.results.length === 1 ? 'result' : 'results'}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Results list */}
-              {hasResults && (
-                <div className="pl-6">
-                  {searchResult.results.map((result, idx) => (
-                    <WebSearchResultItem
-                      key={result.url}
-                      result={result}
-                      showDivider={idx < searchResult.results.length - 1}
+    <AnimatePresence mode="wait" initial={false}>
+      {isPendingWithNoData
+        ? (
+            <motion.div
+              key="presearch-loader"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{
+                duration: ANIMATION_DURATION.fast,
+                ease: ANIMATION_EASE.standard,
+              }}
+              className="flex items-center justify-center py-8 text-muted-foreground text-sm"
+            >
+              <LoaderFive text={t('pendingSearch')} />
+            </motion.div>
+          )
+        : (
+            <motion.div
+              key="presearch-content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: ANIMATION_DURATION.normal,
+                ease: ANIMATION_EASE.enter,
+              }}
+            >
+              <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-4">
+                {/* Search Summary - only show if we have analysis text */}
+                {analysis && (
+                  <AnimatedStreamingItem
+                    key="search-config"
+                    itemKey="search-config"
+                    index={sectionIndex++}
+                  >
+                    <WebSearchConfigurationDisplay
+                      queries={validQueries.filter(q => q?.query).map(q => ({
+                        query: q.query,
+                        rationale: q.rationale,
+                        searchDepth: q.searchDepth,
+                        index: q.index,
+                      }))}
+                      results={validResults.flatMap(r => r.results || [])}
+                      searchPlan={analysis}
+                      isStreamingPlan={isStreamingNow && !analysis}
+                      totalResults={totalResults}
+                      totalTime={totalTime}
                     />
-                  ))}
-                </div>
-              )}
+                  </AnimatedStreamingItem>
+                )}
 
-              {/* Separator between searches */}
-              {queryIndex < validQueries.length - 1 && (
-                <Separator className="!mt-4" />
-              )}
-            </div>
-          </AnimatedStreamingItem>
-        );
-      })}
-    </AnimatedStreamingList>
+                {validQueries.map((query, queryIndex) => {
+                  if (!query?.query) {
+                    return null;
+                  }
+
+                  const searchResult = validResults.find(r => r?.query === query?.query);
+                  const hasResult = !!searchResult;
+                  const uniqueKey = `query-${query?.query || queryIndex}`;
+                  const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
+                  const currentIndex = sectionIndex++;
+
+                  return (
+                    <AnimatedStreamingItem
+                      key={uniqueKey}
+                      itemKey={uniqueKey}
+                      index={currentIndex}
+                    >
+                      <div className="space-y-2">
+                        {/* Query header - minimal */}
+                        <div className="flex items-start gap-2">
+                          <Search className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground">{query?.query}</p>
+                            {hasResult && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {searchResult.results.length}
+                                {' '}
+                                {searchResult.results.length === 1 ? 'result' : 'results'}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Results list */}
+                        {hasResults && (
+                          <div className="pl-6">
+                            {searchResult.results.map((result, idx) => (
+                              <WebSearchResultItem
+                                key={result.url}
+                                result={result}
+                                showDivider={idx < searchResult.results.length - 1}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Separator between searches */}
+                        {queryIndex < validQueries.length - 1 && (
+                          <Separator className="!mt-4" />
+                        )}
+                      </div>
+                    </AnimatedStreamingItem>
+                  );
+                })}
+              </AnimatedStreamingList>
+            </motion.div>
+          )}
+    </AnimatePresence>
   );
 }
 

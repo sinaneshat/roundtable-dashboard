@@ -24,12 +24,14 @@ import {
   ChangelogTypes,
   ChatModes,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type {
   ChatParticipant,
   ChatThread,
   StoredModeratorAnalysis,
 } from '@/api/routes/chat/schema';
+import type { DbChangelogData } from '@/db/schemas/chat-metadata';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
@@ -95,6 +97,7 @@ function setupCompletedRound(
 /**
  * Helper to simulate changelog entry creation
  * In production, this is done by the backend service
+ * ✅ TYPE-SAFE: Uses DbChangelogData instead of Record<string, unknown>
  */
 type ChangelogEntry = {
   id: string;
@@ -102,7 +105,7 @@ type ChangelogEntry = {
   roundNumber: number;
   changeType: string;
   changeSummary: string;
-  changeData: Record<string, unknown>;
+  changeData: DbChangelogData;
   createdAt: Date;
 };
 
@@ -111,7 +114,7 @@ function createChangelogEntry(
   roundNumber: number,
   changeType: string,
   changeSummary: string,
-  changeData: Record<string, unknown>,
+  changeData: DbChangelogData,
 ): ChangelogEntry {
   return {
     id: `changelog-${Date.now()}-${Math.random().toString(36).substring(7)}`,
@@ -278,7 +281,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
 
       // Verify Round 2 has all 3 participant responses
       const r2Messages = store.getState().messages.filter(
-        m => m.metadata?.roundNumber === 1 && m.role === 'assistant',
+        m => m.metadata?.roundNumber === 1 && m.role === UIMessageRoles.ASSISTANT,
       );
       expect(r2Messages).toHaveLength(3);
     });
@@ -425,7 +428,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
 
       // Verify only 2 responses in Round 2
       const r2Messages = store.getState().messages.filter(
-        m => m.metadata?.roundNumber === 1 && m.role === 'assistant',
+        m => m.metadata?.roundNumber === 1 && m.role === UIMessageRoles.ASSISTANT,
       );
       expect(r2Messages).toHaveLength(2);
     });
@@ -528,7 +531,7 @@ describe('configuration Changes Mid-Conversation Flow', () => {
 
       // Verify order: Gemini first, GPT-4 second, Claude third
       const r2Messages = store.getState().messages.filter(
-        m => m.role === 'assistant',
+        m => m.role === UIMessageRoles.ASSISTANT,
       );
 
       expect(r2Messages[0].metadata?.model).toBe('google/gemini-pro');

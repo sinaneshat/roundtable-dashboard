@@ -21,7 +21,7 @@ import { AgreementStatuses, EvidenceStrengths, VoteTypes } from '@/api/core/enum
  * Get vote icon based on VoteType enum
  * Following established enum pattern with centralized mapping
  */
-export function getVoteIcon(vote: VoteType) {
+export function getVoteIcon(vote: VoteType | null) {
   switch (vote) {
     case VoteTypes.APPROVE:
       return <ThumbsUp className="size-4 text-green-500" />;
@@ -39,7 +39,7 @@ export function getVoteIcon(vote: VoteType) {
  * Following established enum pattern with centralized styling
  * Using subtle glass-like backgrounds without borders for coherent design
  */
-export function getVoteCardColor(vote: VoteType): string {
+export function getVoteCardColor(vote: VoteType | null): string {
   switch (vote) {
     case VoteTypes.APPROVE:
       return 'bg-green-500/5';

@@ -10,10 +10,11 @@
 
 'use client';
 
+import type { UIMessage } from 'ai';
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
@@ -22,7 +23,8 @@ import { showApiErrorToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
+import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
+import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
 export type UseChatFormActionsReturn = {
   /** Submit form to create new thread */
@@ -67,6 +69,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   const threadState = useChatStore(useShallow(s => ({
     thread: s.thread,
     participants: s.participants,
+    messages: s.messages, // ✅ IMMEDIATE UI FEEDBACK: For calculating next round
   })));
 
   // Batch actions selectors (functions are stable, but batching reduces subscriptions)
@@ -74,6 +77,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setInputValue: s.setInputValue,
     resetForm: s.resetForm,
     setSelectedMode: s.setSelectedMode,
+    setSelectedParticipants: s.setSelectedParticipants,
     setEnableWebSearch: s.setEnableWebSearch,
     setShowInitialUI: s.setShowInitialUI,
     setIsCreatingThread: s.setIsCreatingThread,
@@ -86,6 +90,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     updateParticipants: s.updateParticipants,
     addPreSearch: s.addPreSearch,
     addAnalysis: s.addAnalysis,
+    // ✅ IMMEDIATE UI FEEDBACK: For eager accordion collapse and optimistic message
+    setStreamingRoundNumber: s.setStreamingRoundNumber,
+    setMessages: s.setMessages,
+    setHasEarlyOptimisticMessage: s.setHasEarlyOptimisticMessage,
   })));
 
   // Mutations
@@ -150,6 +158,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
+      // ✅ CRITICAL FIX: Sync selectedParticipants with DB IDs immediately after thread creation
+      // BUG FIX: Without this, selectedParticipants keeps frontend IDs (participant-XXX) from overview screen
+      // When user sends next message, prepareParticipantUpdate sees frontend IDs as "new" participants
+      // and creates duplicate participants in database (empty ID = create new)
+      const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
+      actions.setSelectedParticipants(syncedParticipantConfigs);
+
       // ✅ EAGER RENDERING: Create placeholder analysis immediately for round 0
       // This allows the RoundAnalysisCard to render in PENDING state with loading UI
       // before participants finish streaming. Creates better UX with immediate visual feedback.
@@ -205,6 +220,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         });
       }
 
+      // ✅ IMMEDIATE UI FEEDBACK: Set streamingRoundNumber IMMEDIATELY for round 0
+      // This enables ChatMessageList to show pending participant cards with shimmer animation
+      // BUG FIX: Previously only handleUpdateThreadAndSend set this, leaving overview screen
+      // without streamingRoundNumber, which caused isLatestRound check to fail
+      // and pending participant cards to not render during initial round
+      actions.setStreamingRoundNumber(0);
+
       // Set flag to trigger streaming once chat is ready
       // Store subscription will wait for startRound to be registered by provider
       actions.setWaitingToStartStreaming(true);
@@ -235,6 +257,42 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     }
 
     try {
+      // ============================================================================
+      // ✅ IMMEDIATE UI FEEDBACK: Set streamingRoundNumber and optimistic message FIRST
+      // ============================================================================
+      // CRITICAL FIX: This enables immediate accordion collapse and message display
+      // BEFORE any API calls (PATCH) that might take 100-500ms
+      //
+      // Previous bug: prepareForNewMessage was called AFTER awaiting PATCH, causing:
+      // 1. Accordion stays open during PATCH wait
+      // 2. User message doesn't appear until PATCH completes
+      // 3. Changelog doesn't appear until PATCH completes
+      //
+      // Fix: Set streamingRoundNumber + add optimistic message immediately
+      // Then prepareForNewMessage will merge with this state later
+      // ============================================================================
+      const nextRoundNumber = calculateNextRoundNumber(threadState.messages);
+
+      // Set streamingRoundNumber IMMEDIATELY for accordion collapse
+      actions.setStreamingRoundNumber(nextRoundNumber);
+
+      // Add optimistic user message IMMEDIATELY for instant UI feedback
+      const optimisticUserMessage: UIMessage = {
+        id: `optimistic-user-${Date.now()}`,
+        role: MessageRoles.USER,
+        parts: [{ type: MessagePartTypes.TEXT, text: trimmed }],
+        metadata: {
+          role: MessageRoles.USER,
+          roundNumber: nextRoundNumber,
+          isOptimistic: true, // Marker for optimistic update
+        },
+      };
+      actions.setMessages([...threadState.messages, optimisticUserMessage]);
+
+      // ✅ IMMEDIATE UI FEEDBACK: Set flag to tell prepareForNewMessage not to add duplicate
+      // This flag is cleared by prepareForNewMessage after it checks it
+      actions.setHasEarlyOptimisticMessage(true);
+
       // ✅ EXTRACTED TO UTILITY: Detect participant changes
       const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
         threadState.participants,
@@ -300,6 +358,16 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
             actions.updateParticipants(participantsWithDates);
             actions.setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
+
+            // ✅ CRITICAL FIX: Sync selectedParticipants with DB IDs after successful update
+            // BUG FIX: Without this, selectedParticipants keeps frontend IDs (participant-XXX)
+            // When user sends next message, prepareParticipantUpdate sees frontend IDs as "new" participants
+            // and creates duplicate participants in database (empty ID = create new)
+            const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
+            actions.setSelectedParticipants(syncedParticipantConfigs);
+
+            // ✅ Reset hasPendingConfigChanges since changes are now saved
+            actions.setHasPendingConfigChanges(false);
           } else {
             actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
           }
@@ -313,6 +381,15 @@ export function useChatFormActions(): UseChatFormActionsReturn {
               mode: formState.selectedMode,
               enableWebSearch: formState.enableWebSearch,
             },
+          }).then((response) => {
+            // On success, sync selectedParticipants with DB IDs and reset hasPendingConfigChanges
+            if (response?.data?.participants) {
+              const participantsWithDates = transformChatParticipants(response.data.participants);
+              actions.updateParticipants(participantsWithDates);
+              const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
+              actions.setSelectedParticipants(syncedParticipantConfigs);
+            }
+            actions.setHasPendingConfigChanges(false);
           }).catch((error) => {
             // Rollback optimistic update on failure
             actions.updateParticipants(previousParticipants);
@@ -330,12 +407,60 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // On THREAD screen, this also adds optimistic user message to UI
       actions.prepareForNewMessage(trimmed, []);
 
+      // ✅ EAGER RENDERING: Create placeholder pre-search immediately for round 2+ when web search enabled
+      // This matches the pattern in handleCreateThread (overview screen) for round 0
+      // Without this placeholder:
+      // - Web search accordion doesn't appear with loading/shimmer state
+      // - Participant placeholders don't show "waiting for web search"
+      // - UI appears broken because pre-search is created asynchronously by provider effect
+      //
+      // The provider will later execute the actual pre-search, but the placeholder ensures
+      // immediate visual feedback while waiting for the backend to create/execute the search
+      if (formState.enableWebSearch) {
+        // ✅ IMMEDIATE UI FEEDBACK: Reuse nextRoundNumber calculated at start of function
+        actions.addPreSearch({
+          id: `placeholder-presearch-${threadId}-${nextRoundNumber}`,
+          threadId,
+          roundNumber: nextRoundNumber,
+          userQuery: trimmed,
+          status: AnalysisStatuses.PENDING,
+          searchData: null,
+          createdAt: new Date(),
+          completedAt: null,
+          errorMessage: null,
+        });
+      }
+
       // ✅ FIX: Clear input AFTER prepareForNewMessage so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through
       // and the msg box of what user just said shows on the round"
       // Also moved inside try block so input isn't cleared on error
       actions.setInputValue('');
     } catch (error) {
+      // ✅ CRITICAL FIX: Clean up state on error to prevent UI freeze
+      // If we get here, we've already set:
+      // - streamingRoundNumber (causes accordion to collapse)
+      // - messages with optimistic user message
+      // - hasEarlyOptimisticMessage = true (blocks message sync)
+      // We must revert these to restore a usable UI state
+
+      // Clear the optimistic message flag so message sync can resume
+      actions.setHasEarlyOptimisticMessage(false);
+
+      // Reset streaming round number since we're not actually streaming
+      actions.setStreamingRoundNumber(null);
+
+      // Remove the optimistic user message we added
+      // Filter out messages with isOptimistic: true in metadata
+      const currentMessages = threadState.messages;
+      const originalMessages = currentMessages.filter((m) => {
+        const metadata = m.metadata;
+        return !(metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true);
+      });
+      actions.setMessages(originalMessages);
+
+      // DON'T clear input value on error - let user retry with same message
+
       showApiErrorToast('Error updating thread', error);
     }
   }, [

@@ -35,6 +35,7 @@ import {
   AnalysisStatuses,
   ChatModes,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type { LeaderboardEntry, ModeratorAnalysisPayload, ParticipantAnalysis } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -197,7 +198,7 @@ describe('section 4.1: Analysis Triggering', () => {
 
       // Verify all participant messages exist
       const state = store.getState();
-      const participantMessages = state.messages.filter(m => m.role === 'assistant');
+      const participantMessages = state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(participantMessages).toHaveLength(3);
 
       // Add analysis (simulating what provider does after all complete)
@@ -262,7 +263,7 @@ describe('section 4.1: Analysis Triggering', () => {
       store.getState().setIsStreaming(false);
 
       // Verify all messages
-      const participantMessages = store.getState().messages.filter(m => m.role === 'assistant');
+      const participantMessages = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(participantMessages).toHaveLength(10);
 
       // Analysis can now be triggered

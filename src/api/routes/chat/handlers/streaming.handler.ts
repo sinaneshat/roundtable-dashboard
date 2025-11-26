@@ -9,8 +9,9 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { RetryError, streamText } from 'ai';
+import { extractReasoningMiddleware, RetryError, streamText, wrapLanguageModel } from 'ai';
 import { and, asc, eq } from 'drizzle-orm';
+import { HTTPException } from 'hono/http-exception';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
@@ -126,6 +127,37 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     });
 
     const currentRoundNumber = roundResult.roundNumber;
+
+    // =========================================================================
+    // STEP 3.1: ✅ ROUND INTEGRITY PROTECTION - Prevent overwriting completed rounds
+    // =========================================================================
+    // CRITICAL: This prevents a frontend bug where messages get reset during navigation
+    // from overview to thread screen, causing round 1 to incorrectly calculate as round 0.
+    //
+    // RULE: A new user message can only be created in a round if:
+    // 1. It's a regeneration (explicit intent to redo the round), OR
+    // 2. It's a trigger message (empty message to trigger participants for existing round), OR
+    // 3. The round has NO assistant responses yet (incomplete/new round)
+    //
+    // If the round already has assistant messages and this isn't a regeneration/trigger,
+    // then the frontend incorrectly calculated the round number - reject the request.
+    if (!roundResult.isRegeneration && !roundResult.isTriggerMessage && participantIndex === 0) {
+      const existingAssistantMessages = await db.query.chatMessage.findMany({
+        where: and(
+          eq(tables.chatMessage.threadId, threadId),
+          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.roundNumber, currentRoundNumber),
+        ),
+        columns: { id: true },
+        limit: 1,
+      });
+
+      if (existingAssistantMessages.length > 0) {
+        throw new HTTPException(409, {
+          message: `Round ${currentRoundNumber} already has assistant responses. Cannot create new user message in a completed round. Expected round ${currentRoundNumber + 1}.`,
+        });
+      }
+    }
 
     // =========================================================================
     // STEP 3.5: ✅ PRE-SEARCH CREATION REMOVED (Fixed web search ordering)
@@ -428,9 +460,28 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // - onFinish callback handles response-level errors (empty responses, content filters)
     // - No double API calls, no validation overhead, faster response times
     //
+    // ✅ AI SDK v5 REASONING MIDDLEWARE: Extract reasoning tags from model output
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/middleware#extract-reasoning-middleware
+    // This prevents raw reasoning tags from being rendered as HTML in the frontend
+    // Different models use different tag names:
+    // - Claude (Anthropic): uses <thinking> tags
+    // - DeepSeek R1: uses <think> tags
+    // The middleware extracts these into structured reasoning events (reasoning-start, reasoning-delta, reasoning-end)
+    const baseModel = client.chat(participant.modelId);
+
+    // Determine the reasoning tag based on model provider
+    // DeepSeek models use <think>, Claude/Anthropic use <thinking>
+    const isDeepSeekModel = participant.modelId.toLowerCase().includes('deepseek');
+    const reasoningTagName = isDeepSeekModel ? 'think' : 'thinking';
+
+    const modelWithReasoningExtraction = wrapLanguageModel({
+      model: baseModel,
+      middleware: extractReasoningMiddleware({ tagName: reasoningTagName }),
+    });
+
     // Parameters for streamText
     const streamParams = {
-      model: client.chat(participant.modelId),
+      model: modelWithReasoningExtraction,
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,

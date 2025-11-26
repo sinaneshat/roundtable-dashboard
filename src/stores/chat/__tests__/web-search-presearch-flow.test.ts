@@ -21,6 +21,7 @@ import {
   AnalysisStatuses,
   PreSearchStatuses,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { shouldSendPendingMessage, shouldWaitForPreSearch } from '@/stores/chat/actions/pending-message-sender';
@@ -678,7 +679,7 @@ describe('2.4 Multi-Round Web Search', () => {
 
     // Next round should be 2
     const messages = store.getState().messages;
-    const userMessages = messages.filter(m => m.role === 'user');
+    const userMessages = messages.filter(m => m.role === UIMessageRoles.USER);
     const nextRoundNumber = userMessages.length; // 2 user messages = next is round 2
 
     expect(nextRoundNumber).toBe(2);

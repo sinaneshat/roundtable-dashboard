@@ -483,29 +483,33 @@ export default function ChatThreadScreen({
     if (orderedModel.participant) {
       // Remove participant - update priorities for remaining participants
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
-      // Recalculate priorities based on visual order
-      const reindexed = filtered.map((p) => {
-        const visualIndex = modelOrder.indexOf(p.modelId);
-        return { ...p, priority: visualIndex };
-      }).sort((a, b) => a.priority - b.priority);
+      // ✅ FIX: Sort by visual order, then reindex priorities to 0, 1, 2, ...
+      // BUG FIX: Previously used modelOrder.indexOf() which gave model list position (21, 25, 29)
+      // instead of selection order (0, 1, 2). This caused backend to create participants with
+      // wrong priorities, leading to duplicate participants when priorities were reindexed later.
+      const sortedByVisualOrder = filtered.sort((a, b) => {
+        const aIdx = modelOrder.indexOf(a.modelId);
+        const bIdx = modelOrder.indexOf(b.modelId);
+        return aIdx - bIdx;
+      });
+      const reindexed = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
       threadActions.handleParticipantsChange(reindexed);
     } else {
-      // Add participant - assign priority based on position in visual order
-      const visualIndex = modelOrder.indexOf(modelId);
+      // Add participant
       const newParticipant = {
         id: `participant-${Date.now()}`,
         modelId,
         role: '',
-        priority: visualIndex,
+        priority: selectedParticipants.length, // Temp priority, will be reindexed below
       };
-      // Insert and re-sort all participants by their visual order
-      const updated = [...selectedParticipants, newParticipant]
-        .map((p) => {
-          const idx = modelOrder.indexOf(p.modelId);
-          return { ...p, priority: idx };
-        })
-        .sort((a, b) => a.priority - b.priority);
-      threadActions.handleParticipantsChange(updated);
+      // ✅ FIX: Sort by visual order, then reindex priorities to 0, 1, 2, ...
+      const updated = [...selectedParticipants, newParticipant].sort((a, b) => {
+        const aIdx = modelOrder.indexOf(a.modelId);
+        const bIdx = modelOrder.indexOf(b.modelId);
+        return aIdx - bIdx;
+      });
+      const reindexed = updated.map((p, index) => ({ ...p, priority: index }));
+      threadActions.handleParticipantsChange(reindexed);
     }
   }, [orderedModels, selectedParticipants, threadActions, modelOrder]);
 

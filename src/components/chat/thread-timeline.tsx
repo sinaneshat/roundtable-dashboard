@@ -210,6 +210,22 @@ export function ThreadTimeline({
                     return parseResult.success && messageHasError(parseResult.data);
                   });
 
+                  // ✅ CRITICAL FIX: Only show feedback after the round's analysis is COMPLETE
+                  // This ensures consistent behavior between first round and subsequent rounds
+                  // Previously, feedback appeared immediately when participants finished streaming
+                  // but before the analysis was complete, which was inconsistent with first round behavior
+                  const roundAnalysis = timelineItems.find(
+                    ti => ti.type === 'analysis' && ti.data.roundNumber === roundNumber,
+                  );
+                  const isRoundComplete = roundAnalysis
+                    && roundAnalysis.type === 'analysis'
+                    && roundAnalysis.data.status === AnalysisStatuses.COMPLETE;
+
+                  // Don't show feedback if round is not complete (analysis still pending/streaming)
+                  if (!isRoundComplete) {
+                    return null;
+                  }
+
                   return (
                     <Actions className="mt-3 mb-2">
                       {!hasRoundError && (

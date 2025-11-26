@@ -408,29 +408,40 @@ export function safeParse<T extends z.ZodType>(
  *
  * @param value - Value to check (typically from PartialObject during streaming)
  * @returns True if all required fields are present
+ *
+ * Note: role and vote can be null for valid perspectives:
+ * - role: null when participant has no custom role assigned
+ * - vote: null when AI determines insufficient content to form a vote
  */
 export function isCompleteContributorPerspective(value: unknown): value is {
   participantIndex: number;
-  role: string;
+  role: string | null;
   modelId: string;
   modelName: string;
   scorecard: Record<string, unknown>;
   stance: string;
   evidence: string[];
-  vote: string;
+  vote: string | null;
 } {
   if (!isObject(value))
     return false;
 
+  // Check required fields that must be non-null strings
+  const hasRequiredStrings = isNonEmptyString(value.modelId)
+    && isNonEmptyString(value.modelName)
+    && isNonEmptyString(value.stance);
+
+  // Check fields that can be null (role and vote)
+  const hasValidRole = value.role === null || isNonEmptyString(value.role);
+  const hasValidVote = value.vote === null || isNonEmptyString(value.vote);
+
   return (
     isNumber(value.participantIndex)
-    && isNonEmptyString(value.role)
-    && isNonEmptyString(value.modelId)
-    && isNonEmptyString(value.modelName)
+    && hasValidRole
+    && hasRequiredStrings
     && isObject(value.scorecard)
-    && isNonEmptyString(value.stance)
     && isArray(value.evidence)
-    && isNonEmptyString(value.vote)
+    && hasValidVote
   );
 }
 
@@ -527,6 +538,8 @@ export function isCompleteRoundSummary(value: unknown): value is {
  * @param items - Array from streaming data (may contain undefined/partial items)
  * @returns Filtered array with only complete items
  *
+ * Note: role and vote can be null in valid perspectives
+ *
  * @example
  * ```typescript
  * const validPerspectives = filterCompleteContributorPerspectives(contributorPerspectives);
@@ -535,7 +548,7 @@ export function isCompleteRoundSummary(value: unknown): value is {
  */
 export function filterCompleteContributorPerspectives<T>(
   items: T,
-): Array<{ participantIndex: number; role: string; modelId: string; modelName: string; scorecard: Record<string, unknown>; stance: string; evidence: string[]; vote: string }> {
+): Array<{ participantIndex: number; role: string | null; modelId: string; modelName: string; scorecard: Record<string, unknown>; stance: string; evidence: string[]; vote: string | null }> {
   if (!isArray(items))
     return [];
 
@@ -556,4 +569,44 @@ export function filterCompleteAlternatives<T>(
     return [];
 
   return items.filter(isCompleteAlternativeScenario);
+}
+
+// ============================================================================
+// ZOD-BASED ARRAY FILTERING UTILITIES
+// ============================================================================
+
+/**
+ * Filter array elements using Zod schema validation
+ * Returns only elements that pass Zod validation, with proper type inference
+ *
+ * **RECOMMENDED**: Use this for filtering streaming data with Zod schemas
+ * instead of manual safeParse + filter + map chains
+ *
+ * @param items - Array of items to filter (typically from AI SDK streaming)
+ * @param schema - Zod schema to validate each element against
+ * @returns Array of valid elements with inferred type from schema
+ *
+ * @example
+ * ```typescript
+ * import { ContributorPerspectiveSchema } from '@/api/routes/chat/schema';
+ *
+ * const validPerspectives = filterArrayWithSchema(
+ *   contributorPerspectives ?? [],
+ *   ContributorPerspectiveSchema
+ * );
+ * // Returns: ContributorPerspective[] (type inferred from schema)
+ * ```
+ */
+export function filterArrayWithSchema<TSchema extends z.ZodType>(
+  items: unknown[] | null | undefined,
+  schema: TSchema,
+): z.infer<TSchema>[] {
+  if (!items || !isArray(items)) {
+    return [];
+  }
+
+  return items
+    .map(item => schema.safeParse(item))
+    .filter((result): result is { success: true; data: z.infer<TSchema> } => result.success)
+    .map(result => result.data);
 }

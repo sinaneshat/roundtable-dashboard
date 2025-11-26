@@ -28,6 +28,7 @@ import {
   FeedbackTypes,
   PreSearchStatuses,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -189,7 +190,7 @@ describe('section 7.1: Regeneration Trigger & Cleanup', () => {
 
     // Clear AI responses (keep user message)
     const messagesWithoutAI = store.getState().messages.filter(
-      m => !(m.role === 'assistant' && m.metadata?.roundNumber === 0),
+      m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 0),
     );
     store.getState().setMessages(messagesWithoutAI);
 
@@ -261,7 +262,7 @@ describe('section 7.1: Regeneration Trigger & Cleanup', () => {
 
     // Clear round 1 AI messages
     const messagesWithoutR1AI = store.getState().messages.filter(
-      m => !(m.role === 'assistant' && m.metadata?.roundNumber === 1),
+      m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 1),
     );
     store.getState().setMessages(messagesWithoutR1AI);
 
@@ -341,7 +342,7 @@ describe('section 7.2: Regeneration Re-execution', () => {
 
     // Start regeneration
     store.getState().startRegeneration(0);
-    const userMessage = store.getState().messages.find(m => m.role === 'user');
+    const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
     store.getState().setMessages(userMessage ? [userMessage] : []);
 
     // Stream responses sequentially
@@ -395,7 +396,7 @@ describe('section 7.2: Regeneration Re-execution', () => {
     store.getState().removeAnalysis(0);
 
     // Keep user message, clear AI
-    const userMessage = store.getState().messages.find(m => m.role === 'user');
+    const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
     store.getState().setMessages(userMessage ? [userMessage] : []);
 
     // Stream new response
@@ -498,7 +499,7 @@ describe('section 7.2: Regeneration Re-execution', () => {
     // First retry
     store.getState().startRegeneration(0);
     store.getState().removeAnalysis(0);
-    const userMessage = store.getState().messages.find(m => m.role === 'user');
+    const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
     store.getState().setMessages(userMessage ? [userMessage] : []);
 
     // Add new response
@@ -617,7 +618,7 @@ describe('section 8.1: AI Errors', () => {
 
     // All 3 participant messages exist
     const participantMessages = store.getState().messages.filter(
-      m => m.role === 'assistant',
+      m => m.role === UIMessageRoles.ASSISTANT,
     );
     expect(participantMessages).toHaveLength(3);
 
@@ -1114,7 +1115,7 @@ describe('section 9.2: Usage Limits', () => {
     expect(store.getState().messages).toHaveLength(10);
 
     // In real app, this count would be checked against tier limit
-    const messageCount = store.getState().messages.filter(m => m.role === 'user').length;
+    const messageCount = store.getState().messages.filter(m => m.role === UIMessageRoles.USER).length;
     expect(messageCount).toBe(10);
   });
 });
@@ -1278,7 +1279,7 @@ describe('error Handling Integration', () => {
 
     const state = store.getState();
     expect(state.preSearches[0].status).toBe(PreSearchStatuses.FAILED);
-    expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(2);
+    expect(state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
     expect(state.analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
   });
 });

@@ -28,6 +28,7 @@ import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
 import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { hasError } from '@/lib/utils/metadata';
 import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
 import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
 
@@ -227,7 +228,17 @@ export async function saveStreamedMessage(
     // AI SDK v5 provides both usage (final step) and totalUsage (cumulative across all steps)
     // Some models (DeepSeek) only populate totalUsage, not usage
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#onFinish
-    const usageData = finishResult.usage || (finishResult as { totalUsage?: { inputTokens?: number; outputTokens?: number } }).totalUsage;
+    // Type-safe extraction of totalUsage from finishResult
+    const getTotalUsage = () => {
+      if (!('totalUsage' in finishResult) || !finishResult.totalUsage || typeof finishResult.totalUsage !== 'object') {
+        return undefined;
+      }
+      const tu = finishResult.totalUsage;
+      const inputTokens = 'inputTokens' in tu && typeof tu.inputTokens === 'number' ? tu.inputTokens : undefined;
+      const outputTokens = 'outputTokens' in tu && typeof tu.outputTokens === 'number' ? tu.outputTokens : undefined;
+      return { inputTokens, outputTokens };
+    };
+    const usageData = finishResult.usage || getTotalUsage();
 
     // Extract error metadata
     // ✅ CRITICAL FIX: Pass reasoning to error detection for o1/o3 models
@@ -506,9 +517,9 @@ async function createPendingAnalysis(
       return;
     }
 
-    // Check for messages with errors
+    // Check for messages with errors using type-safe metadata extraction
     const messagesWithErrors = assistantMessages.filter(
-      msg => (msg.metadata as { hasError?: boolean })?.hasError === true,
+      msg => hasError(msg.metadata),
     );
 
     if (messagesWithErrors.length > 0) {

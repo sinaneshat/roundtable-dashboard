@@ -26,6 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   ChatModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type {
   LeaderboardEntry,
@@ -175,7 +176,7 @@ describe('analysis Streaming Sections', () => {
 
       // Verify all participants have responded
       const state = store.getState();
-      const participantMessages = state.messages.filter(m => m.role === 'assistant');
+      const participantMessages = state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       expect(participantMessages).toHaveLength(3);
 
       // Analysis should now be created

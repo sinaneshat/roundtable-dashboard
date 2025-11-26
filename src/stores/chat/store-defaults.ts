@@ -17,8 +17,8 @@ import type { UIMessage } from 'ai';
 import type { FeedbackType, ScreenMode } from '@/api/core/enums';
 import { ChatModes, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import type { AnimationResolver } from './store-action-types';
 import type { StreamResumptionState } from './store-schemas';
@@ -126,7 +126,9 @@ export const TRACKING_DEFAULTS = {
   hasSentPendingMessage: false,
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-} satisfies Pick<import('./store-schemas').ChatStore, 'hasSentPendingMessage' | 'createdAnalysisRounds' | 'triggeredPreSearchRounds'>;
+  /** ✅ IMMEDIATE UI FEEDBACK: Track when early optimistic message added by handleUpdateThreadAndSend */
+  hasEarlyOptimisticMessage: false,
+} satisfies Pick<import('./store-schemas').ChatStore, 'hasSentPendingMessage' | 'createdAnalysisRounds' | 'triggeredPreSearchRounds' | 'hasEarlyOptimisticMessage'>;
 
 // ============================================================================
 // CALLBACKS SLICE DEFAULTS
@@ -270,6 +272,7 @@ export const COMPLETE_RESET_STATE = {
   // 🚨 BUG FIX: Create fresh Set instances for each complete reset
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
+  hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // Callbacks state
   onComplete: CALLBACKS_DEFAULTS.onComplete,
   // Screen state
@@ -312,6 +315,7 @@ export const THREAD_RESET_STATE = {
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
   preSearchActivityTimes: new Map<number, number>(),
+  hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // AI SDK methods (thread-related)
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
@@ -326,6 +330,30 @@ export const THREAD_RESET_STATE = {
   // Animation state
   pendingAnimations: new Set<number>(),
   animationResolvers: new Map<number, AnimationResolver>(),
+} as const;
+
+/**
+ * Full thread navigation reset state
+ * 🚨 CRITICAL: Used when navigating BETWEEN threads (e.g., /chat/thread-1 → /chat/thread-2)
+ * Unlike THREAD_RESET_STATE, this ALSO clears thread data (messages, participants, analyses)
+ * This prevents stale data from previous thread leaking into new thread
+ * Used by: resetForThreadNavigation
+ */
+export const THREAD_NAVIGATION_RESET_STATE = {
+  // Include all from THREAD_RESET_STATE
+  ...THREAD_RESET_STATE,
+  // 🚨 CRITICAL: Also clear thread data to prevent state leakage
+  thread: THREAD_DEFAULTS.thread,
+  participants: THREAD_DEFAULTS.participants,
+  messages: THREAD_DEFAULTS.messages,
+  error: THREAD_DEFAULTS.error,
+  currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
+  // 🚨 CRITICAL: Clear analyses and pre-searches from previous thread
+  analyses: ANALYSIS_DEFAULTS.analyses,
+  preSearches: PRESEARCH_DEFAULTS.preSearches,
+  // 🚨 CRITICAL: Reset UI flags related to thread creation
+  createdThreadId: UI_DEFAULTS.createdThreadId,
+  isCreatingThread: UI_DEFAULTS.isCreatingThread,
 } as const;
 
 /**
@@ -344,4 +372,5 @@ export type CallbacksDefaults = typeof CALLBACKS_DEFAULTS;
 export type ScreenDefaults = typeof SCREEN_DEFAULTS;
 export type CompleteResetState = typeof COMPLETE_RESET_STATE;
 export type ThreadResetState = typeof THREAD_RESET_STATE;
+export type ThreadNavigationResetState = typeof THREAD_NAVIGATION_RESET_STATE;
 export type AnimationDefaults = typeof ANIMATION_DEFAULTS;

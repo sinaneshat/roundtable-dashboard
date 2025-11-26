@@ -6,7 +6,7 @@ Custom React hooks for common patterns and features.
 
 Hooks are organized by purpose rather than bundled into large files. Each hook has a single responsibility for better discoverability and maintainability.
 
-**Current Status:** 17 hooks, 3,113 lines total
+**Current Status:** 16 hooks (consolidated)
 
 ## Categories
 
@@ -263,26 +263,17 @@ const {
 
 ### React Patterns
 
-#### `use-synced-message-refs.ts` (160 lines)
+#### `use-synced-refs.ts` (85 lines)
 Prevent stale closures in callbacks by synchronizing refs with state.
-- **Exports:**
-  - `useSyncedRefs<T>()` - Generic ref sync for any values
-  - `useSyncedMessageRefs()` - Specific for messages/participants
 - **Pattern:** useLayoutEffect for immediate synchronous sync
 - **Usage:** AI SDK callbacks, store subscriptions, async callbacks
 - **Why:** Callbacks are set once and don't update, creating stale closures
+- **Returns:** Object of refs with same keys as input, each synced to corresponding value
 
 ```typescript
-// Generic version
 const refs = useSyncedRefs({ onComplete, onRetry, messages, participants });
 // Use: refs.onComplete.current, refs.messages.current
-
-// Specialized version
-const { messagesRef, participantsRef } = useSyncedMessageRefs({
-  messages,
-  participants,
-  createPendingAnalysis
-});
+// Refs are updated synchronously before browser paint
 ```
 
 ## Best Practices
@@ -341,7 +332,7 @@ function useChatWithEverything() {
 - **Memoization:** Use `useMemo` for expensive computations, not for simple filters
 - **Pure Functions:** Export non-hook versions for use in callbacks/loops (see `getMessageParts`)
 - **Dependencies:** Be precise with dependency arrays, avoid over-memoization
-- **Refs vs State:** Use refs for values that don't trigger re-renders (see `use-synced-message-refs`)
+- **Refs vs State:** Use refs for values that don't trigger re-renders (see `use-synced-refs`)
 
 ## Architecture Patterns
 
@@ -374,9 +365,9 @@ const onComplete = useCallback(() => {
 }, []); // Empty deps = messages never update
 
 // ✅ Solution: Synced refs
-const { messagesRef } = useSyncedMessageRefs({ messages });
+const refs = useSyncedRefs({ messages });
 const onComplete = useCallback(() => {
-  console.log(messagesRef.current); // Always current!
+  console.log(refs.messages.current); // Always current!
 }, []); // Empty deps OK, ref is mutable
 ```
 
@@ -496,7 +487,7 @@ useEffect(() => {
 | Timeline/Virtualization | 4 | 807 | Medium |
 | Form/Input | 2 | 106 | High |
 | Streaming/SSE | 2 | 1,161 | Low (app-specific) |
-| React Patterns | 1 | 160 | Very High |
+| React Patterns | 1 | 85 | Very High |
 
 ## Contributing
 

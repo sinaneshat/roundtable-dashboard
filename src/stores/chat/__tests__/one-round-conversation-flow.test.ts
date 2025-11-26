@@ -22,6 +22,7 @@ import {
   AnalysisStatuses,
   ChatModes,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type {
   ChatParticipant,
@@ -399,7 +400,7 @@ describe('one Round Conversation Flow', () => {
 
     it('should detect when all participants have responded for current round', () => {
       const state = store.getState();
-      const participantMessages = state.messages.filter(m => m.role === 'assistant');
+      const participantMessages = state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
 
       expect(participantMessages).toHaveLength(2);
       expect(participantMessages).toHaveLength(state.participants.length);

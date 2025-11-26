@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnalysisStatuses,
   PreSearchStatuses,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -1711,7 +1712,7 @@ describe('comprehensive Data Integrity Validation', () => {
       store.getState().setMessages(messages);
 
       const participantMessages = store.getState().messages.filter(
-        m => m.role === 'assistant',
+        m => m.role === UIMessageRoles.ASSISTANT,
       );
 
       participantMessages.forEach((msg) => {
@@ -1763,7 +1764,7 @@ describe('comprehensive Data Integrity Validation', () => {
       store.getState().setMessages(createMockRoundMessages(0, 3));
 
       const assistantMessages = store.getState().messages.filter(
-        m => m.role === 'assistant',
+        m => m.role === UIMessageRoles.ASSISTANT,
       );
 
       assistantMessages.forEach((msg) => {

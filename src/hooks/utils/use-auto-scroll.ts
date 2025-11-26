@@ -189,9 +189,30 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
     let debounceTimeout: NodeJS.Timeout | null = null;
     let pendingScrollRAF: number | null = null;
 
+    // ✅ FIX: Track if user has scrolled up (opted out of auto-scroll)
+    // This persists across ResizeObserver callbacks during a single streaming session
+    let userOptedOut = false;
+    const handleUserScroll = () => {
+      const isAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
+      if (!isAtBottom) {
+        userOptedOut = true;
+      } else {
+        // User scrolled back to bottom - re-enable auto-scroll
+        userOptedOut = false;
+      }
+    };
+
+    // Listen for user scroll events to detect opt-out
+    window.addEventListener('scroll', handleUserScroll, { passive: true });
+
     // ✅ IMPROVED: Only check current state, don't use wasAtBottom
     // wasAtBottom was causing scroll even after user scrolled away
     const resizeObserver = new ResizeObserver(() => {
+      // ✅ FIX: If user has opted out, don't auto-scroll
+      if (userOptedOut) {
+        return;
+      }
+
       const isAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
 
       // ✅ IMPROVED: Strict check - only scroll if currently at bottom
@@ -215,6 +236,11 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
       }
 
       debounceTimeout = setTimeout(() => {
+        // ✅ FIX: Re-check opt-out status after debounce (user might have scrolled)
+        if (userOptedOut) {
+          return;
+        }
+
         // Re-check position after debounce (user might have scrolled)
         if (onlyIfAtBottom && !isScrolledToBottom(scrollContainer, bottomThreshold)) {
           return;
@@ -237,12 +263,13 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
     resizeObserver.observe(scrollContainer);
     resizeObserver.observe(element);
 
-    // Initial scroll only if at bottom
-    if (!onlyIfAtBottom || isScrolledToBottom(scrollContainer, bottomThreshold)) {
-      scrollToBottom(scrollContainer, behavior);
-    }
+    // ✅ FIX: Remove initial scroll - useChatScroll handles initial positioning
+    // Initial scroll was causing unwanted scroll jumps when streaming started
+    // The scroll should only happen in response to content growth, not on mount
 
     return () => {
+      // ✅ FIX: Clean up scroll listener to prevent memory leaks
+      window.removeEventListener('scroll', handleUserScroll);
       if (debounceTimeout) {
         clearTimeout(debounceTimeout);
       }

@@ -94,8 +94,11 @@ export function useUpdateApiKeyMutation() {
       });
     },
     retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
+      // Type-safe status extraction
+      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+        ? error.status
+        : null;
+      if (status !== null && status >= 400 && status < 500) {
         return false;
       }
       return failureCount < 2;
@@ -170,8 +173,11 @@ export function useDeleteApiKeyMutation() {
       });
     },
     retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
+      // Type-safe status extraction
+      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+        ? error.status
+        : null;
+      if (status !== null && status >= 400 && status < 500) {
         return false;
       }
       return failureCount < 2;

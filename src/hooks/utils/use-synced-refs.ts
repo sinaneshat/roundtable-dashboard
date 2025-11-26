@@ -14,7 +14,6 @@
  * - One useLayoutEffect syncs all values efficiently
  *
  * Used by:
- * - useSyncedMessageRefs: Sync messages, participants for callbacks
  * - useMultiParticipantChat: Sync callbacks and state values to prevent stale closures
  * - ChatOverviewScreen: Sync messages, participants for onComplete callback
  * - ChatThreadScreen: Sync messages, participants, createPendingAnalysis
@@ -23,6 +22,13 @@
  */
 
 import { useLayoutEffect, useMemo } from 'react';
+
+/**
+ * Ref values type - constrained to valid ref value types
+ * ✅ TYPE-SAFE: Uses object index signature without `unknown`
+ * Excludes null/undefined from base constraint while allowing them as specific values
+ */
+type RefValues = { [key: string]: NonNullable<object> | string | number | boolean | null | undefined | ((...args: never[]) => void) };
 
 /**
  * Generic hook to sync any values into refs with useLayoutEffect
@@ -41,7 +47,7 @@ import { useLayoutEffect, useMemo } from 'react';
  * - O(n) sync operation where n = number of values
  * - No re-renders: refs are not state, reading them doesn't trigger updates
  *
- * @template T - Object type with string keys and unknown values
+ * @template T - Object type with string keys and typed values
  * @param values - Object of values to sync into refs
  * @returns Object of refs with same keys, each synced to corresponding value
  *
@@ -59,14 +65,16 @@ import { useLayoutEffect, useMemo } from 'react';
  * // Refs are updated synchronously before browser paint
  * ```
  */
-export function useSyncedRefs<T extends Record<string, unknown>>(
+export function useSyncedRefs<T extends RefValues>(
   values: T,
 ): { [K in keyof T]: React.MutableRefObject<T[K]> } {
   // Create stable refs object - only initialize once
   const refs = useMemo(() => {
-    const result = {} as Record<keyof T, React.MutableRefObject<T[keyof T]>>;
+    const result: Partial<{ [K in keyof T]: React.MutableRefObject<T[K]> }> = {};
     for (const key in values) {
-      result[key as keyof T] = { current: values[key] };
+      if (Object.prototype.hasOwnProperty.call(values, key)) {
+        result[key as keyof T] = { current: values[key] } as React.MutableRefObject<T[keyof T]>;
+      }
     }
     return result as { [K in keyof T]: React.MutableRefObject<T[K]> };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,7 +83,7 @@ export function useSyncedRefs<T extends Record<string, unknown>>(
   // Sync all refs with current values using one useLayoutEffect
   useLayoutEffect(() => {
     for (const key in values) {
-      if (Object.prototype.hasOwnProperty.call(refs, key)) {
+      if (Object.prototype.hasOwnProperty.call(values, key) && Object.prototype.hasOwnProperty.call(refs, key)) {
         refs[key as keyof T].current = values[key];
       }
     }

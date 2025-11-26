@@ -1,7 +1,6 @@
 'use client';
 
 // ✅ REMOVED: useQueryClient - no longer invalidating queries on completion
-import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -9,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -23,8 +22,6 @@ import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LoaderFive } from '@/components/ui/loader';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery } from '@/hooks/queries/chat';
@@ -40,8 +37,7 @@ import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 // ✅ REMOVED: queryKeys - no longer invalidating queries on completion
 import { showApiErrorToast } from '@/lib/toast';
-import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
+// ✅ REMOVED: getAvatarPropsFromModelId, getParticipantIndex, getRoleBadgeStyle - no longer needed after consolidating pending cards to ChatMessageList
 // ✅ REMOVED: waitForIdleOrRender - was a timeout workaround (2s) for race conditions
 import {
   useChatFormActions,
@@ -109,9 +105,8 @@ export default function ChatOverviewScreen() {
   // Pre-search state
   const preSearches = useChatStore(s => s.preSearches);
 
-  // Data state
-  // ✅ REMOVED: streamingRoundNumber no longer needed after removing duplicate PreSearchCard
-  // const _streamingRoundNumber = useChatStore(s => s.streamingRoundNumber);
+  // Data state - streamingRoundNumber needed for ChatMessageList pending cards logic
+  const streamingRoundNumber = useChatStore(s => s.streamingRoundNumber);
 
   // Analysis actions
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
@@ -217,30 +212,34 @@ export default function ChatOverviewScreen() {
     if (orderedModel.participant) {
       // Remove model - update priorities for remaining participants
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
-      // Recalculate priorities based on visual order
-      const reindexed = filtered.map((p) => {
-        const visualIndex = modelOrder.indexOf(p.modelId);
-        return { ...p, priority: visualIndex };
-      }).sort((a, b) => a.priority - b.priority);
+      // ✅ FIX: Sort by visual order, then reindex priorities to 0, 1, 2, ...
+      // BUG FIX: Previously used modelOrder.indexOf() which gave model list position (21, 25, 29)
+      // instead of selection order (0, 1, 2). This caused backend to create participants with
+      // wrong priorities, leading to duplicate participants when priorities were reindexed later.
+      const sortedByVisualOrder = filtered.sort((a, b) => {
+        const aIdx = modelOrder.indexOf(a.modelId);
+        const bIdx = modelOrder.indexOf(b.modelId);
+        return aIdx - bIdx;
+      });
+      const reindexed = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
       setSelectedParticipants(reindexed);
     } else {
-      // Add model - assign priority based on position in visual order
+      // Add model
       participantIdCounterRef.current += 1;
-      const visualIndex = modelOrder.indexOf(modelId);
       const newParticipant: ParticipantConfig = {
         id: `participant-${participantIdCounterRef.current}`,
         modelId,
         role: '',
-        priority: visualIndex,
+        priority: selectedParticipants.length, // Temp priority, will be reindexed below
       };
-      // Insert and re-sort all participants by their visual order
-      const updated = [...selectedParticipants, newParticipant]
-        .map((p) => {
-          const idx = modelOrder.indexOf(p.modelId);
-          return { ...p, priority: idx };
-        })
-        .sort((a, b) => a.priority - b.priority);
-      setSelectedParticipants(updated);
+      // ✅ FIX: Sort by visual order, then reindex priorities to 0, 1, 2, ...
+      const updated = [...selectedParticipants, newParticipant].sort((a, b) => {
+        const aIdx = modelOrder.indexOf(a.modelId);
+        const bIdx = modelOrder.indexOf(b.modelId);
+        return aIdx - bIdx;
+      });
+      const reindexed = updated.map((p, index) => ({ ...p, priority: index }));
+      setSelectedParticipants(reindexed);
     }
   }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder]);
 
@@ -402,6 +401,8 @@ export default function ChatOverviewScreen() {
     if (!hasResetOnMount.current && pathname === '/chat') {
       hasResetOnMount.current = true;
       resetToOverview();
+      // ✅ UNIFIED RESET: Clear local refs to day 0
+      hasSentInitialPromptRef.current = false;
 
       // Set initial form values if defaults are available
       if (defaultModelId && initialParticipants.length > 0) {
@@ -420,6 +421,8 @@ export default function ChatOverviewScreen() {
       // Reset ALL state (form, thread, messages, analyses, etc.)
       // This includes pre-searches and all AI SDK methods
       resetToOverview();
+      // ✅ UNIFIED RESET: Clear local refs to day 0
+      hasSentInitialPromptRef.current = false;
 
       // Set initial form values if defaults are available
       if (defaultModelId && initialParticipants.length > 0) {
@@ -641,29 +644,24 @@ export default function ChatOverviewScreen() {
                 className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4"
               >
                 <UnifiedErrorBoundary context="message-list">
-                  {/* Split messages for correct ordering: user → pre-search → assistant */}
-                  <ChatMessageList
-                    messages={messages.filter((m: UIMessage) => m.role === MessageRoles.USER)}
-                    user={{
-                      name: sessionUser?.name || 'You',
-                      image: sessionUser?.image || null,
-                    }}
-                    participants={contextParticipants}
-                    isStreaming={false}
-                    currentParticipantIndex={currentParticipantIndex}
-                    currentStreamingParticipant={null}
-                    threadId={createdThreadId}
-                    preSearches={preSearches}
-                  />
+                  {/* ✅ UNIFIED RENDERING: Single ChatMessageList with ALL messages
+                      This eliminates duplicate pending participant cards by:
+                      1. Passing ALL messages instead of split user/assistant
+                      2. Passing streamingRoundNumber so pending cards logic works correctly
+                      3. REMOVED duplicate pending cards section that was here before
 
-                  {/* ✅ CRITICAL FIX: Do NOT pass preSearches to assistant messages list
-                      PreSearchCard should only render after user messages (handled by first ChatMessageList).
-                      Passing preSearches to both lists was causing duplicate pre-search accordion rendering.
+                      The ChatMessageList handles:
+                      - User messages with header
+                      - PreSearchCard after user messages (from preSearches prop)
+                      - Pending participant cards (when streaming round and pre-search active)
+                      - Assistant messages with streaming state
+
+                      NOTE: Pending participant cards are now ONLY rendered inside ChatMessageList
+                      to prevent 2x duplication that occurred when both ChatMessageList AND
+                      this screen rendered them independently.
                   */}
-
-                  {/* Assistant messages */}
                   <ChatMessageList
-                    messages={messages.filter((m: UIMessage) => m.role !== MessageRoles.USER)}
+                    messages={messages}
                     user={{
                       name: sessionUser?.name || 'You',
                       image: sessionUser?.image || null,
@@ -673,93 +671,9 @@ export default function ChatOverviewScreen() {
                     currentParticipantIndex={currentParticipantIndex}
                     currentStreamingParticipant={currentStreamingParticipant}
                     threadId={createdThreadId}
+                    preSearches={preSearches}
+                    streamingRoundNumber={streamingRoundNumber}
                   />
-
-                  {/* ✅ EAGER RENDERING: Show pending participant cards for participants that haven't responded yet
-                      This provides immediate visual feedback showing all participants with "Waiting for response..." */}
-                  {createdThreadId && contextParticipants.length > 0 && (() => {
-                    // Get participant indices that already have messages
-                    const assistantMessages = messages.filter((m: UIMessage) => m.role !== MessageRoles.USER);
-                    const respondedParticipantIndices = new Set<number>();
-                    assistantMessages.forEach((m: UIMessage) => {
-                      const metadata = m.metadata as { participantIndex?: number } | undefined;
-                      if (metadata?.participantIndex !== undefined) {
-                        respondedParticipantIndices.add(metadata.participantIndex);
-                      }
-                    });
-
-                    // Find participants that haven't responded yet (excluding the currently streaming one)
-                    const pendingParticipants = contextParticipants.filter((p, index) => {
-                      // Skip if already responded
-                      if (respondedParticipantIndices.has(index))
-                        return false;
-                      // Skip if currently streaming (handled by ChatMessageList)
-                      if (isStreaming && index === currentParticipantIndex)
-                        return false;
-                      return true;
-                    });
-
-                    if (pendingParticipants.length === 0)
-                      return null;
-
-                    return (
-                      <div className="space-y-4 mt-4">
-                        {pendingParticipants.map((participant) => {
-                          const model = allEnabledModels.find(m => m.id === participant.modelId);
-                          const avatarProps = getAvatarPropsFromModelId(
-                            MessageRoles.ASSISTANT,
-                            participant.modelId,
-                            null,
-                            'AI',
-                          );
-                          const displayName = model?.name || 'AI Assistant';
-
-                          // ✅ EAGER RENDERING: Match AssistantGroupCard format exactly
-                          return (
-                            <div
-                              key={`pending-${participant.id}`}
-                              className="mb-4 flex justify-start"
-                            >
-                              <div className="w-full">
-                                {/* Header at top - matches AssistantGroupCard */}
-                                <div className="flex items-center gap-3 mb-6">
-                                  <Avatar className="size-8 drop-shadow-[0_0_12px_hsl(var(--muted-foreground)/0.3)]">
-                                    <AvatarImage
-                                      src={avatarProps.src}
-                                      alt={avatarProps.name}
-                                      className="object-contain p-0.5"
-                                    />
-                                    <AvatarFallback className="text-[8px] bg-muted">
-                                      {avatarProps.name?.slice(0, 2).toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                                    <span className="text-xl font-semibold text-muted-foreground">
-                                      {displayName}
-                                    </span>
-                                    {participant.role && (
-                                      <span
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
-                                        style={getRoleBadgeStyle(participant.role)}
-                                      >
-                                        {participant.role}
-                                      </span>
-                                    )}
-                                    {/* Pulsing indicator for pending */}
-                                    <span className="ml-1 size-1.5 rounded-full bg-muted-foreground/60 animate-pulse flex-shrink-0" />
-                                  </div>
-                                </div>
-                                {/* Content - Waiting message with shimmer effect */}
-                                <div className="py-2 text-muted-foreground text-sm">
-                                  <LoaderFive text={t('chat.participant.waitingNamed', { name: displayName })} />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
                 </UnifiedErrorBoundary>
 
                 {/* ✅ REVISED: Only filter out PENDING placeholder analyses

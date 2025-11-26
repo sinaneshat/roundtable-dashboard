@@ -197,6 +197,36 @@ export function participantConfigToOptimistic(
   };
 }
 
+/**
+ * Convert ChatParticipant array to ParticipantConfig array
+ *
+ * Used to sync selectedParticipants (form state) from participants (DB state)
+ * after thread creation or update.
+ *
+ * @param participants - Database participants to convert
+ * @returns ParticipantConfig array for form state
+ *
+ * @example
+ * ```typescript
+ * const participantConfigs = chatParticipantsToConfig(dbParticipants);
+ * actions.setSelectedParticipants(participantConfigs);
+ * ```
+ */
+export function chatParticipantsToConfig(
+  participants: ChatParticipant[],
+): ParticipantConfig[] {
+  return participants
+    .filter(p => p.isEnabled)
+    .sort((a, b) => a.priority - b.priority)
+    .map((p, index) => ({
+      id: p.id,
+      modelId: p.modelId,
+      role: p.role,
+      customRoleId: p.customRoleId || undefined,
+      priority: index,
+    }));
+}
+
 // ============================================================================
 // Validation Functions
 // ============================================================================

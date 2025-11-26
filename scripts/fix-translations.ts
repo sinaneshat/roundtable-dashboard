@@ -23,40 +23,55 @@ interface FixResults {
   finalKeyCount: number;
 }
 
-function flattenObject(obj: any, prefix = ''): Record<string, any> {
-  const result: Record<string, any> = {};
-  
+/**
+ * Type-safe JSON value representation for translation files.
+ * Follows the established pattern of explicit typing over `any`.
+ */
+type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
+type JsonObject = { [key: string]: JsonValue };
+type JsonArray = JsonValue[];
+
+/** Type guard to check if a JSON value is a JsonObject (nested object) */
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function flattenObject(obj: JsonObject, prefix = ''): Record<string, JsonValue> {
+  const result: Record<string, JsonValue> = {};
+
   for (const key in obj) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
-    
-    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-      Object.assign(result, flattenObject(obj[key], fullKey));
+    const value = obj[key];
+
+    if (isJsonObject(value)) {
+      Object.assign(result, flattenObject(value, fullKey));
     } else {
-      result[fullKey] = obj[key];
+      result[fullKey] = value;
     }
   }
-  
+
   return result;
 }
 
-function unflattenObject(flatObj: Record<string, any>): any {
-  const result: any = {};
-  
+function unflattenObject(flatObj: Record<string, JsonValue>): JsonObject {
+  const result: JsonObject = {};
+
   for (const [key, value] of Object.entries(flatObj)) {
     const parts = key.split('.');
-    let current = result;
-    
+    let current: JsonObject = result;
+
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
       if (!current[part]) {
         current[part] = {};
       }
-      current = current[part];
+      // We know this is a JsonObject because we just created it
+      current = current[part] as JsonObject;
     }
-    
+
     current[parts[parts.length - 1]] = value;
   }
-  
+
   return result;
 }
 
@@ -220,18 +235,18 @@ async function fixTranslations(removeUnused: boolean = true, addMissing: boolean
   return results;
 }
 
-function sortObjectKeys(obj: any): any {
-  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+function sortObjectKeys(obj: JsonValue): JsonValue {
+  if (!isJsonObject(obj)) {
     return obj;
   }
-  
-  const sorted: any = {};
+
+  const sorted: JsonObject = {};
   const keys = Object.keys(obj).sort();
-  
+
   for (const key of keys) {
     sorted[key] = sortObjectKeys(obj[key]);
   }
-  
+
   return sorted;
 }
 

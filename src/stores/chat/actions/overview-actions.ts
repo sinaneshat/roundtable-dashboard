@@ -15,9 +15,9 @@
 
 import { useCallback } from 'react';
 
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 import { useFlowController } from './flow-controller';

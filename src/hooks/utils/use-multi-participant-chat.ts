@@ -270,6 +270,9 @@ export function useMultiParticipantChat(
   // ✅ TYPE-SAFE: Use DbUserMessageMetadata (without createdAt which is added by backend)
   const aiSendMessageRef = useRef<((message: { text: string; metadata?: Omit<DbUserMessageMetadata, 'createdAt'> }) => void) | null>(null);
 
+  // Track previous threadId for navigation reset (effect defined after hasHydratedRef)
+  const prevThreadIdRef = useRef<string>(threadId);
+
   /**
    * Trigger the next participant using refs (safe to call from useChat callbacks)
    */
@@ -978,6 +981,53 @@ export function useMultiParticipantChat(
     }
   }, [messages.length, initialMessages, setMessages]);
 
+  // ✅ NAVIGATION FIX: Reset all refs when threadId changes (to empty OR different thread)
+  // This handles:
+  // 1. Navigation from /chat/[slug] to /chat overview (threadId becomes empty)
+  // 2. Navigation between different threads (threadId changes to different value)
+  // Without this reset, refs persist and cause stale state issues
+  useLayoutEffect(() => {
+    const prevId = prevThreadIdRef.current;
+    const currentId = threadId;
+
+    const wasValidThread = prevId && prevId.trim() !== '';
+    const isNowEmpty = !currentId || currentId.trim() === '';
+    const isNowDifferentThread = wasValidThread && currentId && currentId.trim() !== '' && prevId !== currentId;
+
+    // Reset all refs when:
+    // 1. Transitioning from valid thread to empty (overview)
+    // 2. Transitioning between different threads
+    if ((wasValidThread && isNowEmpty) || isNowDifferentThread) {
+      // Reset participant tracking refs
+      respondedParticipantsRef.current = new Set();
+      regenerateRoundNumberRef.current = null;
+
+      // Reset round state refs
+      currentRoundRef.current = 0;
+      roundParticipantsRef.current = [];
+      currentIndexRef.current = 0;
+
+      // Reset queue and triggering refs
+      participantIndexQueue.current = [];
+      lastUsedParticipantIndex.current = null;
+      isTriggeringRef.current = false;
+      isStreamingRef.current = false;
+
+      // Reset hydration flag to allow re-hydration on next thread
+      hasHydratedRef.current = false;
+
+      // Reset React state as well (intentional direct setState for sync reset)
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      setCurrentRound(0);
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      setCurrentParticipantIndex(0);
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional sync state reset on navigation
+      setIsExplicitlyStreaming(false);
+    }
+
+    prevThreadIdRef.current = currentId;
+  }, [threadId]);
+
   /**
    * Start a new round with existing participants
    *
@@ -995,6 +1045,14 @@ export function useMultiParticipantChat(
     // When subscription calls this before provider re-renders, ref is stale
     // Subscription can pass participants directly from store.getState()
     const currentParticipants = participantsOverride || participantsRef.current;
+
+    // ✅ CRITICAL FIX: Update participantsRef synchronously when fresh participants provided
+    // This ensures prepareSendMessagesRequest uses up-to-date participants with real DB IDs
+    // Without this, the transport callback may read stale ref data with temp frontend IDs,
+    // causing the backend to create duplicate participants (race condition)
+    if (participantsOverride) {
+      participantsRef.current = participantsOverride;
+    }
 
     // ✅ Guards: Wait for dependencies to be ready (effect will retry)
     // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
@@ -1090,6 +1148,12 @@ export function useMultiParticipantChat(
   const continueFromParticipant = useCallback((fromIndex: number, participantsOverride?: ChatParticipant[]) => {
     // ✅ CRITICAL FIX: Allow caller to pass fresh participants (from store subscription)
     const currentParticipants = participantsOverride || participantsRef.current;
+
+    // ✅ CRITICAL FIX: Update participantsRef synchronously when fresh participants provided
+    // Same fix as startRound - ensures prepareSendMessagesRequest uses up-to-date participants
+    if (participantsOverride) {
+      participantsRef.current = participantsOverride;
+    }
 
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
@@ -1398,16 +1462,34 @@ export function useMultiParticipantChat(
   // This allows synchronous checks in microtasks to use the latest value
   isStreamingRef.current = isActuallyStreaming;
 
-  return {
-    messages,
-    sendMessage,
-    startRound,
-    continueFromParticipant,
-    isStreaming: isActuallyStreaming,
-    isStreamingRef,
-    currentParticipantIndex,
-    error: chatError || null,
-    retry,
-    setMessages,
-  };
+  // ✅ INFINITE LOOP FIX: Memoize return value to prevent new object reference on every render
+  // Without this, the chat object creates a new reference each render, causing any effect
+  // that depends on `chat` to re-run infinitely (e.g., message sync effect in chat-store-provider)
+  // The chat object is used as dependency in provider effects - stable reference is critical.
+  return useMemo(
+    () => ({
+      messages,
+      sendMessage,
+      startRound,
+      continueFromParticipant,
+      isStreaming: isActuallyStreaming,
+      isStreamingRef,
+      currentParticipantIndex,
+      error: chatError || null,
+      retry,
+      setMessages,
+    }),
+    [
+      messages,
+      sendMessage,
+      startRound,
+      continueFromParticipant,
+      isActuallyStreaming,
+      // isStreamingRef is stable (useRef)
+      currentParticipantIndex,
+      chatError,
+      retry,
+      setMessages,
+    ],
+  );
 }

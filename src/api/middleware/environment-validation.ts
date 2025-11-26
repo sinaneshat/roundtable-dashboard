@@ -11,6 +11,8 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { validateEnvironmentVariables } from '@/api/common/fetch-utilities';
+import type { HealthStatus } from '@/api/core/enums';
+import { HealthStatuses } from '@/api/core/enums';
 import type { SafeEnvironmentSummary } from '@/api/types/http';
 
 // ============================================================================
@@ -281,19 +283,20 @@ export function validateServiceEnvironment(
 /**
  * Health check function that returns environment validation status
  * Can be used by health check endpoints
+ * ✅ ENUM PATTERN: Uses HealthStatus type and HealthStatuses constants
  */
 export function getEnvironmentHealthStatus(env: CloudflareEnv): {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: HealthStatus;
   validation: ReturnType<typeof validateEnvironmentConfiguration>;
 } {
   const validation = validateEnvironmentConfiguration(env);
 
-  let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+  let status: HealthStatus = HealthStatuses.HEALTHY;
 
   if (validation.errors.length > 0 || validation.missingCritical.length > 0) {
-    status = 'unhealthy';
+    status = HealthStatuses.UNHEALTHY;
   } else if (validation.warnings.length > 0 || validation.missingOptional.length > 3) {
-    status = 'degraded';
+    status = HealthStatuses.DEGRADED;
   }
 
   return { status, validation };

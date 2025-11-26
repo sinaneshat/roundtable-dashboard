@@ -1,7 +1,7 @@
 import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
-import type { AnalysisStatus } from '@/api/core/enums';
+import type { AnalysisStatus, WebSearchDepth } from '@/api/core/enums';
 import { AnalysisStatuses, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 
@@ -294,13 +294,13 @@ export function createMockPreSearch(data: {
   id: string;
   threadId: string;
   roundNumber: number;
-  status: 'pending' | 'streaming' | 'complete' | 'failed';
+  status: AnalysisStatus;
   userQuery: string;
   searchData?: {
     queries?: Array<{
       query: string;
       rationale: string;
-      searchDepth: 'basic' | 'advanced';
+      searchDepth: WebSearchDepth;
       index: number;
       total: number;
     }>;
@@ -328,7 +328,7 @@ export function createMockPreSearch(data: {
   id: string;
   threadId: string;
   roundNumber: number;
-  status: 'pending' | 'streaming' | 'complete' | 'failed';
+  status: AnalysisStatus;
   userQuery: string;
   searchData?: typeof data.searchData;
   errorMessage: string | null;

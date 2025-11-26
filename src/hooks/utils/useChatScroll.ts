@@ -50,6 +50,11 @@ type UseChatScrollResult = {
    */
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   scrolledToAnalysesRef: React.MutableRefObject<Set<string>>;
+  /**
+   * Reset all scroll state to initial values
+   * Call this when navigating to a new thread or overview
+   */
+  resetScrollState: () => void;
 };
 
 /**
@@ -85,7 +90,7 @@ export function useChatScroll({
   scrollContainerId = 'chat-scroll-container',
   enableNearBottomDetection = true,
   autoScrollThreshold = 100,
-  currentParticipantIndex,
+  currentParticipantIndex: _currentParticipantIndex, // ✅ FIX: Unused - participant changes no longer trigger scroll
   bottomOffset = 0,
   preSearches = [],
 }: UseChatScrollParams): UseChatScrollResult {
@@ -103,13 +108,39 @@ export function useChatScroll({
   // Track last scroll position to detect scroll direction
   const lastScrollTopRef = useRef<number>(0);
 
+  /**
+   * Reset all scroll state to initial values
+   * ✅ NAVIGATION FIX: Call this when navigating to overview or different thread
+   * Prevents stale scroll state from affecting new conversations
+   */
+  const resetScrollState = useCallback(() => {
+    isAtBottomRef.current = true;
+    scrolledToAnalysesRef.current = new Set();
+    lastScrollTopRef.current = 0;
+    isProgrammaticScrollRef.current = false;
+  }, []);
+
+  // ✅ NAVIGATION FIX: Auto-reset scroll state when messages become empty
+  // This handles navigation to overview screen where messages array is cleared
+  // Ensures clean scroll state for new conversations
+  useEffect(() => {
+    if (messages.length === 0) {
+      resetScrollState();
+    }
+  }, [messages.length, resetScrollState]);
+
   // Compute streaming states from analyses and pre-searches
+  // ✅ FIX: Only consider STREAMING status (not PENDING) for auto-scroll decisions
+  // PENDING status indicates something is about to start, not actively generating content
+  // Auto-scrolling on PENDING causes unwanted scroll jumps before user sees new content
   const hasAnalysisStreaming = analyses.some(
-    a => a.status === AnalysisStatuses.STREAMING || a.status === AnalysisStatuses.PENDING,
+    a => a.status === AnalysisStatuses.STREAMING,
   );
   const hasPreSearchStreaming = preSearches.some(
-    ps => ps.status === AnalysisStatuses.STREAMING || ps.status === AnalysisStatuses.PENDING,
+    ps => ps.status === AnalysisStatuses.STREAMING,
   );
+  // ✅ FIX: isAnyStreaming should ONLY be true when content is actively being generated
+  // This prevents auto-scroll during PENDING states and after streaming completes
   const isAnyStreaming = isStreaming || hasAnalysisStreaming || hasPreSearchStreaming;
 
   /**
@@ -194,34 +225,39 @@ export function useChatScroll({
   }, [enableNearBottomDetection, autoScrollThreshold]);
 
   // Effect 2: Auto-scroll on new content during streaming
+  // ✅ FIX: Only auto-scroll when content is ACTIVELY being generated
+  // Removed currentParticipantIndex dependency - participant changes shouldn't trigger scroll
+  // User opt-out (scrolling up) is respected via isAtBottomRef check
   useEffect(() => {
     if (messages.length === 0) {
       return;
     }
 
-    // ✅ SIMPLIFIED: Only scroll if at bottom
+    // ✅ CRITICAL: Respect user opt-out - only scroll if user is at bottom
     if (!isAtBottomRef.current) {
       return;
     }
 
-    // Check for new analyses
-    const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
-    const hasNewAnalysis = newAnalyses.length > 0;
-
-    const shouldScroll = isAnyStreaming || hasNewAnalysis;
-
-    if (shouldScroll) {
-      if (hasNewAnalysis) {
-        newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
-      }
-
-      requestAnimationFrame(() => {
-        if (isAtBottomRef.current) {
-          scrollToBottom('smooth');
-        }
-      });
+    // ✅ FIX: Only auto-scroll when actively streaming content
+    // Don't scroll for new analyses when not streaming - user should manually scroll
+    // This prevents unwanted scroll jumps when analyses appear after streaming completes
+    if (!isAnyStreaming) {
+      return;
     }
-  }, [messages.length, analyses, isAnyStreaming, currentParticipantIndex, scrollToBottom]);
+
+    // Track new analyses for scroll tracking (but don't use as scroll trigger)
+    const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
+    if (newAnalyses.length > 0) {
+      newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
+    }
+
+    requestAnimationFrame(() => {
+      // Double-check user is still at bottom before scrolling
+      if (isAtBottomRef.current) {
+        scrollToBottom('smooth');
+      }
+    });
+  }, [messages.length, analyses, isAnyStreaming, scrollToBottom]);
 
   // Effect 3: Auto-scroll on content resize during streaming
   useEffect(() => {
@@ -279,5 +315,6 @@ export function useChatScroll({
     isNearBottomRef: isAtBottomRef, // Backwards compatibility alias
     scrollToBottom,
     scrolledToAnalysesRef,
+    resetScrollState,
   };
 }

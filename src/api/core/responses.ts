@@ -16,7 +16,8 @@ import type { Context } from 'hono';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
-import type { DatabaseOperation } from '@/api/core/enums';
+import type { DatabaseOperation, HealthStatus } from '@/api/core/enums';
+import { HealthStatuses } from '@/api/core/enums';
 
 import type { ApiResponse, CursorPaginatedResponse, ErrorContext, PaginatedResponse, ResponseMetadata } from './schemas';
 import { ApiErrorResponseSchema, createApiResponseSchema, createPaginatedResponseSchema } from './schemas';
@@ -624,9 +625,10 @@ export function collection<T, M extends Record<string, unknown> = Record<string,
 
 /**
  * Health check dependency status
+ * ✅ ENUM PATTERN: Uses HealthStatus type from @/api/core/enums
  */
 export type HealthDependency = {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: HealthStatus;
   message: string;
   duration?: number;
   details?: Record<string, unknown>;
@@ -645,16 +647,17 @@ export type HealthSummary = {
 /**
  * Create a basic health check response
  * For simple health endpoints that return overall status
+ * ✅ ENUM PATTERN: Uses HealthStatus type from @/api/core/enums
  *
  * @example
- * return Responses.health(c, 'healthy');
+ * return Responses.health(c, HealthStatuses.HEALTHY);
  */
 export function health(
   c: Context,
-  status: 'healthy' | 'degraded' | 'unhealthy',
+  status: HealthStatus,
 ): Response {
   const data = {
-    ok: status === 'healthy',
+    ok: status === HealthStatuses.HEALTHY,
     status,
     timestamp: new Date().toISOString(),
   };
@@ -666,7 +669,7 @@ export function health(
   };
 
   // Return appropriate HTTP status code
-  const httpStatus = status === 'healthy'
+  const httpStatus = status === HealthStatuses.HEALTHY
     ? HttpStatusCodes.OK
     : HttpStatusCodes.SERVICE_UNAVAILABLE;
 
@@ -676,16 +679,17 @@ export function health(
 /**
  * Create a detailed health check response
  * For comprehensive health endpoints with dependency checks
+ * ✅ ENUM PATTERN: Uses HealthStatus type and HealthStatuses constants
  *
  * @example
- * return Responses.detailedHealth(c, 'healthy', {
- *   database: { status: 'healthy', message: 'Connected', duration: 45 },
- *   cache: { status: 'healthy', message: 'Responsive', duration: 12 }
+ * return Responses.detailedHealth(c, HealthStatuses.HEALTHY, {
+ *   database: { status: HealthStatuses.HEALTHY, message: 'Connected', duration: 45 },
+ *   cache: { status: HealthStatuses.HEALTHY, message: 'Responsive', duration: 12 }
  * }, 150);
  */
 export function detailedHealth(
   c: Context,
-  status: 'healthy' | 'degraded' | 'unhealthy',
+  status: HealthStatus,
   dependencies: Record<string, HealthDependency>,
   duration?: number,
 ): Response {
@@ -693,9 +697,9 @@ export function detailedHealth(
   const summary = Object.values(dependencies).reduce(
     (acc, dep) => {
       acc.total++;
-      if (dep.status === 'healthy')
+      if (dep.status === HealthStatuses.HEALTHY)
         acc.healthy++;
-      else if (dep.status === 'degraded')
+      else if (dep.status === HealthStatuses.DEGRADED)
         acc.degraded++;
       else
         acc.unhealthy++;
@@ -705,7 +709,7 @@ export function detailedHealth(
   );
 
   const data = {
-    ok: status === 'healthy',
+    ok: status === HealthStatuses.HEALTHY,
     status,
     timestamp: new Date().toISOString(),
     duration,
@@ -725,7 +729,7 @@ export function detailedHealth(
   };
 
   // Return appropriate HTTP status code
-  const httpStatus = status === 'healthy'
+  const httpStatus = status === HealthStatuses.HEALTHY
     ? HttpStatusCodes.OK
     : HttpStatusCodes.SERVICE_UNAVAILABLE;
 

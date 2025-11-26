@@ -21,6 +21,7 @@ import {
   AnalysisStatuses,
   PreSearchStatuses,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import { shouldWaitForPreSearch } from '@/stores/chat/actions/pending-message-sender';
 import { createChatStore } from '@/stores/chat/store';
@@ -670,7 +671,7 @@ describe('race Conditions: Comprehensive Test Suite (COMPREHENSIVE_TEST_PLAN Sec
       store.getState().setIsStreaming(false);
 
       // Check analysis trigger condition
-      const responses = store.getState().messages.filter(m => m.role === 'assistant');
+      const responses = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
       const allParticipantsResponded = responses.length === participants.length;
 
       expect(allParticipantsResponded).toBe(false);

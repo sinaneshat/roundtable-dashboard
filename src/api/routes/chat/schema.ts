@@ -823,7 +823,7 @@ export const ContributorPerspectiveSchema = z.object({
   scorecard: AIScorecardSchema,
   stance: z.string(),
   evidence: z.array(z.string()),
-  vote: z.enum(VOTE_TYPES),
+  vote: z.enum(VOTE_TYPES).nullable(), // ✅ FIX: Allow null for insufficient content (AI may return null when vote can't be determined)
 }).openapi('ContributorPerspective');
 
 /**

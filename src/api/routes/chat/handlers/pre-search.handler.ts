@@ -23,7 +23,6 @@ import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
-import { getErrorCause, getErrorMessage, getErrorStack } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AnalysisStatuses, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
@@ -261,16 +260,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // Prevents AI_NoObjectGeneratedError for greetings, commands, etc.
         const queryIsSearchable = isQuerySearchable(body.userQuery);
 
-        // ✅ DEBUG: Log searchability check
-        console.error('[Pre-Search] Query searchability check:', {
-          userQuery: body.userQuery.substring(0, 100),
-          isSearchable: queryIsSearchable,
-        });
-
         if (!queryIsSearchable) {
-          // Skip AI generation entirely and use optimized fallback
-          console.error('[Pre-Search] Query not searchable, using fallback:', body.userQuery.substring(0, 50));
-
           const optimizedQuery = simpleOptimizeQuery(body.userQuery);
 
           // Create fallback with single query
@@ -368,19 +358,6 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // Get final complete result
             multiQueryResult = await queryStream.object;
 
-            // ✅ DEBUG: Log AI-generated queries
-            console.error('[Pre-Search] AI query generation SUCCESS:', {
-              totalQueries: multiQueryResult?.totalQueries,
-              analysisRationale: multiQueryResult?.analysisRationale,
-              queries: multiQueryResult?.queries?.map(q => ({
-                query: q?.query,
-                rationale: q?.rationale,
-                searchDepth: q?.searchDepth,
-                complexity: q?.complexity,
-                sourceCount: q?.sourceCount,
-              })),
-            });
-
             // ✅ FIX: Send FINAL query events with correct searchDepth values
             // During streaming, partial objects may have incomplete searchDepth (defaulted to 'basic')
             // Send corrected events with the complete data from final result
@@ -406,27 +383,15 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             // Validate generation succeeded
             if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
-              console.error('[Pre-Search] AI generation produced NO queries - triggering fallback');
               throw new Error('Query generation failed - no queries produced');
             }
-          } catch (streamingError) {
-          // ✅ FALLBACK LEVEL 1: Try non-streaming generation
-            const streamErrorMessage = streamingError instanceof Error ? streamingError.message : 'Unknown error';
-            console.error('[Pre-Search] ❌ FALLBACK LEVEL 1: Streaming generation failed, trying non-streaming approach:', streamErrorMessage);
-
+          } catch {
+          // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed silently)
             try {
-            // Try non-streaming approach
               multiQueryResult = await generateSearchQuery(body.userQuery, c.env);
-
-              // ✅ DEBUG: Log non-streaming result
-              console.error('[Pre-Search] Non-streaming query generation SUCCESS:', {
-                totalQueries: multiQueryResult?.totalQueries,
-                queries: multiQueryResult?.queries?.map(q => q?.query),
-              });
 
               // Validate generation succeeded
               if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
-                console.error('[Pre-Search] Non-streaming generation produced NO queries - triggering final fallback');
                 throw new Error('Non-streaming query generation failed - no queries produced');
               }
 
@@ -458,30 +423,9 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                   });
                 }
               }
-            } catch (nonStreamingError) {
+            } catch {
             // ✅ FALLBACK LEVEL 2: If all AI fails, use simple query optimizer
-              // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utilities instead of unsafe casting
-              const errorMessage = getErrorMessage(nonStreamingError);
-              const errorStack = getErrorStack(nonStreamingError);
-              const errorCause = getErrorCause(nonStreamingError);
-
-              // ✅ DEBUG: Log full error details to understand AI generation failure
-              console.error('[Pre-Search] ❌❌ FALLBACK LEVEL 2: All AI generation attempts FAILED, using simple query optimizer:', {
-                streamingError: streamErrorMessage,
-                nonStreamingError: errorMessage,
-                stack: errorStack,
-                cause: errorCause,
-                errorType: nonStreamingError?.constructor?.name,
-                fullError: JSON.stringify(nonStreamingError, Object.getOwnPropertyNames(nonStreamingError ?? {}), 2),
-              });
-
               const optimizedQuery = simpleOptimizeQuery(body.userQuery);
-
-              // ✅ DEBUG: Log fallback query
-              console.error('[Pre-Search] Simple optimizer fallback result:', {
-                userQuery: body.userQuery.substring(0, 100),
-                optimizedQuery,
-              });
 
               // Create fallback with single query
               multiQueryResult = {
@@ -562,17 +506,6 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           }
         }
 
-        // ✅ DEBUG: Log complexity analysis and query limiting
-        console.error('[Pre-Search] Complexity analysis:', {
-          userQuery: body.userQuery.substring(0, 100),
-          complexity: complexityResult.complexity,
-          maxQueries: complexityResult.maxQueries,
-          reasoning: complexityResult.reasoning,
-          originalQueryCount: rawTotalQueries,
-          limitedQueryCount: totalQueries,
-          queriesRemoved: rawTotalQueries - totalQueries,
-        });
-
         // ✅ STREAM: Notify frontend about complexity decision
         await stream.writeSSE({
           event: PreSearchSseEvents.START,
@@ -586,27 +519,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           }),
         });
 
-        // ✅ DEBUG: Log final query execution plan
-        console.error('[Pre-Search] Executing search queries:', {
-          totalQueries,
-          complexity: complexityResult.complexity,
-          queries: generatedQueries.map((q, idx) => ({
-            index: idx,
-            query: q?.query,
-            complexity: q?.complexity,
-            sourceCount: q?.sourceCount,
-            searchDepth: q?.searchDepth,
-          })),
-        });
-
         // ✅ MULTI-QUERY EXECUTION: Execute all queries and collect results
         const allResults: Array<{ query: GeneratedSearchQuery; result: WebSearchResult | null; duration: number }> = [];
 
         for (let queryIndex = 0; queryIndex < generatedQueries.length; queryIndex++) {
           const generatedQuery = generatedQueries[queryIndex];
-
-          // ✅ DEBUG: Log each query execution
-          console.error(`[Pre-Search] Executing query ${queryIndex + 1}/${totalQueries}:`, generatedQuery?.query);
 
           // Type guard - skip if query is undefined (shouldn't happen but TypeScript requires this)
           if (!generatedQuery) {

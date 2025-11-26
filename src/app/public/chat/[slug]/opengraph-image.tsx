@@ -23,8 +23,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
-import { MessagePartTypes } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import {
   createGradient,
   getLogoBase64,
@@ -138,10 +138,7 @@ export default async function Image({
 
     // Get first user message preview
     const firstUserMessage = messages?.find(m => m.role === 'user');
-    const firstUserText = firstUserMessage?.parts
-      .filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
-      .map(p => (p as { type: 'text'; text: string }).text)
-      .join(' ');
+    const firstUserText = extractTextFromMessage(firstUserMessage);
     const messagePreview = firstUserText
       ? truncateText(firstUserText, 120)
       : 'View this AI conversation';

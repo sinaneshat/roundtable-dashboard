@@ -42,6 +42,7 @@ import {
   FeedbackTypes,
   PreSearchStatuses,
   ScreenModes,
+  UIMessageRoles,
 } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
@@ -153,7 +154,7 @@ describe('round Regeneration Flow', () => {
 
       // Clear AI responses (keep user message)
       const messagesWithoutAI = store.getState().messages.filter(
-        m => !(m.role === 'assistant' && m.metadata?.roundNumber === 0),
+        m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 0),
       );
       store.getState().setMessages(messagesWithoutAI);
 
@@ -230,7 +231,7 @@ describe('round Regeneration Flow', () => {
 
       // Clear AI messages for round 0
       const messagesWithoutAI = store.getState().messages.filter(
-        m => !(m.role === 'assistant' && m.metadata?.roundNumber === 0),
+        m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 0),
       );
       store.getState().setMessages(messagesWithoutAI);
 
@@ -308,7 +309,7 @@ describe('round Regeneration Flow', () => {
       store.getState().startRegeneration(0);
 
       // Clear AI messages
-      const userMessage = store.getState().messages.find(m => m.role === 'user');
+      const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMessage ? [userMessage] : []);
 
       // New responses stream in
@@ -351,7 +352,7 @@ describe('round Regeneration Flow', () => {
 
       // Start regeneration
       store.getState().startRegeneration(0);
-      const userMessage = store.getState().messages.find(m => m.role === 'user');
+      const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMessage ? [userMessage] : []);
 
       // Stream responses sequentially
@@ -391,7 +392,7 @@ describe('round Regeneration Flow', () => {
       store.getState().removeAnalysis(0);
 
       // Keep user message, clear AI
-      const userMessage = store.getState().messages.find(m => m.role === 'user');
+      const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMessage ? [userMessage] : []);
 
       // Stream new response
@@ -436,7 +437,7 @@ describe('round Regeneration Flow', () => {
 
       // Clear round 1 AI messages
       const messagesWithoutR1AI = store.getState().messages.filter(
-        m => !(m.role === 'assistant' && m.metadata?.roundNumber === 1),
+        m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 1),
       );
       store.getState().setMessages(messagesWithoutR1AI);
 
@@ -496,7 +497,7 @@ describe('round Regeneration Flow', () => {
 
       // Clear only round 1 AI messages
       const messagesWithoutR1AI = store.getState().messages.filter(
-        m => !(m.role === 'assistant' && m.metadata?.roundNumber === 1),
+        m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 1),
       );
       store.getState().setMessages(messagesWithoutR1AI);
 
@@ -551,7 +552,7 @@ describe('round Regeneration Flow', () => {
       // First retry
       store.getState().startRegeneration(0);
       store.getState().removeAnalysis(0);
-      const userMessage = store.getState().messages.find(m => m.role === 'user');
+      const userMessage = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMessage ? [userMessage] : []);
 
       // Add new response
@@ -566,7 +567,7 @@ describe('round Regeneration Flow', () => {
       // Second retry
       store.getState().startRegeneration(0);
       store.getState().removeAnalysis(0);
-      const userMsg2 = store.getState().messages.find(m => m.role === 'user');
+      const userMsg2 = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg2 ? [userMsg2] : []);
 
       // Add newer response
@@ -617,7 +618,7 @@ describe('round Regeneration Flow', () => {
       // First regeneration
       store.getState().startRegeneration(0);
       store.getState().removeAnalysis(0);
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       const response1 = `Response ${Date.now()}-1`;
@@ -630,7 +631,7 @@ describe('round Regeneration Flow', () => {
 
       // Second regeneration
       store.getState().startRegeneration(0);
-      const userMsg2 = store.getState().messages.find(m => m.role === 'user');
+      const userMsg2 = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg2 ? [userMsg2] : []);
 
       const response2 = `Response ${Date.now()}-2`;
@@ -689,7 +690,7 @@ describe('round Regeneration Flow', () => {
       store.getState().startRegeneration(0);
 
       // Clear partial results
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       // Stream all participants
@@ -817,7 +818,7 @@ describe('round Regeneration Flow', () => {
       store.getState().setError(null);
       store.getState().startRegeneration(0);
 
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       // All participants attempt again
@@ -897,7 +898,7 @@ describe('round Regeneration Flow', () => {
       store.getState().startRegeneration(0);
       store.getState().removeAnalysis(0);
 
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       // New response
@@ -1046,7 +1047,7 @@ describe('round Regeneration Flow', () => {
       // Clear and regenerate
       store.getState().removeAnalysis(1);
       const messagesWithoutR1AI = store.getState().messages.filter(
-        m => !(m.role === 'assistant' && m.metadata?.roundNumber === 1),
+        m => !(m.role === UIMessageRoles.ASSISTANT && m.metadata?.roundNumber === 1),
       );
       store.getState().setMessages(messagesWithoutR1AI);
 
@@ -1076,7 +1077,7 @@ describe('round Regeneration Flow', () => {
 
       // Regenerate
       store.getState().startRegeneration(0);
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       // New message with new ID
@@ -1104,7 +1105,7 @@ describe('round Regeneration Flow', () => {
       store.getState().startRegeneration(0);
       store.getState().removeAnalysis(0);
 
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       // Create new analysis with new timestamp
@@ -1202,7 +1203,7 @@ describe('round Regeneration Flow', () => {
       store.getState().startRegeneration(0);
       store.getState().removeAnalysis(0);
 
-      const userMsg = store.getState().messages.find(m => m.role === 'user');
+      const userMsg = store.getState().messages.find(m => m.role === UIMessageRoles.USER);
       store.getState().setMessages(userMsg ? [userMsg] : []);
 
       // All models respond again
@@ -1248,7 +1249,7 @@ describe('round Regeneration Flow', () => {
       // Verify all models responded
       expect(store.getState().messages).toHaveLength(4);
 
-      const models = store.getState().messages.filter(m => m.role === 'assistant').map(m => m.metadata?.model);
+      const models = store.getState().messages.filter(m => m.role === UIMessageRoles.ASSISTANT).map(m => m.metadata?.model);
 
       expect(models).toContain('openai/gpt-4');
       expect(models).toContain('anthropic/claude-3');

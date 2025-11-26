@@ -1,4 +1,5 @@
 'use client';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
@@ -14,6 +15,7 @@ import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import { LoaderFive } from '@/components/ui/loader';
+import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
@@ -142,65 +144,91 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            {/* ✅ EAGER RENDERING: Show loading when pending with no content */}
-            {isPendingWithNoParts && (
-              <div className="py-2 text-muted-foreground text-sm">
-                <LoaderFive text={t('generating', { model: modelName })} />
-              </div>
-            )}
-            {parts.map((part, partIndex) => {
-              if (part.type === MessagePartTypes.TEXT) {
-                return (
-                  <Streamdown
-                    key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
-                    className="size-full text-foreground text-sm leading-relaxed whitespace-pre-wrap [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                  >
-                    {part.text}
-                  </Streamdown>
-                );
-              }
-              if (part.type === MessagePartTypes.REASONING) {
-                return (
-                  <Reasoning
-                    key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
-                    isStreaming={status === MessageStatuses.STREAMING}
-                    className="w-full"
-                  >
-                    <ReasoningTrigger />
-                    <ReasoningContent>{part.text}</ReasoningContent>
-                  </Reasoning>
-                );
-              }
-              if (part.type === MessagePartTypes.TOOL_CALL) {
-                return (
-                  <ToolCallPart
-                    key={messageId ? `${messageId}-tool-call-${partIndex}` : `tool-call-${partIndex}`}
-                    part={part}
-                    className="my-2"
-                  />
-                );
-              }
-              if (part.type === MessagePartTypes.TOOL_RESULT) {
-                return (
-                  <ToolResultPart
-                    key={messageId ? `${messageId}-tool-result-${partIndex}` : `tool-result-${partIndex}`}
-                    part={part}
-                    className="my-2"
-                  />
-                );
-              }
-              // ✅ TYPE-SAFE: Use Zod-validated type guard from custom-data-part
-              if (isDataPart(part)) {
-                return (
-                  <CustomDataPart
-                    key={messageId ? `${messageId}-data-${partIndex}` : `data-${partIndex}`}
-                    part={part}
-                    className="my-2"
-                  />
-                );
-              }
-              return null;
-            })}
+            {/* ✅ SMOOTH TRANSITION: AnimatePresence prevents flash between loader and content */}
+            <AnimatePresence mode="wait" initial={false}>
+              {isPendingWithNoParts
+                ? (
+                    <motion.div
+                      key="loader"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{
+                        duration: ANIMATION_DURATION.fast,
+                        ease: ANIMATION_EASE.standard,
+                      }}
+                      className="py-2 text-muted-foreground text-sm"
+                    >
+                      <LoaderFive text={t('generating', { model: modelName })} />
+                    </motion.div>
+                  )
+                : parts.length > 0
+                  ? (
+                      <motion.div
+                        key="content"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{
+                          duration: ANIMATION_DURATION.normal,
+                          ease: ANIMATION_EASE.enter,
+                        }}
+                      >
+                        {parts.map((part, partIndex) => {
+                          if (part.type === MessagePartTypes.TEXT) {
+                            return (
+                              <Streamdown
+                                key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
+                                className="size-full text-foreground text-sm leading-relaxed whitespace-pre-wrap [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                              >
+                                {part.text}
+                              </Streamdown>
+                            );
+                          }
+                          if (part.type === MessagePartTypes.REASONING) {
+                            return (
+                              <Reasoning
+                                key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
+                                isStreaming={status === MessageStatuses.STREAMING}
+                                className="w-full"
+                              >
+                                <ReasoningTrigger />
+                                <ReasoningContent>{part.text}</ReasoningContent>
+                              </Reasoning>
+                            );
+                          }
+                          if (part.type === MessagePartTypes.TOOL_CALL) {
+                            return (
+                              <ToolCallPart
+                                key={messageId ? `${messageId}-tool-call-${partIndex}` : `tool-call-${partIndex}`}
+                                part={part}
+                                className="my-2"
+                              />
+                            );
+                          }
+                          if (part.type === MessagePartTypes.TOOL_RESULT) {
+                            return (
+                              <ToolResultPart
+                                key={messageId ? `${messageId}-tool-result-${partIndex}` : `tool-result-${partIndex}`}
+                                part={part}
+                                className="my-2"
+                              />
+                            );
+                          }
+                          if (isDataPart(part)) {
+                            return (
+                              <CustomDataPart
+                                key={messageId ? `${messageId}-data-${partIndex}` : `data-${partIndex}`}
+                                part={part}
+                                className="my-2"
+                              />
+                            );
+                          }
+                          return null;
+                        })}
+                      </motion.div>
+                    )
+                  : null}
+            </AnimatePresence>
           </>
         </MessageContent>
         {!hideAvatar && <MessageAvatar src={avatarSrc} name={avatarName} />}

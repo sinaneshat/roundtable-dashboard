@@ -109,6 +109,7 @@ import {
   STREAM_RESUMPTION_DEFAULTS,
   STREAMING_STATE_RESET,
   THREAD_DEFAULTS,
+  THREAD_NAVIGATION_RESET_STATE,
   THREAD_RESET_STATE,
   TRACKING_DEFAULTS,
   UI_DEFAULTS,
@@ -414,15 +415,18 @@ const createAnalysisSlice: StateCreator<
       return;
     }
 
-    // ✅ VALIDATION: Check if message IDs match their metadata (warning only)
-    // Logs mismatches but doesn't block analysis creation
+    // ✅ VALIDATION: Check if message IDs match their metadata
+    // Only flag messages that have deterministic IDs (contain _r{N}_p{M}) but wrong values
+    // Skip temp IDs (like AI SDK's gen-xxxxx) - these will be updated with real IDs
     // Metadata is the source of truth, not message IDs
     const messageIdMismatches = participantMessages.filter((msg) => {
       // Extract round number from message ID pattern: {threadId}_r{roundNumber}_p{participantIndex}
       const idMatch = msg.id.match(/_r(\d+)_p(\d+)/);
       if (!idMatch) {
-        // Message ID doesn't follow expected pattern
-        return true; // This is a mismatch
+        // Message ID doesn't follow expected pattern (likely temp ID from AI SDK)
+        // This is NOT a mismatch - temp IDs are expected during streaming
+        // The real ID will be synced when streaming completes
+        return false; // Skip temp IDs, they're fine
       }
 
       const roundFromId = Number.parseInt(idMatch[1]!);
@@ -433,11 +437,13 @@ const createAnalysisSlice: StateCreator<
       const msgParticipantIndex = getParticipantIndex(msg.metadata);
 
       // Check if round and participant index match
+      // This catches bugs where deterministic IDs have wrong values
       return roundFromId !== msgRound || participantIndexFromId !== msgParticipantIndex;
     });
 
-    // ✅ REJECT ANALYSIS: Block analysis creation if message ID/metadata mismatch detected
+    // ✅ REJECT ANALYSIS: Block analysis creation if deterministic ID/metadata mismatch detected
     // This prevents bugs where backend generates duplicate IDs or incorrect round numbers
+    // Note: Temp IDs are allowed (filtered out above) - only deterministic ID mismatches block
     if (messageIdMismatches.length > 0) {
       console.error('[createPendingAnalysis] Message ID/metadata mismatch detected - rejecting analysis', {
         roundNumber,
@@ -447,7 +453,7 @@ const createAnalysisSlice: StateCreator<
           metadata: msg.metadata,
         })),
       });
-      // ✅ RETURN EARLY - Do not create analysis when IDs don't match metadata
+      // ✅ RETURN EARLY - Do not create analysis when deterministic IDs don't match metadata
       return;
     }
 
@@ -880,6 +886,8 @@ const createTrackingSlice: StateCreator<
       newSet.delete(roundNumber);
       return { triggeredPreSearchRounds: newSet };
     }, false, 'tracking/clearPreSearchTracking'),
+  setHasEarlyOptimisticMessage: (value: boolean) =>
+    set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
 });
 
 /**
@@ -1114,10 +1122,33 @@ const createAnimationSlice: StateCreator<
       return Promise.resolve();
     }
 
-    // Wait for all pending animations in parallel
-    await Promise.all(
-      pendingIndices.map(index => state.waitForAnimation(index)),
-    );
+    // ✅ CRITICAL FIX: Add timeout to prevent indefinite blocking
+    // If animations don't complete within 5 seconds, force-clear them and continue
+    // This prevents analysis creation from being blocked forever by stuck animations
+    const ANIMATION_TIMEOUT_MS = 5000;
+
+    const animationPromises = pendingIndices.map(index => state.waitForAnimation(index));
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        console.error('[waitForAllAnimations] Timeout - forcing animation completion', {
+          pendingIndices,
+          timeoutMs: ANIMATION_TIMEOUT_MS,
+        });
+        // Force-clear all pending animations
+        set({
+          pendingAnimations: new Set<number>(),
+          animationResolvers: new Map<number, () => void>(),
+        }, false, 'animation/waitForAllAnimations-timeout');
+        resolve();
+      }, ANIMATION_TIMEOUT_MS);
+    });
+
+    // Race between animation completion and timeout
+    await Promise.race([
+      Promise.all(animationPromises),
+      timeoutPromise,
+    ]);
   },
 
   clearAnimations: () =>
@@ -1139,7 +1170,55 @@ const createOperationsSlice: StateCreator<
   resetThreadState: () =>
     set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
 
-  resetToOverview: () =>
+  /**
+   * ✅ CRITICAL FIX: Reset for thread-to-thread navigation
+   *
+   * Called when navigating BETWEEN threads (e.g., /chat/thread-1 → /chat/thread-2)
+   * Unlike resetThreadState which only clears flags, this ALSO clears:
+   * - thread, participants, messages (previous thread data)
+   * - analyses, preSearches (previous thread content)
+   * - createdThreadId (prevents confusion with new thread)
+   *
+   * This prevents the critical bug where stale messages/participants from
+   * a previous thread leak into a new thread, causing participant ID mismatches.
+   *
+   * @see THREAD_NAVIGATION_RESET_STATE in store-defaults.ts
+   */
+  resetForThreadNavigation: () => {
+    const state = get();
+
+    // ✅ CRITICAL: Stop any ongoing streams BEFORE resetting state
+    state.stop?.();
+
+    // ✅ CRITICAL: Clear AI SDK hook's internal messages via chatSetMessages
+    // Without this, the AI SDK hook retains old messages that get synced back to store
+    // This is the root cause of the state leakage bug
+    state.chatSetMessages?.([]);
+
+    // Apply the navigation reset state
+    set({
+      ...THREAD_NAVIGATION_RESET_STATE,
+      // Create fresh Set instances
+      createdAnalysisRounds: new Set<number>(),
+      triggeredPreSearchRounds: new Set<number>(),
+      resumptionAttempts: new Set<string>(),
+      pendingAnimations: new Set<number>(),
+      animationResolvers: new Map(),
+      preSearchActivityTimes: new Map<number, number>(),
+    }, false, 'operations/resetForThreadNavigation');
+  },
+
+  resetToOverview: () => {
+    const state = get();
+
+    // ✅ CRITICAL: Stop any ongoing streams BEFORE resetting state
+    state.stop?.();
+
+    // ✅ CRITICAL FIX: Clear AI SDK hook's internal messages via chatSetMessages
+    // Without this, the AI SDK hook retains old messages that get synced back to store
+    // after resetToOverview clears store.messages to [], causing state leakage
+    state.chatSetMessages?.([]);
+
     set({
       ...COMPLETE_RESET_STATE,
       // ✅ CRITICAL FIX: Set screenMode to 'overview' instead of null
@@ -1149,10 +1228,53 @@ const createOperationsSlice: StateCreator<
       // ✅ Create fresh Set instances (same as resetToNewChat)
       createdAnalysisRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
-    }, false, 'operations/resetToOverview'),
+    }, false, 'operations/resetToOverview');
+  },
 
   initializeThread: (thread: ChatThread, participants: ChatParticipant[], initialMessages?: UIMessage[]) => {
-    const messagesToSet = initialMessages || [];
+    const currentState = get();
+
+    // ✅ CRITICAL FIX: Preserve existing messages during navigation
+    // When navigating from overview to thread screen after round 0 completes:
+    // 1. Overview screen has live messages from streaming session in store
+    // 2. Thread screen receives SSR initialMessages (potentially stale)
+    // 3. We must NOT overwrite live messages with stale SSR data
+    //
+    // RULES:
+    // - If store has messages for the SAME thread, preserve them if they're more complete
+    // - "More complete" means more messages OR higher max round number
+    // - If different thread or empty store, use initialMessages
+    //
+    // BUG FIX: Previously unconditionally set messages = initialMessages,
+    // which caused round 0 data to be lost when navigating from overview to thread
+    const isSameThread = currentState.thread?.id === thread.id || currentState.createdThreadId === thread.id;
+    const storeMessages = currentState.messages;
+    const newMessages = initialMessages || [];
+
+    let messagesToSet: UIMessage[];
+
+    if (isSameThread && storeMessages.length > 0) {
+      // Same thread - compare completeness
+      const storeMaxRound = storeMessages.reduce((max, m) => {
+        const round = (m.metadata as { roundNumber?: number } | undefined)?.roundNumber ?? 0;
+        return Math.max(max, round);
+      }, 0);
+
+      const newMaxRound = newMessages.reduce((max, m) => {
+        const round = (m.metadata as { roundNumber?: number } | undefined)?.roundNumber ?? 0;
+        return Math.max(max, round);
+      }, 0);
+
+      // Preserve store messages if they have more rounds OR more messages in same round
+      if (storeMaxRound > newMaxRound || (storeMaxRound === newMaxRound && storeMessages.length >= newMessages.length)) {
+        messagesToSet = storeMessages;
+      } else {
+        messagesToSet = newMessages;
+      }
+    } else {
+      // Different thread or empty store - use new messages
+      messagesToSet = newMessages;
+    }
 
     // ✅ UNIFIED PATTERN: Pre-search data is fetched by PreSearchCard component
     // Components use TanStack Query to fetch completed pre-search from DB
@@ -1195,8 +1317,17 @@ const createOperationsSlice: StateCreator<
       //   4. Real messages replace optimistic message
       const isOnThreadScreen = state.screenMode === ScreenModes.THREAD;
 
-      // Only create optimistic message for THREAD screen (subsequent rounds, not initial thread creation)
-      const optimisticUserMessage: UIMessage | null = isOnThreadScreen
+      // ✅ IMMEDIATE UI FEEDBACK FIX: Use explicit flag instead of heuristic detection
+      // handleUpdateThreadAndSend sets this flag when it adds an early optimistic message
+      // This prevents duplicate messages and is reliable across multiple rounds
+      //
+      // Previous heuristic using `streamingRoundNumber === nextRoundNumber - 1` was buggy
+      // because streamingRoundNumber persists from previous rounds if not cleared,
+      // causing false positives in subsequent rounds.
+      const hasExistingOptimisticMessage = state.hasEarlyOptimisticMessage;
+
+      // Only create optimistic message for THREAD screen AND if one doesn't already exist
+      const optimisticUserMessage: UIMessage | null = isOnThreadScreen && !hasExistingOptimisticMessage
         ? {
             id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
             role: MessageRoles.USER,
@@ -1208,6 +1339,16 @@ const createOperationsSlice: StateCreator<
             },
           }
         : null;
+
+      // ✅ IMMEDIATE UI FEEDBACK FIX: Preserve streamingRoundNumber if optimistic message exists
+      // When handleUpdateThreadAndSend adds an early optimistic message, it also sets streamingRoundNumber.
+      // We should preserve that value rather than recalculating (which would be wrong due to the
+      // optimistic message affecting calculateNextRoundNumber).
+      //
+      // If no optimistic message exists, calculate normally based on screen mode.
+      const preserveStreamingRoundNumber = hasExistingOptimisticMessage
+        ? state.streamingRoundNumber // Preserve the early-set value
+        : (isOnThreadScreen ? nextRoundNumber : null);
 
       return {
         // ✅ TYPE-SAFE: Use reset groups to ensure ALL flags are cleared
@@ -1224,12 +1365,14 @@ const createOperationsSlice: StateCreator<
           : state.expectedParticipantIds,
         hasSentPendingMessage: false,
         // ✅ FIX: Only add optimistic user message for subsequent rounds on THREAD screen
-        // For OVERVIEW screen (thread creation), backend handles the user message
+        // AND only if one doesn't already exist (prevents duplicates from early UI feedback)
         messages: optimisticUserMessage
           ? [...state.messages, optimisticUserMessage]
           : state.messages,
-        // Track the round number for the pending message (only for subsequent rounds)
-        streamingRoundNumber: isOnThreadScreen ? nextRoundNumber : null,
+        // ✅ FIX: Preserve streamingRoundNumber if already set (for immediate accordion collapse)
+        streamingRoundNumber: preserveStreamingRoundNumber,
+        // ✅ IMMEDIATE UI FEEDBACK: Clear flag after using it (ready for next round)
+        hasEarlyOptimisticMessage: false,
       };
     }, false, 'operations/prepareForNewMessage'),
 
@@ -1241,6 +1384,11 @@ const createOperationsSlice: StateCreator<
       ...ANALYSIS_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
+      // ✅ CRITICAL FIX: Also clear animation state to prevent waitForAllAnimations from blocking
+      // If animations are stuck pending when streaming completes, the next round's analysis
+      // creation would hang forever waiting for animations that will never complete
+      pendingAnimations: new Set<number>(),
+      animationResolvers: new Map<number, () => void>(),
     }, false, 'operations/completeStreaming'),
 
   startRegeneration: (roundNumber: number) => {
@@ -1279,6 +1427,7 @@ const createOperationsSlice: StateCreator<
    *
    * Ensures complete cleanup:
    * - Cancels ongoing streams
+   * - Clears AI SDK hook messages
    * - Resets all state to defaults
    * - Clears tracking Sets
    * - Aborts pending operations
@@ -1288,6 +1437,10 @@ const createOperationsSlice: StateCreator<
 
     // ✅ CRITICAL: Stop any ongoing streams first
     state.stop?.();
+
+    // ✅ CRITICAL FIX: Clear AI SDK hook's internal messages via chatSetMessages
+    // Without this, the AI SDK hook retains old messages that get synced back to store
+    state.chatSetMessages?.([]);
 
     // ✅ RESET: Apply complete reset state
     set({

@@ -24,21 +24,35 @@ interface ValidationResult {
   };
 }
 
+/**
+ * Type-safe JSON value representation for translation files.
+ * Follows the established pattern of explicit typing over `any`.
+ */
+type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
+type JsonObject = { [key: string]: JsonValue };
+type JsonArray = JsonValue[];
+
+/** Type guard to check if a JSON value is a JsonObject (nested object) */
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const TRANSLATION_FILE = path.join(process.cwd(), 'src/i18n/locales/en/common.json');
 
-function flattenObject(obj: any, prefix = ''): Record<string, any> {
-  const result: Record<string, any> = {};
-  
+function flattenObject(obj: JsonObject, prefix = ''): Record<string, JsonValue> {
+  const result: Record<string, JsonValue> = {};
+
   for (const key in obj) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
-    
-    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-      Object.assign(result, flattenObject(obj[key], fullKey));
+    const value = obj[key];
+
+    if (isJsonObject(value)) {
+      Object.assign(result, flattenObject(value, fullKey));
     } else {
-      result[fullKey] = obj[key];
+      result[fullKey] = value;
     }
   }
-  
+
   return result;
 }
 

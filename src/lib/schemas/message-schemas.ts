@@ -15,7 +15,7 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { MESSAGE_PART_TYPES, MESSAGE_STATUSES, MessageStatusSchema } from '@/api/core/enums';
+import { MESSAGE_PART_TYPES, MESSAGE_STATUSES, MessagePartTypes, MessageStatusSchema } from '@/api/core/enums';
 
 // ============================================================================
 // MESSAGE PART SCHEMAS
@@ -207,7 +207,7 @@ export function isMessageStatus(value: unknown): value is MessageStatus {
  */
 export function extractTextFromParts(parts: MessagePart[]): string {
   return parts
-    .filter((part): part is Extract<MessagePart, { type: 'text' }> => part.type === 'text')
+    .filter((part): part is Extract<MessagePart, { type: 'text' }> => part.type === MessagePartTypes.TEXT)
     .map(part => part.text)
     .join(' ');
 }
@@ -265,7 +265,7 @@ export function extractTextFromMessage(
  */
 export function extractReasoningFromParts(parts: MessagePart[]): string {
   return parts
-    .filter((part): part is Extract<MessagePart, { type: 'reasoning' }> => part.type === 'reasoning')
+    .filter((part): part is Extract<MessagePart, { type: 'reasoning' }> => part.type === MessagePartTypes.REASONING)
     .map(part => part.text)
     .join(' ');
 }
@@ -292,7 +292,7 @@ export function extractReasoningFromParts(parts: MessagePart[]): string {
 export function extractAllTextFromParts(parts: MessagePart[]): string {
   return parts
     .filter((part): part is Extract<MessagePart, { type: 'text' | 'reasoning' }> =>
-      part.type === 'text' || part.type === 'reasoning')
+      part.type === MessagePartTypes.TEXT || part.type === MessagePartTypes.REASONING)
     .map(part => part.text)
     .join(' ');
 }
@@ -374,7 +374,7 @@ export function getPartsByType<T extends MessagePart['type']>(
  * @see extractReasoningFromParts - Extract reasoning content if present
  */
 export function hasReasoning(parts: MessagePart[]): boolean {
-  return parts.some(part => part.type === 'reasoning');
+  return parts.some(part => part.type === MessagePartTypes.REASONING);
 }
 
 /**
@@ -392,7 +392,7 @@ export function hasReasoning(parts: MessagePart[]): boolean {
  * }
  */
 export function hasText(parts: MessagePart[]): boolean {
-  return parts.some(part => part.type === 'text');
+  return parts.some(part => part.type === MessagePartTypes.TEXT);
 }
 
 /**
@@ -632,7 +632,7 @@ export function convertUIMessagesToText(
   parts: TextOrReasoningPart[],
 ): string {
   return parts
-    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .filter((part): part is { type: 'text'; text: string } => part.type === MessagePartTypes.TEXT)
     .map(part => part.text)
     .join(' ');
 }
