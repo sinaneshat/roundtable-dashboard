@@ -29,6 +29,7 @@ import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
 import type { ScreenMode } from '@/api/core/enums';
+import { ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -224,6 +225,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
   useIncompleteRoundResumption({
     threadId: thread?.id || '',
-    enabled: mode === 'thread' && Boolean(thread?.id) && !isStreaming && enableOrchestrator,
+    enabled: mode === ScreenModes.THREAD && Boolean(thread?.id) && !isStreaming && enableOrchestrator,
   });
 }

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
+import type { UsageStatsPayload } from '@/api/routes/usage/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
@@ -71,6 +72,7 @@ export const ChatInput = memo(({
   const { data: statsData } = useUsageStatsQuery();
   const isQuotaExceeded = useMemo(() => {
     // Type guard: ensure statsData has the expected shape
+    // Uses API response structure: { success: true, data: UsageStatsPayload }
     if (
       !quotaCheckType
       || !statsData
@@ -83,10 +85,8 @@ export const ChatInput = memo(({
       return false;
     }
 
-    const data = statsData.data as {
-      threads: { remaining: number };
-      messages: { remaining: number };
-    };
+    // Type-safe access: statsData.data is UsageStatsPayload after narrowing
+    const data = statsData.data as UsageStatsPayload;
 
     if (quotaCheckType === 'threads') {
       return data.threads.remaining === 0;
