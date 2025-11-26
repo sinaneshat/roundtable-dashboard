@@ -8,6 +8,7 @@ import { ConfidenceWeightings, DebatePhases } from '@/api/core/enums';
 import type { ConsensusEvolution, ContributorPerspective } from '@/api/routes/chat/schema';
 import { ModelBadge } from '@/components/chat/model-badge';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
@@ -183,21 +184,25 @@ export function RoundOutcomeHeader({
 
       {/* Contributors */}
       {contributors && contributors.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {contributors.map(contributor => (
-            <ModelBadge
-              key={contributor.participantIndex}
-              modelId={contributor.modelId}
-              role={contributor.role}
-              size="sm"
-            />
-          ))}
-        </div>
+        <ScrollArea className="w-full whitespace-nowrap">
+          <div className="flex w-max items-center gap-3 p-4">
+            {contributors.map(contributor => (
+              <ModelBadge
+                key={contributor.participantIndex}
+                modelId={contributor.modelId}
+                role={contributor.role}
+                size="sm"
+                className="shrink-0"
+              />
+            ))}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       )}
 
       {/* Consensus Evolution Timeline */}
       {consensusEvolution && consensusEvolution.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-medium">{t('consensusEvolution.title')}</h4>
             <span className="text-xs text-muted-foreground">
@@ -205,39 +210,50 @@ export function RoundOutcomeHeader({
             </span>
           </div>
 
-          <div className="relative">
-            {/* Timeline Line */}
-            <div className="absolute top-4 left-0 right-0 h-0.5 bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500" />
+          {/* Centered Timeline */}
+          <div className="flex justify-center py-4 px-2">
+            <div className="relative px-6">
+              {/* Timeline Line */}
+              <div className="absolute top-6 left-10 right-10 h-px bg-gradient-to-r from-amber-600/60 via-amber-500/80 to-emerald-500" />
 
-            {/* Timeline Points */}
-            <div className="relative flex justify-between">
-              {consensusEvolution.map((phase) => {
-                const percentage = phase.percentage;
+              {/* Timeline Points */}
+              <div className="relative flex gap-10 sm:gap-12">
+                {consensusEvolution.map((phase, index) => {
+                  const percentage = phase.percentage;
+                  const isLast = index === consensusEvolution.length - 1;
 
-                return (
-                  <div
-                    key={phase.phase}
-                    className="flex flex-col items-center"
-                    style={{ width: `${100 / consensusEvolution.length}%` }}
-                  >
-                    {/* Percentage Circle */}
+                  return (
                     <div
-                      className={cn(
-                        'flex size-8 items-center justify-center rounded-full border-2 bg-background text-xs font-bold',
-                        getConfidenceColor(percentage),
-                      )}
+                      key={phase.phase}
+                      className="flex flex-col items-center"
                     >
-                      {percentage}
-                      %
-                    </div>
+                      {/* Percentage Circle */}
+                      <div
+                        className={cn(
+                          'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-background',
+                          isLast
+                            ? 'border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/30'
+                            : percentage >= 70
+                              ? 'border-emerald-500/60 text-emerald-400'
+                              : percentage >= 50
+                                ? 'border-amber-500/60 text-amber-400'
+                                : 'border-red-500/60 text-red-400',
+                        )}
+                      >
+                        <span className="text-sm font-bold tabular-nums">
+                          {percentage}
+                          %
+                        </span>
+                      </div>
 
-                    {/* Phase Label */}
-                    <span className="mt-2 text-xs text-muted-foreground text-center">
-                      {phase.label || getPhaseLabel(phase.phase, t)}
-                    </span>
-                  </div>
-                );
-              })}
+                      {/* Phase Label */}
+                      <span className="mt-3 text-xs text-muted-foreground text-center leading-tight max-w-16">
+                        {phase.label || getPhaseLabel(phase.phase, t)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
