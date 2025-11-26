@@ -13,7 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
 import {
@@ -142,6 +142,9 @@ describe('reset Functions Completeness', () => {
 
       // Streaming flags - ALL must be cleared
       expect(state.isStreaming).toBe(false);
+      // ✅ FIX: prepareForNewMessage only adds optimistic message on THREAD screen
+      // setAllStreamingFlags() doesn't set screenMode to THREAD, so no optimistic message is added
+      // and streamingRoundNumber remains null
       expect(state.streamingRoundNumber).toBe(null);
       expect(state.currentRoundNumber).toBe(null);
       expect(state.waitingToStartStreaming).toBe(false);
@@ -160,6 +163,10 @@ describe('reset Functions Completeness', () => {
       expect(state.expectedParticipantIds).toEqual(['model-new']);
       expect(state.hasSentPendingMessage).toBe(false);
 
+      // ✅ FIX: prepareForNewMessage only adds optimistic message on THREAD screen
+      // setAllStreamingFlags() doesn't set screenMode to THREAD, so messages unchanged (2 from initial setup)
+      expect(state.messages).toHaveLength(2);
+
       // Tracking - should NOT be cleared
       expect(state.hasAnalysisBeenCreated(0)).toBe(true);
       expect(state.hasAnalysisBeenCreated(1)).toBe(true);
@@ -174,6 +181,123 @@ describe('reset Functions Completeness', () => {
       // Should preserve existing expectedParticipantIds
       const state = store.getState();
       expect(state.expectedParticipantIds).toEqual(['p1', 'p2']);
+    });
+
+    // ============================================================================
+    // ✅ CRITICAL BUG PREVENTION: Screen mode determines optimistic message behavior
+    // These tests prevent duplicate user messages in UI (BUG: mid-conversation-web-search)
+    // ============================================================================
+
+    it('should NOT add optimistic user message on OVERVIEW screen (thread creation)', () => {
+      // Setup: Initialize with round 0 messages on OVERVIEW screen
+      const thread = createMockThread({ id: 'thread-overview' });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0, 'Initial question'),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.OVERVIEW); // OVERVIEW screen!
+
+      const messagesBefore = store.getState().messages.length;
+
+      // Action: Call prepareForNewMessage on OVERVIEW screen
+      store.getState().prepareForNewMessage('Follow up question', ['model-0']);
+
+      const state = store.getState();
+
+      // ✅ CRITICAL: No optimistic message should be added on OVERVIEW screen
+      // Backend handles user message creation for thread creation
+      expect(state.messages).toHaveLength(messagesBefore); // Messages unchanged
+      expect(state.streamingRoundNumber).toBe(null); // Not tracking round
+      expect(state.pendingMessage).toBe('Follow up question'); // Message prepared
+    });
+
+    it('should ADD optimistic user message on THREAD screen (subsequent messages)', () => {
+      // Setup: Initialize with round 0 messages on THREAD screen
+      const thread = createMockThread({ id: 'thread-detail' });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0, 'Initial question'),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD); // THREAD screen!
+
+      const messagesBefore = store.getState().messages.length;
+
+      // Action: Call prepareForNewMessage on THREAD screen
+      store.getState().prepareForNewMessage('Follow up question', ['model-0']);
+
+      const state = store.getState();
+
+      // ✅ CRITICAL: Optimistic message SHOULD be added on THREAD screen
+      // For instant UI feedback before pre-search completes
+      expect(state.messages).toHaveLength(messagesBefore + 1); // One optimistic message added
+      expect(state.streamingRoundNumber).toBe(1); // Tracking round 1
+
+      // Verify the optimistic message has correct structure
+      const optimisticMessage = state.messages[state.messages.length - 1];
+      expect(optimisticMessage.role).toBe('user');
+      expect(optimisticMessage.id).toContain('optimistic-user-');
+      expect((optimisticMessage.metadata as { isOptimistic?: boolean }).isOptimistic).toBe(true);
+      expect((optimisticMessage.metadata as { roundNumber?: number }).roundNumber).toBe(1);
+    });
+
+    it('should use correct round number for optimistic message', () => {
+      // Setup: Initialize with round 0 AND round 1 messages
+      const thread = createMockThread({ id: 'thread-multi-round' });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0, 'Question 1'),
+        createMockMessage(0, 0),
+        createMockUserMessage(1, 'Question 2'),
+        createMockMessage(0, 1),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Action: Prepare message for round 2
+      store.getState().prepareForNewMessage('Question 3', ['model-0']);
+
+      const state = store.getState();
+      const optimisticMessage = state.messages[state.messages.length - 1];
+
+      // ✅ CRITICAL: Round number should be calculated correctly (2, not 0 or 1)
+      expect(state.streamingRoundNumber).toBe(2);
+      expect((optimisticMessage.metadata as { roundNumber?: number }).roundNumber).toBe(2);
+    });
+
+    it('should NOT create duplicate messages when switching from OVERVIEW to THREAD', () => {
+      // Setup: Start on OVERVIEW, then switch to THREAD
+      const thread = createMockThread({ id: 'thread-switch' });
+      const participants = [createMockParticipant(0)];
+
+      // Initialize on OVERVIEW (simulates thread creation)
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0, 'Initial question'),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+      // First prepareForNewMessage on OVERVIEW (should NOT add message)
+      store.getState().prepareForNewMessage('Message A', ['model-0']);
+      const messagesAfterOverview = store.getState().messages.length;
+
+      // Clear pending state (simulates message sent)
+      store.getState().setPendingMessage(null);
+
+      // Switch to THREAD screen
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Second prepareForNewMessage on THREAD (SHOULD add message)
+      store.getState().prepareForNewMessage('Message B', ['model-0']);
+      const messagesAfterThread = store.getState().messages.length;
+
+      // ✅ CRITICAL: Only ONE new message should be added (for THREAD screen)
+      // OVERVIEW call: +0 messages
+      // THREAD call: +1 message
+      expect(messagesAfterThread).toBe(messagesAfterOverview + 1);
     });
   });
 

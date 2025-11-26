@@ -88,11 +88,18 @@ type AnimatedStreamingItemProps = {
   index?: number;
   /** Base delay before animation starts */
   delay?: number;
+  /** Stagger delay multiplier per item (default: 0.04 = 40ms) */
+  staggerDelay?: number;
 };
 
 /**
  * Individual item in a streaming list with enter/exit animations.
  * Uses layout prop for smooth height transitions when siblings change.
+ *
+ * Animation timing ensures top-to-bottom ordering:
+ * - Each item's delay = baseDelay + (index * staggerDelay)
+ * - Default stagger: 40ms per item for responsive streaming feel
+ * - Items appear sequentially from top to bottom
  */
 export function AnimatedStreamingItem({
   children,
@@ -100,7 +107,10 @@ export function AnimatedStreamingItem({
   itemKey,
   index = 0,
   delay = 0,
+  staggerDelay = 0.04,
 }: AnimatedStreamingItemProps) {
+  const itemDelay = delay + (index * staggerDelay);
+
   return (
     <motion.div
       key={itemKey}
@@ -112,8 +122,8 @@ export function AnimatedStreamingItem({
         opacity: 1,
         y: 0,
         transition: {
-          opacity: { duration: ANIMATION_DURATION.normal, delay: delay + (index * 0.05) },
-          y: { duration: ANIMATION_DURATION.normal, delay: delay + (index * 0.05) },
+          opacity: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
+          y: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
         }
       }}
       exit={{

@@ -1132,7 +1132,8 @@ describe('complete Chat Journey Integration', () => {
     expect(shouldWait).toBe(false);
 
     // Send user message
-    store.getState().setMessages(prev => [...prev, createMockUserMessage(1, 'Second question')]);
+    // ✅ FIX: prepareForNewMessage now adds optimistic user message, no need for manual setMessages
+    // The optimistic message was already added by prepareForNewMessage('Second question', ...)
     store.getState().setHasSentPendingMessage(true);
     store.getState().setIsStreaming(true);
     store.getState().setCurrentParticipantIndex(0);

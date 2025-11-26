@@ -113,6 +113,7 @@ export default function ChatOverviewScreen() {
   // Analysis actions
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
   const updateAnalysisStatus = useChatStore(s => s.updateAnalysisStatus);
+  const updateAnalysisError = useChatStore(s => s.updateAnalysisError);
 
   // ============================================================================
   // STORE ACTIONS (Grouped with useShallow for Performance)
@@ -471,7 +472,7 @@ export default function ChatOverviewScreen() {
   }, [showInitialUI]);
 
   // Scroll management for window-level scrolling
-  // bottomOffset accounts for: sticky input (pt-4 + ~80px input) + bottom margin (16px)
+  // bottomOffset accounts for: sticky input (pt-10 + ~80px input) + shadow gradient (h-8) + bottom margin (16px)
   // ✅ FIX: Pass preSearches for auto-scroll during pre-search object generation
   useChatScroll({
     messages,
@@ -480,7 +481,7 @@ export default function ChatOverviewScreen() {
     scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
     currentParticipantIndex,
-    bottomOffset: 120,
+    bottomOffset: 180,
     preSearches,
   });
 
@@ -491,244 +492,114 @@ export default function ChatOverviewScreen() {
   const keyboardOffset = useVisualViewportPosition();
 
   return (
-    <UnifiedErrorBoundary context="chat">
-      <div className={`flex flex-col relative flex-1 ${showInitialUI ? 'min-h-full' : 'min-h-full pt-14'}`}>
-        {/* Radial glow - fixed positioning, doesn't affect layout */}
-        <AnimatePresence mode="wait">
-          {showInitialUI && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-              className="fixed inset-0 pointer-events-none overflow-hidden"
-              style={{ zIndex: 0, willChange: 'opacity' }}
-            >
-              {/* Position behind logo, right of center at top */}
-              <div
-                className="absolute"
-                style={{
-                  top: '-100px',
-                  left: '63%',
-                  transform: 'translateX(-50%)',
-                  willChange: 'transform',
-                }}
+    <>
+      <UnifiedErrorBoundary context="chat">
+        <div className="flex flex-col relative flex-1 min-h-full">
+          {/* Radial glow - fixed positioning, doesn't affect layout */}
+          <AnimatePresence mode="wait">
+            {showInitialUI && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className="fixed inset-0 pointer-events-none overflow-hidden"
+                style={{ zIndex: 0, willChange: 'opacity' }}
               >
-                <RadialGlow
-                  size={500}
-                  offsetY={0}
-                  duration={18}
-                  animate={true}
-                  useLogoColors={true}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Initial UI - standard layout without scroll wrapper */}
-        {showInitialUI && (
-          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative z-10 !flex !flex-col !items-center pt-6 sm:pt-8">
-            <motion.div
-              key="initial-ui"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.4, ease: 'easeOut' }}
-              className="w-full"
-            >
-              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
-
-                <motion.div
-                  className="relative h-20 w-20 sm:h-24 sm:w-24 z-10"
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                  transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                {/* Position behind logo, right of center at top */}
+                <div
+                  className="absolute"
+                  style={{
+                    top: '-100px',
+                    left: '63%',
+                    transform: 'translateX(-50%)',
+                    willChange: 'transform',
+                  }}
                 >
-                  <Image
-                    src={BRAND.logos.main}
-                    alt={BRAND.name}
-                    className="w-full h-full object-contain relative z-10"
-                    width={96}
-                    height={96}
-                    priority
+                  <RadialGlow
+                    size={500}
+                    offsetY={0}
+                    duration={18}
+                    animate={true}
+                    useLogoColors={true}
                   />
-                </motion.div>
-
-                <div className="flex flex-col items-center gap-1.5">
-                  <motion.h1
-                    className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -30 }}
-                    transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
-                  >
-                    {BRAND.name}
-                  </motion.h1>
-
-                  <motion.p
-                    className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -30 }}
-                    transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
-                  >
-                    {BRAND.tagline}
-                  </motion.p>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                <motion.div
-                  className="w-full mt-6 sm:mt-8"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
-                >
-                  <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
-                </motion.div>
-              </div>
-            </motion.div>
+          {/* Initial UI - standard layout without scroll wrapper */}
+          {showInitialUI && (
+            <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative !flex !flex-col !items-center pt-6 sm:pt-8">
+              <motion.div
+                key="initial-ui"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+                className="w-full"
+              >
+                <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
 
-            {/* Chat input - positioned below suggested chats with regular spacing */}
-            <motion.div
-              className="w-full mt-6 sm:mt-8 pb-4"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
-            >
-              <ChatInput
-                value={inputValue}
-                onChange={setInputValue}
-                onSubmit={handlePromptSubmit}
-                status={isInputBlocked ? 'submitted' : 'ready'}
-                onStop={stopStreaming}
-                placeholder={t('chat.input.placeholder')}
-                participants={selectedParticipants}
-                quotaCheckType="threads"
-                onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
-                toolbar={(
-                  <ChatInputToolbarMenu
-                    selectedParticipants={selectedParticipants}
-                    allModels={allEnabledModels}
-                    onOpenModelModal={() => modelModal.onTrue()}
-                    selectedMode={selectedMode || getDefaultChatMode()}
-                    onOpenModeModal={() => modeModal.onTrue()}
-                    enableWebSearch={enableWebSearch}
-                    onWebSearchToggle={setEnableWebSearch}
-                    disabled={isInputBlocked}
-                  />
-                )}
-              />
-            </motion.div>
-          </div>
-        )}
-
-        {/* Chat UI with body-based scrolling */}
-        {!showInitialUI && currentThread && (
-          <>
-            <div
-              className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4"
-            >
-              <UnifiedErrorBoundary context="message-list">
-                {/* Split messages for correct ordering: user → pre-search → assistant */}
-                <ChatMessageList
-                  messages={messages.filter((m: UIMessage) => m.role === MessageRoles.USER)}
-                  user={{
-                    name: sessionUser?.name || 'You',
-                    image: sessionUser?.image || null,
-                  }}
-                  participants={contextParticipants}
-                  isStreaming={false}
-                  currentParticipantIndex={currentParticipantIndex}
-                  currentStreamingParticipant={null}
-                  threadId={createdThreadId}
-                  preSearches={preSearches}
-                />
-
-                {/* ✅ CRITICAL FIX: Do NOT pass preSearches to assistant messages list
-                      PreSearchCard should only render after user messages (handled by first ChatMessageList).
-                      Passing preSearches to both lists was causing duplicate pre-search accordion rendering.
-                  */}
-
-                {/* Assistant messages */}
-                <ChatMessageList
-                  messages={messages.filter((m: UIMessage) => m.role !== MessageRoles.USER)}
-                  user={{
-                    name: sessionUser?.name || 'You',
-                    image: sessionUser?.image || null,
-                  }}
-                  participants={contextParticipants}
-                  isStreaming={isStreaming}
-                  currentParticipantIndex={currentParticipantIndex}
-                  currentStreamingParticipant={currentStreamingParticipant}
-                  threadId={createdThreadId}
-                />
-              </UnifiedErrorBoundary>
-
-              {createdThreadId && analyses[0] && (() => {
-                const firstAnalysis = analyses[0];
-                return (
-                  <div className="mt-4 sm:mt-6">
-                    <RoundAnalysisCard
-                      analysis={firstAnalysis}
-                      threadId={createdThreadId}
-                      isLatest={true}
-                      onStreamStart={() => {
-                        updateAnalysisStatus(firstAnalysis.roundNumber, AnalysisStatuses.STREAMING);
-                      }}
-                      onStreamComplete={(completedData) => {
-                        const roundNumber = firstAnalysis.roundNumber;
-
-                        // ✅ FIX: Update store with completed analysis data and status
-                        // This immediately unblocks navigation logic without waiting for server
-                        if (completedData) {
-                          updateAnalysisData(
-                            roundNumber,
-                            completedData as ModeratorAnalysisPayload,
-                          );
-                        }
-                        updateAnalysisStatus(roundNumber, AnalysisStatuses.COMPLETE);
-
-                        // ✅ PROPER FIX: Don't invalidate query on overview screen
-                        // The orchestrator merge logic already prefers higher-priority client status
-                        // ('complete' priority 3 > 'streaming' priority 2)
-                        // Navigation to thread screen will trigger fresh data load automatically
-                        // Removing premature invalidation eliminates race condition with server DB commit
-
-                        // Navigation handled by overview-actions.ts effect
-                      }}
-                      onActionClick={recommendedActions.handleActionClick}
+                  <motion.div
+                    className="relative h-20 w-20 sm:h-24 sm:w-24"
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0, y: -50 }}
+                    transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                  >
+                    <Image
+                      src={BRAND.logos.main}
+                      alt={BRAND.name}
+                      className="w-full h-full object-contain"
+                      width={96}
+                      height={96}
+                      priority
                     />
-                  </div>
-                );
-              })()}
+                  </motion.div>
 
-              {streamError && !isStreaming && (
-                <div className="flex justify-center mt-4">
-                  <div className="px-4 py-2 text-sm text-destructive">
-                    {streamError instanceof Error ? streamError.message : String(streamError)}
+                  <div className="flex flex-col items-center gap-1.5">
+                    <motion.h1
+                      className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -30 }}
+                      transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
+                    >
+                      {BRAND.name}
+                    </motion.h1>
+
+                    <motion.p
+                      className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -30 }}
+                      transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
+                    >
+                      {BRAND.tagline}
+                    </motion.p>
                   </div>
+
+                  <motion.div
+                    className="w-full mt-6 sm:mt-8"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
+                  >
+                    <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
+                  </motion.div>
                 </div>
-              )}
+              </motion.div>
 
-            </div>
-
-            {/* Unified loading indicator - sticky positioned above input */}
-            <UnifiedLoadingIndicator
-              showLoader={showLoader}
-              loadingDetails={loadingDetails}
-              preSearches={preSearches}
-            />
-
-            {/* Chat input - sticky at bottom, mt-auto pushes to bottom when content is small */}
-            <div
-              ref={inputContainerRef}
-              className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-4 relative"
-              style={{ bottom: `${keyboardOffset + 16}px` }}
-            >
-              <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+              {/* Chat input - positioned below suggested chats with regular spacing */}
+              <motion.div
+                className="w-full mt-6 sm:mt-8 pb-4"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+              >
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
@@ -752,45 +623,186 @@ export default function ChatOverviewScreen() {
                     />
                   )}
                 />
-              </div>
-              {/* Bottom fill - covers gap to screen bottom */}
-              <div className="absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
+              </motion.div>
             </div>
-          </>
-        )}
+          )}
 
-        {/* Conversation Mode Modal */}
-        <ConversationModeModal
-          open={modeModal.value}
-          onOpenChange={modeModal.setValue}
-          selectedMode={selectedMode || getDefaultChatMode()}
-          onModeSelect={(mode) => {
-            setSelectedMode(mode);
-            modeModal.onFalse();
-          }}
-        />
+          {/* Chat UI with body-based scrolling */}
+          {!showInitialUI && currentThread && (
+            <>
+              <div
+                className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4"
+              >
+                <UnifiedErrorBoundary context="message-list">
+                  {/* Split messages for correct ordering: user → pre-search → assistant */}
+                  <ChatMessageList
+                    messages={messages.filter((m: UIMessage) => m.role === MessageRoles.USER)}
+                    user={{
+                      name: sessionUser?.name || 'You',
+                      image: sessionUser?.image || null,
+                    }}
+                    participants={contextParticipants}
+                    isStreaming={false}
+                    currentParticipantIndex={currentParticipantIndex}
+                    currentStreamingParticipant={null}
+                    threadId={createdThreadId}
+                    preSearches={preSearches}
+                  />
 
-        {/* Model Selection Modal */}
-        <ModelSelectionModal
-          open={modelModal.value}
-          onOpenChange={modelModal.setValue}
-          orderedModels={orderedModels}
-          onReorder={handleReorderModels}
-          allParticipants={selectedParticipants}
-          customRoles={customRoles}
-          onToggle={handleToggleModel}
-          onRoleChange={handleRoleChange}
-          onClearRole={handleClearRole}
-          selectedCount={selectedParticipants.length}
-          maxModels={userTierConfig.max_models}
-          userTierInfo={{
-            tier_name: userTierConfig.tier_name,
-            max_models: userTierConfig.max_models,
-            current_tier: userTierConfig.tier,
-            can_upgrade: userTierConfig.can_upgrade,
-          }}
-        />
-      </div>
-    </UnifiedErrorBoundary>
+                  {/* ✅ CRITICAL FIX: Do NOT pass preSearches to assistant messages list
+                      PreSearchCard should only render after user messages (handled by first ChatMessageList).
+                      Passing preSearches to both lists was causing duplicate pre-search accordion rendering.
+                  */}
+
+                  {/* Assistant messages */}
+                  <ChatMessageList
+                    messages={messages.filter((m: UIMessage) => m.role !== MessageRoles.USER)}
+                    user={{
+                      name: sessionUser?.name || 'You',
+                      image: sessionUser?.image || null,
+                    }}
+                    participants={contextParticipants}
+                    isStreaming={isStreaming}
+                    currentParticipantIndex={currentParticipantIndex}
+                    currentStreamingParticipant={currentStreamingParticipant}
+                    threadId={createdThreadId}
+                  />
+                </UnifiedErrorBoundary>
+
+                {createdThreadId && analyses[0] && (() => {
+                  const firstAnalysis = analyses[0];
+                  return (
+                    <div className="mt-4 sm:mt-6">
+                      <RoundAnalysisCard
+                        analysis={firstAnalysis}
+                        threadId={createdThreadId}
+                        isLatest={true}
+                        onStreamStart={() => {
+                          updateAnalysisStatus(firstAnalysis.roundNumber, AnalysisStatuses.STREAMING);
+                        }}
+                        onStreamComplete={(completedData, error) => {
+                          const roundNumber = firstAnalysis.roundNumber;
+
+                          // ✅ FIX: Update store with completed analysis data and status
+                          // This immediately unblocks navigation logic without waiting for server
+                          if (completedData) {
+                            updateAnalysisData(
+                              roundNumber,
+                              completedData as ModeratorAnalysisPayload,
+                            );
+                          } else if (error) {
+                            // ✅ CRITICAL FIX: Handle streaming errors (schema validation failures)
+                            // Server may return error when LLM response doesn't match schema
+                            // Must set status=FAILED with error message, not COMPLETE
+                            const errorMessage = error instanceof Error
+                              ? error.message
+                              : 'Analysis failed. Please try again.';
+                            updateAnalysisError(roundNumber, errorMessage);
+                          } else {
+                            // ✅ Edge case: No data and no error - still mark complete to unblock UI
+                            updateAnalysisStatus(roundNumber, AnalysisStatuses.COMPLETE);
+                          }
+
+                          // ✅ PROPER FIX: Don't invalidate query on overview screen
+                          // The orchestrator merge logic already prefers higher-priority client status
+                          // ('failed' priority 4 > 'complete' priority 3 > 'streaming' priority 2)
+                          // Navigation to thread screen will trigger fresh data load automatically
+                          // Removing premature invalidation eliminates race condition with server DB commit
+
+                        // Navigation handled by overview-actions.ts effect
+                        }}
+                        onActionClick={recommendedActions.handleActionClick}
+                      />
+                    </div>
+                  );
+                })()}
+
+                {streamError && !isStreaming && (
+                  <div className="flex justify-center mt-4">
+                    <div className="px-4 py-2 text-sm text-destructive">
+                      {streamError instanceof Error ? streamError.message : String(streamError)}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Unified loading indicator - sticky positioned above input */}
+              <UnifiedLoadingIndicator
+                showLoader={showLoader}
+                loadingDetails={loadingDetails}
+                preSearches={preSearches}
+              />
+
+              {/* Chat input - sticky at bottom, mt-auto pushes to bottom when content is small */}
+              <div
+                ref={inputContainerRef}
+                className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-10 relative"
+                style={{ bottom: `${keyboardOffset + 16}px` }}
+              >
+                <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+                  <ChatInput
+                    value={inputValue}
+                    onChange={setInputValue}
+                    onSubmit={handlePromptSubmit}
+                    status={isInputBlocked ? 'submitted' : 'ready'}
+                    onStop={stopStreaming}
+                    placeholder={t('chat.input.placeholder')}
+                    participants={selectedParticipants}
+                    quotaCheckType="threads"
+                    onRemoveParticipant={isInputBlocked ? undefined : removeParticipant}
+                    toolbar={(
+                      <ChatInputToolbarMenu
+                        selectedParticipants={selectedParticipants}
+                        allModels={allEnabledModels}
+                        onOpenModelModal={() => modelModal.onTrue()}
+                        selectedMode={selectedMode || getDefaultChatMode()}
+                        onOpenModeModal={() => modeModal.onTrue()}
+                        enableWebSearch={enableWebSearch}
+                        onWebSearchToggle={setEnableWebSearch}
+                        disabled={isInputBlocked}
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+        </div>
+      </UnifiedErrorBoundary>
+
+      {/* Conversation Mode Modal - Outside error boundary to match thread screen pattern */}
+      <ConversationModeModal
+        open={modeModal.value}
+        onOpenChange={modeModal.setValue}
+        selectedMode={selectedMode || getDefaultChatMode()}
+        onModeSelect={(mode) => {
+          setSelectedMode(mode);
+          modeModal.onFalse();
+        }}
+      />
+
+      {/* Model Selection Modal - Outside error boundary to match thread screen pattern */}
+      <ModelSelectionModal
+        open={modelModal.value}
+        onOpenChange={modelModal.setValue}
+        orderedModels={orderedModels}
+        onReorder={handleReorderModels}
+        allParticipants={selectedParticipants}
+        customRoles={customRoles}
+        onToggle={handleToggleModel}
+        onRoleChange={handleRoleChange}
+        onClearRole={handleClearRole}
+        selectedCount={selectedParticipants.length}
+        maxModels={userTierConfig.max_models}
+        userTierInfo={{
+          tier_name: userTierConfig.tier_name,
+          max_models: userTierConfig.max_models,
+          current_tier: userTierConfig.tier,
+          can_upgrade: userTierConfig.can_upgrade,
+        }}
+      />
+    </>
   );
 }

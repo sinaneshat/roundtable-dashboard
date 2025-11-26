@@ -289,9 +289,11 @@ export const EvidenceStrengths = {
 // MULTI-AI DELIBERATION - CONFIDENCE WEIGHTING
 // ============================================================================
 
-export const CONFIDENCE_WEIGHTINGS = ['balanced', 'evidence_heavy', 'consensus_heavy', 'expertise_weighted'] as const;
+export const CONFIDENCE_WEIGHTINGS = ['balanced', 'evidence_heavy', 'consensus_heavy', 'expertise_weighted', 'direct', 'simple'] as const;
 
-export const ConfidenceWeightingSchema = z.enum(CONFIDENCE_WEIGHTINGS).openapi({
+// ✅ LENIENT SCHEMA: AI models may return unexpected values - default to 'balanced'
+// Uses .catch() to prevent validation failures from breaking analysis streaming
+export const ConfidenceWeightingSchema = z.enum(CONFIDENCE_WEIGHTINGS).catch('balanced').openapi({
   description: 'Weighting method for calculating round confidence score',
   example: 'balanced',
 });
@@ -303,6 +305,8 @@ export const ConfidenceWeightings = {
   EVIDENCE_HEAVY: 'evidence_heavy' as const,
   CONSENSUS_HEAVY: 'consensus_heavy' as const,
   EXPERTISE_WEIGHTED: 'expertise_weighted' as const,
+  DIRECT: 'direct' as const,
+  SIMPLE: 'simple' as const,
 } as const;
 
 // ============================================================================

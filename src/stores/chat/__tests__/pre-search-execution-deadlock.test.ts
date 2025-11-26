@@ -600,8 +600,8 @@ describe('pre-Search Execution Deadlock Prevention', () => {
       // === ROUND 1 ===
 
       // User sends second message
+      // ✅ FIX: prepareForNewMessage now adds optimistic user message, no need for manual setMessages
       store.getState().prepareForNewMessage('Question 2', ['model-0', 'model-1']);
-      store.getState().setMessages(prev => [...prev, createMockUserMessage(1, 'Question 2')]);
 
       // Create and execute pre-search for round 1
       store.getState().addPreSearch(createPendingPreSearch(1));
@@ -623,8 +623,8 @@ describe('pre-Search Execution Deadlock Prevention', () => {
       // === ROUND 2 ===
 
       // User sends third message
+      // ✅ FIX: prepareForNewMessage now adds optimistic user message, no need for manual setMessages
       store.getState().prepareForNewMessage('Question 3', ['model-0', 'model-1']);
-      store.getState().setMessages(prev => [...prev, createMockUserMessage(2, 'Question 3')]);
 
       // Create and execute pre-search for round 2
       store.getState().addPreSearch(createPendingPreSearch(2));

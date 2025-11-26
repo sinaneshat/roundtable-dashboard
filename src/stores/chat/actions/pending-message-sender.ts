@@ -14,7 +14,7 @@ import {
   ScreenModes,
 } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
-import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
+import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 /**
  * State required for pending message validation and sending
@@ -84,8 +84,11 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
     return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.WAITING_FOR_CHANGELOG };
   }
 
-  // Calculate next round number
-  const newRoundNumber = calculateNextRoundNumber(state.messages);
+  // Get current round number from the last user message
+  // ✅ FIX: Use getCurrentRoundNumber instead of calculateNextRoundNumber
+  // After prepareForNewMessage adds an optimistic user message, we need to check
+  // pre-search for the CURRENT round (from the optimistic message), not the NEXT round
+  const currentRoundNumber = getCurrentRoundNumber(state.messages);
 
   // ✅ CRITICAL FIX: Web search blocking logic for mid-conversation toggle
   //
@@ -113,7 +116,7 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   const webSearchEnabled = state.enableWebSearch;
 
   if (webSearchEnabled) {
-    const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === newRoundNumber);
+    const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === currentRoundNumber);
 
     // ✅ FIX #2: Optimistic wait when pre-search doesn't exist yet
     // Race condition: Backend creates PENDING pre-search, but orchestrator hasn't synced it yet
@@ -121,7 +124,7 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
     // If we send message during this window, participants start WITHOUT web search
     // Solution: Wait for orchestrator to sync the pre-search that backend created
     if (!preSearchForRound) {
-      return { shouldSend: false, roundNumber: newRoundNumber, reason: PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH_CREATION };
+      return { shouldSend: false, roundNumber: currentRoundNumber, reason: PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH_CREATION };
     }
 
     // ✅ FIX #1: Block on PENDING status (not just STREAMING)
@@ -130,7 +133,7 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
     // Previous bug: Only checked STREAMING, so messages sent when status was PENDING
     if (preSearchForRound.status === AnalysisStatuses.PENDING
       || preSearchForRound.status === AnalysisStatuses.STREAMING) {
-      return { shouldSend: false, roundNumber: newRoundNumber, reason: PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH };
+      return { shouldSend: false, roundNumber: currentRoundNumber, reason: PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH };
     }
 
     // Pre-search is COMPLETE or FAILED - allow message to send
@@ -139,7 +142,7 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   }
 
   // All validations passed
-  return { shouldSend: true, roundNumber: newRoundNumber };
+  return { shouldSend: true, roundNumber: currentRoundNumber };
 }
 
 /**

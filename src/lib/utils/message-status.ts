@@ -19,7 +19,7 @@
 
 import type { UIMessage } from 'ai';
 
-import { MessagePartTypes } from '@/api/core/enums';
+import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { MessageStatus } from '@/lib/schemas/message-schemas';
 
 import { getAssistantMetadata } from './metadata';
@@ -190,21 +190,21 @@ export function getMessageStatus({
   const hasError = assistantMetadata?.hasError === true;
 
   if (hasError) {
-    return 'failed';
+    return MessageStatuses.FAILED;
   }
 
   // Priority 2: Streaming but no content yet = thinking
   if (isStreaming && !hasAnyContent) {
-    return 'pending';
+    return MessageStatuses.PENDING;
   }
 
   // Priority 3: Streaming with content = actively streaming
   if (isStreaming) {
-    return 'streaming';
+    return MessageStatuses.STREAMING;
   }
 
   // Priority 4: Default complete state
-  return 'complete';
+  return MessageStatuses.COMPLETE;
 }
 
 /**

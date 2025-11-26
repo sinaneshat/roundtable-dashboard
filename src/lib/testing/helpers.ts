@@ -1,7 +1,8 @@
 import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
-import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import type { AnalysisStatus } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 
 /**
@@ -465,17 +466,17 @@ export function mockFetchSSE(events: Array<{
  * Useful for integration tests
  */
 export async function waitForSearchComplete(
-  getStatus: () => 'pending' | 'streaming' | 'complete' | 'failed',
+  getStatus: () => AnalysisStatus,
   timeout = 5000,
 ): Promise<void> {
   const startTime = Date.now();
   return new Promise<void>((resolve, reject) => {
     const interval = setInterval(() => {
       const status = getStatus();
-      if (status === 'complete') {
+      if (status === AnalysisStatuses.COMPLETE) {
         clearInterval(interval);
         resolve();
-      } else if (status === 'failed') {
+      } else if (status === AnalysisStatuses.FAILED) {
         clearInterval(interval);
         reject(new Error('Search failed'));
       } else if (Date.now() - startTime > timeout) {

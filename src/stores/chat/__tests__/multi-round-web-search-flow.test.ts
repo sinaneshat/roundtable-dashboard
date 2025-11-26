@@ -443,8 +443,8 @@ describe('multi-Round Web Search Flow', () => {
       store.getState().setThread(threadWithNewMode);
 
       // Add user message for round 1 (0-indexed, so second round is index 1)
-      const userMessageR2 = createMockUserMessage(1, trimmedMessage);
-      store.getState().setMessages(prev => [...prev, userMessageR2]);
+      // ✅ FIX: prepareForNewMessage already added optimistic user message, no need for manual setMessages
+      // The optimistic message was already added by prepareForNewMessage(trimmedMessage, ...)
 
       // Clear flags
       store.getState().setIsWaitingForChangelog(false);
@@ -453,7 +453,8 @@ describe('multi-Round Web Search Flow', () => {
       store.getState().setInputValue('');
 
       // Verify round 2 setup
-      expect(store.getState().messages).toHaveLength(5); // 4 from R1 + 1 user R2
+      // ✅ FIX: 4 from R1 + 1 optimistic user R2 = 5
+      expect(store.getState().messages).toHaveLength(5);
       expect(store.getState().participants[2].modelId).toBe('mistral/mistral-large');
       expect(store.getState().thread?.mode).toBe(ChatModes.DEBATING);
 

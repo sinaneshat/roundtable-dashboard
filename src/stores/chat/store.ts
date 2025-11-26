@@ -74,7 +74,7 @@ import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
 import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModeSchema, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema, MessagePartTypes, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
@@ -86,6 +86,8 @@ import type {
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
+import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
+import { isPreSearchTimedOut } from '@/lib/utils/web-search-utils';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
@@ -287,9 +289,30 @@ const createAnalysisSlice: StateCreator<
   setAnalyses: (analyses: StoredModeratorAnalysis[]) =>
     set({ analyses }, false, 'analysis/setAnalyses'),
   addAnalysis: (analysis: StoredModeratorAnalysis) =>
-    set(state => ({
-      analyses: [...state.analyses, analysis],
-    }), false, 'analysis/addAnalysis'),
+    set((state) => {
+      // ✅ CRITICAL FIX: Deduplicate by roundNumber to prevent retrigger bug
+      // Multiple trigger points (Provider, FlowStateMachine) can race to add
+      // analyses for the same round. Without deduplication, both would be added
+      // causing the stream to retrigger and data mismatch issues.
+      const exists = state.analyses.some(
+        a => a.threadId === analysis.threadId && a.roundNumber === analysis.roundNumber,
+      );
+
+      if (exists) {
+        // eslint-disable-next-line no-console
+        console.debug(
+          '[addAnalysis] Skipping duplicate analysis for round',
+          analysis.roundNumber,
+          'threadId',
+          analysis.threadId,
+        );
+        return state;
+      }
+
+      return {
+        analyses: [...state.analyses, analysis],
+      };
+    }, false, 'analysis/addAnalysis'),
   updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) =>
     set(state => ({
       analyses: state.analyses.map((a) => {
@@ -485,9 +508,41 @@ const createPreSearchSlice: StateCreator<
   setPreSearches: (preSearches: StoredPreSearch[]) =>
     set({ preSearches }, false, 'preSearch/setPreSearches'),
   addPreSearch: (preSearch: StoredPreSearch) =>
-    set(state => ({
-      preSearches: [...state.preSearches, preSearch],
-    }), false, 'preSearch/addPreSearch'),
+    set((state) => {
+      // ✅ CRITICAL FIX: Handle race condition between orchestrator and provider
+      // Race condition: Provider creates pre-search → mutation's onSuccess invalidates query
+      // → orchestrator syncs PENDING → provider's .then() tries to add STREAMING
+      // Without this fix: STREAMING is skipped, PreSearchStream sees PENDING and triggers duplicate POST
+      const existingIndex = state.preSearches.findIndex(
+        ps => ps.threadId === preSearch.threadId && ps.roundNumber === preSearch.roundNumber,
+      );
+
+      if (existingIndex !== -1) {
+        const existing = state.preSearches[existingIndex];
+        if (!existing)
+          return state;
+
+        // ✅ RACE CONDITION FIX: If existing is PENDING and new is STREAMING, UPDATE instead of skip
+        // This ensures PreSearchStream sees STREAMING status and doesn't trigger duplicate POST
+        // Status priority: STREAMING > PENDING (provider's execution should win over orchestrator's sync)
+        if (existing.status === AnalysisStatuses.PENDING && preSearch.status === AnalysisStatuses.STREAMING) {
+          const updatedPreSearches = [...state.preSearches];
+          updatedPreSearches[existingIndex] = {
+            ...existing,
+            ...preSearch,
+            status: AnalysisStatuses.STREAMING,
+          };
+          return { preSearches: updatedPreSearches };
+        }
+
+        // Otherwise skip duplicate (same round, already at same or better status)
+        return state;
+      }
+
+      return {
+        preSearches: [...state.preSearches, preSearch],
+      };
+    }, false, 'preSearch/addPreSearch'),
   updatePreSearchData: (roundNumber: number, data: PreSearchDataPayload) =>
     set(state => ({
       preSearches: state.preSearches.map(ps =>
@@ -508,7 +563,7 @@ const createPreSearchSlice: StateCreator<
     set(state => ({
       preSearches: state.preSearches.map(ps =>
         ps.roundNumber === roundNumber
-          ? { ...ps, errorMessage }
+          ? { ...ps, status: AnalysisStatuses.FAILED, errorMessage }
           : ps,
       ),
     }), false, 'preSearch/updatePreSearchError'),
@@ -523,7 +578,8 @@ const createPreSearchSlice: StateCreator<
     }, false, 'preSearch/clearAllPreSearches'),
   checkStuckPreSearches: () =>
     set((state) => {
-      const PRESEARCH_TIMEOUT_MS = 30000; // 30 seconds
+      // ✅ DYNAMIC TIMEOUT: Uses calculated timeout based on query count and search depth
+      // Replaces hardcoded 30 second timeout with dynamic calculation
       const now = Date.now();
       let hasChanges = false;
 
@@ -532,11 +588,9 @@ const createPreSearchSlice: StateCreator<
           return ps;
         }
 
-        const createdTime = ps.createdAt instanceof Date
-          ? ps.createdAt.getTime()
-          : new Date(ps.createdAt).getTime();
-
-        if (now - createdTime > PRESEARCH_TIMEOUT_MS) {
+        // ✅ DYNAMIC: Uses isPreSearchTimedOut which calculates timeout based on
+        // number of queries, search depth (basic vs advanced), and expected results
+        if (isPreSearchTimedOut(ps, now)) {
           hasChanges = true;
           // Mark as complete to unblock message sending
           return { ...ps, status: AnalysisStatuses.COMPLETE };
@@ -915,6 +969,9 @@ const createStreamResumptionSlice: StateCreator<
 
   getNextParticipantToTrigger: () => get().nextParticipantToTrigger,
 
+  setNextParticipantToTrigger: (index: number | null) =>
+    set({ nextParticipantToTrigger: index }, false, 'streamResumption/setNextParticipantToTrigger'),
+
   markResumptionAttempted: (roundNumber, participantIndex) => {
     const key = `${roundNumber}_${participantIndex}`;
     const attempts = get().resumptionAttempts;
@@ -1072,21 +1129,63 @@ const createOperationsSlice: StateCreator<
     set({ participants }, false, 'operations/updateParticipants'),
 
   prepareForNewMessage: (message: string, participantIds: string[]) =>
-    set(state => ({
-      // ✅ TYPE-SAFE: Use reset groups to ensure ALL flags are cleared
-      // This prevents bugs where individual fields are forgotten
-      ...STREAMING_STATE_RESET,
-      ...REGENERATION_STATE_RESET,
-      ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
-      isCreatingAnalysis: false,
-      // Prepare new message state
-      isWaitingForChangelog: true,
-      pendingMessage: message,
-      expectedParticipantIds: participantIds.length > 0
-        ? participantIds
-        : state.expectedParticipantIds,
-      hasSentPendingMessage: false,
-    }), false, 'operations/prepareForNewMessage'),
+    set((state) => {
+      // ✅ FIX: Calculate next round number for mid-conversation messages
+      const nextRoundNumber = calculateNextRoundNumber(state.messages);
+
+      // ✅ CRITICAL FIX: Only add optimistic user message for THREAD screen (subsequent rounds)
+      // On OVERVIEW screen (initial thread creation), the backend creates the round 0 user message
+      // via initializeThread() - we should NOT add a duplicate optimistic message
+      //
+      // OVERVIEW screen flow:
+      //   1. initializeThread() adds round 0 user message from backend
+      //   2. prepareForNewMessage() prepares state but should NOT add optimistic message
+      //   3. Backend streaming starts and includes the user message
+      //
+      // THREAD screen flow (subsequent messages):
+      //   1. prepareForNewMessage() adds optimistic user message immediately (for instant UI feedback)
+      //   2. Pre-search runs and completes
+      //   3. sendMessage() is called, backend responds with real messages
+      //   4. Real messages replace optimistic message
+      const isOnThreadScreen = state.screenMode === ScreenModes.THREAD;
+
+      // Only create optimistic message for THREAD screen (subsequent rounds, not initial thread creation)
+      const optimisticUserMessage: UIMessage | null = isOnThreadScreen
+        ? {
+            id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
+            role: MessageRoles.USER,
+            parts: [{ type: MessagePartTypes.TEXT, text: message }],
+            metadata: {
+              role: MessageRoles.USER,
+              roundNumber: nextRoundNumber,
+              isOptimistic: true, // Flag to identify optimistic messages
+            },
+          }
+        : null;
+
+      return {
+        // ✅ TYPE-SAFE: Use reset groups to ensure ALL flags are cleared
+        // This prevents bugs where individual fields are forgotten
+        ...STREAMING_STATE_RESET,
+        ...REGENERATION_STATE_RESET,
+        ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
+        isCreatingAnalysis: false,
+        // Prepare new message state
+        isWaitingForChangelog: true,
+        pendingMessage: message,
+        expectedParticipantIds: participantIds.length > 0
+          ? participantIds
+          : state.expectedParticipantIds,
+        hasSentPendingMessage: false,
+        // ✅ FIX: Only add optimistic user message for subsequent rounds on THREAD screen
+        // For OVERVIEW screen (thread creation), backend handles the user message
+        messages: optimisticUserMessage
+          ? [...state.messages, optimisticUserMessage]
+          : state.messages,
+        // Track the round number for the pending message (only for subsequent rounds)
+        streamingRoundNumber: isOnThreadScreen ? nextRoundNumber : null,
+      };
+    }, false, 'operations/prepareForNewMessage'),
 
   completeStreaming: () =>
     set({

@@ -7,6 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AnalysisStatuses, PreSearchStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -68,7 +69,7 @@ describe('fLOW: Part 1 - Starting New Chat (Overview Screen)', () => {
       id: 'ps-1',
       threadId: 't1',
       roundNumber: 0,
-      status: 'pending' as const,
+      status: PreSearchStatuses.PENDING,
       userQuery: 'What is AI?',
       createdAt: new Date(),
     };
@@ -80,7 +81,7 @@ describe('fLOW: Part 1 - Starting New Chat (Overview Screen)', () => {
 
     // 3. Expectation: Cannot stream while pre-search PENDING
     const hasBlockingPreSearch = store.getState().preSearches.some(
-      ps => ps.roundNumber === 0 && (ps.status === 'pending' || ps.status === 'streaming'),
+      ps => ps.roundNumber === 0 && (ps.status === PreSearchStatuses.PENDING || ps.status === PreSearchStatuses.STREAMING),
     );
     expect(hasBlockingPreSearch).toBe(true);
 
@@ -105,15 +106,17 @@ describe('fLOW: Part 1 - Starting New Chat (Overview Screen)', () => {
       id: 'ps-1',
       threadId: 't1',
       roundNumber: 0,
-      status: 'streaming' as const,
+      status: AnalysisStatuses.STREAMING,
       userQuery: 'What is AI?',
-      createdAt: new Date(Date.now() - 35000), // 35 seconds ago
+      // Default timeout is 45 seconds (TIMEOUT_CONFIG.DEFAULT_MS)
+      // Pre-search must be older than 45 seconds to be considered timed out
+      createdAt: new Date(Date.now() - 46000), // 46 seconds ago (exceeds 45s default)
     };
 
     store.getState().addPreSearch(preSearch);
 
     // Pre-search stuck in STREAMING
-    expect(preSearch.status).toBe('streaming');
+    expect(preSearch.status).toBe(AnalysisStatuses.STREAMING);
 
     // MANUAL: Call timeout check (Provider not active in unit test)
     // In real app, ChatOverviewScreen has interval checking stuck pre-searches
@@ -121,7 +124,7 @@ describe('fLOW: Part 1 - Starting New Chat (Overview Screen)', () => {
 
     // Expectation: Pre-search marked as complete to unblock
     const updated = store.getState().preSearches.find(ps => ps.id === 'ps-1');
-    expect(updated?.status).toBe('complete');
+    expect(updated?.status).toBe(AnalysisStatuses.COMPLETE);
 
     vi.useRealTimers();
   });
@@ -190,7 +193,7 @@ describe('fLOW: Part 2 - Web Search Mid-Conversation Toggle', () => {
       id: 'ps-0',
       threadId: 't1',
       roundNumber: 0,
-      status: 'complete' as const,
+      status: PreSearchStatuses.COMPLETE,
       userQuery: 'First question',
       createdAt: new Date(),
     });
@@ -404,7 +407,7 @@ describe('fLOW: Part 4 - Round Analysis', () => {
       id: 'a1',
       threadId: 't1',
       roundNumber: 0,
-      status: 'streaming' as const,
+      status: AnalysisStatuses.STREAMING,
       createdAt: new Date(Date.now() - 95000), // 95 seconds ago
     };
     store.getState().addAnalysis(analysis);

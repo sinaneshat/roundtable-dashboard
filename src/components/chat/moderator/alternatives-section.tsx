@@ -1,5 +1,7 @@
 'use client';
 
+import { motion } from 'motion/react';
+
 import type { AlternativeScenario } from '@/api/routes/chat/schema';
 
 import { getConfidenceProgressColors } from './moderator-ui-utils';
@@ -14,6 +16,7 @@ type AlternativesSectionProps = {
  *
  * Displays alternative scenarios with confidence percentages.
  * Simple visualization of what-if scenarios explored during deliberation.
+ * Items animate in top-to-bottom order with 40ms stagger.
  */
 export function AlternativesSection({
   alternatives,
@@ -28,12 +31,19 @@ export function AlternativesSection({
 
   return (
     <div className="space-y-3">
-      {sortedAlternatives.map((alternative, altIndex) => {
+      {sortedAlternatives.map((alternative, index) => {
         const colors = getConfidenceProgressColors(alternative.confidence);
         return (
-          <div
-            key={`alt-${altIndex}`}
+          <motion.div
+            key={alternative.scenario}
             className="space-y-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.2,
+              delay: index * 0.04,
+              ease: 'easeOut',
+            }}
           >
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm flex-1">
@@ -50,7 +60,7 @@ export function AlternativesSection({
                 style={{ width: `${alternative.confidence}%`, backgroundColor: colors.indicator }}
               />
             </div>
-          </div>
+          </motion.div>
         );
       })}
     </div>

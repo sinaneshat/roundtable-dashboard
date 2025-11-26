@@ -122,7 +122,18 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
+  // Debug mode: add ?pwa-debug=1 to URL to preview the update prompt in development
+  const isDebugMode = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('pwa-debug') === '1';
+
   useEffect(() => {
+    // In debug mode, show the prompt immediately for testing/preview
+    // Use queueMicrotask to avoid synchronous setState in effect (prevents cascading renders)
+    if (isDebugMode) {
+      queueMicrotask(() => setUpdateAvailable(true));
+      return;
+    }
+
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
       return;
     }
@@ -200,7 +211,7 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
         installingWorker.removeEventListener('statechange', handleStateChange);
       }
     };
-  }, []);
+  }, [isDebugMode]);
 
   const handleDismiss = () => {
     setDismissed(true);

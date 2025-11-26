@@ -16,11 +16,16 @@
 import type { UIMessage } from 'ai';
 
 import {
+  AgreementStatuses,
   AnalysisStatuses,
   ChatModes,
+  ConfidenceWeightings,
+  DebatePhases,
+  EvidenceStrengths,
   PreSearchStatuses,
   ThreadStatuses,
   UIMessageRoles,
+  VoteTypes,
 } from '@/api/core/enums';
 import type {
   ChatParticipant,
@@ -361,18 +366,23 @@ export function createMockPreSearchDataPayload(
  * - roundSummary: Participation stats, themes, unresolved questions
  */
 export function createMockAnalysisPayload(
-  _roundNumber = 0,
+  roundNumber = 0,
   overrides?: Partial<ModeratorAnalysisPayload>,
 ): ModeratorAnalysisPayload {
   return {
+    // Required fields per schema
+    roundNumber,
+    mode: ChatModes.DEBATING,
+    userQuestion: `Test question for round ${roundNumber}`,
+    // Optional fields
     roundConfidence: 78,
-    confidenceWeighting: 'balanced',
+    confidenceWeighting: ConfidenceWeightings.BALANCED,
     consensusEvolution: [
-      { phase: 'opening', percentage: 32, label: 'Opening' },
-      { phase: 'rebuttal', percentage: 58, label: 'Rebuttal' },
-      { phase: 'cross_exam', percentage: 65, label: 'Cross-Exam' },
-      { phase: 'synthesis', percentage: 72, label: 'Synthesis' },
-      { phase: 'final_vote', percentage: 78, label: 'Final Vote' },
+      { phase: DebatePhases.OPENING, percentage: 32, label: 'Opening' },
+      { phase: DebatePhases.REBUTTAL, percentage: 58, label: 'Rebuttal' },
+      { phase: DebatePhases.CROSS_EXAM, percentage: 65, label: 'Cross-Exam' },
+      { phase: DebatePhases.SYNTHESIS, percentage: 72, label: 'Synthesis' },
+      { phase: DebatePhases.FINAL_VOTE, percentage: 78, label: 'Final Vote' },
     ],
     summary: 'Good discussion overall with solid reasoning and evidence from all contributors.',
     recommendations: [
@@ -400,7 +410,7 @@ export function createMockAnalysisPayload(
         },
         stance: 'Strong support for the proposed approach with minor reservations about timing',
         evidence: ['Market data supports growth trajectory', 'Historical precedent exists'],
-        vote: 'approve',
+        vote: VoteTypes.APPROVE,
       },
     ],
     consensusAnalysis: {
@@ -415,11 +425,11 @@ export function createMockAnalysisPayload(
       agreementHeatmap: [
         {
           claim: 'Market timing is critical',
-          perspectives: { 'GPT-4': 'agree' },
+          perspectives: { 'GPT-4': AgreementStatuses.AGREE },
         },
         {
           claim: 'Resources are sufficient',
-          perspectives: { 'GPT-4': 'caution' },
+          perspectives: { 'GPT-4': AgreementStatuses.CAUTION },
         },
       ],
       argumentStrengthProfile: {
@@ -440,8 +450,8 @@ export function createMockAnalysisPayload(
         },
       ],
       evidenceCoverage: [
-        { claim: 'Market timing', strength: 'strong', percentage: 85 },
-        { claim: 'Resource allocation', strength: 'moderate', percentage: 65 },
+        { claim: 'Market timing', strength: EvidenceStrengths.STRONG, percentage: 85 },
+        { claim: 'Resource allocation', strength: EvidenceStrengths.MODERATE, percentage: 65 },
       ],
     },
     alternatives: [

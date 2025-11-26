@@ -113,7 +113,27 @@ export function hasAnalysisData(
 
   // Type-safe access to properties for NEW SCHEMA: Multi-AI Deliberation Framework
   // Both ModeratorAnalysisPayload and PartialObject<ModeratorAnalysisPayload> have these properties
-  const { contributorPerspectives, consensusAnalysis, evidenceAndReasoning, alternatives, roundSummary } = data;
+  const {
+    // ✅ CRITICAL FIX: Include first-streamed fields
+    // Backend generates these fields FIRST, but they weren't being checked
+    // causing hasAnalysisData to return false during initial streaming
+    roundConfidence,
+    summary,
+    recommendations,
+    // Later-streamed detail sections
+    contributorPerspectives,
+    consensusAnalysis,
+    evidenceAndReasoning,
+    alternatives,
+    roundSummary,
+  } = data;
+
+  // ✅ CRITICAL FIX: Check header/summary fields (generated FIRST by backend)
+  // Without these checks, UI shows nothing until later sections stream
+  const hasRoundConfidence = typeof roundConfidence === 'number' && roundConfidence > 0;
+  const hasSummary = typeof summary === 'string' && summary.length > 0;
+  const recommendationsArray = recommendations ?? [];
+  const hasRecommendations = Array.isArray(recommendationsArray) && recommendationsArray.length > 0;
 
   // Check arrays: handle both complete arrays and partial arrays with undefined elements
   const contributorPerspectivesArray = contributorPerspectives ?? [];
@@ -133,7 +153,8 @@ export function hasAnalysisData(
   // Check roundSummary fields (all possible sections)
   const hasRoundSummaryData = hasRoundSummaryContent(roundSummary);
 
-  return hasContributorPerspectives || hasConsensusAnalysis || hasEvidenceAndReasoning || hasAlternatives || hasRoundSummaryData;
+  // ✅ CRITICAL FIX: Include first-streamed fields in OR condition
+  return hasRoundConfidence || hasSummary || hasRecommendations || hasContributorPerspectives || hasConsensusAnalysis || hasEvidenceAndReasoning || hasAlternatives || hasRoundSummaryData;
 }
 
 /**

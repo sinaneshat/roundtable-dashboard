@@ -45,6 +45,12 @@ export function PreSearchCard({
   const updatePreSearchStatus = useChatStore(s => s.updatePreSearchStatus);
   const updatePreSearchData = useChatStore(s => s.updatePreSearchData);
 
+  // ✅ CRITICAL FIX: Check if provider has already triggered this pre-search
+  // The provider marks rounds as triggered in the store before executing
+  // PreSearchStream should NOT execute if provider is handling it
+  // This prevents race condition where both provider and PreSearchStream try to execute
+  const providerTriggered = useChatStore(s => s.hasPreSearchBeenTriggered(preSearch.roundNumber));
+
   // ✅ ANIMATION COORDINATION: Track animation lifecycle (pattern from ModelMessageCard)
   const registerAnimation = useChatStore(s => s.registerAnimation);
   const completeAnimation = useChatStore(s => s.completeAnimation);
@@ -186,6 +192,7 @@ export function PreSearchCard({
                   preSearch={preSearch}
                   onStreamStart={handleStreamStart}
                   onStreamComplete={handleStreamComplete}
+                  providerTriggered={providerTriggered}
                 />
               )}
 

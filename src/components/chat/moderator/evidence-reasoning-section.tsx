@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -24,6 +25,7 @@ type EvidenceReasoningSectionProps = {
  * Displays evidence and reasoning analysis:
  * - Reasoning threads (claims with synthesis)
  * - Evidence coverage with strength indicators
+ * Items animate in top-to-bottom order with 40ms stagger.
  */
 export function EvidenceReasoningSection({
   evidenceAndReasoning,
@@ -53,15 +55,25 @@ export function EvidenceReasoningSection({
           <span className="text-sm font-medium">{t('evidenceReasoning.reasoningThreads')}</span>
 
           <div className="space-y-3">
-            {visibleThreads?.map((thread, threadIndex) => (
-              <div key={`thread-${threadIndex}`} className="space-y-1.5">
+            {visibleThreads?.map((thread, index) => (
+              <motion.div
+                key={thread.claim}
+                className="space-y-1.5"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.2,
+                  delay: index * 0.04,
+                  ease: 'easeOut',
+                }}
+              >
                 <p className="text-sm font-medium text-foreground/90">
                   {thread.claim}
                 </p>
                 <p className="text-xs text-muted-foreground pl-3 border-l-2 border-primary/20">
                   {thread.synthesis}
                 </p>
-              </div>
+              </motion.div>
             ))}
           </div>
 
@@ -88,10 +100,20 @@ export function EvidenceReasoningSection({
           <span className="text-sm font-medium">{t('evidenceReasoning.evidenceCoverage')}</span>
 
           <div className="space-y-3">
-            {evidenceCoverage.map((item, coverageIndex) => {
+            {evidenceCoverage.map((item, index) => {
               const colors = getEvidenceStrengthProgressColors(item.strength);
               return (
-                <div key={`coverage-${coverageIndex}`} className="space-y-1.5">
+                <motion.div
+                  key={item.claim}
+                  className="space-y-1.5"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.2,
+                    delay: index * 0.04,
+                    ease: 'easeOut',
+                  }}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm flex-1 truncate">
                       {item.claim}
@@ -111,7 +133,7 @@ export function EvidenceReasoningSection({
                       style={{ width: `${item.percentage}%`, backgroundColor: colors.indicator }}
                     />
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

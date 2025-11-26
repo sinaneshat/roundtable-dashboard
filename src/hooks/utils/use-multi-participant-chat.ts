@@ -93,6 +93,12 @@ type UseMultiParticipantChatReturn = {
    * @param participantsOverride - Optional fresh participants (used by store subscription to avoid stale data)
    */
   startRound: (participantsOverride?: ChatParticipant[]) => void;
+  /**
+   * Continue a round from a specific participant index (used for incomplete round resumption)
+   * @param fromIndex - The participant index to continue from
+   * @param participantsOverride - Optional fresh participants
+   */
+  continueFromParticipant: (fromIndex: number, participantsOverride?: ChatParticipant[]) => void;
   /** Whether participants are currently streaming responses */
   isStreaming: boolean;
   /**
@@ -1050,6 +1056,93 @@ export function useMultiParticipantChat(
   // callbackRefs provides stable ref access to threadId (no deps needed)
 
   /**
+   * Continue a round from a specific participant index
+   * Used for incomplete round resumption when user navigates away during streaming
+   * and returns later to find some participants have responded but not all
+   *
+   * @param fromIndex - The participant index to continue from (0-based)
+   * @param participantsOverride - Optional fresh participants to use
+   */
+  const continueFromParticipant = useCallback((fromIndex: number, participantsOverride?: ChatParticipant[]) => {
+    // ✅ CRITICAL FIX: Allow caller to pass fresh participants (from store subscription)
+    const currentParticipants = participantsOverride || participantsRef.current;
+
+    // ✅ Guards: Wait for dependencies to be ready
+    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming || isTriggeringRef.current) {
+      return;
+    }
+
+    // Set lock to prevent concurrent calls
+    isTriggeringRef.current = true;
+
+    const uniqueParticipants = deduplicateParticipants(currentParticipants);
+    const enabled = uniqueParticipants.filter(p => p.isEnabled);
+
+    if (enabled.length === 0) {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    // Validate fromIndex is within bounds
+    if (fromIndex < 0 || fromIndex >= enabled.length) {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
+
+    if (!lastUserMessage) {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    const textPart = lastUserMessage.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p);
+    const userText = textPart && 'text' in textPart ? textPart.text : '';
+
+    if (!userText.trim()) {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    // Get round number from the last user message
+    const roundNumber = getCurrentRoundNumber(messages);
+
+    // CRITICAL: Update refs to start from the specified participant index
+    currentIndexRef.current = fromIndex;
+    roundParticipantsRef.current = enabled;
+    currentRoundRef.current = roundNumber;
+    lastUsedParticipantIndex.current = null; // Reset for new continuation
+
+    // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
+    isStreamingRef.current = true;
+
+    // Reset state for continuation
+    setIsExplicitlyStreaming(true);
+    setCurrentParticipantIndex(fromIndex);
+    setCurrentRound(roundNumber);
+    resetErrorTracking();
+    clearAnimations?.(); // Clear any pending animations
+
+    // ✅ CRITICAL FIX: Push participant index to queue before calling aiSendMessage
+    participantIndexQueue.current.push(fromIndex);
+
+    // Trigger streaming for the specified participant
+    aiSendMessage({
+      text: userText,
+      metadata: {
+        role: 'user',
+        roundNumber,
+        isParticipantTrigger: true,
+      },
+    });
+
+    // Release lock after message is sent
+    requestAnimationFrame(() => {
+      isTriggeringRef.current = false;
+    });
+  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
+
+  /**
    * Send a user message and start a new round
    *
    * If enableWebSearch is true, executes pre-search BEFORE participant streaming
@@ -1281,6 +1374,7 @@ export function useMultiParticipantChat(
     messages,
     sendMessage,
     startRound,
+    continueFromParticipant,
     isStreaming: isActuallyStreaming,
     isStreamingRef,
     currentParticipantIndex,

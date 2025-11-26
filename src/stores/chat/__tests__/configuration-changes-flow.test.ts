@@ -1218,8 +1218,8 @@ describe('configuration Changes Mid-Conversation Flow', () => {
       store.getState().setPendingMessage(null);
 
       // ROUND 2: With new configuration
-      const userMsgR2 = createMockUserMessage(1, 'Follow-up question');
-      store.getState().setMessages(prev => [...prev, userMsgR2]);
+      // ✅ FIX: prepareForNewMessage already added optimistic user message, no need for manual setMessages
+      // The optimistic message was already added by prepareForNewMessage('Follow-up question', ...)
 
       // All 3 participants respond
       updatedParticipants.forEach((participant, index) => {

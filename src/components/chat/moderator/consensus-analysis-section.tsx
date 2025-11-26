@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { AgreementStatuses } from '@/api/core/enums';
@@ -32,6 +33,7 @@ type ConsensusAnalysisSectionProps = {
  * - Alignment summary
  * - Agreement matrix (simplified)
  * - Argument strength radar chart
+ * Items animate in top-to-bottom order with 40ms stagger.
  */
 export function ConsensusAnalysisSection({
   analysis,
@@ -113,11 +115,21 @@ export function ConsensusAnalysisSection({
       {/* Contested Claims */}
       {alignmentSummary.contestedClaimsList && alignmentSummary.contestedClaimsList.length > 0 && (
         <div className="space-y-1.5">
-          {alignmentSummary.contestedClaimsList.map((contested, contestedIndex) => (
-            <div key={`contested-${contestedIndex}`} className="flex items-start gap-2 text-sm">
+          {alignmentSummary.contestedClaimsList.map((contested, index) => (
+            <motion.div
+              key={contested.claim}
+              className="flex items-start gap-2 text-sm"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.2,
+                delay: index * 0.04,
+                ease: 'easeOut',
+              }}
+            >
               <AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-amber-500" />
               <span className="text-muted-foreground">{contested.claim}</span>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}
@@ -140,19 +152,29 @@ export function ConsensusAnalysisSection({
               </thead>
               <tbody>
                 {agreementHeatmap.map((row, rowIndex) => (
-                  <tr key={`heatmap-row-${rowIndex}`} className="border-b border-border/50">
+                  <motion.tr
+                    key={row.claim}
+                    className="border-b border-border/50"
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.2,
+                      delay: rowIndex * 0.04,
+                      ease: 'easeOut',
+                    }}
+                  >
                     <td className="py-2 pr-4 text-foreground/80">{row.claim}</td>
                     {contributors.map((contributor) => {
                       const status = row.perspectives[contributor] ?? AgreementStatuses.AGREE;
                       return (
-                        <td key={`${rowIndex}-${contributor}`} className="py-2 px-2">
+                        <td key={`${row.claim}-${contributor}`} className="py-2 px-2">
                           <div className="flex justify-center items-center">
                             {getAgreementIcon(status)}
                           </div>
                         </td>
                       );
                     })}
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>

@@ -1,6 +1,7 @@
 'use client';
 
 import { HelpCircle, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import type { Recommendation, RoundSummary } from '@/api/routes/chat/schema';
@@ -17,6 +18,7 @@ type RoundSummarySectionProps = {
  *
  * Displays round summary with participation stats, key themes, and unresolved questions.
  * Simplified layout without excessive borders.
+ * Items animate in top-to-bottom order with 40ms stagger.
  */
 export function RoundSummarySection({
   roundSummary,
@@ -80,11 +82,21 @@ export function RoundSummarySection({
         <div className="space-y-1.5">
           <span className="text-sm font-medium">{t('roundSummary.unresolvedQuestions')}</span>
           <ul className="space-y-1">
-            {unresolvedQuestions.map((question, questionIndex) => (
-              <li key={`question-${questionIndex}`} className="flex items-start gap-2 text-sm text-muted-foreground">
+            {unresolvedQuestions.map((question, index) => (
+              <motion.li
+                key={question}
+                className="flex items-start gap-2 text-sm text-muted-foreground"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.2,
+                  delay: index * 0.04,
+                  ease: 'easeOut',
+                }}
+              >
                 <span>•</span>
                 <span>{question}</span>
-              </li>
+              </motion.li>
             ))}
           </ul>
         </div>

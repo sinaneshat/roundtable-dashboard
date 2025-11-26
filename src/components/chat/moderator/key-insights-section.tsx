@@ -63,7 +63,7 @@ export function KeyInsightsSection({
 
               return (
                 <motion.button
-                  key={`rec-${recIndex}`}
+                  key={rec.title}
                   type="button"
                   onClick={() => onActionClick?.(rec)}
                   disabled={!onActionClick || !isClickable}
@@ -73,7 +73,7 @@ export function KeyInsightsSection({
                   whileTap={{ scale: 0.99 }}
                   transition={{
                     duration: 0.2,
-                    delay: recIndex * 0.05,
+                    delay: recIndex * 0.04,
                     ease: 'easeOut',
                   }}
                   className={cn(
@@ -125,7 +125,7 @@ export function KeyInsightsSection({
                         )}
                         {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
                           <ModelBadge
-                            key={`rec-${recIndex}-model-${modelIndex}`}
+                            key={`${rec.title}-${modelId}`}
                             modelId={modelId}
                             role={rec.suggestedRoles?.[modelIndex]}
                             size="sm"

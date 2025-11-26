@@ -34,6 +34,7 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
 import { useAnalysisOrchestrator } from './analysis-orchestrator';
+import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { usePreSearchOrchestrator } from './pre-search-orchestrator';
 
 export type UseScreenInitializationOptions = {
@@ -209,4 +210,20 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // ANALYSIS CALLBACKS (Overview & Thread modes)
   // ============================================================================
   // Analysis creation now handled automatically by store subscription
+
+  // ============================================================================
+  // INCOMPLETE ROUND RESUMPTION (Thread mode only)
+  // ============================================================================
+  // ✅ CRITICAL FIX: Resume incomplete rounds on page load
+  // When a user navigates away during participant streaming and returns later:
+  // - Some participants may have responded, others may not
+  // - This hook detects incomplete rounds and triggers remaining participants
+  // - Only enabled for thread mode (overview creates new threads)
+
+  const isStreaming = useChatStore(s => s.isStreaming);
+
+  useIncompleteRoundResumption({
+    threadId: thread?.id || '',
+    enabled: mode === 'thread' && Boolean(thread?.id) && !isStreaming && enableOrchestrator,
+  });
 }

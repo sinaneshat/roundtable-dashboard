@@ -1,14 +1,16 @@
 'use client';
 
 import { Search } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, use, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
+import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
+import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
@@ -19,6 +21,12 @@ type PreSearchStreamProps = {
   preSearch: StoredPreSearch;
   onStreamComplete?: (completedSearchData?: PreSearchDataPayload) => void;
   onStreamStart?: () => void;
+  /**
+   * ✅ CRITICAL FIX: If true, the provider has already triggered this pre-search
+   * PreSearchStream should NOT execute if provider is handling it
+   * This prevents race condition during navigation (overview → thread screen)
+   */
+  providerTriggered?: boolean;
 };
 
 // Track at TWO levels to prevent duplicate submissions
@@ -50,8 +58,19 @@ function PreSearchStreamComponent({
   preSearch,
   onStreamComplete,
   onStreamStart,
+  providerTriggered = false,
 }: PreSearchStreamProps) {
   const is409Conflict = useBoolean(false);
+
+  // ✅ CRITICAL FIX: Get store directly to check state synchronously inside effects
+  // Using useContext instead of useChatStore allows us to call getState() at execution time
+  // This prevents race conditions where render-time values are stale when effects run
+  const store = use(ChatStoreContext);
+
+  // ✅ CRITICAL FIX: Get markPreSearchTriggered to signal to provider
+  // When PreSearchStream decides to execute, it MUST mark the store so provider knows
+  // Without this, both PreSearchStream and provider can race to execute simultaneously
+  const markPreSearchTriggered = useChatStore(s => s.markPreSearchTriggered);
 
   // Local streaming state
   const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
@@ -61,15 +80,29 @@ function PreSearchStreamComponent({
   // ✅ DEBUG: Track component renders
   const renderCountRef = useRef(0);
   renderCountRef.current++;
-  //   id: preSearch.id,
-  //   round: preSearch.roundNumber,
-  //   status: preSearch.status,
-  //   threadId,
-  // });
 
   // Store callbacks in refs for stability and to allow calling after unmount
   const onStreamCompleteRef = useRef(onStreamComplete);
   const onStreamStartRef = useRef(onStreamStart);
+
+  // ✅ CRITICAL FIX: Do NOT abort fetch on unmount
+  // Following the ModeratorAnalysisStream pattern - let the fetch complete in the background
+  // Aborting on unmount causes "Malformed JSON in request body" errors because:
+  // 1. Component unmounts quickly after starting fetch
+  // 2. Abort happens after HTTP headers sent but before body completes
+  // 3. Server receives partial/empty body → 400 error
+  //
+  // Instead, we let the fetch complete naturally:
+  // - The callback refs (onStreamCompleteRef) allow callbacks to fire even after unmount
+  // - Deduplication (triggeredSearchIds) prevents duplicate fetches
+  // - The store updates will still happen via the ref callbacks
+  useEffect(() => {
+    return () => {
+      // ✅ REMOVED: abortControllerRef.current?.abort()
+      // Do NOT abort - let the request complete in background
+      // The ref callbacks will handle completion even after unmount
+    };
+  }, []); // Empty deps = only runs on mount/unmount
 
   useEffect(() => {
     onStreamCompleteRef.current = onStreamComplete;
@@ -81,6 +114,23 @@ function PreSearchStreamComponent({
 
   // Custom SSE handler for backend's custom event format (POST with fetch)
   useEffect(() => {
+    // ✅ CRITICAL FIX: Skip if provider is already handling this pre-search
+    // The provider marks rounds as triggered in the store before executing
+    // This prevents race condition during navigation (overview → thread screen)
+    // where provider starts fetch, navigation aborts it, then PreSearchStream tries to start
+    if (providerTriggered) {
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Check store SYNCHRONOUSLY at effect execution time
+    // The render-time hasStoreTriggered value can be stale when effects run concurrently
+    // This ensures we check the actual current state right before marking/executing
+    // If provider already marked this round, we skip to prevent duplicate fetch
+    const currentStoreState = store?.getState();
+    if (currentStoreState?.hasPreSearchBeenTriggered(preSearch.roundNumber)) {
+      return;
+    }
+
     // ✅ FIX: Only trigger for PENDING status, not STREAMING/COMPLETE/FAILED
     // STREAMING status means the backend has already started processing
     // COMPLETE/FAILED means it's done - no need to trigger
@@ -106,6 +156,13 @@ function PreSearchStreamComponent({
     } else {
       triggeredRounds.set(threadId, new Set([preSearch.roundNumber]));
     }
+
+    // ✅ CRITICAL FIX: Also mark store's triggeredPreSearchRounds
+    // This signals to the provider that PreSearchStream is handling this pre-search
+    // Without this, provider's pendingMessage effect may also try to execute,
+    // causing duplicate fetches and "Malformed JSON in request body" errors
+    // @see ChatStoreProvider pendingMessage effect at lines 1076-1224
+    markPreSearchTriggered(preSearch.roundNumber);
 
     const abortController = new AbortController();
     // Store controller for cleanup - we use AbortController API for fetch-based streaming
@@ -250,35 +307,17 @@ function PreSearchStreamComponent({
       // Stream failed, error state already handled
     });
 
-    // Cleanup on unmount
-    return () => {
-      // ✅ CRITICAL FIX: Do NOT delete search ID from triggered map on unmount
-      // This prevents double-calling when component unmounts/remounts (e.g., React Strict Mode, parent re-renders)
-      // The ID is only cleared via clearTriggeredPreSearchForRound() during regeneration
-      // Background fetch will complete and sync via PreSearchOrchestrator
-      // triggeredSearchIds.delete(preSearch.id); // REMOVED - causes double fetching
-      // triggeredRounds cleanup // REMOVED - causes double fetching
-
-      // ✅ DEFENSIVE: Abort fetch on unmount and handle controller errors gracefully
-      // "Controller is already closed" errors are expected during navigation/refresh
-      if (abortControllerRef.current) {
-        try {
-          abortControllerRef.current.abort();
-        } catch (err) {
-          // Silently ignore "Controller is already closed" and similar errors
-          // These are expected when user navigates away or refreshes
-          if (err instanceof Error && !err.message.includes('Controller') && !err.message.includes('closed')) {
-            console.error('[PreSearchStream] Cleanup error:', err);
-          }
-        }
-        abortControllerRef.current = null;
-      }
-    };
+    // ✅ CRITICAL FIX: NO cleanup here - abort is handled by the separate unmount effect
+    // Previously, the cleanup ran on EVERY dependency change (not just unmount), which:
+    // 1. Aborted the running fetch
+    // 2. Then the effect re-ran and returned early (due to deduplication)
+    // 3. Result: fetch aborted, no new fetch started → stuck at PENDING
+    // Now: abort only happens on true unmount via the empty-deps effect above
     // ✅ FIX: Removed preSearch.status from dependencies to prevent effect re-run when backend updates status
     // The effect should only run once per unique search (id + roundNumber)
     // Status changes (pending→streaming→completed) should NOT re-trigger the effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered]);
 
   // ✅ POLLING RECOVERY: Handle 409 Conflict (Stream already active)
   // If we reconnect to a stream that's already running (e.g. after reload),
@@ -409,11 +448,18 @@ function PreSearchStreamComponent({
 
   const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
 
+  // Track section indices for staggered top-to-bottom animations
+  let sectionIndex = 0;
+
   return (
-    <div className="space-y-6">
-      {/* Search Plan & Configuration Summary */}
+    <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-6">
+      {/* Search Plan & Configuration Summary - renders first (index 0) */}
       {validQueries.length > 0 && validQueries.some(q => q?.query) && (
-        <div>
+        <AnimatedStreamingItem
+          key="search-config"
+          itemKey="search-config"
+          index={sectionIndex++}
+        >
           <WebSearchConfigurationDisplay
             queries={validQueries.filter(q => q?.query).map(q => ({
               query: q.query,
@@ -428,7 +474,7 @@ function PreSearchStreamComponent({
             failureCount={failureCount}
             totalTime={totalTime}
           />
-        </div>
+        </AnimatedStreamingItem>
       )}
 
       {validQueries.map((query, queryIndex) => {
@@ -440,141 +486,148 @@ function PreSearchStreamComponent({
         const hasResult = !!searchResult;
         const uniqueKey = `query-${query?.query || queryIndex}`;
         const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
+        const currentIndex = sectionIndex++;
 
         return (
-          <div key={uniqueKey} className="space-y-2">
-            {/* Query header */}
+          <AnimatedStreamingItem
+            key={uniqueKey}
+            itemKey={uniqueKey}
+            index={currentIndex}
+          >
             <div className="space-y-2">
-              <div className="flex items-start gap-2">
-                <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {query?.index !== undefined && query?.total !== undefined && (
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        Query
-                        {' '}
-                        {query.index + 1}
-                        {' '}
-                        of
-                        {' '}
-                        {query.total}
+              {/* Query header */}
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {query?.index !== undefined && query?.total !== undefined && (
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          Query
+                          {' '}
+                          {query.index + 1}
+                          {' '}
+                          of
+                          {' '}
+                          {query.total}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      {query?.query}
+                    </p>
+                    {query?.rationale && (
+                      <p className="text-xs text-muted-foreground mt-1 italic">
+                        {query.rationale}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {query?.searchDepth && (
+                      <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
+                        {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
+                      </Badge>
+                    )}
+                    {hasResult && searchResult.responseTime && (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">
+                        {Math.round(searchResult.responseTime)}
+                        ms
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {query?.query}
+                </div>
+                {hasResult && (
+                  <p className="text-xs text-muted-foreground pl-6">
+                    {searchResult.results.length}
+                    {' '}
+                    {searchResult.results.length === 1 ? 'source' : 'sources'}
                   </p>
-                  {query?.rationale && (
-                    <p className="text-xs text-muted-foreground mt-1 italic">
-                      {query.rationale}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {query?.searchDepth && (
-                    <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
-                      {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
-                    </Badge>
-                  )}
-                  {hasResult && searchResult.responseTime && (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
-                      {Math.round(searchResult.responseTime)}
-                      ms
-                    </Badge>
-                  )}
-                </div>
+                )}
               </div>
+
+              {/* Results list */}
+              {hasResults && (
+                <div className="pl-6 space-y-0">
+                  {searchResult.results.map((result, idx) => (
+                    <WebSearchResultItem
+                      key={result.url}
+                      result={result}
+                      showDivider={idx < searchResult.results.length - 1}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Image Gallery */}
+              {hasResults && (
+                <div className="pl-6">
+                  <WebSearchImageGallery results={searchResult.results} />
+                </div>
+              )}
+
+              {/* Search Statistics */}
+              {hasResults && (() => {
+                const totalImages = searchResult.results.reduce(
+                  (sum, r) => sum + (r.images?.length || 0) + (r.metadata?.imageUrl ? 1 : 0),
+                  0,
+                );
+                const totalWords = searchResult.results.reduce(
+                  (sum, r) => sum + (r.metadata?.wordCount || 0),
+                  0,
+                );
+                const resultsWithContent = searchResult.results.filter(r => r.fullContent);
+                const hasMetadata = totalImages > 0 || totalWords > 0 || resultsWithContent.length > 0;
+
+                if (!hasMetadata)
+                  return null;
+
+                return (
+                  <div className="pl-6 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                    {totalImages > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {totalImages}
+                        {' '}
+                        {totalImages === 1 ? 'image' : 'images'}
+                      </Badge>
+                    )}
+                    {totalWords > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {totalWords.toLocaleString()}
+                        {' '}
+                        words extracted
+                      </Badge>
+                    )}
+                    {resultsWithContent.length > 0 && (
+                      <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
+                        {resultsWithContent.length}
+                        {' '}
+                        full content
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* AI-Generated Answer Summary */}
               {hasResult && (
-                <p className="text-xs text-muted-foreground pl-6">
-                  {searchResult.results.length}
-                  {' '}
-                  {searchResult.results.length === 1 ? 'source' : 'sources'}
-                </p>
+                <div className="pl-6">
+                  <LLMAnswerDisplay
+                    answer={searchResult.answer}
+                    isStreaming={isStreamingNow}
+                    sources={searchResult.results.map(r => ({ url: r.url, title: r.title }))}
+                  />
+                </div>
+              )}
+
+              {/* Separator between searches */}
+              {queryIndex < validQueries.length - 1 && (
+                <Separator className="!mt-6" />
               )}
             </div>
-
-            {/* Results list */}
-            {hasResults && (
-              <div className="pl-6 space-y-0">
-                {searchResult.results.map((result, idx) => (
-                  <WebSearchResultItem
-                    key={result.url}
-                    result={result}
-                    showDivider={idx < searchResult.results.length - 1}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Image Gallery */}
-            {hasResults && (
-              <div className="pl-6">
-                <WebSearchImageGallery results={searchResult.results} />
-              </div>
-            )}
-
-            {/* Search Statistics */}
-            {hasResults && (() => {
-              const totalImages = searchResult.results.reduce(
-                (sum, r) => sum + (r.images?.length || 0) + (r.metadata?.imageUrl ? 1 : 0),
-                0,
-              );
-              const totalWords = searchResult.results.reduce(
-                (sum, r) => sum + (r.metadata?.wordCount || 0),
-                0,
-              );
-              const resultsWithContent = searchResult.results.filter(r => r.fullContent);
-              const hasMetadata = totalImages > 0 || totalWords > 0 || resultsWithContent.length > 0;
-
-              if (!hasMetadata)
-                return null;
-
-              return (
-                <div className="pl-6 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                  {totalImages > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      {totalImages}
-                      {' '}
-                      {totalImages === 1 ? 'image' : 'images'}
-                    </Badge>
-                  )}
-                  {totalWords > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      {totalWords.toLocaleString()}
-                      {' '}
-                      words extracted
-                    </Badge>
-                  )}
-                  {resultsWithContent.length > 0 && (
-                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
-                      {resultsWithContent.length}
-                      {' '}
-                      full content
-                    </Badge>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* AI-Generated Answer Summary */}
-            {hasResult && (
-              <div className="pl-6">
-                <LLMAnswerDisplay
-                  answer={searchResult.answer}
-                  isStreaming={isStreamingNow}
-                  sources={searchResult.results.map(r => ({ url: r.url, title: r.title }))}
-                />
-              </div>
-            )}
-
-            {/* Separator between searches */}
-            {queryIndex < validQueries.length - 1 && (
-              <Separator className="!mt-6" />
-            )}
-          </div>
+          </AnimatedStreamingItem>
         );
       })}
-    </div>
+    </AnimatedStreamingList>
   );
 }
 
@@ -588,5 +641,6 @@ export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextPr
     && prevProps.threadId === nextProps.threadId
     && prevProps.onStreamComplete === nextProps.onStreamComplete
     && prevProps.onStreamStart === nextProps.onStreamStart
+    && prevProps.providerTriggered === nextProps.providerTriggered
   );
 });

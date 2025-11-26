@@ -19,17 +19,21 @@ import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat
  * Priority order for analysis/pre-search status resolution
  *
  * When deduplicating or merging server/client state, higher priority wins.
+ * Failed status has HIGHEST priority - server-side errors are authoritative.
  * Complete status takes precedence over in-progress, which beats pending.
+ *
+ * CRITICAL: failed=4 ensures server validation errors (schema mismatch)
+ * always override client-side optimistic "complete" status.
  *
  * Usage:
  * - analysis-orchestrator.ts: Server vs client analysis merging
  * - pre-search-orchestrator.ts: Server vs client pre-search merging
  */
 export const ANALYSIS_STATUS_PRIORITY = {
+  failed: 4,
   complete: 3,
   streaming: 2,
   pending: 1,
-  failed: 0,
 } as const satisfies Record<AnalysisStatus, number>;
 
 /**

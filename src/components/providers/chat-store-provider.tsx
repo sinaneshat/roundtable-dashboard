@@ -28,7 +28,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useRef } from 'react';
 import type { z } from 'zod';
@@ -42,6 +42,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { getPreSearchTimeout, isPreSearchTimedOut, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, createChatStore } from '@/stores/chat';
 
@@ -135,6 +136,7 @@ export type ChatStoreProviderProps = {
 
 export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
@@ -352,7 +354,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // Without this, updatePreSearchStatus operates on empty array and UI never updates
           if (createResponse && createResponse.data) {
             const preSearchWithDates = transformPreSearch(createResponse.data);
-            store.getState().addPreSearch(preSearchWithDates);
+            // ✅ RACE CONDITION FIX: Set status to STREAMING to prevent PreSearchStream from also executing
+            // PreSearchStream only triggers for PENDING status, so STREAMING status prevents duplicate execution
+            // Without this, both provider and PreSearchStream race to execute, causing malformed JSON errors
+            store.getState().addPreSearch({
+              ...preSearchWithDates,
+              status: AnalysisStatuses.STREAMING,
+            });
           }
 
           // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
@@ -528,14 +536,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
+  const continueFromParticipantRef = useRef(chat.continueFromParticipant);
   const setMessagesRef = useRef(chat.setMessages);
 
   // Keep refs in sync with latest chat methods
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
+    continueFromParticipantRef.current = chat.continueFromParticipant;
     setMessagesRef.current = chat.setMessages;
-  }, [chat.sendMessage, chat.startRound, chat.setMessages]);
+  }, [chat.sendMessage, chat.startRound, chat.continueFromParticipant, chat.setMessages]);
 
   // ✅ REMOVED: Old effect that stored unwrapped chat methods
   // This effect was overwriting the wrapped versions with quota/pre-search invalidation
@@ -661,35 +671,118 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // ✅ TIMEOUT PROTECTION: Clear waitingToStartStreaming if streaming fails to start
   // Prevents system from getting stuck forever if AI SDK never becomes ready
+  // ✅ DYNAMIC TIMEOUT: Adjusts based on pre-search query count and search depth
   useEffect(() => {
     if (!waitingToStart) {
       return;
     }
 
-    const STREAMING_START_TIMEOUT_MS = 30000; // 30 seconds
+    // ✅ DYNAMIC TIMEOUT: Calculate based on pre-search configuration
+    // If web search is enabled, use dynamic timeout based on query count/depth
+    // Otherwise use default timeout for non-web-search conversations
+    const currentState = store.getState();
+    const webSearchEnabled = currentState.thread?.enableWebSearch ?? currentState.enableWebSearch;
+
+    let dynamicTimeoutMs: number = TIMEOUT_CONFIG.DEFAULT_MS;
+
+    if (webSearchEnabled && currentState.messages.length > 0) {
+      const currentRound = getCurrentRoundNumber(currentState.messages);
+      const preSearchForRound = currentState.preSearches.find(ps => ps.roundNumber === currentRound);
+
+      // Calculate dynamic timeout based on pre-search data
+      // If pre-search exists, use its configuration; otherwise use default
+      dynamicTimeoutMs = getPreSearchTimeout(preSearchForRound);
+    }
 
     const timeoutId = setTimeout(() => {
-      const currentState = store.getState();
+      const latestState = store.getState();
 
       // Only timeout if still waiting and not streaming
-      if (currentState.waitingToStartStreaming && !currentState.isStreaming) {
-        console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming after 30s');
+      if (latestState.waitingToStartStreaming && !latestState.isStreaming) {
+        // ✅ DYNAMIC CHECK: Use dynamic timeout for pre-search status check
+        const latestWebSearchEnabled = latestState.thread?.enableWebSearch ?? latestState.enableWebSearch;
+        if (latestWebSearchEnabled && latestState.messages.length > 0) {
+          const currentRound = getCurrentRoundNumber(latestState.messages);
+          const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === currentRound);
 
-        // Clear the flag
-        currentState.setWaitingToStartStreaming(false);
+          // If pre-search doesn't exist yet OR hasn't timed out yet, don't error
+          // The isPreSearchTimedOut uses dynamic timeout calculation
+          if (!preSearchForRound) {
+            // Pre-search doesn't exist yet - still waiting for creation
+            return;
+          }
 
-        // Reset to allow retry
-        currentState.resetToOverview();
+          const isStillRunning = preSearchForRound.status === AnalysisStatuses.PENDING
+            || preSearchForRound.status === AnalysisStatuses.STREAMING;
+          if (isStillRunning && !isPreSearchTimedOut(preSearchForRound)) {
+            // Pre-search is still running and hasn't exceeded its dynamic timeout
+            return;
+          }
+        }
+
+        console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming', {
+          timeoutMs: dynamicTimeoutMs,
+          webSearchEnabled: latestWebSearchEnabled,
+        });
+
+        // ✅ FULL RESET: Clear all streaming-related state
+        latestState.setWaitingToStartStreaming(false);
+        latestState.setIsStreaming(false);
+        latestState.setIsCreatingThread(false);
+
+        // ✅ COMPLETE RESET: Reset entire store to overview state
+        latestState.resetToOverview();
+
+        // ✅ NAVIGATE: Push back to /chat to ensure URL matches state
+        router.push('/chat');
 
         // Show error to user
         showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
       }
-    }, STREAMING_START_TIMEOUT_MS);
+    }, dynamicTimeoutMs);
 
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [waitingToStart, store]);
+  }, [waitingToStart, store, router]);
+
+  // ✅ INCOMPLETE ROUND RESUMPTION: Continue from specific participant when round is incomplete
+  // This effect is triggered by useIncompleteRoundResumption hook when it detects an incomplete round
+  // on page load. It calls continueFromParticipant to trigger the remaining participants.
+  const nextParticipantToTrigger = useStore(store, s => s.nextParticipantToTrigger);
+
+  useEffect(() => {
+    // Skip if no participant to trigger or not waiting to resume
+    if (nextParticipantToTrigger === null || !waitingToStart) {
+      return;
+    }
+
+    // Skip if already streaming
+    if (chatIsStreaming) {
+      store.getState().setWaitingToStartStreaming(false);
+      store.getState().setNextParticipantToTrigger(null);
+      return;
+    }
+
+    // Skip if no participants
+    if (storeParticipants.length === 0) {
+      return;
+    }
+
+    // Skip if no messages (nothing to resume)
+    if (storeMessages.length === 0) {
+      store.getState().setWaitingToStartStreaming(false);
+      store.getState().setNextParticipantToTrigger(null);
+      return;
+    }
+
+    // ✅ CRITICAL: Call continueFromParticipant to resume from the specific participant
+    // This triggers streaming for the missing participant, not from the beginning
+    chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
+
+    // Clear the trigger flag after calling (let the effect retry if needed)
+    // The flag will be cleared when streaming actually begins
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, chat, store]);
 
   // ✅ SAFETY MECHANISM: Auto-complete stuck pre-searches after timeout
   // Prevents pre-searches stuck at 'streaming' or 'pending' from blocking messages
@@ -788,7 +881,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // ✅ SAFETY MECHANISM: Auto-stop stuck streams
   // Prevents system from getting stuck in isStreaming=true state if backend hangs
-  // Checks for 60 seconds of silence (no message updates)
+  // ✅ DYNAMIC TIMEOUT: Adjusts based on web search complexity
   useEffect(() => {
     if (!chatIsStreaming)
       return;
@@ -796,28 +889,60 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // Reset activity timer when streaming starts
     lastStreamActivityRef.current = Date.now();
 
-    const STREAM_TIMEOUT_MS = 60000; // 60 seconds
+    // ✅ DYNAMIC TIMEOUT: Calculate based on pre-search configuration
+    // If web search is enabled with complex queries, allow more time for processing
+    const currentState = store.getState();
+    const webSearchEnabled = currentState.thread?.enableWebSearch ?? currentState.enableWebSearch;
+
+    let streamTimeoutMs = 60_000; // Default 60 seconds for non-web-search
+
+    if (webSearchEnabled && currentState.messages.length > 0) {
+      const currentRound = getCurrentRoundNumber(currentState.messages);
+      const preSearchForRound = currentState.preSearches.find(ps => ps.roundNumber === currentRound);
+
+      // If pre-search has data, increase timeout based on content complexity
+      // More results = more content for AI to process = longer gaps between updates
+      const preSearchTimeout = getPreSearchTimeout(preSearchForRound);
+      // Stream timeout should be at least the pre-search timeout, plus extra buffer
+      streamTimeoutMs = Math.max(60_000, Math.min(preSearchTimeout + 30_000, TIMEOUT_CONFIG.MAX_MS));
+    }
 
     const checkInterval = setInterval(() => {
       const now = Date.now();
       const elapsed = now - lastStreamActivityRef.current;
 
-      if (elapsed > STREAM_TIMEOUT_MS) {
+      if (elapsed > streamTimeoutMs) {
         console.error('[ChatStoreProvider] Stream stuck detected - force stopping', {
           elapsed,
-          timeout: STREAM_TIMEOUT_MS,
+          timeout: streamTimeoutMs,
+          webSearchEnabled,
         });
+
+        // ✅ FULL RESET: Clear all streaming-related state
+        const latestState = store.getState();
+        latestState.setWaitingToStartStreaming(false);
+        latestState.setIsStreaming(false);
+        latestState.setIsCreatingThread(false);
 
         // Force stop streaming using store action
         // Note: chat.stop was removed for resumable streams compatibility
-        store.getState().checkStuckStreams();
+        latestState.checkStuckStreams();
+
+        // ✅ COMPLETE RESET: Reset entire store to overview state
+        latestState.resetToOverview();
+
+        // ✅ NAVIGATE: Push back to /chat to ensure URL matches state
+        router.push('/chat');
 
         showApiErrorToast('Stream timed out', new Error('The connection timed out. Please try again.'));
+
+        // Clear the interval since we've reset
+        clearInterval(checkInterval);
       }
     }, 5000);
 
     return () => clearInterval(checkInterval);
-  }, [chatIsStreaming, store]);
+  }, [chatIsStreaming, store, router]);
 
   // Sync other reactive values from hook to store for component access
   useEffect(() => {
@@ -987,7 +1112,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             // Without this, updatePreSearchStatus operates on empty array and UI never updates
             if (createResponse && createResponse.data) {
               const preSearchWithDates = transformPreSearch(createResponse.data);
-              store.getState().addPreSearch(preSearchWithDates);
+              // ✅ RACE CONDITION FIX: Set status to STREAMING to prevent PreSearchStream from also executing
+              // PreSearchStream only triggers for PENDING status, so STREAMING status prevents duplicate execution
+              // Without this, both provider and PreSearchStream race to execute, causing malformed JSON errors
+              store.getState().addPreSearch({
+                ...preSearchWithDates,
+                status: AnalysisStatuses.STREAMING,
+              });
             }
 
             // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation

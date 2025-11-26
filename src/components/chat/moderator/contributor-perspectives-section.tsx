@@ -7,6 +7,7 @@ import {
   Search,
   Wrench,
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useState } from 'react';
 
 import type { ContributorPerspective } from '@/api/routes/chat/schema';
@@ -61,137 +62,143 @@ export function ContributorPerspectivesSection({
         const isExpanded = expandedIndex === index;
 
         return (
-          <Collapsible
+          <motion.div
             key={perspective.participantIndex}
-            open={isExpanded}
-            onOpenChange={open => setExpandedIndex(open ? index : null)}
-            className={cn(
-              'rounded-xl overflow-hidden transition-colors',
-              getVoteCardColor(perspective.vote),
-            )}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.1 }}
           >
-            <CollapsibleTrigger
+            <Collapsible
+              open={isExpanded}
+              onOpenChange={open => setExpandedIndex(open ? index : null)}
               className={cn(
-                'flex w-full items-center justify-between px-4 py-3 text-left transition-colors',
-                'hover:bg-white/5',
+                'rounded-xl overflow-hidden transition-colors',
+                getVoteCardColor(perspective.vote),
               )}
             >
-              <div className="flex items-center gap-3">
-                <span className="text-muted-foreground">{getRoleIcon(perspective.role || '')}</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{perspective.role || 'Contributor'}</p>
-                  <p className="text-xs text-muted-foreground">{perspective.modelName}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {getVoteIcon(perspective.vote)}
-                <ChevronDown
-                  className={cn(
-                    'size-4 text-muted-foreground transition-transform duration-200',
-                    isExpanded && 'rotate-180',
-                  )}
-                />
-              </div>
-            </CollapsibleTrigger>
-
-            <CollapsibleContent>
-              <div className="px-4 pb-4 pt-2 space-y-6">
-                {/* Scorecard Section */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scorecard</h4>
-                  <div className="grid gap-4">
-                    {/* Logic */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium" style={{ color: '#60a5fa' }}>Logic</span>
-                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#60a5fa' }}>
-                          {perspective.scorecard.logic}
-                          %
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.logic}%`, backgroundColor: '#3b82f6' }}
-                        />
-                      </div>
-                    </div>
-                    {/* Creativity */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium" style={{ color: '#c084fc' }}>Creativity</span>
-                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#c084fc' }}>
-                          {perspective.scorecard.creativity}
-                          %
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)' }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.creativity}%`, backgroundColor: '#a855f7' }}
-                        />
-                      </div>
-                    </div>
-                    {/* Risk Awareness */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium" style={{ color: '#fbbf24' }}>Risk Awareness</span>
-                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#fbbf24' }}>
-                          {perspective.scorecard.riskAwareness}
-                          %
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)' }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.riskAwareness}%`, backgroundColor: '#f59e0b' }}
-                        />
-                      </div>
-                    </div>
-                    {/* Evidence */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium" style={{ color: '#34d399' }}>Evidence</span>
-                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#34d399' }}>
-                          {perspective.scorecard.evidence}
-                          %
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)' }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.evidence}%`, backgroundColor: '#10b981' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stance Section */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stance</h4>
-                  <p className="text-sm text-foreground/90 leading-relaxed">
-                    {perspective.stance}
-                  </p>
-                </div>
-
-                {/* Supporting Evidence Section */}
-                {perspective.evidence && perspective.evidence.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Supporting Evidence</h4>
-                    <ul className="space-y-2">
-                      {perspective.evidence.map((item, evidenceIndex) => (
-                        <li key={`evidence-${perspective.participantIndex}-${evidenceIndex}`} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                          <span className="text-primary/60 mt-0.5">•</span>
-                          <span className="leading-relaxed">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+              <CollapsibleTrigger
+                className={cn(
+                  'flex w-full items-center justify-between px-4 py-3 text-left transition-colors',
+                  'hover:bg-white/5',
                 )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-muted-foreground">{getRoleIcon(perspective.role || '')}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{perspective.role || 'Contributor'}</p>
+                    <p className="text-xs text-muted-foreground">{perspective.modelName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {getVoteIcon(perspective.vote)}
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform duration-200',
+                      isExpanded && 'rotate-180',
+                    )}
+                  />
+                </div>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <div className="px-4 pb-4 pt-2 space-y-6">
+                  {/* Scorecard Section */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scorecard</h4>
+                    <div className="grid gap-4">
+                      {/* Logic */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium" style={{ color: '#60a5fa' }}>Logic</span>
+                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#60a5fa' }}>
+                            {perspective.scorecard.logic}
+                            %
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.logic}%`, backgroundColor: '#3b82f6' }}
+                          />
+                        </div>
+                      </div>
+                      {/* Creativity */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium" style={{ color: '#c084fc' }}>Creativity</span>
+                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#c084fc' }}>
+                            {perspective.scorecard.creativity}
+                            %
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.creativity}%`, backgroundColor: '#a855f7' }}
+                          />
+                        </div>
+                      </div>
+                      {/* Risk Awareness */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium" style={{ color: '#fbbf24' }}>Risk Awareness</span>
+                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#fbbf24' }}>
+                            {perspective.scorecard.riskAwareness}
+                            %
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.riskAwareness}%`, backgroundColor: '#f59e0b' }}
+                          />
+                        </div>
+                      </div>
+                      {/* Evidence */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium" style={{ color: '#34d399' }}>Evidence</span>
+                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#34d399' }}>
+                            {perspective.scorecard.evidence}
+                            %
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.evidence}%`, backgroundColor: '#10b981' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stance Section */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stance</h4>
+                    <p className="text-sm text-foreground/90 leading-relaxed">
+                      {perspective.stance}
+                    </p>
+                  </div>
+
+                  {/* Supporting Evidence Section */}
+                  {perspective.evidence && perspective.evidence.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Supporting Evidence</h4>
+                      <ul className="space-y-2">
+                        {perspective.evidence.map(item => (
+                          <li key={`evidence-${perspective.participantIndex}-${item}`} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                            <span className="text-primary/60 mt-0.5">•</span>
+                            <span className="leading-relaxed">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </motion.div>
         );
       })}
     </div>

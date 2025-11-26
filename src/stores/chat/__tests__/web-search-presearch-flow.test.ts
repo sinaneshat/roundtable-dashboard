@@ -1110,8 +1110,8 @@ describe('integration: Complete Pre-Search Flow', () => {
     store.getState().setScreenMode(ScreenModes.THREAD);
 
     // === ROUND 1 ===
+    // ✅ FIX: prepareForNewMessage now adds optimistic user message, no need for manual setMessages
     store.getState().prepareForNewMessage('Question 2', ['openai/gpt-4', 'openai/gpt-4']);
-    store.getState().setMessages(prev => [...prev, createMockUserMessage(1, 'Question 2')]);
 
     // Pre-search flow
     store.getState().addPreSearch(createPendingPreSearch(1));
@@ -1131,8 +1131,8 @@ describe('integration: Complete Pre-Search Flow', () => {
     }));
 
     // === ROUND 2 ===
+    // ✅ FIX: prepareForNewMessage now adds optimistic user message, no need for manual setMessages
     store.getState().prepareForNewMessage('Question 3', ['openai/gpt-4', 'openai/gpt-4']);
-    store.getState().setMessages(prev => [...prev, createMockUserMessage(2, 'Question 3')]);
 
     // Pre-search flow
     store.getState().addPreSearch(createPendingPreSearch(2));

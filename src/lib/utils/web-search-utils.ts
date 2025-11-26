@@ -7,6 +7,187 @@
  * @module lib/utils/web-search-utils
  */
 
+import type { WebSearchDepth } from '@/api/core/enums';
+import { WebSearchDepths } from '@/api/core/enums';
+import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
+
+// ============================================================================
+// DYNAMIC TIMEOUT CALCULATION
+// ============================================================================
+
+/**
+ * Timeout configuration constants (in milliseconds)
+ * These can be tuned based on actual performance metrics
+ */
+export const TIMEOUT_CONFIG = {
+  /** Base timeout before any queries (initial overhead) */
+  BASE_MS: 15_000, // 15 seconds
+
+  /** Additional time per search query */
+  PER_QUERY_BASIC_MS: 8_000, // 8 seconds for basic depth
+  PER_QUERY_ADVANCED_MS: 15_000, // 15 seconds for advanced depth
+
+  /** Additional time per expected website/result to scrape */
+  PER_RESULT_MS: 1_500, // 1.5 seconds per result
+
+  /** Minimum timeout (never go below this) */
+  MIN_MS: 20_000, // 20 seconds
+
+  /** Maximum timeout (never exceed this) */
+  MAX_MS: 180_000, // 3 minutes
+
+  /** Default timeout when no pre-search data available */
+  DEFAULT_MS: 45_000, // 45 seconds
+
+  /** Default expected results per query if not specified */
+  DEFAULT_RESULTS_PER_QUERY: 5,
+} as const;
+
+/**
+ * Input for calculating dynamic timeout
+ * Can accept partial data at different stages of pre-search lifecycle
+ */
+export type PreSearchTimeoutInput = {
+  /** Number of search queries to execute */
+  queryCount?: number;
+  /** Number of advanced depth queries (takes longer than basic) */
+  advancedQueryCount?: number;
+  /** Expected total number of results/websites to scrape */
+  expectedResultCount?: number;
+  /** Array of queries with depth info (alternative to queryCount/advancedQueryCount) */
+  queries?: Array<{ searchDepth?: WebSearchDepth; sourceCount?: number | string }>;
+};
+
+/**
+ * Calculates dynamic timeout based on pre-search configuration
+ *
+ * Formula:
+ *   timeout = BASE + (basicQueries × PER_QUERY_BASIC) + (advancedQueries × PER_QUERY_ADVANCED) + (results × PER_RESULT)
+ *
+ * Clamped between MIN and MAX values.
+ *
+ * @param input - Pre-search configuration (query counts, result counts, etc.)
+ * @returns Calculated timeout in milliseconds
+ *
+ * @example
+ * ```ts
+ * // From query/result counts
+ * const timeout = calculatePreSearchTimeout({ queryCount: 3, advancedQueryCount: 1, expectedResultCount: 15 });
+ *
+ * // From queries array
+ * const timeout = calculatePreSearchTimeout({
+ *   queries: [
+ *     { searchDepth: 'basic', sourceCount: 5 },
+ *     { searchDepth: 'advanced', sourceCount: 10 },
+ *   ]
+ * });
+ * ```
+ */
+export function calculatePreSearchTimeout(input?: PreSearchTimeoutInput): number {
+  // No input = return default
+  if (!input) {
+    return TIMEOUT_CONFIG.DEFAULT_MS;
+  }
+
+  let basicQueryCount = 0;
+  let advancedQueryCount = 0;
+  let expectedResults = 0;
+
+  // If queries array provided, extract counts from it
+  if (input.queries && input.queries.length > 0) {
+    for (const query of input.queries) {
+      if (query.searchDepth === WebSearchDepths.ADVANCED) {
+        advancedQueryCount++;
+      } else {
+        basicQueryCount++;
+      }
+
+      // Sum up expected results per query
+      const sourceCount = typeof query.sourceCount === 'string'
+        ? Number.parseInt(query.sourceCount, 10) || TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY
+        : query.sourceCount ?? TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY;
+      expectedResults += sourceCount;
+    }
+  } else {
+    // Use explicit counts if provided
+    const totalQueries = input.queryCount ?? 0;
+    advancedQueryCount = input.advancedQueryCount ?? 0;
+    basicQueryCount = Math.max(0, totalQueries - advancedQueryCount);
+    expectedResults = input.expectedResultCount ?? (totalQueries * TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY);
+  }
+
+  // Calculate timeout
+  const timeout
+    = TIMEOUT_CONFIG.BASE_MS
+      + (basicQueryCount * TIMEOUT_CONFIG.PER_QUERY_BASIC_MS)
+      + (advancedQueryCount * TIMEOUT_CONFIG.PER_QUERY_ADVANCED_MS)
+      + (expectedResults * TIMEOUT_CONFIG.PER_RESULT_MS);
+
+  // Clamp between min and max
+  return Math.min(Math.max(timeout, TIMEOUT_CONFIG.MIN_MS), TIMEOUT_CONFIG.MAX_MS);
+}
+
+/**
+ * Extracts timeout input from a StoredPreSearch object
+ * Works at any stage of the pre-search lifecycle
+ *
+ * @param preSearch - Stored pre-search record (may have partial data)
+ * @returns Timeout input extracted from available data
+ */
+export function extractTimeoutInputFromPreSearch(preSearch: StoredPreSearch | null | undefined): PreSearchTimeoutInput | undefined {
+  if (!preSearch) {
+    return undefined;
+  }
+
+  const searchData = preSearch.searchData as PreSearchDataPayload | null | undefined;
+
+  if (searchData?.queries && searchData.queries.length > 0) {
+    // Full data available - extract from queries
+    return {
+      queries: searchData.queries.map(q => ({
+        searchDepth: q.searchDepth,
+        sourceCount: TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY, // Individual queries don't have sourceCount
+      })),
+      expectedResultCount: searchData.totalResults || searchData.queries.length * TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY,
+    };
+  }
+
+  // No detailed data yet - return undefined to use default
+  return undefined;
+}
+
+/**
+ * Calculates dynamic timeout for a pre-search operation
+ * Convenience function that combines extraction and calculation
+ *
+ * @param preSearch - Stored pre-search record
+ * @returns Calculated timeout in milliseconds
+ */
+export function getPreSearchTimeout(preSearch: StoredPreSearch | null | undefined): number {
+  const input = extractTimeoutInputFromPreSearch(preSearch);
+  return calculatePreSearchTimeout(input);
+}
+
+/**
+ * Checks if a pre-search has exceeded its dynamic timeout
+ *
+ * @param preSearch - Stored pre-search record
+ * @param now - Current timestamp (default: Date.now())
+ * @returns True if pre-search has timed out
+ */
+export function isPreSearchTimedOut(preSearch: StoredPreSearch | null | undefined, now = Date.now()): boolean {
+  if (!preSearch) {
+    return false;
+  }
+
+  const createdTime = preSearch.createdAt instanceof Date
+    ? preSearch.createdAt.getTime()
+    : new Date(preSearch.createdAt).getTime();
+
+  const timeout = getPreSearchTimeout(preSearch);
+  return now - createdTime > timeout;
+}
+
 /**
  * Safely extracts domain/hostname from a URL string
  *

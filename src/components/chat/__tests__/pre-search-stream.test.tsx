@@ -18,6 +18,33 @@ vi.mock('@/components/chat/web-search-result-item', () => ({
   WebSearchResultItem: () => <div data-testid="search-result">Result Item</div>,
 }));
 
+// Mock chat store provider - PreSearchStream uses hasPreSearchBeenTriggered and markPreSearchTriggered
+// ✅ FIX: Use vi.hoisted() to define mocks before vi.mock hoisting
+const { mockStoreState, mockStore } = vi.hoisted(() => {
+  const mockHasPreSearchBeenTriggered = vi.fn(() => false);
+  const mockMarkPreSearchTriggered = vi.fn();
+  const mockStoreState = {
+    hasPreSearchBeenTriggered: mockHasPreSearchBeenTriggered,
+    markPreSearchTriggered: mockMarkPreSearchTriggered,
+  };
+  const mockStore = {
+    getState: () => mockStoreState,
+    subscribe: () => () => {},
+  };
+  return { mockStoreState, mockStore };
+});
+
+vi.mock('@/components/providers/chat-store-provider', async () => {
+  const React = await import('react');
+  const MockChatStoreContext = React.createContext(mockStore);
+
+  return {
+    useChatStore: (selector: (state: typeof mockStoreState) => unknown) =>
+      selector(mockStoreState),
+    ChatStoreContext: MockChatStoreContext,
+  };
+});
+
 describe('preSearchStream Component', () => {
   const mockThreadId = 'thread-123';
   const mockPreSearch = {
