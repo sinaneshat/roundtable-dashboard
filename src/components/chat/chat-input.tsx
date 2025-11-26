@@ -99,10 +99,14 @@ export const ChatInput = memo(({
     return false;
   }, [quotaCheckType, statsData]);
 
-  // Disable input if disabled prop, streaming, OR quota exceeded
-  // ✅ CRITICAL: When streaming, users CANNOT submit new messages
-  // Participants must complete their responses before new input is accepted
-  const isDisabled = disabled || isStreaming || isQuotaExceeded;
+  // ✅ FIX: Split disabled states for typing vs submission
+  // User reported: "during the loading 3 dots matrix text ensure the chatbox is allowed
+  // to be filled in but it's not allowing for submissions until the round is done fully"
+  //
+  // isInputDisabled: Controls textarea - only disabled when explicitly disabled or quota exceeded
+  // isSubmitDisabled: Controls submit button - disabled when streaming, disabled, or quota exceeded
+  const isInputDisabled = disabled || isQuotaExceeded;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded;
   const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
   // Auto-resizing textarea
@@ -178,7 +182,7 @@ export const ChatInput = memo(({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!isDisabled && hasValidInput) {
+      if (!isSubmitDisabled && hasValidInput) {
         // Create a properly typed synthetic FormEvent
         // FormEvent requires minimal properties: currentTarget, preventDefault, and type
         const form = e.currentTarget.form || e.currentTarget;
@@ -214,7 +218,7 @@ export const ChatInput = memo(({
           'bg-card',
           'shadow-lg',
           'transition-opacity duration-200',
-          isDisabled && !isQuotaExceeded && 'cursor-not-allowed',
+          isSubmitDisabled && !isQuotaExceeded && 'cursor-not-allowed',
           isStreaming && 'ring-2 ring-primary/20', // Visual indicator during streaming
           className,
         )}
@@ -233,7 +237,7 @@ export const ChatInput = memo(({
 
           <form
             onSubmit={(e) => {
-              if (isDisabled || !hasValidInput) {
+              if (isSubmitDisabled || !hasValidInput) {
                 e.preventDefault();
                 return;
               }
@@ -253,7 +257,7 @@ export const ChatInput = memo(({
                   onChange(e.target.value);
                 }}
                 onKeyDown={handleKeyDown}
-                disabled={isDisabled}
+                disabled={isInputDisabled}
                 placeholder={
                   isStreaming
                     ? t('chat.input.streamingPlaceholder')
@@ -263,7 +267,7 @@ export const ChatInput = memo(({
                 }
                 className="flex-1 bg-transparent border-0 text-sm sm:text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"
                 style={{ minHeight: `${minHeight}px` }}
-                aria-disabled={isDisabled}
+                aria-disabled={isInputDisabled}
                 aria-label={isStreaming ? t('chat.input.streamingLabel') : t('chat.input.label')}
               />
             </div>
@@ -287,7 +291,7 @@ export const ChatInput = memo(({
                       size="icon"
                       variant={isListening ? 'default' : 'ghost'}
                       onClick={toggleSpeech}
-                      disabled={isDisabled && !isListening}
+                      disabled={isInputDisabled && !isListening}
                       className={cn(
                         'size-8 sm:size-9 shrink-0 rounded-full',
                         isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
@@ -315,7 +319,7 @@ export const ChatInput = memo(({
                         <Button
                           type="submit"
                           size="icon"
-                          disabled={isDisabled || !hasValidInput}
+                          disabled={isSubmitDisabled || !hasValidInput}
                           className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
                         >
                           <ArrowUp className="size-4 sm:size-5" />

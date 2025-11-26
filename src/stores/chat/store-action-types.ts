@@ -133,6 +133,12 @@ export type UpdatePreSearchError = (roundNumber: number, errorMessage: string | 
 export type RemovePreSearch = (roundNumber: number) => void;
 export type ClearAllPreSearches = () => void;
 export type CheckStuckPreSearches = () => void;
+/** Update the last activity timestamp for a pre-search (for timeout tracking) */
+export type UpdatePreSearchActivity = (roundNumber: number) => void;
+/** Get the last activity timestamp for a pre-search */
+export type GetPreSearchActivityTime = (roundNumber: number) => number | undefined;
+/** Clear activity tracking for a pre-search (after completion) */
+export type ClearPreSearchActivity = (roundNumber: number) => void;
 
 // ============================================================================
 // THREAD ACTIONS - AI SDK Method Bindings
@@ -498,6 +504,9 @@ export type PreSearchActionsType = {
   removePreSearch: RemovePreSearch;
   clearAllPreSearches: ClearAllPreSearches;
   checkStuckPreSearches: CheckStuckPreSearches;
+  updatePreSearchActivity: UpdatePreSearchActivity;
+  getPreSearchActivityTime: GetPreSearchActivityTime;
+  clearPreSearchActivity: ClearPreSearchActivity;
 };
 
 export type ThreadActionsType = {

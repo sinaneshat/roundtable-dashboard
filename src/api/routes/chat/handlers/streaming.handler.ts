@@ -703,7 +703,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // This includes errors thrown from onFinish (like empty response errors)
       // AI SDK v5 will automatically handle these errors and propagate them to the client
       onError: async ({ error }) => {
-        // ✅ RESUMABLE STREAMS: Clean up stream state on error
+        // ✅ RESUMABLE STREAMS: Detect abort errors (page refresh/close)
+        // AI SDK Docs: "Stream resumption is not compatible with abort functionality.
+        // Closing a tab or refreshing the page triggers an abort signal."
+        // On abort, we MUST preserve stream state for resumption - don't clear KV!
+        const isAbortError = error instanceof Error && (
+          error.name === 'AbortError'
+          || error.message.includes('abort')
+          || error.message.includes('cancel')
+          || (error.cause instanceof Error && error.cause.name === 'AbortError')
+        );
+
+        if (isAbortError) {
+          // ✅ CRITICAL: Do NOT clear stream state on abort!
+          // The stream buffer in KV should remain intact for resumption
+          // Frontend will call GET /api/v1/chat/threads/{id}/stream to resume
+          return;
+        }
+
+        // ✅ RESUMABLE STREAMS: Clean up stream state on REAL errors only
         // This ensures failed streams don't block future streaming attempts
         try {
           await markStreamFailed(
@@ -1019,7 +1037,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               await appendStreamChunk(streamMessageId, value, c.env);
             }
           } catch (error) {
-            // Buffer failure shouldn't break streaming
+            // ✅ RESUMABLE STREAMS: Detect abort errors (page refresh/close)
+            // On abort, we preserve the buffer state for resumption
+            const isAbortError = error instanceof Error && (
+              error.name === 'AbortError'
+              || error.message.includes('abort')
+              || error.message.includes('cancel')
+              || (error.cause instanceof Error && error.cause.name === 'AbortError')
+            );
+
+            if (isAbortError) {
+              // ✅ CRITICAL: Do NOT fail buffer on abort!
+              // The partially buffered chunks are still valid for resumption
+              // Frontend will receive whatever was buffered before the abort
+              return;
+            }
+
+            // Buffer failure shouldn't break streaming - only mark failed on real errors
             const errorMessage = error instanceof Error ? error.message : 'Stream buffer error';
             await failStreamBuffer(streamMessageId, errorMessage, c.env);
           }
@@ -1034,11 +1068,31 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
 
       onError: (error) => {
-        // =========================================================================
-        // ✅ RESUMABLE STREAMS: Mark stream as failed for resume detection
-        // =========================================================================
         // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utility for consistent error handling
         const streamErrorMessage = getErrorMessage(error);
+        const errorName = getErrorName(error);
+
+        // ✅ RESUMABLE STREAMS: Detect abort errors (page refresh/close)
+        // AI SDK Docs: "Stream resumption is not compatible with abort functionality."
+        // On abort, we preserve stream state for resumption - don't mark as failed!
+        const isAbortError = error instanceof Error && (
+          error.name === 'AbortError'
+          || streamErrorMessage.includes('abort')
+          || streamErrorMessage.includes('cancel')
+          || streamErrorMessage.includes('This operation was aborted')
+          || (error.cause instanceof Error && error.cause.name === 'AbortError')
+        );
+
+        if (isAbortError) {
+          // ✅ CRITICAL: Return empty string to suppress error on abort
+          // Stream buffer remains intact in KV for resumption
+          // Frontend will call GET /api/v1/chat/threads/{id}/stream to resume
+          return '';
+        }
+
+        // =========================================================================
+        // ✅ RESUMABLE STREAMS: Mark stream as failed for resume detection (real errors only)
+        // =========================================================================
         markStreamFailed(
           threadId,
           currentRoundNumber,
@@ -1073,7 +1127,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // ✅ DEEPSEEK R1 WORKAROUND: Suppress logprobs validation errors
         // These are non-fatal errors from DeepSeek R1's non-conforming logprobs structure
         // Reference: https://github.com/vercel/ai/issues/9087
-        const errorName = getErrorName(error);
         if (errorName === 'AI_TypeValidationError' && streamErrorMessage.includes('logprobs')) {
           // Return empty string to indicate error was handled and stream should continue
           return '';

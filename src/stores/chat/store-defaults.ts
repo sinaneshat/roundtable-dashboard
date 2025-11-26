@@ -70,7 +70,8 @@ export const ANALYSIS_DEFAULTS = {
 
 export const PRESEARCH_DEFAULTS = {
   preSearches: [] as StoredPreSearch[],
-} as const;
+  preSearchActivityTimes: new Map<number, number>(),
+};
 
 // ============================================================================
 // THREAD SLICE DEFAULTS
@@ -240,6 +241,7 @@ export const COMPLETE_RESET_STATE = {
   analyses: ANALYSIS_DEFAULTS.analyses,
   // Pre-search state
   preSearches: PRESEARCH_DEFAULTS.preSearches,
+  preSearchActivityTimes: new Map<number, number>(),
   // Thread state
   thread: THREAD_DEFAULTS.thread,
   participants: THREAD_DEFAULTS.participants,
@@ -306,9 +308,10 @@ export const THREAD_RESET_STATE = {
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  // 🚨 BUG FIX: Create fresh Set instances for each thread reset
+  // 🚨 BUG FIX: Create fresh Set/Map instances for each thread reset
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
+  preSearchActivityTimes: new Map<number, number>(),
   // AI SDK methods (thread-related)
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,

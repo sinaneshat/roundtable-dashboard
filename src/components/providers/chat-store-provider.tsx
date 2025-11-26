@@ -42,7 +42,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { getPreSearchTimeout, isPreSearchTimedOut, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
+import { ACTIVITY_TIMEOUT_MS, getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, createChatStore } from '@/stores/chat';
 
@@ -78,9 +78,11 @@ function parsePreSearchData(jsonString: string): PreSearchDataPayload | null {
  * This caused searchData to be undefined when status was set to COMPLETE
  * Now we parse SSE events and return the final searchData from DONE event
  * ✅ Uses Zod schema validation instead of type assertions
+ * ✅ ACTIVITY TRACKING: Calls onActivity callback on each SSE event for timeout tracking
  */
 async function readPreSearchStreamAndExtractData(
   response: Response,
+  onActivity?: () => void,
 ): Promise<PreSearchDataPayload | null> {
   const reader = response.body?.getReader();
   if (!reader)
@@ -97,6 +99,9 @@ async function readPreSearchStreamAndExtractData(
       const { done, value } = await reader.read();
       if (done)
         break;
+
+      // ✅ ACTIVITY TRACKING: Call callback on each chunk received
+      onActivity?.();
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -384,7 +389,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // ✅ BUG FIX: Parse SSE events and extract searchData
           // Previously we just read bytes without parsing, leaving searchData undefined
           // Now we parse the DONE event to get the final searchData
-          const searchData = await readPreSearchStreamAndExtractData(response);
+          // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
+          const searchData = await readPreSearchStreamAndExtractData(response, () => {
+            store.getState().updatePreSearchActivity(newRoundNumber);
+          });
 
           // ✅ CRITICAL FIX: Update store with searchData AND status
           // Use updatePreSearchData which sets both searchData and status to COMPLETE
@@ -395,12 +403,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
           }
 
+          // Clear activity tracking after completion
+          store.getState().clearPreSearchActivity(newRoundNumber);
+
           // Also invalidate query for orchestrator sync when enabled
           queryClientRef.current.invalidateQueries({
             queryKey: queryKeys.threads.preSearches(effectiveThreadId),
           });
         }).catch((error) => {
           console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
+          // Clear activity tracking on failure
+          store.getState().clearPreSearchActivity(newRoundNumber);
           // Clear the trigger tracking on failure so retry is possible
           store.getState().clearPreSearchTracking(newRoundNumber);
           // If pre-search creation fails, continue with message anyway (degraded UX)
@@ -449,7 +462,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
             // ✅ BUG FIX: Parse SSE events and extract searchData
-            const searchData = await readPreSearchStreamAndExtractData(response);
+            // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
+            const searchData = await readPreSearchStreamAndExtractData(response, () => {
+              store.getState().updatePreSearchActivity(newRoundNumber);
+            });
 
             // ✅ CRITICAL FIX: Update store with searchData AND status
             if (searchData) {
@@ -458,12 +474,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
             }
 
+            // Clear activity tracking after completion
+            store.getState().clearPreSearchActivity(newRoundNumber);
+
             // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
               queryKey: queryKeys.threads.preSearches(effectiveThreadId),
             });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
+            // Clear activity tracking on failure
+            store.getState().clearPreSearchActivity(newRoundNumber);
             // Clear tracking on failure so retry is possible
             store.getState().clearPreSearchTracking(newRoundNumber);
           });
@@ -671,78 +692,95 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // ✅ TIMEOUT PROTECTION: Clear waitingToStartStreaming if streaming fails to start
   // Prevents system from getting stuck forever if AI SDK never becomes ready
-  // ✅ DYNAMIC TIMEOUT: Adjusts based on pre-search query count and search depth
+  // ✅ ACTIVITY-BASED TIMEOUT: Checks both total time AND recent SSE activity
   useEffect(() => {
     if (!waitingToStart) {
       return;
     }
 
-    // ✅ DYNAMIC TIMEOUT: Calculate based on pre-search configuration
-    // If web search is enabled, use dynamic timeout based on query count/depth
-    // Otherwise use default timeout for non-web-search conversations
-    const currentState = store.getState();
-    const webSearchEnabled = currentState.thread?.enableWebSearch ?? currentState.enableWebSearch;
+    // ✅ ACTIVITY-BASED TIMEOUT: Use interval to check activity rather than fixed timeout
+    // This allows pre-searches to run as long as they're making progress (receiving SSE events)
+    // Timeout is triggered when:
+    // 1. Total elapsed time exceeds dynamic timeout (based on query complexity), OR
+    // 2. No SSE activity received within ACTIVITY_TIMEOUT_MS (data flow stopped)
 
-    let dynamicTimeoutMs: number = TIMEOUT_CONFIG.DEFAULT_MS;
-
-    if (webSearchEnabled && currentState.messages.length > 0) {
-      const currentRound = getCurrentRoundNumber(currentState.messages);
-      const preSearchForRound = currentState.preSearches.find(ps => ps.roundNumber === currentRound);
-
-      // Calculate dynamic timeout based on pre-search data
-      // If pre-search exists, use its configuration; otherwise use default
-      dynamicTimeoutMs = getPreSearchTimeout(preSearchForRound);
-    }
-
-    const timeoutId = setTimeout(() => {
+    const checkInterval = setInterval(() => {
       const latestState = store.getState();
 
       // Only timeout if still waiting and not streaming
-      if (latestState.waitingToStartStreaming && !latestState.isStreaming) {
-        // ✅ DYNAMIC CHECK: Use dynamic timeout for pre-search status check
-        const latestWebSearchEnabled = latestState.thread?.enableWebSearch ?? latestState.enableWebSearch;
-        if (latestWebSearchEnabled && latestState.messages.length > 0) {
-          const currentRound = getCurrentRoundNumber(latestState.messages);
-          const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === currentRound);
+      if (!latestState.waitingToStartStreaming || latestState.isStreaming) {
+        return;
+      }
 
-          // If pre-search doesn't exist yet OR hasn't timed out yet, don't error
-          // The isPreSearchTimedOut uses dynamic timeout calculation
-          if (!preSearchForRound) {
-            // Pre-search doesn't exist yet - still waiting for creation
-            return;
-          }
+      const now = Date.now();
+      const latestWebSearchEnabled = latestState.thread?.enableWebSearch ?? latestState.enableWebSearch;
 
-          const isStillRunning = preSearchForRound.status === AnalysisStatuses.PENDING
-            || preSearchForRound.status === AnalysisStatuses.STREAMING;
-          if (isStillRunning && !isPreSearchTimedOut(preSearchForRound)) {
-            // Pre-search is still running and hasn't exceeded its dynamic timeout
-            return;
-          }
+      if (latestWebSearchEnabled && latestState.messages.length > 0) {
+        const currentRound = getCurrentRoundNumber(latestState.messages);
+        const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === currentRound);
+
+        // If pre-search doesn't exist yet, wait for creation
+        if (!preSearchForRound) {
+          return;
         }
 
-        console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming', {
-          timeoutMs: dynamicTimeoutMs,
-          webSearchEnabled: latestWebSearchEnabled,
-        });
+        const isStillRunning = preSearchForRound.status === AnalysisStatuses.PENDING
+          || preSearchForRound.status === AnalysisStatuses.STREAMING;
 
-        // ✅ FULL RESET: Clear all streaming-related state
-        latestState.setWaitingToStartStreaming(false);
-        latestState.setIsStreaming(false);
-        latestState.setIsCreatingThread(false);
+        if (isStillRunning) {
+          // ✅ ACTIVITY-BASED TIMEOUT: Check both total time AND activity
+          const lastActivityTime = latestState.getPreSearchActivityTime(currentRound);
 
-        // ✅ COMPLETE RESET: Reset entire store to overview state
-        latestState.resetToOverview();
+          // If still receiving SSE events (has recent activity), don't timeout
+          if (!shouldPreSearchTimeout(preSearchForRound, lastActivityTime, now)) {
+            return; // Pre-search is still running and has recent activity
+          }
 
-        // ✅ NAVIGATE: Push back to /chat to ensure URL matches state
-        router.push('/chat');
+          // Log timeout with activity info for debugging
+          console.error('[ChatStoreProvider] Pre-search timeout - no activity', {
+            roundNumber: currentRound,
+            status: preSearchForRound.status,
+            lastActivityTime,
+            timeSinceActivity: lastActivityTime ? now - lastActivityTime : 'no tracking',
+            activityTimeoutMs: ACTIVITY_TIMEOUT_MS,
+          });
+        }
+      } else {
+        // No web search enabled - use default timeout from creation
+        // For non-web-search, just check if we've been waiting too long (45s default)
+        const createdThreadTime = latestState.createdThreadId
+          ? Date.now() // We don't track exact creation time, so this is approximate
+          : 0;
 
-        // Show error to user
-        showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
+        if (createdThreadTime === 0 || Date.now() - createdThreadTime < TIMEOUT_CONFIG.DEFAULT_MS) {
+          return; // Still within default timeout window
+        }
       }
-    }, dynamicTimeoutMs);
+
+      console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming', {
+        webSearchEnabled: latestWebSearchEnabled,
+      });
+
+      // ✅ FULL RESET: Clear all streaming-related state
+      latestState.setWaitingToStartStreaming(false);
+      latestState.setIsStreaming(false);
+      latestState.setIsCreatingThread(false);
+
+      // ✅ COMPLETE RESET: Reset entire store to overview state
+      latestState.resetToOverview();
+
+      // ✅ NAVIGATE: Push back to /chat to ensure URL matches state
+      router.push('/chat');
+
+      // Show error to user
+      showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
+
+      // Clear interval after timeout
+      clearInterval(checkInterval);
+    }, 5000); // Check every 5 seconds
 
     return () => {
-      clearTimeout(timeoutId);
+      clearInterval(checkInterval);
     };
   }, [waitingToStart, store, router]);
 
@@ -1140,7 +1178,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
             // ✅ BUG FIX: Parse SSE events and extract searchData
-            const searchData = await readPreSearchStreamAndExtractData(response);
+            // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
+            const searchData = await readPreSearchStreamAndExtractData(response, () => {
+              store.getState().updatePreSearchActivity(newRoundNumber);
+            });
 
             // ✅ CRITICAL FIX: Update store with searchData AND status
             if (searchData) {
@@ -1149,12 +1190,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
             }
 
+            // Clear activity tracking after completion
+            store.getState().clearPreSearchActivity(newRoundNumber);
+
             // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
               queryKey: queryKeys.threads.preSearches(effectiveThreadId),
             });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
+            // Clear activity tracking on failure
+            store.getState().clearPreSearchActivity(newRoundNumber);
             // Clear the trigger tracking on failure so retry is possible
             store.getState().clearPreSearchTracking(newRoundNumber);
           });
@@ -1201,7 +1247,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
             // ✅ BUG FIX: Parse SSE events and extract searchData
-            const searchData = await readPreSearchStreamAndExtractData(response);
+            // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
+            const searchData = await readPreSearchStreamAndExtractData(response, () => {
+              store.getState().updatePreSearchActivity(newRoundNumber);
+            });
 
             // ✅ CRITICAL FIX: Update store with searchData AND status
             if (searchData) {
@@ -1210,12 +1259,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
             }
 
+            // Clear activity tracking after completion
+            store.getState().clearPreSearchActivity(newRoundNumber);
+
             // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
               queryKey: queryKeys.threads.preSearches(effectiveThreadId),
             });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
+            // Clear activity tracking on failure
+            store.getState().clearPreSearchActivity(newRoundNumber);
             // Clear tracking on failure so retry is possible
             store.getState().clearPreSearchTracking(newRoundNumber);
           });

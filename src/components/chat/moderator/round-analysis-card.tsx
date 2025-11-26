@@ -23,7 +23,7 @@ type RoundAnalysisCardProps = {
   isLatest?: boolean;
   className?: string;
   onStreamStart?: () => void;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
   streamingRoundNumber?: number | null;
   onActionClick?: (action: Recommendation) => void;
   demoOpen?: boolean; // Demo mode controlled accordion state

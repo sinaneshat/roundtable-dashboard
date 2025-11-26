@@ -138,7 +138,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // });
 
       actions.setShowInitialUI(false);
-      actions.setInputValue('');
       actions.setCreatedThreadId(thread.id);
 
       // ✅ SINGLE SOURCE OF TRUTH: Use utility for type-safe message transformation
@@ -149,6 +148,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // });
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
+
+      // ✅ FIX: Clear input AFTER initializeThread so user message appears in UI first
+      // User reported: "never empty out the chatbox until the request goes through
+      // and the msg box of what user just said shows on the round"
+      actions.setInputValue('');
 
       // ✅ CRITICAL FIX: Set pending message so provider can trigger participants
       // BUG FIX: Without this, pendingMessage stays null after pre-search completes
@@ -286,12 +290,17 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }
 
       // Prepare for new message (sets flags and pending message)
+      // On THREAD screen, this also adds optimistic user message to UI
       actions.prepareForNewMessage(trimmed, []);
+
+      // ✅ FIX: Clear input AFTER prepareForNewMessage so user message appears in UI first
+      // User reported: "never empty out the chatbox until the request goes through
+      // and the msg box of what user just said shows on the round"
+      // Also moved inside try block so input isn't cleared on error
+      actions.setInputValue('');
     } catch (error) {
       showApiErrorToast('Error updating thread', error);
     }
-
-    actions.setInputValue('');
   }, [
     formState,
     threadState,

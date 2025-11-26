@@ -44,6 +44,7 @@ import type {
   ClearAnalysisTracking,
   ClearAnimations,
   ClearFeedback,
+  ClearPreSearchActivity,
   ClearPreSearchTracking,
   ClearStreamResumption,
   CompleteAnimation,
@@ -51,6 +52,7 @@ import type {
   CompleteStreaming,
   CreatePendingAnalysis,
   GetNextParticipantToTrigger,
+  GetPreSearchActivityTime,
   HandleResumedStreamComplete,
   HandleStreamResumptionFailure,
   HasAnalysisBeenCreated,
@@ -121,6 +123,7 @@ import type {
   UpdateAnalysisStatus,
   UpdateParticipant,
   UpdateParticipants,
+  UpdatePreSearchActivity,
   UpdatePreSearchData,
   UpdatePreSearchStatus,
   WaitForAnimation,
@@ -255,6 +258,8 @@ export const AnalysisSliceSchema = z.intersection(AnalysisStateSchema, AnalysisA
 
 export const PreSearchStateSchema = z.object({
   preSearches: z.array(StoredPreSearchSchema),
+  /** Tracks last activity timestamp per round number for dynamic timeout calculation */
+  preSearchActivityTimes: z.custom<Map<number, number>>(),
 });
 
 export const PreSearchActionsSchema = z.object({
@@ -265,6 +270,9 @@ export const PreSearchActionsSchema = z.object({
   removePreSearch: z.custom<RemovePreSearch>(),
   clearAllPreSearches: z.custom<ClearAllPreSearches>(),
   checkStuckPreSearches: z.custom<CheckStuckPreSearches>(),
+  updatePreSearchActivity: z.custom<UpdatePreSearchActivity>(),
+  getPreSearchActivityTime: z.custom<GetPreSearchActivityTime>(),
+  clearPreSearchActivity: z.custom<ClearPreSearchActivity>(),
 });
 
 export const PreSearchSliceSchema = z.intersection(PreSearchStateSchema, PreSearchActionsSchema);

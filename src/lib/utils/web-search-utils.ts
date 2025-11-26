@@ -189,6 +189,74 @@ export function isPreSearchTimedOut(preSearch: StoredPreSearch | null | undefine
 }
 
 /**
+ * Activity-based timeout threshold (in milliseconds)
+ * If no SSE activity is received within this period, the pre-search is considered stalled
+ * This is more generous than the total timeout because:
+ * - SSE events should arrive regularly during active processing
+ * - Large searches with many queries may take longer overall
+ * - But they should ALWAYS have activity within this window
+ */
+export const ACTIVITY_TIMEOUT_MS = 60_000; // 60 seconds without activity = stalled
+
+/**
+ * Checks if a pre-search has stalled based on SSE activity
+ * This is used alongside isPreSearchTimedOut for more robust timeout handling:
+ * - isPreSearchTimedOut: Total elapsed time exceeded (based on query complexity)
+ * - isPreSearchActivityStalled: No recent activity (data flow stopped)
+ *
+ * @param lastActivityTime - Last activity timestamp from store (or undefined if no tracking)
+ * @param createdTime - Pre-search creation timestamp (fallback if no activity tracked)
+ * @param now - Current timestamp (default: Date.now())
+ * @returns True if pre-search has stalled (no recent activity)
+ */
+export function isPreSearchActivityStalled(
+  lastActivityTime: number | undefined,
+  createdTime: number,
+  now = Date.now(),
+): boolean {
+  // Use last activity time if available, otherwise fall back to creation time
+  const referenceTime = lastActivityTime ?? createdTime;
+  return now - referenceTime > ACTIVITY_TIMEOUT_MS;
+}
+
+/**
+ * Combined timeout check that considers both total time and activity
+ * Returns true if EITHER condition is met:
+ * 1. Total elapsed time exceeds dynamic timeout (based on query complexity)
+ * 2. No SSE activity received within ACTIVITY_TIMEOUT_MS
+ *
+ * @param preSearch - Stored pre-search record
+ * @param lastActivityTime - Last activity timestamp from store (or undefined)
+ * @param now - Current timestamp (default: Date.now())
+ * @returns True if pre-search should be considered timed out
+ */
+export function shouldPreSearchTimeout(
+  preSearch: StoredPreSearch | null | undefined,
+  lastActivityTime: number | undefined,
+  now = Date.now(),
+): boolean {
+  if (!preSearch) {
+    return false;
+  }
+
+  const createdTime = preSearch.createdAt instanceof Date
+    ? preSearch.createdAt.getTime()
+    : new Date(preSearch.createdAt).getTime();
+
+  // Check total elapsed time timeout
+  if (isPreSearchTimedOut(preSearch, now)) {
+    return true;
+  }
+
+  // Check activity-based timeout (no recent SSE events)
+  if (isPreSearchActivityStalled(lastActivityTime, createdTime, now)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Safely extracts domain/hostname from a URL string
  *
  * @param url - URL string to parse (may be malformed)

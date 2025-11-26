@@ -31,10 +31,14 @@ import { shouldSendPendingMessage, shouldWaitForPreSearch } from '@/stores/chat/
 import { createChatStore } from '@/stores/chat/store';
 
 import {
+  createMockAnalysis,
+  createMockMessage,
   createMockParticipant,
   createMockPreSearch,
+  createMockPreSearchDataPayload,
   createMockThread,
   createMockUserMessage,
+  createPendingPreSearch,
 } from './test-factories';
 
 // ============================================================================
@@ -612,6 +616,597 @@ describe('mid-Conversation Web Search Toggle', () => {
 
       expect(validationResult.shouldSend).toBe(false);
       expect(validationResult.reason).toBe(PendingMessageValidationReasons.PUBLIC_SCREEN_MODE);
+    });
+  });
+
+  // ==========================================================================
+  // OPTIMISTIC UI UPDATES
+  // ==========================================================================
+
+  describe('optimistic UI Updates', () => {
+    it('should add optimistic user message when enabling web search on THREAD screen', () => {
+      const thread = createMockThread({
+        id: 'thread-optimistic',
+        enableWebSearch: false,
+      });
+      const participants = [createMockParticipant(0), createMockParticipant(1)];
+
+      // Complete round 0
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0, 'First question'),
+        createMockMessage(0, 0),
+        createMockMessage(1, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().markAnalysisCreated(0);
+      store.getState().addAnalysis(createMockAnalysis({
+        roundNumber: 0,
+        status: AnalysisStatuses.COMPLETE,
+      }));
+
+      // Before: 3 messages
+      expect(store.getState().messages).toHaveLength(3);
+
+      // Enable web search
+      store.getState().setEnableWebSearch(true);
+
+      // Prepare new message - should add optimistic user message
+      store.getState().prepareForNewMessage('Question with web search', ['openai/gpt-4', 'openai/gpt-4']);
+
+      // After: 4 messages (optimistic user message added)
+      expect(store.getState().messages).toHaveLength(4);
+
+      const lastMessage = store.getState().messages[3];
+      expect(lastMessage.role).toBe('user');
+      expect(lastMessage.metadata?.roundNumber).toBe(1);
+      expect(lastMessage.metadata?.isOptimistic).toBe(true);
+    });
+
+    it('should NOT add optimistic user message on OVERVIEW screen', () => {
+      const thread = createMockThread({
+        id: 'thread-overview',
+        enableWebSearch: true,
+      });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants);
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+      // Enable web search
+      store.getState().setEnableWebSearch(true);
+
+      // Before: 0 messages
+      expect(store.getState().messages).toHaveLength(0);
+
+      // Prepare new message
+      store.getState().prepareForNewMessage('First question', ['openai/gpt-4']);
+
+      // After: Still 0 messages (no optimistic message on OVERVIEW)
+      expect(store.getState().messages).toHaveLength(0);
+    });
+
+    it('should correctly track streamingRoundNumber when web search enabled', () => {
+      const thread = createMockThread({
+        id: 'thread-round-number',
+        enableWebSearch: false,
+      });
+      const participants = [createMockParticipant(0)];
+
+      // Complete round 0
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Enable web search
+      store.getState().setEnableWebSearch(true);
+
+      // Prepare message for round 1
+      store.getState().prepareForNewMessage('Follow-up', ['openai/gpt-4']);
+
+      // streamingRoundNumber should be set to next round
+      expect(store.getState().streamingRoundNumber).toBe(1);
+    });
+  });
+
+  // ==========================================================================
+  // RACE CONDITIONS
+  // ==========================================================================
+
+  describe('race Conditions', () => {
+    it('should handle toggle during participant streaming', () => {
+      const thread = createMockThread({
+        id: 'thread-race',
+        enableWebSearch: true,
+      });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add completed pre-search for round 1
+      store.getState().addPreSearch(createMockPreSearch({
+        roundNumber: 1,
+        status: AnalysisStatuses.COMPLETE,
+        searchData: createMockPreSearchDataPayload(),
+      }));
+
+      // Start streaming round 1
+      store.getState().setIsStreaming(true);
+      store.getState().setStreamingRoundNumber(1);
+
+      // User disables web search mid-stream
+      store.getState().setEnableWebSearch(false);
+
+      // Current round's pre-search should still be present (already completed)
+      const preSearch = store.getState().preSearches.find((ps: StoredPreSearch) => ps.roundNumber === 1);
+      expect(preSearch).toBeDefined();
+      expect(preSearch?.status).toBe(AnalysisStatuses.COMPLETE);
+
+      // Next round (2) should NOT wait for pre-search
+      const shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: false,
+        preSearches: store.getState().preSearches,
+        roundNumber: 2,
+      });
+      expect(shouldWait).toBe(false);
+    });
+
+    it('should handle toggle during pre-search streaming', () => {
+      const thread = createMockThread({
+        id: 'thread-presearch-race',
+        enableWebSearch: true,
+      });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Pre-search in progress
+      store.getState().addPreSearch(createPendingPreSearch(1));
+      store.getState().updatePreSearchStatus(1, AnalysisStatuses.STREAMING);
+
+      // Should wait (web search enabled, pre-search streaming)
+      let shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: store.getState().preSearches,
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(true);
+
+      // User disables mid-pre-search
+      store.getState().setEnableWebSearch(false);
+
+      // Should NOT wait anymore (user disabled)
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: false,
+        preSearches: store.getState().preSearches,
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(false);
+
+      // Re-enable
+      store.getState().setEnableWebSearch(true);
+
+      // Should wait again (pre-search still streaming)
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: store.getState().preSearches,
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(true);
+    });
+
+    it('should handle rapid toggle operations consistently', () => {
+      const thread = createMockThread({
+        id: 'thread-rapid-toggle',
+        enableWebSearch: false,
+      });
+
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Rapid toggles
+      for (let i = 0; i < 50; i++) {
+        store.getState().setEnableWebSearch(i % 2 === 0);
+      }
+
+      // Final state should be consistent (50 is even, so false)
+      expect(store.getState().enableWebSearch).toBe(false);
+
+      // One more toggle
+      store.getState().setEnableWebSearch(true);
+      expect(store.getState().enableWebSearch).toBe(true);
+
+      // Blocking should reflect final state
+      const shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: [],
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(true);
+    });
+
+    it('should handle toggle during PATCH request (simulated)', () => {
+      const thread = createMockThread({
+        id: 'thread-patch-race',
+        enableWebSearch: false,
+      });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // User enables web search
+      store.getState().setEnableWebSearch(true);
+
+      // PATCH starts (simulated async)
+      // User changes mind and disables before PATCH completes
+      store.getState().setEnableWebSearch(false);
+
+      // Form state should be false
+      expect(store.getState().enableWebSearch).toBe(false);
+
+      // Should NOT wait for pre-search during PATCH (before response)
+      const shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: false,
+        preSearches: [],
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(false);
+
+      // PATCH returns with enableWebSearch: true
+      // NOTE: setThread intentionally syncs form state with thread state
+      // This ensures the UI reflects server state after PATCH completes
+      store.getState().setThread({ ...store.getState().thread!, enableWebSearch: true });
+
+      // After PATCH, form state is synced with thread (enableWebSearch: true)
+      expect(store.getState().enableWebSearch).toBe(true);
+
+      // Now should wait because form state is synced
+      const shouldWaitAfterPatch = shouldWaitForPreSearch({
+        webSearchEnabled: store.getState().enableWebSearch,
+        preSearches: [],
+        roundNumber: 1,
+      });
+      expect(shouldWaitAfterPatch).toBe(true);
+
+      // User can still toggle again after PATCH completes
+      store.getState().setEnableWebSearch(false);
+      expect(store.getState().enableWebSearch).toBe(false);
+      expect(shouldWaitForPreSearch({
+        webSearchEnabled: store.getState().enableWebSearch,
+        preSearches: [],
+        roundNumber: 1,
+      })).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // COMPLETE FLOW SCENARIOS
+  // ==========================================================================
+
+  describe('complete Flow Scenarios', () => {
+    it('should handle 5-round conversation with mixed web search states', () => {
+      const thread = createMockThread({
+        id: 'thread-5round',
+        enableWebSearch: false,
+      });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants);
+      store.getState().setScreenMode(ScreenModes.OVERVIEW);
+
+      // Round 0: No web search
+      store.getState().setMessages([createMockUserMessage(0)]);
+      let shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: false,
+        preSearches: [],
+        roundNumber: 0,
+      });
+      expect(shouldWait).toBe(false);
+      store.getState().setMessages(prev => [...prev, createMockMessage(0, 0)]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Round 1: Enable web search
+      store.getState().setEnableWebSearch(true);
+      store.getState().prepareForNewMessage('Round 1', ['openai/gpt-4']);
+
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: [],
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(true);
+
+      store.getState().addPreSearch(createPendingPreSearch(1));
+      store.getState().markPreSearchTriggered(1);
+      store.getState().updatePreSearchStatus(1, AnalysisStatuses.STREAMING);
+      store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: store.getState().preSearches,
+        roundNumber: 1,
+      });
+      expect(shouldWait).toBe(false);
+      store.getState().setMessages(prev => [...prev, createMockMessage(0, 1)]);
+
+      // Round 2: Keep web search enabled
+      store.getState().prepareForNewMessage('Round 2', ['openai/gpt-4']);
+
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: store.getState().preSearches,
+        roundNumber: 2,
+      });
+      expect(shouldWait).toBe(true);
+
+      store.getState().addPreSearch(createPendingPreSearch(2));
+      store.getState().updatePreSearchData(2, createMockPreSearchDataPayload());
+      store.getState().setMessages(prev => [...prev, createMockMessage(0, 2)]);
+
+      // Round 3: Disable web search
+      store.getState().setEnableWebSearch(false);
+      store.getState().prepareForNewMessage('Round 3', ['openai/gpt-4']);
+
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: false,
+        preSearches: store.getState().preSearches,
+        roundNumber: 3,
+      });
+      expect(shouldWait).toBe(false);
+      store.getState().setMessages(prev => [...prev, createMockMessage(0, 3)]);
+
+      // Round 4: Re-enable web search
+      store.getState().setEnableWebSearch(true);
+      store.getState().prepareForNewMessage('Round 4', ['openai/gpt-4']);
+
+      shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: true,
+        preSearches: store.getState().preSearches,
+        roundNumber: 4,
+      });
+      expect(shouldWait).toBe(true);
+
+      store.getState().addPreSearch(createPendingPreSearch(4));
+      store.getState().updatePreSearchData(4, createMockPreSearchDataPayload());
+
+      // Final verification
+      const preSearches = store.getState().preSearches;
+      expect(preSearches).toHaveLength(3); // Rounds 1, 2, and 4
+
+      const roundNumbers = preSearches.map((ps: StoredPreSearch) => ps.roundNumber).sort();
+      expect(roundNumbers).toEqual([1, 2, 4]);
+
+      // All have data
+      expect(preSearches.every((ps: StoredPreSearch) => ps.searchData !== null)).toBe(true);
+    });
+
+    it('should handle sparse pre-search array from toggling', () => {
+      const thread = createMockThread({
+        id: 'thread-sparse',
+        enableWebSearch: false,
+      });
+
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Simulate: Round 0 (no search), Round 1 (search), Round 2 (no search), Round 3 (search)
+      store.getState().addPreSearch(createMockPreSearch({
+        id: 'ps-1',
+        roundNumber: 1,
+        status: AnalysisStatuses.COMPLETE,
+      }));
+      store.getState().addPreSearch(createMockPreSearch({
+        id: 'ps-3',
+        roundNumber: 3,
+        status: AnalysisStatuses.COMPLETE,
+      }));
+
+      // Web search disabled - no round should wait
+      store.getState().setEnableWebSearch(false);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: false, preSearches: store.getState().preSearches, roundNumber: 0 })).toBe(false);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: false, preSearches: store.getState().preSearches, roundNumber: 1 })).toBe(false);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: false, preSearches: store.getState().preSearches, roundNumber: 2 })).toBe(false);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: false, preSearches: store.getState().preSearches, roundNumber: 3 })).toBe(false);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: false, preSearches: store.getState().preSearches, roundNumber: 4 })).toBe(false);
+
+      // Web search enabled - only rounds without complete pre-search should wait
+      store.getState().setEnableWebSearch(true);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 0 })).toBe(true); // No pre-search
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 1 })).toBe(false); // Has complete pre-search
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 2 })).toBe(true); // No pre-search
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 3 })).toBe(false); // Has complete pre-search
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 4 })).toBe(true); // No pre-search (new round)
+    });
+
+    it('should handle enable-cancel-enable pattern gracefully', () => {
+      const thread = createMockThread({
+        id: 'thread-cancel',
+        enableWebSearch: false,
+      });
+      const participants = [createMockParticipant(0)];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+
+      // Enable
+      store.getState().setEnableWebSearch(true);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: [], roundNumber: 1 })).toBe(true);
+
+      // Prepare message
+      store.getState().prepareForNewMessage('Test', ['openai/gpt-4']);
+
+      // Pre-search created
+      store.getState().addPreSearch(createPendingPreSearch(1));
+
+      // User "cancels" by disabling
+      store.getState().setEnableWebSearch(false);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: false, preSearches: store.getState().preSearches, roundNumber: 1 })).toBe(false);
+
+      // Reset form
+      store.getState().resetForm();
+
+      // Enable again for fresh attempt
+      store.getState().setEnableWebSearch(true);
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 1 })).toBe(true);
+
+      // New message submission
+      store.getState().prepareForNewMessage('New attempt', ['openai/gpt-4']);
+
+      // Complete the pre-search this time
+      store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+      expect(shouldWaitForPreSearch({ webSearchEnabled: true, preSearches: store.getState().preSearches, roundNumber: 1 })).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // PENDING MESSAGE VALIDATION INTEGRATION
+  // ==========================================================================
+
+  describe('pending Message Validation Integration', () => {
+    it('should correctly integrate with pending message validation when enabling web search', () => {
+      const thread = createMockThread({
+        id: 'thread-validation',
+        enableWebSearch: false,
+      });
+      const participants = [createMockParticipant(0, { modelId: 'openai/gpt-4' })];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().addAnalysis(createMockAnalysis({
+        roundNumber: 0,
+        status: AnalysisStatuses.COMPLETE,
+      }));
+
+      // Enable web search
+      store.getState().setEnableWebSearch(true);
+
+      // Prepare message
+      store.getState().prepareForNewMessage('Follow-up question', ['openai/gpt-4']);
+      store.getState().setExpectedParticipantIds(['openai/gpt-4']);
+      store.getState().setIsWaitingForChangelog(false);
+
+      // Should NOT send - waiting for pre-search creation
+      let result = shouldSendPendingMessage({
+        pendingMessage: 'Follow-up question',
+        expectedParticipantIds: ['openai/gpt-4'],
+        hasSentPendingMessage: false,
+        isStreaming: false,
+        isWaitingForChangelog: false,
+        screenMode: ScreenModes.THREAD,
+        participants,
+        messages: store.getState().messages,
+        preSearches: [],
+        thread,
+        enableWebSearch: true,
+      });
+      expect(result.shouldSend).toBe(false);
+      expect(result.reason).toBe(PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH_CREATION);
+
+      // Add PENDING pre-search
+      store.getState().addPreSearch(createPendingPreSearch(1));
+
+      // Still should NOT send - pre-search PENDING
+      result = shouldSendPendingMessage({
+        pendingMessage: 'Follow-up question',
+        expectedParticipantIds: ['openai/gpt-4'],
+        hasSentPendingMessage: false,
+        isStreaming: false,
+        isWaitingForChangelog: false,
+        screenMode: ScreenModes.THREAD,
+        participants,
+        messages: store.getState().messages,
+        preSearches: store.getState().preSearches,
+        thread,
+        enableWebSearch: true,
+      });
+      expect(result.shouldSend).toBe(false);
+      expect(result.reason).toBe(PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH);
+
+      // Complete pre-search
+      store.getState().updatePreSearchData(1, createMockPreSearchDataPayload());
+
+      // Now should send
+      result = shouldSendPendingMessage({
+        pendingMessage: 'Follow-up question',
+        expectedParticipantIds: ['openai/gpt-4'],
+        hasSentPendingMessage: false,
+        isStreaming: false,
+        isWaitingForChangelog: false,
+        screenMode: ScreenModes.THREAD,
+        participants,
+        messages: store.getState().messages,
+        preSearches: store.getState().preSearches,
+        thread,
+        enableWebSearch: true,
+      });
+      expect(result.shouldSend).toBe(true);
+      expect(result.roundNumber).toBe(1);
+    });
+
+    it('should allow immediate send when web search disabled mid-conversation', () => {
+      const thread = createMockThread({
+        id: 'thread-disable-validation',
+        enableWebSearch: true,
+      });
+      const participants = [createMockParticipant(0, { modelId: 'openai/gpt-4' })];
+
+      store.getState().initializeThread(thread, participants, [
+        createMockUserMessage(0),
+        createMockMessage(0, 0),
+      ]);
+      store.getState().setScreenMode(ScreenModes.THREAD);
+      store.getState().setEnableWebSearch(true);
+
+      // Add completed pre-search for round 0
+      store.getState().addPreSearch(createMockPreSearch({
+        roundNumber: 0,
+        status: AnalysisStatuses.COMPLETE,
+      }));
+
+      // Disable web search
+      store.getState().setEnableWebSearch(false);
+
+      // Prepare message
+      store.getState().prepareForNewMessage('Question without search', ['openai/gpt-4']);
+      store.getState().setExpectedParticipantIds(['openai/gpt-4']);
+      store.getState().setIsWaitingForChangelog(false);
+
+      // Should send immediately (no pre-search blocking when disabled)
+      const result = shouldSendPendingMessage({
+        pendingMessage: 'Question without search',
+        expectedParticipantIds: ['openai/gpt-4'],
+        hasSentPendingMessage: false,
+        isStreaming: false,
+        isWaitingForChangelog: false,
+        screenMode: ScreenModes.THREAD,
+        participants,
+        messages: store.getState().messages,
+        preSearches: store.getState().preSearches,
+        thread,
+        enableWebSearch: false, // Disabled
+      });
+      expect(result.shouldSend).toBe(true);
     });
   });
 });

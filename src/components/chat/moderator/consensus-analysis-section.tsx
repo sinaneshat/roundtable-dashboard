@@ -21,6 +21,19 @@ import {
 
 import { getAgreementIcon } from './moderator-ui-utils';
 
+/**
+ * Radar chart data point type for argument strength visualization.
+ * Recharts requires dynamic keys for each data series, so index signature is
+ * necessary to allow role names as keys dynamically added from argumentStrengthProfile.
+ * The 'metric' field is the category axis label; role name keys hold numeric scores.
+ *
+ * Example: { metric: 'Logic', 'The Ideator': 85, 'The Critic': 72 }
+ */
+type RadarDataPoint = {
+  metric: string;
+  [roleKey: string]: string | number;
+};
+
 type ConsensusAnalysisSectionProps = {
   analysis: ConsensusAnalysis;
   isStreaming?: boolean;
@@ -51,7 +64,7 @@ export function ConsensusAnalysisSection({
   const metrics = ['Logic', 'Risk', 'Creativity', 'Consensus', 'Evidence'];
   const fullRadarData = argumentStrengthProfile
     ? metrics.map((metric) => {
-        const dataPoint: Record<string, string | number> = { metric };
+        const dataPoint: RadarDataPoint = { metric };
         Object.entries(argumentStrengthProfile).forEach(([role, profile]) => {
           const metricKey = metric.toLowerCase();
           if (metricKey === 'logic')
@@ -77,12 +90,16 @@ export function ConsensusAnalysisSection({
     'var(--chart-4)',
     'var(--chart-5)',
   ];
-  const chartConfig: ChartConfig = argumentStrengthProfile
-    ? Object.keys(argumentStrengthProfile).reduce((acc, role, index) => {
-        acc[role] = { label: role, color: chartColors[index % chartColors.length] };
-        return acc;
-      }, {} as ChartConfig)
-    : {};
+
+  // Build chart config using Object.fromEntries for type-safe construction
+  const chartConfig = argumentStrengthProfile
+    ? Object.fromEntries(
+      Object.keys(argumentStrengthProfile).map((role, index) => [
+        role,
+        { label: role, color: chartColors[index % chartColors.length] },
+      ]),
+    ) satisfies ChartConfig
+    : ({} satisfies ChartConfig);
 
   const contributors = agreementHeatmap && agreementHeatmap.length > 0
     ? Object.keys(agreementHeatmap[0]?.perspectives || {})

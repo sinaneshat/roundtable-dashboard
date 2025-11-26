@@ -87,7 +87,7 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
-import { isPreSearchTimedOut } from '@/lib/utils/web-search-utils';
+import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
@@ -502,7 +502,7 @@ const createPreSearchSlice: StateCreator<
   [['zustand/devtools', never]],
   [],
   PreSearchSlice
-> = set => ({
+> = (set, get) => ({
   ...PRESEARCH_DEFAULTS,
 
   setPreSearches: (preSearches: StoredPreSearch[]) =>
@@ -578,8 +578,10 @@ const createPreSearchSlice: StateCreator<
     }, false, 'preSearch/clearAllPreSearches'),
   checkStuckPreSearches: () =>
     set((state) => {
-      // ✅ DYNAMIC TIMEOUT: Uses calculated timeout based on query count and search depth
-      // Replaces hardcoded 30 second timeout with dynamic calculation
+      // ✅ ACTIVITY-BASED TIMEOUT: Uses both total time AND activity tracking
+      // Replaces hardcoded 30 second timeout with dynamic calculation that considers:
+      // 1. Total elapsed time (based on query complexity)
+      // 2. Time since last SSE activity (data flow check)
       const now = Date.now();
       let hasChanges = false;
 
@@ -588,9 +590,12 @@ const createPreSearchSlice: StateCreator<
           return ps;
         }
 
-        // ✅ DYNAMIC: Uses isPreSearchTimedOut which calculates timeout based on
-        // number of queries, search depth (basic vs advanced), and expected results
-        if (isPreSearchTimedOut(ps, now)) {
+        // ✅ ACTIVITY-BASED: Check both total time AND activity tracking
+        // A pre-search is considered stuck if:
+        // 1. Total time exceeds dynamic timeout, OR
+        // 2. No SSE activity within ACTIVITY_TIMEOUT_MS
+        const lastActivityTime = state.preSearchActivityTimes.get(ps.roundNumber);
+        if (shouldPreSearchTimeout(ps, lastActivityTime, now)) {
           hasChanges = true;
           // Mark as complete to unblock message sending
           return { ...ps, status: AnalysisStatuses.COMPLETE };
@@ -609,6 +614,25 @@ const createPreSearchSlice: StateCreator<
 
       return { preSearches: updatedPreSearches };
     }, false, 'preSearch/checkStuckPreSearches'),
+
+  // ✅ ACTIVITY TRACKING: For dynamic timeout calculation based on SSE events
+  updatePreSearchActivity: (roundNumber: number) =>
+    set((state) => {
+      const newActivityTimes = new Map(state.preSearchActivityTimes);
+      newActivityTimes.set(roundNumber, Date.now());
+      return { preSearchActivityTimes: newActivityTimes };
+    }, false, 'preSearch/updatePreSearchActivity'),
+
+  getPreSearchActivityTime: (roundNumber: number) => {
+    return get().preSearchActivityTimes.get(roundNumber);
+  },
+
+  clearPreSearchActivity: (roundNumber: number) =>
+    set((state) => {
+      const newActivityTimes = new Map(state.preSearchActivityTimes);
+      newActivityTimes.delete(roundNumber);
+      return { preSearchActivityTimes: newActivityTimes };
+    }, false, 'preSearch/clearPreSearchActivity'),
 });
 
 /**

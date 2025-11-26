@@ -16,6 +16,7 @@ import {
   ConsensusEvolutionPhaseSchema,
   ContributorPerspectiveSchema,
   EvidenceAndReasoningSchema,
+  ModeratorAnalysisListResponseSchema,
   ModeratorAnalysisPayloadSchema,
   RecommendationSchema,
   RoundSummarySchema,
@@ -36,7 +37,7 @@ import { RoundSummarySection } from './round-summary-section';
 type ModeratorAnalysisStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
   onStreamStart?: () => void;
   onActionClick?: (action: Recommendation) => void;
 };
@@ -121,18 +122,6 @@ function ModeratorAnalysisStreamComponent({
   useEffect(() => {
     hasStartedStreamingRef.current = false;
   }, [analysis.id]);
-
-  useEffect(() => {
-    onStreamCompleteRef.current = onStreamComplete;
-  }, [onStreamComplete]);
-
-  useEffect(() => {
-    onStreamStartRef.current = onStreamStart;
-  }, [onStreamStart]);
-
-  useEffect(() => {
-    onActionClickRef.current = onActionClick;
-  }, [onActionClick]);
 
   // ✅ MOCK MODE: Mock streaming effect (disabled in favor of real API)
   // useEffect(() => {
@@ -226,19 +215,35 @@ function ModeratorAnalysisStreamComponent({
         if (!res.ok)
           throw new Error('Failed to fetch analyses');
 
-        const json = (await res.json()) as { data: StoredModeratorAnalysis[] };
-        const analyses = json.data;
+        // ✅ ZOD VALIDATION: Parse API response with schema instead of force typecast
+        const json: unknown = await res.json();
+        const parseResult = ModeratorAnalysisListResponseSchema.safeParse(json);
+
+        if (!parseResult.success) {
+          console.error('[ModeratorAnalysisStream] Invalid API response:', parseResult.error);
+          return; // Continue polling on validation error
+        }
+
+        const analyses = parseResult.data.data.items;
         const current = analyses.find(a => a.roundNumber === analysis.roundNumber);
 
         if (current) {
           if (current.status === AnalysisStatuses.COMPLETE && current.analysisData) {
-            // ✅ TYPE FIX: analysisData is ModeratorAnalysisPayload which matches onStreamComplete signature
-            onStreamCompleteRef.current?.(current.analysisData as ModeratorAnalysisPayload);
+            // ✅ TYPE SAFE: Reconstruct full payload by adding back omitted fields
+            // StoredModeratorAnalysis.analysisData omits roundNumber, mode, userQuestion
+            // (stored at top level) - reconstruct for ModeratorAnalysisPayload
+            const fullPayload: ModeratorAnalysisPayload = {
+              ...current.analysisData,
+              roundNumber: current.roundNumber,
+              mode: current.mode,
+              userQuestion: current.userQuestion,
+            };
+            onStreamCompleteRef.current?.(fullPayload);
             if (isMounted)
               is409Conflict.onFalse(); // Stop polling
             return;
           } else if (current.status === AnalysisStatuses.FAILED) {
-            onStreamCompleteRef.current?.(null, new Error(current.errorMessage || 'Analysis failed'));
+            onStreamCompleteRef.current?.(null, new Error(current.errorMessage ?? 'Analysis failed'));
             if (isMounted)
               is409Conflict.onFalse(); // Stop polling
             return;
