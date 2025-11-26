@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 
@@ -12,6 +13,7 @@ import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
+import { LoaderFive } from '@/components/ui/loader';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
@@ -50,8 +52,10 @@ export const ModelMessageCard = memo(({
   hideInlineHeader = false,
   hideAvatar = false,
 }: ModelMessageCardProps) => {
+  const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
+  const isPendingWithNoParts = showStatusIndicator && parts.length === 0;
   const isError = status === MessageStatuses.FAILED;
   const isStreaming = status === MessageStatuses.STREAMING;
 
@@ -137,6 +141,12 @@ export const ModelMessageCard = memo(({
                 metadata={metadata}
                 className="mb-2"
               />
+            )}
+            {/* ✅ EAGER RENDERING: Show loading when pending with no content */}
+            {isPendingWithNoParts && (
+              <div className="py-2 text-muted-foreground text-sm">
+                <LoaderFive text={t('generating', { model: modelName })} />
+              </div>
             )}
             {parts.map((part, partIndex) => {
               if (part.type === MessagePartTypes.TEXT) {

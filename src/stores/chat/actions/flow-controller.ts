@@ -121,10 +121,17 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
 
     // SAFETY NET 2: Analysis stuck at 'pending' for >60s
+    // ✅ CRITICAL FIX: Only apply timeout to placeholder analyses (no participantMessageIds)
+    // When analysis has participantMessageIds, it's ready to stream - not stuck
+    // The ModeratorAnalysisStream component will render and trigger the POST request
+    const isPlaceholderAnalysis = !firstAnalysis.participantMessageIds
+      || firstAnalysis.participantMessageIds.length === 0;
+
     if (
       !streamingState.isStreaming
       && firstAnalysis.status === AnalysisStatuses.PENDING
       && firstAnalysis.createdAt
+      && isPlaceholderAnalysis // Only timeout if no participantMessageIds yet
     ) {
       const SAFETY_TIMEOUT_MS = 60000; // 60 seconds
       const createdTime = firstAnalysis.createdAt instanceof Date
@@ -139,33 +146,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     return false;
   }, [analyses, streamingState.isStreaming]);
-
-  /**
-   * Defensive fallback: Allow navigation when participants done + AI slug ready
-   * Even if analysis is stuck, navigate after 15s timeout
-   * ✅ 0-BASED: First round is round 0
-   */
-  const canNavigateWithoutAnalysis = useMemo(() => {
-    const firstAnalysis = analyses[0];
-    if (!firstAnalysis || firstAnalysis.roundNumber !== 0) {
-      return false;
-    }
-
-    // After 15s, if participants done + AI slug ready, proceed
-    if (firstAnalysis.createdAt) {
-      const createdTime = firstAnalysis.createdAt instanceof Date
-        ? firstAnalysis.createdAt.getTime()
-        : new Date(firstAnalysis.createdAt).getTime();
-      const elapsed = Date.now() - createdTime;
-      const hasAiSlug = Boolean(aiGeneratedSlug || (threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug));
-
-      if (elapsed > 15000 && !streamingState.isStreaming && hasAiSlug) {
-        return true;
-      }
-    }
-
-    return false;
-  }, [analyses, streamingState.isStreaming, aiGeneratedSlug, threadState.currentThread]);
 
   // ============================================================================
   // SLUG POLLING & URL UPDATES
@@ -264,12 +244,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       return;
     }
 
-    // Navigate when either:
-    // A) Analysis completed + AI slug ready
-    // B) Participants done + AI slug ready + timeout passed
+    // Navigate ONLY when analysis is fully completed + AI slug ready
+    // Wait for participants to speak AND analysis to finish before navigating
     const shouldNavigate = !hasNavigated
       && hasAiSlug
-      && (firstAnalysisCompleted || canNavigateWithoutAnalysis);
+      && firstAnalysisCompleted;
 
     if (shouldNavigate) {
       // Mark as navigated
@@ -304,7 +283,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   }, [
     isActive,
     firstAnalysisCompleted,
-    canNavigateWithoutAnalysis,
     streamingState.showInitialUI,
     hasNavigated,
     hasAiSlug,

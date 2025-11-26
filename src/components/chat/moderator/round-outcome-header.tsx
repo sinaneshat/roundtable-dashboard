@@ -159,7 +159,7 @@ export function RoundOutcomeHeader({
               <ModelBadge
                 key={contributor.participantIndex}
                 modelId={contributor.modelId}
-                role={contributor.role}
+                role={contributor.role ?? undefined}
                 size="sm"
                 className="shrink-0"
               />

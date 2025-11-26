@@ -9,7 +9,7 @@
 
 import type { WebSearchDepth } from '@/api/core/enums';
 import { WebSearchDepths } from '@/api/core/enums';
-import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // DYNAMIC TIMEOUT CALCULATION
@@ -17,30 +17,36 @@ import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/sc
 
 /**
  * Timeout configuration constants (in milliseconds)
- * These can be tuned based on actual performance metrics
+ *
+ * ✅ OPTIMIZED: Following Tavily-style patterns - fast search, minimal overhead
+ * The key insight from Tavily: search APIs are fast (~1-3s), scraping is the bottleneck
+ * We optimize for:
+ * - Fast query generation (AI generates queries quickly)
+ * - Parallel search execution (DDG returns results in ~500ms)
+ * - Serial content extraction (bottleneck: ~2-5s per page)
  */
 export const TIMEOUT_CONFIG = {
-  /** Base timeout before any queries (initial overhead) */
-  BASE_MS: 15_000, // 15 seconds
+  /** Base timeout: query generation + search API calls */
+  BASE_MS: 10_000, // 10s for AI query gen + DDG search (both are fast)
 
-  /** Additional time per search query */
-  PER_QUERY_BASIC_MS: 8_000, // 8 seconds for basic depth
-  PER_QUERY_ADVANCED_MS: 15_000, // 15 seconds for advanced depth
+  /** Per-query overhead: minimal since DDG search is fast */
+  PER_QUERY_BASIC_MS: 3_000, // 3s per basic query
+  PER_QUERY_ADVANCED_MS: 5_000, // 5s per advanced query
 
-  /** Additional time per expected website/result to scrape */
-  PER_RESULT_MS: 1_500, // 1.5 seconds per result
+  /** Per-result scraping time: the actual bottleneck */
+  PER_RESULT_MS: 4_000, // 4s per result (content extraction via Puppeteer)
 
-  /** Minimum timeout (never go below this) */
-  MIN_MS: 20_000, // 20 seconds
+  /** Minimum timeout */
+  MIN_MS: 15_000, // 15s minimum (fast queries)
 
-  /** Maximum timeout (never exceed this) */
-  MAX_MS: 180_000, // 3 minutes
+  /** Maximum timeout - cap at 2 minutes */
+  MAX_MS: 120_000, // 2 minutes max (avoid hanging)
 
-  /** Default timeout when no pre-search data available */
-  DEFAULT_MS: 45_000, // 45 seconds
+  /** Default when no config */
+  DEFAULT_MS: 30_000, // 30s default
 
-  /** Default expected results per query if not specified */
-  DEFAULT_RESULTS_PER_QUERY: 5,
+  /** Max sources per query - keep low for speed */
+  DEFAULT_RESULTS_PER_QUERY: 3,
 } as const;
 
 /**
@@ -139,7 +145,7 @@ export function extractTimeoutInputFromPreSearch(preSearch: StoredPreSearch | nu
     return undefined;
   }
 
-  const searchData = preSearch.searchData as PreSearchDataPayload | null | undefined;
+  const searchData = preSearch.searchData;
 
   if (searchData?.queries && searchData.queries.length > 0) {
     // Full data available - extract from queries
@@ -191,12 +197,12 @@ export function isPreSearchTimedOut(preSearch: StoredPreSearch | null | undefine
 /**
  * Activity-based timeout threshold (in milliseconds)
  * If no SSE activity is received within this period, the pre-search is considered stalled
- * This is more generous than the total timeout because:
- * - SSE events should arrive regularly during active processing
- * - Large searches with many queries may take longer overall
- * - But they should ALWAYS have activity within this window
+ *
+ * ✅ OPTIMIZED: Following Tavily patterns - expect regular activity
+ * DDG search returns quickly, content extraction streams progressively
+ * If no activity for 30s, something is wrong
  */
-export const ACTIVITY_TIMEOUT_MS = 60_000; // 60 seconds without activity = stalled
+export const ACTIVITY_TIMEOUT_MS = 30_000; // 30s without activity = stalled
 
 /**
  * Checks if a pre-search has stalled based on SSE activity
@@ -205,18 +211,22 @@ export const ACTIVITY_TIMEOUT_MS = 60_000; // 60 seconds without activity = stal
  * - isPreSearchActivityStalled: No recent activity (data flow stopped)
  *
  * @param lastActivityTime - Last activity timestamp from store (or undefined if no tracking)
- * @param createdTime - Pre-search creation timestamp (fallback if no activity tracked)
+ * @param _createdTime - Pre-search creation timestamp (unused - kept for API compatibility)
  * @param now - Current timestamp (default: Date.now())
  * @returns True if pre-search has stalled (no recent activity)
  */
 export function isPreSearchActivityStalled(
   lastActivityTime: number | undefined,
-  createdTime: number,
+  _createdTime: number,
   now = Date.now(),
 ): boolean {
-  // Use last activity time if available, otherwise fall back to creation time
-  const referenceTime = lastActivityTime ?? createdTime;
-  return now - referenceTime > ACTIVITY_TIMEOUT_MS;
+  // ✅ FIX: Only check activity timeout AFTER we've received at least one SSE event
+  // If no activity tracked yet (undefined), we can't determine if it's stalled
+  // Let the total-time-based timeout (isPreSearchTimedOut) handle the initial period
+  if (lastActivityTime === undefined) {
+    return false;
+  }
+  return now - lastActivityTime > ACTIVITY_TIMEOUT_MS;
 }
 
 /**

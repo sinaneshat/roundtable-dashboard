@@ -36,11 +36,11 @@ describe('multi-Query Generation - Prompt Validation', () => {
       expect(WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT).toContain('three different aspects');
     });
 
-    it('should explain multi-query strategy (1-5 queries)', () => {
+    it('should explain multi-query strategy (1-3 queries max)', () => {
       expect(WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT).toContain('1 query');
       expect(WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT).toContain('2 queries');
       expect(WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT).toContain('3 queries');
-      expect(WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT).toContain('4-5 queries');
+      expect(WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT).toContain('MAXIMUM 3');
     });
 
     it('should emphasize each query must target DIFFERENT aspect', () => {
@@ -82,7 +82,7 @@ describe('multi-Query Generation - Prompt Validation', () => {
       expect(prompt).toContain('Q: "GraphQL vs REST API performance"');
     });
 
-    it('should include multiple positive examples', () => {
+    it('should include multiple positive examples (max 3 queries)', () => {
       const prompt = buildWebSearchQueryPrompt('test query');
 
       // Simple question example
@@ -95,11 +95,11 @@ describe('multi-Query Generation - Prompt Validation', () => {
 
       // Multi-faceted example
       expect(prompt).toContain('Q: "How to implement authentication in Next.js?"');
-      expect(prompt).toContain('3 queries (multi-faceted)');
+      expect(prompt).toContain('3 queries (multi-faceted');
 
-      // Comprehensive example
+      // Max queries example
       expect(prompt).toContain('Q: "Best practices for React state management"');
-      expect(prompt).toContain('4 queries (comprehensive)');
+      expect(prompt).toContain('3 queries (MAXIMUM');
     });
 
     it('should remind to generate DIFFERENT angles at the end', () => {
@@ -167,14 +167,13 @@ describe('multi-Query Generation - Prompt Validation', () => {
       expect(prompt).toContain('Vue advantages');
     });
 
-    it('microservices example should have 4 distinct queries', () => {
+    it('microservices example should have 3 distinct queries (max allowed)', () => {
       const prompt = WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT;
 
-      // Should have 4 different approaches
+      // Should have 3 different approaches (max allowed)
       expect(prompt).toContain('microservices design patterns');
       expect(prompt).toContain('microservices communication protocols');
-      expect(prompt).toContain('microservices deployment strategies');
-      expect(prompt).toContain('microservices monitoring observability');
+      expect(prompt).toContain('microservices deployment monitoring');
     });
   });
 
@@ -223,17 +222,11 @@ describe('multi-Query Generation - Expected Behavior', () => {
       expect(systemPrompt).toContain('Comparisons (A vs B)');
     });
 
-    it('should generate 3 queries for multi-faceted topics', () => {
+    it('should generate 3 queries max for multi-faceted or complex topics', () => {
       const systemPrompt = WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT;
       expect(systemPrompt).toContain('3 queries');
-      expect(systemPrompt).toContain('Multi-faceted topics');
-    });
-
-    it('should generate 4-5 queries for complex topics', () => {
-      const systemPrompt = WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT;
-      expect(systemPrompt).toContain('4-5 queries');
-      expect(systemPrompt).toContain('Complex topics');
-      expect(systemPrompt).toContain('comprehensive research');
+      expect(systemPrompt).toContain('Multi-faceted or complex topics');
+      expect(systemPrompt).toContain('THIS IS THE MAX');
     });
   });
 

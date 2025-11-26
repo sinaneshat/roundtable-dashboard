@@ -3,7 +3,9 @@ import { AlertCircle, ChevronDown, ChevronUp, Globe, Search } from 'lucide-react
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import type { WebSearchDisplayProps } from '@/api/routes/chat/schema';
+import type { WebSearchStreamingStage } from '@/api/core/enums';
+import { WebSearchStreamingStages } from '@/api/core/enums';
+import type { WebSearchDisplayExtendedProps } from '@/api/routes/chat/schema';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { WebSearchResultItem } from '@/components/chat/web-search-result-item';
@@ -13,6 +15,17 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
+
+/**
+ * Determine current streaming stage based on available data
+ */
+function getStreamingStage(query: string | undefined, answer: string | null | undefined): WebSearchStreamingStage {
+  if (!query)
+    return WebSearchStreamingStages.QUERY;
+  if (!answer)
+    return WebSearchStreamingStages.SEARCH;
+  return WebSearchStreamingStages.SYNTHESIZE;
+}
 
 // Card-based display component
 export function WebSearchDisplay({
@@ -24,28 +37,14 @@ export function WebSearchDisplay({
   requestId: _requestId,
   query: _query,
   autoParameters: _autoParameters,
-}: WebSearchDisplayProps & {
-  isStreaming?: boolean;
-  requestId?: string;
-  query?: string;
-  autoParameters?: {
-    topic?: string;
-    timeRange?: string;
-    searchDepth?: string;
-    reasoning?: string;
-  };
-}) {
+}: WebSearchDisplayExtendedProps) {
   const t = useTranslations('chat.tools.webSearch');
   const [isOpen, setIsOpen] = useState(true);
 
   // Show loading state while streaming
   if (isStreaming && (!results || results.length === 0)) {
     // Determine current stage based on available data
-    const currentStage = !_query
-      ? 'query'
-      : !answer
-          ? 'search'
-          : 'synthesize';
+    const currentStage = getStreamingStage(_query, answer);
 
     return (
       <div className={cn('relative py-2', className)}>
@@ -60,15 +59,15 @@ export function WebSearchDisplay({
 
             {/* Compact stages */}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className={cn(currentStage === 'query' && 'font-medium animate-pulse')}>
+              <span className={cn(currentStage === WebSearchStreamingStages.QUERY && 'font-medium animate-pulse')}>
                 Query
               </span>
               <span>→</span>
-              <span className={cn(currentStage === 'search' && 'font-medium animate-pulse')}>
+              <span className={cn(currentStage === WebSearchStreamingStages.SEARCH && 'font-medium animate-pulse')}>
                 Search
               </span>
               <span>→</span>
-              <span className={cn(currentStage === 'synthesize' && 'font-medium animate-pulse')}>
+              <span className={cn(currentStage === WebSearchStreamingStages.SYNTHESIZE && 'font-medium animate-pulse')}>
                 Answer
               </span>
             </div>
@@ -181,7 +180,6 @@ export function WebSearchDisplay({
                       key={result.url}
                       result={result}
                       showDivider={index < successfulResults.length - 1}
-                      citationNumber={index + 1}
                     />
                   ))}
                 </div>

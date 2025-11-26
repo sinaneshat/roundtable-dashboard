@@ -53,6 +53,10 @@ export type UseAutoScrollOptions = {
   bottomThreshold?: number;
   /** Enable/disable auto-scroll */
   enabled?: boolean;
+  /** Minimum height change in pixels to trigger scroll (prevents micro-scrolls) */
+  minHeightChange?: number;
+  /** Debounce delay in ms for scroll calls */
+  debounceMs?: number;
 };
 
 /**
@@ -162,6 +166,8 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
     onlyIfAtBottom = true,
     bottomThreshold = 100,
     enabled = true,
+    minHeightChange = 20, // Require meaningful height change (~1 line of text)
+    debounceMs = 150, // Debounce to prevent rapid scroll calls
   } = options;
 
   const elementRef = useRef<T>(null);
@@ -178,35 +184,74 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
       return;
     }
 
-    let wasAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
+    // ✅ IMPROVED: Track height changes to prevent micro-scrolls
+    let lastHeight = scrollContainer.scrollHeight;
+    let debounceTimeout: NodeJS.Timeout | null = null;
+    let pendingScrollRAF: number | null = null;
 
+    // ✅ IMPROVED: Only check current state, don't use wasAtBottom
+    // wasAtBottom was causing scroll even after user scrolled away
     const resizeObserver = new ResizeObserver(() => {
       const isAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
 
-      if (onlyIfAtBottom && !wasAtBottom && !isAtBottom) {
+      // ✅ IMPROVED: Strict check - only scroll if currently at bottom
+      if (onlyIfAtBottom && !isAtBottom) {
         return;
       }
 
-      if (!onlyIfAtBottom || isAtBottom || wasAtBottom) {
-        requestAnimationFrame(() => {
-          scrollToBottom(scrollContainer, behavior);
-        });
+      // ✅ IMPROVED: Only scroll on meaningful height changes
+      const newHeight = scrollContainer.scrollHeight;
+      const heightDelta = newHeight - lastHeight;
+
+      if (heightDelta < minHeightChange) {
+        return;
       }
 
-      wasAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
+      lastHeight = newHeight;
+
+      // ✅ IMPROVED: Debounce scroll calls to prevent rapid-fire scrolling
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+
+      debounceTimeout = setTimeout(() => {
+        // Re-check position after debounce (user might have scrolled)
+        if (onlyIfAtBottom && !isScrolledToBottom(scrollContainer, bottomThreshold)) {
+          return;
+        }
+
+        // Cancel any pending RAF
+        if (pendingScrollRAF) {
+          cancelAnimationFrame(pendingScrollRAF);
+        }
+
+        pendingScrollRAF = requestAnimationFrame(() => {
+          scrollToBottom(scrollContainer, behavior);
+          pendingScrollRAF = null;
+        });
+
+        debounceTimeout = null;
+      }, debounceMs);
     });
 
     resizeObserver.observe(scrollContainer);
     resizeObserver.observe(element);
 
-    if (!onlyIfAtBottom || wasAtBottom) {
+    // Initial scroll only if at bottom
+    if (!onlyIfAtBottom || isScrolledToBottom(scrollContainer, bottomThreshold)) {
       scrollToBottom(scrollContainer, behavior);
     }
 
     return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+      if (pendingScrollRAF) {
+        cancelAnimationFrame(pendingScrollRAF);
+      }
       resizeObserver.disconnect();
     };
-  }, [shouldScroll, behavior, onlyIfAtBottom, bottomThreshold, enabled]);
+  }, [shouldScroll, behavior, onlyIfAtBottom, bottomThreshold, enabled, minHeightChange, debounceMs]);
 
   return elementRef;
 }

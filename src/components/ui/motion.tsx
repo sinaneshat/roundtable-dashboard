@@ -71,7 +71,11 @@ export function AnimatedStreamingList({
         className={cn(className)}
         transition={layoutTransition}
       >
-        <AnimatePresence mode="popLayout" initial={false}>
+        {/* ✅ React 19 Fix: Changed from "popLayout" to "sync" to avoid element.ref deprecation warning
+         * popLayout mode requires internal ref access which triggers React 19 deprecation warning
+         * sync mode provides similar behavior without the ref access pattern
+         * See: https://github.com/motiondivision/motion/issues/2668 */}
+        <AnimatePresence mode="sync" initial={false}>
           {children}
         </AnimatePresence>
       </motion.div>

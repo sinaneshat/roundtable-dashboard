@@ -164,14 +164,23 @@ export function useThreadTimeline({
         roundNumber,
       });
 
-      // Add analysis after messages (if exists)
+      // Add analysis after messages (if exists and should be shown)
+      // ✅ REVISED: Only filter out PENDING placeholder analyses (empty participantMessageIds)
+      // STREAMING/COMPLETE/FAILED analyses should ALWAYS show for proper stream resumption
+      // Placeholder states (PENDING + empty participantMessageIds) are handled by participant cards instead
       if (roundAnalysis) {
-        timeline.push({
-          type: 'analysis',
-          data: roundAnalysis,
-          key: `round-${roundNumber}-analysis`,
-          roundNumber,
-        });
+        const isPendingPlaceholder = roundAnalysis.status === 'pending'
+          && (!roundAnalysis.participantMessageIds || roundAnalysis.participantMessageIds.length === 0);
+
+        // Show analysis if it's NOT a pending placeholder
+        if (!isPendingPlaceholder) {
+          timeline.push({
+            type: 'analysis',
+            data: roundAnalysis,
+            key: `round-${roundNumber}-analysis`,
+            roundNumber,
+          });
+        }
       }
     });
 

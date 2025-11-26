@@ -1,7 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
 import {
-  AGREEMENT_STATUSES,
+  AgreementStatusSchema,
   ChangelogTypeSchema,
   ChatModeSchema,
   ConfidenceWeightingSchema,
@@ -194,6 +194,41 @@ const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
   })
   .openapi('ChatThreadChangelog');
 
+/**
+ * Changelog schema with flexible date handling
+ * Accepts both string and Date for createdAt (API returns strings, store may have Dates)
+ * ✅ FOLLOWS: StoredPreSearchSchema and StoredModeratorAnalysisSchema pattern
+ */
+export const ChatThreadChangelogFlexibleSchema = chatThreadChangelogSelectSchema
+  .extend({
+    changeData: DbChangelogDataSchema,
+    createdAt: z.union([z.string(), z.date()]),
+  })
+  .openapi('ChatThreadChangelogFlexible');
+
+export type ChatThreadChangelogFlexible = z.infer<typeof ChatThreadChangelogFlexibleSchema>;
+
+/**
+ * Configuration changes group schema for UI components
+ * Single source of truth for changelog grouping props
+ */
+export const ConfigurationChangesGroupSchema = z.object({
+  timestamp: z.date(),
+  changes: z.array(ChatThreadChangelogFlexibleSchema),
+}).openapi('ConfigurationChangesGroup');
+
+export type ConfigurationChangesGroup = z.infer<typeof ConfigurationChangesGroupSchema>;
+
+/**
+ * Props schema for ConfigurationChangesGroup component
+ */
+export const ConfigurationChangesGroupPropsSchema = z.object({
+  group: ConfigurationChangesGroupSchema,
+  className: z.string().optional(),
+}).openapi('ConfigurationChangesGroupProps');
+
+export type ConfigurationChangesGroupProps = z.infer<typeof ConfigurationChangesGroupPropsSchema>;
+
 // ✅ TYPE-SAFE: Strictly typed custom role metadata (tags, category only)
 const ChatCustomRoleSchema = chatCustomRoleSelectSchema
   .extend({
@@ -380,7 +415,7 @@ const UIMessageSchema = z.object({
 
 export const WebSearchParametersSchema = z.object({
   query: z.string().min(1),
-  maxResults: z.number().int().positive().min(1).max(20).optional().default(10),
+  maxResults: z.number().int().positive().min(1).max(3).optional().default(3),
   searchDepth: WebSearchDepthSchema.optional().default('advanced'),
   topic: WebSearchTopicSchema.optional(),
   timeRange: WebSearchTimeRangeSchema.optional(),
@@ -446,6 +481,19 @@ export const WebSearchResultMetaSchema = z.object({
 
 export type WebSearchResultMeta = z.infer<typeof WebSearchResultMetaSchema>;
 
+/**
+ * Auto-detected search parameters schema
+ * Used when LLM automatically determines optimal search parameters
+ */
+export const WebSearchAutoParametersSchema = z.object({
+  topic: WebSearchTopicSchema.optional(),
+  timeRange: WebSearchTimeRangeSchema.optional(),
+  searchDepth: WebSearchDepthSchema.optional(),
+  reasoning: z.string().optional(),
+}).openapi('WebSearchAutoParameters');
+
+export type WebSearchAutoParameters = z.infer<typeof WebSearchAutoParametersSchema>;
+
 export const WebSearchResultSchema = z.object({
   query: z.string(),
   answer: z.string().nullable(),
@@ -456,12 +504,7 @@ export const WebSearchResultSchema = z.object({
     url: z.string(),
     description: z.string().optional(),
   })).optional(),
-  autoParameters: z.object({
-    topic: WebSearchTopicSchema.optional(),
-    timeRange: WebSearchTimeRangeSchema.optional(),
-    searchDepth: WebSearchDepthSchema.optional(),
-    reasoning: z.string().optional(),
-  }).optional(),
+  autoParameters: WebSearchAutoParametersSchema.optional(),
   _meta: WebSearchResultMetaSchema.optional(),
 }).openapi('WebSearchResult');
 
@@ -774,7 +817,7 @@ export const AIScorecardSchema = z.object({
  */
 export const ContributorPerspectiveSchema = z.object({
   participantIndex: RoundNumberSchema,
-  role: z.string(),
+  role: z.string().nullable().optional().default(null), // ✅ FIX: Allow undefined (AI may omit field)
   modelId: z.string(),
   modelName: z.string(),
   scorecard: AIScorecardSchema,
@@ -796,7 +839,7 @@ export const ContestedClaimSchema = z.object({
  */
 export const AgreementHeatmapEntrySchema = z.object({
   claim: z.string(),
-  perspectives: z.record(z.string(), z.enum(AGREEMENT_STATUSES)),
+  perspectives: z.record(z.string(), AgreementStatusSchema), // ✅ Uses lenient schema with .catch()
 }).openapi('AgreementHeatmapEntry');
 
 /**
@@ -1277,6 +1320,43 @@ export const WebSearchDisplayPropsSchema = z.object({
 }).openapi('WebSearchDisplayProps');
 
 export type WebSearchDisplayProps = z.infer<typeof WebSearchDisplayPropsSchema>;
+
+/**
+ * Extended web search display component props with streaming state
+ * Extends WebSearchDisplayPropsSchema with streaming-specific fields
+ */
+export const WebSearchDisplayExtendedPropsSchema = WebSearchDisplayPropsSchema.extend({
+  isStreaming: z.boolean().optional(),
+  requestId: z.string().optional(),
+  query: z.string().optional(),
+  autoParameters: WebSearchAutoParametersSchema.optional(),
+}).openapi('WebSearchDisplayExtendedProps');
+
+export type WebSearchDisplayExtendedProps = z.infer<typeof WebSearchDisplayExtendedPropsSchema>;
+
+/**
+ * Individual image item in search results
+ * Used for rendering image galleries
+ */
+export const WebSearchImageItemSchema = z.object({
+  url: z.string(),
+  title: z.string(),
+  sourceUrl: z.string(),
+  alt: z.string().optional(),
+  domain: z.string().optional(),
+}).openapi('WebSearchImageItem');
+
+export type WebSearchImageItem = z.infer<typeof WebSearchImageItemSchema>;
+
+/**
+ * Web search image gallery component props schema
+ */
+export const WebSearchImageGalleryPropsSchema = z.object({
+  results: z.array(WebSearchResultItemSchema),
+  className: z.string().optional(),
+}).openapi('WebSearchImageGalleryProps');
+
+export type WebSearchImageGalleryProps = z.infer<typeof WebSearchImageGalleryPropsSchema>;
 
 /**
  * Web search result item component props schema (simple variant)

@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -666,7 +666,7 @@ export default function ChatThreadScreen({
                 if (completedData) {
                   updateAnalysisData(
                     roundNumber,
-                    completedData as ModeratorAnalysisPayload,
+                    completedData,
                   );
                 } else {
                   // ✅ CRITICAL FIX: Preserve error message when analysis fails

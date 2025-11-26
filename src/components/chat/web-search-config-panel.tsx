@@ -4,6 +4,8 @@ import { ChevronDown, ChevronUp, Hash, Layers, Settings2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import type { WebSearchDepth } from '@/api/core/enums';
+import { WebSearchDepths } from '@/api/core/enums';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -14,11 +16,11 @@ import { cn } from '@/lib/ui/cn';
 
 type WebSearchConfigPanelProps = {
   maxResults?: number;
-  searchDepth?: 'basic' | 'advanced';
+  searchDepth?: WebSearchDepth;
   numQueries?: number;
   onConfigChange?: (config: {
     maxResults: number;
-    searchDepth: 'basic' | 'advanced';
+    searchDepth: WebSearchDepth;
     numQueries: number;
   }) => void;
   className?: string;
@@ -27,7 +29,7 @@ type WebSearchConfigPanelProps = {
 
 export function WebSearchConfigPanel({
   maxResults = 10,
-  searchDepth = 'advanced',
+  searchDepth = WebSearchDepths.ADVANCED,
   numQueries = 3,
   onConfigChange,
   className,

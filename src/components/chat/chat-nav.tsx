@@ -169,19 +169,19 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
             <SidebarMenu className="gap-1">
               {/* Logo/Brand */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
-                <SidebarMenuButton size="lg" asChild className="hover:bg-transparent">
-                  <Link href="/chat" onClick={handleNavLinkClick}>
+                <SidebarMenuButton size="lg" asChild className="hover:bg-transparent !h-10">
+                  <Link href="/chat" onClick={handleNavLinkClick} className="flex items-center gap-2.5">
                     {/* ✅ FIX: Use plain img tag to prevent hydration mismatch */}
                     {/* eslint-disable-next-line next/no-img-element */}
                     <img
                       src={BRAND.logos.main}
                       alt={`${BRAND.name} Logo`}
-                      className="size-10 object-contain shrink-0"
-                      width={40}
-                      height={40}
+                      className="size-7 object-contain shrink-0"
+                      width={28}
+                      height={28}
                     />
                     <span
-                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-base font-bold"
+                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold"
                       style={{ maxWidth: '11rem' }}
                     >
                       {BRAND.name}
@@ -198,9 +198,9 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   <img
                     src={BRAND.logos.main}
                     alt={`${BRAND.name} Logo`}
-                    className="size-12 object-contain shrink-0"
-                    width={48}
-                    height={48}
+                    className="size-8 object-contain shrink-0"
+                    width={32}
+                    height={32}
                   />
                 </Link>
               </SidebarMenuItem>

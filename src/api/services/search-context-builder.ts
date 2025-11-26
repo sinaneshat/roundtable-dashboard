@@ -140,68 +140,70 @@ function extractValidatedPreSearchData(
 /**
  * Build search context for current round
  *
- * Provides full details: queries, AI summaries, sources with FULL CONTENT.
- * This gives participants maximum context for the current question.
+ * ✅ TAVILY PATTERN: Expose ALL raw data directly to participants
+ * No summarization - participants synthesize from raw scraped content
  *
- * ✅ FULL CONTENT EXPOSURE: Uses fullContent field (up to 15,000 chars per source)
- * instead of limiting to 200 chars. This ensures participants have complete
- * website content for comprehensive analysis and accurate responses.
- *
- * **REPLACES**: streaming.handler.ts:887-907
+ * **KEY CHANGES**:
+ * - Prioritize rawContent (markdown) over content (text)
+ * - Include ALL scraped results, not just top 3
+ * - Include full metadata for citation
+ * - No AI summary - participants generate their own
  *
  * @param preSearch - Validated pre-search data
- * @returns Formatted context string with full details
+ * @returns Formatted context string with full raw data
  */
 function buildCurrentRoundSearchContext(preSearch: ValidatedPreSearchData): string {
-  let context = '### Current Round Search Results\n\n';
-  context += 'The following information was gathered from web searches to help answer the current question:\n\n';
+  let context = '### Web Search Results\n\n';
+  context += 'The following raw content was scraped from web sources. Use this information directly to formulate your response:\n\n';
 
   for (const searchResult of preSearch.results) {
-    context += `**Search Query:** "${searchResult.query}"\n\n`;
+    context += `---\n**Search Query:** "${searchResult.query}"\n\n`;
 
-    if (searchResult.answer) {
-      context += `**AI Summary:** ${searchResult.answer}\n\n`;
-    }
+    // ✅ EXPOSE ALL RESULTS: Don't limit - let participants see everything
+    for (let i = 0; i < searchResult.results.length; i++) {
+      const result = searchResult.results[i];
+      if (!result)
+        continue;
 
-    context += '**Sources:**\n\n';
-    // Limit to top 3 results for context window management
-    for (const result of searchResult.results.slice(0, 3)) {
-      context += `- **${result.title}**\n`;
-      context += `  URL: ${result.url}\n`;
-
-      // ✅ FULL CONTENT EXPOSURE: Use fullContent when available (up to 15,000 chars)
-      // Falls back to content (800 chars) or excerpt if fullContent not available
-      // This provides complete website content for comprehensive participant analysis
-      const contentToExpose = result.fullContent || result.content || result.excerpt || '';
-
-      if (contentToExpose) {
-        // ✅ NO ARTIFICIAL LIMIT: Expose full content to participants
-        // Context window management is handled by model's native token limit
-        // Participants need complete information for accurate, well-sourced responses
-        context += `  **Content:**\n  ${contentToExpose}\n\n`;
+      context += `#### Source ${i + 1}: ${result.title}\n`;
+      context += `**URL:** ${result.url}\n`;
+      if (result.domain) {
+        context += `**Domain:** ${result.domain}\n`;
+      }
+      if (result.publishedDate) {
+        context += `**Published:** ${result.publishedDate}\n`;
       }
 
-      // Add metadata if available
+      // ✅ METADATA: Include all available metadata
       if (result.metadata) {
-        const metaParts: string[] = [];
-        if (result.metadata.author) {
-          metaParts.push(`Author: ${result.metadata.author}`);
+        const meta: string[] = [];
+        if (result.metadata.author)
+          meta.push(`Author: ${result.metadata.author}`);
+        if (result.metadata.wordCount)
+          meta.push(`${result.metadata.wordCount.toLocaleString()} words`);
+        if (result.metadata.readingTime)
+          meta.push(`${result.metadata.readingTime} min read`);
+        if (result.metadata.description)
+          meta.push(`Description: ${result.metadata.description}`);
+        if (meta.length > 0) {
+          context += `**Metadata:** ${meta.join(' | ')}\n`;
         }
-        if (result.metadata.wordCount) {
-          metaParts.push(`${result.metadata.wordCount.toLocaleString()} words`);
-        }
-        if (result.metadata.readingTime) {
-          metaParts.push(`${result.metadata.readingTime} min read`);
-        }
-        if (metaParts.length > 0) {
-          context += `  *${metaParts.join(' • ')}*\n\n`;
-        }
+      }
+
+      // ✅ RAW CONTENT PRIORITY: Prefer rawContent (markdown) > fullContent > content > excerpt
+      // rawContent is scraped markdown, fullContent is extracted text, content is truncated
+      const rawData = result.rawContent || result.fullContent || result.content || result.excerpt || '';
+
+      if (rawData) {
+        context += '\n**Raw Content:**\n```\n';
+        context += rawData;
+        context += '\n```\n\n';
       }
     }
   }
 
-  context += '\nUse this information to provide an accurate, well-sourced response. ';
-  context += 'Cite specific sources when referencing search results.\n\n';
+  context += '---\n\n**Instructions:** Synthesize the above raw data to answer the user\'s question. ';
+  context += 'Cite sources with URLs when referencing specific information.\n\n';
 
   return context;
 }

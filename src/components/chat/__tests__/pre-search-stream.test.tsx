@@ -1,8 +1,11 @@
-import { render, waitFor } from '@testing-library/react';
+import { render as rtlRender, waitFor } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import { PreSearchStream } from '@/components/chat/pre-search-stream';
+import { testLocale, testMessages, testTimeZone } from '@/lib/testing/test-messages';
 
 // Mock UI components to simplify testing
 vi.mock('@/components/chat/web-search-configuration-display', () => ({
@@ -44,6 +47,24 @@ vi.mock('@/components/providers/chat-store-provider', async () => {
     ChatStoreContext: MockChatStoreContext,
   };
 });
+
+// Custom wrapper for tests that mock ChatStoreProvider
+function TestWrapper({ children }: { children: ReactNode }) {
+  return (
+    <NextIntlClientProvider
+      locale={testLocale}
+      messages={testMessages}
+      timeZone={testTimeZone}
+    >
+      {children}
+    </NextIntlClientProvider>
+  );
+}
+
+// Custom render that includes i18n wrapper
+function render(ui: ReactNode) {
+  return rtlRender(ui, { wrapper: TestWrapper });
+}
 
 describe('preSearchStream Component', () => {
   const mockThreadId = 'thread-123';

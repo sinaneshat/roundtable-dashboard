@@ -204,15 +204,17 @@ export function createMockParticipant(
 
 /**
  * Create mock ParticipantConfig (frontend representation)
+ * Matches ParticipantConfigSchema: id, modelId, role, priority, customRoleId?, settings?
  */
 export function createMockParticipantConfig(
   participantIndex: number,
   overrides?: Partial<ParticipantConfig>,
 ): ParticipantConfig {
   return {
-    participantIndex,
+    id: `participant-${participantIndex}`,
     modelId: 'openai/gpt-4',
     role: null,
+    priority: participantIndex,
     ...overrides,
   };
 }
@@ -310,8 +312,69 @@ export function createMockRoundMessages(
 // ============================================================================
 
 /**
+ * Create mock WebSearchResultItem with ALL fields including images and metadata
+ * This ensures tests verify complete data flow from backend to UI
+ */
+export function createMockWebSearchResultItem(overrides?: {
+  title?: string;
+  url?: string;
+  content?: string;
+  excerpt?: string;
+  fullContent?: string;
+  rawContent?: string;
+  score?: number;
+  domain?: string;
+  publishedDate?: string | null;
+  metadata?: {
+    author?: string;
+    description?: string;
+    imageUrl?: string;
+    faviconUrl?: string;
+    wordCount?: number;
+    readingTime?: number;
+  };
+  images?: Array<{ url: string; alt?: string }>;
+  keyPoints?: string[];
+}) {
+  return {
+    title: overrides?.title ?? 'Complete Test Result with All Fields',
+    url: overrides?.url ?? 'https://example.com/test-article',
+    content: overrides?.content ?? 'Full content from the webpage that was scraped and extracted for analysis by participants.',
+    excerpt: overrides?.excerpt ?? 'Short excerpt snippet from the search result description.',
+    fullContent: overrides?.fullContent ?? 'This is the complete full content that was extracted from the page including all paragraphs and sections.',
+    rawContent: overrides?.rawContent ?? '# Test Article\n\nThis is raw markdown content extracted from the page.',
+    score: overrides?.score ?? 0.85,
+    domain: overrides?.domain ?? 'example.com',
+    publishedDate: overrides?.publishedDate ?? '2024-11-15T10:00:00Z',
+    metadata: {
+      author: overrides?.metadata?.author ?? 'John Author',
+      description: overrides?.metadata?.description ?? 'Meta description from og:description tag',
+      imageUrl: overrides?.metadata?.imageUrl ?? 'https://example.com/og-image.jpg',
+      faviconUrl: overrides?.metadata?.faviconUrl ?? 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
+      wordCount: overrides?.metadata?.wordCount ?? 1500,
+      readingTime: overrides?.metadata?.readingTime ?? 8,
+    },
+    images: overrides?.images ?? [
+      { url: 'https://example.com/image1.jpg', alt: 'First image' },
+      { url: 'https://example.com/image2.png', alt: 'Second image' },
+      { url: 'https://example.com/image3.webp', alt: 'Third image' },
+    ],
+    keyPoints: overrides?.keyPoints ?? [
+      'Key point 1 from content',
+      'Key point 2 from content',
+    ],
+  };
+}
+
+/**
  * Create mock PreSearchDataPayload with all required fields
  * Matches the schema structure exactly for type safety
+ *
+ * ✅ COMPREHENSIVE: Includes ALL fields that backend can return:
+ * - queries with searchDepth, rationale, index, total
+ * - results with complete WebSearchResultItem including images and metadata
+ * - analysis text
+ * - statistics (successCount, failureCount, totalResults, totalTime)
  */
 export function createMockPreSearchDataPayload(
   overrides?: Partial<PreSearchDataPayload>,
@@ -320,7 +383,7 @@ export function createMockPreSearchDataPayload(
     queries: [
       {
         query: 'test search query',
-        rationale: 'Test rationale',
+        rationale: 'Test rationale explaining why this query was chosen',
         searchDepth: 'basic',
         index: 0,
         total: 1,
@@ -329,23 +392,253 @@ export function createMockPreSearchDataPayload(
     results: [
       {
         query: 'test search query',
-        answer: 'Test answer from search',
+        answer: null, // No AI answer per Tavily pattern
+        results: [
+          createMockWebSearchResultItem(),
+          createMockWebSearchResultItem({
+            title: 'Second Result',
+            url: 'https://another-site.com/article',
+            domain: 'another-site.com',
+            score: 0.72,
+            metadata: {
+              imageUrl: 'https://another-site.com/preview.png',
+              wordCount: 800,
+              readingTime: 4,
+            },
+            images: [
+              { url: 'https://another-site.com/photo.jpg', alt: 'Photo' },
+            ],
+          }),
+        ],
+        responseTime: 1250,
+      },
+    ],
+    analysis: 'Search analysis: Found relevant results covering the topic comprehensively.',
+    successCount: 1,
+    failureCount: 0,
+    totalResults: 2,
+    totalTime: 1250,
+    ...overrides,
+  };
+}
+
+/**
+ * Create mock PreSearchDataPayload WITHOUT images/metadata
+ * Used to test fallback behavior when lightweight extraction fails
+ */
+export function createMockPreSearchDataPayloadMinimal(): PreSearchDataPayload {
+  return {
+    queries: [
+      {
+        query: 'minimal query',
+        rationale: '',
+        searchDepth: 'basic',
+        index: 0,
+        total: 1,
+      },
+    ],
+    results: [
+      {
+        query: 'minimal query',
+        answer: null,
         results: [
           {
-            title: 'Test Result',
-            url: 'https://example.com',
-            content: 'Test content snippet',
+            title: 'Minimal Result',
+            url: 'https://minimal.com',
+            content: 'Basic content only',
+            score: 0.5,
+            domain: 'minimal.com',
+            publishedDate: null,
+            // NO metadata, NO images - testing minimal data scenario
           },
         ],
         responseTime: 500,
       },
     ],
-    analysis: 'Test analysis summary',
+    analysis: '',
     successCount: 1,
     failureCount: 0,
     totalResults: 1,
     totalTime: 500,
-    ...overrides,
+  };
+}
+
+/**
+ * Create mock PreSearchDataPayload with METADATA ONLY (no fullContent/rawContent)
+ * Simulates lightweight extraction when browser is unavailable
+ *
+ * ✅ CRITICAL FIX TEST: This tests the fix where metadata was not applied
+ * when browser was unavailable. The fix ensures metadata (og:image, favicon,
+ * description, title) is applied even when content is empty.
+ */
+export function createMockPreSearchDataPayloadMetadataOnly(): PreSearchDataPayload {
+  return {
+    queries: [
+      {
+        query: 'metadata only query',
+        rationale: 'Query for testing lightweight extraction',
+        searchDepth: 'basic',
+        index: 0,
+        total: 1,
+      },
+    ],
+    results: [
+      {
+        query: 'metadata only query',
+        answer: null,
+        results: [
+          {
+            title: 'Article with Metadata Only',
+            url: 'https://example.com/metadata-test',
+            content: 'Search snippet from DuckDuckGo - basic content', // Basic content from search API
+            excerpt: 'Search snippet from DuckDuckGo',
+            // NO fullContent - browser unavailable
+            // NO rawContent - browser unavailable
+            score: 0.78,
+            domain: 'example.com',
+            publishedDate: null,
+            // ✅ METADATA IS PRESENT from lightweight extraction
+            metadata: {
+              imageUrl: 'https://example.com/og-preview.jpg', // From og:image
+              faviconUrl: 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
+              description: 'Page meta description from head tag',
+              // author is undefined - not extracted by lightweight
+              wordCount: 0, // Unknown without full content
+              readingTime: 0, // Unknown without full content
+            },
+            // NO images array - browser unavailable (can't scrape page images)
+          },
+          {
+            title: 'Second Article with Partial Metadata',
+            url: 'https://another.com/article',
+            content: 'Another search snippet',
+            excerpt: 'Another search snippet',
+            score: 0.65,
+            domain: 'another.com',
+            publishedDate: null,
+            metadata: {
+              // Only faviconUrl available (no og:image on this page)
+              faviconUrl: 'https://www.google.com/s2/favicons?domain=another.com&sz=64',
+              wordCount: 0,
+              readingTime: 0,
+            },
+          },
+        ],
+        responseTime: 850,
+      },
+    ],
+    analysis: 'Lightweight extraction - browser unavailable',
+    successCount: 1,
+    failureCount: 0,
+    totalResults: 2,
+    totalTime: 850,
+  };
+}
+
+/**
+ * Create mock WebSearchResultItem with METADATA ONLY (no content extraction)
+ * Simulates what performWebSearch returns when browser is unavailable
+ * but lightweight extraction successfully fetches og:image, favicon, etc.
+ */
+export function createMockWebSearchResultItemMetadataOnly(overrides?: {
+  title?: string;
+  url?: string;
+  content?: string;
+  excerpt?: string;
+  score?: number;
+  domain?: string;
+  publishedDate?: string | null;
+  metadata?: {
+    description?: string;
+    imageUrl?: string;
+    faviconUrl?: string;
+  };
+}) {
+  return {
+    title: overrides?.title ?? 'Result with Metadata Only',
+    url: overrides?.url ?? 'https://example.com/lightweight',
+    content: overrides?.content ?? 'Search snippet from search API',
+    excerpt: overrides?.excerpt ?? 'Search snippet from search API',
+    // NO fullContent - browser unavailable
+    // NO rawContent - browser unavailable
+    score: overrides?.score ?? 0.75,
+    domain: overrides?.domain ?? 'example.com',
+    publishedDate: overrides?.publishedDate ?? null,
+    // ✅ METADATA PRESENT from lightweight extraction
+    metadata: {
+      imageUrl: overrides?.metadata?.imageUrl ?? 'https://example.com/og-image.jpg',
+      faviconUrl: overrides?.metadata?.faviconUrl ?? 'https://www.google.com/s2/favicons?domain=example.com&sz=64',
+      description: overrides?.metadata?.description ?? 'Meta description from page',
+      wordCount: 0,
+      readingTime: 0,
+    },
+    // NO images array - page scraping unavailable
+  };
+}
+
+/**
+ * Create mock PreSearchDataPayload with multiple queries
+ * Used to test complex multi-query scenarios
+ */
+export function createMockPreSearchDataPayloadMultiQuery(): PreSearchDataPayload {
+  return {
+    queries: [
+      {
+        query: 'first aspect of topic',
+        rationale: 'Exploring the primary angle',
+        searchDepth: 'advanced',
+        index: 0,
+        total: 3,
+      },
+      {
+        query: 'second aspect comparison',
+        rationale: 'Comparing alternatives',
+        searchDepth: 'basic',
+        index: 1,
+        total: 3,
+      },
+      {
+        query: 'third aspect implications',
+        rationale: 'Understanding broader impact',
+        searchDepth: 'advanced',
+        index: 2,
+        total: 3,
+      },
+    ],
+    results: [
+      {
+        query: 'first aspect of topic',
+        answer: null,
+        results: [
+          createMockWebSearchResultItem({ title: 'First Query Result 1' }),
+          createMockWebSearchResultItem({ title: 'First Query Result 2' }),
+        ],
+        responseTime: 1100,
+      },
+      {
+        query: 'second aspect comparison',
+        answer: null,
+        results: [
+          createMockWebSearchResultItem({ title: 'Second Query Result' }),
+        ],
+        responseTime: 800,
+      },
+      {
+        query: 'third aspect implications',
+        answer: null,
+        results: [
+          createMockWebSearchResultItem({ title: 'Third Query Result 1' }),
+          createMockWebSearchResultItem({ title: 'Third Query Result 2' }),
+          createMockWebSearchResultItem({ title: 'Third Query Result 3' }),
+        ],
+        responseTime: 1500,
+      },
+    ],
+    analysis: 'Multi-faceted search covering three distinct aspects of the topic.',
+    successCount: 3,
+    failureCount: 0,
+    totalResults: 6,
+    totalTime: 3400,
   };
 }
 

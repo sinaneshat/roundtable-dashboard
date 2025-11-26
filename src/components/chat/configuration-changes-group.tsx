@@ -4,7 +4,10 @@ import { useTranslations } from 'next-intl';
 
 import type { ChangelogType } from '@/api/core/enums';
 import { ChangelogTypes } from '@/api/core/enums';
-import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
+import type {
+  ChatThreadChangelogFlexible,
+  ConfigurationChangesGroupProps,
+} from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -24,16 +27,8 @@ import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 
-type ConfigurationChangesGroupProps = {
-  group: {
-    timestamp: Date;
-    changes: (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[];
-  };
-  className?: string;
-};
-
 // No conversion needed - changeType IS the action
-function getChangeAction(changeType: ChatThreadChangelog['changeType']): ChangelogType {
+function getChangeAction(changeType: ChatThreadChangelogFlexible['changeType']): ChangelogType {
   return changeType;
 }
 const actionConfig: Record<ChangelogType, { icon: typeof Plus; color: string }> = {
@@ -56,7 +51,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
   if (!group.changes || group.changes.length === 0) {
     return null;
   }
-  const changesByAction = group.changes.reduce(
+  const changesByAction = group.changes.reduce<Partial<Record<ChangelogType, ChatThreadChangelogFlexible[]>>>(
     (acc, change) => {
       const action = getChangeAction(change.changeType);
       if (!acc[action]) {
@@ -65,19 +60,23 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
       acc[action].push(change);
       return acc;
     },
-    {} as Record<ChangelogType, (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[]>,
+    {},
   );
   const actionOrder: ChangelogType[] = [ChangelogTypes.ADDED, ChangelogTypes.MODIFIED, ChangelogTypes.REMOVED];
   const sortedActions = actionOrder.filter(action => changesByAction[action]);
+  const addedChanges = changesByAction[ChangelogTypes.ADDED];
+  const modifiedChanges = changesByAction[ChangelogTypes.MODIFIED];
+  const removedChanges = changesByAction[ChangelogTypes.REMOVED];
+
   const actionSummaries: string[] = [];
-  if (changesByAction[ChangelogTypes.ADDED]?.length) {
-    actionSummaries.push(`${changesByAction[ChangelogTypes.ADDED].length} ${tActionSummary('added')}`);
+  if (addedChanges?.length) {
+    actionSummaries.push(`${addedChanges.length} ${tActionSummary('added')}`);
   }
-  if (changesByAction[ChangelogTypes.MODIFIED]?.length) {
-    actionSummaries.push(`${changesByAction[ChangelogTypes.MODIFIED].length} ${tActionSummary('modified')}`);
+  if (modifiedChanges?.length) {
+    actionSummaries.push(`${modifiedChanges.length} ${tActionSummary('modified')}`);
   }
-  if (changesByAction[ChangelogTypes.REMOVED]?.length) {
-    actionSummaries.push(`${changesByAction[ChangelogTypes.REMOVED].length} ${tActionSummary('removed')}`);
+  if (removedChanges?.length) {
+    actionSummaries.push(`${removedChanges.length} ${tActionSummary('removed')}`);
   }
   return (
     <div className={cn('py-2', className)}>
@@ -102,6 +101,12 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
               const changes = changesByAction[action];
               const config = actionConfig[action];
               const Icon = config.icon;
+
+              // Skip if no changes (shouldn't happen due to filter, but TypeScript needs this)
+              if (!changes || changes.length === 0) {
+                return null;
+              }
+
               return (
                 <div key={action} className="space-y-2">
                   <div className="flex items-center gap-2 px-1">
@@ -132,7 +137,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
  * ✅ TYPE-SAFE: Uses DbChangelogData from @/db/schemas/chat-metadata (single source of truth)
  * ✅ TYPE GUARDS: Uses discriminated union type guards instead of unsafe type casts
  */
-function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }) }) {
+function ChangeItem({ change }: { change: ChatThreadChangelogFlexible }) {
   const t = useTranslations('chat.configuration');
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];

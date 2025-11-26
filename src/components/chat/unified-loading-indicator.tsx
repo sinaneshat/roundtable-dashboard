@@ -13,12 +13,32 @@ import { EncryptedText } from '../ui/encrypted-text';
 const EMPTY_PRESEARCHES: StoredPreSearch[] = [];
 
 /**
+ * Animated 3-dot loader that cycles through dot count
+ */
+function AnimatedDots() {
+  const [dotCount, setDotCount] = useState(1);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDotCount(prev => (prev % 3) + 1);
+    }, 400);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <span className="inline-block w-[1.5ch] text-left">
+      {'.'.repeat(dotCount)}
+    </span>
+  );
+}
+
+/**
  * Inner component that cycles through messages
  * Separated to allow React to reset state when messageSet changes via key prop
  */
 function CyclingMessage({ messages }: { messages: string[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const currentMessage = messages[currentIndex] || 'Processing...';
+  const currentMessage = messages[currentIndex] || 'Processing';
 
   // Cycle through messages every 2.5 seconds
   useEffect(() => {
@@ -33,42 +53,21 @@ function CyclingMessage({ messages }: { messages: string[] }) {
     return () => clearInterval(interval);
   }, [messages.length]);
 
-  return (
-    <EncryptedText
-      text={currentMessage}
-      className="font-medium"
-      revealDelayMs={30}
-      flipDelayMs={40}
-      encryptedClassName="text-muted-foreground/40"
-      revealedClassName="text-muted-foreground"
-      continuous
-    />
-  );
-}
+  // Remove trailing dots from message for clean display
+  const baseMessage = currentMessage.replace(/\.+$/, '');
 
-/**
- * Animated bouncing dots for loading indicator
- */
-function LoadingDots() {
   return (
-    <div className="flex gap-1">
-      {[0, 1, 2].map(i => (
-        <motion.div
-          key={i}
-          className="size-1.5 bg-muted-foreground/40 rounded-full"
-          animate={{
-            scale: [1, 1.3, 1],
-            opacity: [0.4, 1, 0.4],
-          }}
-          transition={{
-            repeat: Infinity,
-            duration: 1.2,
-            delay: i * 0.2,
-            ease: 'easeInOut',
-          }}
-        />
-      ))}
-    </div>
+    <span className="font-sans font-bold text-muted-foreground">
+      <EncryptedText
+        text={baseMessage}
+        continuous
+        revealDelayMs={30}
+        flipDelayMs={80}
+        encryptedClassName="opacity-60"
+        revealedClassName="opacity-100"
+      />
+      <AnimatedDots />
+    </span>
   );
 }
 
@@ -96,7 +95,7 @@ export type UnifiedLoadingIndicatorProps = {
  * - Pre-search operations
  * - Navigation
  *
- * Uses EncryptedText with continuous mode for the matrix effect
+ * Uses EncryptedText for matrix scramble effect with 3-dot animation
  */
 export function UnifiedLoadingIndicator({
   showLoader,
@@ -166,8 +165,7 @@ export function UnifiedLoadingIndicator({
             exit={{ opacity: 0, y: -10 }}
             className="mt-6 mb-8 text-left"
           >
-            <div className="flex items-center gap-3 text-sm py-2">
-              <LoadingDots />
+            <div className="text-sm py-2">
               {/* Key ensures component remounts and resets cycling when message set changes */}
               <CyclingMessage key={messageSetKey} messages={messageSet} />
             </div>

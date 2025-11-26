@@ -1,5 +1,6 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { useTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import type { z } from 'zod';
 
@@ -21,6 +22,7 @@ import {
   RecommendationSchema,
   RoundSummarySchema,
 } from '@/api/routes/chat/schema';
+import { LoaderFive } from '@/components/ui/loader';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { useAutoScroll, useBoolean } from '@/hooks/utils';
 import { hasAnalysisData } from '@/lib/utils/analysis-utils';
@@ -79,6 +81,7 @@ function ModeratorAnalysisStreamComponent({
   onStreamStart,
   onActionClick,
 }: ModeratorAnalysisStreamProps) {
+  const t = useTranslations('moderator');
   // ✅ CRITICAL FIX: Store callbacks in refs for stability and to allow calling after unmount
   // This prevents analysis from getting stuck in "streaming" state when component unmounts
   // Follows the same pattern as use-multi-participant-chat.ts callback refs
@@ -344,12 +347,17 @@ function ModeratorAnalysisStreamComponent({
 
   const hasData = hasAnalysisData(displayData);
 
-  // Don't show internal loading - unified loading indicator handles this
+  // ✅ EAGER RENDERING: Show loading UI when PENDING/STREAMING with no data
+  // This provides immediate visual feedback that analysis is coming
   if ((analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return null;
+    return (
+      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+        <LoaderFive text={t('pendingAnalysis')} />
+      </div>
+    );
   }
 
-  // Don't render if no data
+  // Don't render if no data and not pending/streaming
   if (!hasData) {
     return null;
   }

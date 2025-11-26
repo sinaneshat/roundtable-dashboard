@@ -190,7 +190,11 @@ function Sidebar({
           data-slot="sidebar"
           data-mobile="true"
           className={cn(
-            "text-sidebar-foreground w-[var(--sidebar-width)] p-0 [&>button]:hidden bg-card border-border"
+            "text-sidebar-foreground w-[var(--sidebar-width)] p-3 [&>button]:hidden",
+            // Floating effect matching desktop
+            "bg-transparent border-none shadow-none",
+            // Override default sheet inset positioning
+            "!inset-y-auto !h-[calc(100vh-1.5rem)] !top-3 !start-3"
           )}
           style={
             {
@@ -203,7 +207,10 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col p-2">{children}</div>
+          {/* Inner container with floating card effect */}
+          <div className="flex h-full w-full flex-col p-2 bg-card rounded-2xl border border-border shadow-lg">
+            {children}
+          </div>
         </SheetContent>
       </Sheet>
     )

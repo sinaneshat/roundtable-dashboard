@@ -10,7 +10,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -24,6 +23,8 @@ import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { useChatStore } from '@/components/providers/chat-store-provider';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LoaderFive } from '@/components/ui/loader';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery } from '@/hooks/queries/chat';
@@ -39,6 +40,8 @@ import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 // ✅ REMOVED: queryKeys - no longer invalidating queries on completion
 import { showApiErrorToast } from '@/lib/toast';
+import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 // ✅ REMOVED: waitForIdleOrRender - was a timeout workaround (2s) for race conditions
 import {
   useChatFormActions,
@@ -316,8 +319,12 @@ export default function ChatOverviewScreen() {
   const hasActivePreSearch = preSearches.some(
     ps => ps.status === AnalysisStatuses.PENDING || ps.status === AnalysisStatuses.STREAMING,
   );
+  // ✅ FIX: Only count analyses that are actually streaming/analyzing (have participant messages)
+  // Placeholder analyses (created for eager rendering) have empty participantMessageIds
+  // and should NOT block the orchestrator from running
   const hasStreamingAnalysis = analyses.some(
-    a => a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING,
+    a => (a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING)
+      && a.participantMessageIds && a.participantMessageIds.length > 0,
   );
 
   useScreenInitialization({
@@ -667,9 +674,101 @@ export default function ChatOverviewScreen() {
                     currentStreamingParticipant={currentStreamingParticipant}
                     threadId={createdThreadId}
                   />
+
+                  {/* ✅ EAGER RENDERING: Show pending participant cards for participants that haven't responded yet
+                      This provides immediate visual feedback showing all participants with "Waiting for response..." */}
+                  {createdThreadId && contextParticipants.length > 0 && (() => {
+                    // Get participant indices that already have messages
+                    const assistantMessages = messages.filter((m: UIMessage) => m.role !== MessageRoles.USER);
+                    const respondedParticipantIndices = new Set<number>();
+                    assistantMessages.forEach((m: UIMessage) => {
+                      const metadata = m.metadata as { participantIndex?: number } | undefined;
+                      if (metadata?.participantIndex !== undefined) {
+                        respondedParticipantIndices.add(metadata.participantIndex);
+                      }
+                    });
+
+                    // Find participants that haven't responded yet (excluding the currently streaming one)
+                    const pendingParticipants = contextParticipants.filter((p, index) => {
+                      // Skip if already responded
+                      if (respondedParticipantIndices.has(index))
+                        return false;
+                      // Skip if currently streaming (handled by ChatMessageList)
+                      if (isStreaming && index === currentParticipantIndex)
+                        return false;
+                      return true;
+                    });
+
+                    if (pendingParticipants.length === 0)
+                      return null;
+
+                    return (
+                      <div className="space-y-4 mt-4">
+                        {pendingParticipants.map((participant) => {
+                          const model = allEnabledModels.find(m => m.id === participant.modelId);
+                          const avatarProps = getAvatarPropsFromModelId(
+                            MessageRoles.ASSISTANT,
+                            participant.modelId,
+                            null,
+                            'AI',
+                          );
+                          const displayName = model?.name || 'AI Assistant';
+
+                          // ✅ EAGER RENDERING: Match AssistantGroupCard format exactly
+                          return (
+                            <div
+                              key={`pending-${participant.id}`}
+                              className="mb-4 flex justify-start"
+                            >
+                              <div className="w-full">
+                                {/* Header at top - matches AssistantGroupCard */}
+                                <div className="flex items-center gap-3 mb-6">
+                                  <Avatar className="size-8 drop-shadow-[0_0_12px_hsl(var(--muted-foreground)/0.3)]">
+                                    <AvatarImage
+                                      src={avatarProps.src}
+                                      alt={avatarProps.name}
+                                      className="object-contain p-0.5"
+                                    />
+                                    <AvatarFallback className="text-[8px] bg-muted">
+                                      {avatarProps.name?.slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                                    <span className="text-xl font-semibold text-muted-foreground">
+                                      {displayName}
+                                    </span>
+                                    {participant.role && (
+                                      <span
+                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
+                                        style={getRoleBadgeStyle(participant.role)}
+                                      >
+                                        {participant.role}
+                                      </span>
+                                    )}
+                                    {/* Pulsing indicator for pending */}
+                                    <span className="ml-1 size-1.5 rounded-full bg-muted-foreground/60 animate-pulse flex-shrink-0" />
+                                  </div>
+                                </div>
+                                {/* Content - Waiting message with shimmer effect */}
+                                <div className="py-2 text-muted-foreground text-sm">
+                                  <LoaderFive text={t('chat.participant.waitingNamed', { name: displayName })} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </UnifiedErrorBoundary>
 
-                {createdThreadId && analyses[0] && (() => {
+                {/* ✅ REVISED: Only filter out PENDING placeholder analyses
+                    STREAMING/COMPLETE/FAILED analyses should ALWAYS render for proper stream resumption
+                    Placeholder states (PENDING + empty participantMessageIds) are handled by participant cards */}
+                {createdThreadId && analyses[0] && !(
+                  analyses[0].status === AnalysisStatuses.PENDING
+                  && (!analyses[0].participantMessageIds || analyses[0].participantMessageIds.length === 0)
+                ) && (() => {
                   const firstAnalysis = analyses[0];
                   return (
                     <div className="mt-4 sm:mt-6">
@@ -688,7 +787,7 @@ export default function ChatOverviewScreen() {
                           if (completedData) {
                             updateAnalysisData(
                               roundNumber,
-                              completedData as ModeratorAnalysisPayload,
+                              completedData,
                             );
                           } else if (error) {
                             // ✅ CRITICAL FIX: Handle streaming errors (schema validation failures)
@@ -765,6 +864,8 @@ export default function ChatOverviewScreen() {
                     )}
                   />
                 </div>
+                {/* Bottom fill - covers gap to screen bottom */}
+                <div className="absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
               </div>
             </>
           )}

@@ -1,6 +1,11 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+import type {
+  AgreementStatus,
+  EvidenceStrength,
+  VoteType,
+} from '@/api/core/enums';
 import {
   ANALYSIS_STATUSES,
   CHANGELOG_TYPES,
@@ -312,7 +317,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
     // Contributor Perspectives
     contributorPerspectives: Array<{
       participantIndex: number;
-      role: string;
+      role: string | null; // ✅ FIX: Participants can have no custom role
       modelId: string;
       modelName: string;
       scorecard: {
@@ -324,7 +329,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
       };
       stance: string;
       evidence: string[];
-      vote: 'approve' | 'caution' | 'reject';
+      vote: VoteType;
     }>;
 
     // Consensus Analysis
@@ -340,7 +345,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
       };
       agreementHeatmap: Array<{
         claim: string;
-        perspectives: Record<string, 'agree' | 'caution' | 'disagree'>;
+        perspectives: Record<string, AgreementStatus>;
       }>;
       argumentStrengthProfile: Record<string, {
         logic: number;
@@ -359,7 +364,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
       }>;
       evidenceCoverage: Array<{
         claim: string;
-        strength: 'strong' | 'moderate' | 'weak';
+        strength: EvidenceStrength;
         percentage: number;
       }>;
     };

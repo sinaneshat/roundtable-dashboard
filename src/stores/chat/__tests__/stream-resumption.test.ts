@@ -182,7 +182,7 @@ describe('stream Resumption Logic', () => {
         status: AnalysisStatuses.STREAMING,
         searchData: null,
         errorMessage: null,
-        createdAt: new Date(Date.now() - 60000), // 1 min ago
+        createdAt: new Date(Date.now() - 150000), // 2.5 min ago (exceeds ACTIVITY_TIMEOUT_MS of 120s)
       };
 
       store.getState().addPreSearch(stuckPreSearch);

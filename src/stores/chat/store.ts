@@ -471,17 +471,39 @@ const createAnalysisSlice: StateCreator<
       createdAt: new Date(),
     };
 
-    // ✅ CRITICAL FIX: Add to store with deduplication
+    // ✅ CRITICAL FIX: Add to store with deduplication OR update placeholder
     // Check if analysis already exists before adding (defense-in-depth)
     // Even with markAnalysisCreated() called first, React state batching
     // can cause this to be called twice before state propagates
+    //
+    // ✅ EAGER RENDERING FIX: If a placeholder exists (empty participantMessageIds),
+    // update it with real data instead of skipping. This enables the eager UI pattern
+    // where placeholders are created immediately for loading states.
     set((state) => {
       // Check if analysis already exists for this thread+round
-      const exists = state.analyses.some(
+      const existingIndex = state.analyses.findIndex(
         a => a.threadId === threadId && a.roundNumber === roundNumber,
       );
 
-      if (exists) {
+      if (existingIndex >= 0) {
+        const existing = state.analyses[existingIndex]!;
+
+        // ✅ FIX: If existing is a placeholder (empty participantMessageIds), update it
+        // Placeholder analyses are created for eager UI rendering with loading states
+        // When participants finish, we update the placeholder with real participantMessageIds
+        if (!existing.participantMessageIds || existing.participantMessageIds.length === 0) {
+          const updatedAnalyses = [...state.analyses];
+          updatedAnalyses[existingIndex] = {
+            ...existing,
+            ...pendingAnalysis,
+            // Keep original ID and createdAt from placeholder
+            id: existing.id,
+            createdAt: existing.createdAt,
+          };
+          return { analyses: updatedAnalyses };
+        }
+
+        // Real analysis exists, skip
         return state;
       }
 

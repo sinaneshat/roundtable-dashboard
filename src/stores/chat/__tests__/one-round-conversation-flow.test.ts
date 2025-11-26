@@ -936,9 +936,9 @@ describe('one Round Conversation Flow', () => {
       store.getState().setSelectedParticipants(participants);
 
       const selected = store.getState().selectedParticipants;
-      expect(selected[0].participantIndex).toBe(0);
-      expect(selected[1].participantIndex).toBe(1);
-      expect(selected[2].participantIndex).toBe(2);
+      expect(selected[0].priority).toBe(0);
+      expect(selected[1].priority).toBe(1);
+      expect(selected[2].priority).toBe(2);
     });
 
     it('should prevent duplicate analysis creation', () => {

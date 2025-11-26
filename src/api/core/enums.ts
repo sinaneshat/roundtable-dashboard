@@ -251,9 +251,11 @@ export const VoteTypes = {
 // MULTI-AI DELIBERATION - AGREEMENT STATUS
 // ============================================================================
 
-export const AGREEMENT_STATUSES = ['agree', 'caution', 'disagree'] as const;
+export const AGREEMENT_STATUSES = ['agree', 'caution', 'disagree', 'neutral'] as const;
 
-export const AgreementStatusSchema = z.enum(AGREEMENT_STATUSES).openapi({
+// ✅ LENIENT SCHEMA: AI models may return unexpected values - default to 'neutral'
+// Uses .catch() to prevent validation failures from breaking analysis streaming
+export const AgreementStatusSchema = z.enum(AGREEMENT_STATUSES).catch('neutral').openapi({
   description: 'Agreement status in consensus analysis',
   example: 'agree',
 });
@@ -264,6 +266,7 @@ export const AgreementStatuses = {
   AGREE: 'agree' as const,
   CAUTION: 'caution' as const,
   DISAGREE: 'disagree' as const,
+  NEUTRAL: 'neutral' as const,
 } as const;
 
 // ============================================================================
@@ -650,6 +653,25 @@ export const WebSearchAnswerModes = {
 } as const;
 
 // ============================================================================
+// WEB SEARCH STREAMING STAGE
+// ============================================================================
+
+export const WEB_SEARCH_STREAMING_STAGES = ['query', 'search', 'synthesize'] as const;
+
+export const WebSearchStreamingStageSchema = z.enum(WEB_SEARCH_STREAMING_STAGES).openapi({
+  description: 'Current stage of web search streaming process',
+  example: 'search',
+});
+
+export type WebSearchStreamingStage = z.infer<typeof WebSearchStreamingStageSchema>;
+
+export const WebSearchStreamingStages = {
+  QUERY: 'query' as const,
+  SEARCH: 'search' as const,
+  SYNTHESIZE: 'synthesize' as const,
+} as const;
+
+// ============================================================================
 // CHAIN OF THOUGHT STEP STATUS
 // ============================================================================
 
@@ -669,10 +691,15 @@ export const ChainOfThoughtStepStatuses = {
 } as const;
 
 // ============================================================================
-// AI SDK STATUS
+// AI SDK STATUS (AI SDK v5 useChat hook status values)
 // ============================================================================
 
-export const AI_SDK_STATUSES = ['ready', 'streaming', 'awaiting_message'] as const;
+// ✅ AI SDK v5 uses these status values:
+// - 'ready' - Initial/idle state, ready to accept new messages
+// - 'submitted' - Message submitted, waiting for response
+// - 'streaming' - Currently streaming a response
+// - 'error' - An error occurred
+export const AI_SDK_STATUSES = ['ready', 'submitted', 'streaming', 'error'] as const;
 
 export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES);
 
@@ -680,8 +707,9 @@ export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
 
 export const AiSdkStatuses = {
   READY: 'ready' as const,
+  SUBMITTED: 'submitted' as const,
   STREAMING: 'streaming' as const,
-  AWAITING_MESSAGE: 'awaiting_message' as const,
+  ERROR: 'error' as const,
 } as const;
 
 // ============================================================================

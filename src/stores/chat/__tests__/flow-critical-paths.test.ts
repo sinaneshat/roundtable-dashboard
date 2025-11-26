@@ -86,11 +86,11 @@ describe('fLOW: Part 1 - Starting New Chat (Overview Screen)', () => {
     expect(hasBlockingPreSearch).toBe(true);
 
     // 4. Pre-search completes
-    store.getState().updatePreSearchStatus(preSearch.roundNumber, 'complete');
+    store.getState().updatePreSearchStatus(preSearch.roundNumber, PreSearchStatuses.COMPLETE);
 
     // 5. Now streaming can proceed
     const stillBlocked = store.getState().preSearches.some(
-      ps => ps.roundNumber === 0 && (ps.status === 'pending' || ps.status === 'streaming'),
+      ps => ps.roundNumber === 0 && (ps.status === PreSearchStatuses.PENDING || ps.status === PreSearchStatuses.STREAMING),
     );
     expect(stillBlocked).toBe(false);
   });
@@ -108,9 +108,10 @@ describe('fLOW: Part 1 - Starting New Chat (Overview Screen)', () => {
       roundNumber: 0,
       status: AnalysisStatuses.STREAMING,
       userQuery: 'What is AI?',
-      // Default timeout is 45 seconds (TIMEOUT_CONFIG.DEFAULT_MS)
-      // Pre-search must be older than 45 seconds to be considered timed out
-      createdAt: new Date(Date.now() - 46000), // 46 seconds ago (exceeds 45s default)
+      // Default timeout is 90 seconds (TIMEOUT_CONFIG.DEFAULT_MS)
+      // Activity timeout is 120 seconds (ACTIVITY_TIMEOUT_MS)
+      // Pre-search must be older than 120 seconds to be considered timed out
+      createdAt: new Date(Date.now() - 150000), // 150 seconds ago (exceeds 120s activity timeout)
     };
 
     store.getState().addPreSearch(preSearch);
@@ -537,6 +538,256 @@ describe('fLOW: Part 5 - Thread Detail Page Critical Behaviors', () => {
   });
 });
 
+describe('fLOW: Eager Rendering Pattern', () => {
+  let store: ReturnType<typeof createChatStore>;
+
+  beforeEach(() => {
+    store = createChatStore();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should create placeholder analysis in PENDING status immediately on thread creation', () => {
+    // Per eager rendering pattern: Create placeholder analysis immediately
+    // so RoundAnalysisCard renders with loading UI before participants stream
+
+    // 1. Simulate form-actions.ts behavior after initializeThread()
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      mode: 'debating' as const,
+      enableWebSearch: false,
+      status: 'active' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+
+    // 2. Create placeholder analysis immediately (as form-actions does)
+    store.getState().addAnalysis({
+      id: `placeholder-analysis-${thread.id}-0`,
+      threadId: thread.id,
+      roundNumber: 0,
+      mode: thread.mode,
+      userQuestion: 'Test question',
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      participantMessageIds: [],
+      createdAt: new Date(),
+      completedAt: null,
+      errorMessage: null,
+    });
+
+    // 3. Expectation: Analysis exists in PENDING state for round 0
+    const analyses = store.getState().analyses;
+    expect(analyses).toHaveLength(1);
+    expect(analyses[0].status).toBe(AnalysisStatuses.PENDING);
+    expect(analyses[0].roundNumber).toBe(0);
+    expect(analyses[0].analysisData).toBeNull();
+  });
+
+  it('should allow UI to render PENDING analysis with no data (loading state)', () => {
+    // Per eager rendering: Components should render with loading UI when PENDING + no data
+
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+
+    // Create placeholder analysis
+    store.getState().addAnalysis({
+      id: 'placeholder-0',
+      threadId: 't1',
+      roundNumber: 0,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    const analysis = store.getState().analyses[0];
+
+    // UI component checks: isPendingWithNoData
+    const isPending = analysis.status === AnalysisStatuses.PENDING;
+    const hasNoData = analysis.analysisData === null;
+    const shouldShowLoadingUI = isPending && hasNoData;
+
+    expect(shouldShowLoadingUI).toBe(true);
+  });
+
+  it('should upgrade PENDING placeholder to STREAMING when analysis starts', () => {
+    // Ensure the placeholder is properly upgraded, not duplicated
+
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+
+    // 1. Create placeholder in PENDING
+    store.getState().addAnalysis({
+      id: 'placeholder-0',
+      threadId: 't1',
+      roundNumber: 0,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.PENDING);
+
+    // 2. Analysis starts streaming - status should upgrade
+    store.getState().updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
+
+    // 3. Expectation: Still one analysis, now STREAMING
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.STREAMING);
+  });
+
+  it('should handle multi-round conversations with eager rendering', () => {
+    // Test that eager rendering works across multiple rounds
+
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      mode: 'debating' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+
+    // ========== ROUND 0 ==========
+    // Create placeholder for round 0
+    store.getState().addAnalysis({
+      id: 'placeholder-0',
+      threadId: 't1',
+      roundNumber: 0,
+      mode: thread.mode,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    // Verify placeholder exists
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.PENDING);
+
+    // Simulate participants complete, analysis streams and completes
+    store.getState().updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
+    store.getState().updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+
+    expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
+
+    // ========== ROUND 1 ==========
+    // User sends another message - create placeholder for round 1
+    store.getState().addAnalysis({
+      id: 'placeholder-1',
+      threadId: 't1',
+      roundNumber: 1,
+      mode: thread.mode,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    // Verify both rounds exist
+    expect(store.getState().analyses).toHaveLength(2);
+    expect(store.getState().analyses[0].roundNumber).toBe(0);
+    expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.COMPLETE);
+    expect(store.getState().analyses[1].roundNumber).toBe(1);
+    expect(store.getState().analyses[1].status).toBe(AnalysisStatuses.PENDING);
+
+    // Complete round 1
+    store.getState().updateAnalysisStatus(1, AnalysisStatuses.STREAMING);
+    store.getState().updateAnalysisStatus(1, AnalysisStatuses.COMPLETE);
+
+    // ========== ROUND 2 ==========
+    // Another round
+    store.getState().addAnalysis({
+      id: 'placeholder-2',
+      threadId: 't1',
+      roundNumber: 2,
+      mode: thread.mode,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    // Verify all 3 rounds
+    expect(store.getState().analyses).toHaveLength(3);
+    expect(store.getState().analyses[2].roundNumber).toBe(2);
+    expect(store.getState().analyses[2].status).toBe(AnalysisStatuses.PENDING);
+  });
+
+  it('should not duplicate analysis when PENDING placeholder exists and addAnalysis called again', () => {
+    // Important: When orchestrator calls addAnalysis for same round, should not create duplicate
+    // The store uses deduplication - addAnalysis skips duplicates, updateAnalysisStatus upgrades
+
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+
+    // 1. Form-actions creates PENDING placeholder
+    store.getState().addAnalysis({
+      id: 'placeholder-0',
+      threadId: 't1',
+      roundNumber: 0,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    expect(store.getState().analyses).toHaveLength(1);
+
+    // 2. Orchestrator tries to add another PENDING for same round (race condition scenario)
+    store.getState().addAnalysis({
+      id: 'orchestrator-0',
+      threadId: 't1',
+      roundNumber: 0,
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      createdAt: new Date(),
+    });
+
+    // 3. Expectation: Still only one analysis (deduplication works)
+    expect(store.getState().analyses).toHaveLength(1);
+
+    // 4. To upgrade status, use updateAnalysisStatus (not addAnalysis which is for new entries)
+    // This is the correct pattern - addAnalysis deduplicates, updateAnalysisStatus upgrades
+    store.getState().updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
+
+    // 5. Expectation: Status upgraded to STREAMING (not another entry)
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].status).toBe(AnalysisStatuses.STREAMING);
+  });
+});
+
 describe('fLOW: Critical Race Conditions from Documentation', () => {
   let store: ReturnType<typeof createChatStore>;
 
@@ -585,5 +836,260 @@ describe('fLOW: Critical Race Conditions from Documentation', () => {
     expect(store.getState().isCreatingAnalysis).toBe(true);
 
     // User can still type and submit (analysis continues in background)
+  });
+});
+
+describe('flow: createPendingAnalysis updates placeholder instead of skipping', () => {
+  let store: ReturnType<typeof createChatStore>;
+
+  beforeEach(() => {
+    store = createChatStore();
+  });
+
+  it('should update placeholder analysis (empty participantMessageIds) with real data', () => {
+    // BUG FIX: createPendingAnalysis was skipping when placeholder exists
+    // Now it updates placeholder with real participantMessageIds
+
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      mode: 'debating' as const,
+      enableWebSearch: false,
+      status: 'active' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+    store.getState().setParticipants([
+      { id: 'p1', modelId: 'gpt-4', priority: 0, isEnabled: true } as ChatParticipant,
+    ]);
+
+    // 1. Form-actions creates PLACEHOLDER with empty participantMessageIds
+    // (matches form-actions.ts addAnalysis pattern)
+    store.getState().addAnalysis({
+      id: 'placeholder-analysis-t1-0',
+      threadId: 't1',
+      roundNumber: 0,
+      mode: 'debating',
+      userQuestion: 'Test question',
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      participantMessageIds: [], // ✅ KEY: Empty array = placeholder
+      createdAt: new Date(),
+      completedAt: null,
+      errorMessage: null,
+    });
+
+    // Verify placeholder exists
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].participantMessageIds).toHaveLength(0);
+    const originalId = store.getState().analyses[0].id;
+
+    // 2. Simulate participant messages arrive with IDs
+    // NOTE: Messages need FULL participant metadata for createPendingAnalysis to find them
+    // DbAssistantMessageMetadataSchema requires: role, roundNumber, participantId, participantIndex,
+    // participantRole, model, finishReason, usage
+    const messages: UIMessage[] = [
+      {
+        id: 't1_r0_p0',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Response' }],
+        metadata: {
+          role: 'assistant',
+          roundNumber: 0,
+          participantIndex: 0,
+          participantId: 'p1',
+          participantRole: null,
+          model: 'gpt-4',
+          finishReason: 'stop',
+          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          hasError: false,
+          isTransient: false,
+          isPartialResponse: false,
+        },
+      } as UIMessage,
+    ];
+
+    store.getState().setMessages(messages);
+
+    // 3. createPendingAnalysis is called (normally by provider handleComplete)
+    // This should UPDATE the placeholder, not skip or duplicate
+    store.getState().createPendingAnalysis({
+      roundNumber: 0,
+      messages,
+      userQuestion: 'Test question',
+      threadId: 't1',
+      mode: 'debating',
+    });
+
+    // 4. Verify: Still only 1 analysis, but NOW has participantMessageIds
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].participantMessageIds).toHaveLength(1);
+    expect(store.getState().analyses[0].participantMessageIds[0]).toBe('t1_r0_p0');
+    // Original ID should be preserved (updated in-place, not replaced)
+    expect(store.getState().analyses[0].id).toBe(originalId);
+  });
+
+  it('should skip when real analysis (non-empty participantMessageIds) exists', () => {
+    // When analysis already has participantMessageIds, don't update - it's real
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      mode: 'debating' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+    store.getState().setParticipants([
+      { id: 'p1', modelId: 'gpt-4', priority: 0, isEnabled: true } as ChatParticipant,
+    ]);
+
+    // 1. Real analysis with participantMessageIds (non-placeholder)
+    store.getState().addAnalysis({
+      id: 'real-analysis-0',
+      threadId: 't1',
+      roundNumber: 0,
+      mode: 'debating',
+      userQuestion: 'Test question',
+      status: AnalysisStatuses.PENDING,
+      analysisData: null,
+      participantMessageIds: ['existing-msg-id'], // ✅ Non-empty = real
+      createdAt: new Date(),
+      completedAt: null,
+      errorMessage: null,
+    });
+
+    const messages: UIMessage[] = [
+      {
+        id: 't1_r0_p0',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Response' }],
+        metadata: {
+          role: 'assistant',
+          roundNumber: 0,
+          participantIndex: 0,
+          participantId: 'p1',
+          participantRole: null,
+          model: 'gpt-4',
+          finishReason: 'stop',
+          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          hasError: false,
+          isTransient: false,
+          isPartialResponse: false,
+        },
+      } as UIMessage,
+    ];
+
+    store.getState().setMessages(messages);
+
+    // 2. createPendingAnalysis should skip (real analysis exists)
+    store.getState().createPendingAnalysis({
+      roundNumber: 0,
+      messages,
+      userQuestion: 'Test question',
+      threadId: 't1',
+      mode: 'debating',
+    });
+
+    // 3. Verify: Analysis unchanged (original participantMessageIds preserved)
+    expect(store.getState().analyses).toHaveLength(1);
+    expect(store.getState().analyses[0].participantMessageIds).toHaveLength(1);
+    expect(store.getState().analyses[0].participantMessageIds[0]).toBe('existing-msg-id');
+  });
+});
+
+describe('flow: placeholder pre-search for overview screen', () => {
+  let store: ReturnType<typeof createChatStore>;
+
+  beforeEach(() => {
+    store = createChatStore();
+  });
+
+  it('should create placeholder pre-search when web search is enabled', () => {
+    // form-actions.ts creates placeholder pre-search for eager rendering
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      mode: 'debating' as const,
+      enableWebSearch: true,
+      status: 'active' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+
+    // Simulate form-actions placeholder pre-search creation
+    store.getState().addPreSearch({
+      id: `placeholder-presearch-${thread.id}-0`,
+      threadId: thread.id,
+      roundNumber: 0,
+      userQuery: 'What is the weather?',
+      status: AnalysisStatuses.PENDING,
+      searchData: null,
+      createdAt: new Date(),
+      completedAt: null,
+      errorMessage: null,
+    });
+
+    // Verify placeholder exists with correct data for PreSearchStream to execute
+    const preSearches = store.getState().preSearches;
+    expect(preSearches).toHaveLength(1);
+    expect(preSearches[0].status).toBe(AnalysisStatuses.PENDING);
+    expect(preSearches[0].userQuery).toBe('What is the weather?');
+    expect(preSearches[0].roundNumber).toBe(0);
+  });
+
+  it('should allow streaming trigger to see pre-search exists', () => {
+    // Provider streaming trigger effect checks if pre-search exists
+    const thread = {
+      id: 't1',
+      slug: 'test',
+      title: 'Test Thread',
+      userId: 'user-1',
+      mode: 'debating' as const,
+      enableWebSearch: true,
+      status: 'active' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as ChatThread;
+
+    store.getState().setThread(thread);
+    store.getState().addPreSearch({
+      id: `placeholder-presearch-t1-0`,
+      threadId: 't1',
+      roundNumber: 0,
+      userQuery: 'Test query',
+      status: AnalysisStatuses.PENDING,
+      searchData: null,
+      createdAt: new Date(),
+      completedAt: null,
+      errorMessage: null,
+    });
+
+    // Simulate provider streaming trigger effect check
+    const preSearches = store.getState().preSearches;
+    const currentRound = 0;
+    const preSearchForRound = preSearches.find(ps => ps.roundNumber === currentRound);
+
+    // With placeholder: pre-search exists, effect waits for it to complete
+    expect(preSearchForRound).toBeDefined();
+    expect(preSearchForRound?.status).toBe(AnalysisStatuses.PENDING);
+
+    // Simulate pre-search completes
+    store.getState().updatePreSearchStatus(0, AnalysisStatuses.COMPLETE);
+
+    const updatedPreSearch = store.getState().preSearches.find(ps => ps.roundNumber === currentRound);
+    expect(updatedPreSearch?.status).toBe(AnalysisStatuses.COMPLETE);
+
+    // Now streaming trigger can proceed (status is COMPLETE)
   });
 });

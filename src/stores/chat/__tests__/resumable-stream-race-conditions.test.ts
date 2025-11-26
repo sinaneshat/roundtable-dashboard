@@ -177,18 +177,19 @@ describe('resumable Stream Race Conditions', () => {
 
     it('should handle pre-search stuck in PENDING', async () => {
       // 1. Setup: Pre-search created but never started
+      // Activity timeout is 120s (ACTIVITY_TIMEOUT_MS)
       const preSearch = {
         id: 'ps-1',
         threadId: 't1',
         roundNumber: 1,
         status: 'pending' as const,
-        createdAt: new Date(Date.now() - 35000), // 35 seconds ago
+        createdAt: new Date(Date.now() - 100000), // 100 seconds ago
       };
 
       store.getState().addPreSearch(preSearch);
 
-      // 2. Wait for timeout (30s)
-      vi.advanceTimersByTime(31000);
+      // 2. Wait for timeout to exceed 120s total
+      vi.advanceTimersByTime(51000); // Total: 100s + 51s = 151s > 120s activity timeout
 
       // 3. MANUAL: Call stuck pre-search check
       store.getState().checkStuckPreSearches();

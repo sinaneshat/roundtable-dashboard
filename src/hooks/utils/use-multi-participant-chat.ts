@@ -726,13 +726,22 @@ export function useMultiParticipantChat(
         const finishReason = 'finishReason' in metadataObj ? metadataObj.finishReason : FinishReasons.UNKNOWN;
         const isExplicitErrorFinish = finishReason === FinishReasons.FAILED;
 
+        // ✅ FIX: Signal 5 - Check if any parts are still streaming
+        // AI SDK v5 marks parts with state: 'streaming' while content is still being generated
+        // If parts are still streaming, we should NOT set hasError=true yet
+        // This prevents premature "No Response Generated" errors while stream is active
+        const isStillStreaming = data.message.parts?.some(
+          p => 'state' in p && p.state === 'streaming',
+        ) || false;
+
         // ✅ CRITICAL: Consider it successful if ANY positive signal is present
         // and there's no explicit error signal
         const hasGeneratedText = hasTextInParts
           || hasSuccessfulFinish
           || backendMarkedSuccess
           || hasOutputTokens
-          || (!isExplicitErrorFinish && textParts.length > 0);
+          || (!isExplicitErrorFinish && textParts.length > 0)
+          || isStillStreaming; // ← Parts still streaming = content generation in progress
 
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
@@ -813,6 +822,26 @@ export function useMultiParticipantChat(
               }
             }
 
+            // ✅ FIX: First, find ALL messages with this ID and deduplicate
+            // AI SDK can create streaming messages without our metadata, causing duplicates
+            // We need to find any message with matching ID and update it
+            const messagesWithSameId = prev.filter(msg => msg.id === idToSearchFor);
+
+            // ✅ FIX: If multiple messages exist with same ID, something went wrong - deduplicate first
+            if (messagesWithSameId.length > 1) {
+              // Remove all duplicates, keep only the first one, then update it
+              const deduplicatedPrev = prev.filter((msg, index) => {
+                if (msg.id !== idToSearchFor)
+                  return true;
+                // Keep only the first occurrence
+                return prev.findIndex(m => m.id === idToSearchFor) === index;
+              });
+              // Now update the single remaining message
+              return deduplicatedPrev.map((msg: UIMessage) =>
+                msg.id === idToSearchFor ? completeMessage : msg,
+              );
+            }
+
             // ✅ STRICT TYPING FIX: Check if message exists AND belongs to current participant AND current round
             // No more loose optional chaining - completeMetadata has ALL required fields
             // ✅ CRITICAL FIX: Search for idToSearchFor (original ID if we changed it, otherwise the current ID)
@@ -837,24 +866,17 @@ export function useMultiParticipantChat(
             });
 
             if (existingMessageIndex === -1) {
-              // ✅ SAFETY CHECK: Before adding, verify no duplicate IDs exist
-              // This prevents edge cases where messages might have been refetched
-              const duplicateMsg = prev.find(msg => msg.id === completeMessage.id);
-              if (duplicateMsg) {
-                // ✅ TYPE-SAFE: Use extraction utility instead of force casting
-                const dupMetadata = getAssistantMetadata(duplicateMsg.metadata);
-                const dupParticipantId = dupMetadata?.participantId;
-
-                // Only replace if it's the same participant (prevents overwriting different participant's message)
-                if (dupParticipantId === participant.id) {
-                  return prev.map((msg: UIMessage) =>
-                    msg.id === completeMessage.id ? completeMessage : msg,
-                  );
-                }
-                // Different participant with same ID - this shouldn't happen after our ID generation fix
-                // Silently handle by adding as new message with the (hopefully unique) ID
+              // ✅ FIX: Even if metadata doesn't match, check if message with same ID exists
+              // AI SDK creates streaming messages without metadata - we should update them
+              const anyMessageWithSameId = prev.findIndex(msg => msg.id === completeMessage.id);
+              if (anyMessageWithSameId !== -1) {
+                // Message exists but metadata didn't match - update it anyway
+                // This handles the case where AI SDK created a streaming message without our metadata
+                return prev.map((msg: UIMessage, idx: number) =>
+                  idx === anyMessageWithSameId ? completeMessage : msg,
+                );
               }
-              // Message doesn't exist or belongs to different participant - add new message
+              // Message truly doesn't exist - add new message
               return [...prev, completeMessage];
             }
 
@@ -975,7 +997,9 @@ export function useMultiParticipantChat(
     const currentParticipants = participantsOverride || participantsRef.current;
 
     // ✅ Guards: Wait for dependencies to be ready (effect will retry)
-    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming || isTriggeringRef.current) {
+    // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
+    const canSendMessage = status === AiSdkStatuses.READY;
+    if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
       return;
     }
 
@@ -1068,7 +1092,9 @@ export function useMultiParticipantChat(
     const currentParticipants = participantsOverride || participantsRef.current;
 
     // ✅ Guards: Wait for dependencies to be ready
-    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming || isTriggeringRef.current) {
+    // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
+    const canSendMessage = status === AiSdkStatuses.READY;
+    if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
       return;
     }
 
@@ -1149,8 +1175,9 @@ export function useMultiParticipantChat(
    */
   const sendMessage = useCallback(
     async (content: string) => {
-      // ✅ ENUM PATTERN: Use AiSdkStatuses constant instead of hardcoded 'ready'
-      if (status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
+      // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
+      const canSendMessage = status === AiSdkStatuses.READY;
+      if (!canSendMessage || isExplicitlyStreaming) {
         return;
       }
 
@@ -1268,8 +1295,9 @@ export function useMultiParticipantChat(
    * and re-sends the user's prompt to regenerate the round from ground up.
    */
   const retry = useCallback(() => {
-    // ✅ ENUM PATTERN: Use AiSdkStatuses constant instead of hardcoded 'ready'
-    if (status !== AiSdkStatuses.READY) {
+    // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
+    const canSendMessage = status === AiSdkStatuses.READY;
+    if (!canSendMessage) {
       return;
     }
 

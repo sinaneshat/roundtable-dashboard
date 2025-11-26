@@ -8,13 +8,34 @@
  * This prevents "Controller is already closed" errors and ensures
  * analysis completes even after page refresh during streaming.
  */
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render as rtlRender, waitFor } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { testLocale, testMessages, testTimeZone } from '@/lib/testing/test-messages';
 
 import { clearTriggeredAnalysesForRound, ModeratorAnalysisStream } from '../moderator/moderator-analysis-stream';
+
+// Custom wrapper for tests
+function TestWrapper({ children }: { children: ReactNode }) {
+  return (
+    <NextIntlClientProvider
+      locale={testLocale}
+      messages={testMessages}
+      timeZone={testTimeZone}
+    >
+      {children}
+    </NextIntlClientProvider>
+  );
+}
+
+// Custom render that includes i18n wrapper
+function render(ui: ReactNode) {
+  return rtlRender(ui, { wrapper: TestWrapper });
+}
 
 // Store onFinish callback to trigger manually
 let capturedOnFinish: ((result: { object: unknown; error: Error | null }) => void) | null = null;

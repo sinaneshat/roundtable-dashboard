@@ -957,11 +957,11 @@ describe('section 6: Error Recovery and Edge Cases', () => {
       const thread = createMockThread({ id: 'thread-stuck-ps', enableWebSearch: true });
       store.getState().initializeThread(thread, [], []);
 
-      // Add streaming pre-search that started 50 seconds ago (exceeds 45s default timeout)
+      // Add streaming pre-search that exceeds 120s activity timeout (ACTIVITY_TIMEOUT_MS)
       store.getState().addPreSearch(createMockPreSearch({
         roundNumber: 0,
         status: PreSearchStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 50000), // 50 seconds ago
+        createdAt: new Date(Date.now() - 150000), // 150 seconds ago (exceeds 120s)
       }));
 
       // Trigger stuck check

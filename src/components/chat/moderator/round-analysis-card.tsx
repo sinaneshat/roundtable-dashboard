@@ -29,6 +29,18 @@ type RoundAnalysisCardProps = {
   demoOpen?: boolean; // Demo mode controlled accordion state
   demoShowContent?: boolean; // Demo mode controlled content visibility
 };
+
+/**
+ * RoundAnalysisCard - Accordion component for moderator analysis
+ *
+ * ✅ REVISED: This component should ONLY be rendered when analysis has participant responses
+ * (participantMessageIds.length > 0). Placeholder states with closed/locked accordions are
+ * NOT shown - placeholder states are ONLY for participant cards.
+ *
+ * Filtering is done upstream in:
+ * - ChatOverviewScreen.tsx: checks participantMessageIds before rendering
+ * - useThreadTimeline.ts: filters out placeholder analyses from timeline
+ */
 export function RoundAnalysisCard({
   analysis,
   threadId,
@@ -42,6 +54,8 @@ export function RoundAnalysisCard({
   demoShowContent,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
+
+  // Status configuration for badge styling
   const statusConfig = {
     pending: {
       label: t('analyzing'),
@@ -78,10 +92,13 @@ export function RoundAnalysisCard({
   }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
 
   // Demo mode override: If demoOpen is provided, use it instead of computed state
-  const isOpen = demoOpen !== undefined ? demoOpen : (isManuallyControlled ? manuallyOpen : isLatest);
+  const isOpen = demoOpen !== undefined
+    ? demoOpen
+    : (isManuallyControlled ? manuallyOpen : isLatest);
 
-  // ✅ Disable accordion interaction during streaming
-  const isStreamingOrPending = analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING;
+  // Disable accordion interaction during streaming/pending
+  const isStreamingOrPending = analysis.status === AnalysisStatuses.STREAMING
+    || analysis.status === AnalysisStatuses.PENDING;
 
   const handleOpenChange = useCallback((open: boolean) => {
     // Prevent interaction during streaming
@@ -133,6 +150,7 @@ export function RoundAnalysisCard({
           {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
             <>
+              {/* Render appropriate content based on analysis status */}
               {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
                 ? (
                     <ModeratorAnalysisStream

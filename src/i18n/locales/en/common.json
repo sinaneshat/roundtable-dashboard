@@ -413,6 +413,7 @@
     "preSearch": {
       "title": "Web Research",
       "searching": "Searching",
+      "pendingSearch": "Searching the web...",
       "error": "Error",
       "retry": "Retry",
       "searchDepth": {
@@ -471,7 +472,7 @@
         },
         "images": {
           "title": "Related Images",
-          "count": "{{count}} images found",
+          "count": "{count, plural, =0 {No images} =1 {1 image} other {# images}}",
           "viewFull": "View full size",
           "openSource": "View source page",
           "copyUrl": "Copy image URL",
@@ -563,7 +564,7 @@
             "advanced": "Advanced"
           },
           "sourceCount": {
-            "optimal": "{{count}} sources optimal",
+            "optimal": "{count, plural, =1 {1 source optimal} other {# sources optimal}}",
             "label": "Recommended Sources"
           }
         },
@@ -842,6 +843,11 @@
     "user": {
       "defaultName": "You"
     },
+    "participant": {
+      "waiting": "Waiting for response...",
+      "waitingNamed": "Waiting for {name}'s response...",
+      "generating": "Generating response from {model}..."
+    },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
     "threadCreated": "Chat thread created successfully",
@@ -1048,6 +1054,8 @@
   "moderator": {
     "analyzeRound": "Analyze Round",
     "analyzing": "Analyzing",
+    "pendingAnalysis": "Analyzing participant responses...",
+    "waitingForParticipants": "Waiting for participants to finish",
     "roundAnalysis": "Round {number} Analysis",
     "overallRating": "Overall Rating",
     "rating": "Rating",
@@ -1535,24 +1543,26 @@
   "webSearch": {
     "images": {
       "title": "Images from Search",
-      "count": "{{count}} images found",
+      "count": "{count, plural, =0 {No images} =1 {1 image} other {# images}}",
       "viewFull": "View full size",
       "openSource": "View source page",
       "copyUrl": "Copy image URL",
       "copiedUrl": "Image URL copied!",
       "loadError": "Failed to load image",
       "noImages": "No images found",
-      "from": "From {{source}}"
+      "from": "From {source}"
     },
     "result": {
-      "author": "By {{name}}",
-      "publishedDate": "Published {{date}}",
-      "readingTime": "{{minutes}} min read",
-      "wordCount": "{{count}} words",
+      "author": "By {name}",
+      "publishedDate": "Published {date}",
+      "readingTime": "{minutes} min read",
+      "wordCount": "{count, plural, =1 {1 word} other {# words}}",
       "showFullContent": "Show full content",
       "showLess": "Show less",
+      "expandMore": "More",
+      "collapseLess": "Less",
       "keyPoints": "Key Points",
-      "relevanceScore": "Relevance: {{score}}%",
+      "relevanceScore": "Relevance: {score}%",
       "openExternal": "Open in new tab",
       "copyLink": "Copy link"
     },

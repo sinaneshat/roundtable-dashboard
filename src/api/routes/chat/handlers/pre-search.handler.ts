@@ -29,12 +29,12 @@ import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AnalysisStatuses, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
+import { analyzeQueryComplexity } from '@/api/services/prompts.service';
 import { isQuerySearchable, simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
 import {
   createSearchCache,
   generateSearchQuery,
   performWebSearch,
-  streamAnswerSummary,
   streamSearchQuery,
 } from '@/api/services/web-search.service';
 import type { ApiEnv } from '@/api/types';
@@ -381,6 +381,29 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               })),
             });
 
+            // ✅ FIX: Send FINAL query events with correct searchDepth values
+            // During streaming, partial objects may have incomplete searchDepth (defaulted to 'basic')
+            // Send corrected events with the complete data from final result
+            if (multiQueryResult?.queries) {
+              for (let i = 0; i < multiQueryResult.queries.length; i++) {
+                const query = multiQueryResult.queries[i];
+                if (query?.query) {
+                  await stream.writeSSE({
+                    event: PreSearchSseEvents.QUERY,
+                    data: JSON.stringify({
+                      timestamp: Date.now(),
+                      query: query.query,
+                      rationale: query.rationale || '',
+                      searchDepth: query.searchDepth || WebSearchDepths.ADVANCED,
+                      index: i,
+                      total: multiQueryResult.totalQueries || multiQueryResult.queries.length,
+                      final: true, // Flag to indicate this is the final/corrected data
+                    }),
+                  });
+                }
+              }
+            }
+
             // Validate generation succeeded
             if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
               console.error('[Pre-Search] AI generation produced NO queries - triggering fallback');
@@ -514,14 +537,59 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         }
 
         // Coerce string numbers to actual numbers
-        const totalQueries = typeof multiQueryResult.totalQueries === 'string'
+        const rawTotalQueries = typeof multiQueryResult.totalQueries === 'string'
           ? Number.parseInt(multiQueryResult.totalQueries, 10)
           : multiQueryResult.totalQueries;
-        const generatedQueries = multiQueryResult.queries;
+        const rawGeneratedQueries = multiQueryResult.queries;
+
+        // ✅ COMPLEXITY-AWARE: Limit queries based on user prompt complexity
+        // Simple queries (definitions, single facts) = 1 query
+        // Moderate queries (how-to, comparisons) = 2 queries max
+        // Complex queries (multi-part, research) = 3 queries max
+        const complexityResult = analyzeQueryComplexity(body.userQuery);
+
+        // Apply complexity limits - slice queries to maxQueries
+        const generatedQueries = rawGeneratedQueries.slice(0, complexityResult.maxQueries);
+        const totalQueries = Math.min(rawTotalQueries, complexityResult.maxQueries);
+
+        // Apply default search depth and source count to queries that lack them
+        for (const query of generatedQueries) {
+          if (!query.searchDepth) {
+            query.searchDepth = complexityResult.defaultSearchDepth;
+          }
+          if (!query.sourceCount) {
+            query.sourceCount = complexityResult.defaultSourceCount;
+          }
+        }
+
+        // ✅ DEBUG: Log complexity analysis and query limiting
+        console.error('[Pre-Search] Complexity analysis:', {
+          userQuery: body.userQuery.substring(0, 100),
+          complexity: complexityResult.complexity,
+          maxQueries: complexityResult.maxQueries,
+          reasoning: complexityResult.reasoning,
+          originalQueryCount: rawTotalQueries,
+          limitedQueryCount: totalQueries,
+          queriesRemoved: rawTotalQueries - totalQueries,
+        });
+
+        // ✅ STREAM: Notify frontend about complexity decision
+        await stream.writeSSE({
+          event: PreSearchSseEvents.START,
+          data: JSON.stringify({
+            timestamp: Date.now(),
+            userQuery: body.userQuery,
+            totalQueries,
+            analysisRationale: multiQueryResult.analysisRationale,
+            complexity: complexityResult.complexity,
+            complexityReasoning: complexityResult.reasoning,
+          }),
+        });
 
         // ✅ DEBUG: Log final query execution plan
         console.error('[Pre-Search] Executing search queries:', {
           totalQueries,
+          complexity: complexityResult.complexity,
           queries: generatedQueries.map((q, idx) => ({
             index: idx,
             query: q?.query,
@@ -606,17 +674,21 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               ? Number.parseInt(generatedQuery.chunksPerSource, 10)
               : generatedQuery.chunksPerSource;
 
+            // ✅ TAVILY PATTERN: Comprehensive data extraction
+            // - Always include images for visual context
+            // - Always include raw markdown content for participants
+            // - No answer generation - participants synthesize directly
             result = await performWebSearch(
               {
                 query: generatedQuery.query,
                 maxResults: sourceCount ?? defaultSourceCount,
                 searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
                 chunksPerSource: chunksPerSource ?? 2,
-                includeImages: generatedQuery.includeImages ?? false,
-                includeImageDescriptions: generatedQuery.includeImageDescriptions ?? false,
-                includeAnswer: generatedQuery.needsAnswer ?? 'advanced',
+                includeImages: true, // ✅ ALWAYS include images from pages
+                includeImageDescriptions: false, // Skip AI descriptions for speed
+                includeAnswer: false, // ✅ NO ANSWER - raw data only
                 includeFavicon: true,
-                includeRawContent: generatedQuery.requiresFullContent ?? true ? 'markdown' : false,
+                includeRawContent: 'markdown', // ✅ ALWAYS include raw markdown content
                 topic: generatedQuery.topic,
                 timeRange: generatedQuery.timeRange,
                 autoParameters: false,
@@ -689,73 +761,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           }
         }
 
-        // Combine all results for answer generation
-        // Use type predicate to properly narrow the type after filtering
+        // Combine all results - NO ANSWER GENERATION during pre-search
+        // ✅ TAVILY PATTERN: Expose raw data directly to participants
+        // Participants synthesize from raw content, not from pre-generated summaries
         const successfulResults = allResults.filter((r): r is { query: GeneratedSearchQuery; result: WebSearchResult; duration: number } => r.result !== null);
         const allSearchResults = successfulResults.flatMap(r => r.result.results);
-
-        // ============================================================================
-        // ✅ STREAMING ANSWER INTEGRATION: Stream answer chunks via SSE
-        // ============================================================================
-        // Uses combined results from all queries for comprehensive answer
-        let finalAnswer: string | null = null;
-        if (allSearchResults.length > 0) {
-          try {
-            // Determine answer mode based on total results
-            const answerMode = allSearchResults.length > 5 ? 'advanced' : 'basic';
-
-            // Use user's original query for answer generation (more context)
-            const answerStream = streamAnswerSummary(
-              body.userQuery,
-              allSearchResults,
-              answerMode,
-              c.env,
-            );
-
-            // ✅ BUFFERED STREAMING: Accumulate chunks for efficiency
-            let buffer = '';
-            let lastSendTime = Date.now();
-            const CHUNK_INTERVAL = 100;
-
-            for await (const chunk of answerStream.textStream) {
-              buffer += chunk;
-              finalAnswer = (finalAnswer || '') + chunk;
-
-              if (Date.now() - lastSendTime > CHUNK_INTERVAL) {
-                await stream.writeSSE({
-                  event: PreSearchSseEvents.ANSWER_CHUNK,
-                  data: JSON.stringify({ chunk: buffer }),
-                });
-                buffer = '';
-                lastSendTime = Date.now();
-              }
-            }
-
-            if (buffer) {
-              await stream.writeSSE({
-                event: PreSearchSseEvents.ANSWER_CHUNK,
-                data: JSON.stringify({ chunk: buffer }),
-              });
-            }
-
-            await stream.writeSSE({
-              event: PreSearchSseEvents.ANSWER_COMPLETE,
-              data: JSON.stringify({
-                answer: finalAnswer,
-                mode: answerMode,
-                generatedAt: new Date().toISOString(),
-              }),
-            });
-          } catch (answerError) {
-            await stream.writeSSE({
-              event: PreSearchSseEvents.ANSWER_ERROR,
-              data: JSON.stringify({
-                error: 'Failed to generate answer',
-                message: answerError instanceof Error ? answerError.message : 'Please try again',
-              }),
-            });
-          }
-        }
 
         const totalTime = performance.now() - startTime;
         const isSuccess = successfulResults.length > 0;
@@ -773,6 +783,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         });
 
         // Save results to database
+        // ✅ TAVILY PATTERN: Store raw results with full content, no summaries
         if (isSuccess) {
           const searchData = {
             queries: allResults.map((r, idx) => ({
@@ -782,12 +793,22 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               index: idx,
               total: totalQueries,
             })),
+            // ✅ FULL RAW DATA: Include fullContent, rawContent for participant access
             results: successfulResults.map(r => ({
               query: r.result!.query,
-              answer: null, // Individual query answers not stored
+              answer: null, // No pre-generated answers - participants synthesize from raw data
               results: r.result!.results.map((res: WebSearchResult['results'][number]) => ({
-                ...res,
+                title: res.title,
+                url: res.url,
+                content: res.content,
+                excerpt: res.excerpt,
+                fullContent: res.fullContent, // ✅ CRITICAL: Full scraped content
+                rawContent: res.rawContent, // ✅ CRITICAL: Raw markdown content
+                score: res.score,
                 publishedDate: res.publishedDate ?? null,
+                domain: res.domain,
+                metadata: res.metadata,
+                images: res.images,
               })),
               responseTime: r.duration,
             })),
@@ -796,7 +817,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             failureCount: totalQueries - successfulResults.length,
             totalResults: allSearchResults.length,
             totalTime,
-            combinedAnswer: finalAnswer, // Store combined answer
+            // ✅ NO combinedAnswer - participants synthesize directly from raw data
           };
 
           // Update search record

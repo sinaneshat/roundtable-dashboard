@@ -520,12 +520,13 @@ describe('section 3: Web Search + Round Closing Interaction', () => {
       store.getState().initializeThread(thread, [], []);
 
       // Add pre-search stuck in STREAMING
-      // Default timeout is 45 seconds (from TIMEOUT_CONFIG.DEFAULT_MS)
-      // So we need the pre-search to be older than 45 seconds
+      // Default timeout is 90 seconds (from TIMEOUT_CONFIG.DEFAULT_MS)
+      // Activity timeout is 120 seconds (ACTIVITY_TIMEOUT_MS)
+      // So we need the pre-search to be older than 120 seconds
       const stuckPreSearch = createMockPreSearch({
         roundNumber: 0,
         status: AnalysisStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 46000), // 46 seconds ago (exceeds 45s default)
+        createdAt: new Date(Date.now() - 150000), // 150 seconds ago (exceeds 120s activity timeout)
       });
       store.getState().addPreSearch(stuckPreSearch);
 

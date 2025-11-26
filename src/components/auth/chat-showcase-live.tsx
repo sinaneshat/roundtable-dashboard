@@ -39,6 +39,22 @@ export function ChatShowcaseLive() {
   const [streamingText, setStreamingText] = useState<Record<string, string>>({});
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
+  // Interactive accordion states - undefined means use component's internal state (interactive)
+  // When complete, pass undefined to let accordions be fully interactive
+  const [preSearchManualOpen, setPreSearchManualOpen] = useState<boolean | undefined>(undefined);
+  const [analysisManualOpen, setAnalysisManualOpen] = useState<boolean | undefined>(undefined);
+
+  // Reset manual states when demo restarts using queueMicrotask
+  // Pattern follows AI SDK v5 best practice for state updates in effects
+  useEffect(() => {
+    if (stage === 'idle') {
+      queueMicrotask(() => {
+        setPreSearchManualOpen(undefined);
+        setAnalysisManualOpen(undefined);
+      });
+    }
+  }, [stage]);
+
   // Clear all timeouts on unmount
   useEffect(() => {
     return () => {
@@ -282,7 +298,7 @@ export function ChatShowcaseLive() {
           scrollContainerId="main-scroll-container"
           user={MOCK_USER}
           participants={MOCK_PARTICIPANTS.map((p, idx) => ({
-            id: `participant-${idx}`,
+            id: `participant-demo-${idx}`,
             modelId: p.modelId,
             role: p.role,
             priority: idx,
@@ -298,7 +314,7 @@ export function ChatShowcaseLive() {
           currentParticipantIndex={currentParticipantIndex}
           currentStreamingParticipant={currentStreamingParticipant
             ? {
-                id: `participant-${currentParticipantIndex}`,
+                id: `participant-demo-${currentParticipantIndex}`,
                 modelId: currentStreamingParticipant.modelId,
                 role: currentStreamingParticipant.role,
                 priority: currentParticipantIndex,
@@ -317,8 +333,18 @@ export function ChatShowcaseLive() {
           preSearches={preSearches}
           onAnalysisStreamStart={() => {}}
           onAnalysisStreamComplete={() => {}}
-          demoPreSearchOpen={stage !== 'idle' && stage !== 'user-message'}
-          demoAnalysisOpen={stage === 'analysis-start' || stage === 'analysis-complete'}
+          // Interactive accordions: expanded during streaming, stay open when complete
+          // Pass undefined for full interactivity, or boolean for controlled state
+          demoPreSearchOpen={
+            stage === 'analysis-complete'
+              ? (preSearchManualOpen ?? true) // Default open when complete, allow toggle
+              : stage !== 'idle' && stage !== 'user-message' // Auto-open during streaming
+          }
+          demoAnalysisOpen={
+            stage === 'analysis-complete'
+              ? (analysisManualOpen ?? true) // Default open when complete, allow toggle
+              : stage === 'analysis-start' // Open during analysis streaming
+          }
         />
       </div>
 

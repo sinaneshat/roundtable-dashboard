@@ -26,6 +26,7 @@ import {
   AnalysisStatuses,
   ChatModes,
   ScreenModes,
+  StreamStatuses,
 } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat/store';
 
@@ -1122,13 +1123,13 @@ describe('3.5 Stream Completion Detection (KV)', () => {
     const streamStatus = {
       threadId: 'thread-123',
       roundNumber: 0,
-      status: 'completed' as const,
+      status: StreamStatuses.COMPLETED,
       participantsCompleted: 1,
       totalParticipants: 1,
     };
 
     // Use status to determine UI state
-    const isComplete = streamStatus.status === 'completed';
+    const isComplete = streamStatus.status === StreamStatuses.COMPLETED;
     const allParticipantsResponded = streamStatus.participantsCompleted === streamStatus.totalParticipants;
 
     expect(isComplete).toBe(true);

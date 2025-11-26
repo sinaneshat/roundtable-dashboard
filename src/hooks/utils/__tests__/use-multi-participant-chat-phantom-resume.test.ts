@@ -397,7 +397,7 @@ describe('startRound Guards', () => {
           metadata: { role: 'user', roundNumber: 0 },
         },
       ];
-      mockStatus = 'submitted'; // Not ready
+      mockStatus = 'streaming'; // AI SDK is streaming, not ready to accept new messages
 
       const { result } = renderHook(() =>
         useMultiParticipantChat({

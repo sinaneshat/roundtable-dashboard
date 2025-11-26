@@ -63,7 +63,7 @@ export function KeyInsightsSection({
 
               return (
                 <motion.button
-                  key={rec.title}
+                  key={rec.title || `insight-${recIndex}`}
                   type="button"
                   onClick={() => onActionClick?.(rec)}
                   disabled={!onActionClick || !isClickable}
@@ -125,7 +125,8 @@ export function KeyInsightsSection({
                         )}
                         {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
                           <ModelBadge
-                            key={`${rec.title}-${modelId}`}
+                            // eslint-disable-next-line react/no-array-index-key -- Models may repeat with different roles
+                            key={`${rec.title}-${modelId}-${modelIndex}`}
                             modelId={modelId}
                             role={rec.suggestedRoles?.[modelIndex]}
                             size="sm"

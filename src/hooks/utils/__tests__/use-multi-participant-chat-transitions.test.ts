@@ -31,7 +31,7 @@ const mockSetMessages = vi.fn();
 let useChatOnFinish: ((data: { message: UIMessage }) => void) | undefined;
 let useChatOnError: ((error: Error) => void) | undefined;
 let mockMessages: UIMessage[] = [];
-let mockStatus = 'ready';
+let mockStatus = 'ready'; // AI SDK v5 status when ready to accept messages
 
 vi.mock('@ai-sdk/react', () => ({
   useChat: vi.fn((options) => {
@@ -145,7 +145,7 @@ describe('useMultiParticipantChat Stream Transitions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessages = [];
-    mockStatus = 'ready';
+    mockStatus = 'ready'; // AI SDK v5 status when ready to accept messages
     useChatOnFinish = undefined;
     useChatOnError = undefined;
     flushSyncCalls = 0;

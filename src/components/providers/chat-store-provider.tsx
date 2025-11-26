@@ -294,7 +294,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Check changelog wait state
-    if (isWaitingForChangelog) {
+    // ✅ CRITICAL FIX: Skip changelog check on overview screen (new thread creation)
+    // Overview screen has no changelog query - the thread was just created
+    // The changelog wait flag is designed for thread screen where existing changelog needs to sync
+    // Without this fix, isWaitingForChangelog=true blocks forever on overview screen (DEADLOCK)
+    // See: useThreadActions in ChatThreadScreen clears this flag via isChangelogFetching query
+    // But that hook only runs on thread screen, not overview screen
+    if (isWaitingForChangelog && screenMode !== ScreenModes.OVERVIEW) {
       return;
     }
 
@@ -693,9 +699,18 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ TIMEOUT PROTECTION: Clear waitingToStartStreaming if streaming fails to start
   // Prevents system from getting stuck forever if AI SDK never becomes ready
   // ✅ ACTIVITY-BASED TIMEOUT: Checks both total time AND recent SSE activity
+  // Track when we started waiting to properly calculate elapsed time
+  const waitingStartTimeRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!waitingToStart) {
+      waitingStartTimeRef.current = null;
       return;
+    }
+
+    // Record when we started waiting
+    if (waitingStartTimeRef.current === null) {
+      waitingStartTimeRef.current = Date.now();
     }
 
     // ✅ ACTIVITY-BASED TIMEOUT: Use interval to check activity rather than fixed timeout
@@ -713,52 +728,96 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
 
       const now = Date.now();
+      const waitingStartTime = waitingStartTimeRef.current ?? now;
+      const elapsedWaitingTime = now - waitingStartTime;
       const latestWebSearchEnabled = latestState.thread?.enableWebSearch ?? latestState.enableWebSearch;
 
-      if (latestWebSearchEnabled && latestState.messages.length > 0) {
-        const currentRound = getCurrentRoundNumber(latestState.messages);
-        const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === currentRound);
+      // ✅ FIX: Early return if still in initial setup phase (< 60s and no thread yet)
+      // This prevents premature timeout during thread creation
+      if (!latestState.createdThreadId && elapsedWaitingTime < 60_000) {
+        return;
+      }
 
-        // If pre-search doesn't exist yet, wait for creation
-        if (!preSearchForRound) {
-          return;
-        }
-
-        const isStillRunning = preSearchForRound.status === AnalysisStatuses.PENDING
-          || preSearchForRound.status === AnalysisStatuses.STREAMING;
-
-        if (isStillRunning) {
-          // ✅ ACTIVITY-BASED TIMEOUT: Check both total time AND activity
-          const lastActivityTime = latestState.getPreSearchActivityTime(currentRound);
-
-          // If still receiving SSE events (has recent activity), don't timeout
-          if (!shouldPreSearchTimeout(preSearchForRound, lastActivityTime, now)) {
-            return; // Pre-search is still running and has recent activity
+      // ✅ Web search path: check pre-search timeout
+      if (latestWebSearchEnabled) {
+        // If no messages yet, wait for initial setup (up to 60s)
+        if (latestState.messages.length === 0) {
+          if (elapsedWaitingTime < 60_000) {
+            return;
           }
+        } else {
+          const currentRound = getCurrentRoundNumber(latestState.messages);
+          const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === currentRound);
 
-          // Log timeout with activity info for debugging
-          console.error('[ChatStoreProvider] Pre-search timeout - no activity', {
-            roundNumber: currentRound,
-            status: preSearchForRound.status,
-            lastActivityTime,
-            timeSinceActivity: lastActivityTime ? now - lastActivityTime : 'no tracking',
-            activityTimeoutMs: ACTIVITY_TIMEOUT_MS,
-          });
+          // If pre-search doesn't exist yet, wait for creation (up to 60s from start)
+          if (!preSearchForRound) {
+            if (elapsedWaitingTime < 60_000) {
+              return;
+            }
+          } else {
+            const isStillRunning = preSearchForRound.status === AnalysisStatuses.PENDING
+              || preSearchForRound.status === AnalysisStatuses.STREAMING;
+
+            if (isStillRunning) {
+              // ✅ ACTIVITY-BASED TIMEOUT: Check both total time AND activity
+              const lastActivityTime = latestState.getPreSearchActivityTime(currentRound);
+
+              // If still receiving SSE events (has recent activity), don't timeout
+              if (!shouldPreSearchTimeout(preSearchForRound, lastActivityTime, now)) {
+                return; // Pre-search is still running and has recent activity
+              }
+
+              // Log timeout with activity info for debugging
+              console.error('[ChatStoreProvider] Pre-search timeout - no activity', {
+                roundNumber: currentRound,
+                status: preSearchForRound.status,
+                lastActivityTime,
+                timeSinceActivity: lastActivityTime ? now - lastActivityTime : 'no tracking',
+                activityTimeoutMs: ACTIVITY_TIMEOUT_MS,
+              });
+              // ✅ FIX: Return here - pre-search specific timeout should not trigger full reset
+              // The checkStuckPreSearches mechanism will mark this as FAILED, allowing participants to proceed
+              return;
+            } else {
+              // Pre-search finished (COMPLETE/FAILED) - need grace period for participants to start
+              // ✅ FIX: Add grace period between pre-search completion and participant streaming
+              // There's a delay between pre-search completing and participants starting streaming
+              // Without this grace period, the timeout would fire during this transition
+              const PARTICIPANT_START_GRACE_PERIOD_MS = 15_000; // 15s for participants to start
+
+              const completedTime = preSearchForRound.completedAt instanceof Date
+                ? preSearchForRound.completedAt.getTime()
+                : preSearchForRound.completedAt
+                  ? new Date(preSearchForRound.completedAt).getTime()
+                  : now; // If no completedAt, use now as fallback
+
+              const timeSinceComplete = now - completedTime;
+
+              if (timeSinceComplete < PARTICIPANT_START_GRACE_PERIOD_MS) {
+                return; // Still within grace period - participants may start soon
+              }
+
+              // Grace period exceeded but participants still haven't started - unusual state
+              // Log for debugging but don't trigger full reset yet
+              console.error('[ChatStoreProvider] Pre-search complete but participants not started', {
+                roundNumber: currentRound,
+                timeSinceComplete,
+                gracePeriodMs: PARTICIPANT_START_GRACE_PERIOD_MS,
+              });
+              return; // Don't reset - let other mechanisms handle stuck state
+            }
+          }
         }
       } else {
-        // No web search enabled - use default timeout from creation
-        // For non-web-search, just check if we've been waiting too long (45s default)
-        const createdThreadTime = latestState.createdThreadId
-          ? Date.now() // We don't track exact creation time, so this is approximate
-          : 0;
-
-        if (createdThreadTime === 0 || Date.now() - createdThreadTime < TIMEOUT_CONFIG.DEFAULT_MS) {
+        // ✅ Non-web-search path: use fixed timeout from when we started waiting
+        if (elapsedWaitingTime < TIMEOUT_CONFIG.DEFAULT_MS) {
           return; // Still within default timeout window
         }
       }
 
       console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming', {
         webSearchEnabled: latestWebSearchEnabled,
+        elapsedWaitingTime,
       });
 
       // ✅ FULL RESET: Clear all streaming-related state
@@ -1096,7 +1155,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Check changelog wait state
-    if (isWaitingForChangelog) {
+    // ✅ CRITICAL FIX: Skip changelog check on overview screen (new thread creation)
+    // Overview screen has no changelog query - the thread was just created
+    // The changelog wait flag is designed for thread screen where existing changelog needs to sync
+    // Without this fix, isWaitingForChangelog=true blocks forever on overview screen (DEADLOCK)
+    // See: useThreadActions in ChatThreadScreen clears this flag via isChangelogFetching query
+    // But that hook only runs on thread screen, not overview screen
+    if (isWaitingForChangelog && screenMode !== ScreenModes.OVERVIEW) {
       return;
     }
 

@@ -1,15 +1,14 @@
 'use client';
 
 import { Search } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 
-import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
-import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
-import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
-import { Badge } from '@/components/ui/badge';
+import { LoaderFive } from '@/components/ui/loader';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
@@ -60,6 +59,7 @@ function PreSearchStreamComponent({
   onStreamStart,
   providerTriggered = false,
 }: PreSearchStreamProps) {
+  const t = useTranslations('chat.preSearch');
   const is409Conflict = useBoolean(false);
 
   // ✅ CRITICAL FIX: Get store directly to check state synchronously inside effects
@@ -231,7 +231,7 @@ function PreSearchStreamComponent({
               queriesMap.set(queryData.index, {
                 query: queryData.query,
                 rationale: queryData.rationale,
-                searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
+                searchDepth: queryData.searchDepth || 'basic',
                 index: queryData.index,
                 total: queryData.total,
               });
@@ -415,11 +415,10 @@ function PreSearchStreamComponent({
   }
 
   // Handle streaming state properly
-  // PENDING/STREAMING: Show partialSearchData (actual stream data), fallback to preSearch.searchData
-  // COMPLETED: Show stored searchData
-  const displayData = preSearch.status === AnalysisStatuses.COMPLETE
-    ? preSearch.searchData
-    : (partialSearchData || preSearch.searchData);
+  // ✅ FIX: Always prefer partialSearchData when available (it has the streamed data)
+  // Only fall back to preSearch.searchData when partialSearchData is null/empty
+  // This prevents data disappearing when status changes to COMPLETE before store sync
+  const displayData = partialSearchData || preSearch.searchData;
 
   const hasData = displayData && (
     (displayData.queries && displayData.queries.length > 0)
@@ -432,17 +431,22 @@ function PreSearchStreamComponent({
     return null;
   }
 
-  // Don't show internal loading - unified loading indicator handles this
+  // ✅ EAGER RENDERING: Show loading UI when PENDING/STREAMING with no data
+  // This provides immediate visual feedback that search is coming
   if ((preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return null;
+    return (
+      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+        <LoaderFive text={t('pendingSearch')} />
+      </div>
+    );
   }
 
-  // Don't render if no data
+  // Don't render if no data and not pending/streaming
   if (!hasData) {
     return null;
   }
 
-  const { queries = [], results = [], analysis, successCount, failureCount, totalResults, totalTime } = displayData;
+  const { queries = [], results = [], analysis, totalResults, totalTime } = displayData;
   const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
   const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
 
@@ -452,9 +456,9 @@ function PreSearchStreamComponent({
   let sectionIndex = 0;
 
   return (
-    <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-6">
-      {/* Search Plan & Configuration Summary - renders first (index 0) */}
-      {validQueries.length > 0 && validQueries.some(q => q?.query) && (
+    <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-4">
+      {/* Search Summary - only show if we have analysis text */}
+      {analysis && (
         <AnimatedStreamingItem
           key="search-config"
           itemKey="search-config"
@@ -464,14 +468,13 @@ function PreSearchStreamComponent({
             queries={validQueries.filter(q => q?.query).map(q => ({
               query: q.query,
               rationale: q.rationale,
-              searchDepth: q.searchDepth as 'basic' | 'advanced',
+              searchDepth: q.searchDepth,
               index: q.index,
             }))}
+            results={validResults.flatMap(r => r.results || [])}
             searchPlan={analysis}
             isStreamingPlan={isStreamingNow && !analysis}
             totalResults={totalResults}
-            successCount={successCount}
-            failureCount={failureCount}
             totalTime={totalTime}
           />
         </AnimatedStreamingItem>
@@ -495,59 +498,24 @@ function PreSearchStreamComponent({
             index={currentIndex}
           >
             <div className="space-y-2">
-              {/* Query header */}
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {query?.index !== undefined && query?.total !== undefined && (
-                        <Badge variant="outline" className="text-xs shrink-0">
-                          Query
-                          {' '}
-                          {query.index + 1}
-                          {' '}
-                          of
-                          {' '}
-                          {query.total}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium text-foreground">
-                      {query?.query}
+              {/* Query header - minimal */}
+              <div className="flex items-start gap-2">
+                <Search className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground">{query?.query}</p>
+                  {hasResult && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {searchResult.results.length}
+                      {' '}
+                      {searchResult.results.length === 1 ? 'result' : 'results'}
                     </p>
-                    {query?.rationale && (
-                      <p className="text-xs text-muted-foreground mt-1 italic">
-                        {query.rationale}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {query?.searchDepth && (
-                      <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
-                        {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
-                      </Badge>
-                    )}
-                    {hasResult && searchResult.responseTime && (
-                      <Badge variant="outline" className="text-xs text-muted-foreground">
-                        {Math.round(searchResult.responseTime)}
-                        ms
-                      </Badge>
-                    )}
-                  </div>
+                  )}
                 </div>
-                {hasResult && (
-                  <p className="text-xs text-muted-foreground pl-6">
-                    {searchResult.results.length}
-                    {' '}
-                    {searchResult.results.length === 1 ? 'source' : 'sources'}
-                  </p>
-                )}
               </div>
 
               {/* Results list */}
               {hasResults && (
-                <div className="pl-6 space-y-0">
+                <div className="pl-6">
                   {searchResult.results.map((result, idx) => (
                     <WebSearchResultItem
                       key={result.url}
@@ -558,70 +526,9 @@ function PreSearchStreamComponent({
                 </div>
               )}
 
-              {/* Image Gallery */}
-              {hasResults && (
-                <div className="pl-6">
-                  <WebSearchImageGallery results={searchResult.results} />
-                </div>
-              )}
-
-              {/* Search Statistics */}
-              {hasResults && (() => {
-                const totalImages = searchResult.results.reduce(
-                  (sum, r) => sum + (r.images?.length || 0) + (r.metadata?.imageUrl ? 1 : 0),
-                  0,
-                );
-                const totalWords = searchResult.results.reduce(
-                  (sum, r) => sum + (r.metadata?.wordCount || 0),
-                  0,
-                );
-                const resultsWithContent = searchResult.results.filter(r => r.fullContent);
-                const hasMetadata = totalImages > 0 || totalWords > 0 || resultsWithContent.length > 0;
-
-                if (!hasMetadata)
-                  return null;
-
-                return (
-                  <div className="pl-6 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                    {totalImages > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        {totalImages}
-                        {' '}
-                        {totalImages === 1 ? 'image' : 'images'}
-                      </Badge>
-                    )}
-                    {totalWords > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        {totalWords.toLocaleString()}
-                        {' '}
-                        words extracted
-                      </Badge>
-                    )}
-                    {resultsWithContent.length > 0 && (
-                      <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
-                        {resultsWithContent.length}
-                        {' '}
-                        full content
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* AI-Generated Answer Summary */}
-              {hasResult && (
-                <div className="pl-6">
-                  <LLMAnswerDisplay
-                    answer={searchResult.answer}
-                    isStreaming={isStreamingNow}
-                    sources={searchResult.results.map(r => ({ url: r.url, title: r.title }))}
-                  />
-                </div>
-              )}
-
               {/* Separator between searches */}
               {queryIndex < validQueries.length - 1 && (
-                <Separator className="!mt-6" />
+                <Separator className="!mt-4" />
               )}
             </div>
           </AnimatedStreamingItem>

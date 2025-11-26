@@ -13,7 +13,7 @@
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-// Removed: AnalysisStatuses import - no longer needed after removing duplicate pre-search creation
+import { AnalysisStatuses } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
@@ -85,6 +85,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     initializeThread: s.initializeThread,
     updateParticipants: s.updateParticipants,
     addPreSearch: s.addPreSearch,
+    addAnalysis: s.addAnalysis,
   })));
 
   // Mutations
@@ -149,6 +150,23 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
+      // ✅ EAGER RENDERING: Create placeholder analysis immediately for round 0
+      // This allows the RoundAnalysisCard to render in PENDING state with loading UI
+      // before participants finish streaming. Creates better UX with immediate visual feedback.
+      actions.addAnalysis({
+        id: `placeholder-analysis-${thread.id}-0`,
+        threadId: thread.id,
+        roundNumber: 0,
+        mode: thread.mode,
+        userQuestion: prompt,
+        status: AnalysisStatuses.PENDING,
+        analysisData: null,
+        participantMessageIds: [],
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      });
+
       // ✅ FIX: Clear input AFTER initializeThread so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through
       // and the msg box of what user just said shows on the round"
@@ -160,13 +178,32 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       //
       // This is the same pattern used by handleUpdateThreadAndSend in thread detail page
       // Now overview page will work correctly with web search enabled
-      const participantIds = participants.map(p => p.id);
-      actions.prepareForNewMessage(prompt, participantIds);
+      // ✅ BUG FIX: Use modelId instead of participant record id
+      // Provider compares against modelIds, not participant record IDs
+      const participantModelIds = participants.map(p => p.modelId);
+      actions.prepareForNewMessage(prompt, participantModelIds);
 
-      // ✅ REMOVED: Duplicate pre-search creation
-      // Backend already creates PENDING pre-search record during thread creation (thread.handler.ts:265-274)
-      // PreSearchOrchestrator will sync it from server automatically
-      // No need for temporary frontend record - causes race conditions with orchestrator sync
+      // ✅ EAGER RENDERING: Create placeholder pre-search immediately for round 0 when web search enabled
+      // This allows the streaming trigger effect to see a pre-search exists
+      // PreSearchStream component will execute the search when it renders and sees PENDING status
+      //
+      // NOTE: Backend also creates PENDING pre-search during thread creation, but:
+      // - PreSearchOrchestrator only runs on thread screen, not overview screen
+      // - Without this placeholder, streaming trigger effect returns early (no pre-search exists)
+      // - PreSearchStream needs a pre-search record with userQuery to execute
+      if (formState.enableWebSearch) {
+        actions.addPreSearch({
+          id: `placeholder-presearch-${thread.id}-0`,
+          threadId: thread.id,
+          roundNumber: 0,
+          userQuery: prompt,
+          status: AnalysisStatuses.PENDING,
+          searchData: null,
+          createdAt: new Date(),
+          completedAt: null,
+          errorMessage: null,
+        });
+      }
 
       // Set flag to trigger streaming once chat is ready
       // Store subscription will wait for startRound to be registered by provider

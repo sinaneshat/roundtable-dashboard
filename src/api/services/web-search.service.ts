@@ -256,25 +256,36 @@ export async function generateSearchQuery(
       throw new Error('Generated object does not contain valid queries');
     }
 
-    // ✅ VALIDATE: Clamp totalQueries to valid range (1-5)
+    // ✅ VALIDATE: Clamp totalQueries to valid range (1-3)
     // Anthropic doesn't support min/max in schema, so validate after generation
     // Coerce string to number if needed
     const totalQueriesNum = typeof result.object.totalQueries === 'string'
       ? Number.parseInt(result.object.totalQueries, 10)
       : result.object.totalQueries;
 
-    if (totalQueriesNum < 1 || totalQueriesNum > 5) {
-      console.error(`[Web Search] Invalid totalQueries ${totalQueriesNum}, clamping to 1-5`);
-      result.object.totalQueries = Math.max(1, Math.min(5, totalQueriesNum));
+    if (totalQueriesNum < 1 || totalQueriesNum > 3) {
+      console.error(`[Web Search] Invalid totalQueries ${totalQueriesNum}, clamping to 1-3`);
+      result.object.totalQueries = Math.max(1, Math.min(3, totalQueriesNum));
     } else {
       result.object.totalQueries = totalQueriesNum;
     }
 
-    // ✅ VALIDATE: Trim queries array if exceeds limit
-    if (result.object.queries.length > 5) {
-      console.error(`[Web Search] Too many queries (${result.object.queries.length}), trimming to 5`);
-      result.object.queries = result.object.queries.slice(0, 5);
+    // ✅ VALIDATE: Trim queries array if exceeds limit (max 3 queries)
+    if (result.object.queries.length > 3) {
+      console.error(`[Web Search] Too many queries (${result.object.queries.length}), trimming to 3`);
+      result.object.queries = result.object.queries.slice(0, 3);
     }
+
+    // ✅ VALIDATE: Clamp sourceCount per query to max 3
+    result.object.queries = result.object.queries.map((q) => {
+      const sourceCount = typeof q.sourceCount === 'string'
+        ? Number.parseInt(q.sourceCount, 10)
+        : q.sourceCount;
+      if (sourceCount && sourceCount > 3) {
+        return { ...q, sourceCount: 3 };
+      }
+      return q;
+    });
 
     return result.object;
   } catch (error) {
@@ -340,6 +351,96 @@ async function initBrowser(env: ApiEnv['Bindings']) {
 }
 
 // ============================================================================
+// Lightweight Metadata Extraction (Fallback when browser unavailable)
+// ============================================================================
+
+/**
+ * Extract metadata from HTML using regex (no browser required)
+ * Used as fallback when Puppeteer isn't available
+ */
+async function extractLightweightMetadata(url: string): Promise<{
+  imageUrl?: string;
+  faviconUrl?: string;
+  description?: string;
+  title?: string;
+}> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; RoundtableBot/1.0)',
+        'Accept': 'text/html',
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return {};
+    }
+
+    // Only read first 50KB to find meta tags (they're in <head>)
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return {};
+    }
+
+    let html = '';
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    const maxBytes = 50000;
+
+    while (bytesRead < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      html += decoder.decode(value, { stream: true });
+      bytesRead += value.length;
+      // Stop after </head> if found
+      if (html.includes('</head>')) {
+        break;
+      }
+    }
+
+    reader.cancel();
+
+    // Extract og:image
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    const imageUrl = ogImageMatch?.[1];
+
+    // Extract twitter:image as fallback
+    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
+
+    // Extract description
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+      || html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+
+    // Build favicon URL
+    const domain = new URL(url).hostname;
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+    return {
+      imageUrl: imageUrl || twitterImageMatch?.[1],
+      faviconUrl,
+      description: descMatch?.[1]?.substring(0, 300),
+      title: titleMatch?.[1]?.substring(0, 200),
+    };
+  } catch {
+    return {};
+  }
+}
+
+// ============================================================================
 // Page Content Extraction (Enhanced with Markdown/Text Modes)
 // ============================================================================
 
@@ -382,11 +483,19 @@ async function extractPageContent(
 }> {
   const browser = await initBrowser(env);
 
-  // Fallback if no browser available
+  // Fallback if no browser available - use lightweight extraction
   if (!browser) {
+    const lightMeta = await extractLightweightMetadata(url);
     return {
       content: '',
-      metadata: { wordCount: 0, readingTime: 0 },
+      metadata: {
+        title: lightMeta.title,
+        description: lightMeta.description,
+        imageUrl: lightMeta.imageUrl,
+        faviconUrl: lightMeta.faviconUrl,
+        wordCount: 0,
+        readingTime: 0,
+      },
     };
   }
 
@@ -1369,13 +1478,15 @@ export async function* streamSearchResults(
           10000, // 10s timeout per page
         );
 
-        if (extracted.content) {
+        // ✅ FIX: Check for metadata even when content is empty (lightweight extraction case)
+        const hasContent = !!extracted.content;
+        const hasMetadata = !!(extracted.metadata.imageUrl || extracted.metadata.faviconUrl
+          || extracted.metadata.title || extracted.metadata.description);
+
+        if (hasContent || hasMetadata) {
           // Build enhanced result
           const enhancedResult: WebSearchResultItem = {
             ...basicResult,
-            fullContent: extracted.content,
-            content: extracted.content.substring(0, 800),
-            rawContent: extracted.rawContent,
             metadata: {
               author: extracted.metadata.author,
               readingTime: extracted.metadata.readingTime,
@@ -1386,6 +1497,13 @@ export async function* streamSearchResults(
             },
             publishedDate: extracted.metadata.publishedDate || null,
           };
+
+          // Apply content fields only if we have content
+          if (hasContent) {
+            enhancedResult.fullContent = extracted.content;
+            enhancedResult.content = extracted.content.substring(0, 800);
+            enhancedResult.rawContent = extracted.rawContent;
+          }
 
           // Use extracted title if available
           if (extracted.metadata.title) {
@@ -1405,7 +1523,7 @@ export async function* streamSearchResults(
             }
           }
 
-          // ✅ YIELD ENHANCED VERSION
+          // ✅ YIELD ENHANCED VERSION (even if only metadata available)
           yield {
             type: 'result',
             data: {
@@ -1626,12 +1744,22 @@ export async function performWebSearch(
             10000,
           );
 
-          if (extracted.content) {
+          // ✅ FIX: Apply metadata even when content is empty (lightweight extraction case)
+          // When browser is unavailable, extractLightweightMetadata still provides
+          // imageUrl, faviconUrl, title, and description - these should be applied
+          const hasContent = !!extracted.content;
+          const hasMetadata = !!(extracted.metadata.imageUrl || extracted.metadata.faviconUrl
+            || extracted.metadata.title || extracted.metadata.description);
+
+          if (hasContent) {
             baseResult.fullContent = extracted.content;
             baseResult.content = extracted.content.substring(0, 800);
             baseResult.rawContent = extracted.rawContent;
+          }
 
-            // Add metadata
+          // ✅ ALWAYS apply metadata if we have any useful data
+          if (hasContent || hasMetadata) {
+            // Add metadata - apply even without full content (lightweight extraction)
             baseResult.metadata = {
               author: extracted.metadata.author,
               readingTime: extracted.metadata.readingTime,
@@ -1648,19 +1776,19 @@ export async function performWebSearch(
             if (extracted.metadata.title && extracted.metadata.title.length > 0) {
               baseResult.title = extracted.metadata.title;
             }
+          }
 
-            // Include images if requested
-            if (params.includeImages && extracted.images && extracted.images.length > 0) {
-              if (params.includeImageDescriptions) {
-                // Generate AI descriptions for images
-                baseResult.images = await generateImageDescriptions(
-                  extracted.images,
-                  env,
-                  logger,
-                );
-              } else {
-                baseResult.images = extracted.images;
-              }
+          // Include images if requested (only when we have actual images from page scraping)
+          if (params.includeImages && extracted.images && extracted.images.length > 0) {
+            if (params.includeImageDescriptions) {
+              // Generate AI descriptions for images
+              baseResult.images = await generateImageDescriptions(
+                extracted.images,
+                env,
+                logger,
+              );
+            } else {
+              baseResult.images = extracted.images;
             }
           }
         } catch (extractError) {

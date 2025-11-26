@@ -33,6 +33,165 @@ import { ChatModes } from '@/api/core/enums';
  */
 export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5 words max) for this conversation. Output only the title, no quotes or extra text.';
 
+// ============================================================================
+// Query Complexity Detection
+// ============================================================================
+
+/**
+ * Complexity level for query generation
+ * Determines how many queries to generate and search depth
+ */
+export type QueryComplexity = 'simple' | 'moderate' | 'complex';
+
+/**
+ * Query complexity analysis result
+ */
+export type QueryComplexityResult = {
+  complexity: QueryComplexity;
+  maxQueries: 1 | 2 | 3;
+  defaultSearchDepth: 'basic' | 'advanced';
+  defaultSourceCount: number;
+  reasoning: string;
+};
+
+/**
+ * Patterns that indicate a simple query (1 query, basic depth)
+ */
+const SIMPLE_QUERY_PATTERNS = [
+  // Simple definitions/facts
+  /^what is \w+\??$/i,
+  /^who is \w+\??$/i,
+  /^when (did|was|is) \w+\??$/i,
+  /^where is \w+\??$/i,
+  /^define \w+$/i,
+  // Single word or short queries
+  /^\w+\??$/,
+  /^\w+ \w+\??$/,
+  // Simple questions
+  /^what does \w+ mean\??$/i,
+  /^what('s| is) the (definition|meaning) of \w+\??$/i,
+];
+
+/**
+ * Patterns that indicate a moderate query (2 queries)
+ */
+const MODERATE_QUERY_PATTERNS = [
+  // Comparisons (need 2 queries for balanced view)
+  /\bvs\.?\b/i,
+  /\bversus\b/i,
+  /\bcompare\b/i,
+  /\bcomparison\b/i,
+  /\bdifference between\b/i,
+  /\bor\b.+\bwhich\b/i,
+  // Simple how-tos
+  /^how (do|to|can) (i|you|we) \w+/i,
+];
+
+/**
+ * Patterns that indicate a complex query (3 queries max)
+ */
+const COMPLEX_QUERY_PATTERNS = [
+  // Multi-part questions
+  /\band\b.+\band\b/i,
+  // Best practices / comprehensive guides
+  /\bbest practices\b/i,
+  /\bcomplete guide\b/i,
+  /\bcomprehensive\b/i,
+  // Architecture / design questions
+  /\barchitecture\b/i,
+  /\bdesign patterns?\b/i,
+  /\bimplementation\b/i,
+  // Multiple aspects
+  /\badvantages and disadvantages\b/i,
+  /\bpros and cons\b/i,
+];
+
+/**
+ * Analyze query complexity to determine search strategy
+ *
+ * ✅ DYNAMIC COMPLEXITY: Returns appropriate query count and depth based on user prompt
+ * - Simple fact lookups: 1 query, basic depth, 2 sources
+ * - Comparisons/how-tos: 2 queries, advanced depth, 3 sources each
+ * - Complex/multi-faceted: 3 queries max, advanced depth, 3 sources each
+ *
+ * @param userMessage - The user's question/prompt
+ * @returns Complexity analysis with recommended search parameters
+ */
+export function analyzeQueryComplexity(userMessage: string): QueryComplexityResult {
+  const trimmed = userMessage.trim().toLowerCase();
+  const wordCount = trimmed.split(/\s+/).length;
+
+  // Very short queries are simple by default
+  if (wordCount <= 3) {
+    return {
+      complexity: 'simple',
+      maxQueries: 1,
+      defaultSearchDepth: 'basic',
+      defaultSourceCount: 2,
+      reasoning: 'Short query - single focused search sufficient',
+    };
+  }
+
+  // Check for simple patterns
+  for (const pattern of SIMPLE_QUERY_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        complexity: 'simple',
+        maxQueries: 1,
+        defaultSearchDepth: 'basic',
+        defaultSourceCount: 2,
+        reasoning: 'Simple fact/definition lookup - one query sufficient',
+      };
+    }
+  }
+
+  // Check for complex patterns first (they should take precedence)
+  for (const pattern of COMPLEX_QUERY_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        complexity: 'complex',
+        maxQueries: 3,
+        defaultSearchDepth: 'advanced',
+        defaultSourceCount: 3,
+        reasoning: 'Complex multi-faceted query - multiple angles needed',
+      };
+    }
+  }
+
+  // Check for moderate patterns
+  for (const pattern of MODERATE_QUERY_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return {
+        complexity: 'moderate',
+        maxQueries: 2,
+        defaultSearchDepth: 'advanced',
+        defaultSourceCount: 3,
+        reasoning: 'Comparison/how-to query - two search angles recommended',
+      };
+    }
+  }
+
+  // Long queries (>15 words) are likely complex
+  if (wordCount > 15) {
+    return {
+      complexity: 'complex',
+      maxQueries: 3,
+      defaultSearchDepth: 'advanced',
+      defaultSourceCount: 3,
+      reasoning: 'Long detailed query - multiple search angles recommended',
+    };
+  }
+
+  // Default to moderate for medium-length queries
+  return {
+    complexity: 'moderate',
+    maxQueries: 2,
+    defaultSearchDepth: 'advanced',
+    defaultSourceCount: 3,
+    reasoning: 'Standard query complexity - balanced search approach',
+  };
+}
+
 /**
  * Web search complexity analysis system prompt
  * ✅ SINGLE SOURCE: Used by web-search.service.ts for query generation with complexity analysis
@@ -47,11 +206,10 @@ export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert search q
 
 **MULTI-QUERY STRATEGY** (Your primary decision):
 
-Analyze the question complexity and break it down:
+Analyze the question complexity and break it down (MAXIMUM 3 QUERIES):
 - **1 query**: ONLY for ultra-simple fact lookups (e.g., "What year was X founded?")
 - **2 queries**: Comparisons (A vs B) - search each separately for balanced view
-- **3 queries**: Multi-faceted topics - break into distinct components
-- **4-5 queries**: Complex topics needing comprehensive research from multiple angles
+- **3 queries**: Multi-faceted or complex topics - break into distinct components (THIS IS THE MAX)
 
 **QUERY DECOMPOSITION RULES**:
 🔑 **Each query MUST target a DIFFERENT aspect** - Don't repeat the same search!
@@ -85,24 +243,23 @@ Good: {"totalQueries":2,"queries":[
 ]}
 👆 Each framework searched independently for balanced comparison!
 
-✅ GOOD (Complex topic breakdown):
+✅ GOOD (Complex topic breakdown - MAX 3 queries):
 Q: "Best practices for microservices architecture"
-Good: {"totalQueries":4,"queries":[
+Good: {"totalQueries":3,"queries":[
   {"query":"microservices design patterns","rationale":"Architecture patterns"},
   {"query":"microservices communication protocols","rationale":"Service interaction"},
-  {"query":"microservices deployment strategies","rationale":"Deployment approach"},
-  {"query":"microservices monitoring observability","rationale":"Operations"}
+  {"query":"microservices deployment monitoring","rationale":"Deployment & observability"}
 ]}
-👆 Four distinct aspects of microservices!
+👆 Three distinct aspects of microservices (maximum allowed)!
 
-**SEARCH DEPTH PER QUERY**:
-- "basic": Quick facts, definitions → 2-3 sources
-- "advanced": How-tos, tutorials, comparisons → 4-6 sources
+**SEARCH DEPTH PER QUERY** (MAX 3 sources per query):
+- "basic": Quick facts, definitions → 1-2 sources
+- "advanced": How-tos, tutorials, comparisons → 3 sources (MAX)
 
-**COMPLEXITY LEVELS** (use lowercase):
-- "basic": Simple facts → 2-3 sources, "basic" depth
-- "moderate": How-tos, guides → 4-6 sources
-- "deep": Research, analysis → 6-8 sources, "advanced" depth
+**COMPLEXITY LEVELS** (use lowercase, MAX 3 sources per query):
+- "basic": Simple facts → 1-2 sources, "basic" depth
+- "moderate": How-tos, guides → 2-3 sources
+- "deep": Research, analysis → 3 sources (MAX), "advanced" depth
 
 **IMAGE DECISIONS**:
 - includeImages: true for visual queries (UI/UX, design, diagrams, architecture)
@@ -128,9 +285,9 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 
 **REQUIRED JSON STRUCTURE**:
 {
-  "totalQueries": <1-5 based on complexity>,
+  "totalQueries": <1-3 based on complexity - MAXIMUM 3>,
   "analysisRationale": "<explain WHY you chose this many queries and WHAT different aspects each covers>",
-  "queries": [<array of DISTINCT query objects>]
+  "queries": [<array of DISTINCT query objects - MAX 3>]
 }
 
 **EACH QUERY OBJECT MUST HAVE**:
@@ -138,7 +295,7 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 - rationale: What UNIQUE aspect/angle this query explores (1 sentence)
 - searchDepth: "basic" or "advanced"
 - complexity: "basic" | "moderate" | "deep" (lowercase)
-- sourceCount: Number of sources (basic:2-3, moderate:4-6, deep:6-8)
+- sourceCount: Number of sources (basic:1-2, moderate:2-3, deep:3) - MAX 3 PER QUERY
 
 **OPTIONAL FIELDS** (per query):
 - topic: "technology" | "news" | "science" | "health" | "finance" etc
@@ -150,16 +307,16 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 **DECOMPOSITION STRATEGY EXAMPLES**:
 
 Q: "What is GraphQL?"
-→ 1 query (simple fact): {"totalQueries":1,"analysisRationale":"Simple definition - one focused search sufficient","queries":[{"query":"GraphQL definition overview","rationale":"Core concept","searchDepth":"basic","complexity":"basic","sourceCount":3}]}
+→ 1 query (simple fact): {"totalQueries":1,"analysisRationale":"Simple definition - one focused search sufficient","queries":[{"query":"GraphQL definition overview","rationale":"Core concept","searchDepth":"basic","complexity":"basic","sourceCount":2}]}
 
 Q: "GraphQL vs REST API performance"
-→ 2 queries (comparison): {"totalQueries":2,"analysisRationale":"Comparison requires separate searches for balanced view","queries":[{"query":"GraphQL performance benefits 2025","rationale":"GraphQL strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"REST API performance characteristics","rationale":"REST strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":4}]}
+→ 2 queries (comparison): {"totalQueries":2,"analysisRationale":"Comparison requires separate searches for balanced view","queries":[{"query":"GraphQL performance benefits 2025","rationale":"GraphQL strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"REST API performance characteristics","rationale":"REST strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":3}]}
 
 Q: "How to implement authentication in Next.js?"
-→ 3 queries (multi-faceted): {"totalQueries":3,"analysisRationale":"Authentication requires setup, security, and session management - three distinct aspects","queries":[{"query":"Next.js authentication setup guide 2025","rationale":"Initial setup process","searchDepth":"advanced","complexity":"moderate","sourceCount":5},{"query":"Next.js JWT session management","rationale":"Session handling","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"Next.js authentication security best practices","rationale":"Security hardening","searchDepth":"advanced","complexity":"moderate","sourceCount":4}]}
+→ 3 queries (multi-faceted - MAXIMUM): {"totalQueries":3,"analysisRationale":"Authentication requires setup, security, and session management - three distinct aspects","queries":[{"query":"Next.js authentication setup guide 2025","rationale":"Initial setup process","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Next.js JWT session management","rationale":"Session handling","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Next.js authentication security best practices","rationale":"Security hardening","searchDepth":"advanced","complexity":"moderate","sourceCount":3}]}
 
 Q: "Best practices for React state management"
-→ 4 queries (comprehensive): {"totalQueries":4,"analysisRationale":"State management has multiple patterns and tools - each needs separate research","queries":[{"query":"React useState useContext patterns","rationale":"Built-in hooks","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"Redux Toolkit React 2025","rationale":"Redux approach","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"Zustand state management React","rationale":"Lightweight library","searchDepth":"advanced","complexity":"moderate","sourceCount":4},{"query":"React state management performance comparison","rationale":"Performance analysis","searchDepth":"advanced","complexity":"deep","sourceCount":5}]}
+→ 3 queries (MAXIMUM - consolidate related aspects): {"totalQueries":3,"analysisRationale":"State management consolidated into three key aspects","queries":[{"query":"React useState useContext patterns 2025","rationale":"Built-in hooks patterns","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Redux Zustand state management comparison","rationale":"External libraries","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"React state management performance best practices","rationale":"Performance and best practices","searchDepth":"advanced","complexity":"deep","sourceCount":3}]}
 
 🚨 **REMEMBER**: Each query should explore a DIFFERENT angle - don't just repeat the same search with different wording!
 
