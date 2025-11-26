@@ -44,14 +44,19 @@ export function UsageMetrics() {
     router.push('/chat/pricing');
   };
   const isPremiumTier = usage.subscription.tier !== 'free';
-  const getProgressColor = (status: string) => {
+  /**
+   * Get progress indicator color based on usage status
+   * Uses theme CSS variables for consistent styling without custom safelists
+   * @see https://github.com/shadcn-ui/ui/discussions/1454
+   */
+  const getProgressIndicatorColor = (status: string): string => {
     switch (status) {
       case 'critical':
-        return '[&>*]:bg-destructive';
+        return 'bg-destructive';
       case 'warning':
-        return '[&>*]:bg-orange-500 dark:[&>*]:bg-orange-600';
+        return 'bg-warning';
       default:
-        return '';
+        return 'bg-primary';
     }
   };
   return (
@@ -96,7 +101,8 @@ export function UsageMetrics() {
           </div>
           <Progress
             value={threadsPercentage}
-            className={cn('h-1', getProgressColor(threadsStatus))}
+            className="h-1"
+            indicatorClassName={getProgressIndicatorColor(threadsStatus)}
             aria-label={`${t('usage.threads')}: ${usage.threads.used} ${t('usage.of')} ${usage.threads.limit} ${t('usage.used')}`}
           />
         </div>
@@ -121,7 +127,8 @@ export function UsageMetrics() {
           </div>
           <Progress
             value={messagesPercentage}
-            className={cn('h-1', getProgressColor(messagesStatus))}
+            className="h-1"
+            indicatorClassName={getProgressIndicatorColor(messagesStatus)}
             aria-label={`${t('usage.messages')}: ${usage.messages.used} ${t('usage.of')} ${usage.messages.limit} ${t('usage.used')}`}
           />
         </div>
@@ -146,7 +153,8 @@ export function UsageMetrics() {
           </div>
           <Progress
             value={analysisPercentage}
-            className={cn('h-1', getProgressColor(analysisStatus))}
+            className="h-1"
+            indicatorClassName={getProgressIndicatorColor(analysisStatus)}
             aria-label={`${t('usage.analysis')}: ${usage.analysis.used} ${t('usage.of')} ${usage.analysis.limit} ${t('usage.used')}`}
           />
         </div>

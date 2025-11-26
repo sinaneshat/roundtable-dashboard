@@ -31,9 +31,11 @@ import type { UIMessage } from 'ai';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useRef } from 'react';
+import type { z } from 'zod';
 import { useStore } from 'zustand';
 
-import { AnalysisStatuses, MessagePartTypes, MessageRoles, ScreenModes } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles, PreSearchSseEvents, ScreenModes } from '@/api/core/enums';
+import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import { useCreatePreSearchMutation } from '@/hooks/mutations';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -49,6 +51,83 @@ import { AnimationIndices, createChatStore } from '@/stores/chat';
 
 // eslint-disable-next-line react-refresh/only-export-components -- Context export required for provider pattern
 export const ChatStoreContext = createContext<ChatStoreApi | undefined>(undefined);
+
+/** Type inferred from schema - single source of truth */
+type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
+
+/**
+ * Safely parse and validate pre-search data using Zod schema
+ * Returns validated data or null if invalid
+ */
+function parsePreSearchData(jsonString: string): PreSearchDataPayload | null {
+  try {
+    const parsed: unknown = JSON.parse(jsonString);
+    const result = PreSearchDataPayloadSchema.safeParse(parsed);
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Helper function to read and parse SSE stream for pre-search
+ * Extracts searchData from the stream events and returns it
+ *
+ * ✅ BUG FIX: Previously provider read stream bytes without parsing
+ * This caused searchData to be undefined when status was set to COMPLETE
+ * Now we parse SSE events and return the final searchData from DONE event
+ * ✅ Uses Zod schema validation instead of type assertions
+ */
+async function readPreSearchStreamAndExtractData(
+  response: Response,
+): Promise<PreSearchDataPayload | null> {
+  const reader = response.body?.getReader();
+  if (!reader)
+    return null;
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let currentEvent = '';
+  let currentData = '';
+  let searchData: PreSearchDataPayload | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done)
+        break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          currentData = line.slice(5).trim();
+        } else if (line === '' && currentEvent && currentData) {
+          // Process complete event - only care about DONE event for final data
+          if (currentEvent === PreSearchSseEvents.DONE) {
+            searchData = parsePreSearchData(currentData);
+          }
+          // Reset for next event
+          currentEvent = '';
+          currentData = '';
+        }
+      }
+    }
+
+    // Process any remaining buffered event
+    if (currentEvent === PreSearchSseEvents.DONE && currentData) {
+      searchData = parsePreSearchData(currentData);
+    }
+  } catch {
+    // Stream error, return what we have
+  }
+
+  return searchData;
+}
 
 export type ChatStoreProviderProps = {
   children: ReactNode;
@@ -294,20 +373,19 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             // 409 = already executing, which is fine
             console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
           }
-          // Read the stream to completion
-          const reader = response.body?.getReader();
-          if (reader) {
-            while (true) {
-              const { done } = await reader.read();
-              if (done)
-                break;
-            }
+          // ✅ BUG FIX: Parse SSE events and extract searchData
+          // Previously we just read bytes without parsing, leaving searchData undefined
+          // Now we parse the DONE event to get the final searchData
+          const searchData = await readPreSearchStreamAndExtractData(response);
+
+          // ✅ CRITICAL FIX: Update store with searchData AND status
+          // Use updatePreSearchData which sets both searchData and status to COMPLETE
+          if (searchData) {
+            store.getState().updatePreSearchData(newRoundNumber, searchData);
+          } else {
+            // Fallback: just update status if no searchData extracted
+            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
           }
-          // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
-          // This ensures the streaming trigger effect sees COMPLETE status immediately
-          // Without this, orchestrator sync (which may be disabled) is the only path
-          // and streaming would be blocked forever
-          store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
 
           // Also invalidate query for orchestrator sync when enabled
           queryClientRef.current.invalidateQueries({
@@ -362,17 +440,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             if (!response.ok && response.status !== 409) {
               console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
-            // Read the stream to completion
-            const reader = response.body?.getReader();
-            if (reader) {
-              while (true) {
-                const { done } = await reader.read();
-                if (done)
-                  break;
-              }
+            // ✅ BUG FIX: Parse SSE events and extract searchData
+            const searchData = await readPreSearchStreamAndExtractData(response);
+
+            // ✅ CRITICAL FIX: Update store with searchData AND status
+            if (searchData) {
+              store.getState().updatePreSearchData(newRoundNumber, searchData);
+            } else {
+              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
             }
-            // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
-            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
 
             // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
@@ -561,10 +637,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // If pre-search failed, continue anyway - participants can work without it
     }
 
+    // ✅ RACE CONDITION FIX: Prevent duplicate startRound calls for the same round
+    // Effect may re-run multiple times due to dependency changes (messages array updates)
+    // before isStreaming becomes true and clears the waitingToStart flag
     // ✅ CRITICAL FIX: Call startRound and let it handle AI SDK readiness
     // startRound has internal guards for AI SDK status - it will return early if not ready
     // We keep the flag set so this effect retries until streaming actually begins
     // The flag is only cleared when isStreaming becomes true (see effect below)
+    // NOTE: Don't mark as attempted here - let the effect retry until messages are hydrated
     chat.startRound(storeParticipants);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only depend on chat.startRound, not entire chat object to avoid unnecessary re-renders
   }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
@@ -837,10 +917,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ✅ CRITICAL FIX: Guard against sendMessage being undefined
     // Check the ref directly to ensure AI SDK hook has initialized
     if (!sendMessageRef.current) {
-      // eslint-disable-next-line no-console -- Debug logging for streaming issues
-      console.warn('[Provider:pendingMessage] Blocked - sendMessage not available', {
-        hasRef: !!sendMessageRef.current,
-      });
       return; // Wait for sendMessage to be available
     }
 
@@ -932,17 +1008,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               // 409 = already executing, which is fine
               console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
-            // Read the stream to completion
-            const reader = response.body?.getReader();
-            if (reader) {
-              while (true) {
-                const { done } = await reader.read();
-                if (done)
-                  break;
-              }
+            // ✅ BUG FIX: Parse SSE events and extract searchData
+            const searchData = await readPreSearchStreamAndExtractData(response);
+
+            // ✅ CRITICAL FIX: Update store with searchData AND status
+            if (searchData) {
+              store.getState().updatePreSearchData(newRoundNumber, searchData);
+            } else {
+              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
             }
-            // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
-            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
 
             // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
@@ -995,17 +1069,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             if (!response.ok && response.status !== 409) {
               console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
-            // Read the stream to completion
-            const reader = response.body?.getReader();
-            if (reader) {
-              while (true) {
-                const { done } = await reader.read();
-                if (done)
-                  break;
-              }
+            // ✅ BUG FIX: Parse SSE events and extract searchData
+            const searchData = await readPreSearchStreamAndExtractData(response);
+
+            // ✅ CRITICAL FIX: Update store with searchData AND status
+            if (searchData) {
+              store.getState().updatePreSearchData(newRoundNumber, searchData);
+            } else {
+              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
             }
-            // ✅ CRITICAL FIX: Directly update store's pre-search status to COMPLETE
-            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
 
             // Also invalidate query for orchestrator sync when enabled
             queryClientRef.current.invalidateQueries({
@@ -1036,10 +1108,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // The store's isStreaming might be stale, but the hook's ref is always current
       // This prevents duplicate sends when startRound and pendingMessage effects race
       if (chat.isStreamingRef.current) {
-        // eslint-disable-next-line no-console -- Debug logging for race condition
-        console.warn('[Provider:pendingMessage] Blocked in microtask - streaming already started', {
-          isStreamingRef: chat.isStreamingRef.current,
-        });
         // Reset flag since we didn't actually send
         store.getState().setHasSentPendingMessage(false);
         return;

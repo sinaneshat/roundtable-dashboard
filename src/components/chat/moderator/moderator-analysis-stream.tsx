@@ -1,16 +1,36 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { memo, useCallback, useEffect, useRef } from 'react';
+import type { z } from 'zod';
 
 import type { StreamErrorType } from '@/api/core/enums';
 import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
-import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import type {
+  ModeratorAnalysisPayload,
+  Recommendation,
+  StoredModeratorAnalysis,
+} from '@/api/routes/chat/schema';
+import {
+  AlternativeScenarioSchema,
+  ConsensusAnalysisSchema,
+  ConsensusEvolutionPhaseSchema,
+  ContributorPerspectiveSchema,
+  EvidenceAndReasoningSchema,
+  ModeratorAnalysisPayloadSchema,
+  RecommendationSchema,
+  RoundSummarySchema,
+} from '@/api/routes/chat/schema';
+import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { useAutoScroll, useBoolean } from '@/hooks/utils';
-import { hasAnalysisData, hasParticipantContent, hasRoundSummaryContent } from '@/lib/utils/analysis-utils';
+import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 
-import { LeaderboardCard } from './leaderboard-card';
-import { ParticipantAnalysisCard } from './participant-analysis-card';
+// ✅ NEW COMPONENTS: Multi-AI Deliberation Framework
+import { AlternativesSection } from './alternatives-section';
+import { ConsensusAnalysisSection } from './consensus-analysis-section';
+import { ContributorPerspectivesSection } from './contributor-perspectives-section';
+import { EvidenceReasoningSection } from './evidence-reasoning-section';
+import { KeyInsightsSection } from './key-insights-section';
+import { RoundOutcomeHeader } from './round-outcome-header';
 import { RoundSummarySection } from './round-summary-section';
 
 type ModeratorAnalysisStreamProps = {
@@ -18,7 +38,7 @@ type ModeratorAnalysisStreamProps = {
   analysis: StoredModeratorAnalysis;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   onStreamStart?: () => void;
-  onActionClick?: (action: RecommendedAction) => void;
+  onActionClick?: (action: Recommendation) => void;
 };
 
 // ✅ CRITICAL FIX: Track at TWO levels to prevent duplicate submissions
@@ -79,7 +99,7 @@ function ModeratorAnalysisStreamComponent({
 
   // ✅ Create stable wrapper for onActionClick that can be safely passed to child components
   // This prevents ref access during render
-  const stableOnActionClick = useCallback((_action: RecommendedAction) => {
+  const stableOnActionClick = useCallback((_action: Recommendation) => {
     // Disabled for demo mode - no action clicks allowed
     // onActionClickRef.current?.(action);
   }, []);
@@ -329,64 +349,181 @@ function ModeratorAnalysisStreamComponent({
     return null;
   }
 
-  // Type-safe destructuring: displayData structure validated by hasAnalysisData
-  // Works with both complete ModeratorAnalysisPayload and streaming DeepPartial
-  // Extract roundSummary from nested structure
-  const { leaderboard = [], participantAnalyses = [], roundSummary } = displayData;
+  // ✅ NEW SCHEMA: Multi-AI Deliberation Framework
+  // Sections ordered to match visual top-to-bottom flow AND backend generation order
+  const {
+    // Header section (generated first by backend)
+    roundConfidence,
+    confidenceWeighting,
+    consensusEvolution,
+    // Key insights (generated second)
+    summary,
+    recommendations,
+    // Detail sections (generated in visual order)
+    contributorPerspectives,
+    consensusAnalysis,
+    evidenceAndReasoning,
+    alternatives,
+    roundSummary,
+  } = displayData;
 
-  /**
-   * Type compatibility bridge for AI SDK streaming
-   *
-   * AI SDK's DeepPartial makes all properties recursively optional, but components
-   * expect complete types. This is safe because:
-   * 1. hasAnalysisData validated that data exists
-   * 2. UI will render whatever fields are available during streaming
-   * 3. Incomplete data is visually acceptable (progressive rendering)
-   *
-   * This is an established pattern when bridging streaming (partial) and
-   * complete types - similar to how AI SDK itself handles streaming text.
-   */
-  const validLeaderboard = leaderboard.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['leaderboard'];
-  const validParticipantAnalyses = participantAnalyses.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['participantAnalyses'];
-  const validRoundSummary = roundSummary as ModeratorAnalysisPayload['roundSummary'];
+  // ✅ ZOD-BASED ARRAY VALIDATION: Use schema validation for array elements
+  // Following established pattern: Use Zod safeParse for runtime type validation
+  // This validates each element and filters out invalid/incomplete ones during streaming
+  const validContributorPerspectives = (contributorPerspectives ?? [])
+    .map(p => ContributorPerspectiveSchema.safeParse(p))
+    .filter((result): result is { success: true; data: z.infer<typeof ContributorPerspectiveSchema> } => result.success)
+    .map(result => result.data);
+
+  const validAlternatives = (alternatives ?? [])
+    .map(a => AlternativeScenarioSchema.safeParse(a))
+    .filter((result): result is { success: true; data: z.infer<typeof AlternativeScenarioSchema> } => result.success)
+    .map(result => result.data);
+
+  // ✅ VALIDATE CONSENSUS EVOLUTION: Filter incomplete phases during streaming
+  const validConsensusEvolution = (consensusEvolution ?? [])
+    .map(p => ConsensusEvolutionPhaseSchema.safeParse(p))
+    .filter((result): result is { success: true; data: z.infer<typeof ConsensusEvolutionPhaseSchema> } => result.success)
+    .map(result => result.data);
+
+  // ✅ VALIDATE RECOMMENDATIONS: Filter incomplete recommendations during streaming
+  const validRecommendations = (recommendations ?? [])
+    .map(r => RecommendationSchema.safeParse(r))
+    .filter((result): result is { success: true; data: z.infer<typeof RecommendationSchema> } => result.success)
+    .map(result => result.data);
+
+  // ✅ ZOD-BASED TYPE GUARDS: Use schema validation instead of manual type guards
+  // Following established pattern: Use Zod safeParse for runtime type validation
+  // This is type-safe and reuses existing schema definitions
+  const consensusResult = ConsensusAnalysisSchema.safeParse(consensusAnalysis);
+  const validConsensusAnalysis = consensusResult.success ? consensusResult.data : null;
+
+  const evidenceResult = EvidenceAndReasoningSchema.safeParse(evidenceAndReasoning);
+  const validEvidenceAndReasoning = evidenceResult.success ? evidenceResult.data : null;
+
+  const roundSummaryResult = RoundSummarySchema.safeParse(roundSummary);
+  const validRoundSummary = roundSummaryResult.success ? roundSummaryResult.data : null;
 
   // Content checking
-  const hasSummaryContent = hasRoundSummaryContent(validRoundSummary);
+  const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING;
+
+  // ✅ Check for header data availability
+  const hasHeaderData = roundConfidence !== undefined && roundConfidence > 0;
+
+  // ✅ Check for key insights availability (use validated recommendations)
+  const hasKeyInsights = summary || validRecommendations.length > 0;
+
+  // Track section indices for staggered animations - sections appear top-to-bottom
+  let sectionIndex = 0;
 
   return (
-    <div className="space-y-4">
-      {validLeaderboard.length > 0 && (
-        <LeaderboardCard leaderboard={validLeaderboard} />
+    <AnimatedStreamingList groupId={`analysis-stream-${analysis.id}`} className="space-y-6">
+      {/* 1. Round Outcome Header - Generated FIRST by backend, shown at TOP */}
+      {hasHeaderData && (
+        <AnimatedStreamingItem
+          key="round-outcome-header"
+          itemKey="round-outcome-header"
+          index={sectionIndex++}
+        >
+          <RoundOutcomeHeader
+            roundConfidence={roundConfidence}
+            confidenceWeighting={confidenceWeighting}
+            consensusEvolution={validConsensusEvolution.length > 0 ? validConsensusEvolution : undefined}
+            contributors={validContributorPerspectives}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
       )}
 
-      {validParticipantAnalyses.length > 0 && (
-        <div className="space-y-4">
-          {validParticipantAnalyses.map((participant) => {
-            if (!hasParticipantContent(participant)) {
-              return null;
-            }
-
-            return (
-              <ParticipantAnalysisCard
-                key={`participant-${participant.participantIndex}`}
-                analysis={participant}
-                isStreaming={analysis.status === AnalysisStatuses.STREAMING}
-              />
-            );
-          })}
-        </div>
+      {/* 2. Key Insights - Generated SECOND by backend */}
+      {hasKeyInsights && (
+        <AnimatedStreamingItem
+          key="key-insights"
+          itemKey="key-insights"
+          index={sectionIndex++}
+        >
+          <KeyInsightsSection
+            summary={summary}
+            recommendations={validRecommendations.length > 0 ? validRecommendations : undefined}
+            onActionClick={stableOnActionClick}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
       )}
 
-      {hasSummaryContent && (
-        <RoundSummarySection
-          roundSummary={validRoundSummary}
-          onActionClick={stableOnActionClick}
-          isStreaming={analysis.status === AnalysisStatuses.STREAMING}
-        />
+      {/* 3. Contributor Perspectives */}
+      {validContributorPerspectives.length > 0 && (
+        <AnimatedStreamingItem
+          key="contributor-perspectives"
+          itemKey="contributor-perspectives"
+          index={sectionIndex++}
+        >
+          <ContributorPerspectivesSection
+            perspectives={validContributorPerspectives}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
+      )}
+
+      {/* 4. Consensus Analysis */}
+      {validConsensusAnalysis && (
+        <AnimatedStreamingItem
+          key="consensus-analysis"
+          itemKey="consensus-analysis"
+          index={sectionIndex++}
+        >
+          <ConsensusAnalysisSection
+            analysis={validConsensusAnalysis}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
+      )}
+
+      {/* 5. Evidence & Reasoning */}
+      {validEvidenceAndReasoning && (
+        <AnimatedStreamingItem
+          key="evidence-reasoning"
+          itemKey="evidence-reasoning"
+          index={sectionIndex++}
+        >
+          <EvidenceReasoningSection
+            evidenceAndReasoning={validEvidenceAndReasoning}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
+      )}
+
+      {/* 6. Alternative Scenarios */}
+      {validAlternatives.length > 0 && (
+        <AnimatedStreamingItem
+          key="alternatives"
+          itemKey="alternatives"
+          index={sectionIndex++}
+        >
+          <AlternativesSection
+            alternatives={validAlternatives}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
+      )}
+
+      {/* 7. Round Summary - Generated LAST by backend, shown at BOTTOM */}
+      {validRoundSummary && (
+        <AnimatedStreamingItem
+          key="round-summary"
+          itemKey="round-summary"
+          index={sectionIndex++}
+        >
+          <RoundSummarySection
+            roundSummary={validRoundSummary}
+            onActionClick={stableOnActionClick}
+            isStreaming={isCurrentlyStreaming}
+          />
+        </AnimatedStreamingItem>
       )}
 
       <div ref={bottomRef} />
-    </div>
+    </AnimatedStreamingList>
   );
 }
 export const ModeratorAnalysisStream = memo(ModeratorAnalysisStreamComponent, (prevProps, nextProps) => {

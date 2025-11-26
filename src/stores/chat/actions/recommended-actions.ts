@@ -17,7 +17,7 @@
 
 import { useCallback } from 'react';
 
-import type { RecommendedAction } from '@/api/routes/chat/schema';
+import type { Recommendation } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
@@ -33,7 +33,7 @@ export type UseRecommendedActionsOptions = {
 
 export type UseRecommendedActionsReturn = {
   /** Handle recommended action click - delegates to store action + handles UI concerns */
-  handleActionClick: (action: RecommendedAction) => void;
+  handleActionClick: (action: Recommendation) => void;
 };
 
 /**
@@ -81,7 +81,7 @@ export function useRecommendedActions(
    * Handle recommended action click
    * Delegates to store action, then handles UI concerns
    */
-  const handleActionClick = useCallback((action: RecommendedAction) => {
+  const handleActionClick = useCallback((action: Recommendation) => {
     // ✅ BUSINESS LOGIC: Delegate to store action (single source of truth)
     // This handles: full state reset, setting input, applying mode, filtering models by tier, adding participants
     applyRecommendedAction(action, {

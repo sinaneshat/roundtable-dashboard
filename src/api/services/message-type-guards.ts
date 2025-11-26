@@ -6,7 +6,7 @@
  *
  * **PURPOSE**:
  * - Provides Zod-validated type guards for database messages (ChatMessage type)
- * - Separates database type guards from frontend type guards (message-filtering.ts)
+ * - Separates database type guards from frontend type guards (message-transforms.ts)
  * - Enables type-safe filtering in handlers and services
  *
  * **CONSOLIDATION NOTES**:

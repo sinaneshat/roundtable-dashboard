@@ -540,6 +540,10 @@ export default function ChatThreadScreen({
   // Streaming loader state calculation
   const { showLoader, loadingDetails } = useFlowLoading({ mode: 'thread' });
 
+  // ✅ FIX: Comprehensive input blocking check
+  // Block all interactions when the 3-dot matrix loading indicator is visible
+  const isInputBlocked = isRoundInProgress || showLoader;
+
   // Visual viewport positioning for mobile keyboard handling
   // Returns bottom offset to adjust for keyboard (0 when no keyboard, >0 when keyboard open)
   const keyboardOffset = useVisualViewportPosition();
@@ -608,14 +612,14 @@ export default function ChatThreadScreen({
     async (e: React.FormEvent) => {
       e.preventDefault();
       // ✅ FIX: Include comprehensive guards to prevent double submission
-      // - isRoundInProgress: Streaming or analysis in progress
+      // - isInputBlocked: Streaming, analysis in progress, OR loading indicator visible
       // - pendingMessage: Message already queued for sending
-      if (!inputValue.trim() || selectedParticipants.length === 0 || isRoundInProgress || state.data.pendingMessage) {
+      if (!inputValue.trim() || selectedParticipants.length === 0 || isInputBlocked || state.data.pendingMessage) {
         return;
       }
       await formActions.handleUpdateThreadAndSend(thread.id);
     },
-    [inputValue, selectedParticipants, formActions, thread.id, isRoundInProgress, state.data.pendingMessage],
+    [inputValue, selectedParticipants, formActions, thread.id, isInputBlocked, state.data.pendingMessage],
   );
 
   // Timeline grouping
@@ -703,12 +707,12 @@ export default function ChatThreadScreen({
                 value={inputValue}
                 onChange={setInputValue}
                 onSubmit={handlePromptSubmit}
-                status={isRoundInProgress ? 'submitted' : 'ready'}
+                status={isInputBlocked ? 'submitted' : 'ready'}
                 onStop={stopStreaming}
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
                 quotaCheckType="messages"
-                onRemoveParticipant={isRoundInProgress
+                onRemoveParticipant={isInputBlocked
                   ? undefined
                   : (participantId) => {
                       if (selectedParticipants.length <= 1)
@@ -726,7 +730,7 @@ export default function ChatThreadScreen({
                     onOpenModeModal={isModeModalOpen.onTrue}
                     enableWebSearch={enableWebSearch}
                     onWebSearchToggle={threadActions.handleWebSearchToggle}
-                    disabled={isRoundInProgress}
+                    disabled={isInputBlocked}
                   />
                 )}
               />

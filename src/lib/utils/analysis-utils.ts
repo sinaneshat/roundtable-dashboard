@@ -111,25 +111,29 @@ export function hasAnalysisData(
     return false;
   }
 
-  // Type-safe access to properties
+  // Type-safe access to properties for NEW SCHEMA: Multi-AI Deliberation Framework
   // Both ModeratorAnalysisPayload and PartialObject<ModeratorAnalysisPayload> have these properties
-  const { leaderboard, participantAnalyses, roundSummary } = data;
+  const { contributorPerspectives, consensusAnalysis, evidenceAndReasoning, alternatives, roundSummary } = data;
 
   // Check arrays: handle both complete arrays and partial arrays with undefined elements
-  const leaderboardArray = leaderboard ?? [];
-  const participantAnalysesArray = participantAnalyses ?? [];
+  const contributorPerspectivesArray = contributorPerspectives ?? [];
+  const alternativesArray = alternatives ?? [];
 
   // Check if arrays have content (filter undefined elements from PartialObject)
-  const hasLeaderboard = Array.isArray(leaderboardArray)
-    && leaderboardArray.length > 0;
+  const hasContributorPerspectives = Array.isArray(contributorPerspectivesArray)
+    && contributorPerspectivesArray.length > 0;
 
-  const hasParticipantAnalyses = Array.isArray(participantAnalysesArray)
-    && participantAnalysesArray.length > 0;
+  const hasAlternatives = Array.isArray(alternativesArray)
+    && alternativesArray.length > 0;
+
+  // Check object fields
+  const hasConsensusAnalysis = consensusAnalysis != null;
+  const hasEvidenceAndReasoning = evidenceAndReasoning != null;
 
   // Check roundSummary fields (all possible sections)
   const hasRoundSummaryData = hasRoundSummaryContent(roundSummary);
 
-  return hasLeaderboard || hasParticipantAnalyses || hasRoundSummaryData;
+  return hasContributorPerspectives || hasConsensusAnalysis || hasEvidenceAndReasoning || hasAlternatives || hasRoundSummaryData;
 }
 
 /**

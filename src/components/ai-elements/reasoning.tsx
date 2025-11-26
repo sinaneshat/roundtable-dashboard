@@ -13,9 +13,9 @@ import { cn } from '@/lib/ui/cn';
  * A collapsible component that displays AI reasoning content with real-time streaming support.
  *
  * Features:
- * - Always starts expanded by default
- * - Stays expanded and locked during streaming (prevents accidental closure)
- * - Auto-collapses when reasoning finishes (before final message streams)
+ * - Starts collapsed by default (for completed messages)
+ * - Auto-expands and locks during streaming (prevents accidental closure)
+ * - Auto-collapses when streaming ends
  * - Manual toggle available when not streaming
  * - Real-time reasoning token streaming from AI SDK v5
  * - Smooth animations powered by Radix UI
@@ -59,8 +59,9 @@ function useReasoning() {
 type ReasoningProps = ComponentProps<typeof Collapsible> & {
   /**
    * Whether the reasoning is currently being streamed
-   * Component starts expanded by default and stays locked during stream.
-   * Auto-collapses when streaming completes (before final message).
+   * Component starts collapsed by default (for completed messages).
+   * Auto-expands and stays locked during stream.
+   * Auto-collapses when streaming completes.
    * User can manually toggle when not streaming.
    */
   isStreaming?: boolean;
@@ -75,10 +76,10 @@ export function Reasoning({
   const startTimeRef = useRef<number | undefined>(undefined);
   const wasStreamingRef = useRef(false);
   const [duration, setDuration] = useState<number | undefined>(undefined);
-  const [isOpen, setIsOpen] = useState(true); // ✅ Always start expanded
+  // ✅ Start collapsed for completed messages, open for streaming
+  const [isOpen, setIsOpen] = useState(isStreaming);
 
-  // Track streaming lifecycle for duration calculation
-  // Pattern: Use queueMicrotask to avoid direct setState in useEffect warning
+  // Track streaming lifecycle for duration calculation and auto-expand/collapse
   useEffect(() => {
     if (isStreaming && !wasStreamingRef.current) {
       // Streaming started - auto-open
@@ -98,7 +99,7 @@ export function Reasoning({
         queueMicrotask(() => setDuration(durationInSeconds));
       }
 
-      // ✅ Auto-collapse when reasoning finishes (final message about to stream)
+      // ✅ Auto-collapse when streaming ends
       queueMicrotask(() => setIsOpen(false));
     }
 
@@ -127,7 +128,7 @@ export function Reasoning({
       <Collapsible
         open={isOpen}
         onOpenChange={handleOpenChange}
-        className={cn('not-prose mb-4', className)}
+        className={cn('not-prose mb-4 w-full', className)}
         {...props}
       >
         {children}
@@ -170,26 +171,30 @@ export function ReasoningTrigger({
   };
 
   return (
-    <CollapsibleTrigger
-      disabled={isStreaming}
-      className={cn(
-        'flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors',
-        !isStreaming && 'hover:text-foreground cursor-pointer',
-        isStreaming && 'cursor-default',
-        className,
-      )}
-      {...props}
-    >
-      <Brain className="size-4 shrink-0" />
-      <span className={cn(isStreaming && 'animate-pulse')}>{getMessage()}</span>
-      <ChevronDown
+    <div className="flex w-full">
+      <CollapsibleTrigger
+        disabled={isStreaming}
         className={cn(
-          'ml-auto size-4 shrink-0 transition-transform duration-200',
-          open && 'rotate-180',
-          isStreaming && 'opacity-50',
+          'flex flex-1 items-center justify-between gap-2 text-muted-foreground text-sm transition-colors',
+          !isStreaming && 'hover:text-foreground cursor-pointer',
+          isStreaming && 'cursor-default',
+          className,
         )}
-      />
-    </CollapsibleTrigger>
+        {...props}
+      >
+        <div className="flex items-center gap-2">
+          <Brain className="size-4 shrink-0" />
+          <span className={cn(isStreaming && 'animate-pulse')}>{getMessage()}</span>
+        </div>
+        <ChevronDown
+          className={cn(
+            'size-4 shrink-0 transition-transform duration-200',
+            open && 'rotate-180',
+            isStreaming && 'opacity-50',
+          )}
+        />
+      </CollapsibleTrigger>
+    </div>
   );
 }
 
@@ -207,14 +212,14 @@ export function ReasoningContent({
   return (
     <CollapsibleContent
       className={cn(
-        'mt-4 text-sm text-muted-foreground',
+        'mt-4 w-full text-sm text-muted-foreground',
         'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2',
         'data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2',
         className,
       )}
       {...props}
     >
-      <div className="whitespace-pre-wrap leading-relaxed">
+      <div className="w-full whitespace-pre-wrap leading-relaxed">
         {children}
       </div>
     </CollapsibleContent>

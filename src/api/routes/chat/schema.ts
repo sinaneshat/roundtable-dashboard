@@ -1,10 +1,15 @@
 import { z } from '@hono/zod-openapi';
 
 import {
+  AGREEMENT_STATUSES,
   ChangelogTypeSchema,
   ChatModeSchema,
+  ConfidenceWeightingSchema,
+  DEBATE_PHASES,
   DEFAULT_CHAT_MODE,
+  EVIDENCE_STRENGTHS,
   PreSearchQueryStatusSchema,
+  VOTE_TYPES,
   WebSearchAnswerModeSchema,
   WebSearchComplexitySchema,
   WebSearchContentTypeSchema,
@@ -373,169 +378,117 @@ const UIMessageSchema = z.object({
 // WEB SEARCH SCHEMAS (Domain-Specific)
 // ============================================================================
 
-/**
- * Web search parameters schema (Tavily-enhanced)
- * All fields optional for backward compatibility
- */
 export const WebSearchParametersSchema = z.object({
-  // Core search parameters
-  query: z.string().min(1).describe('Search query to find information on the web'),
-  maxResults: z.number().int().positive().min(1).max(20).optional().default(10).describe('Maximum number of search results to return (1-20, default 10)'),
-  searchDepth: WebSearchDepthSchema.optional().default('advanced').describe('Search depth: basic for fast results, advanced for comprehensive search'),
-
-  // Topic and content filtering
-  topic: WebSearchTopicSchema.optional().describe('Search topic category for specialized search optimization'),
-  timeRange: WebSearchTimeRangeSchema.optional().describe('Filter results by time range (day, week, month, year)'),
-  days: z.number().int().positive().max(365).optional().describe('Filter results by specific number of days (for news topic)'),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Start date for date range filter (YYYY-MM-DD)'),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('End date for date range filter (YYYY-MM-DD)'),
-
-  // Content extraction options
-  chunksPerSource: z.number().int().min(1).max(3).optional().default(2).describe('Number of content chunks per source (1-3, for advanced search)'),
-  includeImages: z.boolean().optional().default(true).describe('Include images from search results'),
-  includeImageDescriptions: z.boolean().optional().default(true).describe('Generate AI descriptions for images'),
-  includeRawContent: z.union([z.boolean(), WebSearchRawContentFormatSchema]).optional().default('markdown').describe('Include raw page content (boolean or format: markdown/text)'),
-  maxTokens: z.number().int().positive().optional().describe('Maximum tokens for content extraction'),
-
-  // Answer generation
-  includeAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().default('advanced').describe('Include AI-generated answer summary (boolean or mode: basic/advanced)'),
-
-  // Domain filtering
-  includeDomains: z.array(z.string()).optional().describe('Only search within these domains'),
-  excludeDomains: z.array(z.string()).optional().describe('Exclude these domains from search'),
-
-  // Geographic and metadata
-  country: z.string().length(2).optional().describe('ISO 3166-1 alpha-2 country code for geographic prioritization'),
-  includeFavicon: z.boolean().optional().default(true).describe('Include website favicons in results'),
-
-  // Auto-parameters mode
-  autoParameters: z.boolean().optional().default(false).describe('Automatically detect and apply optimal search parameters'),
+  query: z.string().min(1),
+  maxResults: z.number().int().positive().min(1).max(20).optional().default(10),
+  searchDepth: WebSearchDepthSchema.optional().default('advanced'),
+  topic: WebSearchTopicSchema.optional(),
+  timeRange: WebSearchTimeRangeSchema.optional(),
+  days: z.number().int().positive().max(365).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  chunksPerSource: z.number().int().min(1).max(3).optional().default(2),
+  includeImages: z.boolean().optional().default(true),
+  includeImageDescriptions: z.boolean().optional().default(true),
+  includeRawContent: z.union([z.boolean(), WebSearchRawContentFormatSchema]).optional().default('markdown'),
+  maxTokens: z.number().int().positive().optional(),
+  includeAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().default('advanced'),
+  includeDomains: z.array(z.string()).optional(),
+  excludeDomains: z.array(z.string()).optional(),
+  country: z.string().length(2).optional(),
+  includeFavicon: z.boolean().optional().default(true),
+  autoParameters: z.boolean().optional().default(false),
 }).openapi('WebSearchParameters');
 
 export type WebSearchParameters = z.infer<typeof WebSearchParametersSchema>;
 
-/**
- * Individual search result schema (Tavily-enhanced)
- */
 export const WebSearchResultItemSchema = z.object({
-  title: z.string().describe('Title of the search result'),
-  // ✅ FIX: More lenient URL validation - some search APIs return malformed URLs
-  // Use string().min(1) instead of url() to avoid validation failures on relative/malformed URLs
-  url: z.string().min(1).describe('URL of the search result'),
-  content: z.string().describe('Content snippet from the page'),
-  excerpt: z.string().optional().describe('Short snippet from search results'),
-  fullContent: z.string().optional().describe('Full scraped content from actual page (up to 15000 chars)'),
-  rawContent: z.string().optional().describe('Raw content in markdown or text format (Tavily-style)'),
-  score: z.number().min(0).max(1).describe('Relevance score (0-1)'),
-  publishedDate: z.string().nullable().optional().describe('Publication date if available (ISO 8601)'),
-  domain: z.string().optional().describe('Domain extracted from URL'),
+  title: z.string(),
+  url: z.string().min(1),
+  content: z.string(),
+  excerpt: z.string().optional(),
+  fullContent: z.string().optional(),
+  rawContent: z.string().optional(),
+  score: z.number().min(0).max(1),
+  publishedDate: z.string().nullable().optional(),
+  domain: z.string().optional(),
   metadata: z.object({
-    author: z.string().optional().describe('Article/page author'),
-    readingTime: z.number().optional().describe('Estimated reading time in minutes'),
-    wordCount: z.number().optional().describe('Word count of extracted content'),
-    description: z.string().optional().describe('Meta description or summary'),
-    imageUrl: z.string().optional().describe('Main image URL from the page'),
-    faviconUrl: z.string().optional().describe('Favicon URL for the website'),
-  }).optional().describe('Additional metadata extracted from the page'),
-  contentType: WebSearchContentTypeSchema.optional().describe('Content type classification'),
-  keyPoints: z.array(z.string()).optional().describe('Key points extracted from content'),
-  // Tavily-specific fields
+    author: z.string().optional(),
+    readingTime: z.number().optional(),
+    wordCount: z.number().optional(),
+    description: z.string().optional(),
+    imageUrl: z.string().optional(),
+    faviconUrl: z.string().optional(),
+  }).optional(),
+  contentType: WebSearchContentTypeSchema.optional(),
+  keyPoints: z.array(z.string()).optional(),
   images: z.array(z.object({
-    url: z.string().describe('Image URL'),
-    description: z.string().optional().describe('AI-generated image description'),
-    alt: z.string().optional().describe('Image alt text'),
-  })).optional().describe('Images found in the result with optional AI descriptions'),
+    url: z.string(),
+    description: z.string().optional(),
+    alt: z.string().optional(),
+  })).optional(),
 }).openapi('WebSearchResultItem');
 
 export type WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
 
-/**
- * Search result metadata schema
- * Includes cache performance tracking and usage limits
- */
 export const WebSearchResultMetaSchema = z.object({
-  // Cache metadata
-  cached: z.boolean().optional().describe('Whether result was retrieved from cache'),
-  cacheAge: z.number().optional().describe('Age of cached result in milliseconds (only for cached results)'),
-  cacheHitRate: z.number().min(0).max(1).optional().describe('Overall cache hit rate (0-1)'),
-
-  // Usage limits
-  limitReached: z.boolean().optional().describe('Whether participant has reached search limit'),
-  searchesUsed: z.number().int().min(0).optional().describe('Number of searches used by participant'),
-  maxSearches: z.number().int().positive().optional().describe('Maximum searches allowed per participant'),
-  remainingSearches: z.number().int().min(0).optional().describe('Remaining searches for participant'),
-
-  // Error tracking
-  error: z.boolean().optional().describe('Whether search encountered an error'),
-  message: z.string().optional().describe('Additional message or error description'),
-
-  // Performance
-  complexity: WebSearchComplexitySchema.optional().describe('Search complexity level used'),
+  cached: z.boolean().optional(),
+  cacheAge: z.number().optional(),
+  cacheHitRate: z.number().min(0).max(1).optional(),
+  limitReached: z.boolean().optional(),
+  searchesUsed: z.number().int().min(0).optional(),
+  maxSearches: z.number().int().positive().optional(),
+  remainingSearches: z.number().int().min(0).optional(),
+  error: z.boolean().optional(),
+  message: z.string().optional(),
+  complexity: WebSearchComplexitySchema.optional(),
 }).openapi('WebSearchResultMeta');
 
 export type WebSearchResultMeta = z.infer<typeof WebSearchResultMetaSchema>;
 
-/**
- * Complete web search result schema (Tavily-enhanced)
- */
 export const WebSearchResultSchema = z.object({
-  query: z.string().describe('The search query that was executed'),
-  answer: z.string().nullable().describe('AI-generated answer summary'),
-  results: z.array(WebSearchResultItemSchema).describe('Array of search results'),
-  responseTime: z.number().describe('API response time in milliseconds'),
-  requestId: z.string().optional().describe('Unique request ID for tracking and debugging'),
-  // Tavily-style images array
+  query: z.string(),
+  answer: z.string().nullable(),
+  results: z.array(WebSearchResultItemSchema),
+  responseTime: z.number(),
+  requestId: z.string().optional(),
   images: z.array(z.object({
-    url: z.string().describe('Image URL'),
-    description: z.string().optional().describe('AI-generated image description'),
-  })).optional().describe('Consolidated images from all results with AI descriptions'),
-  // Auto-detected parameters
+    url: z.string(),
+    description: z.string().optional(),
+  })).optional(),
   autoParameters: z.object({
-    topic: WebSearchTopicSchema.optional().describe('Auto-detected search topic'),
-    timeRange: WebSearchTimeRangeSchema.optional().describe('Auto-detected time range'),
-    searchDepth: WebSearchDepthSchema.optional().describe('Auto-detected search depth'),
-    reasoning: z.string().optional().describe('Explanation of why these parameters were chosen'),
-  }).optional().describe('Auto-detected search parameters based on query analysis'),
-  _meta: WebSearchResultMetaSchema.optional().describe('Search metadata (cache status, limits, etc.)'),
+    topic: WebSearchTopicSchema.optional(),
+    timeRange: WebSearchTimeRangeSchema.optional(),
+    searchDepth: WebSearchDepthSchema.optional(),
+    reasoning: z.string().optional(),
+  }).optional(),
+  _meta: WebSearchResultMetaSchema.optional(),
 }).openapi('WebSearchResult');
 
 export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
 
-/**
- * Generated search query schema
- * Used by web-search.service.ts AI generation
- */
 export const GeneratedSearchQuerySchema = z.object({
-  query: z.string().describe('The generated search query'),
-  rationale: z.string().describe('Explanation for why this query will help answer the user question'),
-  searchDepth: WebSearchDepthSchema.describe('Recommended search depth for this query'),
-  // ✅ CASE-INSENSITIVE: Transform to lowercase to handle AI returning uppercase values
-  complexity: z.string().optional().transform(val => val?.toLowerCase() as 'basic' | 'moderate' | 'deep' | undefined).pipe(WebSearchComplexitySchema.optional()).describe('Query complexity level: basic (2-3 sources), moderate (4-6 sources), deep (6-8 sources)'),
-  // ✅ DYNAMIC SOURCE COUNT: AI determines optimal source count based on query complexity
-  sourceCount: z.number().min(1).max(10).optional().describe('Dynamic source count: BASIC=2-3, MODERATE=4-6, DEEP=6-8 (AI-determined based on complexity)'),
-  // ✅ TAVILY-STYLE: AI-driven advanced parameters
-  requiresFullContent: z.boolean().optional().describe('Whether full content extraction is needed'),
-  chunksPerSource: z.number().int().min(1).max(3).optional().describe('Number of content chunks per source for deep research (1-3)'),
-  topic: WebSearchTopicSchema.optional().describe('Auto-detected topic category'),
-  timeRange: WebSearchTimeRangeSchema.optional().describe('Auto-detected time relevance'),
-  needsAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().describe('Whether to generate AI answer summary (boolean or mode: basic/advanced)'),
-  // ✅ DYNAMIC IMAGE DECISIONS: AI determines if images are needed
-  includeImages: z.boolean().optional().describe('Whether to fetch and include images from search results (true for visual queries, false for text-only)'),
-  includeImageDescriptions: z.boolean().optional().describe('Whether images need AI-generated descriptions (true for complex visual analysis, false for simple display)'),
-  analysis: z.string().optional().describe('Analysis of user intent and information needs'),
+  query: z.string(),
+  rationale: z.string(),
+  searchDepth: WebSearchDepthSchema,
+  complexity: z.string().optional().transform(val => val?.toLowerCase() as 'basic' | 'moderate' | 'deep' | undefined).pipe(WebSearchComplexitySchema.optional()),
+  sourceCount: z.union([z.number(), z.string()]).optional(),
+  requiresFullContent: z.boolean().optional(),
+  chunksPerSource: z.union([z.number(), z.string()]).optional(),
+  topic: WebSearchTopicSchema.optional(),
+  timeRange: WebSearchTimeRangeSchema.optional(),
+  needsAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional(),
+  includeImages: z.boolean().optional(),
+  includeImageDescriptions: z.boolean().optional(),
+  analysis: z.string().optional(),
 }).openapi('GeneratedSearchQuery');
 
 export type GeneratedSearchQuery = z.infer<typeof GeneratedSearchQuerySchema>;
 
-/**
- * Multi-query generation response schema
- * ✅ DYNAMIC QUERY COUNT: AI determines optimal number of queries (1-5)
- * Used by web-search.service.ts for multi-query generation
- */
 export const MultiQueryGenerationSchema = z.object({
-  totalQueries: z.number().min(1).max(5).describe('Total number of queries to execute (1-5)'),
-  analysisRationale: z.string().describe('Explanation for why this many queries are needed'),
-  queries: z.array(GeneratedSearchQuerySchema).min(1).max(5).describe('Array of generated search queries'),
+  totalQueries: z.union([z.number(), z.string()]),
+  analysisRationale: z.string(),
+  queries: z.array(GeneratedSearchQuerySchema),
 }).openapi('MultiQueryGeneration');
 
 export type MultiQueryGeneration = z.infer<typeof MultiQueryGenerationSchema>;
@@ -800,98 +753,210 @@ export const ModeratorAnalysisRequestSchema = z.object({
     example: ['msg_abc123', 'msg_def456', 'msg_ghi789'],
   }),
 }).openapi('ModeratorAnalysisRequest');
-export const SkillRatingSchema = z.object({
-  skillName: z.string()
-    .describe('Name of the skill being evaluated (e.g., "Creativity", "Technical Depth", "Clarity")'),
-  rating: z.number().min(1).max(10).describe('Rating out of 10 for this specific skill'),
-}).openapi('SkillRating');
-export const ParticipantAnalysisSchema = z.object({
-  participantIndex: RoundNumberSchema.describe('Index of the participant in the conversation (0-based)'),
-  participantRole: z.string().nullable().describe('The role assigned to this participant (e.g., "The Ideator")'),
-  modelId: z.string()
-    .describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
-  modelName: z.string()
-    .describe('Human-readable model name (e.g., "Claude Sonnet 4.5")'),
-  overallRating: z.number().min(1).max(10).describe('Overall rating out of 10 for this response'),
-  skillsMatrix: z.array(SkillRatingSchema)
-    .length(5)
-    .describe('Individual skill ratings for pentagon visualization - MUST be exactly 5 skills (e.g., Creativity, Technical Depth, Clarity, Analysis, Innovation)'),
-  pros: z.array(z.string()).min(1).describe('List of strengths in this response (2-4 items)'),
-  cons: z.array(z.string()).min(1).describe('List of weaknesses or areas for improvement (1-3 items)'),
-  summary: z.string().max(300).describe('Brief summary of this participant\'s contribution (1-2 sentences)'),
-}).openapi('ParticipantAnalysis');
-export const LeaderboardEntrySchema = z.object({
-  rank: z.number().int().min(1).describe('Rank position (1 = best)'),
-  participantIndex: RoundNumberSchema.describe('Index of the participant'),
-  participantRole: z.string().nullable().describe('The role assigned to this participant'),
-  modelId: z.string()
-    .describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
-  modelName: z.string()
-    .describe('Human-readable model name'),
-  overallRating: z.number().min(1).max(10).describe('Overall rating for ranking'),
-  badge: z.string().nullable().describe('Optional badge/award (e.g., "Most Creative", "Best Analysis")'),
-}).openapi('LeaderboardEntry');
+// ============================================================================
+// MULTI-AI DELIBERATION SCHEMAS - New Framework
+// ============================================================================
 
-// RecommendedAction schema - used within RoundSummarySchema
-export const RecommendedActionSchema = z.object({
-  action: z.string().describe('User-ready prompt addressing specific gaps in the conversation. Write as the user would: "Can you explore X? What challenges..." NOT "Explore X" or "Consider Y". Be direct and actionable.'),
-  rationale: z.string().describe('Why this addresses a blind spot in the conversation'),
-  suggestedModels: z.array(z.string()).describe('Model IDs to add (e.g., "openai/gpt-4o"), empty if none'),
-  suggestedRoles: z.array(z.string()).describe('Roles for new participants (e.g., "critic"), empty if none'),
-  suggestedMode: z.string().describe('Mode change if beneficial (e.g., "debating"), empty if none'),
-});
+/**
+ * AI Model Scorecard - Measures cognitive strengths
+ * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ */
+export const AIScorecardSchema = z.object({
+  logic: z.coerce.number(),
+  riskAwareness: z.coerce.number(),
+  creativity: z.coerce.number(),
+  evidence: z.coerce.number(),
+  consensus: z.coerce.number().optional(),
+}).openapi('AIScorecard');
 
+/**
+ * Contributor Perspective - Single AI participant's viewpoint
+ */
+export const ContributorPerspectiveSchema = z.object({
+  participantIndex: RoundNumberSchema,
+  role: z.string(),
+  modelId: z.string(),
+  modelName: z.string(),
+  scorecard: AIScorecardSchema,
+  stance: z.string(),
+  evidence: z.array(z.string()),
+  vote: z.enum(VOTE_TYPES),
+}).openapi('ContributorPerspective');
+
+/**
+ * Contested claim in consensus analysis
+ */
+export const ContestedClaimSchema = z.object({
+  claim: z.string(),
+  status: z.literal('contested'),
+}).openapi('ContestedClaim');
+
+/**
+ * Agreement heatmap entry - Shows which models agree/disagree on claims
+ */
+export const AgreementHeatmapEntrySchema = z.object({
+  claim: z.string(),
+  perspectives: z.record(z.string(), z.enum(AGREEMENT_STATUSES)),
+}).openapi('AgreementHeatmapEntry');
+
+/**
+ * Argument strength profile - Radar chart data per model
+ * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ */
+export const ArgumentStrengthProfileSchema = z.record(
+  z.string(),
+  z.object({
+    logic: z.coerce.number(),
+    evidence: z.coerce.number(),
+    riskAwareness: z.coerce.number(),
+    consensus: z.coerce.number(),
+    creativity: z.coerce.number(),
+  }),
+).openapi('ArgumentStrengthProfile');
+
+/**
+ * Consensus Analysis - Agreement patterns across contributors
+ * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ */
+export const ConsensusAnalysisSchema = z.object({
+  alignmentSummary: z.object({
+    totalClaims: z.coerce.number(),
+    majorAlignment: z.coerce.number(),
+    contestedClaims: z.coerce.number(),
+    contestedClaimsList: z.array(ContestedClaimSchema),
+  }),
+  agreementHeatmap: z.array(AgreementHeatmapEntrySchema),
+  argumentStrengthProfile: ArgumentStrengthProfileSchema,
+}).openapi('ConsensusAnalysis');
+
+/**
+ * Reasoning thread - Claim with supporting synthesis
+ */
+export const ReasoningThreadSchema = z.object({
+  claim: z.string(),
+  synthesis: z.string(),
+}).openapi('ReasoningThread');
+
+/**
+ * Evidence coverage for a claim
+ * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ */
+export const EvidenceCoverageSchema = z.object({
+  claim: z.string(),
+  strength: z.enum(EVIDENCE_STRENGTHS),
+  percentage: z.coerce.number(),
+}).openapi('EvidenceCoverage');
+
+/**
+ * Evidence & Reasoning - Supporting data and logic
+ */
+export const EvidenceAndReasoningSchema = z.object({
+  reasoningThreads: z.array(ReasoningThreadSchema),
+  evidenceCoverage: z.array(EvidenceCoverageSchema),
+}).openapi('EvidenceAndReasoning');
+
+/**
+ * Alternative scenario with confidence
+ * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ */
+export const AlternativeScenarioSchema = z.object({
+  scenario: z.string(),
+  confidence: z.coerce.number(),
+}).openapi('AlternativeScenario');
+
+/**
+ * Recommendation item with optional interactive suggestions
+ */
+export const RecommendationSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  // Actionable user prompt to continue the conversation
+  suggestedPrompt: z.string().optional(),
+  // Optional interactive fields for applying suggestions to form
+  suggestedModels: z.array(z.string()).optional(),
+  suggestedRoles: z.array(z.string()).optional(),
+  suggestedMode: z.string().optional(),
+}).openapi('Recommendation');
+
+/**
+ * Round summary - Progress and key themes
+ * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ */
 export const RoundSummarySchema = z.object({
-  keyInsights: z.array(z.string()).min(1).max(6).describe('3-6 most important insights or patterns identified across all participant responses'),
-  consensusPoints: z.array(z.string()).min(0).max(5).describe('2-5 key points where participants showed agreement or alignment (empty if no consensus)'),
-  divergentApproaches: z.array(z.object({
-    topic: z.string().describe('The specific topic or aspect where participants diverged'),
-    perspectives: z.array(z.string()).min(1).describe('Different perspectives taken by participants (at least 1)'),
-  })).min(0).max(4).describe('0-4 areas where participants took significantly different approaches'),
-  comparativeAnalysis: z.object({
-    strengthsByCategory: z.array(z.object({
-      category: z.string().describe('Strength category (e.g., "Technical Depth", "Creativity")'),
-      participants: z.array(z.string()).describe('Participant names or indices showing this strength'),
-    })).min(1).max(6).describe('2-6 strength categories mapped to participants who excel in each'),
-    tradeoffs: z.array(z.string()).min(1).max(4).describe('2-4 key trade-offs to consider when choosing between approaches'),
-  }).describe('Structured comparison showing which approaches excel in which areas and trade-offs'),
-  decisionFramework: z.object({
-    criteriaToConsider: z.array(z.string()).min(2).max(5).describe('3-5 key criteria the user should consider when evaluating the responses'),
-    scenarioRecommendations: z.array(z.object({
-      scenario: z.string().describe('A specific use case or scenario'),
-      recommendation: z.string().describe('Which approach(es) work best for this scenario and why'),
-    })).min(1).max(3).describe('2-3 scenario-based recommendations'),
-  }).describe('Framework to help user make informed decisions'),
-  overallSummary: z.string().min(50).max(1200).describe('Narrative summary that synthesizes the analysis (50-1200 chars, adapt length to complexity)'),
-  conclusion: z.string().min(30).max(600).describe('Final conclusion with recommendation (30-600 chars, adapt length to complexity)'),
-  recommendedActions: z.array(RecommendedActionSchema).min(1).max(5).describe('1-5 next steps addressing conversation gaps. Generate after conclusion.'),
+  participation: z.object({
+    approved: z.coerce.number(),
+    cautioned: z.coerce.number(),
+    rejected: z.coerce.number(),
+  }),
+  keyThemes: z.string(),
+  unresolvedQuestions: z.array(z.string()),
+  generated: z.string(),
 }).openapi('RoundSummary');
 
+/**
+ * Consensus Evolution Phase - Shows consensus percentage at each debate phase
+ * Used for timeline visualization showing how consensus evolved through deliberation
+ */
+export const ConsensusEvolutionPhaseSchema = z.object({
+  phase: z.enum(DEBATE_PHASES),
+  percentage: z.coerce.number().min(0).max(100),
+  label: z.string().optional(), // Optional human-readable label like "Opening", "Final Vote"
+}).openapi('ConsensusEvolutionPhase');
+
+/**
+ * Consensus Evolution - Timeline of consensus through debate phases
+ * Shows how agreement evolved from Opening (low) to Final Vote (high)
+ */
+export const ConsensusEvolutionSchema = z.array(ConsensusEvolutionPhaseSchema).openapi('ConsensusEvolution');
+
+/**
+ * Complete Moderator Analysis Payload - Multi-AI Deliberation Framework
+ */
 export const ModeratorAnalysisPayloadSchema = z.object({
-  roundNumber: RoundNumberSchema.describe('The conversation round number (✅ 0-BASED: starts at 0)'),
-  mode: z.string().describe('Conversation mode (analyzing, brainstorming, debating, solving)'),
-  userQuestion: z.string().describe('The user\'s original question/prompt'),
-  participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant'),
-  leaderboard: z.array(LeaderboardEntrySchema).min(1).describe('Ranked list of participants by overall performance'),
-  roundSummary: RoundSummarySchema.describe('Comprehensive structured summary providing decision-making value'),
+  roundNumber: RoundNumberSchema,
+  mode: z.string(),
+  userQuestion: z.string(),
+
+  // Round Confidence Header - Overall confidence metrics
+  roundConfidence: z.coerce.number().min(0).max(100).optional(), // Overall confidence % (e.g., 78%)
+  confidenceWeighting: ConfidenceWeightingSchema.optional(), // Weighting method (default: balanced)
+
+  // Consensus Evolution - Timeline showing consensus at each debate phase
+  consensusEvolution: ConsensusEvolutionSchema.optional(), // Array of phases with percentages
+
+  // Key Insights & Recommendations
+  summary: z.string(),
+  recommendations: z.array(RecommendationSchema),
+
+  // Contributor Perspectives
+  contributorPerspectives: z.array(ContributorPerspectiveSchema),
+
+  // Consensus Analysis
+  consensusAnalysis: ConsensusAnalysisSchema,
+
+  // Evidence & Reasoning
+  evidenceAndReasoning: EvidenceAndReasoningSchema,
+
+  // Explore Alternatives
+  alternatives: z.array(AlternativeScenarioSchema),
+
+  // Round Summary
+  roundSummary: RoundSummarySchema,
 }).openapi('ModeratorAnalysisPayload');
 export const ModeratorAnalysisResponseSchema = createApiResponseSchema(ModeratorAnalysisPayloadSchema).openapi('ModeratorAnalysisResponse');
 export const AnalysisAcceptedPayloadSchema = z.object({
-  analysisId: z.string().describe('ID of the analysis record being processed'),
-  status: z.literal('processing').describe('Status indicating background processing has started'),
-  message: z.string().optional().describe('Optional message about polling for completion'),
+  analysisId: z.string(),
+  status: z.literal('processing'),
+  message: z.string().optional(),
 }).openapi('AnalysisAcceptedPayload');
 export const AnalysisAcceptedResponseSchema = AnalysisAcceptedPayloadSchema.openapi('AnalysisAcceptedResponse');
 
 // ✅ TYPE-SAFE: Stored moderator analysis with properly typed analysis data
 // ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
+// ✅ BREAKING CHANGE: Updated to multi-AI deliberation framework
 export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
   .extend({
-    analysisData: z.object({
-      leaderboard: z.array(LeaderboardEntrySchema),
-      participantAnalyses: z.array(ParticipantAnalysisSchema),
-      roundSummary: RoundSummarySchema,
-    }).nullable().optional(),
+    analysisData: ModeratorAnalysisPayloadSchema.omit({ roundNumber: true, mode: true, userQuestion: true }).nullable().optional(),
     // Override date fields to accept both string and Date (transform handles conversion)
     createdAt: z.union([z.string(), z.date()]),
     completedAt: z.union([z.string(), z.date()]).nullable(),
@@ -921,7 +986,13 @@ export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
 export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
 export type RoundSummary = z.infer<typeof RoundSummarySchema>;
-export type RecommendedAction = z.infer<typeof RecommendedActionSchema>;
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+export type ContributorPerspective = z.infer<typeof ContributorPerspectiveSchema>;
+export type ConsensusAnalysis = z.infer<typeof ConsensusAnalysisSchema>;
+export type EvidenceAndReasoning = z.infer<typeof EvidenceAndReasoningSchema>;
+export type AlternativeScenario = z.infer<typeof AlternativeScenarioSchema>;
+export type ConsensusEvolutionPhase = z.infer<typeof ConsensusEvolutionPhaseSchema>;
+export type ConsensusEvolution = z.infer<typeof ConsensusEvolutionSchema>;
 // ============================================================================
 // SIMPLIFIED CHANGELOG DATA SCHEMAS
 // ============================================================================
@@ -964,8 +1035,6 @@ export const ChangeDataSchema = z.discriminatedUnion('type', [
 ]);
 export type ChangeData = z.infer<typeof ChangeDataSchema>;
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
-export type ParticipantAnalysis = z.infer<typeof ParticipantAnalysisSchema>;
-export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;
 export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
 export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;
 export type StoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
@@ -1056,15 +1125,11 @@ export const PreSearchStartDataSchema = z.object({
   type: z.literal('pre_search_start'),
   timestamp: z.number(),
   userQuery: z.string(),
-  totalQueries: z.number().int().min(1).max(5),
+  totalQueries: z.union([z.number(), z.string()]),
 }).openapi('PreSearchStartData');
 
 export type PreSearchStartData = z.infer<typeof PreSearchStartDataSchema>;
 
-/**
- * Pre-search query generation event
- * Sent when AI generates a search query (streaming object phase)
- */
 export const PreSearchQueryGeneratedDataSchema = z.object({
   type: z.literal('pre_search_query_generated'),
   timestamp: z.number(),
@@ -1072,15 +1137,11 @@ export const PreSearchQueryGeneratedDataSchema = z.object({
   rationale: z.string(),
   searchDepth: z.enum(['basic', 'advanced']),
   index: RoundNumberSchema,
-  total: z.number().int().min(1),
+  total: z.union([z.number(), z.string()]),
 }).openapi('PreSearchQueryGeneratedData');
 
 export type PreSearchQueryGeneratedData = z.infer<typeof PreSearchQueryGeneratedDataSchema>;
 
-/**
- * Pre-search query execution event
- * Sent when individual search query is being executed
- */
 export const PreSearchQueryDataSchema = z.object({
   type: z.literal('pre_search_query'),
   timestamp: z.number(),
@@ -1088,7 +1149,7 @@ export const PreSearchQueryDataSchema = z.object({
   rationale: z.string(),
   searchDepth: z.enum(['basic', 'advanced']),
   index: RoundNumberSchema,
-  total: z.number().int().min(1),
+  total: z.union([z.number(), z.string()]),
 }).openapi('PreSearchQueryData');
 
 export type PreSearchQueryData = z.infer<typeof PreSearchQueryDataSchema>;
@@ -1209,7 +1270,7 @@ export type MessageWithParticipant = z.infer<typeof MessageWithParticipantSchema
  */
 export const WebSearchDisplayPropsSchema = z.object({
   results: z.array(WebSearchResultItemSchema),
-  answer: z.string().nullable().optional().describe('AI-generated answer summary'),
+  answer: z.string().nullable().optional(),
   className: z.string().optional(),
   meta: WebSearchResultMetaSchema.optional(),
   complexity: WebSearchComplexitySchema.optional(),

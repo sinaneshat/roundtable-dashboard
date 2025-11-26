@@ -22,6 +22,10 @@
     --accent-foreground: hsl(0 0% 0%);
     --destructive: hsl(358.4334 74.912% 59.7455%);
     --destructive-foreground: hsl(223.8136 -172.5242% 100%);
+    --warning: hsl(38 92% 50%);
+    --warning-foreground: hsl(0 0% 0%);
+    --success: hsl(142 76% 36%);
+    --success-foreground: hsl(0 0% 100%);
     --border: hsl(223.8136 0.0001% 89.5577%);
     --input: hsl(223.8136 0.0001% 92.1478%);
     --ring: hsl(0 0% 0%);
@@ -77,6 +81,10 @@
     --accent-foreground: hsl(223.8136 -172.5242% 100%);
     --destructive: hsl(359.9132 100.2494% 67.8807%);
     --destructive-foreground: hsl(0 0% 0%);
+    --warning: hsl(38 92% 50%);
+    --warning-foreground: hsl(0 0% 0%);
+    --success: hsl(142 71% 45%);
+    --success-foreground: hsl(0 0% 100%);
     --border: hsl(223.8136 0% 14.0871%);
     --input: hsl(223.8136 0% 19.8916%);
     --ring: hsl(223.8136 0% 64.471%);
@@ -130,6 +138,10 @@
     --color-accent-foreground: var(--accent-foreground);
     --color-destructive: var(--destructive);
     --color-destructive-foreground: var(--destructive-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
@@ -340,120 +352,57 @@
     padding-right: env(safe-area-inset-right, 0px);
   }
 
+  /* Gradient utilities for round-outcome-header confidence progress bars */
+  /* These custom gradients are used in RoundOutcomeHeader component */
+  .safelist-gradient-progress {
+    @apply bg-gradient-to-r;
+    @apply from-red-500 from-amber-500 from-emerald-500;
+    @apply via-amber-500 via-red-500;
+    @apply to-emerald-500 to-amber-500 to-red-500;
+  }
+
   /* Role color utilities - Safelist for dynamic role colors */
   /* These classes are used dynamically via getRoleColors() and need to be explicitly included */
-  .bg-yellow-500\/20,
-  .text-yellow-400,
-  .bg-red-500\/20,
-  .text-red-400,
-  .bg-blue-500\/20,
-  .text-blue-400,
-  .bg-green-500\/20,
-  .text-green-400,
-  .bg-purple-500\/20,
-  .text-purple-400,
-  .bg-indigo-500\/20,
-  .text-indigo-400,
-  .bg-teal-500\/20,
-  .text-teal-400,
-  .bg-orange-500\/20,
-  .text-orange-400,
-  .bg-cyan-500\/20,
-  .text-cyan-400,
-  .bg-pink-500\/20,
-  .text-pink-400,
-  .bg-lime-500\/20,
-  .text-lime-400,
-  .bg-amber-500\/20,
-  .text-amber-400,
-  .bg-emerald-500\/20,
-  .text-emerald-400,
-  .bg-violet-500\/20,
-  .text-violet-400,
-  .bg-fuchsia-500\/20,
-  .text-fuchsia-400,
-  .bg-rose-500\/20,
-  .text-rose-400,
-  .bg-sky-500\/20,
-  .text-sky-400,
-  .bg-slate-500\/20,
-  .text-slate-400 {
-    /* Placeholder to force Tailwind to include these classes */
+  .safelist-role-bg-colors {
+    @apply bg-yellow-500/20 bg-red-500/20 bg-blue-500/20 bg-green-500/20 bg-purple-500/20;
+    @apply bg-indigo-500/20 bg-teal-500/20 bg-orange-500/20 bg-cyan-500/20 bg-pink-500/20;
+    @apply bg-lime-500/20 bg-amber-500/20 bg-emerald-500/20 bg-violet-500/20 bg-fuchsia-500/20;
+    @apply bg-rose-500/20 bg-sky-500/20 bg-slate-500/20;
+  }
+
+  .safelist-role-text-colors {
+    @apply text-yellow-400 text-red-400 text-blue-400 text-green-400 text-purple-400;
+    @apply text-indigo-400 text-teal-400 text-orange-400 text-cyan-400 text-pink-400;
+    @apply text-lime-400 text-amber-400 text-emerald-400 text-violet-400 text-fuchsia-400;
+    @apply text-rose-400 text-sky-400 text-slate-400;
   }
 
   /* Badge gradient utilities for role badges */
-  .from-yellow-500\/20,
-  .to-yellow-500\/10,
-  .text-yellow-300,
-  .border-yellow-500\/30,
-  .from-red-500\/20,
-  .to-red-500\/10,
-  .text-red-300,
-  .border-red-500\/30,
-  .from-blue-500\/20,
-  .to-blue-500\/10,
-  .text-blue-300,
-  .border-blue-500\/30,
-  .from-green-500\/20,
-  .to-green-500\/10,
-  .text-green-300,
-  .border-green-500\/30,
-  .from-purple-500\/20,
-  .to-purple-500\/10,
-  .text-purple-300,
-  .border-purple-500\/30,
-  .from-indigo-500\/20,
-  .to-indigo-500\/10,
-  .text-indigo-300,
-  .border-indigo-500\/30,
-  .from-teal-500\/20,
-  .to-teal-500\/10,
-  .text-teal-300,
-  .border-teal-500\/30,
-  .from-orange-500\/20,
-  .to-orange-500\/10,
-  .text-orange-300,
-  .border-orange-500\/30,
-  .from-cyan-500\/20,
-  .to-cyan-500\/10,
-  .text-cyan-300,
-  .border-cyan-500\/30,
-  .from-pink-500\/20,
-  .to-pink-500\/10,
-  .text-pink-300,
-  .border-pink-500\/30,
-  .from-lime-500\/20,
-  .to-lime-500\/10,
-  .text-lime-300,
-  .border-lime-500\/30,
-  .from-amber-500\/20,
-  .to-amber-500\/10,
-  .text-amber-300,
-  .border-amber-500\/30,
-  .from-emerald-500\/20,
-  .to-emerald-500\/10,
-  .text-emerald-300,
-  .border-emerald-500\/30,
-  .from-violet-500\/20,
-  .to-violet-500\/10,
-  .text-violet-300,
-  .border-violet-500\/30,
-  .from-fuchsia-500\/20,
-  .to-fuchsia-500\/10,
-  .text-fuchsia-300,
-  .border-fuchsia-500\/30,
-  .from-rose-500\/20,
-  .to-rose-500\/10,
-  .text-rose-300,
-  .border-rose-500\/30,
-  .from-sky-500\/20,
-  .to-sky-500\/10,
-  .text-sky-300,
-  .border-sky-500\/30,
-  .from-slate-500\/20,
-  .to-slate-500\/10,
-  .text-slate-300,
-  .border-slate-500\/30 {
-    /* Placeholder to force Tailwind to include these classes */
+  .safelist-badge-gradients-from {
+    @apply from-yellow-500/20 from-red-500/20 from-blue-500/20 from-green-500/20 from-purple-500/20;
+    @apply from-indigo-500/20 from-teal-500/20 from-orange-500/20 from-cyan-500/20 from-pink-500/20;
+    @apply from-lime-500/20 from-amber-500/20 from-emerald-500/20 from-violet-500/20 from-fuchsia-500/20;
+    @apply from-rose-500/20 from-sky-500/20 from-slate-500/20;
+  }
+
+  .safelist-badge-gradients-to {
+    @apply to-yellow-500/10 to-red-500/10 to-blue-500/10 to-green-500/10 to-purple-500/10;
+    @apply to-indigo-500/10 to-teal-500/10 to-orange-500/10 to-cyan-500/10 to-pink-500/10;
+    @apply to-lime-500/10 to-amber-500/10 to-emerald-500/10 to-violet-500/10 to-fuchsia-500/10;
+    @apply to-rose-500/10 to-sky-500/10 to-slate-500/10;
+  }
+
+  .safelist-badge-text-light {
+    @apply text-yellow-300 text-red-300 text-blue-300 text-green-300 text-purple-300;
+    @apply text-indigo-300 text-teal-300 text-orange-300 text-cyan-300 text-pink-300;
+    @apply text-lime-300 text-amber-300 text-emerald-300 text-violet-300 text-fuchsia-300;
+    @apply text-rose-300 text-sky-300 text-slate-300;
+  }
+
+  .safelist-badge-borders {
+    @apply border-yellow-500/30 border-red-500/30 border-blue-500/30 border-green-500/30 border-purple-500/30;
+    @apply border-indigo-500/30 border-teal-500/30 border-orange-500/30 border-cyan-500/30 border-pink-500/30;
+    @apply border-lime-500/30 border-amber-500/30 border-emerald-500/30 border-violet-500/30 border-fuchsia-500/30;
+    @apply border-rose-500/30 border-sky-500/30 border-slate-500/30;
   }
 }

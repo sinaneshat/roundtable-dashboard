@@ -40,7 +40,7 @@ import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums'
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
-  RecommendedAction,
+  Recommendation,
   RoundFeedbackData,
   StoredModeratorAnalysis,
   StoredPreSearch,
@@ -74,7 +74,7 @@ export type ApplyRecommendedActionResult = {
 };
 
 export type ApplyRecommendedAction = (
-  action: RecommendedAction,
+  action: Recommendation,
   options?: ApplyRecommendedActionOptions,
 ) => ApplyRecommendedActionResult;
 

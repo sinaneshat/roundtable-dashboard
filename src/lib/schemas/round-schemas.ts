@@ -36,14 +36,19 @@ export const NO_ROUND_SENTINEL = -1;
  * Round number schema for data storage and API communication
  * ✅ 0-BASED: Allows 0 (first round)
  * ✅ NON-NEGATIVE: Rejects negative numbers except sentinel
+ * ✅ NO .int(): AI SDK providers reject integer type constraints in output_format schemas
+ * IMPORTANT: This schema is used in AI-generated schemas (ModeratorAnalysisPayloadSchema)
+ * so we CANNOT use .int() as it causes "integer type properties maximum, minimum not supported" errors
  */
-export const RoundNumberSchema = z.number().int().nonnegative().describe('Round number (0-based: first round is 0)');
+export const RoundNumberSchema = z.number().describe('Round number (0-based: first round is 0, must be integer >= 0)');
 
 /**
  * Round number schema for internal calculations (allows sentinel value)
  * Used for: maxRoundNumber tracking, round calculation logic
+ * ✅ NO .int()/.min(): Even though this is for internal use, keeping consistency
+ * with RoundNumberSchema to avoid confusion
  */
-export const RoundNumberWithSentinelSchema = z.number().int().min(NO_ROUND_SENTINEL).describe('Round number or sentinel (-1 for calculations)');
+export const RoundNumberWithSentinelSchema = z.number().describe('Round number or sentinel (-1 for calculations, must be integer >= -1)');
 
 /**
  * Optional round number schema (for nullable fields)

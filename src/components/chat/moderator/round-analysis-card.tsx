@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ModeratorAnalysisPayload, Recommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -14,11 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 import { cn } from '@/lib/ui/cn';
 
-import { LeaderboardCard } from './leaderboard-card';
+import { ModeratorAnalysisPanel } from './moderator-analysis-panel';
 import { ModeratorAnalysisStream } from './moderator-analysis-stream';
-import { ParticipantAnalysisCard } from './participant-analysis-card';
-import { RoundSummarySection } from './round-summary-section';
-import { SkillsComparisonChart } from './skills-comparison-chart';
 
 type RoundAnalysisCardProps = {
   analysis: StoredModeratorAnalysis;
@@ -28,7 +25,7 @@ type RoundAnalysisCardProps = {
   onStreamStart?: () => void;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   streamingRoundNumber?: number | null;
-  onActionClick?: (action: RecommendedAction) => void;
+  onActionClick?: (action: Recommendation) => void;
   demoOpen?: boolean; // Demo mode controlled accordion state
   demoShowContent?: boolean; // Demo mode controlled content visibility
 };
@@ -136,14 +133,6 @@ export function RoundAnalysisCard({
           {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
             <>
-              {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Question:</p>
-                  <p className="text-sm text-foreground/80 leading-relaxed">
-                    {analysis.userQuestion}
-                  </p>
-                </div>
-              )}
               {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
                 ? (
                     <ModeratorAnalysisStream
@@ -156,28 +145,10 @@ export function RoundAnalysisCard({
                   )
                 : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
                   ? (
-                      <div className="space-y-4">
-                        {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
-                          <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
-                        )}
-                        {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                          <>
-                            <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
-                            {analysis.analysisData.participantAnalyses.map(participant => (
-                              <ParticipantAnalysisCard
-                                key={`${analysis.id}-participant-${participant.participantIndex}`}
-                                analysis={participant}
-                              />
-                            ))}
-                          </>
-                        )}
-                        {analysis.analysisData.roundSummary && (
-                          <RoundSummarySection
-                            roundSummary={analysis.analysisData.roundSummary}
-                            onActionClick={onActionClick}
-                          />
-                        )}
-                      </div>
+                      <ModeratorAnalysisPanel
+                        analysis={analysis}
+                        onActionClick={onActionClick}
+                      />
                     )
                   : analysis.status === AnalysisStatuses.FAILED
                     ? (

@@ -13,7 +13,7 @@
  */
 
 import { ChatModeSchema } from '@/api/core/enums';
-import type { RecommendedAction } from '@/api/routes/chat/schema';
+import type { Recommendation } from '@/api/routes/chat/schema';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
@@ -54,7 +54,7 @@ export type ApplyRecommendedActionResult = {
  * @returns Result with success status, updates object, and validation feedback
  */
 export function applyRecommendedAction(
-  action: RecommendedAction,
+  action: Recommendation,
   options: ApplyRecommendedActionOptions = {},
 ): ApplyRecommendedActionResult {
   const { maxModels, tierName, userTier, allModels } = options;
@@ -67,8 +67,8 @@ export function applyRecommendedAction(
   // Build updates object
   const updates: ApplyRecommendedActionResult['updates'] = {};
 
-  // 1. Set input from suggestion
-  updates.inputValue = action.action;
+  // 1. Set input from suggestion (use suggestedPrompt if available, fallback to title)
+  updates.inputValue = action.suggestedPrompt || action.title;
 
   // 2. Apply mode suggestion if provided (validate with schema)
   if (action.suggestedMode) {
@@ -119,7 +119,7 @@ export function applyRecommendedAction(
         modelsSkipped += accessibleModels.length - availableSlots;
 
         const newParticipants = modelsToAdd.map((modelId, index) => {
-          const originalIndex = action.suggestedModels.indexOf(modelId);
+          const originalIndex = action.suggestedModels!.indexOf(modelId);
           return {
             id: `participant-${Date.now()}-${index}`,
             modelId,
@@ -135,7 +135,7 @@ export function applyRecommendedAction(
       } else {
         // All accessible models fit within limit
         const newParticipants = accessibleModels.map((modelId, index) => {
-          const originalIndex = action.suggestedModels.indexOf(modelId);
+          const originalIndex = action.suggestedModels!.indexOf(modelId);
           return {
             id: `participant-${Date.now()}-${index}`,
             modelId,
@@ -152,7 +152,7 @@ export function applyRecommendedAction(
       // No tier limit provided, add all accessible models
       if (accessibleModels.length > 0) {
         const newParticipants = accessibleModels.map((modelId, index) => {
-          const originalIndex = action.suggestedModels.indexOf(modelId);
+          const originalIndex = action.suggestedModels!.indexOf(modelId);
           return {
             id: `participant-${Date.now()}-${index}`,
             modelId,

@@ -395,9 +395,6 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      // Console spy to check for resume detection log
-      const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
-
       if (useChatOnFinish) {
         // Simulate resumed stream finishing for participant 1 (middle of round)
         const message = createTestAssistantMessage(1, 0);
@@ -406,15 +403,9 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         });
       }
 
-      // Check that resume was detected
-      const resumeLog = consoleSpy.mock.calls.find(
-        call => call[0]?.includes?.('resumed stream'),
-      );
-
-      consoleSpy.mockRestore();
-
-      // Resume detection should have been logged
-      expect(resumeLog).toBeDefined();
+      // Verify resumed stream was handled - onComplete should NOT be called yet
+      // since participant 1 (index 1) means participant 2 (index 2) still needs to finish
+      expect(onComplete).not.toHaveBeenCalled();
     });
 
     it('should update currentIndexRef from metadata for participant 0', () => {
@@ -453,24 +444,17 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
-
       if (useChatOnFinish) {
-        // Resume stream from round 2
+        // Resume stream from round 2, participant 0
         const message = createTestAssistantMessage(0, 2);
         act(() => {
           useChatOnFinish!({ message });
         });
       }
 
-      // Verify round number was updated
-      const resumeLog = consoleSpy.mock.calls.find(
-        call => call[0]?.includes?.('resumed stream') && call[1]?.roundNumber === 2,
-      );
-
-      consoleSpy.mockRestore();
-
-      expect(resumeLog).toBeDefined();
+      // Verify round was handled - onComplete should NOT be called
+      // since participant 0 finished but participant 1 still needs to finish
+      expect(onComplete).not.toHaveBeenCalled();
     });
 
     it('should populate roundParticipantsRef from participantsRef for resumed streams', async () => {
@@ -485,24 +469,13 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
-
       if (useChatOnFinish) {
-        // Last participant of resumed stream
+        // Last participant of resumed stream (participant index 2 of 3)
         const message = createTestAssistantMessage(2, 0);
         act(() => {
           useChatOnFinish!({ message });
         });
       }
-
-      // Verify participant count in log
-      const resumeLog = consoleSpy.mock.calls.find(
-        call => call[0]?.includes?.('resumed stream') && call[1]?.participantCount === 3,
-      );
-
-      consoleSpy.mockRestore();
-
-      expect(resumeLog).toBeDefined();
 
       // After last participant, onComplete should be called
       // Use waitFor to handle async triggerWithAnimationWait
@@ -660,26 +633,19 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       // First call should succeed
       act(() => {
         result.current.startRound();
       });
 
-      // Second call should be blocked
+      // Second call should be silently blocked by triggering lock
       act(() => {
         result.current.startRound();
       });
 
-      // Should see a warning about already triggering
-      const blockedLog = consoleSpy.mock.calls.find(
-        call => call[0]?.includes?.('Blocked'),
-      );
-
-      consoleSpy.mockRestore();
-
-      expect(blockedLog).toBeDefined();
+      // Verify only one streaming session initiated
+      // The triggering lock prevents concurrent startRound calls
+      expect(result.current.isStreaming).toBe(true);
     });
 
     it('should prevent premature round completion from resumed streams', async () => {
@@ -979,26 +945,18 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       // First message
       await act(async () => {
         await result.current.sendMessage('First');
       });
 
-      // Second message should be blocked
+      // Second message should be silently blocked
       await act(async () => {
         await result.current.sendMessage('Second');
       });
 
-      // Should see warning about being blocked
-      const blockedLog = consoleSpy.mock.calls.find(
-        call => call[0]?.includes?.('Blocked'),
-      );
-
-      consoleSpy.mockRestore();
-
-      expect(blockedLog).toBeDefined();
+      // Verify streaming is still active (second message was blocked)
+      expect(result.current.isStreaming).toBe(true);
     });
   });
 
@@ -1654,28 +1612,19 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       // First message starts streaming
       await act(async () => {
         await result.current.sendMessage('First');
       });
 
-      // Second and third calls should be blocked due to isExplicitlyStreaming
+      // Second and third calls should be silently blocked
       await act(async () => {
         result.current.sendMessage('Second');
         result.current.sendMessage('Third');
       });
 
-      // Should see warnings about being blocked (by isExplicitlyStreaming or isTriggeringRef)
-      const blockedLogs = consoleSpy.mock.calls.filter(
-        call => call[0]?.includes?.('Blocked'),
-      );
-
-      consoleSpy.mockRestore();
-
-      // At least one of the subsequent calls should be blocked
-      expect(blockedLogs.length).toBeGreaterThanOrEqual(1);
+      // Verify streaming is still active (subsequent calls were blocked)
+      expect(result.current.isStreaming).toBe(true);
     });
 
     it('should block startRound during active streaming', async () => {
@@ -1691,25 +1640,17 @@ describe('useMultiParticipantChat Stream Transitions', () => {
         }),
       );
 
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
       await act(async () => {
         await result.current.sendMessage('Test');
       });
 
-      // Try to start another round during streaming
+      // Try to start another round during streaming - should be silently blocked
       act(() => {
         result.current.startRound();
       });
 
-      // Should see warning
-      const blockedLog = consoleSpy.mock.calls.find(
-        call => call[0]?.includes?.('Blocked'),
-      );
-
-      consoleSpy.mockRestore();
-
-      expect(blockedLog).toBeDefined();
+      // Verify streaming session is still active (startRound was blocked)
+      expect(result.current.isStreaming).toBe(true);
     });
 
     it('should handle retry call during streaming gracefully', async () => {

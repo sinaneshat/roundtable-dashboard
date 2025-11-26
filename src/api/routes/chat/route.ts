@@ -688,7 +688,7 @@ export const analyzeRoundRoute = createRoute({
   request: {
     params: ThreadRoundParamSchema,
     body: {
-      required: true,
+      required: false, // ✅ FIXED: Allow empty body (backend auto-queries messages from database)
       content: {
         'application/json': {
           schema: ModeratorAnalysisRequestSchema,

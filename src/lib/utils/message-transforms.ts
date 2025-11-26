@@ -11,8 +11,7 @@
  * - Avoid High Knowledge Cost (HKC) implementations
  *
  * Consolidates:
- * - message-transforms.ts: Format conversion, error creation
- * - message-filtering.ts: Type guards, round/participant filtering
+ * - Format conversion, error creation, type guards, round/participant filtering
  * - Metadata extraction delegated to metadata.ts (single source of truth)
  *
  * @module lib/utils/message-transforms
@@ -20,7 +19,7 @@
 
 import type { UIMessage } from 'ai';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
 import type {
   DbAssistantMessageMetadata,
@@ -82,7 +81,7 @@ export type { UIMessageErrorType };
  * Tool messages are handled separately.
  */
 function isUIMessageRole(role: string): role is 'user' | 'assistant' | 'system' {
-  return role === MessageRoles.USER || role === MessageRoles.ASSISTANT || role === 'system';
+  return role === MessageRoles.USER || role === MessageRoles.ASSISTANT || role === UIMessageRoles.SYSTEM;
 }
 
 /**
@@ -419,8 +418,8 @@ export function getParticipantMessagesForRound(
       return false;
     }
 
-    // ✅ TYPE-SAFE: Check role field without force casting
-    if (m.metadata && typeof m.metadata === 'object' && 'role' in m.metadata && m.metadata.role === 'system') {
+    // ✅ TYPE-SAFE: Check role field without force casting, using enum constants
+    if (m.metadata && typeof m.metadata === 'object' && 'role' in m.metadata && m.metadata.role === UIMessageRoles.SYSTEM) {
       return false;
     }
 
@@ -576,40 +575,48 @@ export function mergeParticipantMetadata(
 ): Extract<MessageMetadata, { role: 'assistant' }> {
   const validatedMetadata = getAssistantMetadata(message.metadata);
 
-  // Trust backend error flags
+  // Trust backend error flags - these are authoritative
   const hasBackendErrorFlag = validatedMetadata?.hasError === true;
   const hasBackendNoErrorFlag = validatedMetadata?.hasError === false;
-  const hasExplicitErrorMetadata = (validatedMetadata?.errorType && validatedMetadata.errorType !== 'unknown')
-    || (validatedMetadata?.errorMessage && typeof validatedMetadata.errorMessage === 'string');
+
+  // Note: Explicit error type/message detection removed - backend hasError flag is authoritative
+  // Previously checked for explicit error types but this caused false positives
+  // Now we rely on: backend flags, finish reasons, and content presence
 
   // Skip parts check when called from onFinish with hasGeneratedText=true
   const skipPartsCheck = options?.hasGeneratedText === true;
 
-  // Frontend fallback error detection
-  const textParts = message.parts?.filter(p => p.type === MessagePartTypes.TEXT) || [];
+  // ✅ RACE CONDITION FIX: Check for REASONING parts (DeepSeek R1, Claude thinking, etc.)
+  // AI SDK v5 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
+  const textParts = message.parts?.filter(
+    p => p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING,
+  ) || [];
   const hasTextContent = textParts.some(
     part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
   );
   const hasToolCalls = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
-  const hasAnyContent = skipPartsCheck ? true : (hasTextContent || hasToolCalls);
 
-  // ✅ CRITICAL FIX: Don't mark as error if finishReason='stop' even if parts not populated yet
-  // For fast models, onFinish fires before parts are fully populated in React state
-  // finishReason='stop' indicates successful completion
+  // ✅ CRITICAL FIX: Multiple signals for content presence
+  // Signal 1: Has text or reasoning content in parts
+  // Signal 2: Has tool calls
+  // Signal 3: Output tokens > 0 (backend reported content generation)
+  // Signal 4: Caller said content was generated (skipPartsCheck)
+  const hasOutputTokens = (validatedMetadata?.usage?.completionTokens ?? 0) > 0;
+  const hasAnyContent = skipPartsCheck || hasTextContent || hasToolCalls || hasOutputTokens;
+
+  // ✅ CRITICAL FIX: Multiple signals for successful completion
+  // Signal 1: finishReason='stop' indicates successful completion
   const hasSuccessfulFinish = validatedMetadata?.finishReason === 'stop';
 
-  // Determine hasError with proper priority
-  const hasError = hasBackendErrorFlag
-    ? true
-    : hasBackendNoErrorFlag
-      ? false
-      : skipPartsCheck
-        ? false
-        : hasSuccessfulFinish
-          ? false // ✅ Don't mark as error if finished successfully
-          : hasExplicitErrorMetadata
-            ? true
-            : !hasAnyContent;
+  // Signal 2: Backend explicitly marked as no error
+  const backendMarkedSuccess = hasBackendNoErrorFlag;
+
+  // ✅ RACE CONDITION FIX: Determine hasError with defensive logic
+  // Error if: Backend explicitly marked error
+  // No error if: Backend marked success, OR caller confirmed content, OR successful finish, OR has content
+  // Default: ERROR when no content (stream completed but produced nothing)
+  const hasNoErrorSignal = backendMarkedSuccess || skipPartsCheck || hasSuccessfulFinish || hasAnyContent;
+  const hasError = hasBackendErrorFlag || !hasNoErrorSignal;
 
   // Generate error message if needed
   let errorMessage: string | undefined;

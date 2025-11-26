@@ -1324,12 +1324,11 @@ export const generateAnalysisToolHandler: RouteHandler<typeof generateAnalysisTo
     });
 
     try {
-      // ✅ AI SDK v5: streamObject with mode:'json' (OpenRouter compatibility)
-      // mode:'json' uses response_format: {type: 'json_object'} instead of json_schema
+      // ✅ AI SDK v5: streamObject with mode:'auto' (Provider-adaptive)
       const result = await streamObject({
         model: client.chat(analysisModelId),
         schema: ModeratorAnalysisPayloadSchema,
-        mode: 'json', // ✅ CRITICAL: Force JSON mode instead of json_schema
+        mode: 'json',
         system: systemPrompt,
         prompt: userPrompt,
         temperature: 0.3,
@@ -1337,6 +1336,9 @@ export const generateAnalysisToolHandler: RouteHandler<typeof generateAnalysisTo
 
       // Await object result
       const finalObject = await result.object;
+
+      // ✅ AUTOMATIC COERCION: z.coerce.number() in schemas handles string→number conversion
+      // No manual coercion needed - Zod already validated and coerced all numeric fields
 
       // Update analysis with result
       await db.update(tables.chatModeratorAnalysis)

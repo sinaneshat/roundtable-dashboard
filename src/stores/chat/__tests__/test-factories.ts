@@ -346,83 +346,126 @@ export function createMockPreSearchDataPayload(
 
 /**
  * Create mock ModeratorAnalysisPayload with all required fields
- * Matches the schema structure exactly for type safety
+ * Matches the NEW Multi-AI Deliberation Framework schema structure
+ *
+ * Schema includes:
+ * - roundConfidence: Overall confidence score (0-100)
+ * - confidenceWeighting: Weighting method (balanced, evidence_heavy, etc.)
+ * - consensusEvolution: 5 debate phases with percentages
+ * - summary: High-level insights text
+ * - recommendations: Actionable items with title/description
+ * - contributorPerspectives: Per-model analysis with scorecard, stance, evidence, vote
+ * - consensusAnalysis: Alignment summary, heatmap, argument strength profile
+ * - evidenceAndReasoning: Reasoning threads and evidence coverage
+ * - alternatives: Alternative scenarios with confidence
+ * - roundSummary: Participation stats, themes, unresolved questions
  */
 export function createMockAnalysisPayload(
-  roundNumber = 0,
+  _roundNumber = 0,
   overrides?: Partial<ModeratorAnalysisPayload>,
 ): ModeratorAnalysisPayload {
   return {
-    roundNumber,
-    mode: ChatModes.DEBATING,
-    userQuestion: 'Test question?',
-    participantAnalyses: [
+    roundConfidence: 78,
+    confidenceWeighting: 'balanced',
+    consensusEvolution: [
+      { phase: 'opening', percentage: 32, label: 'Opening' },
+      { phase: 'rebuttal', percentage: 58, label: 'Rebuttal' },
+      { phase: 'cross_exam', percentage: 65, label: 'Cross-Exam' },
+      { phase: 'synthesis', percentage: 72, label: 'Synthesis' },
+      { phase: 'final_vote', percentage: 78, label: 'Final Vote' },
+    ],
+    summary: 'Good discussion overall with solid reasoning and evidence from all contributors.',
+    recommendations: [
       {
-        participantIndex: 0,
-        model: 'openai/gpt-4',
-        role: null,
-        overallScore: 85,
-        keyInsights: ['Key insight 1', 'Key insight 2'],
-        strengths: ['Strength 1'],
-        weaknesses: ['Weakness 1'],
-        uniqueContributions: ['Unique contribution 1'],
-        reasoning: {
-          clarity: 8,
-          depth: 7,
-          evidence: 8,
-          creativity: 7,
-        },
-        communication: {
-          engagement: 8,
-          tone: 8,
-          structure: 7,
-        },
-        factualAccuracy: {
-          score: 8,
-          concerns: [],
-        },
-        summary: 'Test participant summary',
+        title: 'Expand market research',
+        description: 'Consider broader competitive analysis to validate assumptions',
+      },
+      {
+        title: 'Review risk factors',
+        description: 'Address identified concerns about timeline feasibility',
       },
     ],
-    leaderboard: [
+    contributorPerspectives: [
       {
-        rank: 1,
         participantIndex: 0,
-        model: 'openai/gpt-4',
-        score: 85,
-        badges: ['Top Performer'],
+        role: 'Analyst',
+        modelId: 'openai/gpt-4',
+        modelName: 'GPT-4',
+        scorecard: {
+          logic: 85,
+          riskAwareness: 75,
+          creativity: 70,
+          evidence: 80,
+          consensus: 75,
+        },
+        stance: 'Strong support for the proposed approach with minor reservations about timing',
+        evidence: ['Market data supports growth trajectory', 'Historical precedent exists'],
+        vote: 'approve',
+      },
+    ],
+    consensusAnalysis: {
+      alignmentSummary: {
+        totalClaims: 5,
+        majorAlignment: 4,
+        contestedClaims: 1,
+        contestedClaimsList: [
+          { claim: 'Timeline feasibility', status: 'contested' },
+        ],
+      },
+      agreementHeatmap: [
+        {
+          claim: 'Market timing is critical',
+          perspectives: { 'GPT-4': 'agree' },
+        },
+        {
+          claim: 'Resources are sufficient',
+          perspectives: { 'GPT-4': 'caution' },
+        },
+      ],
+      argumentStrengthProfile: {
+        Analyst: {
+          logic: 85,
+          riskAwareness: 75,
+          creativity: 70,
+          evidence: 80,
+          consensus: 75,
+        },
+      },
+    },
+    evidenceAndReasoning: {
+      reasoningThreads: [
+        {
+          claim: 'Market timing matters',
+          synthesis: 'Strong agreement on timing importance across all contributors',
+        },
+      ],
+      evidenceCoverage: [
+        { claim: 'Market timing', strength: 'strong', percentage: 85 },
+        { claim: 'Resource allocation', strength: 'moderate', percentage: 65 },
+      ],
+    },
+    alternatives: [
+      {
+        scenario: 'Delayed launch',
+        confidence: 65,
+      },
+      {
+        scenario: 'Phased rollout',
+        confidence: 72,
       },
     ],
     roundSummary: {
-      consensusPoints: ['Consensus point 1'],
-      keyDebatePoints: ['Debate point 1'],
-      comparativeAnalysis: {
-        strengthsByCategory: [
-          {
-            category: 'Technical Depth',
-            participants: ['participant-0'],
-          },
-        ],
-        tradeoffs: ['Tradeoff 1'],
+      participation: {
+        approved: 1,
+        cautioned: 0,
+        rejected: 0,
       },
-      decisionFramework: {
-        criteriaToConsider: ['Criterion 1', 'Criterion 2'],
-        scenarioRecommendations: [
-          {
-            scenario: 'Default scenario',
-            recommendation: 'Default recommendation',
-          },
-        ],
-      },
-      overallSummary: 'Test overall summary providing a comprehensive overview of the analysis results and key findings from the debate.',
-      conclusion: 'Test conclusion with final recommendation.',
-      recommendedActions: [
-        {
-          action: 'Test action',
-          rationale: 'Test rationale',
-          priority: 'high',
-        },
+      keyThemes: 'Strong alignment on market opportunity with debate on execution timeline',
+      unresolvedQuestions: [
+        'Competitive response timing',
+        'Resource scaling strategy',
       ],
+      generated: new Date().toISOString(),
     },
     ...overrides,
   };

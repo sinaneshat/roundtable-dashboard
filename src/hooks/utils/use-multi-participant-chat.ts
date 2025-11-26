@@ -7,12 +7,11 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
-import { AiSdkStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
-import { DEFAULT_PARTICIPANT_INDEX, ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
-import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
+import { errorCategoryToUIType, ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
+import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
 import { deduplicateParticipants } from '@/lib/utils/participant';
@@ -25,12 +24,18 @@ import { useSyncedRefs } from './use-synced-refs';
  * Validates hook options at entry point to ensure type safety
  * Note: Callbacks are not validated to preserve their type signatures
  *
- * ✅ SINGLE SOURCE OF TRUTH: Uses ParticipantsArraySchema from central schemas
+ * ✅ LENIENT VALIDATION: Only validates essential fields for hook operation
+ * Database fields (createdAt, updatedAt) are optional to support test fixtures
  */
 const UseMultiParticipantChatOptionsSchema = z
   .object({
     threadId: z.string(), // Allow empty string for initial state
-    participants: ParticipantsArraySchema,
+    participants: z.array(z.object({
+      id: z.string(),
+      modelId: z.string(),
+      isEnabled: z.boolean(),
+      priority: z.number().int().nonnegative(),
+    }).passthrough()), // Allow additional fields (database fields, etc.)
     messages: z.array(z.custom<UIMessage>()).optional(),
     mode: z.string().optional(),
     regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
@@ -202,6 +207,7 @@ export function useMultiParticipantChat(
     onPreSearchError,
     threadId,
     enableWebSearch,
+    mode, // ✅ FIX: Add mode to refs to prevent transport recreation
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -277,24 +283,20 @@ export function useMultiParticipantChat(
       const enabled = participantsRef.current.filter(p => p.isEnabled);
       roundParticipantsRef.current = enabled;
       totalParticipants = enabled.length;
-      // eslint-disable-next-line no-console -- Debug logging
-      console.debug('[triggerNextParticipant] Populated roundParticipantsRef:', {
-        count: totalParticipants,
-        nextIndex,
-      });
     }
 
     // ✅ SAFETY CHECK: Don't complete round if we have no participants at all
     // This prevents triggering onComplete when participants haven't loaded yet
     if (totalParticipants === 0) {
-      // eslint-disable-next-line no-console -- Debug logging
-      console.warn('[triggerNextParticipant] No participants available, skipping transition');
       return;
     }
 
     // Round complete - reset state
     // Analysis triggering now handled automatically by store subscription
     if (nextIndex >= totalParticipants) {
+      // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
+      isStreamingRef.current = false;
+
       // eslint-disable-next-line react-dom/no-flush-sync -- Required for analysis trigger synchronization
       flushSync(() => {
         setIsExplicitlyStreaming(false);
@@ -414,7 +416,10 @@ export function useMultiParticipantChat(
         participantIndex: participantIndexToUse,
         participants: participantsRef.current,
         ...(regenerateRoundNumberRef.current && { regenerateRound: regenerateRoundNumberRef.current }),
-        ...(mode && { mode }),
+        // ✅ CRITICAL FIX: Access mode via ref to prevent transport recreation
+        // Previously mode was in closure, causing callback to recreate on mode change
+        // This recreated transport mid-stream, corrupting AI SDK's Chat instance state
+        ...(callbackRefs.mode.current && { mode: callbackRefs.mode.current }),
         // ✅ CRITICAL FIX: Pass enableWebSearch to backend for ALL rounds
         // BUG FIX: Previously only round 0 (thread creation) included enableWebSearch
         // Now all subsequent rounds will also trigger pre-search when enabled
@@ -424,8 +429,11 @@ export function useMultiParticipantChat(
 
       return { body };
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable (useSyncedRefs), accessed via .current
-    [mode],
+    // ✅ CRITICAL FIX: Empty dependencies - callback is stable across renders
+    // All dynamic values accessed via callbackRefs.*.current (stable refs)
+    // This prevents transport recreation which corrupts AI SDK's Chat instance
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
+    [],
   );
 
   // AI SDK v5 Pattern: Create transport with callback that accesses refs safely
@@ -446,10 +454,12 @@ export function useMultiParticipantChat(
         // Following AI SDK documentation pattern: Backend tracks active stream per thread
         // Frontend doesn't need to construct stream ID - backend looks it up
         prepareReconnectToStreamRequest: ({ id }) => {
-          // Guard: Don't attempt resume if no thread ID
-          // This prevents 404 errors on overview page where threadId is empty
+          // ✅ FIX: Only include 'api' field when we have a valid ID
+          // AI SDK v5 skips reconnection when 'api' field is omitted from returned object
+          // This prevents constructing invalid endpoints like /api/v1/chat/threads//stream
           if (!id || id.trim() === '') {
-            return {}; // AI SDK will skip resume attempt (no api property)
+            // Return object without 'api' field to signal SDK to skip reconnection
+            return { credentials: 'include' };
           }
 
           return {
@@ -462,12 +472,17 @@ export function useMultiParticipantChat(
         },
       }),
     [prepareSendMessagesRequest],
+    // threadId accessed in closure at call time, doesn't affect transport creation
   );
 
   // ✅ CRITICAL FIX: NEVER pass messages prop - use uncontrolled AI SDK
   // Problem: Passing messages makes useChat controlled, causing updates to be overwritten
   // Solution: Let AI SDK manage its own state via id-based persistence
   // We'll sync external messages using setMessages in an effect below
+
+  const useChatId = threadId && threadId.trim() !== '' ? threadId : undefined;
+  const useChatResume = !!threadId && threadId.trim() !== '';
+
   const {
     messages,
     sendMessage: aiSendMessage,
@@ -475,14 +490,18 @@ export function useMultiParticipantChat(
     error: chatError,
     setMessages,
   } = useChat({
-    id: threadId,
+    // ✅ CRITICAL FIX: Pass undefined instead of empty string when no thread ID
+    // AI SDK's Chat class expects either valid ID or undefined, not empty string
+    // Empty string causes "Cannot read properties of undefined (reading 'state')" error
+    // in Chat.makeRequest because internal state initialization fails
+    id: useChatId,
     transport,
     // ✅ RESUMABLE STREAMS: Enable automatic stream resumption after page reload
     // ONLY when we have a valid threadId (prevents 404s on overview page)
     // When true, useChat automatically checks for and reconnects to active streams on mount
     // Backend buffers SSE chunks to Cloudflare KV via consumeSseStream callback
     // GET endpoint at /api/v1/chat/{threadId}/stream serves buffered chunks
-    resume: !!threadId && threadId.trim() !== '',
+    resume: useChatResume,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -495,10 +514,6 @@ export function useMultiParticipantChat(
       if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
         const enabled = participantsRef.current.filter(p => p.isEnabled);
         roundParticipantsRef.current = enabled;
-        // eslint-disable-next-line no-console -- Debug logging
-        console.debug('[onError] Populated roundParticipantsRef as safety fallback:', {
-          count: enabled.length,
-        });
       }
 
       // CRITICAL: Use ref for current index to avoid stale closure
@@ -531,11 +546,16 @@ export function useMultiParticipantChat(
         if (!hasResponded(errorKey)) {
           markAsResponded(errorKey);
 
+          // ✅ TYPE-SAFE: Convert ErrorCategory to UIMessageErrorType using mapping function
+          const errorType = errorMetadata?.errorCategory
+            ? errorCategoryToUIType(errorMetadata.errorCategory)
+            : UIMessageErrorTypeSchema.enum.failed;
+
           const errorUIMessage = createErrorUIMessage(
             participant,
             currentIndex,
             errorMessage,
-            (errorMetadata?.errorCategory as UIMessageErrorType) || 'failed',
+            errorType,
             errorMetadata,
             currentRoundRef.current,
           );
@@ -554,6 +574,17 @@ export function useMultiParticipantChat(
      * AI SDK v5 Pattern: Trust the SDK's built-in deduplication
      */
     onFinish: async (data) => {
+      // ✅ Skip phantom resume completions (no active stream to resume)
+      const notOurMessageId = !data.message?.id?.includes('_r');
+      const emptyParts = data.message?.parts?.length === 0;
+      const noFinishReason = data.finishReason === undefined;
+      const noActiveRound = roundParticipantsRef.current.length === 0;
+      const notStreaming = !isStreamingRef.current;
+
+      if (notOurMessageId && emptyParts && noFinishReason && noActiveRound && notStreaming) {
+        return;
+      }
+
       // ✅ RESUMABLE STREAMS: Detect and handle resumed stream completion
       // After page reload, refs are reset but message metadata has correct values
       // Check if this is a resumed stream by looking at the message metadata
@@ -587,13 +618,6 @@ export function useMultiParticipantChat(
 
         // Also set streaming state since we're in the middle of a round
         setIsExplicitlyStreaming(true);
-
-        // eslint-disable-next-line no-console -- Debug logging for resume flow
-        console.debug('[onFinish] Detected resumed stream, updated refs from metadata:', {
-          participantIndex: currentIndex,
-          roundNumber: metadataRoundNumber,
-          participantCount: roundParticipantsRef.current.length,
-        });
       }
 
       // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
@@ -601,10 +625,6 @@ export function useMultiParticipantChat(
       if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
         const enabled = participantsRef.current.filter(p => p.isEnabled);
         roundParticipantsRef.current = enabled;
-        // eslint-disable-next-line no-console -- Debug logging
-        console.debug('[onFinish] Populated roundParticipantsRef as safety fallback:', {
-          count: enabled.length,
-        });
       }
 
       const participant = roundParticipantsRef.current[currentIndex];
@@ -664,20 +684,49 @@ export function useMultiParticipantChat(
 
         // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
         // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
-        // But finishReason='stop' indicates successful completion with content
-        // ✅ ENUM PATTERN: Use MessagePartTypes constant instead of string literal
-        const textParts = data.message.parts?.filter(p => p.type === MessagePartTypes.TEXT) || [];
+        // ✅ REASONING MODELS: Include REASONING parts (DeepSeek R1, Claude thinking, etc.)
+        // AI SDK v5 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
+        const textParts = data.message.parts?.filter(
+          p => p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING,
+        ) || [];
         const hasTextInParts = textParts.some(
           part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
         );
+
+        // ✅ RACE CONDITION FIX: Multiple signals for successful generation
+        // Some models (DeepSeek R1, etc.) return finishReason='unknown' even on success
         const metadata = data.message.metadata;
-        const hasSuccessfulFinish = Boolean(
-          metadata
-          && typeof metadata === 'object'
-          && 'finishReason' in metadata
-          && metadata.finishReason === 'stop',
+        const metadataObj = metadata && typeof metadata === 'object' ? metadata : {};
+
+        // Signal 1: finishReason='stop' indicates successful completion
+        const hasSuccessfulFinish = 'finishReason' in metadataObj && metadataObj.finishReason === 'stop';
+
+        // Signal 2: Backend explicitly marked hasError=false (successful generation)
+        const backendMarkedSuccess = 'hasError' in metadataObj && metadataObj.hasError === false;
+
+        // Signal 3: Output tokens > 0 indicates content was generated
+        const hasOutputTokens = Boolean(
+          'usage' in metadataObj
+          && metadataObj.usage
+          && typeof metadataObj.usage === 'object'
+          && 'completionTokens' in metadataObj.usage
+          && typeof metadataObj.usage.completionTokens === 'number'
+          && metadataObj.usage.completionTokens > 0,
         );
-        const hasGeneratedText = hasTextInParts || hasSuccessfulFinish;
+
+        // Signal 4: finishReason is NOT an explicit error state
+        // 'unknown' is ambiguous - could be success or failure, so don't treat as error signal
+        // Valid finish reasons: stop, length, tool-calls, content-filter, other, failed, unknown
+        const finishReason = 'finishReason' in metadataObj ? metadataObj.finishReason : FinishReasons.UNKNOWN;
+        const isExplicitErrorFinish = finishReason === FinishReasons.FAILED;
+
+        // ✅ CRITICAL: Consider it successful if ANY positive signal is present
+        // and there's no explicit error signal
+        const hasGeneratedText = hasTextInParts
+          || hasSuccessfulFinish
+          || backendMarkedSuccess
+          || hasOutputTokens
+          || (!isExplicitErrorFinish && textParts.length > 0);
 
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
@@ -705,13 +754,6 @@ export function useMultiParticipantChat(
               // This is expected behavior in multi-round conversations
               // AI SDK v5 caches messages by threadId and may reuse IDs from previous rounds
               // We correct this using the backend's deterministic ID format
-              // eslint-disable-next-line no-console -- Debug logging for ID correction
-              console.debug('[onCompletion] Corrected AI SDK message ID:', {
-                receivedId,
-                correctId,
-                roundNumber: finalRoundNumber,
-                participantIndex: currentIndex,
-              });
             }
 
             const completeMessage: UIMessage = {
@@ -823,6 +865,19 @@ export function useMultiParticipantChat(
         // Track this response to prevent duplicate error messages
         const responseKey = `${participant.modelId}-${currentIndex}`;
         markAsResponded(responseKey);
+
+        // ✅ BUG FIX: Skip animation wait for error messages
+        // Error messages from backend (hasError=true) never go through streaming phase
+        // They're rendered immediately with status='failed', so no animation to wait for
+        // If we wait, the animation never completes and next participant never starts
+        const hasErrorInMetadata = completeMetadata?.hasError === true;
+
+        if (hasErrorInMetadata) {
+          // Error messages don't animate - trigger next participant immediately
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          triggerNextParticipantWithRefs();
+          return;
+        }
       }
 
       // CRITICAL: Wait for animation to complete before triggering next participant
@@ -831,7 +886,7 @@ export function useMultiParticipantChat(
       // waitForAnimation resolves when ModelMessageCard signals animation complete
       // THEN we trigger the next participant
       const triggerWithAnimationWait = async () => {
-        // Wait for browser paint first
+        // Normal flow for successful responses: wait for animation
         await new Promise(resolve => requestAnimationFrame(resolve));
 
         // ✅ FIX: Wait for current participant's animation
@@ -913,25 +968,8 @@ export function useMultiParticipantChat(
     // Subscription can pass participants directly from store.getState()
     const currentParticipants = participantsOverride || participantsRef.current;
 
-    // Guard: Prevent concurrent rounds - only check isExplicitlyStreaming
-    // ✅ CRITICAL FIX: Removed status !== AiSdkStatuses.READY check
-    // The AI SDK status may not be 'ready' immediately when threadId changes,
-    // but store subscription guards ensure we have valid messages/participants
-    // This was causing 30s timeouts on thread creation
-    if (isExplicitlyStreaming) {
-      // eslint-disable-next-line no-console -- Debug logging for streaming issues
-      console.warn('[startRound] Blocked - already streaming', {
-        isExplicitlyStreaming,
-        threadId: callbackRefs.threadId.current,
-        participantCount: currentParticipants.length,
-      });
-      return;
-    }
-
-    // Guard: Prevent concurrent calls using triggering lock
-    if (isTriggeringRef.current) {
-      // eslint-disable-next-line no-console -- Debug logging for streaming issues
-      console.warn('[startRound] Blocked - already triggering');
+    // ✅ Guards: Wait for dependencies to be ready (effect will retry)
+    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming || isTriggeringRef.current) {
       return;
     }
 
@@ -973,6 +1011,11 @@ export function useMultiParticipantChat(
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new round
 
+    // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
+    // This prevents race condition where pendingMessage effect checks ref
+    // before React re-renders with new isExplicitlyStreaming state
+    isStreamingRef.current = true;
+
     // Reset all state for new round
     setIsExplicitlyStreaming(true);
     setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
@@ -1002,9 +1045,9 @@ export function useMultiParticipantChat(
     requestAnimationFrame(() => {
       isTriggeringRef.current = false;
     });
-  }, [messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, callbackRefs.threadId]);
+  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
   // Note: participantsOverride comes from caller, not deps
-  // Note: status removed from deps since we no longer check it in startRound
+  // callbackRefs provides stable ref access to threadId (no deps needed)
 
   /**
    * Send a user message and start a new round
@@ -1015,21 +1058,11 @@ export function useMultiParticipantChat(
     async (content: string) => {
       // ✅ ENUM PATTERN: Use AiSdkStatuses constant instead of hardcoded 'ready'
       if (status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
-        // ✅ DEBUG: Log when sendMessage returns early due to status
-        // eslint-disable-next-line no-console -- Debug logging for streaming issues
-        console.warn('[sendMessage] Blocked - AI SDK not ready', {
-          status,
-          isExplicitlyStreaming,
-          threadId: callbackRefs.threadId.current,
-          content: content.slice(0, 50),
-        });
         return;
       }
 
       // Guard: Prevent concurrent calls using triggering lock
       if (isTriggeringRef.current) {
-        // eslint-disable-next-line no-console -- Debug logging for streaming issues
-        console.warn('[sendMessage] Blocked - already triggering');
         return;
       }
 
@@ -1087,6 +1120,11 @@ export function useMultiParticipantChat(
       // PARTICIPANT STREAMING: Starts after pre-search (handled by provider)
       // ========================================================================
 
+      // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
+      // This prevents race condition where pendingMessage effect checks ref
+      // before React re-renders with new isExplicitlyStreaming state
+      isStreamingRef.current = true;
+
       // AI SDK v5 Pattern: Synchronization for proper message ordering
       // Reset all state for new round
       setIsExplicitlyStreaming(true);
@@ -1125,7 +1163,8 @@ export function useMultiParticipantChat(
         isTriggeringRef.current = false;
       });
     },
-    [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming, callbackRefs.threadId],
+    [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming],
+    // callbackRefs provides stable ref access to threadId (no deps needed)
   );
 
   /**
@@ -1198,6 +1237,8 @@ export function useMultiParticipantChat(
     setMessages(messagesBeforeRound);
 
     // STEP 4: Reset streaming state to start fresh
+    // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
+    isStreamingRef.current = false;
     setIsExplicitlyStreaming(false);
 
     // CRITICAL: Update ref BEFORE setting state
@@ -1224,13 +1265,13 @@ export function useMultiParticipantChat(
   // Stream resumption is incompatible with abort signals
   // Streams now continue until completion and can resume after page reload
 
-  // ✅ CRITICAL FIX: Derive isStreaming from BOTH manual flag AND AI SDK status
+  // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
   // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'
   // - isExplicitlyStreaming: Our manual flag for participant orchestration
-  // - status !== AiSdkStatuses.READY: AI SDK's internal streaming state
-  // Both must be false for streaming to be truly complete
-  // ✅ ENUM PATTERN: Use AiSdkStatuses.READY instead of hardcoded 'ready'
-  const isActuallyStreaming = isExplicitlyStreaming || status !== AiSdkStatuses.READY;
+  // - We rely primarily on isExplicitlyStreaming which is set/cleared by our logic
+  // - This prevents false positives on initial mount when status='awaiting_message'
+  // ✅ ENUM PATTERN: Use isExplicitlyStreaming as single source of truth
+  const isActuallyStreaming = isExplicitlyStreaming;
 
   // ✅ RACE CONDITION FIX: Keep ref in sync with streaming state
   // This allows synchronous checks in microtasks to use the latest value

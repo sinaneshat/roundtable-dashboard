@@ -3,7 +3,7 @@
  * Simulates a complete chat round with web search, multiple participants, and analysis
  */
 
-import { AnalysisStatuses, MessagePartTypes, MessageStatuses, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, ConfidenceWeightings, DebatePhases, MessagePartTypes, MessageStatuses, WebSearchDepths } from '@/api/core/enums';
 import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 
@@ -272,190 +272,234 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
   createdAt: new Date(),
   completedAt: new Date(),
   analysisData: {
-    leaderboard: [
+    // Round Confidence Header
+    roundConfidence: 78,
+    confidenceWeighting: ConfidenceWeightings.BALANCED,
+
+    // Consensus Evolution - Timeline showing consensus at each debate phase
+    consensusEvolution: [
+      { phase: DebatePhases.OPENING, percentage: 45, label: 'Opening' },
+      { phase: DebatePhases.REBUTTAL, percentage: 52, label: 'Rebuttal' },
+      { phase: DebatePhases.CROSS_EXAM, percentage: 61, label: 'Cross-Exam' },
+      { phase: DebatePhases.SYNTHESIS, percentage: 72, label: 'Synthesis' },
+      { phase: DebatePhases.FINAL_VOTE, percentage: 78, label: 'Final Vote' },
+    ],
+
+    // Key Insights & Recommendations
+    summary: 'The conversation revealed a comprehensive view of AI collaboration trends from three complementary perspectives. Strategic analysis provided structure through multi-agent orchestration, creative insights highlighted the human-AI creative loop potential, and technical depth ensured practical considerations around security and integration.',
+    recommendations: [
       {
-        participantIndex: 0,
-        participantRole: 'Strategic Analyst',
-        modelId: 'anthropic/claude-3-5-sonnet-20241022',
-        modelName: 'Claude 3.5 Sonnet',
-        rank: 1,
-        overallRating: 9.5,
-        badge: 'Most Comprehensive',
+        title: 'Explore cost-benefit analysis of multi-agent systems',
+        description: 'Multiple participants highlighted the value but didn\'t address cost implications. Analyze typical ROI timelines and budget considerations.',
+        suggestedModels: ['anthropic/claude-3-5-sonnet-20241022'],
+        suggestedRoles: ['Financial Analyst'],
+        suggestedMode: 'analyzing',
       },
       {
-        participantIndex: 1,
-        participantRole: 'Creative Director',
-        modelId: 'openai/gpt-4o',
-        modelName: 'GPT-4o',
-        rank: 2,
-        overallRating: 9.0,
-        badge: 'Most Creative',
-      },
-      {
-        participantIndex: 2,
-        participantRole: 'Technical Expert',
-        modelId: 'google/gemini-2.0-flash-exp',
-        modelName: 'Gemini 2.0 Flash',
-        rank: 3,
-        overallRating: 8.8,
-        badge: 'Most Technical',
+        title: 'Address ethical considerations and potential risks',
+        description: 'Ethical dimensions were not covered in technical or creative analyses. Examine bias, transparency, and responsible AI practices.',
+        suggestedModels: ['anthropic/claude-3-5-sonnet-20241022'],
+        suggestedRoles: ['Ethics Advisor'],
+        suggestedMode: 'analyzing',
       },
     ],
-    participantAnalyses: [
+
+    // Contributor Perspectives - Multi-AI Deliberation
+    contributorPerspectives: [
       {
         participantIndex: 0,
-        participantRole: 'Strategic Analyst',
+        role: 'Strategic Analyst',
         modelId: 'anthropic/claude-3-5-sonnet-20241022',
         modelName: 'Claude 3.5 Sonnet',
-        overallRating: 9.5,
-        skillsMatrix: [
-          { skillName: 'Clarity', rating: 9.5 },
-          { skillName: 'Depth', rating: 9.0 },
-          { skillName: 'Creativity', rating: 8.5 },
-          { skillName: 'Accuracy', rating: 9.5 },
-          { skillName: 'Relevance', rating: 9.5 },
+        scorecard: {
+          logic: 95,
+          riskAwareness: 88,
+          creativity: 85,
+          evidence: 92,
+          consensus: 90,
+        },
+        stance: 'Delivered a well-structured strategic analysis that effectively synthesized research findings into a clear framework of three major trends: multi-agent orchestration, real-time knowledge synthesis, and adaptive learning interfaces.',
+        evidence: [
+          'Provided numbered framework with clear structure',
+          'Used evidence-based insights from web search data',
+          'Comprehensive coverage of major collaboration trends',
         ],
-        pros: [
-          'Exceptional structure with numbered framework',
-          'Clear evidence-based insights from web search',
-          'Comprehensive coverage of major trends',
-        ],
-        cons: [
-          'Could explore more specific implementation examples',
-        ],
-        summary: 'Delivered a well-structured strategic analysis that effectively synthesized research findings into a clear framework of three major trends.',
+        vote: 'approve',
       },
       {
         participantIndex: 1,
-        participantRole: 'Creative Director',
+        role: 'Creative Director',
         modelId: 'openai/gpt-4o',
         modelName: 'GPT-4o',
-        overallRating: 9.0,
-        skillsMatrix: [
-          { skillName: 'Clarity', rating: 9.0 },
-          { skillName: 'Depth', rating: 8.0 },
-          { skillName: 'Creativity', rating: 9.5 },
-          { skillName: 'Accuracy', rating: 8.5 },
-          { skillName: 'Relevance', rating: 9.0 },
-        ],
-        pros: [
-          'Unique creative perspective on human-AI interaction',
+        scorecard: {
+          logic: 87,
+          riskAwareness: 75,
+          creativity: 98,
+          evidence: 82,
+          consensus: 85,
+        },
+        stance: 'Brought a refreshing creative lens focusing on the human-AI creative loop and future possibilities in multimodal collaboration. Emphasized innovative approaches to user experience.',
+        evidence: [
+          'Unique perspective on human-AI interaction patterns',
           'Forward-looking vision of multimodal integration',
-          'Complementary insights building on strategic analysis',
+          'Complementary insights building on strategic foundation',
         ],
-        cons: [
-          'Slightly less technical depth than other responses',
-        ],
-        summary: 'Brought a refreshing creative lens focusing on the human-AI creative loop and future possibilities in multimodal collaboration.',
+        vote: 'approve',
       },
       {
         participantIndex: 2,
-        participantRole: 'Technical Expert',
+        role: 'Technical Expert',
         modelId: 'google/gemini-2.0-flash-exp',
         modelName: 'Gemini 2.0 Flash',
-        overallRating: 8.8,
-        skillsMatrix: [
-          { skillName: 'Clarity', rating: 8.5 },
-          { skillName: 'Depth', rating: 9.5 },
-          { skillName: 'Creativity', rating: 8.0 },
-          { skillName: 'Accuracy', rating: 9.0 },
-          { skillName: 'Relevance', rating: 9.0 },
-        ],
-        pros: [
+        scorecard: {
+          logic: 92,
+          riskAwareness: 95,
+          creativity: 78,
+          evidence: 90,
+          consensus: 88,
+        },
+        stance: 'Provided essential technical depth covering scalability, security, and integration concerns critical for enterprise adoption. Strong focus on implementation realities.',
+        evidence: [
           'Deep technical implementation considerations',
-          'Strong focus on security and enterprise needs',
-          'Practical integration ecosystem analysis',
+          'Security and enterprise needs analysis',
+          'Practical integration ecosystem assessment',
         ],
-        cons: [
-          'Could balance technical detail with accessibility',
-        ],
-        summary: 'Provided essential technical depth covering scalability, security, and integration concerns critical for enterprise adoption.',
+        vote: 'caution',
       },
     ],
+
+    // Consensus Analysis
+    consensusAnalysis: {
+      alignmentSummary: {
+        totalClaims: 8,
+        majorAlignment: 6,
+        contestedClaims: 2,
+        contestedClaimsList: [
+          { claim: 'Implementation timeline expectations', status: 'contested' },
+          { claim: 'Technical complexity vs. user accessibility', status: 'contested' },
+        ],
+      },
+      agreementHeatmap: [
+        {
+          claim: 'Multi-agent systems are transformative',
+          perspectives: {
+            'Strategic Analyst': 'agree',
+            'Creative Director': 'agree',
+            'Technical Expert': 'agree',
+          },
+        },
+        {
+          claim: 'Real-time synthesis is essential',
+          perspectives: {
+            'Strategic Analyst': 'agree',
+            'Creative Director': 'agree',
+            'Technical Expert': 'caution',
+          },
+        },
+        {
+          claim: 'Security remains a critical concern',
+          perspectives: {
+            'Strategic Analyst': 'caution',
+            'Creative Director': 'disagree',
+            'Technical Expert': 'agree',
+          },
+        },
+      ],
+      argumentStrengthProfile: {
+        'Strategic Analyst': {
+          logic: 95,
+          evidence: 92,
+          riskAwareness: 88,
+          consensus: 90,
+          creativity: 85,
+        },
+        'Creative Director': {
+          logic: 87,
+          evidence: 82,
+          riskAwareness: 75,
+          consensus: 85,
+          creativity: 98,
+        },
+        'Technical Expert': {
+          logic: 92,
+          evidence: 90,
+          riskAwareness: 95,
+          consensus: 88,
+          creativity: 78,
+        },
+      },
+    },
+
+    // Evidence & Reasoning
+    evidenceAndReasoning: {
+      reasoningThreads: [
+        {
+          claim: 'Multi-agent systems dominate AI collaboration',
+          synthesis: 'All three participants referenced multi-agent orchestration as a core trend, with Strategic Analyst providing framework analysis, Creative Director exploring user experience implications, and Technical Expert addressing implementation requirements.',
+        },
+        {
+          claim: 'Real-time knowledge synthesis is critical',
+          synthesis: 'Consensus emerged around real-time capabilities, though Technical Expert raised valid concerns about latency and infrastructure requirements that warrant further investigation.',
+        },
+        {
+          claim: 'Integration ecosystems determine success',
+          synthesis: 'Technical Expert\'s focus on integration aligned with Strategic Analyst\'s framework, while Creative Director emphasized the importance of seamless user workflows.',
+        },
+      ],
+      evidenceCoverage: [
+        {
+          claim: 'Multi-agent orchestration is key trend',
+          strength: 'strong',
+          percentage: 92,
+        },
+        {
+          claim: 'Security requires careful attention',
+          strength: 'strong',
+          percentage: 78,
+        },
+        {
+          claim: 'Creative workflows enable innovation',
+          strength: 'moderate',
+          percentage: 65,
+        },
+        {
+          claim: 'Implementation timeline is flexible',
+          strength: 'weak',
+          percentage: 45,
+        },
+      ],
+    },
+
+    // Explore Alternatives
+    alternatives: [
+      {
+        scenario: 'Enterprise adoption with phased rollout',
+        confidence: 85,
+      },
+      {
+        scenario: 'Startup rapid deployment with MVP approach',
+        confidence: 72,
+      },
+      {
+        scenario: 'Hybrid approach balancing innovation and stability',
+        confidence: 90,
+      },
+    ],
+
+    // Round Summary
     roundSummary: {
-      keyInsights: [
-        'Multi-agent systems are the dominant trend in AI collaboration',
-        'Real-time knowledge synthesis is becoming essential',
-        'Security and privacy remain critical for enterprise adoption',
-        'The human-AI creative loop enables new workflows',
-        'Integration ecosystems determine platform success',
-      ],
-      consensusPoints: [
-        'All participants emphasized the importance of diverse AI perspectives',
-        'Consensus on real-time capabilities being transformative',
-        'Shared view on adaptive context management as foundational',
-      ],
-      divergentApproaches: [
-        {
-          topic: 'Implementation Focus',
-          perspectives: [
-            'Strategic: Framework-oriented analysis',
-            'Creative: Human-centric vision',
-            'Technical: Enterprise requirements',
-          ],
-        },
-      ],
-      comparativeAnalysis: {
-        strengthsByCategory: [
-          {
-            category: 'Strategic Thinking',
-            participants: ['Strategic Analyst'],
-          },
-          {
-            category: 'Creative Vision',
-            participants: ['Creative Director'],
-          },
-          {
-            category: 'Technical Depth',
-            participants: ['Technical Expert'],
-          },
-        ],
-        tradeoffs: [
-          'Strategic analysis provides structure but may lack creative spark',
-          'Creative vision inspires innovation but needs technical grounding',
-          'Technical depth ensures viability but requires accessibility improvements',
-        ],
+      participation: {
+        approved: 2,
+        cautioned: 1,
+        rejected: 0,
       },
-      decisionFramework: {
-        criteriaToConsider: [
-          'Implementation timeline and complexity',
-          'Team skill level and resources',
-          'Enterprise vs. startup needs',
-          'Budget constraints',
-        ],
-        scenarioRecommendations: [
-          {
-            scenario: 'Enterprise adoption',
-            recommendation: 'Prioritize Technical Expert insights on security and integration',
-          },
-          {
-            scenario: 'Product innovation',
-            recommendation: 'Lead with Creative Director vision for human-AI collaboration',
-          },
-          {
-            scenario: 'Strategic planning',
-            recommendation: 'Start with Strategic Analyst framework for comprehensive overview',
-          },
-        ],
-      },
-      overallSummary: 'The conversation revealed a comprehensive view of AI collaboration trends from three complementary perspectives. Strategic analysis provided structure through the multi-agent orchestration framework, creative insights highlighted the human-AI creative loop potential, and technical depth ensured practical considerations around security and integration. Together, these perspectives demonstrate that successful AI collaboration platforms must balance innovation with implementation realities.',
-      conclusion: 'For organizations evaluating AI collaboration tools, the ideal approach combines all three perspectives: strategic framework for planning, creative vision for differentiation, and technical rigor for execution. The convergence of these viewpoints suggests that multi-agent systems with real-time synthesis are becoming the standard, but success requires careful attention to security, integration, and user experience.',
-      recommendedActions: [
-        {
-          action: 'Can you explore the cost-benefit analysis of implementing multi-agent systems? What are the typical ROI timelines and budget considerations?',
-          rationale: 'Multiple participants highlighted the value but didn\'t address cost implications',
-          suggestedModels: ['anthropic/claude-3-5-sonnet-20241022'],
-          suggestedRoles: ['Financial Analyst'],
-          suggestedMode: '',
-        },
-        {
-          action: 'What are the ethical considerations and potential risks in AI collaboration systems? How should teams address bias and transparency?',
-          rationale: 'Ethical dimensions were not covered in technical or creative analyses',
-          suggestedModels: [],
-          suggestedRoles: ['Ethics Advisor'],
-          suggestedMode: '',
-        },
+      keyThemes: 'Multi-agent collaboration, real-time synthesis, enterprise security, human-AI workflows, integration ecosystems',
+      unresolvedQuestions: [
+        'What are the typical ROI timelines for multi-agent system implementation?',
+        'How should teams balance technical complexity with user accessibility?',
+        'What ethical frameworks should govern AI collaboration platforms?',
       ],
+      generated: new Date().toISOString(),
     },
   },
 };

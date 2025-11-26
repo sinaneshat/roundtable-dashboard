@@ -18,5 +18,5 @@ export * from './message-status';
 // Core transformations and filtering
 export * from './message-transforms';
 
-// Metadata utilities (separate module for single source of truth)
-export * from './metadata';
+// NOTE: Metadata utilities exported separately via index.ts
+// Import from @/lib/utils/metadata directly for single source of truth

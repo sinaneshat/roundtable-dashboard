@@ -397,3 +397,163 @@ export function safeParse<T extends z.ZodType>(
   const result = schema.safeParse(value);
   return result.success ? result.data : undefined;
 }
+
+// ============================================================================
+// STREAMING DATA TYPE GUARDS - Multi-AI Deliberation Framework
+// ============================================================================
+
+/**
+ * Type guard for complete ContributorPerspective from streaming data
+ * Validates all required fields exist during AI SDK streaming
+ *
+ * @param value - Value to check (typically from PartialObject during streaming)
+ * @returns True if all required fields are present
+ */
+export function isCompleteContributorPerspective(value: unknown): value is {
+  participantIndex: number;
+  role: string;
+  modelId: string;
+  modelName: string;
+  scorecard: Record<string, unknown>;
+  stance: string;
+  evidence: string[];
+  vote: string;
+} {
+  if (!isObject(value))
+    return false;
+
+  return (
+    isNumber(value.participantIndex)
+    && isNonEmptyString(value.role)
+    && isNonEmptyString(value.modelId)
+    && isNonEmptyString(value.modelName)
+    && isObject(value.scorecard)
+    && isNonEmptyString(value.stance)
+    && isArray(value.evidence)
+    && isNonEmptyString(value.vote)
+  );
+}
+
+/**
+ * Type guard for complete AlternativeScenario from streaming data
+ * Validates all required fields exist during AI SDK streaming
+ *
+ * @param value - Value to check
+ * @returns True if all required fields are present
+ */
+export function isCompleteAlternativeScenario(value: unknown): value is {
+  scenario: string;
+  confidence: number;
+} {
+  if (!isObject(value))
+    return false;
+
+  return (
+    isNonEmptyString(value.scenario)
+    && isNumber(value.confidence)
+  );
+}
+
+/**
+ * Type guard for complete ConsensusAnalysis from streaming data
+ * Validates all required fields exist during AI SDK streaming
+ *
+ * @param value - Value to check
+ * @returns True if all required fields are present
+ */
+export function isCompleteConsensusAnalysis(value: unknown): value is {
+  alignmentSummary: Record<string, unknown>;
+  agreementHeatmap: unknown[];
+  argumentStrengthProfile: Record<string, unknown>;
+} {
+  if (!isObject(value))
+    return false;
+
+  return (
+    isObject(value.alignmentSummary)
+    && isArray(value.agreementHeatmap)
+    && isObject(value.argumentStrengthProfile)
+  );
+}
+
+/**
+ * Type guard for complete EvidenceAndReasoning from streaming data
+ * Validates all required fields exist during AI SDK streaming
+ *
+ * @param value - Value to check
+ * @returns True if all required fields are present
+ */
+export function isCompleteEvidenceAndReasoning(value: unknown): value is {
+  reasoningThreads: unknown[];
+  evidenceCoverage: unknown[];
+} {
+  if (!isObject(value))
+    return false;
+
+  return (
+    isArray(value.reasoningThreads)
+    && isArray(value.evidenceCoverage)
+  );
+}
+
+/**
+ * Type guard for complete RoundSummary from streaming data
+ * Validates all required fields exist during AI SDK streaming
+ *
+ * @param value - Value to check
+ * @returns True if all required fields are present
+ */
+export function isCompleteRoundSummary(value: unknown): value is {
+  participation: Record<string, unknown>;
+  keyThemes: string;
+  unresolvedQuestions: string[];
+  generated: string;
+} {
+  if (!isObject(value))
+    return false;
+
+  return (
+    isObject(value.participation)
+    && isNonEmptyString(value.keyThemes)
+    && isArray(value.unresolvedQuestions)
+    && isNonEmptyString(value.generated)
+  );
+}
+
+/**
+ * Filter streaming array to only complete ContributorPerspective items
+ * Removes incomplete/undefined items during AI SDK streaming
+ *
+ * @param items - Array from streaming data (may contain undefined/partial items)
+ * @returns Filtered array with only complete items
+ *
+ * @example
+ * ```typescript
+ * const validPerspectives = filterCompleteContributorPerspectives(contributorPerspectives);
+ * // validPerspectives is now properly typed array
+ * ```
+ */
+export function filterCompleteContributorPerspectives<T>(
+  items: T,
+): Array<{ participantIndex: number; role: string; modelId: string; modelName: string; scorecard: Record<string, unknown>; stance: string; evidence: string[]; vote: string }> {
+  if (!isArray(items))
+    return [];
+
+  return items.filter(isCompleteContributorPerspective);
+}
+
+/**
+ * Filter streaming array to only complete AlternativeScenario items
+ * Removes incomplete/undefined items during AI SDK streaming
+ *
+ * @param items - Array from streaming data (may contain undefined/partial items)
+ * @returns Filtered array with only complete items
+ */
+export function filterCompleteAlternatives<T>(
+  items: T,
+): Array<{ scenario: string; confidence: number }> {
+  if (!isArray(items))
+    return [];
+
+  return items.filter(isCompleteAlternativeScenario);
+}

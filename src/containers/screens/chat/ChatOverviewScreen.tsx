@@ -333,18 +333,23 @@ export default function ChatOverviewScreen() {
     ),
   });
 
+  // Streaming loader state calculation - must be before isInputBlocked usage
+  const { showLoader, loadingDetails } = useFlowLoading({ mode: 'overview' });
+
   // ✅ FIX: Comprehensive input blocking check
   // Prevents race condition where user can submit during the gap between
   // isCreatingThread=false and isStreaming=true
-  const isInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming;
+  // Also blocks input when the unified loading indicator (3-dot matrix) is visible
+  const isInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || showLoader;
 
   // Handle form submission
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      // ✅ FIX: Include waitingToStartStreaming in guard to prevent double submission
-      if (!inputValue.trim() || selectedParticipants.length === 0 || isCreatingThread || isStreaming || waitingToStartStreaming) {
+      // ✅ FIX: Include waitingToStartStreaming and showLoader in guard to prevent double submission
+      // showLoader ensures input is blocked when 3-dot matrix loading is visible
+      if (!inputValue.trim() || selectedParticipants.length === 0 || isCreatingThread || isStreaming || waitingToStartStreaming || showLoader) {
         return;
       }
 
@@ -355,7 +360,7 @@ export default function ChatOverviewScreen() {
         showApiErrorToast('Error creating thread', error);
       }
     },
-    [inputValue, selectedParticipants, isCreatingThread, isStreaming, waitingToStartStreaming, formActions],
+    [inputValue, selectedParticipants, isCreatingThread, isStreaming, waitingToStartStreaming, showLoader, formActions],
   );
 
   // Check if first round is incomplete
@@ -447,8 +452,26 @@ export default function ChatOverviewScreen() {
     }
   }, [showInitialUI, isStreaming, stopStreaming]);
 
+  // ✅ FIX: Prevent scrolling when showing initial UI
+  // Content should only be scrollable after submission and chat animations start
+  // This prevents premature scrolling on the overview landing page
+  useLayoutEffect(() => {
+    if (showInitialUI) {
+      // Prevent scrolling on initial UI - lock html element to prevent all scroll
+      document.documentElement.classList.add('overflow-hidden');
+    } else {
+      // Allow scrolling when chat UI is shown
+      document.documentElement.classList.remove('overflow-hidden');
+    }
+
+    // Cleanup on unmount - restore default scroll behavior
+    return () => {
+      document.documentElement.classList.remove('overflow-hidden');
+    };
+  }, [showInitialUI]);
+
   // Scroll management for window-level scrolling
-  // bottomOffset accounts for: sticky input (pt-10 + ~80px input) + shadow gradient (h-8) + bottom margin (16px)
+  // bottomOffset accounts for: sticky input (pt-4 + ~80px input) + bottom margin (16px)
   // ✅ FIX: Pass preSearches for auto-scroll during pre-search object generation
   useChatScroll({
     messages,
@@ -457,12 +480,9 @@ export default function ChatOverviewScreen() {
     scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
     currentParticipantIndex,
-    bottomOffset: 180,
+    bottomOffset: 120,
     preSearches,
   });
-
-  // Streaming loader state calculation
-  const { showLoader, loadingDetails } = useFlowLoading({ mode: 'overview' });
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -508,7 +528,7 @@ export default function ChatOverviewScreen() {
 
         {/* Initial UI - standard layout without scroll wrapper */}
         {showInitialUI && (
-          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative z-10 !flex !flex-col !justify-between !items-center pt-4">
+          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative z-10 !flex !flex-col !items-center pt-6 sm:pt-8">
             <motion.div
               key="initial-ui"
               initial={{ opacity: 0 }}
@@ -517,10 +537,10 @@ export default function ChatOverviewScreen() {
               transition={{ duration: 0.4, ease: 'easeOut' }}
               className="w-full"
             >
-              <div className="flex flex-col items-center gap-8 sm:gap-10 text-center relative">
+              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
 
                 <motion.div
-                  className="relative h-24 w-24 sm:h-28 sm:w-28 z-10"
+                  className="relative h-20 w-20 sm:h-24 sm:w-24 z-10"
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0, y: -50 }}
@@ -530,15 +550,15 @@ export default function ChatOverviewScreen() {
                     src={BRAND.logos.main}
                     alt={BRAND.name}
                     className="w-full h-full object-contain relative z-10"
-                    width={120}
-                    height={120}
+                    width={96}
+                    height={96}
                     priority
                   />
                 </motion.div>
 
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-1.5">
                   <motion.h1
-                    className="text-4xl sm:text-5xl font-semibold text-white px-4 leading-tight"
+                    className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -30 }}
@@ -548,7 +568,7 @@ export default function ChatOverviewScreen() {
                   </motion.h1>
 
                   <motion.p
-                    className="text-base sm:text-lg text-gray-300 max-w-2xl px-4 leading-relaxed"
+                    className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -30 }}
@@ -559,7 +579,7 @@ export default function ChatOverviewScreen() {
                 </div>
 
                 <motion.div
-                  className="w-full mt-8 sm:mt-12"
+                  className="w-full mt-6 sm:mt-8"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -570,9 +590,9 @@ export default function ChatOverviewScreen() {
               </div>
             </motion.div>
 
-            {/* Chat input - pushed to bottom with mt-auto for proper spacing */}
+            {/* Chat input - positioned below suggested chats with regular spacing */}
             <motion.div
-              className="w-full mt-auto pb-4"
+              className="w-full mt-6 sm:mt-8 pb-4"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -705,7 +725,7 @@ export default function ChatOverviewScreen() {
             {/* Chat input - sticky at bottom, mt-auto pushes to bottom when content is small */}
             <div
               ref={inputContainerRef}
-              className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-10 relative"
+              className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-4 relative"
               style={{ bottom: `${keyboardOffset + 16}px` }}
             >
               <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">

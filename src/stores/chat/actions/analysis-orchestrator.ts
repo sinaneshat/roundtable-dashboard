@@ -40,7 +40,7 @@ type AnalysesApiResponse = AnalysesCacheData;
 // ✅ TYPE-SAFE: Raw item type from query response (with unknown analysisData)
 type RawAnalysisItem = AnalysesCacheData['data']['items'][number];
 
-export type UseAnalysisOrchestratorOptions = OrchestratorOptions;
+export type UseAnalysisOrchestratorOptions = OrchestratorOptions<readonly [], AnalysisDeduplicationOptions>;
 export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
 
 /**
@@ -71,7 +71,9 @@ export const useAnalysisOrchestrator = createOrchestrator<
   RawAnalysisItem,
   StoredModeratorAnalysis,
   number,
-  AnalysesApiResponse
+  AnalysesApiResponse,
+  readonly [],
+  AnalysisDeduplicationOptions
 >({
   queryHook: useThreadAnalysesQuery,
   useStoreHook: useChatStore,

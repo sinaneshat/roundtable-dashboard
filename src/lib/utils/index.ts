@@ -32,7 +32,7 @@ export * from './memo-utils';
 // ============================================================================
 // Domain Utilities (Consolidated)
 // ============================================================================
-export * from './message'; // message-filtering + message-transforms + message-status
+export * from './message'; // message-transforms + message-status
 export * from './metadata';
 export * from './metadata-builder'; // ✅ TYPE-SAFE: Enforces all required fields at compile-time
 export * from './participant'; // All participant operations (includes updates)

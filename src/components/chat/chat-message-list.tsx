@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -170,8 +170,30 @@ function AssistantGroupCard({
             const model = findModel(participantInfo.modelId);
             const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
 
-            const hasTextContent = message.parts.some(p => p.type === MessagePartTypes.TEXT && p.text.trim().length > 0);
-            const hasToolCalls = message.parts.some(p => p.type === MessagePartTypes.TOOL_CALL);
+            // ✅ DEFENSIVE CHECK: Log when parts structure is unexpected
+            if (!message.parts || !Array.isArray(message.parts)) {
+              console.error('[ChatMessageList] Message has invalid parts structure:', {
+                messageId: message.id,
+                role: message.role,
+                participantIndex: participantInfo.participantIndex,
+                parts: message.parts,
+              });
+            }
+
+            // ✅ DEFENSIVE CHECK: Log when trying to access parts that might have undefined elements
+            const safeParts = message.parts || [];
+            if (safeParts.some(p => !p || typeof p !== 'object')) {
+              console.error('[ChatMessageList] Message has undefined or invalid parts:', {
+                messageId: message.id,
+                role: message.role,
+                participantIndex: participantInfo.participantIndex,
+                parts: safeParts,
+                invalidPartIndices: safeParts.map((p, idx) => (!p || typeof p !== 'object') ? idx : null).filter(idx => idx !== null),
+              });
+            }
+
+            const hasTextContent = safeParts.some(p => p && p.type === MessagePartTypes.TEXT && p.text?.trim().length > 0);
+            const hasToolCalls = safeParts.some(p => p && p.type === MessagePartTypes.TOOL_CALL);
             const hasAnyContent = hasTextContent || hasToolCalls;
 
             const messageStatus: MessageStatus = getMessageStatus({
@@ -179,16 +201,16 @@ function AssistantGroupCard({
               isStreaming: participantInfo.isStreaming,
               hasAnyContent,
             });
-            const filteredParts = message.parts
+            const filteredParts = safeParts
               .filter(p =>
-                p.type === MessagePartTypes.TEXT
-                || p.type === MessagePartTypes.REASONING
-                || p.type === MessagePartTypes.TOOL_CALL
-                || p.type === MessagePartTypes.TOOL_RESULT,
+                p && (p.type === MessagePartTypes.TEXT
+                  || p.type === MessagePartTypes.REASONING
+                  || p.type === MessagePartTypes.TOOL_CALL
+                  || p.type === MessagePartTypes.TOOL_RESULT),
               )
               .map(p => p as MessagePart);
-            const sourceParts = message.parts.filter(p =>
-              'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
+            const sourceParts = safeParts.filter(p =>
+              p && 'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
             );
 
             return (
@@ -533,7 +555,7 @@ export const ChatMessageList = memo(
 
         const metadata = getMessageMetadata(message.metadata);
         const avatarProps = getAvatarPropsFromModelId(
-          message.role === 'system' ? MessageRoles.ASSISTANT : message.role,
+          message.role === UIMessageRoles.SYSTEM ? MessageRoles.ASSISTANT : message.role,
           participantInfo.modelId,
           userInfo.image,
           userInfo.name,

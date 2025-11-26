@@ -243,7 +243,7 @@ describe('analysis Streaming Sections', () => {
   // ==========================================================================
 
   describe('progressive Streaming Order', () => {
-    it('should stream sections in correct order: leaderboard -> skills -> participants -> summary -> conclusion', () => {
+    it('should stream sections in correct order: insights -> perspectives -> consensus -> evidence -> summary', () => {
       setupCompletedRound(store, 0, 2);
 
       // Add analysis with full data
@@ -259,21 +259,32 @@ describe('analysis Streaming Sections', () => {
       const analysis = store.getState().analyses[0];
       expect(analysis.analysisData).toBeDefined();
 
-      // Verify all sections are present in the data structure
+      // Verify all sections are present in the NEW schema structure
       const data = analysis.analysisData;
-      expect(data?.leaderboard).toBeDefined();
-      expect(data?.participantAnalyses).toBeDefined();
+
+      // Section 1: Key Insights & Recommendations
+      expect(data?.summary).toBeDefined();
+      expect(data?.recommendations).toBeDefined();
+      expect(data?.recommendations.length).toBeGreaterThan(0);
+
+      // Section 2: Contributor Perspectives (replaces old participantAnalyses)
+      expect(data?.contributorPerspectives).toBeDefined();
+      expect(data?.contributorPerspectives.length).toBeGreaterThan(0);
+
+      // Section 3: Consensus Analysis (replaces old leaderboard)
+      expect(data?.consensusAnalysis).toBeDefined();
+      expect(data?.consensusAnalysis.alignmentSummary).toBeDefined();
+      expect(data?.consensusAnalysis.agreementHeatmap).toBeDefined();
+
+      // Section 4: Evidence & Reasoning
+      expect(data?.evidenceAndReasoning).toBeDefined();
+      expect(data?.evidenceAndReasoning.reasoningThreads).toBeDefined();
+      expect(data?.evidenceAndReasoning.evidenceCoverage).toBeDefined();
+
+      // Section 5: Round Summary
       expect(data?.roundSummary).toBeDefined();
-
-      // Verify leaderboard (Section 1)
-      expect(data?.leaderboard.length).toBeGreaterThan(0);
-
-      // Verify participant analyses (Section 3)
-      expect(data?.participantAnalyses.length).toBeGreaterThan(0);
-
-      // Verify round summary with all subsections (Sections 4 & 5)
-      expect(data?.roundSummary.overallSummary).toBeDefined();
-      expect(data?.roundSummary.conclusion).toBeDefined();
+      expect(data?.roundSummary.participation).toBeDefined();
+      expect(data?.roundSummary.keyThemes).toBeDefined();
     });
 
     it('should maintain data integrity during progressive streaming', () => {
@@ -924,54 +935,55 @@ describe('analysis Streaming Sections', () => {
     it('should have correct analysisData schema structure', () => {
       setupCompletedRound(store, 0, 2);
 
-      // Use custom payload with correct schema structure
-      const payload = createMockAnalysisPayload(0, {
-        leaderboard: [
-          createMockLeaderboardEntry(1, 0),
-          createMockLeaderboardEntry(2, 1),
-        ],
-        participantAnalyses: [
-          createMockParticipantAnalysis(0),
-          createMockParticipantAnalysis(1),
-        ],
-      });
+      // Use default payload with NEW Multi-AI Deliberation Framework structure
+      const payload = createMockAnalysisPayload(0);
       store.getState().addAnalysis(createMockAnalysis({ roundNumber: 0 }));
       store.getState().updateAnalysisData(0, payload);
 
       const data = store.getState().analyses[0].analysisData;
 
-      // Top-level structure
-      expect(data).toHaveProperty('leaderboard');
-      expect(data).toHaveProperty('participantAnalyses');
+      // Top-level structure - NEW schema fields
+      expect(data).toHaveProperty('roundConfidence');
+      expect(data).toHaveProperty('consensusEvolution');
+      expect(data).toHaveProperty('summary');
+      expect(data).toHaveProperty('recommendations');
+      expect(data).toHaveProperty('contributorPerspectives');
+      expect(data).toHaveProperty('consensusAnalysis');
+      expect(data).toHaveProperty('evidenceAndReasoning');
+      expect(data).toHaveProperty('alternatives');
       expect(data).toHaveProperty('roundSummary');
 
-      // Leaderboard entry structure - check fields that exist in our mock
-      const leaderboardEntry = data!.leaderboard[0];
-      expect(leaderboardEntry).toHaveProperty('rank');
-      expect(leaderboardEntry).toHaveProperty('participantIndex');
-      expect(leaderboardEntry).toHaveProperty('modelId');
-      expect(leaderboardEntry).toHaveProperty('modelName');
-      expect(leaderboardEntry).toHaveProperty('overallRating');
-      expect(leaderboardEntry).toHaveProperty('badge');
+      // Contributor perspective structure
+      const contributor = data!.contributorPerspectives[0];
+      expect(contributor).toHaveProperty('participantIndex');
+      expect(contributor).toHaveProperty('role');
+      expect(contributor).toHaveProperty('modelId');
+      expect(contributor).toHaveProperty('modelName');
+      expect(contributor).toHaveProperty('scorecard');
+      expect(contributor).toHaveProperty('stance');
+      expect(contributor).toHaveProperty('evidence');
+      expect(contributor).toHaveProperty('vote');
 
-      // Participant analysis structure - check fields that exist in our mock
-      const participantAnalysis = data!.participantAnalyses[0];
-      expect(participantAnalysis).toHaveProperty('participantIndex');
-      expect(participantAnalysis).toHaveProperty('modelId');
-      expect(participantAnalysis).toHaveProperty('overallRating');
-      expect(participantAnalysis).toHaveProperty('skillsMatrix');
-      expect(participantAnalysis).toHaveProperty('pros');
-      expect(participantAnalysis).toHaveProperty('cons');
-      expect(participantAnalysis).toHaveProperty('summary');
+      // Scorecard structure
+      const scorecard = contributor.scorecard;
+      expect(scorecard).toHaveProperty('logic');
+      expect(scorecard).toHaveProperty('riskAwareness');
+      expect(scorecard).toHaveProperty('creativity');
+      expect(scorecard).toHaveProperty('evidence');
+      expect(scorecard).toHaveProperty('consensus');
 
-      // Round summary structure - test fields that exist in the factory
+      // Consensus analysis structure
+      const consensusAnalysis = data!.consensusAnalysis;
+      expect(consensusAnalysis).toHaveProperty('alignmentSummary');
+      expect(consensusAnalysis).toHaveProperty('agreementHeatmap');
+      expect(consensusAnalysis).toHaveProperty('argumentStrengthProfile');
+
+      // Round summary structure - NEW fields
       const roundSummary = data!.roundSummary;
-      expect(roundSummary).toHaveProperty('consensusPoints');
-      expect(roundSummary).toHaveProperty('comparativeAnalysis');
-      expect(roundSummary).toHaveProperty('decisionFramework');
-      expect(roundSummary).toHaveProperty('overallSummary');
-      expect(roundSummary).toHaveProperty('conclusion');
-      expect(roundSummary).toHaveProperty('recommendedActions');
+      expect(roundSummary).toHaveProperty('participation');
+      expect(roundSummary).toHaveProperty('keyThemes');
+      expect(roundSummary).toHaveProperty('unresolvedQuestions');
+      expect(roundSummary).toHaveProperty('generated');
     });
 
     it('should generate correct analysis ID format: threadId_r{round}_analysis', () => {
@@ -1094,14 +1106,29 @@ describe('analysis Streaming Sections', () => {
     it('should focus on comparison for 2 participants', () => {
       setupCompletedRound(store, 0, 2);
 
+      // Create payload with 2 contributor perspectives
       const payload = createMockAnalysisPayload(0, {
-        participantAnalyses: [
-          createMockParticipantAnalysis(0),
-          createMockParticipantAnalysis(1),
-        ],
-        leaderboard: [
-          createMockLeaderboardEntry(1, 0),
-          createMockLeaderboardEntry(2, 1),
+        contributorPerspectives: [
+          {
+            participantIndex: 0,
+            role: 'Analyst',
+            modelId: 'openai/gpt-4',
+            modelName: 'GPT-4',
+            scorecard: { logic: 85, riskAwareness: 75, creativity: 70, evidence: 80, consensus: 75 },
+            stance: 'Supports the approach',
+            evidence: ['Evidence point 1'],
+            vote: 'approve',
+          },
+          {
+            participantIndex: 1,
+            role: 'Skeptic',
+            modelId: 'anthropic/claude-3',
+            modelName: 'Claude-3',
+            scorecard: { logic: 80, riskAwareness: 85, creativity: 75, evidence: 78, consensus: 70 },
+            stance: 'Cautious about risks',
+            evidence: ['Risk concern 1'],
+            vote: 'caution',
+          },
         ],
       });
 
@@ -1110,27 +1137,22 @@ describe('analysis Streaming Sections', () => {
 
       const data = store.getState().analyses[0].analysisData;
 
-      // Should have comparison data
-      expect(data!.participantAnalyses).toHaveLength(2);
-      expect(data!.leaderboard).toHaveLength(2);
-      expect(data!.roundSummary.comparativeAnalysis).toBeDefined();
+      // Should have comparison data in NEW schema
+      expect(data!.contributorPerspectives).toHaveLength(2);
+      expect(data!.consensusAnalysis.alignmentSummary).toBeDefined();
+      expect(data!.consensusAnalysis.agreementHeatmap).toBeDefined();
     });
 
     it('should analyze group dynamics for 3+ participants', () => {
       setupCompletedRound(store, 0, 4);
 
+      // Create payload with 4 contributor perspectives
       const payload = createMockAnalysisPayload(0, {
-        participantAnalyses: [
-          createMockParticipantAnalysis(0),
-          createMockParticipantAnalysis(1),
-          createMockParticipantAnalysis(2),
-          createMockParticipantAnalysis(3),
-        ],
-        leaderboard: [
-          createMockLeaderboardEntry(1, 2),
-          createMockLeaderboardEntry(2, 0),
-          createMockLeaderboardEntry(3, 3),
-          createMockLeaderboardEntry(4, 1),
+        contributorPerspectives: [
+          { participantIndex: 0, role: 'Analyst', modelId: 'gpt-4', modelName: 'GPT-4', scorecard: { logic: 85, riskAwareness: 75, creativity: 70, evidence: 80, consensus: 75 }, stance: 'Pro', evidence: [], vote: 'approve' },
+          { participantIndex: 1, role: 'Skeptic', modelId: 'claude-3', modelName: 'Claude-3', scorecard: { logic: 80, riskAwareness: 85, creativity: 75, evidence: 78, consensus: 70 }, stance: 'Cautious', evidence: [], vote: 'caution' },
+          { participantIndex: 2, role: 'Innovator', modelId: 'gemini', modelName: 'Gemini-Pro', scorecard: { logic: 82, riskAwareness: 70, creativity: 90, evidence: 75, consensus: 72 }, stance: 'Creative', evidence: [], vote: 'approve' },
+          { participantIndex: 3, role: 'Builder', modelId: 'command-r', modelName: 'Command-R+', scorecard: { logic: 78, riskAwareness: 80, creativity: 68, evidence: 82, consensus: 78 }, stance: 'Practical', evidence: [], vote: 'approve' },
         ],
       });
 
@@ -1139,31 +1161,26 @@ describe('analysis Streaming Sections', () => {
 
       const data = store.getState().analyses[0].analysisData;
 
-      // Should have group analysis
-      expect(data!.participantAnalyses).toHaveLength(4);
-      expect(data!.leaderboard).toHaveLength(4);
-      expect(data!.roundSummary.consensusPoints).toBeDefined();
-      // Note: divergentApproaches may not be in the factory's roundSummary
-      // but comparativeAnalysis is - which serves similar purpose
-      expect(data!.roundSummary.comparativeAnalysis).toBeDefined();
+      // Should have group analysis with NEW schema
+      expect(data!.contributorPerspectives).toHaveLength(4);
+      expect(data!.consensusAnalysis.alignmentSummary).toBeDefined();
+      expect(data!.consensusAnalysis.argumentStrengthProfile).toBeDefined();
+      expect(data!.roundSummary.participation).toBeDefined();
     });
 
     it('should provide individual assessment for single participant', () => {
       setupCompletedRound(store, 0, 1);
 
-      const payload = createMockAnalysisPayload(0, {
-        participantAnalyses: [createMockParticipantAnalysis(0)],
-        leaderboard: [createMockLeaderboardEntry(1, 0)],
-      });
+      const payload = createMockAnalysisPayload(0);
 
       store.getState().addAnalysis(createMockAnalysis({ roundNumber: 0 }));
       store.getState().updateAnalysisData(0, payload);
 
       const data = store.getState().analyses[0].analysisData;
 
-      // Should still have complete analysis
-      expect(data!.participantAnalyses).toHaveLength(1);
-      expect(data!.leaderboard).toHaveLength(1);
+      // Should still have complete analysis with NEW schema
+      expect(data!.contributorPerspectives).toHaveLength(1);
+      expect(data!.consensusAnalysis).toBeDefined();
       expect(data!.roundSummary).toBeDefined();
     });
   });
@@ -1219,11 +1236,13 @@ describe('analysis Streaming Sections', () => {
       }));
       store.getState().updateAnalysisData(0, payload);
 
-      // Verify data persists after completion
+      // Verify data persists after completion with NEW schema
       const analysis = store.getState().analyses[0];
       expect(analysis.status).toBe(AnalysisStatuses.COMPLETE);
       expect(analysis.analysisData).toBeDefined();
-      expect(analysis.analysisData?.leaderboard).toBeDefined();
+      expect(analysis.analysisData?.contributorPerspectives).toBeDefined();
+      expect(analysis.analysisData?.consensusAnalysis).toBeDefined();
+      expect(analysis.analysisData?.roundSummary).toBeDefined();
     });
 
     it('should track each round status independently', () => {

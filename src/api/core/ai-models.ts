@@ -49,18 +49,15 @@ const FREE_DEV_MODEL = ModelIdEnum.enum['deepseek/deepseek-chat-v3.1'];
  * Default model for round analysis and moderator analysis
  * ✅ SINGLE SOURCE: Used by analysis.handler.ts and mcp/handler.ts
  * ✅ REPLACES: Hardcoded model strings across analysis operations
- * ✅ DEVELOPMENT: Uses free DeepSeek model
- * ✅ PRODUCTION: Claude 3.5 Sonnet for high-quality analysis
- * ✅ CONFIGURABLE: Override with NEXT_PUBLIC_USE_DEV_MODELS env variable
+ * ✅ SWITCHED TO 3.5: Using Claude 3.5 Sonnet for better structured output compatibility
+ * ✅ CRITICAL PATH: Analysis requires high-quality models, no dev fallback
  *
  * Used by:
  * - /src/api/routes/chat/handlers/analysis.handler.ts - Round analysis streaming
  * - /src/api/routes/mcp/handler.ts - MCP tool analysis operations
  * - /src/api/services/moderator-analysis.service.ts - Analysis generation
  */
-export const ANALYSIS_MODEL_ID = shouldUseDevModels()
-  ? FREE_DEV_MODEL
-  : ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
+export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
 
 // ============================================================================
 // TITLE GENERATION MODELS
@@ -89,19 +86,15 @@ export const TITLE_GENERATION_MODEL_ID = shouldUseDevModels()
 /**
  * Default model for web search query generation and processing
  * ✅ SINGLE SOURCE: Used by web-search.service.ts
- * ✅ DEVELOPMENT: Uses free DeepSeek model
- * ✅ PRODUCTION: Claude Opus 4 for high-quality search query generation
- * ✅ CONFIGURABLE: Override with NEXT_PUBLIC_USE_DEV_MODELS env variable
+ * ✅ ALWAYS PREMIUM: Uses Claude Sonnet 4.5 for reliable JSON generation
+ * ✅ CRITICAL PATH: Search requires high-quality models, no dev fallback
+ * ✅ JSON SCHEMA: Sonnet 4.5 has excellent structured output compliance
  *
  * Used by:
  * - /src/api/services/web-search.service.ts - Query generation
  * - /src/api/routes/chat/handlers/pre-search.handler.ts - Pre-search operations
  */
-// ✅ CHANGED: Using Claude Sonnet 4 instead of Opus for better JSON mode compatibility
-// Opus has issues with structured output through OpenRouter
-export const WEB_SEARCH_MODEL_ID = shouldUseDevModels()
-  ? FREE_DEV_MODEL
-  : ModelIdEnum.enum['anthropic/claude-sonnet-4'];
+export const WEB_SEARCH_MODEL_ID = ModelIdEnum.enum['anthropic/claude-sonnet-4.5'];
 
 // ============================================================================
 // EXPORTS

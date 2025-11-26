@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ConfidenceWeightings } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -165,61 +165,42 @@ type StreamingText = {
   participant1: string;
   participant2: string;
 
-  // Analysis fields - sequential typing in order from top to bottom
-  // Key Insights (5 items)
-  analysisKeyInsight0: string;
-  analysisKeyInsight1: string;
-  analysisKeyInsight2: string;
-  analysisKeyInsight3: string;
-  analysisKeyInsight4: string;
-  // Consensus Points (3 items)
-  analysisConsensus0: string;
-  analysisConsensus1: string;
-  analysisConsensus2: string;
-  // Divergent Approaches
-  analysisDivergentTopic0: string;
-  analysisDivergentPerspective0: string;
-  analysisDivergentPerspective1: string;
-  analysisDivergentPerspective2: string;
-  // Comparative Analysis - Strengths by Category
-  analysisStrengthCategory0: string;
-  analysisStrengthCategory1: string;
-  analysisStrengthCategory2: string;
-  // Comparative Analysis - Tradeoffs
-  analysisTradeoff0: string;
-  analysisTradeoff1: string;
-  analysisTradeoff2: string;
-  // Decision Framework - Criteria
-  analysisCriteria0: string;
-  analysisCriteria1: string;
-  analysisCriteria2: string;
-  analysisCriteria3: string;
-  // Decision Framework - Scenario Recommendations
-  analysisScenario0: string;
-  analysisScenario1: string;
-  analysisScenario2: string;
-  // Participant Analyses
-  analysisParticipant0Pros0: string;
-  analysisParticipant0Pros1: string;
-  analysisParticipant0Pros2: string;
-  analysisParticipant0Cons0: string;
-  analysisParticipant0Summary: string;
-  analysisParticipant1Pros0: string;
-  analysisParticipant1Pros1: string;
-  analysisParticipant1Pros2: string;
-  analysisParticipant1Cons0: string;
-  analysisParticipant1Summary: string;
-  analysisParticipant2Pros0: string;
-  analysisParticipant2Pros1: string;
-  analysisParticipant2Pros2: string;
-  analysisParticipant2Cons0: string;
-  analysisParticipant2Summary: string;
-  // Summary and Conclusion
-  analysisOverallSummary: string;
-  analysisConclusion: string;
-  // Recommended Actions
-  analysisRecommendedAction0: string;
-  analysisRecommendedAction1: string;
+  // Analysis fields - Multi-AI Deliberation Framework
+  // Key Insights & Summary
+  analysisSummary: string;
+  // Recommendations
+  analysisRecommendation0Title: string;
+  analysisRecommendation0Desc: string;
+  analysisRecommendation1Title: string;
+  analysisRecommendation1Desc: string;
+  // Contributor Perspectives - Stances
+  analysisContributor0Stance: string;
+  analysisContributor1Stance: string;
+  analysisContributor2Stance: string;
+  // Contributor Evidence
+  analysisContributor0Evidence0: string;
+  analysisContributor0Evidence1: string;
+  analysisContributor1Evidence0: string;
+  analysisContributor1Evidence1: string;
+  analysisContributor2Evidence0: string;
+  analysisContributor2Evidence1: string;
+  // Consensus Analysis - Agreement Heatmap
+  analysisConsensusClaim0: string;
+  analysisConsensusClaim1: string;
+  analysisConsensusClaim2: string;
+  // Evidence & Reasoning - Reasoning Threads
+  analysisReasoningClaim0: string;
+  analysisReasoningSynthesis0: string;
+  analysisReasoningClaim1: string;
+  analysisReasoningSynthesis1: string;
+  // Explore Alternatives
+  analysisAlternative0: string;
+  analysisAlternative1: string;
+  analysisAlternative2: string;
+  // Round Summary
+  analysisRoundSummaryThemes: string;
+  analysisRoundSummaryQuestion0: string;
+  analysisRoundSummaryQuestion1: string;
 };
 
 // Initial streaming text state
@@ -241,60 +222,34 @@ const INITIAL_STREAMING_TEXT: StreamingText = {
   participant0: '',
   participant1: '',
   participant2: '',
-  // Key Insights
-  analysisKeyInsight0: '',
-  analysisKeyInsight1: '',
-  analysisKeyInsight2: '',
-  analysisKeyInsight3: '',
-  analysisKeyInsight4: '',
-  // Consensus Points
-  analysisConsensus0: '',
-  analysisConsensus1: '',
-  analysisConsensus2: '',
-  // Divergent Approaches
-  analysisDivergentTopic0: '',
-  analysisDivergentPerspective0: '',
-  analysisDivergentPerspective1: '',
-  analysisDivergentPerspective2: '',
-  // Strengths by Category
-  analysisStrengthCategory0: '',
-  analysisStrengthCategory1: '',
-  analysisStrengthCategory2: '',
-  // Tradeoffs
-  analysisTradeoff0: '',
-  analysisTradeoff1: '',
-  analysisTradeoff2: '',
-  // Criteria
-  analysisCriteria0: '',
-  analysisCriteria1: '',
-  analysisCriteria2: '',
-  analysisCriteria3: '',
-  // Scenario Recommendations
-  analysisScenario0: '',
-  analysisScenario1: '',
-  analysisScenario2: '',
-  // Participant Analyses
-  analysisParticipant0Pros0: '',
-  analysisParticipant0Pros1: '',
-  analysisParticipant0Pros2: '',
-  analysisParticipant0Cons0: '',
-  analysisParticipant0Summary: '',
-  analysisParticipant1Pros0: '',
-  analysisParticipant1Pros1: '',
-  analysisParticipant1Pros2: '',
-  analysisParticipant1Cons0: '',
-  analysisParticipant1Summary: '',
-  analysisParticipant2Pros0: '',
-  analysisParticipant2Pros1: '',
-  analysisParticipant2Pros2: '',
-  analysisParticipant2Cons0: '',
-  analysisParticipant2Summary: '',
-  // Summary and Conclusion
-  analysisOverallSummary: '',
-  analysisConclusion: '',
-  // Recommended Actions
-  analysisRecommendedAction0: '',
-  analysisRecommendedAction1: '',
+  // Analysis - Multi-AI Deliberation Framework
+  analysisSummary: '',
+  analysisRecommendation0Title: '',
+  analysisRecommendation0Desc: '',
+  analysisRecommendation1Title: '',
+  analysisRecommendation1Desc: '',
+  analysisContributor0Stance: '',
+  analysisContributor1Stance: '',
+  analysisContributor2Stance: '',
+  analysisContributor0Evidence0: '',
+  analysisContributor0Evidence1: '',
+  analysisContributor1Evidence0: '',
+  analysisContributor1Evidence1: '',
+  analysisContributor2Evidence0: '',
+  analysisContributor2Evidence1: '',
+  analysisConsensusClaim0: '',
+  analysisConsensusClaim1: '',
+  analysisConsensusClaim2: '',
+  analysisReasoningClaim0: '',
+  analysisReasoningSynthesis0: '',
+  analysisReasoningClaim1: '',
+  analysisReasoningSynthesis1: '',
+  analysisAlternative0: '',
+  analysisAlternative1: '',
+  analysisAlternative2: '',
+  analysisRoundSummaryThemes: '',
+  analysisRoundSummaryQuestion0: '',
+  analysisRoundSummaryQuestion1: '',
 };
 
 export function LiveChatDemo() {
@@ -548,78 +503,63 @@ export function LiveChatDemo() {
 
   // Typing animation for analysis (key insights → consensus → participant analyses → summary → conclusion)
   useEffect(() => {
-    if (stage !== DemoStages.ANALYSIS_STREAMING || !MOCK_ANALYSIS.analysisData?.roundSummary)
+    if (stage !== DemoStages.ANALYSIS_STREAMING || !MOCK_ANALYSIS.analysisData)
       return;
 
-    const summary = MOCK_ANALYSIS.analysisData.roundSummary;
-    const participantAnalyses = MOCK_ANALYSIS.analysisData.participantAnalyses || [];
+    const data = MOCK_ANALYSIS.analysisData;
+    const contributors = data.contributorPerspectives || [];
+    const recommendations = data.recommendations || [];
+    const consensus = data.consensusAnalysis;
+    const evidence = data.evidenceAndReasoning;
+    const alternatives = data.alternatives || [];
+    const summary = data.roundSummary;
 
     let currentStep = 0;
     const activeIntervals: NodeJS.Timeout[] = [];
 
-    const divergent = summary.divergentApproaches?.[0];
-    const comparative = summary.comparativeAnalysis;
-    const framework = summary.decisionFramework;
-    const actions = summary.recommendedActions;
-
     const steps = [
-      // 1. Key Insights (5 items)
-      { key: 'analysisKeyInsight0', text: summary.keyInsights?.[0] || '' },
-      { key: 'analysisKeyInsight1', text: summary.keyInsights?.[1] || '' },
-      { key: 'analysisKeyInsight2', text: summary.keyInsights?.[2] || '' },
-      { key: 'analysisKeyInsight3', text: summary.keyInsights?.[3] || '' },
-      { key: 'analysisKeyInsight4', text: summary.keyInsights?.[4] || '' },
-      // 2. Consensus Points (3 items)
-      { key: 'analysisConsensus0', text: summary.consensusPoints?.[0] || '' },
-      { key: 'analysisConsensus1', text: summary.consensusPoints?.[1] || '' },
-      { key: 'analysisConsensus2', text: summary.consensusPoints?.[2] || '' },
-      // 3. Divergent Approaches
-      { key: 'analysisDivergentTopic0', text: divergent?.topic || '' },
-      { key: 'analysisDivergentPerspective0', text: divergent?.perspectives?.[0] || '' },
-      { key: 'analysisDivergentPerspective1', text: divergent?.perspectives?.[1] || '' },
-      { key: 'analysisDivergentPerspective2', text: divergent?.perspectives?.[2] || '' },
-      // 4. Comparative Analysis - Strengths by Category
-      { key: 'analysisStrengthCategory0', text: `${comparative?.strengthsByCategory?.[0]?.category}: ${comparative?.strengthsByCategory?.[0]?.participants?.join(', ')}` },
-      { key: 'analysisStrengthCategory1', text: `${comparative?.strengthsByCategory?.[1]?.category}: ${comparative?.strengthsByCategory?.[1]?.participants?.join(', ')}` },
-      { key: 'analysisStrengthCategory2', text: `${comparative?.strengthsByCategory?.[2]?.category}: ${comparative?.strengthsByCategory?.[2]?.participants?.join(', ')}` },
-      // 5. Comparative Analysis - Tradeoffs
-      { key: 'analysisTradeoff0', text: comparative?.tradeoffs?.[0] || '' },
-      { key: 'analysisTradeoff1', text: comparative?.tradeoffs?.[1] || '' },
-      { key: 'analysisTradeoff2', text: comparative?.tradeoffs?.[2] || '' },
-      // 6. Decision Framework - Criteria
-      { key: 'analysisCriteria0', text: framework?.criteriaToConsider?.[0] || '' },
-      { key: 'analysisCriteria1', text: framework?.criteriaToConsider?.[1] || '' },
-      { key: 'analysisCriteria2', text: framework?.criteriaToConsider?.[2] || '' },
-      { key: 'analysisCriteria3', text: framework?.criteriaToConsider?.[3] || '' },
-      // 7. Decision Framework - Scenario Recommendations
-      { key: 'analysisScenario0', text: `${framework?.scenarioRecommendations?.[0]?.scenario}: ${framework?.scenarioRecommendations?.[0]?.recommendation}` },
-      { key: 'analysisScenario1', text: `${framework?.scenarioRecommendations?.[1]?.scenario}: ${framework?.scenarioRecommendations?.[1]?.recommendation}` },
-      { key: 'analysisScenario2', text: `${framework?.scenarioRecommendations?.[2]?.scenario}: ${framework?.scenarioRecommendations?.[2]?.recommendation}` },
-      // 8. Participant Analyses
-      // Participant 0
-      { key: 'analysisParticipant0Pros0', text: participantAnalyses[0]?.pros?.[0] || '' },
-      { key: 'analysisParticipant0Pros1', text: participantAnalyses[0]?.pros?.[1] || '' },
-      { key: 'analysisParticipant0Pros2', text: participantAnalyses[0]?.pros?.[2] || '' },
-      { key: 'analysisParticipant0Cons0', text: participantAnalyses[0]?.cons?.[0] || '' },
-      { key: 'analysisParticipant0Summary', text: participantAnalyses[0]?.summary || '' },
-      // Participant 1
-      { key: 'analysisParticipant1Pros0', text: participantAnalyses[1]?.pros?.[0] || '' },
-      { key: 'analysisParticipant1Pros1', text: participantAnalyses[1]?.pros?.[1] || '' },
-      { key: 'analysisParticipant1Pros2', text: participantAnalyses[1]?.pros?.[2] || '' },
-      { key: 'analysisParticipant1Cons0', text: participantAnalyses[1]?.cons?.[0] || '' },
-      { key: 'analysisParticipant1Summary', text: participantAnalyses[1]?.summary || '' },
-      // Participant 2
-      { key: 'analysisParticipant2Pros0', text: participantAnalyses[2]?.pros?.[0] || '' },
-      { key: 'analysisParticipant2Pros1', text: participantAnalyses[2]?.pros?.[1] || '' },
-      { key: 'analysisParticipant2Pros2', text: participantAnalyses[2]?.pros?.[2] || '' },
-      { key: 'analysisParticipant2Cons0', text: participantAnalyses[2]?.cons?.[0] || '' },
-      { key: 'analysisParticipant2Summary', text: participantAnalyses[2]?.summary || '' },
-      // 9. Summary and Conclusion
-      { key: 'analysisOverallSummary', text: summary.overallSummary },
-      { key: 'analysisConclusion', text: summary.conclusion },
-      // 10. Recommended Actions
-      { key: 'analysisRecommendedAction0', text: actions?.[0]?.action || '' },
-      { key: 'analysisRecommendedAction1', text: actions?.[1]?.action || '' },
+      // 1. Key Insights & Summary
+      { key: 'analysisSummary', text: data.summary || '' },
+
+      // 2. Recommendations
+      { key: 'analysisRecommendation0Title', text: recommendations[0]?.title || '' },
+      { key: 'analysisRecommendation0Desc', text: recommendations[0]?.description || '' },
+      { key: 'analysisRecommendation1Title', text: recommendations[1]?.title || '' },
+      { key: 'analysisRecommendation1Desc', text: recommendations[1]?.description || '' },
+
+      // 3. Contributor Perspectives - Stances
+      { key: 'analysisContributor0Stance', text: contributors[0]?.stance || '' },
+      { key: 'analysisContributor1Stance', text: contributors[1]?.stance || '' },
+      { key: 'analysisContributor2Stance', text: contributors[2]?.stance || '' },
+
+      // 4. Contributor Evidence
+      { key: 'analysisContributor0Evidence0', text: contributors[0]?.evidence?.[0] || '' },
+      { key: 'analysisContributor0Evidence1', text: contributors[0]?.evidence?.[1] || '' },
+      { key: 'analysisContributor1Evidence0', text: contributors[1]?.evidence?.[0] || '' },
+      { key: 'analysisContributor1Evidence1', text: contributors[1]?.evidence?.[1] || '' },
+      { key: 'analysisContributor2Evidence0', text: contributors[2]?.evidence?.[0] || '' },
+      { key: 'analysisContributor2Evidence1', text: contributors[2]?.evidence?.[1] || '' },
+
+      // 5. Consensus Analysis - Agreement Heatmap
+      { key: 'analysisConsensusClaim0', text: consensus?.agreementHeatmap?.[0]?.claim || '' },
+      { key: 'analysisConsensusClaim1', text: consensus?.agreementHeatmap?.[1]?.claim || '' },
+      { key: 'analysisConsensusClaim2', text: consensus?.agreementHeatmap?.[2]?.claim || '' },
+
+      // 6. Evidence & Reasoning - Reasoning Threads
+      { key: 'analysisReasoningClaim0', text: evidence?.reasoningThreads?.[0]?.claim || '' },
+      { key: 'analysisReasoningSynthesis0', text: evidence?.reasoningThreads?.[0]?.synthesis || '' },
+      { key: 'analysisReasoningClaim1', text: evidence?.reasoningThreads?.[1]?.claim || '' },
+      { key: 'analysisReasoningSynthesis1', text: evidence?.reasoningThreads?.[1]?.synthesis || '' },
+
+      // 7. Explore Alternatives
+      { key: 'analysisAlternative0', text: alternatives[0]?.scenario || '' },
+      { key: 'analysisAlternative1', text: alternatives[1]?.scenario || '' },
+      { key: 'analysisAlternative2', text: alternatives[2]?.scenario || '' },
+
+      // 8. Round Summary
+      { key: 'analysisRoundSummaryThemes', text: summary?.keyThemes || '' },
+      { key: 'analysisRoundSummaryQuestion0', text: summary?.unresolvedQuestions?.[0] || '' },
+      { key: 'analysisRoundSummaryQuestion1', text: summary?.unresolvedQuestions?.[1] || '' },
     ];
 
     const typeNextStep = () => {
@@ -932,155 +872,89 @@ export function LiveChatDemo() {
         status: AnalysisStatuses.COMPLETE,
         analysisData: analysisShowContent
           ? {
-              ...MOCK_ANALYSIS.analysisData,
+              // Multi-AI Deliberation Framework - New Schema
+              roundConfidence: MOCK_ANALYSIS.analysisData.roundConfidence,
+              confidenceWeighting: ConfidenceWeightings.BALANCED,
+              consensusEvolution: MOCK_ANALYSIS.analysisData.consensusEvolution,
+              summary: isAnalysisStreaming ? streamingText.analysisSummary : MOCK_ANALYSIS.analysisData.summary,
+
+              recommendations: MOCK_ANALYSIS.analysisData.recommendations.map((rec, idx) => ({
+                ...rec,
+                title: isAnalysisStreaming
+                  ? (idx === 0 ? streamingText.analysisRecommendation0Title : streamingText.analysisRecommendation1Title)
+                  : rec.title,
+                description: isAnalysisStreaming
+                  ? (idx === 0 ? streamingText.analysisRecommendation0Desc : streamingText.analysisRecommendation1Desc)
+                  : rec.description,
+              })),
+
+              contributorPerspectives: MOCK_ANALYSIS.analysisData.contributorPerspectives.map((contributor, idx) => ({
+                ...contributor,
+                stance: isAnalysisStreaming
+                  ? (idx === 0
+                      ? streamingText.analysisContributor0Stance
+                      : idx === 1
+                        ? streamingText.analysisContributor1Stance
+                        : streamingText.analysisContributor2Stance)
+                  : contributor.stance,
+                evidence: contributor.evidence.map((ev, evIdx) =>
+                  isAnalysisStreaming && evIdx < 2
+                    ? (idx === 0
+                        ? (evIdx === 0 ? streamingText.analysisContributor0Evidence0 : streamingText.analysisContributor0Evidence1)
+                        : idx === 1
+                          ? (evIdx === 0 ? streamingText.analysisContributor1Evidence0 : streamingText.analysisContributor1Evidence1)
+                          : (evIdx === 0 ? streamingText.analysisContributor2Evidence0 : streamingText.analysisContributor2Evidence1))
+                    : ev,
+                ).filter(text => text.length > 0),
+              })),
+
+              consensusAnalysis: {
+                ...MOCK_ANALYSIS.analysisData.consensusAnalysis,
+                agreementHeatmap: MOCK_ANALYSIS.analysisData.consensusAnalysis.agreementHeatmap.map((hm, idx) => ({
+                  ...hm,
+                  claim: isAnalysisStreaming
+                    ? (idx === 0
+                        ? streamingText.analysisConsensusClaim0
+                        : idx === 1
+                          ? streamingText.analysisConsensusClaim1
+                          : streamingText.analysisConsensusClaim2)
+                    : hm.claim,
+                })),
+              },
+
+              evidenceAndReasoning: {
+                ...MOCK_ANALYSIS.analysisData.evidenceAndReasoning,
+                reasoningThreads: MOCK_ANALYSIS.analysisData.evidenceAndReasoning.reasoningThreads.map((thread, idx) => ({
+                  ...thread,
+                  claim: isAnalysisStreaming
+                    ? (idx === 0 ? streamingText.analysisReasoningClaim0 : streamingText.analysisReasoningClaim1)
+                    : thread.claim,
+                  synthesis: isAnalysisStreaming
+                    ? (idx === 0 ? streamingText.analysisReasoningSynthesis0 : streamingText.analysisReasoningSynthesis1)
+                    : thread.synthesis,
+                })).filter(thread => thread.claim.length > 0),
+              },
+
+              alternatives: MOCK_ANALYSIS.analysisData.alternatives.map((alt, idx) => ({
+                ...alt,
+                scenario: isAnalysisStreaming
+                  ? (idx === 0
+                      ? streamingText.analysisAlternative0
+                      : idx === 1
+                        ? streamingText.analysisAlternative1
+                        : streamingText.analysisAlternative2)
+                  : alt.scenario,
+              })).filter(alt => alt.scenario.length > 0),
+
               roundSummary: {
                 ...MOCK_ANALYSIS.analysisData.roundSummary,
-                // Key Insights (5 items)
-                keyInsights: [
-                  isAnalysisStreaming ? streamingText.analysisKeyInsight0 : (MOCK_ANALYSIS.analysisData.roundSummary.keyInsights[0] || ''),
-                  isAnalysisStreaming ? streamingText.analysisKeyInsight1 : (MOCK_ANALYSIS.analysisData.roundSummary.keyInsights[1] || ''),
-                  isAnalysisStreaming ? streamingText.analysisKeyInsight2 : (MOCK_ANALYSIS.analysisData.roundSummary.keyInsights[2] || ''),
-                  isAnalysisStreaming ? streamingText.analysisKeyInsight3 : (MOCK_ANALYSIS.analysisData.roundSummary.keyInsights[3] || ''),
-                  isAnalysisStreaming ? streamingText.analysisKeyInsight4 : (MOCK_ANALYSIS.analysisData.roundSummary.keyInsights[4] || ''),
-                ].filter(text => text.length > 0),
-                // Consensus Points (3 items)
-                consensusPoints: [
-                  isAnalysisStreaming ? streamingText.analysisConsensus0 : (MOCK_ANALYSIS.analysisData.roundSummary.consensusPoints[0] || ''),
-                  isAnalysisStreaming ? streamingText.analysisConsensus1 : (MOCK_ANALYSIS.analysisData.roundSummary.consensusPoints[1] || ''),
-                  isAnalysisStreaming ? streamingText.analysisConsensus2 : (MOCK_ANALYSIS.analysisData.roundSummary.consensusPoints[2] || ''),
-                ].filter(text => text.length > 0),
-                // Summary and Conclusion
-                overallSummary: isAnalysisStreaming ? streamingText.analysisOverallSummary : MOCK_ANALYSIS.analysisData.roundSummary.overallSummary,
-                conclusion: isAnalysisStreaming ? streamingText.analysisConclusion : MOCK_ANALYSIS.analysisData.roundSummary.conclusion,
-                // Divergent Approaches with streaming
-                divergentApproaches: isAnalysisStreaming
-                  ? (streamingText.analysisDivergentTopic0.length > 0
-                      ? [{
-                          topic: streamingText.analysisDivergentTopic0,
-                          perspectives: [
-                            streamingText.analysisDivergentPerspective0,
-                            streamingText.analysisDivergentPerspective1,
-                            streamingText.analysisDivergentPerspective2,
-                          ].filter(p => p.length > 0),
-                        }]
-                      : [])
-                  : MOCK_ANALYSIS.analysisData.roundSummary.divergentApproaches,
-                // Comparative Analysis with streaming
-                comparativeAnalysis: isAnalysisStreaming
-                  ? {
-                      strengthsByCategory: [
-                        ...(streamingText.analysisStrengthCategory0.length > 0
-                          ? [{
-                              category: streamingText.analysisStrengthCategory0.split(':')[0] || '',
-                              participants: [streamingText.analysisStrengthCategory0.split(': ')[1] || ''],
-                            }]
-                          : []),
-                        ...(streamingText.analysisStrengthCategory1.length > 0
-                          ? [{
-                              category: streamingText.analysisStrengthCategory1.split(':')[0] || '',
-                              participants: [streamingText.analysisStrengthCategory1.split(': ')[1] || ''],
-                            }]
-                          : []),
-                        ...(streamingText.analysisStrengthCategory2.length > 0
-                          ? [{
-                              category: streamingText.analysisStrengthCategory2.split(':')[0] || '',
-                              participants: [streamingText.analysisStrengthCategory2.split(': ')[1] || ''],
-                            }]
-                          : []),
-                      ],
-                      tradeoffs: [
-                        streamingText.analysisTradeoff0,
-                        streamingText.analysisTradeoff1,
-                        streamingText.analysisTradeoff2,
-                      ].filter(t => t.length > 0),
-                    }
-                  : MOCK_ANALYSIS.analysisData.roundSummary.comparativeAnalysis,
-                // Decision Framework with streaming
-                decisionFramework: isAnalysisStreaming
-                  ? {
-                      criteriaToConsider: [
-                        streamingText.analysisCriteria0,
-                        streamingText.analysisCriteria1,
-                        streamingText.analysisCriteria2,
-                        streamingText.analysisCriteria3,
-                      ].filter(c => c.length > 0),
-                      scenarioRecommendations: [
-                        ...(streamingText.analysisScenario0.length > 0
-                          ? [{
-                              scenario: streamingText.analysisScenario0.split(':')[0] || '',
-                              recommendation: streamingText.analysisScenario0.split(': ')[1] || '',
-                            }]
-                          : []),
-                        ...(streamingText.analysisScenario1.length > 0
-                          ? [{
-                              scenario: streamingText.analysisScenario1.split(':')[0] || '',
-                              recommendation: streamingText.analysisScenario1.split(': ')[1] || '',
-                            }]
-                          : []),
-                        ...(streamingText.analysisScenario2.length > 0
-                          ? [{
-                              scenario: streamingText.analysisScenario2.split(':')[0] || '',
-                              recommendation: streamingText.analysisScenario2.split(': ')[1] || '',
-                            }]
-                          : []),
-                      ],
-                    }
-                  : MOCK_ANALYSIS.analysisData.roundSummary.decisionFramework,
-                // Recommended Actions with streaming
-                recommendedActions: isAnalysisStreaming
-                  ? [
-                      ...(streamingText.analysisRecommendedAction0.length > 0
-                        ? [{
-                            action: streamingText.analysisRecommendedAction0,
-                            rationale: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[0]?.rationale || '',
-                            suggestedModels: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[0]?.suggestedModels || [],
-                            suggestedRoles: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[0]?.suggestedRoles || [],
-                            suggestedMode: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[0]?.suggestedMode || '',
-                          }]
-                        : []),
-                      ...(streamingText.analysisRecommendedAction1.length > 0
-                        ? [{
-                            action: streamingText.analysisRecommendedAction1,
-                            rationale: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[1]?.rationale || '',
-                            suggestedModels: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[1]?.suggestedModels || [],
-                            suggestedRoles: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[1]?.suggestedRoles || [],
-                            suggestedMode: MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions?.[1]?.suggestedMode || '',
-                          }]
-                        : []),
-                    ]
-                  : MOCK_ANALYSIS.analysisData.roundSummary.recommendedActions,
+                keyThemes: isAnalysisStreaming ? streamingText.analysisRoundSummaryThemes : MOCK_ANALYSIS.analysisData.roundSummary.keyThemes,
+                unresolvedQuestions: MOCK_ANALYSIS.analysisData.roundSummary.unresolvedQuestions.map((q, idx) =>
+                  isAnalysisStreaming
+                    ? (idx === 0 ? streamingText.analysisRoundSummaryQuestion0 : streamingText.analysisRoundSummaryQuestion1)
+                    : q,
+                ).filter(q => q.length > 0),
               },
-              participantAnalyses: MOCK_ANALYSIS.analysisData.participantAnalyses.map((p, idx) => ({
-                ...p,
-                pros: idx === 0
-                  ? [
-                      isAnalysisStreaming ? streamingText.analysisParticipant0Pros0 : (p.pros[0] || ''),
-                      isAnalysisStreaming ? streamingText.analysisParticipant0Pros1 : (p.pros[1] || ''),
-                      isAnalysisStreaming ? streamingText.analysisParticipant0Pros2 : (p.pros[2] || ''),
-                    ].filter(text => text.length > 0)
-                  : idx === 1
-                    ? [
-                        isAnalysisStreaming ? streamingText.analysisParticipant1Pros0 : (p.pros[0] || ''),
-                        isAnalysisStreaming ? streamingText.analysisParticipant1Pros1 : (p.pros[1] || ''),
-                        isAnalysisStreaming ? streamingText.analysisParticipant1Pros2 : (p.pros[2] || ''),
-                      ].filter(text => text.length > 0)
-                    : [
-                        isAnalysisStreaming ? streamingText.analysisParticipant2Pros0 : (p.pros[0] || ''),
-                        isAnalysisStreaming ? streamingText.analysisParticipant2Pros1 : (p.pros[1] || ''),
-                        isAnalysisStreaming ? streamingText.analysisParticipant2Pros2 : (p.pros[2] || ''),
-                      ].filter(text => text.length > 0),
-                cons: idx === 0
-                  ? [isAnalysisStreaming ? streamingText.analysisParticipant0Cons0 : (p.cons[0] || '')].filter(text => text.length > 0)
-                  : idx === 1
-                    ? [isAnalysisStreaming ? streamingText.analysisParticipant1Cons0 : (p.cons[0] || '')].filter(text => text.length > 0)
-                    : [isAnalysisStreaming ? streamingText.analysisParticipant2Cons0 : (p.cons[0] || '')].filter(text => text.length > 0),
-                summary: idx === 0
-                  ? (isAnalysisStreaming ? streamingText.analysisParticipant0Summary : p.summary)
-                  : idx === 1
-                    ? (isAnalysisStreaming ? streamingText.analysisParticipant1Summary : p.summary)
-                    : (isAnalysisStreaming ? streamingText.analysisParticipant2Summary : p.summary),
-              })),
-              leaderboard: MOCK_ANALYSIS.analysisData.leaderboard,
             }
           : undefined,
       }

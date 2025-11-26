@@ -118,6 +118,17 @@ function PreSearchStreamComponent({
     // Start fetch-based SSE stream (backend uses POST)
     const startStream = async () => {
       try {
+        // ✅ FIX: Guard against undefined userQuery (malformed JSON error)
+        if (!preSearch.userQuery || typeof preSearch.userQuery !== 'string') {
+          console.error('[PreSearchStream] userQuery is missing or invalid:', {
+            id: preSearch.id,
+            roundNumber: preSearch.roundNumber,
+            userQuery: preSearch.userQuery,
+            preSearch,
+          });
+          throw new Error('userQuery is required but was not provided');
+        }
+
         const response = await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`,
           {

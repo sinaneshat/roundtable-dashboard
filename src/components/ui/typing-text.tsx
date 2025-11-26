@@ -31,19 +31,21 @@ export function TypingText({
   onComplete,
   enabled = true,
 }: TypingTextProps) {
-  const [displayedText, setDisplayedText] = useState(enabled ? '' : text);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(enabled ? 0 : text.length);
+
+  // ✅ FIX: Derive displayedText from currentIndex (no separate state)
+  // Prevents nested setState calls that cause "Maximum update depth" errors
+  const displayedText = text.slice(0, currentIndex);
 
   useEffect(() => {
     // If not enabled or speed is 0, display instantly
     if (!enabled || speed === 0) {
-      setDisplayedText(text);
       setCurrentIndex(text.length);
       onComplete?.();
       return undefined;
     }
 
-    setDisplayedText('');
+    // Reset to start of text for new animation
     setCurrentIndex(0);
 
     // ✅ MEMORY LEAK FIX: Store interval ID in variable to properly clean up
@@ -52,13 +54,13 @@ export function TypingText({
     const startTimeout = setTimeout(() => {
       intervalId = setInterval(() => {
         setCurrentIndex((prev) => {
-          if (prev >= text.length) {
+          const nextIndex = prev + 1;
+          if (nextIndex >= text.length) {
             if (intervalId) clearInterval(intervalId);
             onComplete?.();
-            return prev;
+            return text.length;
           }
-          setDisplayedText(text.slice(0, prev + 1));
-          return prev + 1;
+          return nextIndex;
         });
       }, speed);
     }, delay);

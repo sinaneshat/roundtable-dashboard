@@ -1060,7 +1060,6 @@
     "rank": "Rank #{rank}",
     "summary": "Summary",
     "conclusion": "Conclusion",
-    "keyInsights": "Key Insights",
     "consensus": "Points of Agreement",
     "consensusPoints": "Points of Agreement",
     "divergentApproaches": "Different Perspectives",
@@ -1149,6 +1148,116 @@
       "mostPractical": "Most Practical",
       "bestArgument": "Best Argument",
       "strongestLogic": "Strongest Logic"
+    },
+    "contributorPerspectives": {
+      "title": "Contributor Perspectives",
+      "scorecard": "Scorecard",
+      "logic": "Logic",
+      "riskAwareness": "Risk Awareness",
+      "creativity": "Creativity",
+      "evidence": "Evidence",
+      "consensus": "Consensus",
+      "stance": "Stance",
+      "vote": "Vote",
+      "approve": "Approve",
+      "caution": "Caution",
+      "reject": "Reject"
+    },
+    "consensusAnalysis": {
+      "title": "Consensus Analysis",
+      "alignmentSummary": "Alignment Summary",
+      "alignmentDescription": "Overview of agreement patterns",
+      "totalClaims": "Total Claims",
+      "majorAlignment": "Major Alignment",
+      "contested": "Contested",
+      "overallAlignment": "Overall Alignment",
+      "contestedList": "Contested Claims",
+      "agreementHeatmap": "Agreement Heatmap",
+      "heatmapDescription": "Claim-by-claim consensus view",
+      "claim": "Claim",
+      "argumentStrength": "Argument Strength Profiles",
+      "strengthDescription": "Detailed metrics per contributor",
+      "profileLogic": "Logic",
+      "profileEvidence": "Evidence",
+      "profileRiskAwareness": "Risk Awareness",
+      "profileConsensus": "Consensus",
+      "profileCreativity": "Creativity"
+    },
+    "evidenceReasoning": {
+      "title": "Evidence & Reasoning",
+      "reasoningThreads": "Reasoning Threads",
+      "threadsDescription": "Key claims with supporting synthesis",
+      "evidenceCoverage": "Evidence Coverage",
+      "coverageDescription": "Strength of support for each claim",
+      "coverage": "Coverage"
+    },
+    "alternatives": {
+      "title": "Explore Alternatives",
+      "explorationTitle": "Alternative Scenarios",
+      "explorationDescription": "Different approaches with confidence levels",
+      "confidence": "Confidence",
+      "highConfidence": "High Confidence",
+      "mediumConfidence": "Medium Confidence",
+      "lowConfidence": "Low Confidence"
+    },
+    "roundOutcome": {
+      "title": "Round Outcome",
+      "allPerspectives": "All perspectives considered equally",
+      "roundConfidence": "Round Confidence",
+      "weighting": "Weighting",
+      "contributors": "Contributors",
+      "contributorCount": "{count} Contributors",
+      "debatePhases": "{count} debate phases",
+      "balanced": "Balanced",
+      "evidenceHeavy": "Evidence Heavy",
+      "consensusHeavy": "Consensus Heavy",
+      "expertiseWeighted": "Expertise Weighted"
+    },
+    "consensusEvolution": {
+      "title": "Consensus Evolution",
+      "opening": "Opening",
+      "rebuttal": "Rebuttal",
+      "crossExam": "Cross-Exam",
+      "synthesis": "Synthesis",
+      "finalVote": "Final Vote"
+    },
+    "keyInsights": {
+      "title": "Key Insights & Recommendations",
+      "insightsIdentified": "{count} key insights identified",
+      "recommendation": "Recommendation {number}"
+    },
+    "roundSummary": {
+      "title": "Round Summary",
+      "closingSynthesis": "Closing synthesis and next steps",
+      "participation": "Participation",
+      "keyThemes": "Key Themes",
+      "unresolvedQuestions": "Unresolved Questions",
+      "generated": "Generated"
+    },
+    "aboutFramework": {
+      "title": "About This Framework",
+      "subtitle": "Understanding multi-model deliberation methodology.",
+      "description": "This report synthesizes deliberation from multiple AI models operating in distinct roles. Each contributor evaluates the topic through their specialized lens, and consensus emerges through structured debate phases.",
+      "howItWorks": "How It Works",
+      "roles": {
+        "analyst": {
+          "name": "Analyst",
+          "description": "Evaluates ideas through rigorous, evidence-based assessment and data analysis."
+        },
+        "innovator": {
+          "name": "Innovator",
+          "description": "Explores creative possibilities, novel applications, and unconventional approaches."
+        },
+        "skeptic": {
+          "name": "Skeptic",
+          "description": "Tests assumptions, identifies potential weaknesses, and challenges conclusions."
+        },
+        "builder": {
+          "name": "Builder",
+          "description": "Focuses on practical implementation, feasibility, and actionable next steps."
+        }
+      },
+      "confidenceExplanation": "Confidence Score reflects weighted consensus across models, factoring in evidence strength and reasoning quality."
     }
   },
   "mostPopular": "Most Popular",

@@ -325,14 +325,19 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             for await (const partialResult of queryStream.partialObjectStream) {
             // Send start event once we know totalQueries
-              if (partialResult.totalQueries && partialResult.totalQueries !== lastTotalQueries) {
-                lastTotalQueries = partialResult.totalQueries;
+              // Coerce string numbers to actual numbers
+              const totalQueries = typeof partialResult.totalQueries === 'string'
+                ? Number.parseInt(partialResult.totalQueries, 10)
+                : partialResult.totalQueries;
+
+              if (totalQueries && totalQueries !== lastTotalQueries) {
+                lastTotalQueries = totalQueries;
                 await stream.writeSSE({
                   event: PreSearchSseEvents.START,
                   data: JSON.stringify({
                     timestamp: Date.now(),
                     userQuery: body.userQuery,
-                    totalQueries: partialResult.totalQueries,
+                    totalQueries,
                     analysisRationale: partialResult.analysisRationale || '',
                   }),
                 });
@@ -351,7 +356,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                         rationale: query.rationale || '',
                         searchDepth: query.searchDepth || WebSearchDepths.BASIC,
                         index: i,
-                        total: partialResult.totalQueries || 1,
+                        total: totalQueries || 1,
                       }),
                     });
                     lastSentQueries[i] = query.query;
@@ -508,7 +513,10 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           throw new Error('Failed to generate search queries');
         }
 
-        const totalQueries = multiQueryResult.totalQueries;
+        // Coerce string numbers to actual numbers
+        const totalQueries = typeof multiQueryResult.totalQueries === 'string'
+          ? Number.parseInt(multiQueryResult.totalQueries, 10)
+          : multiQueryResult.totalQueries;
         const generatedQueries = multiQueryResult.queries;
 
         // ✅ DEBUG: Log final query execution plan
@@ -590,12 +598,20 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             }
 
             // Execute search with AI-driven parameters
+            // Coerce string numbers to actual numbers
+            const sourceCount = typeof generatedQuery.sourceCount === 'string'
+              ? Number.parseInt(generatedQuery.sourceCount, 10)
+              : generatedQuery.sourceCount;
+            const chunksPerSource = typeof generatedQuery.chunksPerSource === 'string'
+              ? Number.parseInt(generatedQuery.chunksPerSource, 10)
+              : generatedQuery.chunksPerSource;
+
             result = await performWebSearch(
               {
                 query: generatedQuery.query,
-                maxResults: generatedQuery.sourceCount ?? defaultSourceCount,
+                maxResults: sourceCount ?? defaultSourceCount,
                 searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
-                chunksPerSource: generatedQuery.chunksPerSource ?? 2,
+                chunksPerSource: chunksPerSource ?? 2,
                 includeImages: generatedQuery.includeImages ?? false,
                 includeImageDescriptions: generatedQuery.includeImageDescriptions ?? false,
                 includeAnswer: generatedQuery.needsAnswer ?? 'advanced',

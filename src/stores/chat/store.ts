@@ -78,13 +78,13 @@ import { AnalysisStatuses, ChatModeSchema, ScreenModes, StreamStatuses } from '@
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
-  RecommendedAction,
+  Recommendation,
   RoundFeedbackData,
   StoredModeratorAnalysis,
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
+import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
@@ -196,14 +196,14 @@ const createFormSlice: StateCreator<
   resetForm: () =>
     set(FORM_DEFAULTS, false, 'form/resetForm'),
 
-  applyRecommendedAction: (action: RecommendedAction, options?: ApplyRecommendedActionOptions) => {
+  applyRecommendedAction: (action: Recommendation, options?: ApplyRecommendedActionOptions) => {
     // ✅ EXTRACTED: Business logic moved to actions/recommended-action-application.ts
     // Thin wrapper applies updates returned from pure function
     const result = applyRecommendedActionLogic(action, options);
 
     set(result.updates, false, 'form/applyRecommendedAction');
 
-    // Return result object (without updates property for backwards compatibility)
+    // ✅ Return result metadata (updates already applied via set() above)
     return {
       success: result.success,
       error: result.error,
@@ -343,7 +343,7 @@ const createAnalysisSlice: StateCreator<
     }
     const mode = modeResult.data;
 
-    // ✅ TYPE-SAFE EXTRACTION: Use consolidated utility from message-filtering.ts
+    // ✅ TYPE-SAFE EXTRACTION: Use consolidated utility from message-transforms.ts
     // Replaces unsafe type assertions with Zod-validated filtering
     // getParticipantMessagesWithIds() uses isParticipantMessage() type guard internally
     const { ids: participantMessageIds, messages: participantMessages } = getParticipantMessagesWithIds(messages, roundNumber);
@@ -579,9 +579,51 @@ const createThreadSlice: StateCreator<
   setParticipants: (participants: ChatParticipant[]) =>
     set({ participants }, false, 'thread/setParticipants'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) =>
-    set(state => ({
-      messages: typeof messages === 'function' ? messages(state.messages) : messages,
-    }), false, 'thread/setMessages'),
+    set((state) => {
+      const newMessages = typeof messages === 'function' ? messages(state.messages) : messages;
+
+      // ✅ DEFENSIVE CHECK: Log when messages have invalid parts structure
+      if (Array.isArray(newMessages)) {
+        newMessages.forEach((msg, idx) => {
+          if (!msg.parts || !Array.isArray(msg.parts)) {
+            console.error('[Store] Message has invalid parts structure:', {
+              messageIndex: idx,
+              messageId: msg.id,
+              role: msg.role,
+              parts: msg.parts,
+              metadata: msg.metadata,
+            });
+          } else {
+            // Check for undefined parts within the array
+            const invalidParts = msg.parts.filter((p, pIdx) => {
+              if (!p || typeof p !== 'object') {
+                console.error('[Store] Message has undefined or invalid part:', {
+                  messageIndex: idx,
+                  messageId: msg.id,
+                  role: msg.role,
+                  partIndex: pIdx,
+                  part: p,
+                  allParts: msg.parts,
+                });
+                return true;
+              }
+              return false;
+            });
+
+            if (invalidParts.length > 0) {
+              console.error('[Store] Message has invalid parts:', {
+                messageIndex: idx,
+                messageId: msg.id,
+                invalidPartCount: invalidParts.length,
+                totalParts: msg.parts.length,
+              });
+            }
+          }
+        });
+      }
+
+      return { messages: newMessages };
+    }, false, 'thread/setMessages'),
   setIsStreaming: (isStreaming: boolean) =>
     set({ isStreaming }, false, 'thread/setIsStreaming'),
   setCurrentParticipantIndex: (currentParticipantIndex: number) =>

@@ -44,6 +44,7 @@ import type { ChatStore } from '@/stores/chat/store-schemas';
  * @template TKey - Key type for deduplication (string or number)
  * @template TResponse - API response type containing items
  * @template TQueryArgs - Additional arguments for query hook
+ * @template TDeduplicationOptions - Type-safe deduplication options (replaces Record<string, unknown>)
  */
 export type OrchestratorConfig<
   TRaw,
@@ -51,6 +52,7 @@ export type OrchestratorConfig<
   TKey extends string | number,
   TResponse = unknown,
   TQueryArgs extends readonly unknown[] = readonly [],
+  TDeduplicationOptions = undefined,
 > = {
   /**
    * TanStack Query hook that fetches data from server
@@ -109,32 +111,42 @@ export type OrchestratorConfig<
 
   /**
    * Optional deduplication hook for additional processing
+   * ✅ TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
    * @example useAnalysisDeduplication
    */
   deduplicationHook?: (
     items: TItem[],
-    options?: Record<string, unknown>,
+    options?: TDeduplicationOptions,
   ) => TItem[];
 
   /**
    * Optional options to pass to deduplication hook
+   * ✅ TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
    * @example { regeneratingRoundNumber }
    */
-  deduplicationOptions?: Record<string, unknown>;
+  deduplicationOptions?: TDeduplicationOptions;
 };
 
 /**
  * Options passed to orchestrator hook instance
+ * @template TQueryArgs - Additional query arguments type
+ * @template TDeduplicationOptions - Type-safe deduplication options (replaces Record<string, unknown>)
  */
-export type OrchestratorOptions<TQueryArgs extends readonly unknown[] = readonly []> = {
+export type OrchestratorOptions<
+  TQueryArgs extends readonly unknown[] = readonly [],
+  TDeduplicationOptions = undefined,
+> = {
   /** Thread ID to fetch data for */
   threadId: string;
   /** Whether orchestrator is enabled (controls query and sync) */
   enabled?: boolean;
   /** Additional query arguments */
   queryArgs?: TQueryArgs;
-  /** Optional options to pass to deduplication hook at runtime */
-  deduplicationOptions?: Record<string, unknown>;
+  /**
+   * Optional options to pass to deduplication hook at runtime
+   * ✅ TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
+   */
+  deduplicationOptions?: TDeduplicationOptions;
 };
 
 /**
@@ -190,8 +202,9 @@ export function createOrchestrator<
   TKey extends string | number,
   TResponse = unknown,
   TQueryArgs extends readonly unknown[] = readonly [],
+  TDeduplicationOptions = undefined,
 >(
-  config: OrchestratorConfig<TRaw, TItem, TKey, TResponse, TQueryArgs>,
+  config: OrchestratorConfig<TRaw, TItem, TKey, TResponse, TQueryArgs, TDeduplicationOptions>,
 ) {
   const {
     queryHook,
@@ -216,7 +229,7 @@ export function createOrchestrator<
    * - Shallow comparison for efficient change detection
    */
   return function useOrchestrator(
-    options: OrchestratorOptions<TQueryArgs>,
+    options: OrchestratorOptions<TQueryArgs, TDeduplicationOptions>,
   ): OrchestratorReturn {
     // ✅ TYPE SAFETY: Extract queryArgs with proper generic type inference
     // TypeScript infers TQueryArgs correctly from readonly unknown[] default
@@ -225,8 +238,15 @@ export function createOrchestrator<
 
     // Merge config and runtime deduplication options (runtime takes precedence)
     // ✅ MEMOIZE: Prevent useMemo dependency from changing on every render
+    // ✅ TYPE-SAFE: Properly merge options, handling undefined case
     const mergedDeduplicationOptions = useMemo(
-      () => ({ ...deduplicationOptions, ...runtimeDeduplicationOptions }),
+      (): TDeduplicationOptions | undefined => {
+        if (deduplicationOptions === undefined && runtimeDeduplicationOptions === undefined) {
+          return undefined;
+        }
+        // Merge objects when at least one is defined
+        return { ...deduplicationOptions, ...runtimeDeduplicationOptions } as TDeduplicationOptions;
+      },
       [runtimeDeduplicationOptions],
     );
 

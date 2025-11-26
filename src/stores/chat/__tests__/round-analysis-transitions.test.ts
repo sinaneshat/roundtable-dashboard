@@ -461,24 +461,26 @@ describe('section 4.2: Analysis Content & UI', () => {
 
       const analysisData = store.getState().analyses[0].analysisData;
 
-      // Verify all 5 sections present
-      // Section 1: Leaderboard
-      expect(analysisData?.leaderboard).toBeDefined();
-      expect(analysisData?.leaderboard.length).toBeGreaterThan(0);
+      // Verify all sections present in NEW Multi-AI Deliberation Framework
+      // Section 1: Key Insights & Recommendations
+      expect(analysisData?.summary).toBeDefined();
+      expect(analysisData?.recommendations).toBeDefined();
+      expect(analysisData?.recommendations.length).toBeGreaterThan(0);
 
-      // Section 2: Skills Chart (via participantAnalyses)
-      expect(analysisData?.participantAnalyses).toBeDefined();
+      // Section 2: Contributor Perspectives (replaces participantAnalyses)
+      expect(analysisData?.contributorPerspectives).toBeDefined();
+      expect(analysisData?.contributorPerspectives.length).toBeGreaterThan(0);
 
-      // Section 3: Individual Cards (participantAnalyses)
-      expect(analysisData?.participantAnalyses[0].strengths).toBeDefined();
-      expect(analysisData?.participantAnalyses[0].weaknesses).toBeDefined();
+      // Section 3: Consensus Analysis (replaces leaderboard)
+      expect(analysisData?.consensusAnalysis).toBeDefined();
+      expect(analysisData?.consensusAnalysis.alignmentSummary).toBeDefined();
 
-      // Section 4: Summary
+      // Section 4: Evidence & Reasoning
+      expect(analysisData?.evidenceAndReasoning).toBeDefined();
+
+      // Section 5: Round Summary
       expect(analysisData?.roundSummary).toBeDefined();
-      expect(analysisData?.roundSummary?.overallSummary).toBeDefined();
-
-      // Section 5: Conclusion
-      expect(analysisData?.roundSummary?.conclusion).toBeDefined();
+      expect(analysisData?.roundSummary?.participation).toBeDefined();
     });
 
     it('should transition through PENDING -> STREAMING -> COMPLETE', () => {
@@ -686,7 +688,7 @@ describe('section 4.2: Analysis Content & UI', () => {
       expect(store.getState().analyses[0].mode).toBe(ChatModes.PROBLEM_SOLVING);
     });
 
-    it('should include reasoning scores for skills chart', () => {
+    it('should include scorecard scores for skills chart', () => {
       const analysisPayload = createMockAnalysisPayload(0);
       store.getState().setAnalyses([createMockAnalysis({
         roundNumber: 0,
@@ -694,14 +696,16 @@ describe('section 4.2: Analysis Content & UI', () => {
         analysisData: analysisPayload,
       })]);
 
-      const participantAnalysis = store.getState().analyses[0].analysisData?.participantAnalyses[0];
+      // NEW schema: contributorPerspectives with scorecard
+      const contributor = store.getState().analyses[0].analysisData?.contributorPerspectives[0];
 
-      // Verify skill dimensions
-      expect(participantAnalysis?.reasoning).toBeDefined();
-      expect(participantAnalysis?.reasoning?.clarity).toBeDefined();
-      expect(participantAnalysis?.reasoning?.depth).toBeDefined();
-      expect(participantAnalysis?.reasoning?.evidence).toBeDefined();
-      expect(participantAnalysis?.reasoning?.creativity).toBeDefined();
+      // Verify skill dimensions in scorecard (NEW schema)
+      expect(contributor?.scorecard).toBeDefined();
+      expect(contributor?.scorecard?.logic).toBeDefined();
+      expect(contributor?.scorecard?.riskAwareness).toBeDefined();
+      expect(contributor?.scorecard?.creativity).toBeDefined();
+      expect(contributor?.scorecard?.evidence).toBeDefined();
+      expect(contributor?.scorecard?.consensus).toBeDefined();
     });
   });
 

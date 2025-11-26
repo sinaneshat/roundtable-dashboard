@@ -37,6 +37,7 @@ import type { WebSearchParameters, WebSearchResult, WebSearchResultItem } from '
 // ============================================================================
 // Import schema from route definitions for consistency
 import { MultiQueryGenerationSchema } from '@/api/routes/chat/schema';
+import { validateModelForOperation } from '@/api/services/model-capabilities.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { buildWebSearchQueryPrompt, WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT } from '@/api/services/prompts.service';
 // ============================================================================
@@ -138,40 +139,67 @@ export function streamSearchQuery(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ) {
+  const modelId = AIModels.WEB_SEARCH;
+
   try {
+    // ✅ VALIDATE: Check model supports structured output
+    validateModelForOperation(modelId, 'web-search-query-generation', {
+      structuredOutput: true,
+      streaming: true,
+      minJsonQuality: 'good',
+    });
+
     initializeOpenRouter(env);
     const client = openRouterService.getClient();
 
-    const modelId = AIModels.WEB_SEARCH;
-
-    // ✅ AI SDK v5: streamObject for gradual multi-query generation
-    // Pattern from /src/api/routes/chat/handlers/analysis.handler.ts:91
-    // ✅ MULTI-QUERY: Now uses MultiQueryGenerationSchema for dynamic query count
     return streamObject({
       model: client.chat(modelId),
-      schema: MultiQueryGenerationSchema, // ✅ UPDATED: Multi-query schema
-      mode: 'json', // ✅ CRITICAL: Force JSON mode for OpenRouter compatibility
+      schema: MultiQueryGenerationSchema,
+      mode: 'json',
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
-      maxRetries: 3, // Increased retries for better reliability
+      maxRetries: 3,
       onFinish: ({ error }) => {
-        if (error && logger) {
-          logger.error('Stream generation error', { error: normalizeError(error) });
+        if (error) {
+          // ✅ DETAILED ERROR LOGGING: Helps diagnose schema failures
+          console.error('[Web Search] Stream generation error:', {
+            modelId,
+            errorType: error.constructor?.name || 'Unknown',
+            errorMessage: error instanceof Error ? error.message : String(error),
+            userMessage: userMessage.substring(0, 100),
+          });
+
+          if (logger) {
+            logger.error('Stream generation error', {
+              error: normalizeError(error),
+              modelId,
+              operation: 'streamSearchQuery',
+            });
+          }
         }
       },
     });
   } catch (error) {
-    // ✅ LOG: Query generation failure
+    // ✅ LOG: Query generation failure with detailed context
+    const errorDetails = {
+      modelId,
+      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      userMessage: userMessage.substring(0, 100),
+    };
+
+    console.error('[Web Search] Query generation failed:', errorDetails);
+
     if (logger) {
       logger.error('Search query generation failed', {
         error: normalizeError(error),
-        userMessage: userMessage.substring(0, 100), // Log first 100 chars
+        ...errorDetails,
       });
     }
 
     // ✅ ERROR CONTEXT: External service error for AI query generation
     throw createError.internal(
-      'Failed to generate search query',
+      `Failed to generate search query using ${modelId}. Try using a more capable model.`,
       {
         errorType: 'external_service',
         service: 'openrouter',
@@ -187,6 +215,10 @@ export function streamSearchQuery(
  * Uses generateObject for single-shot query generation when streaming fails.
  * More reliable than streaming but doesn't provide progressive updates.
  *
+ * ✅ MODEL VALIDATION: Checks model capabilities before generation
+ * ✅ ERROR HANDLING: Comprehensive error context and logging
+ * ✅ VALIDATION: Validates output matches schema
+ *
  * @param userMessage - User's question to generate query for
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger for error tracking
@@ -198,13 +230,18 @@ export async function generateSearchQuery(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ) {
+  const modelId = AIModels.WEB_SEARCH;
+
   try {
+    // ✅ VALIDATE: Check model supports structured output
+    validateModelForOperation(modelId, 'web-search-query-generation-sync', {
+      structuredOutput: true,
+      minJsonQuality: 'good',
+    });
+
     initializeOpenRouter(env);
     const client = openRouterService.getClient();
 
-    const modelId = AIModels.WEB_SEARCH;
-
-    // ✅ AI SDK v5: generateObject for single-shot generation (fallback)
     const result = await generateObject({
       model: client.chat(modelId),
       schema: MultiQueryGenerationSchema,
@@ -214,24 +251,55 @@ export async function generateSearchQuery(
       maxRetries: 3,
     });
 
+    // ✅ VALIDATE: Ensure result matches schema and constraints
+    if (!result.object || !result.object.queries || result.object.queries.length === 0) {
+      throw new Error('Generated object does not contain valid queries');
+    }
+
+    // ✅ VALIDATE: Clamp totalQueries to valid range (1-5)
+    // Anthropic doesn't support min/max in schema, so validate after generation
+    // Coerce string to number if needed
+    const totalQueriesNum = typeof result.object.totalQueries === 'string'
+      ? Number.parseInt(result.object.totalQueries, 10)
+      : result.object.totalQueries;
+
+    if (totalQueriesNum < 1 || totalQueriesNum > 5) {
+      console.error(`[Web Search] Invalid totalQueries ${totalQueriesNum}, clamping to 1-5`);
+      result.object.totalQueries = Math.max(1, Math.min(5, totalQueriesNum));
+    } else {
+      result.object.totalQueries = totalQueriesNum;
+    }
+
+    // ✅ VALIDATE: Trim queries array if exceeds limit
+    if (result.object.queries.length > 5) {
+      console.error(`[Web Search] Too many queries (${result.object.queries.length}), trimming to 5`);
+      result.object.queries = result.object.queries.slice(0, 5);
+    }
+
     return result.object;
   } catch (error) {
-    // ✅ DEBUG: Log the actual error details
-    console.error('[Web Search] Non-streaming generation failed:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+    // ✅ DEBUG: Log the actual error details with full context
+    const errorDetails = {
+      modelId,
+      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-    });
+      userMessage: userMessage.substring(0, 100),
+    };
+
+    console.error('[Web Search] Non-streaming generation failed:', errorDetails);
+
     // ✅ LOG: Query generation failure
     if (logger) {
       logger.error('Search query generation failed (non-streaming)', {
         error: normalizeError(error),
-        userMessage: userMessage.substring(0, 100),
+        ...errorDetails,
       });
     }
 
     // ✅ ERROR CONTEXT: External service error for AI query generation
     throw createError.internal(
-      'Failed to generate search query',
+      `Failed to generate search query using ${modelId}. The model may not support structured output properly.`,
       {
         errorType: 'external_service',
         service: 'openrouter',
@@ -1285,12 +1353,13 @@ export async function* streamSearchResults(
       // ✅ ENHANCE ASYNCHRONOUSLY (non-blocking)
       // Extract full content in background - if it fails, basic result already sent
       try {
-        // Determine content format
+        // ✅ TYPE-SAFE: Determine content format without type casting
+        // TypeScript narrows the union type based on boolean check
         let rawContentFormat: 'text' | 'markdown' | undefined;
         if (params.includeRawContent) {
           rawContentFormat = typeof params.includeRawContent === 'boolean'
             ? 'text'
-            : params.includeRawContent as 'text' | 'markdown';
+            : params.includeRawContent; // Already narrowed to 'text' | 'markdown'
         }
 
         const extracted = await extractPageContent(
@@ -1496,13 +1565,14 @@ export async function performWebSearch(
     // Take only requested number of sources
     const sourcesToProcess = searchResults.slice(0, maxResults);
 
-    // Determine content extraction format
+    // ✅ TYPE-SAFE: Determine content extraction format without type casting
+    // TypeScript narrows the union type based on boolean check
     let rawContentFormat: 'text' | 'markdown' | undefined;
     if (params.includeRawContent) {
       if (typeof params.includeRawContent === 'boolean') {
         rawContentFormat = 'text'; // Default to text
       } else {
-        rawContentFormat = params.includeRawContent as 'text' | 'markdown';
+        rawContentFormat = params.includeRawContent; // Already narrowed to 'text' | 'markdown'
       }
     }
 

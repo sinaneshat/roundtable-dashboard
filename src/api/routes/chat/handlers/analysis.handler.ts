@@ -85,15 +85,16 @@ function generateModeratorAnalysis(
     userTier,
   });
 
-  // ✅ AI SDK v5: streamObject with mode:'json' (OpenRouter compatibility)
-  // mode:'json' uses response_format: {type: 'json_object'} instead of json_schema
-  // This prevents "json_schema not supported" errors on OpenAI/DeepSeek/Groq via OpenRouter
+  // ✅ AI SDK v5: streamObject with mode:'auto' (Provider-adaptive)
+  // mode:'auto' lets AI SDK choose the best structured output approach per provider
+  // Fixes "compiled grammar too large" error from Anthropic with complex schemas
+  // Anthropic rejects large grammars even in 'json' mode - 'auto' uses appropriate fallback
   const enhancedUserPrompt = buildModeratorAnalysisEnhancedPrompt(userPrompt);
 
   return streamObject({
     model: client.chat(AIModels.ANALYSIS),
     schema: ModeratorAnalysisPayloadSchema,
-    mode: 'json', // ✅ CRITICAL: Force JSON mode instead of json_schema
+    mode: 'json',
     system: systemPrompt,
     prompt: enhancedUserPrompt,
     temperature: 0.3,
@@ -148,7 +149,8 @@ function generateModeratorAnalysis(
       // No need for manual validation since we use mode:'json' with schema
       if (finalObject) {
         try {
-          // AI SDK guarantees this matches ModeratorAnalysisPayloadSchema
+          // ✅ AUTOMATIC COERCION: z.coerce.number() in schemas handles string→number conversion
+          // No manual coercion needed - Zod already validated and coerced all numeric fields
           const validatedObject = finalObject;
 
           const db = await getDbAsync();

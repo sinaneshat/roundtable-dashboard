@@ -295,61 +295,91 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   status: text('status', { enum: ANALYSIS_STATUSES })
     .notNull()
     .default('pending'), // pending -> streaming -> complete/failed
-  // Store the full analysis as JSON (leaderboard, participant analyses, summary, conclusion)
+  // Store the full analysis as JSON - Multi-AI Deliberation Framework
   // ✅ NULLABLE: Only populated once streaming completes successfully
+  // ✅ BREAKING CHANGE: Complete redesign for collaborative AI analysis
   analysisData: text('analysis_data', { mode: 'json' }).$type<{
-    leaderboard: Array<{
-      rank: number;
-      participantIndex: number;
-      participantRole: string | null;
-      modelName: string;
-      overallRating: number;
-      badge: string | null;
+    // Key Insights & Recommendations
+    summary: string;
+    recommendations: Array<{
+      title: string;
+      description: string;
+      suggestedModels?: string[];
+      suggestedRoles?: string[];
+      suggestedMode?: string;
     }>;
-    participantAnalyses: Array<{
+
+    // Contributor Perspectives
+    contributorPerspectives: Array<{
       participantIndex: number;
-      participantRole: string | null;
+      role: string;
       modelId: string;
       modelName: string;
-      overallRating: number;
-      skillsMatrix: Array<{
-        skillName: string;
-        rating: number;
-      }>;
-      pros: string[];
-      cons: string[];
-      summary: string;
+      scorecard: {
+        logic: number;
+        riskAwareness: number;
+        creativity: number;
+        evidence: number;
+        consensus?: number;
+      };
+      stance: string;
+      evidence: string[];
+      vote: 'approve' | 'caution' | 'reject';
     }>;
+
+    // Consensus Analysis
+    consensusAnalysis: {
+      alignmentSummary: {
+        totalClaims: number;
+        majorAlignment: number;
+        contestedClaims: number;
+        contestedClaimsList: Array<{
+          claim: string;
+          status: 'contested';
+        }>;
+      };
+      agreementHeatmap: Array<{
+        claim: string;
+        perspectives: Record<string, 'agree' | 'caution' | 'disagree'>;
+      }>;
+      argumentStrengthProfile: Record<string, {
+        logic: number;
+        evidence: number;
+        riskAwareness: number;
+        consensus: number;
+        creativity: number;
+      }>;
+    };
+
+    // Evidence & Reasoning
+    evidenceAndReasoning: {
+      reasoningThreads: Array<{
+        claim: string;
+        synthesis: string;
+      }>;
+      evidenceCoverage: Array<{
+        claim: string;
+        strength: 'strong' | 'moderate' | 'weak';
+        percentage: number;
+      }>;
+    };
+
+    // Explore Alternatives
+    alternatives: Array<{
+      scenario: string;
+      confidence: number;
+    }>;
+
+    // Round Summary
     roundSummary: {
-      keyInsights: string[];
-      consensusPoints: string[];
-      divergentApproaches: Array<{
-        topic: string;
-        perspectives: string[];
-      }>;
-      comparativeAnalysis: {
-        strengthsByCategory: Array<{
-          category: string;
-          participants: string[];
-        }>;
-        tradeoffs: string[];
+      participation: {
+        approved: number;
+        cautioned: number;
+        rejected: number;
       };
-      decisionFramework: {
-        criteriaToConsider: string[];
-        scenarioRecommendations: Array<{
-          scenario: string;
-          recommendation: string;
-        }>;
-      };
-      recommendedActions: Array<{
-        action: string;
-        rationale: string;
-        suggestedModels?: string[];
-        suggestedRoles?: string[];
-        suggestedMode?: string;
-      }>;
-      overallSummary: string;
-      conclusion: string;
+      keyThemes: string;
+      unresolvedQuestions: string[];
+      generated: string;
     };
   }>(),
   // Store participant message IDs that were analyzed

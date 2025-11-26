@@ -9,7 +9,7 @@
  * and ensuring proper data flow from API → Store → UI State
  */
 
-import { AnalysisStatuses, ChatModes, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModes, ConfidenceWeightings, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
 import type {
   ChangelogListResponse,
   MessagesListResponse,
@@ -299,50 +299,83 @@ export function createMockAnalysesListResponse(
           status: AnalysisStatuses.COMPLETE,
           participantMessageIds: [`${threadId}_r${roundNumber}_p0`],
           analysisData: {
-            participantAnalyses: [
+            roundConfidence: 78,
+            confidenceWeighting: ConfidenceWeightings.BALANCED,
+            consensusEvolution: [
+              { phase: 'opening', percentage: 32, label: 'Opening' },
+              { phase: 'rebuttal', percentage: 58, label: 'Rebuttal' },
+              { phase: 'cross_exam', percentage: 65, label: 'Cross-Exam' },
+              { phase: 'synthesis', percentage: 72, label: 'Synthesis' },
+              { phase: 'final_vote', percentage: 78, label: 'Final Vote' },
+            ],
+            summary: 'Good discussion overall with solid reasoning',
+            recommendations: [
+              { title: 'Expand market research', description: 'Consider broader competitive analysis' },
+            ],
+            contributorPerspectives: [
               {
                 participantIndex: 0,
-                participantRole: null,
+                role: 'Analyst',
                 modelId: 'gpt-4',
                 modelName: 'GPT-4',
-                overallRating: 8,
-                skillsMatrix: [
-                  { skillName: 'Argument Strength', rating: 8 },
-                  { skillName: 'Counter-Arguments', rating: 7 },
-                ],
-                pros: ['Good reasoning'],
-                cons: ['Could be more detailed'],
-                summary: 'Solid response',
+                scorecard: {
+                  logic: 85,
+                  riskAwareness: 75,
+                  creativity: 70,
+                  evidence: 80,
+                  consensus: 75,
+                },
+                stance: 'Solid response with good reasoning',
+                evidence: ['Good reasoning', 'Strong arguments'],
+                vote: 'approve',
               },
             ],
-            leaderboard: [
-              {
-                rank: 1,
-                participantIndex: 0,
-                participantRole: null,
-                modelId: 'gpt-4',
-                modelName: 'GPT-4',
-                overallRating: 8,
-                badge: 'Best Argument',
+            consensusAnalysis: {
+              alignmentSummary: {
+                totalClaims: 3,
+                majorAlignment: 2,
+                contestedClaims: 1,
+                contestedClaimsList: [{ claim: 'Contested point', status: 'contested' }],
               },
+              agreementHeatmap: [
+                {
+                  claim: 'Market timing is critical',
+                  perspectives: { 'GPT-4': 'agree' },
+                },
+              ],
+              argumentStrengthProfile: {
+                Analyst: {
+                  logic: 85,
+                  riskAwareness: 75,
+                  creativity: 70,
+                  evidence: 80,
+                  consensus: 75,
+                },
+              },
+            },
+            evidenceAndReasoning: {
+              reasoningThreads: [
+                {
+                  claim: 'Market timing matters',
+                  synthesis: 'Strong agreement on timing importance',
+                },
+              ],
+              evidenceCoverage: [
+                { claim: 'Market timing', strength: 'strong', percentage: 85 },
+              ],
+            },
+            alternatives: [
+              { scenario: 'Delayed launch', confidence: 65 },
             ],
             roundSummary: {
-              keyInsights: ['Insight 1'],
-              consensusPoints: ['Agreement on X'],
-              divergentApproaches: [],
-              comparativeAnalysis: {
-                strengthsByCategory: [{ category: 'Logic', participants: ['GPT-4'] }],
-                tradeoffs: ['Trade-off 1'],
+              participation: {
+                approved: 1,
+                cautioned: 0,
+                rejected: 0,
               },
-              decisionFramework: {
-                criteriaToConsider: ['Criterion 1'],
-                scenarioRecommendations: [
-                  { scenario: 'Scenario A', recommendation: 'Use approach X' },
-                ],
-              },
-              overallSummary: 'Good discussion overall',
-              conclusion: 'Concluded successfully',
-              recommendedActions: [],
+              keyThemes: 'Good discussion overall',
+              unresolvedQuestions: ['Competitive response timing'],
+              generated: new Date().toISOString(),
             },
           },
           errorMessage: null,
@@ -480,6 +513,7 @@ export function createMockFetchError(
 /**
  * Create a mock StoredModeratorAnalysis for testing
  * ✅ FOLLOWS: StoredModeratorAnalysis schema
+ * ✅ INCLUDES: All Multi-AI Deliberation Framework fields
  */
 export function createMockAnalysis(overrides?: Partial<import('@/api/routes/chat/schema').StoredModeratorAnalysis>): import('@/api/routes/chat/schema').StoredModeratorAnalysis {
   const now = new Date();
@@ -493,23 +527,42 @@ export function createMockAnalysis(overrides?: Partial<import('@/api/routes/chat
     status: AnalysisStatuses.COMPLETE,
     participantMessageIds: [],
     analysisData: {
-      participantAnalyses: [],
-      leaderboard: [],
+      roundConfidence: 78,
+      confidenceWeighting: ConfidenceWeightings.BALANCED,
+      consensusEvolution: [
+        { phase: 'opening', percentage: 32, label: 'Opening' },
+        { phase: 'rebuttal', percentage: 58, label: 'Rebuttal' },
+        { phase: 'cross_exam', percentage: 65, label: 'Cross-Exam' },
+        { phase: 'synthesis', percentage: 72, label: 'Synthesis' },
+        { phase: 'final_vote', percentage: 78, label: 'Final Vote' },
+      ],
+      summary: '',
+      recommendations: [],
+      contributorPerspectives: [],
+      consensusAnalysis: {
+        alignmentSummary: {
+          totalClaims: 0,
+          majorAlignment: 0,
+          contestedClaims: 0,
+          contestedClaimsList: [],
+        },
+        agreementHeatmap: [],
+        argumentStrengthProfile: {},
+      },
+      evidenceAndReasoning: {
+        reasoningThreads: [],
+        evidenceCoverage: [],
+      },
+      alternatives: [],
       roundSummary: {
-        keyInsights: [],
-        consensusPoints: [],
-        divergentApproaches: [],
-        comparativeAnalysis: {
-          strengthsByCategory: [],
-          tradeoffs: [],
+        participation: {
+          approved: 0,
+          cautioned: 0,
+          rejected: 0,
         },
-        decisionFramework: {
-          criteriaToConsider: [],
-          scenarioRecommendations: [],
-        },
-        overallSummary: '',
-        conclusion: '',
-        recommendedActions: [],
+        keyThemes: '',
+        unresolvedQuestions: [],
+        generated: new Date().toISOString(),
       },
     },
     errorMessage: null,

@@ -55,6 +55,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
+import { getRoundNumber } from '@/lib/utils/metadata';
 import { completeStreamingMetadata, createStreamingMetadata } from '@/lib/utils/metadata-builder';
 
 import type { streamChatRoute } from '../route';
@@ -698,9 +699,60 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         }
       },
 
+      // ✅ ERROR HANDLING: Catch and propagate streaming errors
+      // This includes errors thrown from onFinish (like empty response errors)
+      // AI SDK v5 will automatically handle these errors and propagate them to the client
+      onError: async ({ error }) => {
+        // ✅ RESUMABLE STREAMS: Clean up stream state on error
+        // This ensures failed streams don't block future streaming attempts
+        try {
+          await markStreamFailed(
+            threadId,
+            currentRoundNumber,
+            participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+            error instanceof Error ? error.message : String(error),
+            c.env,
+          );
+          await clearThreadActiveStream(threadId, c.env);
+        } catch {
+          // Cleanup errors shouldn't break error handling flow
+        }
+      },
+
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
         const messageId = streamMessageId;
+
+        // ✅ CRITICAL FIX: Detect and handle empty responses before persistence
+        // Models like DeepSeek R1, gemini-2.5-flash-lite return empty responses
+        // This prevents AI SDK internal state corruption that causes "Cannot read properties of undefined (reading 'state')" errors
+        const hasText = (finishResult.text?.trim().length || 0) > 0;
+        const hasReasoning = reasoningDeltas.length > 0 && reasoningDeltas.join('').trim().length > 0;
+        const hasToolCalls = finishResult.toolCalls && finishResult.toolCalls.length > 0;
+        const hasContent = hasText || hasReasoning || hasToolCalls;
+
+        // ✅ ROOT CAUSE FIX: Detect empty response REGARDLESS of finishReason
+        // Previous bug: Skipped detection when finishReason='unknown'
+        // But 'unknown' with no content means stream ended abnormally - this IS an error
+        // finishReason='unknown' is NOT "streaming init" - it's a failed completion
+        //
+        // Examples of empty responses in production:
+        // - gemini-2.5-flash-lite: finishReason='unknown', 0 tokens, no text
+        // - deepseek/deepseek-r1: finishReason='stop', 0 tokens, no text
+        //
+        // Both cases should throw error to prevent AI SDK state corruption
+        if (!hasContent) {
+          // ✅ CRITICAL: Throw error for empty responses to prevent AI SDK state corruption
+          // This ensures the error is properly handled by onError callback in use-multi-participant-chat
+          // The error message follows error-metadata-builders pattern for consistent error handling
+          const errorMessage = JSON.stringify({
+            errorCategory: 'empty_response',
+            rawErrorMessage: `The model (${participant.modelId}) did not generate a response.`,
+            isTransient: false,
+            errorType: 'empty_response',
+          });
+          throw new Error(errorMessage);
+        }
 
         // Delegate to message persistence service
         await saveStreamedMessage({
@@ -894,8 +946,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ CRITICAL: Exclude assistant messages from current round
       // These are concurrent participant responses, not conversation history
       if (m.role === UIMessageRoles.ASSISTANT) {
-        const msgMeta = m.metadata as { roundNumber?: number } | undefined;
-        if (msgMeta?.roundNumber === currentRoundNumber) {
+        // ✅ TYPE-SAFE: Use getRoundNumber for proper metadata extraction
+        const msgRoundNumber = getRoundNumber(m.metadata);
+        if (msgRoundNumber === currentRoundNumber) {
           return false;
         }
       }

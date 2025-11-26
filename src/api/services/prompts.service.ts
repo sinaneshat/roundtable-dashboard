@@ -351,66 +351,104 @@ ${basePrompt}`;
  *
  * @returns JSON structure template matching ModeratorAnalysisPayloadSchema
  */
+/**
+ * Multi-AI Deliberation Framework - New Schema
+ * ✅ BREAKING CHANGE: Replaced leaderboard/participantAnalyses with contributorPerspectives + consensusAnalysis
+ */
 export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
   roundNumber: 0, // ✅ 0-BASED: Example showing first round
   mode: ChatModes.ANALYZING,
   userQuestion: 'string',
-  leaderboard: [{
-    rank: 1,
-    participantIndex: 0,
-    participantRole: 'string|null',
-    modelId: 'string',
-    modelName: 'string',
-    overallRating: 8.5,
-    badge: 'string|null',
+
+  // Round Confidence Header - Overall confidence metrics
+  roundConfidence: 78, // 0-100: Overall confidence based on vote distribution and evidence strength
+  confidenceWeighting: 'balanced', // 'balanced' | 'evidence_heavy' | 'consensus_heavy' | 'expertise_weighted'
+
+  // Consensus Evolution - Timeline showing how consensus evolved through debate phases
+  consensusEvolution: [
+    { phase: 'opening', percentage: 32, label: 'Opening' },
+    { phase: 'rebuttal', percentage: 58, label: 'Rebuttal' },
+    { phase: 'cross_exam', percentage: 65, label: 'Cross-Exam' },
+    { phase: 'synthesis', percentage: 72, label: 'Synthesis' },
+    { phase: 'final_vote', percentage: 78, label: 'Final Vote' }, // Should match roundConfidence
+  ],
+
+  summary: 'string', // Overall analysis summary
+  recommendations: [{
+    title: 'string', // Short action title
+    description: 'string', // Why this recommendation matters
+    suggestedPrompt: 'string', // Actual user prompt to continue the conversation (required)
+    suggestedModels: ['string'], // OpenRouter model IDs like "anthropic/claude-sonnet-4" (optional)
+    suggestedRoles: ['string'], // Roles for each model (optional)
+    suggestedMode: 'string', // Chat mode (optional)
   }],
-  participantAnalyses: [{
+  contributorPerspectives: [{
     participantIndex: 0,
-    participantRole: 'string|null',
+    role: 'string',
     modelId: 'string',
     modelName: 'string',
-    overallRating: 8.5,
-    skillsMatrix: [
-      { skillName: 'Skill 1', rating: 8 },
-      { skillName: 'Skill 2', rating: 7 },
-      { skillName: 'Skill 3', rating: 9 },
-      { skillName: 'Skill 4', rating: 6 },
-      { skillName: 'Skill 5', rating: 8 },
-    ],
-    pros: ['string'],
-    cons: ['string'],
-    summary: 'string',
+    scorecard: {
+      logic: 85, // 0-100
+      riskAwareness: 75, // 0-100
+      creativity: 70, // 0-100
+      evidence: 80, // 0-100
+      consensus: 75, // 0-100 (optional)
+    },
+    stance: 'string', // Participant\'s main position/argument
+    evidence: ['string'], // Key points supporting their stance
+    vote: 'approve', // 'approve' | 'caution' | 'reject'
+  }],
+  consensusAnalysis: {
+    alignmentSummary: {
+      totalClaims: 10,
+      majorAlignment: 7,
+      contestedClaims: 3,
+      contestedClaimsList: [{
+        claim: 'string',
+        status: 'contested',
+      }],
+    },
+    agreementHeatmap: [{
+      claim: 'string',
+      perspectives: {
+        role1: 'agree', // 'agree' | 'disagree' | 'neutral' | 'caution'
+        role2: 'disagree',
+      },
+    }],
+    argumentStrengthProfile: {
+      role1: {
+        logic: 85,
+        evidence: 80,
+        riskAwareness: 75,
+        consensus: 70,
+        creativity: 75,
+      },
+    },
+  },
+  evidenceAndReasoning: {
+    reasoningThreads: [{
+      claim: 'string',
+      synthesis: 'string',
+    }],
+    evidenceCoverage: [{
+      claim: 'string',
+      strength: 'strong', // 'strong' | 'moderate' | 'weak'
+      percentage: 85,
+    }],
+  },
+  alternatives: [{
+    scenario: 'string',
+    confidence: 75, // 0-100
   }],
   roundSummary: {
-    keyInsights: ['string'],
-    consensusPoints: ['string'],
-    divergentApproaches: [{
-      topic: 'string',
-      perspectives: ['string'],
-    }],
-    comparativeAnalysis: {
-      strengthsByCategory: [{
-        category: 'string',
-        participants: ['string'],
-      }],
-      tradeoffs: ['string'],
+    participation: {
+      approved: 2,
+      cautioned: 1,
+      rejected: 0,
     },
-    decisionFramework: {
-      criteriaToConsider: ['string'],
-      scenarioRecommendations: [{
-        scenario: 'string',
-        recommendation: 'string',
-      }],
-    },
-    overallSummary: 'string',
-    conclusion: 'string',
-    recommendedActions: [{
-      action: 'string',
-      rationale: 'string',
-      suggestedModels: ['string'],
-      suggestedRoles: ['string'],
-      suggestedMode: 'string',
-    }],
+    keyThemes: 'string', // Main themes/conclusions from the discussion
+    unresolvedQuestions: ['string'],
+    generated: 'ISO 8601 timestamp string',
   },
 };
 

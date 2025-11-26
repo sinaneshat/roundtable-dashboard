@@ -416,6 +416,13 @@ export function extractErrorMetadata(
   const hasGeneratedContent = hasGeneratedText || hasGeneratedReasoning;
 
   // Empty response detection: no output tokens AND no generated content (text or reasoning)
+  // ✅ ROOT CAUSE FIX: Detect empty response REGARDLESS of finishReason
+  // Previous bug: Skipped detection when finishReason='unknown'
+  // But 'unknown' with no content means stream ended abnormally - this IS an error
+  // finishReason='unknown' is NOT "streaming init" - it's a failed stream completion
+  //
+  // If onFinish fires with finishReason='unknown' and no content, the stream failed
+  // This happens with models like gemini-2.5-flash-lite that abort early
   const isEmptyResponse = outputTokens === 0 && !hasGeneratedContent;
 
   // Error occurred if we have provider error OR empty response

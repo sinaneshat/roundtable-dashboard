@@ -11,7 +11,7 @@
 
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ChatParticipant, ModeratorAnalysisPayload, RecommendedAction, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { ChatParticipant, ModeratorAnalysisPayload, Recommendation, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
@@ -53,7 +53,7 @@ type ThreadTimelineProps = {
   // Analysis handlers (optional - view-only for public)
   onAnalysisStreamStart?: (roundNumber: number) => void;
   onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: unknown) => void;
-  onActionClick?: (action: RecommendedAction) => void;
+  onActionClick?: (action: Recommendation) => void;
 
   // Error retry (optional)
   onRetry?: () => void;
