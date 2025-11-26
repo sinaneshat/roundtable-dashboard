@@ -72,7 +72,6 @@ export function ModeratorAnalysisPanel({
         confidenceWeighting={data.confidenceWeighting}
         consensusEvolution={data.consensusEvolution}
         contributors={data.contributorPerspectives}
-        generatedAt={data.roundSummary?.generated}
       />
 
       {/* Collapsible Sections */}

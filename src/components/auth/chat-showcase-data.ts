@@ -3,7 +3,17 @@
  * Simulates a complete chat round with web search, multiple participants, and analysis
  */
 
-import { AnalysisStatuses, ConfidenceWeightings, DebatePhases, MessagePartTypes, MessageStatuses, WebSearchDepths } from '@/api/core/enums';
+import {
+  AgreementStatuses,
+  AnalysisStatuses,
+  ConfidenceWeightings,
+  DebatePhases,
+  EvidenceStrengths,
+  MessagePartTypes,
+  MessageStatuses,
+  VoteTypes,
+  WebSearchDepths,
+} from '@/api/core/enums';
 import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 
@@ -324,7 +334,7 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
           'Used evidence-based insights from web search data',
           'Comprehensive coverage of major collaboration trends',
         ],
-        vote: 'approve',
+        vote: VoteTypes.APPROVE,
       },
       {
         participantIndex: 1,
@@ -344,7 +354,7 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
           'Forward-looking vision of multimodal integration',
           'Complementary insights building on strategic foundation',
         ],
-        vote: 'approve',
+        vote: VoteTypes.APPROVE,
       },
       {
         participantIndex: 2,
@@ -364,7 +374,7 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
           'Security and enterprise needs analysis',
           'Practical integration ecosystem assessment',
         ],
-        vote: 'caution',
+        vote: VoteTypes.CAUTION,
       },
     ],
 
@@ -383,25 +393,25 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
         {
           claim: 'Multi-agent systems are transformative',
           perspectives: {
-            'Strategic Analyst': 'agree',
-            'Creative Director': 'agree',
-            'Technical Expert': 'agree',
+            'Strategic Analyst': AgreementStatuses.AGREE,
+            'Creative Director': AgreementStatuses.AGREE,
+            'Technical Expert': AgreementStatuses.AGREE,
           },
         },
         {
           claim: 'Real-time synthesis is essential',
           perspectives: {
-            'Strategic Analyst': 'agree',
-            'Creative Director': 'agree',
-            'Technical Expert': 'caution',
+            'Strategic Analyst': AgreementStatuses.AGREE,
+            'Creative Director': AgreementStatuses.AGREE,
+            'Technical Expert': AgreementStatuses.CAUTION,
           },
         },
         {
           claim: 'Security remains a critical concern',
           perspectives: {
-            'Strategic Analyst': 'caution',
-            'Creative Director': 'disagree',
-            'Technical Expert': 'agree',
+            'Strategic Analyst': AgreementStatuses.CAUTION,
+            'Creative Director': AgreementStatuses.DISAGREE,
+            'Technical Expert': AgreementStatuses.AGREE,
           },
         },
       ],
@@ -449,22 +459,22 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
       evidenceCoverage: [
         {
           claim: 'Multi-agent orchestration is key trend',
-          strength: 'strong',
+          strength: EvidenceStrengths.STRONG,
           percentage: 92,
         },
         {
           claim: 'Security requires careful attention',
-          strength: 'strong',
+          strength: EvidenceStrengths.STRONG,
           percentage: 78,
         },
         {
           claim: 'Creative workflows enable innovation',
-          strength: 'moderate',
+          strength: EvidenceStrengths.MODERATE,
           percentage: 65,
         },
         {
           claim: 'Implementation timeline is flexible',
-          strength: 'weak',
+          strength: EvidenceStrengths.WEAK,
           percentage: 45,
         },
       ],

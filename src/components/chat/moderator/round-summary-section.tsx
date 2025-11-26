@@ -80,8 +80,8 @@ export function RoundSummarySection({
         <div className="space-y-1.5">
           <span className="text-sm font-medium">{t('roundSummary.unresolvedQuestions')}</span>
           <ul className="space-y-1">
-            {unresolvedQuestions.map(question => (
-              <li key={`question-${question}`} className="flex items-start gap-2 text-sm text-muted-foreground">
+            {unresolvedQuestions.map((question, questionIndex) => (
+              <li key={`question-${questionIndex}`} className="flex items-start gap-2 text-sm text-muted-foreground">
                 <span>•</span>
                 <span>{question}</span>
               </li>

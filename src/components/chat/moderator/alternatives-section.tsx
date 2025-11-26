@@ -1,9 +1,8 @@
 'use client';
 
 import type { AlternativeScenario } from '@/api/routes/chat/schema';
-import { Progress } from '@/components/ui/progress';
 
-import { getConfidenceProgressColor } from './moderator-ui-utils';
+import { getConfidenceProgressColors } from './moderator-ui-utils';
 
 type AlternativesSectionProps = {
   alternatives: AlternativeScenario[];
@@ -29,27 +28,31 @@ export function AlternativesSection({
 
   return (
     <div className="space-y-3">
-      {sortedAlternatives.map(alternative => (
-        <div
-          key={`alt-${alternative.scenario}-${alternative.confidence}`}
-          className="space-y-2"
-        >
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm flex-1">
-              {alternative.scenario}
-            </p>
-            <span className="text-sm font-medium tabular-nums">
-              {alternative.confidence}
-              %
-            </span>
+      {sortedAlternatives.map((alternative, altIndex) => {
+        const colors = getConfidenceProgressColors(alternative.confidence);
+        return (
+          <div
+            key={`alt-${altIndex}`}
+            className="space-y-2"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm flex-1">
+                {alternative.scenario}
+              </p>
+              <span className="text-sm font-medium tabular-nums">
+                {alternative.confidence}
+                %
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: colors.bg }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{ width: `${alternative.confidence}%`, backgroundColor: colors.indicator }}
+              />
+            </div>
           </div>
-          <Progress
-            value={alternative.confidence}
-            className="h-1.5"
-            indicatorClassName={getConfidenceProgressColor(alternative.confidence)}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

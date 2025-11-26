@@ -7,11 +7,10 @@ import { EvidenceStrengths } from '@/api/core/enums';
 import type { EvidenceAndReasoning } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 
 import {
   getEvidenceStrengthBadgeColor,
-  getEvidenceStrengthProgressColor,
+  getEvidenceStrengthProgressColors,
 } from './moderator-ui-utils';
 
 type EvidenceReasoningSectionProps = {
@@ -54,8 +53,8 @@ export function EvidenceReasoningSection({
           <span className="text-sm font-medium">{t('evidenceReasoning.reasoningThreads')}</span>
 
           <div className="space-y-3">
-            {visibleThreads?.map(thread => (
-              <div key={`thread-${thread.claim}`} className="space-y-1.5">
+            {visibleThreads?.map((thread, threadIndex) => (
+              <div key={`thread-${threadIndex}`} className="space-y-1.5">
                 <p className="text-sm font-medium text-foreground/90">
                   {thread.claim}
                 </p>
@@ -89,28 +88,32 @@ export function EvidenceReasoningSection({
           <span className="text-sm font-medium">{t('evidenceReasoning.evidenceCoverage')}</span>
 
           <div className="space-y-3">
-            {evidenceCoverage.map(item => (
-              <div key={`coverage-${item.claim}`} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm flex-1 truncate">
-                    {item.claim}
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className={`text-xs shrink-0 ${getEvidenceStrengthBadgeColor(item.strength)}`}
-                  >
-                    {item.strength === EvidenceStrengths.STRONG && 'Strong'}
-                    {item.strength === EvidenceStrengths.MODERATE && 'Moderate'}
-                    {item.strength === EvidenceStrengths.WEAK && 'Weak'}
-                  </Badge>
+            {evidenceCoverage.map((item, coverageIndex) => {
+              const colors = getEvidenceStrengthProgressColors(item.strength);
+              return (
+                <div key={`coverage-${coverageIndex}`} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm flex-1 truncate">
+                      {item.claim}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs shrink-0 ${getEvidenceStrengthBadgeColor(item.strength)}`}
+                    >
+                      {item.strength === EvidenceStrengths.STRONG && 'Strong'}
+                      {item.strength === EvidenceStrengths.MODERATE && 'Moderate'}
+                      {item.strength === EvidenceStrengths.WEAK && 'Weak'}
+                    </Badge>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: colors.bg }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${item.percentage}%`, backgroundColor: colors.indicator }}
+                    />
+                  </div>
                 </div>
-                <Progress
-                  value={item.percentage}
-                  className="h-1.5"
-                  indicatorClassName={getEvidenceStrengthProgressColor(item.strength)}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

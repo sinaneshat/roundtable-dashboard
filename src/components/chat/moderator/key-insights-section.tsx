@@ -56,14 +56,14 @@ export function KeyInsightsSection({
           </div>
 
           <div className="flex flex-col gap-2">
-            {recommendations.map((rec, index) => {
+            {recommendations.map((rec, recIndex) => {
               const hasModels = rec.suggestedModels && rec.suggestedModels.length > 0;
               const hasPrompt = rec.suggestedPrompt;
               const isClickable = hasModels || hasPrompt || rec.suggestedMode;
 
               return (
                 <motion.button
-                  key={`rec-${rec.title}`}
+                  key={`rec-${recIndex}`}
                   type="button"
                   onClick={() => onActionClick?.(rec)}
                   disabled={!onActionClick || !isClickable}
@@ -73,7 +73,7 @@ export function KeyInsightsSection({
                   whileTap={{ scale: 0.99 }}
                   transition={{
                     duration: 0.2,
-                    delay: index * 0.05,
+                    delay: recIndex * 0.05,
                     ease: 'easeOut',
                   }}
                   className={cn(
@@ -125,7 +125,7 @@ export function KeyInsightsSection({
                         )}
                         {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
                           <ModelBadge
-                            key={`${rec.title}-model-${modelId}`}
+                            key={`rec-${recIndex}-model-${modelIndex}`}
                             modelId={modelId}
                             role={rec.suggestedRoles?.[modelIndex]}
                             size="sm"

@@ -95,60 +95,72 @@ export function ContributorPerspectivesSection({
             </CollapsibleTrigger>
 
             <CollapsibleContent>
-              <div className="px-4 py-5 space-y-5">
+              <div className="px-4 pb-4 pt-2 space-y-6">
                 {/* Scorecard Section */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scorecard</h4>
-                  <div className="grid gap-3">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scorecard</h4>
+                  <div className="grid gap-4">
                     {/* Logic */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-blue-400">Logic</span>
-                        <span className="text-xs font-semibold tabular-nums text-blue-400">{perspective.scorecard.logic}</span>
+                        <span className="text-sm font-medium" style={{ color: '#60a5fa' }}>Logic</span>
+                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#60a5fa' }}>
+                          {perspective.scorecard.logic}
+                          %
+                        </span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}>
                         <div
-                          className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.logic}%` }}
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.logic}%`, backgroundColor: '#3b82f6' }}
                         />
                       </div>
                     </div>
                     {/* Creativity */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-purple-400">Creativity</span>
-                        <span className="text-xs font-semibold tabular-nums text-purple-400">{perspective.scorecard.creativity}</span>
+                        <span className="text-sm font-medium" style={{ color: '#c084fc' }}>Creativity</span>
+                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#c084fc' }}>
+                          {perspective.scorecard.creativity}
+                          %
+                        </span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)' }}>
                         <div
-                          className="h-full rounded-full bg-purple-500 transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.creativity}%` }}
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.creativity}%`, backgroundColor: '#a855f7' }}
                         />
                       </div>
                     </div>
                     {/* Risk Awareness */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-amber-400">Risk Awareness</span>
-                        <span className="text-xs font-semibold tabular-nums text-amber-400">{perspective.scorecard.riskAwareness}</span>
+                        <span className="text-sm font-medium" style={{ color: '#fbbf24' }}>Risk Awareness</span>
+                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#fbbf24' }}>
+                          {perspective.scorecard.riskAwareness}
+                          %
+                        </span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)' }}>
                         <div
-                          className="h-full rounded-full bg-amber-500 transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.riskAwareness}%` }}
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.riskAwareness}%`, backgroundColor: '#f59e0b' }}
                         />
                       </div>
                     </div>
                     {/* Evidence */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-emerald-400">Evidence</span>
-                        <span className="text-xs font-semibold tabular-nums text-emerald-400">{perspective.scorecard.evidence}</span>
+                        <span className="text-sm font-medium" style={{ color: '#34d399' }}>Evidence</span>
+                        <span className="text-sm font-semibold tabular-nums" style={{ color: '#34d399' }}>
+                          {perspective.scorecard.evidence}
+                          %
+                        </span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)' }}>
                         <div
-                          className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                          style={{ width: `${perspective.scorecard.evidence}%` }}
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.evidence}%`, backgroundColor: '#10b981' }}
                         />
                       </div>
                     </div>
@@ -156,8 +168,8 @@ export function ContributorPerspectivesSection({
                 </div>
 
                 {/* Stance Section */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stance</h4>
+                <div className="space-y-3">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stance</h4>
                   <p className="text-sm text-foreground/90 leading-relaxed">
                     {perspective.stance}
                   </p>
@@ -165,13 +177,13 @@ export function ContributorPerspectivesSection({
 
                 {/* Supporting Evidence Section */}
                 {perspective.evidence && perspective.evidence.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Supporting Evidence</h4>
-                    <ul className="space-y-1.5">
-                      {perspective.evidence.map(item => (
-                        <li key={`evidence-${perspective.participantIndex}-${item}`} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <span className="text-primary/50 mt-1">•</span>
-                          <span>{item}</span>
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Supporting Evidence</h4>
+                    <ul className="space-y-2">
+                      {perspective.evidence.map((item, evidenceIndex) => (
+                        <li key={`evidence-${perspective.participantIndex}-${evidenceIndex}`} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                          <span className="text-primary/60 mt-0.5">•</span>
+                          <span className="leading-relaxed">{item}</span>
                         </li>
                       ))}
                     </ul>

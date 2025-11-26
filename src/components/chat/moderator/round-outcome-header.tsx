@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, Info, Users } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ConfidenceWeighting, DebatePhase } from '@/api/core/enums';
@@ -9,7 +9,7 @@ import type { ConsensusEvolution, ContributorPerspective } from '@/api/routes/ch
 import { ModelBadge } from '@/components/chat/model-badge';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
 type RoundOutcomeHeaderProps = {
@@ -17,7 +17,6 @@ type RoundOutcomeHeaderProps = {
   confidenceWeighting?: ConfidenceWeighting;
   consensusEvolution?: ConsensusEvolution;
   contributors?: ContributorPerspective[];
-  generatedAt?: string;
   isStreaming?: boolean;
 };
 
@@ -84,79 +83,49 @@ function getProgressGradientColor(percentage: number): string {
 /**
  * RoundOutcomeHeader - Multi-AI Deliberation Framework
  *
- * Displays only dynamic data from analysis:
- * - Round confidence with weighting (when roundConfidence > 0)
- * - Contributors list (when contributors exist)
- * - Date and contributor count (when available)
- * - Consensus evolution timeline (when data exists)
+ * Displays dynamic data from analysis:
+ * - Round confidence with weighting
+ * - Contributors badges
+ * - Consensus evolution timeline
  */
 export function RoundOutcomeHeader({
   roundConfidence,
   confidenceWeighting,
   consensusEvolution,
   contributors,
-  generatedAt,
   isStreaming = false,
 }: RoundOutcomeHeaderProps) {
   const t = useTranslations('moderator');
 
-  const contributorCount = contributors?.length ?? 0;
   const phaseCount = consensusEvolution?.length ?? 0;
   const hasConfidence = roundConfidence !== undefined && roundConfidence > 0;
-
-  // Format date if provided
-  const formattedDate = generatedAt
-    ? new Date(generatedAt).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short',
-      })
-    : null;
+  const hasContributors = contributors && contributors.length > 0;
 
   // Don't render if no dynamic data available
-  if (!hasConfidence && contributorCount === 0 && !consensusEvolution?.length) {
+  if (!hasConfidence && !hasContributors && !consensusEvolution?.length) {
     return null;
   }
 
   return (
     <div className="space-y-4">
-      {/* Metadata Row - Date & Contributors Count */}
-      {(formattedDate || contributorCount > 0) && (
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          {formattedDate && (
-            <div className="flex items-center gap-1.5">
-              <Clock className="size-4" />
-              <span>{formattedDate}</span>
-            </div>
-          )}
-          {contributorCount > 0 && (
-            <div className="flex items-center gap-1.5">
-              <Users className="size-4" />
-              <span>{t('roundOutcome.contributorCount', { count: contributorCount })}</span>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Confidence Row - Only show when we have actual confidence data */}
       {hasConfidence && (
         <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">{t('roundOutcome.roundConfidence')}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="size-4 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="max-w-xs text-xs">
-                    Overall confidence score based on vote distribution and evidence strength
-                  </p>
-                </TooltipContent>
-              </Tooltip>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="size-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-xs text-xs">
+                      Overall confidence score based on vote distribution and evidence strength
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             <div className="flex items-center gap-3">
@@ -183,7 +152,7 @@ export function RoundOutcomeHeader({
       )}
 
       {/* Contributors */}
-      {contributors && contributors.length > 0 && (
+      {hasContributors && (
         <ScrollArea className="w-full whitespace-nowrap">
           <div className="flex w-max items-center gap-3 p-4">
             {contributors.map(contributor => (

@@ -67,13 +67,13 @@ export function ConsensusAnalysisSection({
       })
     : [];
 
-  // Chart config with specific distinct colors
+  // Chart config using shadcn CSS variables
   const chartColors = [
-    'hsl(217, 91%, 60%)', // Blue
-    'hsl(280, 87%, 65%)', // Violet
-    'hsl(142, 71%, 45%)', // Emerald
-    'hsl(38, 92%, 50%)', // Amber
-    'hsl(350, 89%, 60%)', // Rose
+    'var(--chart-1)',
+    'var(--chart-2)',
+    'var(--chart-3)',
+    'var(--chart-4)',
+    'var(--chart-5)',
   ];
   const chartConfig: ChartConfig = argumentStrengthProfile
     ? Object.keys(argumentStrengthProfile).reduce((acc, role, index) => {
@@ -113,8 +113,8 @@ export function ConsensusAnalysisSection({
       {/* Contested Claims */}
       {alignmentSummary.contestedClaimsList && alignmentSummary.contestedClaimsList.length > 0 && (
         <div className="space-y-1.5">
-          {alignmentSummary.contestedClaimsList.map(contested => (
-            <div key={`contested-${contested.claim}`} className="flex items-start gap-2 text-sm">
+          {alignmentSummary.contestedClaimsList.map((contested, contestedIndex) => (
+            <div key={`contested-${contestedIndex}`} className="flex items-start gap-2 text-sm">
               <AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-amber-500" />
               <span className="text-muted-foreground">{contested.claim}</span>
             </div>
@@ -139,13 +139,13 @@ export function ConsensusAnalysisSection({
                 </tr>
               </thead>
               <tbody>
-                {agreementHeatmap.map(row => (
-                  <tr key={`row-${row.claim}`} className="border-b border-border/50">
+                {agreementHeatmap.map((row, rowIndex) => (
+                  <tr key={`heatmap-row-${rowIndex}`} className="border-b border-border/50">
                     <td className="py-2 pr-4 text-foreground/80">{row.claim}</td>
                     {contributors.map((contributor) => {
                       const status = row.perspectives[contributor] ?? AgreementStatuses.AGREE;
                       return (
-                        <td key={contributor} className="py-2 px-2">
+                        <td key={`${rowIndex}-${contributor}`} className="py-2 px-2">
                           <div className="flex justify-center items-center">
                             {getAgreementIcon(status)}
                           </div>

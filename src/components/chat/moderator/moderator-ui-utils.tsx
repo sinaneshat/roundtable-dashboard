@@ -35,20 +35,20 @@ export function getVoteIcon(vote: VoteType) {
 }
 
 /**
- * Get card border color based on VoteType enum
+ * Get card background color based on VoteType enum
  * Following established enum pattern with centralized styling
- * Using subtle glass-like backgrounds for coherent design
+ * Using subtle glass-like backgrounds without borders for coherent design
  */
 export function getVoteCardColor(vote: VoteType): string {
   switch (vote) {
     case VoteTypes.APPROVE:
-      return 'bg-green-500/5 border border-green-500/20';
+      return 'bg-green-500/5';
     case VoteTypes.CAUTION:
-      return 'bg-orange-500/5 border border-orange-500/20';
+      return 'bg-orange-500/5';
     case VoteTypes.REJECT:
-      return 'bg-red-500/5 border border-red-500/20';
+      return 'bg-red-500/5';
     default:
-      return 'bg-white/[0.02] border border-white/10';
+      return 'bg-white/[0.02]';
   }
 }
 
@@ -112,20 +112,19 @@ export function getEvidenceStrengthBadgeColor(strength: EvidenceStrength): strin
 }
 
 /**
- * Get progress bar indicator color based on EvidenceStrength enum
- * Uses theme CSS variables for consistent styling
- * @see https://github.com/shadcn-ui/ui/discussions/1454
+ * Get progress bar colors based on EvidenceStrength enum
+ * Returns inline style colors to avoid Tailwind purging
  */
-export function getEvidenceStrengthProgressColor(strength: EvidenceStrength): string {
+export function getEvidenceStrengthProgressColors(strength: EvidenceStrength): { bg: string; indicator: string } {
   switch (strength) {
     case EvidenceStrengths.STRONG:
-      return 'bg-success';
+      return { bg: 'rgba(16, 185, 129, 0.2)', indicator: '#10b981' }; // emerald
     case EvidenceStrengths.MODERATE:
-      return 'bg-chart-2'; // Blue from chart theme
+      return { bg: 'rgba(59, 130, 246, 0.2)', indicator: '#3b82f6' }; // blue
     case EvidenceStrengths.WEAK:
-      return 'bg-warning';
+      return { bg: 'rgba(245, 158, 11, 0.2)', indicator: '#f59e0b' }; // amber
     default:
-      return 'bg-primary';
+      return { bg: 'rgba(255, 255, 255, 0.1)', indicator: '#ffffff' };
   }
 }
 
@@ -162,16 +161,15 @@ export function getConfidenceBadgeColor(confidence: number): string {
 }
 
 /**
- * Get progress bar indicator color based on confidence percentage
- * Uses theme CSS variables for consistent styling
- * @see https://github.com/shadcn-ui/ui/discussions/1454
+ * Get progress bar colors based on confidence percentage
+ * Returns inline style colors to avoid Tailwind purging
  */
-export function getConfidenceProgressColor(confidence: number): string {
+export function getConfidenceProgressColors(confidence: number): { bg: string; indicator: string } {
   if (confidence >= 80) {
-    return 'bg-success';
+    return { bg: 'rgba(16, 185, 129, 0.2)', indicator: '#10b981' }; // emerald
   }
   if (confidence >= 60) {
-    return 'bg-chart-2'; // Blue from chart theme
+    return { bg: 'rgba(59, 130, 246, 0.2)', indicator: '#3b82f6' }; // blue
   }
-  return 'bg-warning';
+  return { bg: 'rgba(245, 158, 11, 0.2)', indicator: '#f59e0b' }; // amber
 }
