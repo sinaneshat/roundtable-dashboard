@@ -135,7 +135,8 @@ export function RoundOutcomeHeader({
                 </Badge>
               )}
               <span className={cn('text-xl sm:text-2xl font-bold', getConfidenceColor(roundConfidence))}>
-                {roundConfidence}%
+                {roundConfidence}
+                %
               </span>
             </div>
           </div>
@@ -223,7 +224,8 @@ export function RoundOutcomeHeader({
                           )}
                         >
                           <span className="text-xs sm:text-sm font-bold tabular-nums leading-none">
-                            {percentage}%
+                            {percentage}
+                            %
                           </span>
                         </div>
 

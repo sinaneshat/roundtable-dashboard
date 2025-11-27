@@ -37,7 +37,8 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
 
   // Compute dynamic stats from contributors
   const stats = useMemo(() => {
-    if (!hasContributors) return null;
+    if (!hasContributors)
+      return null;
 
     const totalContributors = contributors.length;
     const approveCount = contributors.filter(c => c.vote === VoteTypes.APPROVE).length;
@@ -100,13 +101,22 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
           </h4>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-500/5">
-              Logic: {stats.avgLogic}%
+              Logic:
+              {' '}
+              {stats.avgLogic}
+              %
             </Badge>
             <Badge variant="outline" className="text-purple-400 border-purple-500/30 bg-purple-500/5">
-              Creativity: {stats.avgCreativity}%
+              Creativity:
+              {' '}
+              {stats.avgCreativity}
+              %
             </Badge>
             <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
-              Evidence: {stats.avgEvidence}%
+              Evidence:
+              {' '}
+              {stats.avgEvidence}
+              %
             </Badge>
           </div>
         </div>
@@ -117,7 +127,11 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
         <div className="space-y-3">
           <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
             <TrendingUp className="size-3" />
-            {t('roundOutcome.contributors')} ({contributors.length})
+            {t('roundOutcome.contributors')}
+            {' '}
+            (
+            {contributors.length}
+            )
           </h4>
 
           <div className="grid gap-2 sm:grid-cols-2">

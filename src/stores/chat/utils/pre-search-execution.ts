@@ -8,13 +8,12 @@
  */
 
 import type { UseMutationResult } from '@tanstack/react-query';
+import type { z } from 'zod';
 
 import type { AnalysisStatus } from '@/api/core/enums';
 import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
-import type { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import type { PreSearchDataPayloadSchema, StoredPreSearch } from '@/api/routes/chat/schema';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
-import type { z } from 'zod';
 
 import type { ChatStoreApi } from '../store';
 
@@ -46,7 +45,8 @@ export async function readPreSearchStreamData(
   onActivity?: () => void,
 ): Promise<PreSearchDataPayload | null> {
   const reader = response.body?.getReader();
-  if (!reader) return null;
+  if (!reader)
+    return null;
 
   const decoder = new TextDecoder();
   let buffer = '';
@@ -57,7 +57,8 @@ export async function readPreSearchStreamData(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done)
+        break;
 
       onActivity?.();
 
@@ -250,8 +251,8 @@ export function shouldWaitForPreSearch(
 
   // Pre-search in progress - wait
   if (
-    preSearchForRound.status === AnalysisStatuses.PENDING ||
-    preSearchForRound.status === AnalysisStatuses.STREAMING
+    preSearchForRound.status === AnalysisStatuses.PENDING
+    || preSearchForRound.status === AnalysisStatuses.STREAMING
   ) {
     return true;
   }

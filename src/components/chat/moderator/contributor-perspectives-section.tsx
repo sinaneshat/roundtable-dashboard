@@ -115,7 +115,8 @@ export function ContributorPerspectivesSection({
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-blue-400">{t('contributorPerspectives.logic')}</span>
                           <span className="text-sm font-semibold tabular-nums text-blue-400">
-                            {perspective.scorecard.logic}%
+                            {perspective.scorecard.logic}
+                            %
                           </span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-500/20">
@@ -130,7 +131,8 @@ export function ContributorPerspectivesSection({
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-purple-400">{t('contributorPerspectives.creativity')}</span>
                           <span className="text-sm font-semibold tabular-nums text-purple-400">
-                            {perspective.scorecard.creativity}%
+                            {perspective.scorecard.creativity}
+                            %
                           </span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-purple-500/20">
@@ -145,7 +147,8 @@ export function ContributorPerspectivesSection({
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-amber-400">{t('contributorPerspectives.riskAwareness')}</span>
                           <span className="text-sm font-semibold tabular-nums text-amber-400">
-                            {perspective.scorecard.riskAwareness}%
+                            {perspective.scorecard.riskAwareness}
+                            %
                           </span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-500/20">
@@ -160,7 +163,8 @@ export function ContributorPerspectivesSection({
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-emerald-400">{t('contributorPerspectives.evidence')}</span>
                           <span className="text-sm font-semibold tabular-nums text-emerald-400">
-                            {perspective.scorecard.evidence}%
+                            {perspective.scorecard.evidence}
+                            %
                           </span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-500/20">

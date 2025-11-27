@@ -118,14 +118,25 @@ export function ConsensusAnalysisSection({
       {/* Alignment Summary - only if data exists */}
       {hasAlignmentData && (
         <div className="text-sm">
-          <span className="text-muted-foreground">{t('consensusAnalysis.alignmentSummary')}: </span>
+          <span className="text-muted-foreground">
+            {t('consensusAnalysis.alignmentSummary')}
+            :
+            {' '}
+          </span>
           <span className="font-medium">
-            {alignmentSummary.majorAlignment} / {alignmentSummary.totalClaims} {t('consensusAnalysis.totalClaims').toLowerCase()}
+            {alignmentSummary.majorAlignment}
+            {' '}
+            /
+            {alignmentSummary.totalClaims}
+            {' '}
+            {t('consensusAnalysis.totalClaims').toLowerCase()}
           </span>
           {alignmentSummary.contestedClaims > 0 && (
             <span className="text-amber-500 ml-2">
               <AlertTriangle className="inline size-3.5 -mt-0.5 mr-1" />
-              {alignmentSummary.contestedClaims} {t('consensusAnalysis.contested').toLowerCase()}
+              {alignmentSummary.contestedClaims}
+              {' '}
+              {t('consensusAnalysis.contested').toLowerCase()}
             </span>
           )}
         </div>
