@@ -26,6 +26,7 @@ import {
   useBoolean,
   useChatScroll,
   useFlowLoading,
+  useSortedParticipants,
   useThreadTimeline,
   useVisualViewportPosition,
 } from '@/hooks/utils';
@@ -128,6 +129,12 @@ export default function ChatThreadScreen({
   const stopStreaming = useChatStore(s => s.stop);
   const contextParticipants = useChatStore(s => s.participants);
   const preSearches = useChatStore(s => s.preSearches);
+
+  // ✅ CRITICAL FIX: Sort participants by priority before indexing
+  // currentParticipantIndex is set based on priority-sorted array in use-multi-participant-chat.ts
+  // So we must sort here to match that same ordering
+  // ✅ REFACTOR: Use useSortedParticipants hook (single source of truth for priority sorting)
+  const sortedContextParticipants = useSortedParticipants(contextParticipants);
 
   // ✅ ZUSTAND V5 PATTERN: Use useShallow for object selectors to prevent re-renders
   // Object selectors without useShallow create new references each render causing infinite loops
@@ -651,8 +658,8 @@ export default function ChatThreadScreen({
               isStreaming={isStreaming}
               currentParticipantIndex={currentParticipantIndex}
               currentStreamingParticipant={
-                isStreaming && contextParticipants[currentParticipantIndex]
-                  ? contextParticipants[currentParticipantIndex]
+                isStreaming && sortedContextParticipants[currentParticipantIndex]
+                  ? sortedContextParticipants[currentParticipantIndex]
                   : null
               }
               streamingRoundNumber={streamingRoundNumber}

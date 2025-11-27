@@ -73,7 +73,9 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
     .sort()
     .join(',');
 
-  const expectedModelIds = state.expectedParticipantIds.sort().join(',');
+  // ✅ FIX: Copy array before sorting to avoid mutating store state
+  // .sort() mutates in place, which was destroying priority order in expectedParticipantIds
+  const expectedModelIds = [...state.expectedParticipantIds].sort().join(',');
 
   if (currentModelIds !== expectedModelIds) {
     return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.PARTICIPANT_MISMATCH };

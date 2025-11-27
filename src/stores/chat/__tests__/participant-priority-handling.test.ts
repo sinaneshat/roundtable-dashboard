@@ -24,7 +24,7 @@
  * @see chat.ts uniqueIndex on (threadId, modelId)
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
@@ -152,7 +152,7 @@ describe('participant Priority Handling', () => {
 
     it('should reindex priorities after removing a participant', () => {
       // Start with 3 participants
-      let participants: ParticipantConfig[] = [
+      const participants: ParticipantConfig[] = [
         { id: 'p1', modelId: 'openai/gpt-4', role: '', priority: 0 },
         { id: 'p2', modelId: 'google/gemini-pro', role: '', priority: 1 },
         { id: 'p3', modelId: 'deepseek/deepseek-r1', role: '', priority: 2 },

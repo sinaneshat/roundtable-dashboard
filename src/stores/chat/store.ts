@@ -86,6 +86,7 @@ import type {
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
+import { sortByPriority } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
 
@@ -683,7 +684,9 @@ const createThreadSlice: StateCreator<
       ...(thread ? { enableWebSearch: thread.enableWebSearch } : {}),
     }, false, 'thread/setThread'),
   setParticipants: (participants: ChatParticipant[]) =>
-    set({ participants }, false, 'thread/setParticipants'),
+    // ✅ DEFENSIVE SORT: Always sort participants by priority to ensure correct streaming order
+    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+    set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) =>
     set((state) => {
       const newMessages = typeof messages === 'function' ? messages(state.messages) : messages;
@@ -1280,9 +1283,12 @@ const createOperationsSlice: StateCreator<
     // Components use TanStack Query to fetch completed pre-search from DB
     // No store hydration needed
 
+    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+    const sortedParticipants = sortByPriority(participants);
+
     set({
       thread,
-      participants,
+      participants: sortedParticipants,
       messages: messagesToSet,
       error: null,
       isStreaming: false,
@@ -1294,7 +1300,8 @@ const createOperationsSlice: StateCreator<
   },
 
   updateParticipants: (participants: ChatParticipant[]) =>
-    set({ participants }, false, 'operations/updateParticipants'),
+    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+    set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants'),
 
   prepareForNewMessage: (message: string, participantIds: string[]) =>
     set((state) => {

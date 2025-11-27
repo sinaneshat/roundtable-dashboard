@@ -171,6 +171,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const messages = useStore(store, s => s.messages);
   const enableWebSearch = useStore(store, s => s.enableWebSearch);
   const createdThreadId = useStore(store, s => s.createdThreadId);
+  // ✅ RACE CONDITION FIX: Pass to hook to prevent resumed stream detection during submission
+  const hasEarlyOptimisticMessage = useStore(store, s => s.hasEarlyOptimisticMessage);
 
   // ✅ CRITICAL FIX: Subscribe to state needed by pending message sender effect
   // These subscriptions ensure effect re-runs when state changes
@@ -287,7 +289,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       .map(p => p.modelId)
       .sort()
       .join(',');
-    const expectedModelIds = expectedParticipantIds.sort().join(',');
+    // ✅ FIX: Copy array before sorting to avoid mutating store state
+    // .sort() mutates in place, which was destroying priority order in expectedParticipantIds
+    const expectedModelIds = [...expectedParticipantIds].sort().join(',');
 
     if (currentModelIds !== expectedModelIds) {
       return;
@@ -613,6 +617,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // Animation tracking for sequential participant streaming
     waitForAnimation,
     clearAnimations,
+    // ✅ RACE CONDITION FIX: Prevents resumed stream detection from setting isStreaming=true
+    // during form submission, which would create a deadlock state
+    hasEarlyOptimisticMessage,
   });
 
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
@@ -1349,7 +1356,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       .map(p => p.modelId)
       .sort()
       .join(',');
-    const expectedModelIds = expectedParticipantIds.sort().join(',');
+    // ✅ FIX: Copy array before sorting to avoid mutating store state
+    // .sort() mutates in place, which was destroying priority order in expectedParticipantIds
+    const expectedModelIds = [...expectedParticipantIds].sort().join(',');
 
     if (currentModelIds !== expectedModelIds) {
       return;

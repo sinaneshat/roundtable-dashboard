@@ -1374,7 +1374,8 @@ describe('initialize Thread Operation', () => {
 
     const state = store.getState();
     expect(state.thread).toBe(thread);
-    expect(state.participants).toBe(participants);
+    // ✅ FIX: Use toEqual since store now copies and sorts participants defensively
+    expect(state.participants).toEqual(participants);
     expect(state.messages).toBe(messages);
     expect(state.error).toBeNull();
     expect(state.isStreaming).toBe(false);

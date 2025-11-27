@@ -35,6 +35,7 @@ import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
+import { sortByPriority } from '@/lib/utils/participant';
 
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];
@@ -217,28 +218,27 @@ export function ChatParticipantsList({
               <TooltipContent side="top" className="max-w-xs">
                 <div className="space-y-1">
                   <div className="font-semibold text-xs">{tModels('selectedModelsLabel')}</div>
-                  {participants
-                    .sort((a, b) => a.priority - b.priority)
-                    .map((participant) => {
-                      const model = allEnabledModels.find(m => m.id === participant.modelId);
-                      if (!model)
-                        return null;
-                      return (
-                        <div key={participant.id} className="flex items-center gap-2 text-xs">
-                          <Avatar className="size-4">
-                            <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
-                          </Avatar>
-                          <span className="font-medium">{model.name}</span>
-                          {participant.role && (
-                            <span className="text-muted-foreground">
-                              •
-                              {' '}
-                              {participant.role}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                  {/* ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting) */}
+                  {sortByPriority(participants).map((participant) => {
+                    const model = allEnabledModels.find(m => m.id === participant.modelId);
+                    if (!model)
+                      return null;
+                    return (
+                      <div key={participant.id} className="flex items-center gap-2 text-xs">
+                        <Avatar className="size-4">
+                          <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
+                        </Avatar>
+                        <span className="font-medium">{model.name}</span>
+                        {participant.role && (
+                          <span className="text-muted-foreground">
+                            •
+                            {' '}
+                            {participant.role}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </TooltipContent>
             )}

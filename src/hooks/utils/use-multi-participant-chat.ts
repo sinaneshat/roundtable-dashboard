@@ -14,7 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema, UIMessageErrorTypeSchema } 
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
-import { deduplicateParticipants } from '@/lib/utils/participant';
+import { deduplicateParticipants, sortByPriority } from '@/lib/utils/participant';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { useSyncedRefs } from './use-synced-refs';
@@ -78,6 +78,12 @@ type UseMultiParticipantChatOptions = {
   waitForAnimation?: (participantIndex: number) => Promise<void>;
   /** Animation tracking: clear all pending animations */
   clearAnimations?: () => void;
+  /**
+   * ✅ RACE CONDITION FIX: Flag indicating a form submission is in progress
+   * When true, prevents resumed stream detection from setting isStreaming=true
+   * This avoids a deadlock state where isStreaming=true but pendingMessage=null
+   */
+  hasEarlyOptimisticMessage?: boolean;
 };
 
 /**
@@ -197,6 +203,7 @@ export function useMultiParticipantChat(
     onPreSearchError,
     waitForAnimation,
     clearAnimations,
+    hasEarlyOptimisticMessage = false,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -214,6 +221,7 @@ export function useMultiParticipantChat(
     threadId,
     enableWebSearch,
     mode, // ✅ FIX: Add mode to refs to prevent transport recreation
+    hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -289,7 +297,9 @@ export function useMultiParticipantChat(
     // If roundParticipantsRef is empty but we have participants, populate it first
     // This can happen during resumed streams or race conditions
     if (totalParticipants === 0 && participantsRef.current.length > 0) {
-      const enabled = participantsRef.current.filter(p => p.isEnabled);
+      // ✅ FIX: Sort by priority to ensure correct streaming order
+      // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+      const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
       roundParticipantsRef.current = enabled;
       totalParticipants = enabled.length;
     }
@@ -374,11 +384,17 @@ export function useMultiParticipantChat(
       });
     }
 
-    // AI SDK v5 Pattern: Use requestAnimationFrame instead of setTimeout
-    // This resets trigger lock after the browser's next paint cycle
-    requestAnimationFrame(() => {
-      isTriggeringRef.current = false;
-    });
+    // ✅ CRITICAL FIX: Reset trigger lock SYNCHRONOUSLY after triggering next participant
+    // Previously used requestAnimationFrame which caused a race condition:
+    // - Fast-responding models (single word responses) complete before rAF fires
+    // - When last participant finishes, triggerNextParticipantWithRefs is called
+    // - But isTriggeringRef is still true (rAF hasn't reset it yet)
+    // - Function returns early, round never completes, analysis never triggers
+    //
+    // The lock only needs to prevent CONCURRENT calls within the same synchronous execution
+    // By resetting synchronously AFTER aiSendMessage returns, we ensure the lock is cleared
+    // before the next onFinish callback can call this function
+    isTriggeringRef.current = false;
     // Note: callbackRefs not in deps - we use callbackRefs.onComplete.current to always get latest value
     // hasResponded, markAsResponded, resetErrorTracking are stable functions
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -521,7 +537,8 @@ export function useMultiParticipantChat(
       // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
       // This prevents premature round completion when totalParticipants is 0
       if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        const enabled = participantsRef.current.filter(p => p.isEnabled);
+        // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
         roundParticipantsRef.current = enabled;
       }
 
@@ -612,7 +629,17 @@ export function useMultiParticipantChat(
         && participantsRef.current.length > 0;
 
       if (isResumedStream) {
-        // Update refs from metadata for resumed stream
+        // ✅ RACE CONDITION FIX: Don't set streaming state if a form submission is in progress
+        // When hasEarlyOptimisticMessage is true, handleUpdateThreadAndSend is executing
+        // and will call prepareForNewMessage soon. Setting isStreaming=true here would
+        // create a deadlock state where isStreaming=true but pendingMessage=null.
+        //
+        // IMPORTANT: We still process the refs update and let onFinish continue - we only
+        // skip setting isStreaming=true. Otherwise, we'd ignore the message data entirely
+        // and cause a stuck stream!
+        const isFormSubmissionInProgress = callbackRefs.hasEarlyOptimisticMessage.current;
+
+        // Update refs from metadata for resumed stream (even during submission - safe)
         currentIndex = metadataParticipantIndex;
         currentIndexRef.current = currentIndex;
 
@@ -622,17 +649,22 @@ export function useMultiParticipantChat(
 
         // ✅ CRITICAL: Populate roundParticipantsRef from participantsRef
         // This MUST happen before triggerNextParticipantWithRefs checks totalParticipants
-        const enabled = participantsRef.current.filter(p => p.isEnabled);
+        // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
         roundParticipantsRef.current = enabled;
 
-        // Also set streaming state since we're in the middle of a round
-        setIsExplicitlyStreaming(true);
+        // Only set streaming state if NOT in the middle of a form submission
+        // This prevents the deadlock but still allows the message to be processed
+        if (!isFormSubmissionInProgress) {
+          setIsExplicitlyStreaming(true);
+        }
       }
 
       // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
       // This prevents premature round completion when totalParticipants is 0
       if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        const enabled = participantsRef.current.filter(p => p.isEnabled);
+        // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
         roundParticipantsRef.current = enabled;
       }
 
@@ -669,7 +701,9 @@ export function useMultiParticipantChat(
 
       // AI SDK v5 Pattern: ALWAYS update message metadata on finish
       // The AI SDK adds the message during streaming; we update it with proper metadata
+
       if (participant && data.message) {
+
         // ✅ CRITICAL FIX: Skip metadata merge for pre-search messages
         // Pre-search messages have isPreSearch: true and complete metadata from backend
         // They should NOT be modified with participant metadata
@@ -911,22 +945,23 @@ export function useMultiParticipantChat(
         }
       }
 
-      // CRITICAL: Wait for animation to complete before triggering next participant
-      // This ensures the typing animation finishes before starting the next one
-      // flushSync above ensures React commits the metadata update
-      // waitForAnimation resolves when ModelMessageCard signals animation complete
-      // THEN we trigger the next participant
+      // CRITICAL: Trigger next participant after current one finishes
+      // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
+      // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
+      // which has its own timeout mechanism for analysis creation
       const triggerWithAnimationWait = async () => {
-        // Normal flow for successful responses: wait for animation
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        try {
+          // Small delay to ensure React has committed any pending state updates
+          await new Promise(resolve => requestAnimationFrame(resolve));
 
-        // ✅ FIX: Wait for current participant's animation
-        if (waitForAnimation) {
-          await waitForAnimation(currentIndex);
+          // Trigger next participant immediately - no animation waiting here
+          // Analysis creation (in handleComplete) will wait for animations separately
+          triggerNextParticipantWithRefs();
+        } catch (error) {
+          console.error('[triggerWithAnimationWait] ERROR:', error);
+          // Still try to trigger next participant on error
+          triggerNextParticipantWithRefs();
         }
-
-        // Now trigger next participant
-        triggerNextParticipantWithRefs();
       };
 
       triggerWithAnimationWait();
@@ -1128,11 +1163,9 @@ export function useMultiParticipantChat(
       },
     });
 
-    // Release lock after message is sent
-    // Use requestAnimationFrame to release after browser paint cycle
-    requestAnimationFrame(() => {
-      isTriggeringRef.current = false;
-    });
+    // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
+    // Same fix as triggerNextParticipantWithRefs - prevents race conditions
+    isTriggeringRef.current = false;
   }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
   // Note: participantsOverride comes from caller, not deps
   // callbackRefs provides stable ref access to threadId (no deps needed)
@@ -1226,10 +1259,9 @@ export function useMultiParticipantChat(
       },
     });
 
-    // Release lock after message is sent
-    requestAnimationFrame(() => {
-      isTriggeringRef.current = false;
-    });
+    // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
+    // Same fix as triggerNextParticipantWithRefs - prevents race conditions
+    isTriggeringRef.current = false;
   }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
 
   /**
@@ -1341,11 +1373,9 @@ export function useMultiParticipantChat(
         },
       });
 
-      // Release lock after message is sent
-      // Use requestAnimationFrame to release after browser paint cycle
-      requestAnimationFrame(() => {
-        isTriggeringRef.current = false;
-      });
+      // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
+      // Same fix as triggerNextParticipantWithRefs - prevents race conditions
+      isTriggeringRef.current = false;
     },
     [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming],
     // callbackRefs provides stable ref access to threadId (no deps needed)

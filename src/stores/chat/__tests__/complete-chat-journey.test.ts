@@ -851,9 +851,10 @@ describe('subscription Tier Limits', () => {
       createMockParticipant(2, { priority: 1 }),
     ]);
 
+    // ✅ FIX: Store now defensively sorts participants by priority
     // Models should respond in priority order (0, 1, 2)
     const priorities = store.getState().participants.map(p => p.priority);
-    expect(priorities).toEqual([2, 0, 1]);
+    expect(priorities).toEqual([0, 1, 2]);
   });
 });
 

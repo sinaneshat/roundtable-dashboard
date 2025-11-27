@@ -19,7 +19,7 @@
  */
 
 import type { UIMessage } from 'ai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ChatModes, MessageRoles, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
@@ -127,7 +127,7 @@ describe('round Override Prevention', () => {
 
       // Store messages should be PRESERVED (not overwritten with empty)
       const state = store.getState();
-      expect(state.messages.length).toBe(3);
+      expect(state.messages).toHaveLength(3);
       expect(state.messages[0].id).toBe(`${thread.id}_r0_user`);
     });
 
@@ -160,7 +160,7 @@ describe('round Override Prevention', () => {
 
       // Store should PRESERVE round 1 data
       const state = store.getState();
-      expect(state.messages.length).toBe(5);
+      expect(state.messages).toHaveLength(5);
       const maxRound = state.messages.reduce((max, m) => {
         const round = (m.metadata as { roundNumber?: number })?.roundNumber ?? 0;
         return Math.max(max, round);
@@ -192,7 +192,7 @@ describe('round Override Prevention', () => {
       // Should use NEW thread's messages
       const state = store.getState();
       expect(state.thread?.id).toBe(newThread.id);
-      expect(state.messages.length).toBe(3);
+      expect(state.messages).toHaveLength(3);
       expect(state.messages[0].id).toBe(`${newThread.id}_r0_user`);
     });
 
@@ -212,7 +212,7 @@ describe('round Override Prevention', () => {
 
       // Should use SSR messages
       const state = store.getState();
-      expect(state.messages.length).toBe(3);
+      expect(state.messages).toHaveLength(3);
     });
 
     it('should use SSR messages when they have MORE rounds than store', () => {
@@ -239,7 +239,7 @@ describe('round Override Prevention', () => {
 
       // Should use SSR messages (they're more complete)
       const state = store.getState();
-      expect(state.messages.length).toBe(4);
+      expect(state.messages).toHaveLength(4);
       const hasRound1 = state.messages.some(m =>
         (m.metadata as { roundNumber?: number })?.roundNumber === 1,
       );
@@ -268,7 +268,7 @@ describe('round Override Prevention', () => {
 
       // Should preserve messages (matched by createdThreadId)
       const state = store.getState();
-      expect(state.messages.length).toBe(3);
+      expect(state.messages).toHaveLength(3);
     });
   });
 
@@ -330,7 +330,7 @@ describe('round Override Prevention', () => {
 
       // Messages should be PRESERVED
       const state = store.getState();
-      expect(state.messages.length).toBe(3);
+      expect(state.messages).toHaveLength(3);
 
       // Round calculation should still work correctly
       const maxRound = state.messages.reduce((max, m) => {
@@ -364,7 +364,7 @@ describe('round Override Prevention', () => {
 
       // Should preserve messages (1 message > 0 messages)
       const state = store.getState();
-      expect(state.messages.length).toBe(1);
+      expect(state.messages).toHaveLength(1);
     });
 
     it('should prefer store when same round count but more messages', () => {
@@ -391,7 +391,7 @@ describe('round Override Prevention', () => {
 
       // Should preserve store messages (more complete)
       const state = store.getState();
-      expect(state.messages.length).toBe(3);
+      expect(state.messages).toHaveLength(3);
     });
   });
 });

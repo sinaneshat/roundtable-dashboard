@@ -17,8 +17,8 @@ import { describe, expect, it } from 'vitest';
 
 import { ChatModes, ScreenModes } from '@/api/core/enums';
 
-import { COMPLETE_RESET_STATE, FORM_DEFAULTS, THREAD_NAVIGATION_RESET_STATE } from '../store-defaults';
 import { createChatStore } from '../store';
+import { COMPLETE_RESET_STATE, FORM_DEFAULTS, THREAD_NAVIGATION_RESET_STATE } from '../store-defaults';
 
 describe('navigation Reset to /chat - Complete State Reset', () => {
   describe('resetToOverview - Day 0 State', () => {
@@ -78,7 +78,7 @@ describe('navigation Reset to /chat - Complete State Reset', () => {
         updatedAt: new Date(),
       });
 
-      expect(store.getState().analyses.length).toBe(1);
+      expect(store.getState().analyses).toHaveLength(1);
 
       // Reset
       store.getState().resetToOverview();
@@ -100,7 +100,7 @@ describe('navigation Reset to /chat - Complete State Reset', () => {
         updatedAt: new Date(),
       });
 
-      expect(store.getState().preSearches.length).toBe(1);
+      expect(store.getState().preSearches).toHaveLength(1);
 
       // Reset
       store.getState().resetToOverview();
@@ -359,32 +359,65 @@ describe('navigation Reset to /chat - Complete State Reset', () => {
 
       const expectedKeys = [
         // Form
-        'inputValue', 'selectedMode', 'selectedParticipants', 'enableWebSearch', 'modelOrder',
+        'inputValue',
+        'selectedMode',
+        'selectedParticipants',
+        'enableWebSearch',
+        'modelOrder',
         // Feedback
-        'feedbackByRound', 'pendingFeedback', 'hasLoadedFeedback',
+        'feedbackByRound',
+        'pendingFeedback',
+        'hasLoadedFeedback',
         // UI
-        'showInitialUI', 'waitingToStartStreaming', 'isCreatingThread', 'createdThreadId',
+        'showInitialUI',
+        'waitingToStartStreaming',
+        'isCreatingThread',
+        'createdThreadId',
         // Analysis
         'analyses',
         // Pre-search
-        'preSearches', 'preSearchActivityTimes',
+        'preSearches',
+        'preSearchActivityTimes',
         // Thread
-        'thread', 'participants', 'messages', 'isStreaming', 'currentParticipantIndex', 'error',
-        'sendMessage', 'startRound', 'stop', 'chatSetMessages',
+        'thread',
+        'participants',
+        'messages',
+        'isStreaming',
+        'currentParticipantIndex',
+        'error',
+        'sendMessage',
+        'startRound',
+        'stop',
+        'chatSetMessages',
         // Flags
-        'hasInitiallyLoaded', 'isRegenerating', 'isCreatingAnalysis', 'isWaitingForChangelog', 'hasPendingConfigChanges',
+        'hasInitiallyLoaded',
+        'isRegenerating',
+        'isCreatingAnalysis',
+        'isWaitingForChangelog',
+        'hasPendingConfigChanges',
         // Data
-        'regeneratingRoundNumber', 'pendingMessage', 'expectedParticipantIds', 'streamingRoundNumber', 'currentRoundNumber',
+        'regeneratingRoundNumber',
+        'pendingMessage',
+        'expectedParticipantIds',
+        'streamingRoundNumber',
+        'currentRoundNumber',
         // Tracking
-        'hasSentPendingMessage', 'createdAnalysisRounds', 'triggeredPreSearchRounds', 'hasEarlyOptimisticMessage',
+        'hasSentPendingMessage',
+        'createdAnalysisRounds',
+        'triggeredPreSearchRounds',
+        'hasEarlyOptimisticMessage',
         // Callbacks
         'onComplete',
         // Screen
-        'screenMode', 'isReadOnly',
+        'screenMode',
+        'isReadOnly',
         // Stream resumption
-        'streamResumptionState', 'resumptionAttempts', 'nextParticipantToTrigger',
+        'streamResumptionState',
+        'resumptionAttempts',
+        'nextParticipantToTrigger',
         // Animation
-        'pendingAnimations', 'animationResolvers',
+        'pendingAnimations',
+        'animationResolvers',
       ];
 
       // Check that all expected keys are in COMPLETE_RESET_STATE

@@ -192,18 +192,36 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // The thread's enableWebSearch is now a default/preference, not a hard restriction
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // ✅ DATABASE-FIRST: Record must already exist from thread creation or mid-conversation creation
-    // Frontend should never create database records - that's backend's job
-    const existingSearch = await db.query.chatPreSearch.findFirst({
+    // ✅ DATABASE-FIRST: Check if record exists, create if not
+    // Record may not exist when web search is enabled mid-conversation
+    // (thread was created without enableWebSearch, user enabled it later)
+    let existingSearch = await db.query.chatPreSearch.findFirst({
       where: (fields, { and, eq: eqOp }) => and(
         eqOp(fields.threadId, threadId),
         eqOp(fields.roundNumber, roundNum),
       ),
     });
 
-    // ❌ CRITICAL: Record MUST exist (created during thread creation)
+    // ✅ AUTO-CREATE: If record doesn't exist, create it (supports mid-conversation web search enable)
+    // This handles the case where thread was created without web search, then user enables it later
+    // The act of calling this endpoint IS the user's intent to use web search for this round
     if (!existingSearch) {
-      throw createError.notFound('Pre-search record not found. This should have been created during thread creation.');
+      const [newSearch] = await db
+        .insert(tables.chatPreSearch)
+        .values({
+          id: ulid(),
+          threadId,
+          roundNumber: roundNum,
+          userQuery: body.userQuery,
+          status: AnalysisStatuses.PENDING,
+          createdAt: new Date(),
+        })
+        .returning();
+
+      if (!newSearch) {
+        throw createError.internal('Failed to create pre-search record');
+      }
+      existingSearch = newSearch;
     }
 
     // ✅ IDEMPOTENT: Return existing if already completed

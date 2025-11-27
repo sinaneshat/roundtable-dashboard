@@ -114,7 +114,7 @@ describe('createPendingAnalysis: Message ID/metadata mismatch detection', () => 
   // BUG REPLICATION TEST
   // ============================================================================
 
-  describe('Bug Replication: Navigation to Thread Screen + Round 1 Message', () => {
+  describe('bug Replication: Navigation to Thread Screen + Round 1 Message', () => {
     it('should NOT reject analysis when message ID and metadata match correctly', () => {
       // Setup: Initialize store (simulates thread screen load)
       store.getState().setThread(mockThread);
@@ -185,7 +185,7 @@ describe('createPendingAnalysis: Message ID/metadata mismatch detection', () => 
   // GENUINE MISMATCH TEST
   // ============================================================================
 
-  describe('Genuine Mismatch Detection', () => {
+  describe('genuine Mismatch Detection', () => {
     it('should reject when ID round number differs from metadata round number', () => {
       store.getState().setThread(mockThread);
       store.getState().setParticipants(mockParticipants);
@@ -299,7 +299,7 @@ describe('createPendingAnalysis: Message ID/metadata mismatch detection', () => 
   // TEMP ID TEST
   // ============================================================================
 
-  describe('Temp ID Handling', () => {
+  describe('temp ID Handling', () => {
     it('should skip temp IDs that do not match _r{N}_p{M} pattern', () => {
       store.getState().setThread(mockThread);
       store.getState().setParticipants(mockParticipants);
@@ -361,7 +361,7 @@ describe('createPendingAnalysis: Message ID/metadata mismatch detection', () => 
   // INCOMPLETE METADATA TEST
   // ============================================================================
 
-  describe('Incomplete Metadata Handling', () => {
+  describe('incomplete Metadata Handling', () => {
     it('should NOT report mismatch for incomplete metadata when ID matches roundNumber and participantIndex', () => {
       // BUG FIX TEST: This test verifies the fix for the issue where
       // incomplete metadata (missing finishReason, usage, etc.) caused
@@ -476,7 +476,7 @@ describe('createPendingAnalysis: Message ID/metadata mismatch detection', () => 
   // MULTI-ROUND TEST
   // ============================================================================
 
-  describe('Multi-round Scenarios', () => {
+  describe('multi-round Scenarios', () => {
     it('should correctly create analysis for round 2 after rounds 0 and 1 complete', () => {
       store.getState().setThread(mockThread);
       store.getState().setParticipants(mockParticipants);

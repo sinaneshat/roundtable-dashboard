@@ -2,6 +2,7 @@ import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
+import { sortByPriority } from '@/lib/utils/participant';
 
 type AvatarGroupProps = {
   participants: ParticipantConfig[];
@@ -28,9 +29,8 @@ export function AvatarGroup({
     md: 'text-xs',
   };
 
-  const visibleParticipants = participants
-    .sort((a, b) => a.priority - b.priority)
-    .slice(0, maxVisible);
+  // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+  const visibleParticipants = sortByPriority(participants).slice(0, maxVisible);
 
   const remainingCount = participants.length - maxVisible;
 

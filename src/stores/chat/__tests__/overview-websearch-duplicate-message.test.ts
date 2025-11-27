@@ -24,11 +24,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
-import { createChatStore } from '@/stores/chat';
 import type { ChatStoreApi } from '@/stores/chat';
-import type { ChatThread, ChatParticipant, ChatAnalysis, ChatPreSearch, ChatMessage } from '@/stores/chat/store-schemas';
+import { createChatStore } from '@/stores/chat';
+import type { ChatMessage, ChatParticipant, ChatThread } from '@/stores/chat/store-schemas';
 
-describe('Overview Screen Web Search - Duplicate Message Bug', () => {
+describe('overview Screen Web Search - Duplicate Message Bug', () => {
   let store: ChatStoreApi;
 
   const mockThread: ChatThread = {
@@ -79,7 +79,7 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
     store = createChatStore();
   });
 
-  describe('Bug Replication: State After handleCreateThread', () => {
+  describe('bug Replication: State After handleCreateThread', () => {
     it('should set both waitingToStartStreaming AND pendingMessage (causing the bug)', () => {
       const state = store.getState();
 
@@ -145,7 +145,7 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
       expect(userMessages[0].metadata?.roundNumber).toBe(0);
     });
 
-    it('BUG: demonstrates how sendMessage creates duplicate user message for round 1', () => {
+    it('bUG: demonstrates how sendMessage creates duplicate user message for round 1', () => {
       const state = store.getState();
 
       // Setup: Initialize thread with round 0 user message
@@ -175,7 +175,7 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
       expect(userMessages[1].metadata?.roundNumber).toBe(1);
 
       // Same message text appearing twice
-      const texts = userMessages.map(m => {
+      const texts = userMessages.map((m) => {
         const textPart = m.parts?.find(p => p.type === 'text' && 'text' in p);
         return textPart && 'text' in textPart ? textPart.text : '';
       });
@@ -183,7 +183,7 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
     });
   });
 
-  describe('Expected Behavior After Fix', () => {
+  describe('expected Behavior After Fix', () => {
     it('should NOT allow pendingMessage to fire when waitingToStartStreaming is true on overview', () => {
       const state = store.getState();
 
@@ -205,8 +205,8 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
       expect(newState.screenMode).toBe(ScreenModes.OVERVIEW);
 
       // When both are true, pendingMessage effect should be skipped
-      const shouldSkipPendingMessageEffect =
-        newState.waitingToStartStreaming && newState.screenMode === ScreenModes.OVERVIEW;
+      const shouldSkipPendingMessageEffect
+        = newState.waitingToStartStreaming && newState.screenMode === ScreenModes.OVERVIEW;
 
       expect(shouldSkipPendingMessageEffect).toBe(true);
     });
@@ -223,14 +223,14 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
       const newState = store.getState();
 
       // On thread screen with waitingToStartStreaming=false, pendingMessage should fire
-      const shouldSkipPendingMessageEffect =
-        newState.waitingToStartStreaming && newState.screenMode === ScreenModes.OVERVIEW;
+      const shouldSkipPendingMessageEffect
+        = newState.waitingToStartStreaming && newState.screenMode === ScreenModes.OVERVIEW;
 
       expect(shouldSkipPendingMessageEffect).toBe(false);
     });
   });
 
-  describe('Analysis Trigger After Correct Round', () => {
+  describe('analysis Trigger After Correct Round', () => {
     it('should only have round 0 analysis when participants stream correctly', () => {
       const state = store.getState();
 
@@ -257,7 +257,7 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
       expect(newState.analyses[0].roundNumber).toBe(0);
     });
 
-    it('BUG: demonstrates incorrect analysis creation for round 1', () => {
+    it('bUG: demonstrates incorrect analysis creation for round 1', () => {
       const state = store.getState();
 
       // Setup: Initialize with round 0
@@ -300,7 +300,7 @@ describe('Overview Screen Web Search - Duplicate Message Bug', () => {
     });
   });
 
-  describe('Pre-search Integration', () => {
+  describe('pre-search Integration', () => {
     it('should have pre-search for round 0 when web search enabled', () => {
       const state = store.getState();
 

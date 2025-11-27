@@ -23,6 +23,7 @@ import { showApiErrorToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { getRoundNumber } from '@/lib/utils/metadata';
 import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
@@ -271,7 +272,40 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Fix: Set streamingRoundNumber + add optimistic message immediately
       // Then prepareForNewMessage will merge with this state later
       // ============================================================================
-      const nextRoundNumber = calculateNextRoundNumber(threadState.messages);
+      let calculatedNextRound = calculateNextRoundNumber(threadState.messages);
+
+      // ✅ CRITICAL: Defensive validation to prevent round override bug
+      // BUG FIX: When navigating from overview to thread, store messages might be stale
+      // If calculatedNextRound is 0 but we already have messages, something is wrong
+      // This prevents accidentally overwriting a completed round
+      if (calculatedNextRound === 0 && threadState.messages.length > 0) {
+        // Check if round 0 already has assistant messages (round completed)
+        // ✅ TYPE-SAFE: Use getRoundNumber utility for Zod-validated metadata extraction
+        const round0AssistantMessages = threadState.messages.filter(
+          m =>
+            m.role === MessageRoles.ASSISTANT
+            && getRoundNumber(m.metadata) === 0,
+        );
+        if (round0AssistantMessages.length > 0) {
+          console.error('[handleUpdateThreadAndSend] Round override detected!', {
+            calculatedRound: calculatedNextRound,
+            totalMessages: threadState.messages.length,
+            round0AssistantCount: round0AssistantMessages.length,
+            // ✅ TYPE-SAFE: Use getRoundNumber for metadata extraction in diagnostic log
+            messageRoundNumbers: threadState.messages.map(m => ({
+              role: m.role,
+              roundNumber: getRoundNumber(m.metadata),
+            })),
+          });
+          // Force recalculate using fallback: count user messages
+          const userMessages = threadState.messages.filter(m => m.role === MessageRoles.USER);
+          calculatedNextRound = userMessages.length;
+          console.error('[handleUpdateThreadAndSend] Correcting to round', calculatedNextRound);
+        }
+      }
+
+      // Use the (potentially corrected) round number
+      const nextRoundNumber = calculatedNextRound;
 
       // Set streamingRoundNumber IMMEDIATELY for accordion collapse
       actions.setStreamingRoundNumber(nextRoundNumber);

@@ -27,14 +27,17 @@ import {
 
 /**
  * Creates mock participants for testing
+ * @param count - Number of participants to create
+ * @param priorities - Optional array of priority values (defaults to 0, 1, 2, ...)
  */
-function createMockParticipants(count: number) {
+function createMockParticipants(count: number, priorities?: number[]) {
   return Array.from({ length: count }, (_, i) => ({
     id: `participant-${i}`,
     modelId: `model-${i}`,
     role: `Role ${i}`,
     isEnabled: true,
     sortOrder: i,
+    priority: priorities?.[i] ?? i,
     threadId: 'test-thread',
     createdAt: new Date(),
   }));
@@ -63,48 +66,109 @@ function calculatePendingParticipants(params: {
     preSearchStatus,
   } = params;
 
-  // Condition 1: Is this the latest round?
-  const isLatestRound = roundNumber === streamingRoundNumber
-    || (preSearchStatus !== null && (preSearchStatus === AnalysisStatuses.PENDING || preSearchStatus === AnalysisStatuses.STREAMING));
+  // ✅ CRITICAL FIX: Sort participants by priority FIRST, matching actual component behavior
+  const sortedParticipants = [...participants].sort((a, b) => a.priority - b.priority);
+
+  // Get assistant messages for this round
+  const assistantMessages = messages.filter(
+    m => m.role === MessageRoles.ASSISTANT
+      && (m.metadata as { roundNumber?: number })?.roundNumber === roundNumber,
+  );
+
+  // Build a map of participant messages for quick lookup
+  const participantMessages = new Map<string, UIMessage>();
+  assistantMessages.forEach((m) => {
+    const participantId = (m.metadata as { participantId?: string })?.participantId;
+    if (participantId) {
+      participantMessages.set(participantId, m);
+    }
+  });
+
+  // ✅ CRITICAL FIX: Check if ALL participants have complete messages with visible content
+  // If so, don't show pending cards - prevents duplicate rendering
+  const allParticipantsHaveContent = sortedParticipants.every((p) => {
+    const msg = participantMessages.get(p.id);
+    if (!msg)
+      return false;
+    return msg.parts?.some((part: { type: string; text?: string }) =>
+      (part.type === 'text' && part.text && part.text.trim().length > 0)
+      || part.type === 'tool-invocation'
+      || part.type === 'reasoning',
+    ) ?? false;
+  });
+
+  // Condition: Is this the latest round?
+  const preSearchActive = preSearchStatus !== null
+    && (preSearchStatus === AnalysisStatuses.PENDING || preSearchStatus === AnalysisStatuses.STREAMING);
+  const preSearchComplete = preSearchStatus === AnalysisStatuses.COMPLETE;
+  const isLatestRound = roundNumber === streamingRoundNumber || preSearchActive || preSearchComplete;
 
   if (!isLatestRound || participants.length === 0) {
     return [];
   }
 
-  // Get participant indices that have responded
-  const assistantMessages = messages.filter(
-    m => m.role === MessageRoles.ASSISTANT
-      && (m.metadata as { roundNumber?: number })?.roundNumber === roundNumber,
-  );
-  const respondedIndices = new Set<number>();
-  assistantMessages.forEach((m) => {
-    const idx = (m.metadata as { participantIndex?: number })?.participantIndex;
-    if (idx !== undefined) {
-      respondedIndices.add(idx);
-    }
-  });
+  // ✅ CRITICAL FIX: If all participants have content, return empty (no pending cards needed)
+  const shouldShowPendingCards = !allParticipantsHaveContent && (preSearchActive || preSearchComplete || isStreaming);
 
-  // Check for streaming content
+  if (!shouldShowPendingCards) {
+    return [];
+  }
+
+  // Get the current streaming participant by priority index
+  const currentStreamingParticipant = sortedParticipants[currentParticipantIndex];
+
+  // ✅ FIX: Check if the CURRENT STREAMING PARTICIPANT's message has content
+  // First check the participantMessages map, but streaming messages often don't have
+  // participantId yet, so also check the last message if it's an assistant message
+  const currentStreamingMessage = currentStreamingParticipant
+    ? participantMessages.get(currentStreamingParticipant.id)
+    : null;
+
+  // ✅ Also check the last message in the array - streaming messages don't have participantId
+  // in metadata yet, but they ARE the last message when streaming is active
+  // CRITICAL: Only treat it as the streaming message if it DOESN'T have a participantId
+  // (completed messages have participantId, streaming messages don't)
   const lastMessage = messages[messages.length - 1];
-  const hasStreamingContent = isStreaming
+  const lastMessageMetadata = lastMessage?.metadata as { participantId?: string } | undefined;
+  const isLastMessageStreaming = !lastMessageMetadata?.participantId;
+  const lastMessageHasContent = isStreaming
     && lastMessage?.role === MessageRoles.ASSISTANT
-    && lastMessage?.parts?.some((p: { type: string; text?: string }) =>
-      p.type === 'text' && p.text && p.text.length > 0,
+    && isLastMessageStreaming // ✅ Only count as streaming message if no participantId
+    && lastMessage?.parts?.some(
+      (p: { type: string; text?: string }) =>
+        p.type === 'text' && p.text && p.text.trim().length > 0,
     );
 
-  // Filter pending participants
-  const pendingIndices: number[] = [];
-  participants.forEach((_, index) => {
-    // Skip if already responded
-    if (respondedIndices.has(index))
-      return;
-    // Skip current streaming participant if has content
-    if (isStreaming && index === currentParticipantIndex && hasStreamingContent)
-      return;
-    pendingIndices.push(index);
+  const streamingParticipantHasContent = currentStreamingMessage?.parts?.some(
+    (p: { type: string; text?: string }) =>
+      p.type === 'text' && p.text && p.text.trim().length > 0,
+  ) || lastMessageHasContent;
+
+  // ✅ FIX: Filter pending participants - check for VISIBLE content, not just having a message
+  const pendingParticipants = sortedParticipants.filter((participant) => {
+    const msg = participantMessages.get(participant.id);
+
+    // ✅ Check if this participant has VISIBLE content (not just a message)
+    const hasVisibleContent = msg?.parts?.some(
+      (p: { type: string; text?: string }) =>
+        (p.type === 'text' && p.text && p.text.trim().length > 0)
+        || p.type === 'tool-invocation'
+        || p.type === 'reasoning',
+    ) ?? false;
+
+    // Skip if has visible content (already rendered)
+    if (hasVisibleContent)
+      return false;
+
+    // Skip current streaming participant if it has visible content
+    if (isStreaming && currentStreamingParticipant && participant.id === currentStreamingParticipant.id && streamingParticipantHasContent)
+      return false;
+
+    return true;
   });
 
-  return pendingIndices;
+  // Return the ORIGINAL array indices of pending participants, sorted by priority
+  return pendingParticipants.map(p => participants.findIndex(orig => orig.id === p.id));
 }
 
 // ============================================================================
@@ -126,7 +190,7 @@ describe('pending Participant Cards Logic', () => {
         messages: [userMessage],
         roundNumber: 0,
         streamingRoundNumber: 0,
-        isStreaming: false,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
         currentParticipantIndex: 0,
         preSearchStatus: null,
       });
@@ -154,8 +218,8 @@ describe('pending Participant Cards Logic', () => {
         messages: [userMessage, assistantMessage],
         roundNumber: 0,
         streamingRoundNumber: 0,
-        isStreaming: false,
-        currentParticipantIndex: 0,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
+        currentParticipantIndex: 1, // ✅ FIX: Now streaming participant 1
         preSearchStatus: null,
       });
 
@@ -452,7 +516,7 @@ describe('pending Participant Cards Logic', () => {
         messages: [userMessage],
         roundNumber: 0,
         streamingRoundNumber: 0,
-        isStreaming: false,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
         currentParticipantIndex: 0,
         preSearchStatus: null,
       });
@@ -492,8 +556,8 @@ describe('pending Participant Cards Logic', () => {
         messages,
         roundNumber: 0,
         streamingRoundNumber: 0,
-        isStreaming: false,
-        currentParticipantIndex: 0,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
+        currentParticipantIndex: 1, // ✅ FIX: Now streaming participant 1
         preSearchStatus: null,
       });
 
@@ -782,5 +846,353 @@ describe('pre-Search Mock Creation', () => {
     expect(preSearch.searchData).toBeDefined();
     expect(preSearch.searchData?.queries?.length).toBe(1);
     expect(preSearch.searchData?.results?.length).toBe(1);
+  });
+});
+
+// ============================================================================
+// Priority Ordering Tests
+// Tests for ensuring pending cards appear in selection order (by priority)
+// ============================================================================
+
+describe('priority Ordering', () => {
+  describe('pending Cards Should Appear in Priority Order', () => {
+    it('should sort pending participants by priority (ascending)', () => {
+      // Create participants with non-sequential priorities
+      // participant-0 has priority 2, participant-1 has priority 0, participant-2 has priority 1
+      const participants = createMockParticipants(3, [2, 0, 1]);
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
+        currentParticipantIndex: 0,
+        preSearchStatus: null,
+      });
+
+      // Should be ordered by priority: [1, 2, 0] (priority 0, 1, 2)
+      // participant-1 (priority 0), participant-2 (priority 1), participant-0 (priority 2)
+      expect(pending).toEqual([1, 2, 0]);
+    });
+
+    it('should maintain priority order when some participants have responded', () => {
+      // participant-0 has priority 2, participant-1 has priority 0, participant-2 has priority 1
+      const participants = createMockParticipants(3, [2, 0, 1]);
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      // participant-1 (priority 0) has responded
+      const assistantMessage = createTestAssistantMessage({
+        id: 'assistant-1',
+        content: 'Response from participant 1',
+        roundNumber: 0,
+        participantId: 'participant-1',
+        participantIndex: 1,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage, assistantMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
+        currentParticipantIndex: 1, // ✅ FIX: Now streaming participant at index 1 in sorted order
+        preSearchStatus: null,
+      });
+
+      // participant-1 responded, remaining should be [2, 0] (priority 1, 2)
+      expect(pending).toEqual([2, 0]);
+    });
+
+    it('should handle reverse priority order (user selected last model first)', () => {
+      // User selected in reverse order: last model has priority 0
+      // participant-0 has priority 2, participant-1 has priority 1, participant-2 has priority 0
+      const participants = createMockParticipants(3, [2, 1, 0]);
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
+        currentParticipantIndex: 0,
+        preSearchStatus: null,
+      });
+
+      // Should be ordered by priority: [2, 1, 0] (priority 0, 1, 2)
+      expect(pending).toEqual([2, 1, 0]);
+    });
+
+    it('should handle equal priorities by maintaining stable order', () => {
+      // All participants have the same priority
+      const participants = createMockParticipants(3, [0, 0, 0]);
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true, // ✅ FIX: Must be streaming to show pending cards
+        currentParticipantIndex: 0,
+        preSearchStatus: null,
+      });
+
+      // With equal priorities, should maintain original order
+      expect(pending).toEqual([0, 1, 2]);
+    });
+
+    it('should exclude streaming participant while maintaining priority order', () => {
+      // participant-0 has priority 1, participant-1 has priority 0, participant-2 has priority 2
+      const participants = createMockParticipants(3, [1, 0, 2]);
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      // participant-1 (priority 0) is currently streaming with content
+      // Streaming messages do NOT have participantId yet (still in progress)
+      const streamingMessage: UIMessage = {
+        id: 'streaming-1',
+        role: UIMessageRoles.ASSISTANT,
+        parts: [{ type: 'text', text: 'Streaming response...' }],
+        metadata: {
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          // No participantId - message is still streaming
+        },
+      };
+
+      // After sorting by priority: [participant-1 (0), participant-0 (1), participant-2 (2)]
+      // currentParticipantIndex 0 = participant-1 (priority 0, first to stream)
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage, streamingMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true,
+        currentParticipantIndex: 0, // Index 0 in sorted array = participant-1
+        preSearchStatus: null,
+      });
+
+      // participant-1 is streaming (excluded because has content), remaining are [0, 2]
+      // These are original array indices of participant-0 (priority 1) and participant-2 (priority 2)
+      expect(pending).toEqual([0, 2]);
+    });
+  });
+});
+
+// ============================================================================
+// Duplicate Rendering Prevention Tests
+// Tests for preventing duplicate message rendering when all participants complete
+// ============================================================================
+
+describe('duplicate Rendering Prevention', () => {
+  describe('all Participants Have Content - No Pending Cards', () => {
+    /**
+     * ✅ CRITICAL REGRESSION TEST
+     *
+     * Bug: When preSearchComplete=true but isStreaming=false and all participants
+     * have completed messages, both AssistantGroupCard AND pending cards were
+     * being rendered, causing duplicate messages in the UI.
+     *
+     * Fix: If all participants have visible content, skip pending cards entirely
+     * to let the normal AssistantGroupCard rendering handle it.
+     */
+    it('should NOT show pending cards when all participants have complete responses', () => {
+      const participants = createMockParticipants(4);
+      const messages = [
+        createTestUserMessage({
+          id: 'user-1',
+          content: 'Say hi',
+          roundNumber: 0,
+        }),
+        // All 4 participants have completed responses
+        createTestAssistantMessage({
+          id: 'assistant-0',
+          content: 'hi',
+          roundNumber: 0,
+          participantId: 'participant-0',
+          participantIndex: 0,
+        }),
+        createTestAssistantMessage({
+          id: 'assistant-1',
+          content: 'Hi.',
+          roundNumber: 0,
+          participantId: 'participant-1',
+          participantIndex: 1,
+        }),
+        createTestAssistantMessage({
+          id: 'assistant-2',
+          content: 'Hi!',
+          roundNumber: 0,
+          participantId: 'participant-2',
+          participantIndex: 2,
+        }),
+        createTestAssistantMessage({
+          id: 'assistant-3',
+          content: 'hi',
+          roundNumber: 0,
+          participantId: 'participant-3',
+          participantIndex: 3,
+        }),
+      ];
+
+      // Pre-search is complete, streaming is done
+      const pending = calculatePendingParticipants({
+        participants,
+        messages,
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: false, // Streaming is done
+        currentParticipantIndex: 0,
+        preSearchStatus: AnalysisStatuses.COMPLETE, // Pre-search complete
+      });
+
+      // ✅ CRITICAL: NO pending cards should be shown because all participants have content
+      expect(pending).toEqual([]);
+      expect(pending).toHaveLength(0);
+    });
+
+    it('should NOT show pending cards when preSearchComplete=true and all messages exist', () => {
+      const participants = createMockParticipants(2);
+      const messages = [
+        createTestUserMessage({
+          id: 'user-1',
+          content: 'Hello',
+          roundNumber: 0,
+        }),
+        createTestAssistantMessage({
+          id: 'assistant-0',
+          content: 'Hello there!',
+          roundNumber: 0,
+          participantId: 'participant-0',
+          participantIndex: 0,
+        }),
+        createTestAssistantMessage({
+          id: 'assistant-1',
+          content: 'Hi!',
+          roundNumber: 0,
+          participantId: 'participant-1',
+          participantIndex: 1,
+        }),
+      ];
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages,
+        roundNumber: 0,
+        streamingRoundNumber: null, // No streaming round
+        isStreaming: false,
+        currentParticipantIndex: 0,
+        preSearchStatus: AnalysisStatuses.COMPLETE,
+      });
+
+      // All participants have content - no pending cards
+      expect(pending).toEqual([]);
+    });
+
+    it('should STILL show pending cards if some participants are missing content', () => {
+      const participants = createMockParticipants(4);
+      const messages = [
+        createTestUserMessage({
+          id: 'user-1',
+          content: 'Say hi',
+          roundNumber: 0,
+        }),
+        // Only 2 of 4 participants have completed responses
+        createTestAssistantMessage({
+          id: 'assistant-0',
+          content: 'hi',
+          roundNumber: 0,
+          participantId: 'participant-0',
+          participantIndex: 0,
+        }),
+        createTestAssistantMessage({
+          id: 'assistant-1',
+          content: 'Hi.',
+          roundNumber: 0,
+          participantId: 'participant-1',
+          participantIndex: 1,
+        }),
+        // participant-2 and participant-3 are still pending
+      ];
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages,
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true, // Still streaming
+        currentParticipantIndex: 2, // Now streaming participant 2
+        preSearchStatus: AnalysisStatuses.COMPLETE,
+      });
+
+      // Participants 2 and 3 should be pending
+      expect(pending).toEqual([2, 3]);
+      expect(pending).toHaveLength(2);
+    });
+
+    it('should detect empty text as not having content', () => {
+      const participants = createMockParticipants(2);
+      const messages = [
+        createTestUserMessage({
+          id: 'user-1',
+          content: 'Hello',
+          roundNumber: 0,
+        }),
+        // Both messages exist but one has empty content
+        createTestAssistantMessage({
+          id: 'assistant-0',
+          content: 'Hello!',
+          roundNumber: 0,
+          participantId: 'participant-0',
+          participantIndex: 0,
+        }),
+        {
+          id: 'assistant-1',
+          role: UIMessageRoles.ASSISTANT,
+          parts: [{ type: 'text', text: '' }], // Empty text
+          metadata: {
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            participantId: 'participant-1',
+            participantIndex: 1,
+          },
+        } as UIMessage,
+      ];
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages,
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true,
+        currentParticipantIndex: 1,
+        preSearchStatus: AnalysisStatuses.COMPLETE,
+      });
+
+      // Participant 1 has empty content, so should show pending card
+      expect(pending).toEqual([1]);
+    });
   });
 });

@@ -91,6 +91,13 @@ export function useIncompleteRoundResumption(
   const waitingToStartStreaming = useChatStore(s => s.waitingToStartStreaming);
   const setWaitingToStartStreaming = useChatStore(s => s.setWaitingToStartStreaming);
 
+  // ✅ INFINITE LOOP FIX: Subscribe to submission state to avoid interfering with normal submissions
+  // When user submits a message, pendingMessage is set. The resumption hook should NOT try to
+  // "resume" the round that the user just started - that's handled by the pending message effect.
+  const pendingMessage = useChatStore(s => s.pendingMessage);
+  const hasSentPendingMessage = useChatStore(s => s.hasSentPendingMessage);
+  const hasEarlyOptimisticMessage = useChatStore(s => s.hasEarlyOptimisticMessage);
+
   // Track if we've already attempted resumption for this thread
   const resumptionAttemptedRef = useRef<string | null>(null);
 
@@ -135,12 +142,22 @@ export function useIncompleteRoundResumption(
   const participantsChangedSinceRound = respondedModelIds.size > 0
     && [...respondedModelIds].some(modelId => !currentModelIds.has(modelId));
 
+  // ✅ INFINITE LOOP FIX: Detect when a submission is in progress
+  // When user submits, these flags indicate the submission flow is active:
+  // 1. hasEarlyOptimisticMessage: Set before PATCH, cleared by prepareForNewMessage
+  // 2. pendingMessage: Set by prepareForNewMessage, used by pending message effect
+  // 3. hasSentPendingMessage: Set to true after message is sent
+  // If any of these indicate a submission is active, we should NOT try to resume
+  const isSubmissionInProgress = hasEarlyOptimisticMessage || (pendingMessage !== null && !hasSentPendingMessage);
+
   // Check if round is incomplete
   // ✅ FIX: Also check that participants haven't changed since round started
+  // ✅ INFINITE LOOP FIX: Don't treat round as incomplete during active submission
   const isIncomplete
     = enabled
       && !isStreaming
       && !waitingToStartStreaming
+      && !isSubmissionInProgress // ← NEW: Don't interfere with normal submissions
       && currentRoundNumber !== null
       && enabledParticipants.length > 0
       && respondedParticipantIndices.size < enabledParticipants.length
@@ -165,6 +182,15 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ INFINITE LOOP FIX: Skip if a submission is in progress
+    // This prevents the hook from interfering with normal message submissions.
+    // When user submits, these states indicate submission is active:
+    // - hasEarlyOptimisticMessage: Set before PATCH, cleared by prepareForNewMessage
+    // - pendingMessage with !hasSentPendingMessage: Message ready to send
+    if (hasEarlyOptimisticMessage || (pendingMessage !== null && !hasSentPendingMessage)) {
+      return;
+    }
+
     // Skip if already attempted for this thread
     if (resumptionAttemptedRef.current === threadId) {
       return;
@@ -180,8 +206,10 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // Check if there's at least one user message for the current round
-    const hasUserMessageForRound = messages.some((msg) => {
+    // ✅ INFINITE LOOP FIX: Skip if the user message for this round is optimistic
+    // Optimistic messages are added by handleUpdateThreadAndSend before the actual submission.
+    // We should NOT try to "resume" a round that was just started - that's handled by pendingMessage effect.
+    const userMessageForRound = messages.find((msg) => {
       if (msg.role !== MessageRoles.USER) {
         return false;
       }
@@ -189,7 +217,13 @@ export function useIncompleteRoundResumption(
       return msgRound === currentRoundNumber;
     });
 
-    if (!hasUserMessageForRound) {
+    if (!userMessageForRound) {
+      return;
+    }
+
+    // If the user message is optimistic, this is a new submission, not a resumption
+    const metadata = userMessageForRound.metadata;
+    if (metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true) {
       return;
     }
 
@@ -213,6 +247,10 @@ export function useIncompleteRoundResumption(
     currentRoundNumber,
     threadId,
     messages,
+    // ✅ INFINITE LOOP FIX: Include submission state in dependencies
+    hasEarlyOptimisticMessage,
+    pendingMessage,
+    hasSentPendingMessage,
     setNextParticipantToTrigger,
     setStreamingRoundNumber,
     setCurrentParticipantIndex,

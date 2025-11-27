@@ -44,6 +44,7 @@ import * as tables from '@/db/schema';
 import type {
   ChatCustomRole,
 } from '@/db/validation';
+import { sortByPriority } from '@/lib/utils/participant';
 
 import type {
   createThreadRoute,
@@ -218,10 +219,16 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         updatedAt: now,
       };
     });
-    const participants = await db
+    // ✅ FIX: Sort participants by priority after insertion
+    // INSERT ... RETURNING does NOT guarantee order in SQLite/D1
+    // Without sorting, participants may return in random order (by internal row ID)
+    // causing placeholders to appear in wrong order in the UI
+    const insertedParticipants = await db
       .insert(tables.chatParticipant)
       .values(participantValues)
       .returning();
+    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+    const participants = sortByPriority(insertedParticipants);
     if (participants.length === 0) {
       throw createError.badRequest(
         'No participants were created for this thread. Please ensure at least one AI model is selected.',

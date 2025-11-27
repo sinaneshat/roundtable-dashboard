@@ -24,6 +24,7 @@ export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
 export { useSelectedParticipants } from './use-selected-participants';
+export { useSortedParticipants } from './use-sorted-participants';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';

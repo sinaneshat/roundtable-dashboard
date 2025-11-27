@@ -21,6 +21,7 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
+import { sortByPriority } from '@/lib/utils/participant';
 
 export type UseThreadActionsOptions = {
   /** Thread slug for query invalidation */
@@ -106,9 +107,8 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
     }
 
     // Use participant comparison utility (with ID for context tracking)
-    const contextKey = contextParticipants
-      .filter(p => p.isEnabled)
-      .sort((a, b) => a.priority - b.priority)
+    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+    const contextKey = sortByPriority(contextParticipants.filter(p => p.isEnabled))
       .map(p => `${p.id}:${p.modelId}:${p.priority}`)
       .join('|');
 
@@ -116,9 +116,8 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
       return;
     }
 
-    const syncedParticipants: ParticipantConfig[] = contextParticipants
-      .filter(p => p.isEnabled)
-      .sort((a, b) => a.priority - b.priority)
+    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
+    const syncedParticipants: ParticipantConfig[] = sortByPriority(contextParticipants.filter(p => p.isEnabled))
       .map((p, index) => ({
         id: p.id,
         modelId: p.modelId,

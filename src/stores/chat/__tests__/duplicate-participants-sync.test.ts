@@ -14,7 +14,7 @@
  * 2. handleUpdateThreadAndSend receives API response (both awaited and fire-and-forget)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';

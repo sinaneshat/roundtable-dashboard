@@ -8,12 +8,41 @@
  * - Comparison and equality checks
  * - Format transformation
  * - Validation and deduplication
+ * - Priority-based sorting (SINGLE SOURCE OF TRUTH)
  *
  * @module lib/utils/participant
  */
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+
+// ============================================================================
+// Priority Sorting (SINGLE SOURCE OF TRUTH)
+// ============================================================================
+
+/**
+ * Type for any object with a priority field
+ */
+export type WithPriority = { priority: number };
+
+/**
+ * Sort participants by priority (ascending order)
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use this function everywhere instead of inline sorting.
+ * Eliminates 25+ duplicates of `[...arr].sort((a, b) => a.priority - b.priority)`
+ *
+ * @param participants - Array of objects with priority field
+ * @returns New array sorted by priority (original unchanged)
+ *
+ * @example
+ * ```typescript
+ * // Instead of: [...participants].sort((a, b) => a.priority - b.priority)
+ * const sorted = sortByPriority(participants);
+ * ```
+ */
+export function sortByPriority<T extends WithPriority>(participants: T[]): T[] {
+  return [...participants].sort((a, b) => a.priority - b.priority);
+}
 
 // ============================================================================
 // Type Definitions
@@ -86,8 +115,7 @@ export function getParticipantsKey(
     ? participants.filter(p => p.isEnabled !== false)
     : participants;
 
-  return filtered
-    .sort((a, b) => a.priority - b.priority)
+  return sortByPriority(filtered)
     .map(p => getParticipantKey(p, mode))
     .join('|');
 }
@@ -215,9 +243,7 @@ export function participantConfigToOptimistic(
 export function chatParticipantsToConfig(
   participants: ChatParticipant[],
 ): ParticipantConfig[] {
-  return participants
-    .filter(p => p.isEnabled)
-    .sort((a, b) => a.priority - b.priority)
+  return sortByPriority(participants.filter(p => p.isEnabled))
     .map((p, index) => ({
       id: p.id,
       modelId: p.modelId,
@@ -297,15 +323,13 @@ export function deduplicateParticipants<T extends { modelId: string; priority: n
   const modelMap = new Map<string, T>();
 
   // Sort by priority for deterministic selection
-  const sorted = [...participants].sort((a, b) => a.priority - b.priority);
-
-  sorted.forEach((p) => {
+  sortByPriority(participants).forEach((p) => {
     if (!modelMap.has(p.modelId)) {
       modelMap.set(p.modelId, p);
     }
   });
 
-  return Array.from(modelMap.values()).sort((a, b) => a.priority - b.priority);
+  return sortByPriority(Array.from(modelMap.values()));
 }
 
 // ============================================================================

@@ -31,6 +31,7 @@ import {
   useChatScroll,
   useFlowLoading,
   useModelLookup,
+  useSortedParticipants,
   useVisualViewportPosition,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
@@ -371,7 +372,12 @@ export default function ChatOverviewScreen() {
   );
 
   // Check if first round is incomplete
-  const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
+  // ✅ CRITICAL FIX: Sort participants by priority before indexing
+  // currentParticipantIndex is set based on priority-sorted array in use-multi-participant-chat.ts
+  // So we must sort here to match that same ordering
+  // ✅ REFACTOR: Use useSortedParticipants hook (single source of truth for priority sorting)
+  const sortedContextParticipants = useSortedParticipants(contextParticipants);
+  const currentStreamingParticipant = sortedContextParticipants[currentParticipantIndex] || null;
 
   // React 19 Pattern: Initialize thread header on mount, update when title changes
   useEffect(() => {

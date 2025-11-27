@@ -77,6 +77,19 @@ export const ModelMessageCard = memo(({
     }
   }, [isStreaming, participantIndex, registerAnimation]);
 
+  // ✅ CRITICAL: Cleanup animation on unmount
+  // If component unmounts while animation is registered (e.g., navigation during streaming),
+  // complete the animation to prevent orphaned entries blocking handleComplete
+  useLayoutEffect(() => {
+    const index = participantIndex;
+    return () => {
+      if (hasRegisteredRef.current && index >= 0) {
+        completeAnimation(index);
+        hasRegisteredRef.current = false;
+      }
+    };
+  }, [participantIndex, completeAnimation]);
+
   // ✅ FIX: Use requestAnimationFrame instead of setTimeout for deterministic timing
   // RAF aligns with browser paint cycle, more reliable than arbitrary 16ms delay
   useLayoutEffect(() => {

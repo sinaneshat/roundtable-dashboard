@@ -544,4 +544,152 @@ describe('useChatScroll', () => {
       );
     });
   });
+
+  // =========================================================================
+  // NAVIGATION RESET TESTS
+  // Tests for resetScrollState and auto-reset on navigation
+  // =========================================================================
+
+  describe('resetScrollState', () => {
+    it('should reset all scroll state to initial values', () => {
+      // Start with user scrolled up (not at bottom)
+      mockWindowScroll(500, 2000, 1000);
+
+      const { result } = renderHook(() =>
+        useChatScroll({
+          messages: [createTestMessage('m1', 0)],
+          analyses: [createTestAnalysis('a1', 0, AnalysisStatuses.COMPLETE)],
+          isStreaming: false,
+          autoScrollThreshold: 100,
+        }),
+      );
+
+      // Simulate user scrolling up to disengage auto-scroll
+      mockWindowScroll(400, 2000, 1000);
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+
+      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.scrolledToAnalysesRef.current.size).toBeGreaterThanOrEqual(0);
+
+      // Call resetScrollState
+      act(() => {
+        result.current.resetScrollState();
+      });
+
+      // Verify all state is reset
+      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.scrolledToAnalysesRef.current.size).toBe(0);
+    });
+
+    it('should provide resetScrollState in the return object', () => {
+      const { result } = renderHook(() =>
+        useChatScroll({
+          messages: [],
+          analyses: [],
+          isStreaming: false,
+        }),
+      );
+
+      expect(typeof result.current.resetScrollState).toBe('function');
+    });
+  });
+
+  describe('auto-reset on navigation (messages become empty)', () => {
+    it('should reset scroll state when messages become empty', () => {
+      // Start with messages
+      const initialMessages = [createTestMessage('m1', 0)];
+
+      // Start with user scrolled up (not at bottom)
+      mockWindowScroll(500, 2000, 1000);
+
+      const { result, rerender } = renderHook(
+        ({ messages }) =>
+          useChatScroll({
+            messages,
+            analyses: [],
+            isStreaming: false,
+            autoScrollThreshold: 100,
+          }),
+        { initialProps: { messages: initialMessages } },
+      );
+
+      // Simulate user scrolling up to disengage auto-scroll
+      mockWindowScroll(400, 2000, 1000);
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+
+      expect(result.current.isAtBottomRef.current).toBe(false);
+
+      // Navigate to overview - messages become empty
+      rerender({ messages: [] });
+
+      // Verify scroll state is reset
+      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.scrolledToAnalysesRef.current.size).toBe(0);
+    });
+
+    it('should not reset when messages change but stay non-empty', () => {
+      const message1 = createTestMessage('m1', 0);
+      const message2 = createTestMessage('m2', 0);
+
+      // Start at bottom, then scroll up
+      mockWindowScroll(1000, 2000, 1000);
+
+      const { result, rerender } = renderHook(
+        ({ messages }) =>
+          useChatScroll({
+            messages,
+            analyses: [],
+            isStreaming: false,
+            autoScrollThreshold: 100,
+          }),
+        { initialProps: { messages: [message1] } },
+      );
+
+      // Scroll up to disengage
+      mockWindowScroll(400, 2000, 1000);
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+
+      expect(result.current.isAtBottomRef.current).toBe(false);
+
+      // Add another message (messages change but stay non-empty)
+      rerender({ messages: [message1, message2] });
+
+      // Should NOT reset - user's scroll position should be preserved
+      expect(result.current.isAtBottomRef.current).toBe(false);
+    });
+
+    it('should clear scrolledToAnalysesRef when navigating to overview', () => {
+      const messages = [createTestMessage('m1', 0)];
+      const analyses = [createTestAnalysis('a1', 0, AnalysisStatuses.COMPLETE)];
+
+      const { result, rerender } = renderHook(
+        ({ msgs }) =>
+          useChatScroll({
+            messages: msgs,
+            analyses,
+            isStreaming: false,
+          }),
+        { initialProps: { msgs: messages } },
+      );
+
+      // Simulate that an analysis was scrolled to
+      act(() => {
+        result.current.scrolledToAnalysesRef.current.add('a1');
+      });
+
+      expect(result.current.scrolledToAnalysesRef.current.has('a1')).toBe(true);
+
+      // Navigate to overview - messages become empty
+      rerender({ msgs: [] });
+
+      // Verify scrolledToAnalysesRef is cleared
+      expect(result.current.scrolledToAnalysesRef.current.size).toBe(0);
+    });
+  });
 });
