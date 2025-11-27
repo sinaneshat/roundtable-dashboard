@@ -82,6 +82,12 @@ export function useChatScroll({
   // Track last known scroll position for direction detection
   const lastScrollTopRef = useRef<number>(0);
 
+  // ✅ SCROLL FIX: Track if we've done the initial scroll for the current streaming session
+  // This prevents scrolling on every new participant message within the same round
+  // Only the FIRST scroll of a streaming session should snap to bottom,
+  // then content growth follows via contentGrew (not messageCountGrew)
+  const hasScrolledForStreamingSessionRef = useRef(false);
+
   /**
    * Reset all scroll state to initial values
    */
@@ -90,6 +96,7 @@ export function useChatScroll({
     scrolledToAnalysesRef.current = new Set();
     lastScrollTopRef.current = 0;
     isProgrammaticScrollRef.current = false;
+    hasScrolledForStreamingSessionRef.current = false;
   }, []);
 
   // Reset when messages become empty (navigation to overview)
@@ -174,8 +181,9 @@ export function useChatScroll({
   }, [enableNearBottomDetection, autoScrollThreshold]);
 
   // ============================================================================
-  // EFFECT 2: Auto-scroll when streaming starts (participant turn begins)
-  // ✅ This ensures we scroll to bottom when a new participant starts
+  // EFFECT 2: Auto-scroll when streaming starts (round begins)
+  // ✅ This ensures we scroll to bottom ONCE when the round starts
+  // ✅ SCROLL FIX: Only scroll once per streaming session (round), not per participant
   // ============================================================================
   const wasStreamingRef = useRef(false);
 
@@ -183,13 +191,25 @@ export function useChatScroll({
     const wasStreaming = wasStreamingRef.current;
     wasStreamingRef.current = isStreaming;
 
-    // When streaming STARTS (transition from false to true), scroll to bottom
-    if (!wasStreaming && isStreaming && isAtBottomRef.current) {
-      requestAnimationFrame(() => {
-        if (isAtBottomRef.current) {
-          scrollToBottom('smooth');
-        }
-      });
+    // When streaming STARTS (transition from false to true), reset session flag and scroll
+    if (!wasStreaming && isStreaming) {
+      // Reset the flag for the new streaming session
+      hasScrolledForStreamingSessionRef.current = false;
+
+      if (isAtBottomRef.current) {
+        requestAnimationFrame(() => {
+          if (isAtBottomRef.current) {
+            scrollToBottom('smooth');
+            // Mark that we've done the initial scroll for this session
+            hasScrolledForStreamingSessionRef.current = true;
+          }
+        });
+      }
+    }
+
+    // When streaming STOPS, reset the flag for the next round
+    if (wasStreaming && !isStreaming) {
+      hasScrolledForStreamingSessionRef.current = false;
     }
   }, [isStreaming, scrollToBottom]);
 
@@ -200,9 +220,13 @@ export function useChatScroll({
   //
   // STRATEGY: Instead of ResizeObserver on document.body (too broad),
   // track actual message content changes:
-  // 1. New messages added → scroll
+  // 1. New messages added → scroll ONLY if first participant (not subsequent)
   // 2. Streaming message content grows → scroll with heavy debounce
   // 3. Accordion/layout shifts → NO scroll (not tracked)
+  //
+  // ✅ KEY FIX: Only scroll once per round when participants start, then follow content
+  // This prevents the "snap to where participant started" bug where each new
+  // participant triggered a scroll to their starting position
   // ============================================================================
   const lastMessageCountRef = useRef(messages.length);
   const lastContentLengthRef = useRef(0);
@@ -246,23 +270,31 @@ export function useChatScroll({
       return;
     }
 
-    // Skip if no meaningful change (prevents layout shift scrolls)
-    // A new message should always scroll, content growth needs meaningful delta
-    if (!messageCountGrew && (!contentGrew || contentDelta < 20)) {
+    // ✅ KEY FIX: Don't scroll on new participant messages after the initial scroll
+    // This prevents the "snap to where participant started" bug
+    // Effect 2 handles the initial scroll when the round starts
+    // This effect should ONLY follow content growth, not snap on new messages
+    const shouldScrollForNewMessage = messageCountGrew && !hasScrolledForStreamingSessionRef.current;
+    const shouldScrollForContentGrowth = contentGrew && contentDelta >= 20;
+
+    // Skip if no meaningful change that we should respond to
+    if (!shouldScrollForNewMessage && !shouldScrollForContentGrowth) {
       return;
     }
 
     // ✅ SCROLL FIX: Debounce scroll to prevent rapid-fire scrolling
     // Multiple message chunks arrive quickly during streaming
-    // Use longer debounce for content growth vs new messages
+    // Use longer debounce for content growth vs initial scroll
     if (scrollDebounceRef.current) {
       clearTimeout(scrollDebounceRef.current);
     }
 
-    const debounceMs = messageCountGrew ? 50 : 200; // Faster for new messages, slower for content growth
+    const debounceMs = shouldScrollForNewMessage ? 50 : 200; // Faster for initial, slower for content growth
     scrollDebounceRef.current = setTimeout(() => {
       if (isAtBottomRef.current && isStreaming) {
         scrollToBottom('smooth');
+        // Mark that we've scrolled for this session
+        hasScrolledForStreamingSessionRef.current = true;
       }
       scrollDebounceRef.current = null;
     }, debounceMs);

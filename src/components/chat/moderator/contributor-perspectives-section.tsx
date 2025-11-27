@@ -59,7 +59,7 @@ export function ContributorPerspectivesSection({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       {perspectives.map((perspective, index) => {
         const isExpanded = expandedIndex === index;
 
@@ -103,107 +103,92 @@ export function ContributorPerspectivesSection({
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-2 space-y-4">
-                  {/* Scorecard Section - Dynamic from backend */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      {t('contributorPerspectives.scorecard')}
-                    </h4>
-                    <div className="grid gap-3">
-                      {/* Logic */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-blue-400">{t('contributorPerspectives.logic')}</span>
-                          <span className="text-sm font-semibold tabular-nums text-blue-400">
-                            {perspective.scorecard.logic}
-                            %
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-500/20">
-                          <div
-                            className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.logic}%` }}
-                          />
-                        </div>
+                <div className="px-4 pt-2 pb-4 space-y-4">
+                  {/* Scorecard with progress bars */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Logic */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{t('contributorPerspectives.logic')}</span>
+                        <span className="text-xs font-medium tabular-nums text-blue-400">
+                          {perspective.scorecard.logic}
+                          %
+                        </span>
                       </div>
-                      {/* Creativity */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-purple-400">{t('contributorPerspectives.creativity')}</span>
-                          <span className="text-sm font-semibold tabular-nums text-purple-400">
-                            {perspective.scorecard.creativity}
-                            %
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-purple-500/20">
-                          <div
-                            className="h-full rounded-full bg-purple-500 transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.creativity}%` }}
-                          />
-                        </div>
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-blue-500/20">
+                        <div
+                          className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.logic}%` }}
+                        />
                       </div>
-                      {/* Risk Awareness */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-amber-400">{t('contributorPerspectives.riskAwareness')}</span>
-                          <span className="text-sm font-semibold tabular-nums text-amber-400">
-                            {perspective.scorecard.riskAwareness}
-                            %
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-500/20">
-                          <div
-                            className="h-full rounded-full bg-amber-500 transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.riskAwareness}%` }}
-                          />
-                        </div>
+                    </div>
+                    {/* Creativity */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{t('contributorPerspectives.creativity')}</span>
+                        <span className="text-xs font-medium tabular-nums text-purple-400">
+                          {perspective.scorecard.creativity}
+                          %
+                        </span>
                       </div>
-                      {/* Evidence */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-emerald-400">{t('contributorPerspectives.evidence')}</span>
-                          <span className="text-sm font-semibold tabular-nums text-emerald-400">
-                            {perspective.scorecard.evidence}
-                            %
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-500/20">
-                          <div
-                            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.evidence}%` }}
-                          />
-                        </div>
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-purple-500/20">
+                        <div
+                          className="h-full rounded-full bg-purple-500 transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.creativity}%` }}
+                        />
+                      </div>
+                    </div>
+                    {/* Risk Awareness */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{t('contributorPerspectives.riskAwareness')}</span>
+                        <span className="text-xs font-medium tabular-nums text-amber-400">
+                          {perspective.scorecard.riskAwareness}
+                          %
+                        </span>
+                      </div>
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-amber-500/20">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.riskAwareness}%` }}
+                        />
+                      </div>
+                    </div>
+                    {/* Evidence */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{t('contributorPerspectives.evidence')}</span>
+                        <span className="text-xs font-medium tabular-nums text-emerald-400">
+                          {perspective.scorecard.evidence}
+                          %
+                        </span>
+                      </div>
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-emerald-500/20">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                          style={{ width: `${perspective.scorecard.evidence}%` }}
+                        />
                       </div>
                     </div>
                   </div>
 
-                  {/* Stance Section */}
+                  {/* Stance */}
                   {perspective.stance && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        {t('contributorPerspectives.stance')}
-                      </h4>
-                      <p className="text-sm text-foreground/90 leading-relaxed">
-                        {perspective.stance}
-                      </p>
-                    </div>
+                    <p className="text-sm text-foreground/80 leading-relaxed">
+                      {perspective.stance}
+                    </p>
                   )}
 
-                  {/* Supporting Evidence Section */}
+                  {/* Supporting Evidence */}
                   {perspective.evidence && perspective.evidence.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        {t('evidenceReasoning.evidenceCoverage')}
-                      </h4>
-                      <ul className="space-y-1.5">
-                        {perspective.evidence.map(item => (
-                          <li key={`evidence-${perspective.participantIndex}-${item}`} className="flex items-start gap-2 text-sm text-muted-foreground">
-                            <span className="text-primary/60 mt-1 size-1 rounded-full bg-current flex-shrink-0" />
-                            <span className="leading-relaxed">{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul className="space-y-1.5">
+                      {perspective.evidence.map(item => (
+                        <li key={`evidence-${perspective.participantIndex}-${item}`} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="size-1 mt-2 rounded-full bg-muted-foreground/60 flex-shrink-0" />
+                          <span className="leading-relaxed">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </CollapsibleContent>

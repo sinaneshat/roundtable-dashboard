@@ -30,13 +30,13 @@ export function AlternativesSection({
   const sortedAlternatives = [...alternatives].sort((a, b) => b.confidence - a.confidence);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {sortedAlternatives.map((alternative, index) => {
         const colors = getConfidenceProgressColors(alternative.confidence);
         return (
           <motion.div
             key={alternative.scenario}
-            className="space-y-2"
+            className="space-y-1.5"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{

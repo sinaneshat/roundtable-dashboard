@@ -132,18 +132,38 @@ export function getEvidenceStrengthProgressColors(strength: EvidenceStrength): {
 // CONFIDENCE LEVEL UTILITIES (percentage-based)
 // ============================================================================
 
+/** Confidence thresholds for consistent classification */
+export const CONFIDENCE_THRESHOLDS = {
+  HIGH: 80,
+  MEDIUM: 60,
+} as const;
+
 /**
  * Get confidence level label based on percentage threshold
  * Reusable across components with percentage-based confidence
  */
 export function getConfidenceLabel(confidence: number, t: (key: string) => string): string {
-  if (confidence >= 80) {
+  if (confidence >= CONFIDENCE_THRESHOLDS.HIGH) {
     return t('alternatives.highConfidence');
   }
-  if (confidence >= 60) {
+  if (confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
     return t('alternatives.mediumConfidence');
   }
   return t('alternatives.lowConfidence');
+}
+
+/**
+ * Get text color class based on confidence percentage
+ * Used for timeline/header confidence displays
+ */
+export function getConfidenceColor(confidence: number): string {
+  if (confidence >= CONFIDENCE_THRESHOLDS.HIGH) {
+    return 'text-emerald-400';
+  }
+  if (confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
+    return 'text-amber-400';
+  }
+  return 'text-red-400';
 }
 
 /**
@@ -151,10 +171,10 @@ export function getConfidenceLabel(confidence: number, t: (key: string) => strin
  * Reusable across components with percentage-based confidence
  */
 export function getConfidenceBadgeColor(confidence: number): string {
-  if (confidence >= 80) {
+  if (confidence >= CONFIDENCE_THRESHOLDS.HIGH) {
     return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/50';
   }
-  if (confidence >= 60) {
+  if (confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
     return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/50';
   }
   return 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/50';
@@ -165,11 +185,33 @@ export function getConfidenceBadgeColor(confidence: number): string {
  * Returns inline style colors to avoid Tailwind purging
  */
 export function getConfidenceProgressColors(confidence: number): { bg: string; indicator: string } {
-  if (confidence >= 80) {
+  if (confidence >= CONFIDENCE_THRESHOLDS.HIGH) {
     return { bg: 'rgba(16, 185, 129, 0.2)', indicator: '#10b981' }; // emerald
   }
-  if (confidence >= 60) {
+  if (confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
     return { bg: 'rgba(59, 130, 246, 0.2)', indicator: '#3b82f6' }; // blue
   }
   return { bg: 'rgba(245, 158, 11, 0.2)', indicator: '#f59e0b' }; // amber
+}
+
+// ============================================================================
+// CONTRIBUTOR COLOR UTILITIES
+// ============================================================================
+
+/** Contributor color palette - cycles for multiple contributors */
+export const CONTRIBUTOR_COLORS = [
+  'text-emerald-400',
+  'text-amber-400',
+  'text-blue-400',
+  'text-purple-400',
+  'text-orange-400',
+] as const;
+
+export type ContributorColorClass = (typeof CONTRIBUTOR_COLORS)[number];
+
+/**
+ * Get contributor color class by index (cycles through palette)
+ */
+export function getContributorColor(index: number): ContributorColorClass {
+  return CONTRIBUTOR_COLORS[index % CONTRIBUTOR_COLORS.length] ?? CONTRIBUTOR_COLORS[0];
 }

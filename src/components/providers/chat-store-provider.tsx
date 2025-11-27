@@ -187,7 +187,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // NOTE: TASK 2 (pending message send with pre-search handling) was REMOVED.
     // It was duplicated in the pendingMessage effect below, causing race conditions.
     // The pendingMessage effect now handles ALL pre-search + message sending logic.
-  }, [store, participants]);
+  }, [store]);
 
   // Initialize AI SDK hook with store state
   // ✅ CRITICAL FIX: Pass onComplete callback for immediate analysis triggering

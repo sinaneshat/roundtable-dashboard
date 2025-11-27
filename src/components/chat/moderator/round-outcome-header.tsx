@@ -12,6 +12,8 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
+import { CONFIDENCE_THRESHOLDS } from './moderator-ui-utils';
+
 type RoundOutcomeHeaderProps = {
   roundConfidence?: number;
   confidenceWeighting?: ConfidenceWeighting;
@@ -59,13 +61,15 @@ function getWeightingLabel(weighting: ConfidenceWeighting | undefined, t: (key: 
 }
 
 /**
- * Get color class for confidence percentage
+ * Get color class for confidence percentage (with border for header display)
  */
-function getConfidenceColor(percentage: number): string {
-  if (percentage >= 70)
+function getConfidenceColorWithBorder(percentage: number): string {
+  if (percentage >= CONFIDENCE_THRESHOLDS.HIGH) {
     return 'text-emerald-500 border-emerald-500';
-  if (percentage >= 50)
+  }
+  if (percentage >= CONFIDENCE_THRESHOLDS.MEDIUM) {
     return 'text-amber-500 border-amber-500';
+  }
   return 'text-red-500 border-red-500';
 }
 
@@ -73,10 +77,12 @@ function getConfidenceColor(percentage: number): string {
  * Get progress gradient color based on percentage
  */
 function getProgressGradientColor(percentage: number): string {
-  if (percentage >= 70)
+  if (percentage >= CONFIDENCE_THRESHOLDS.HIGH) {
     return 'bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500';
-  if (percentage >= 50)
+  }
+  if (percentage >= CONFIDENCE_THRESHOLDS.MEDIUM) {
     return 'bg-gradient-to-r from-red-500 via-amber-500 to-amber-500';
+  }
   return 'bg-gradient-to-r from-red-500 to-red-500';
 }
 
@@ -134,7 +140,7 @@ export function RoundOutcomeHeader({
                   {getWeightingLabel(confidenceWeighting, t)}
                 </Badge>
               )}
-              <span className={cn('text-xl sm:text-2xl font-bold', getConfidenceColor(roundConfidence))}>
+              <span className={cn('text-xl sm:text-2xl font-bold', getConfidenceColorWithBorder(roundConfidence))}>
                 {roundConfidence}
                 %
               </span>
@@ -171,66 +177,49 @@ export function RoundOutcomeHeader({
 
       {/* Consensus Evolution Timeline */}
       {consensusEvolution && consensusEvolution.length > 0 && (
-        <div className="space-y-2 sm:space-y-3 pt-2">
+        <div className="space-y-3 pt-2">
           <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-medium whitespace-nowrap">{t('consensusEvolution.title')}</h4>
-            <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+            <h4 className="text-sm font-medium">{t('consensusEvolution.title')}</h4>
+            <span className="text-xs text-muted-foreground">
               {t('roundOutcome.debatePhases', { count: phaseCount })}
             </span>
           </div>
 
-          {/* Horizontally scrollable timeline on mobile */}
+          {/* Timeline with circles */}
           <ScrollArea className="w-full">
-            <div className="flex justify-center py-4 px-4 min-w-max">
-              {/* Timeline container with relative positioning for the connecting line */}
+            <div className="flex justify-center py-3 px-2 min-w-max">
               <div className="relative">
-                {/* Connecting line - responsive positioning for circle centers */}
-                {/* Mobile: size-10 (40px) → center at 20px (top-5) */}
-                {/* Desktop: size-12 (48px) → center at 24px (sm:top-6) */}
-                <div
-                  className={cn(
-                    'absolute h-0.5 bg-gradient-to-r from-amber-500/60 via-amber-400/60 to-emerald-500/60',
-                    'top-5 sm:top-6', // 20px mobile, 24px desktop (half of circle size)
-                    'left-5 sm:left-6', // Start from center of first circle
-                    'right-5 sm:right-6', // End at center of last circle
-                  )}
-                />
+                {/* Connecting line */}
+                <div className="absolute h-0.5 bg-gradient-to-r from-amber-500/40 to-emerald-500/40 top-5 left-5 right-5" />
 
-                {/* Timeline Points */}
-                <div className="relative flex gap-8 sm:gap-12">
+                {/* Timeline points */}
+                <div className="relative flex gap-6">
                   {consensusEvolution.map((phase, index) => {
                     const percentage = phase.percentage;
                     const isLast = index === consensusEvolution.length - 1;
+                    const colorClass = isLast
+                      ? 'border-emerald-500 text-emerald-400'
+                      : percentage >= CONFIDENCE_THRESHOLDS.HIGH
+                        ? 'border-emerald-500/60 text-emerald-400'
+                        : percentage >= CONFIDENCE_THRESHOLDS.MEDIUM
+                          ? 'border-amber-500/60 text-amber-400'
+                          : 'border-red-500/60 text-red-400';
 
                     return (
-                      <div
-                        key={phase.phase}
-                        className="flex flex-col items-center"
-                      >
-                        {/* Percentage Circle */}
+                      <div key={phase.phase} className="flex flex-col items-center">
                         <div
                           className={cn(
-                            'relative z-10 flex items-center justify-center rounded-full border-2 bg-background',
-                            // Fixed square dimensions for perfect circle
-                            'min-w-10 min-h-10 w-10 h-10 sm:min-w-12 sm:min-h-12 sm:w-12 sm:h-12',
-                            'aspect-square flex-shrink-0',
-                            isLast
-                              ? 'border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/30'
-                              : percentage >= 70
-                                ? 'border-emerald-500/60 text-emerald-400'
-                                : percentage >= 50
-                                  ? 'border-amber-500/60 text-amber-400'
-                                  : 'border-red-500/60 text-red-400',
+                            'relative z-10 flex items-center justify-center size-10 rounded-full border-2 bg-background',
+                            colorClass,
+                            isLast && 'ring-2 ring-emerald-500/30',
                           )}
                         >
-                          <span className="text-xs sm:text-sm font-bold tabular-nums leading-none">
+                          <span className="text-xs font-bold tabular-nums">
                             {percentage}
                             %
                           </span>
                         </div>
-
-                        {/* Phase Label */}
-                        <span className="mt-2 text-[10px] sm:text-xs text-muted-foreground text-center leading-tight max-w-14 sm:max-w-20">
+                        <span className="mt-1.5 text-[10px] text-muted-foreground text-center max-w-16">
                           {phase.label || getPhaseLabel(phase.phase, t)}
                         </span>
                       </div>

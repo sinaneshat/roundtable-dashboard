@@ -15,12 +15,10 @@ type CollapsibleSectionProps = {
   children: ReactNode;
   defaultOpen?: boolean;
   className?: string;
-  /** Optional accent color for the section */
-  accentColor?: 'primary' | 'emerald' | 'amber' | 'blue' | 'purple';
 };
 
 /**
- * CollapsibleSection - Modern accordion-style section wrapper
+ * CollapsibleSection - Clean, minimal accordion-style section wrapper
  *
  * Used for the expandable sections in the Round Outcome panel:
  * - Key Insights & Recommendations
@@ -38,31 +36,14 @@ export function CollapsibleSection({
   children,
   defaultOpen = false,
   className,
-  accentColor,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  // Accent color classes for left border indicator
-  const accentClasses = {
-    primary: 'border-l-primary/60',
-    emerald: 'border-l-emerald-500/60',
-    amber: 'border-l-amber-500/60',
-    blue: 'border-l-blue-500/60',
-    purple: 'border-l-purple-500/60',
-  };
 
   return (
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className={cn(
-        'w-full rounded-lg transition-all duration-200',
-        // Subtle background on hover when closed
-        !isOpen && 'hover:bg-accent/20',
-        // Enhanced background when open
-        isOpen && 'bg-accent/10',
-        className,
-      )}
+      className={cn('w-full rounded-lg', className)}
     >
       <CollapsibleTrigger
         className={cn(
@@ -71,28 +52,17 @@ export function CollapsibleSection({
           'px-3 py-3 sm:px-4 sm:py-3',
           'min-h-[48px]', // Minimum touch target
           'rounded-lg transition-colors',
-          // Left border accent when open
-          'border-l-2 border-l-transparent',
-          isOpen && accentColor && accentClasses[accentColor],
+          // Subtle hover effect
+          'hover:bg-accent/30',
         )}
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {icon && (
-            <span
-              className={cn(
-                'flex-shrink-0 transition-colors',
-                isOpen ? 'text-foreground' : 'text-muted-foreground',
-              )}
-            >
+            <span className="flex-shrink-0 text-muted-foreground">
               {icon}
             </span>
           )}
-          <span
-            className={cn(
-              'font-medium text-sm truncate transition-colors',
-              isOpen ? 'text-foreground' : 'text-foreground/80',
-            )}
-          >
+          <span className="font-medium text-sm truncate text-foreground/90">
             {title}
           </span>
         </div>
@@ -125,12 +95,12 @@ export function CollapsibleSection({
         </div>
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-        {/* Content with smooth padding and separator */}
+        {/* Content with consistent padding matching established patterns */}
         <div
           className={cn(
-            'px-3 pt-1 pb-4 sm:px-4 sm:pt-2 sm:pb-5',
+            'px-4 pt-2 pb-4',
             // Indent content to align with title (past icon)
-            icon && 'pl-10 sm:pl-12',
+            icon && 'pl-11',
           )}
         >
           {children}

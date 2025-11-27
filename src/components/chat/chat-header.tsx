@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import React from 'react';
 
 import { Logo } from '@/components/logo';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -143,10 +144,32 @@ function NavigationHeaderComponent({
 }
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
+  // Subscribe to all loading/streaming states to show glass effect immediately
+  const showInitialUI = useChatStore(s => s.showInitialUI);
+  const isStreaming = useChatStore(s => s.isStreaming);
+  const isCreatingThread = useChatStore(s => s.isCreatingThread);
+  const waitingToStartStreaming = useChatStore(s => s.waitingToStartStreaming);
+  const isCreatingAnalysis = useChatStore(s => s.isCreatingAnalysis);
+
+  // Show glass header on mobile when thread flow is active (placeholders, pending, or streaming)
+  const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isCreatingAnalysis;
+  const showGlassEffect = !showInitialUI && isThreadFlowActive;
+
   return (
     <header
       className={cn(
-        'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center',
+        // Base: sticky positioning
+        'sticky top-0 left-0 right-0 z-50',
+        // Layout
+        'flex h-14 sm:h-16 shrink-0 items-center',
+        // Mobile glass effect when streaming (sm: breakpoint removes it on tablet+)
+        showGlassEffect && [
+          'backdrop-blur-xl bg-background/60',
+          'border-b border-border/30',
+          'mb-2',
+          // Remove glass effect on tablet and up
+          'sm:backdrop-blur-none sm:bg-transparent sm:border-b-0 sm:mb-0',
+        ],
         className,
       )}
     >

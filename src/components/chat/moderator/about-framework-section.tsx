@@ -1,34 +1,23 @@
 'use client';
 
-import { Bot, Sparkles, Target, TrendingUp } from 'lucide-react';
+import { Bot, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import { VoteTypes } from '@/api/core/enums';
 import type { ContributorPerspective } from '@/api/routes/chat/schema';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/ui/cn';
 
-import { getVoteIcon } from './moderator-ui-utils';
+import { getContributorColor, getVoteIcon } from './moderator-ui-utils';
 
 type AboutFrameworkSectionProps = {
   contributors?: ContributorPerspective[];
 };
 
-// Color palette for contributors with background variants
-const contributorStyles = [
-  { text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-  { text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-  { text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-  { text: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
-  { text: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-];
-
 /**
  * AboutFrameworkSection - Multi-AI Deliberation Framework
  *
- * Dynamically shows actual contributors from the analysis when available,
- * with computed stats and insights from their perspectives.
+ * Shows framework explanation with dynamic stats and contributors.
  */
 export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionProps) {
   const t = useTranslations('moderator');
@@ -62,110 +51,89 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
   }, [contributors, hasContributors]);
 
   return (
-    <div className="space-y-5">
-      {/* Section Subtitle with Icon */}
-      <div className="flex items-start gap-2.5 text-sm text-muted-foreground italic border-l-2 border-primary/30 pl-3">
-        <Sparkles className="size-4 mt-0.5 flex-shrink-0 text-primary/60" />
-        <p>{t('aboutFramework.subtitle')}</p>
-      </div>
+    <div className="space-y-4">
+      {/* Section Subtitle */}
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        {t('aboutFramework.subtitle')}
+      </p>
 
       {/* Main Description */}
       <p className="text-sm text-foreground/80 leading-relaxed">
         {t('aboutFramework.description')}
       </p>
 
-      {/* Dynamic Stats from Contributors */}
+      {/* Vote Summary */}
       {stats && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="flex flex-col items-center p-2.5 sm:p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <span className="text-lg sm:text-xl font-bold text-emerald-400">{stats.approveCount}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">Approve</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10">
+            <span className="text-sm font-semibold text-emerald-400">{stats.approveCount}</span>
+            <span className="text-xs text-muted-foreground">Approve</span>
           </div>
-          <div className="flex flex-col items-center p-2.5 sm:p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-            <span className="text-lg sm:text-xl font-bold text-red-400">{stats.rejectCount}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">Reject</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/10">
+            <span className="text-sm font-semibold text-red-400">{stats.rejectCount}</span>
+            <span className="text-xs text-muted-foreground">Reject</span>
           </div>
-          <div className="flex flex-col items-center p-2.5 sm:p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <span className="text-lg sm:text-xl font-bold text-amber-400">{stats.cautionCount}</span>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">Caution</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10">
+            <span className="text-sm font-semibold text-amber-400">{stats.cautionCount}</span>
+            <span className="text-xs text-muted-foreground">Caution</span>
           </div>
         </div>
       )}
 
-      {/* Average Quality Metrics */}
+      {/* Average Quality Scores */}
       {stats && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-            <Target className="size-3" />
-            Average Quality Scores
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-500/5">
-              Logic:
-              {' '}
-              {stats.avgLogic}
-              %
-            </Badge>
-            <Badge variant="outline" className="text-purple-400 border-purple-500/30 bg-purple-500/5">
-              Creativity:
-              {' '}
-              {stats.avgCreativity}
-              %
-            </Badge>
-            <Badge variant="outline" className="text-emerald-400 border-emerald-500/30 bg-emerald-500/5">
-              Evidence:
-              {' '}
-              {stats.avgEvidence}
-              %
-            </Badge>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Avg Scores:</span>
+          <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">
+            Logic
+            {' '}
+            {stats.avgLogic}
+            %
+          </span>
+          <span className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-400">
+            Creativity
+            {' '}
+            {stats.avgCreativity}
+            %
+          </span>
+          <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+            Evidence
+            {' '}
+            {stats.avgEvidence}
+            %
+          </span>
         </div>
       )}
 
-      {/* Dynamic Contributors - shows actual participants from analysis */}
+      {/* Contributors List */}
       {hasContributors && (
-        <div className="space-y-3">
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-            <TrendingUp className="size-3" />
+        <div className="space-y-2">
+          <span className="text-xs text-muted-foreground">
             {t('roundOutcome.contributors')}
             {' '}
             (
             {contributors.length}
             )
-          </h4>
-
-          <div className="grid gap-2 sm:grid-cols-2">
+          </span>
+          <div className="space-y-1.5">
             {contributors.map((contributor, index) => {
-              const styleIndex = index % contributorStyles.length;
-              const style = contributorStyles[styleIndex] ?? contributorStyles[0];
+              const color = getContributorColor(index);
+
               return (
                 <div
                   key={contributor.participantIndex}
-                  className={cn(
-                    'flex items-start gap-2.5 p-3 rounded-lg border',
-                    style?.bg,
-                    style?.border,
-                  )}
+                  className="flex items-center gap-2 py-1.5"
                 >
-                  <Bot className={cn('size-4 mt-0.5 flex-shrink-0', style?.text)} />
-                  <div className="space-y-1.5 min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={cn('text-sm font-medium truncate', style?.text)}>
-                        {contributor.role || contributor.modelName}
-                      </p>
-                      {contributor.vote && (
-                        <span className="flex-shrink-0">{getVoteIcon(contributor.vote)}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {contributor.modelName}
-                    </p>
-                    {contributor.stance && (
-                      <p className="text-xs text-foreground/70 line-clamp-2 leading-relaxed">
-                        {contributor.stance}
-                      </p>
-                    )}
-                  </div>
+                  <Bot className={cn('size-3.5 flex-shrink-0', color)} />
+                  <span className={cn('text-sm font-medium', color)}>
+                    {contributor.role || contributor.modelName}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {contributor.modelName}
+                  </span>
+                  {contributor.vote && (
+                    <span className="ml-auto flex-shrink-0">{getVoteIcon(contributor.vote)}</span>
+                  )}
                 </div>
               );
             })}
@@ -173,22 +141,19 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
         </div>
       )}
 
-      {/* Fallback: Generic framework roles when no contributors */}
+      {/* Fallback when no contributors */}
       {!hasContributors && (
-        <div className="space-y-3">
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            {t('aboutFramework.howItWorks')}
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            {t('aboutFramework.noContributors')}
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {t('aboutFramework.noContributors')}
+        </p>
       )}
 
-      {/* Confidence Score Explanation */}
-      <div className="flex items-start gap-2 text-sm text-muted-foreground italic pt-2 border-t border-border/30">
-        <Sparkles className="size-3.5 mt-0.5 flex-shrink-0 text-primary/40" />
-        <p>{t('aboutFramework.confidenceExplanation')}</p>
+      {/* Confidence Explanation */}
+      <div className="flex items-start gap-2 pt-3 border-t border-border/40">
+        <Sparkles className="size-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {t('aboutFramework.confidenceExplanation')}
+        </p>
       </div>
     </div>
   );

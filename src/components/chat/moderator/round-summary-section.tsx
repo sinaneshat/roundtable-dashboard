@@ -69,7 +69,7 @@ export function RoundSummarySection({
 
       {/* Key Themes */}
       {keyThemes && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <span className="text-sm font-medium">{t('roundSummary.keyThemes')}</span>
           <p className="text-sm text-muted-foreground leading-relaxed">
             {keyThemes}
@@ -79,9 +79,9 @@ export function RoundSummarySection({
 
       {/* Unresolved Questions */}
       {unresolvedQuestions && unresolvedQuestions.length > 0 && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <span className="text-sm font-medium">{t('roundSummary.unresolvedQuestions')}</span>
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {unresolvedQuestions.map((question, index) => (
               <motion.li
                 key={question}
@@ -94,8 +94,8 @@ export function RoundSummarySection({
                   ease: 'easeOut',
                 }}
               >
-                <span>•</span>
-                <span>{question}</span>
+                <span className="size-1 mt-2 rounded-full bg-muted-foreground/60 flex-shrink-0" />
+                <span className="leading-relaxed">{question}</span>
               </motion.li>
             ))}
           </ul>

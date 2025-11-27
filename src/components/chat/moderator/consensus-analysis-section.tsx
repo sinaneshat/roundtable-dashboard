@@ -166,15 +166,15 @@ export function ConsensusAnalysisSection({
 
       {/* Agreement Matrix - only if data exists */}
       {hasAgreementData && contributors.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <span className="text-sm font-medium">{t('consensusAnalysis.agreementHeatmap')}</span>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg border border-border/50">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 pr-4 text-muted-foreground font-medium">{t('consensusAnalysis.claim')}</th>
+                <tr className="border-b border-border/50 bg-muted/30">
+                  <th className="text-left py-2.5 px-3 text-muted-foreground font-medium text-xs">{t('consensusAnalysis.claim')}</th>
                   {contributors.map(contributor => (
-                    <th key={contributor} className="text-center py-2 px-2 text-muted-foreground font-medium">
+                    <th key={contributor} className="text-center py-2.5 px-3 text-muted-foreground font-medium text-xs">
                       {contributor}
                     </th>
                   ))}
@@ -184,7 +184,7 @@ export function ConsensusAnalysisSection({
                 {agreementHeatmap.map((row, rowIndex) => (
                   <motion.tr
                     key={row.claim}
-                    className="border-b border-border/50"
+                    className="border-b border-border/30 last:border-b-0"
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
@@ -193,11 +193,11 @@ export function ConsensusAnalysisSection({
                       ease: 'easeOut',
                     }}
                   >
-                    <td className="py-2 pr-4 text-foreground/80">{row.claim}</td>
+                    <td className="py-2.5 px-3 text-foreground/80">{row.claim}</td>
                     {contributors.map((contributor) => {
                       const status = row.perspectives[contributor] ?? AgreementStatuses.AGREE;
                       return (
-                        <td key={`${row.claim}-${contributor}`} className="py-2 px-2">
+                        <td key={`${row.claim}-${contributor}`} className="py-2.5 px-3">
                           <div className="flex justify-center items-center">
                             {getAgreementIcon(status)}
                           </div>
@@ -214,7 +214,7 @@ export function ConsensusAnalysisSection({
 
       {/* Argument Strength Radar - only if data exists */}
       {hasStrengthData && fullRadarData.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <span className="text-sm font-medium">{t('consensusAnalysis.argumentStrength')}</span>
           {/* Mobile-optimized chart container with responsive sizing */}
           <ChartContainer

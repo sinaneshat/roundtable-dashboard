@@ -54,7 +54,7 @@ export function EvidenceReasoningSection({
         <div className="space-y-3">
           <span className="text-sm font-medium">{t('evidenceReasoning.reasoningThreads')}</span>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {visibleThreads?.map((thread, index) => (
               <motion.div
                 key={thread.claim}
@@ -99,7 +99,7 @@ export function EvidenceReasoningSection({
         <div className="space-y-3">
           <span className="text-sm font-medium">{t('evidenceReasoning.evidenceCoverage')}</span>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {evidenceCoverage.map((item, index) => {
               const colors = getEvidenceStrengthProgressColors(item.strength);
               return (

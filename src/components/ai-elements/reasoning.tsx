@@ -128,7 +128,7 @@ export function Reasoning({
       <Collapsible
         open={isOpen}
         onOpenChange={handleOpenChange}
-        className={cn('not-prose mb-4 w-full', className)}
+        className={cn('not-prose mt-4 mb-4 w-full', className)}
         {...props}
       >
         {children}

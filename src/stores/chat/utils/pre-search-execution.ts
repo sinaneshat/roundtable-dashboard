@@ -10,9 +10,9 @@
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { z } from 'zod';
 
-import type { AnalysisStatus } from '@/api/core/enums';
 import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
-import type { PreSearchDataPayloadSchema, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 
 import type { ChatStoreApi } from '../store';
@@ -22,13 +22,15 @@ type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
 
 /**
  * Parse and validate pre-search data from SSE stream
+ * ✅ TYPE-SAFE: Uses Zod schema validation instead of manual type casting
  */
 function parsePreSearchData(jsonString: string): PreSearchDataPayload | null {
   try {
     const parsed: unknown = JSON.parse(jsonString);
-    // Basic validation - check required fields
-    if (parsed && typeof parsed === 'object' && 'queries' in parsed) {
-      return parsed as PreSearchDataPayload;
+    // ✅ PATTERN: Use Zod safeParse for type-safe validation
+    const result = PreSearchDataPayloadSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
     }
     return null;
   } catch {
@@ -180,7 +182,7 @@ export async function executePreSearch(
       }
     } else {
       // Update existing to streaming
-      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.STREAMING as AnalysisStatus);
+      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.STREAMING);
     }
 
     // Execute pre-search API
@@ -198,7 +200,7 @@ export async function executePreSearch(
 
     if (!response.ok && response.status !== 409) {
       console.error('[executePreSearch] Pre-search execution failed:', response.status);
-      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.FAILED as AnalysisStatus);
+      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.FAILED);
       store.getState().clearPreSearchActivity(roundNumber);
       store.getState().clearPreSearchTracking(roundNumber);
       return 'failed';
@@ -213,7 +215,7 @@ export async function executePreSearch(
     if (searchData) {
       store.getState().updatePreSearchData(roundNumber, searchData);
     } else {
-      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.COMPLETE as AnalysisStatus);
+      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.COMPLETE);
     }
 
     // Clear activity tracking

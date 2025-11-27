@@ -75,7 +75,7 @@ export function ModeratorAnalysisPanel({
       />
 
       {/* Collapsible Sections */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {/* Key Insights & Recommendations */}
         {(data.summary || (data.recommendations && data.recommendations.length > 0)) && (
           <CollapsibleSection
@@ -83,7 +83,6 @@ export function ModeratorAnalysisPanel({
             title={t('keyInsights.title')}
             subtitle={recommendationCount > 0 ? t('keyInsights.insightsIdentified', { count: recommendationCount }) : undefined}
             defaultOpen
-            accentColor="amber"
           >
             <KeyInsightsSection
               summary={data.summary}
@@ -99,7 +98,6 @@ export function ModeratorAnalysisPanel({
             icon={<Users className="size-4" />}
             title={t('contributorPerspectives.title')}
             subtitle={data.roundConfidence ? t('contributorPerspectives.subtitle', { convergence: data.roundConfidence }) : undefined}
-            accentColor="blue"
           >
             <ContributorPerspectivesSection perspectives={data.contributorPerspectives} />
           </CollapsibleSection>
@@ -111,7 +109,6 @@ export function ModeratorAnalysisPanel({
             icon={<TrendingUp className="size-4" />}
             title={t('consensusAnalysis.title')}
             subtitle={claimsInfo ? t('consensusAnalysis.subtitle', { alignment: claimsInfo.majorAlignment, total: claimsInfo.totalClaims }) : undefined}
-            accentColor="emerald"
           >
             <ConsensusAnalysisSection analysis={data.consensusAnalysis} />
           </CollapsibleSection>
@@ -123,7 +120,6 @@ export function ModeratorAnalysisPanel({
             icon={<FileText className="size-4" />}
             title={t('evidenceReasoning.title')}
             subtitle={evidenceCount > 0 ? t('evidenceReasoning.subtitle', { count: evidenceCount }) : undefined}
-            accentColor="purple"
           >
             <EvidenceReasoningSection evidenceAndReasoning={data.evidenceAndReasoning} />
           </CollapsibleSection>
@@ -135,7 +131,6 @@ export function ModeratorAnalysisPanel({
             icon={<GitBranch className="size-4" />}
             title={t('alternatives.title')}
             subtitle={t('alternatives.subtitle', { count: alternativeCount })}
-            accentColor="primary"
           >
             <AlternativesSection alternatives={data.alternatives} />
           </CollapsibleSection>
@@ -147,7 +142,6 @@ export function ModeratorAnalysisPanel({
             icon={<FileText className="size-4" />}
             title={t('roundSummary.title')}
             subtitle={t('roundSummary.closingSynthesis')}
-            accentColor="emerald"
           >
             <RoundSummarySection roundSummary={data.roundSummary} onActionClick={onActionClick} />
           </CollapsibleSection>
