@@ -517,6 +517,9 @@ export async function deleteStreamBuffer(
  * ✅ IMPORTANT: Chunks are stored as raw SSE data strings (e.g., "0:\"text\"\n\n")
  * from the AI SDK stream. We pass them through as-is without wrapping.
  * The chunks already contain the complete SSE protocol format.
+ *
+ * ⚠️ DEPRECATED: Use createLiveParticipantResumeStream for live resumption
+ * This function only returns static chunks and doesn't poll for new ones.
  */
 export function chunksToSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -535,6 +538,137 @@ export function chunksToSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Ar
       } catch {
         // Controller already closed (client disconnected) - ignore
       }
+    },
+  });
+}
+
+// ============================================================================
+// Live Stream Resumption
+// ============================================================================
+
+/**
+ * Create a LIVE SSE streaming response that polls KV for new chunks
+ *
+ * This enables true stream resumption for participant streams:
+ * 1. Return all buffered SSE chunks immediately
+ * 2. Keep polling KV for new chunks as they arrive
+ * 3. Stream new chunks to client in real-time
+ * 4. Complete when stream is marked as COMPLETED or FAILED
+ *
+ * @param streamId - Stream identifier (format: {threadId}_r{roundNumber}_p{participantIndex})
+ * @param env - Cloudflare environment bindings
+ * @param pollIntervalMs - How often to check for new chunks (default 100ms)
+ * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
+ */
+export function createLiveParticipantResumeStream(
+  streamId: string,
+  env: ApiEnv['Bindings'],
+  pollIntervalMs = 100,
+  maxPollDurationMs = 5 * 60 * 1000,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let lastChunkIndex = 0;
+  const startTime = Date.now();
+  let isClosed = false;
+
+  // Helper to safely close controller (handles already-closed state)
+  const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
+    if (isClosed) {
+      return;
+    }
+    try {
+      isClosed = true;
+      controller.close();
+    } catch {
+      // Controller already closed - ignore
+    }
+  };
+
+  // Helper to safely enqueue data (handles already-closed state)
+  const safeEnqueue = (controller: ReadableStreamDefaultController<Uint8Array>, data: Uint8Array) => {
+    if (isClosed) {
+      return false;
+    }
+    try {
+      controller.enqueue(data);
+      return true;
+    } catch {
+      // Controller already closed - mark as closed and return false
+      isClosed = true;
+      return false;
+    }
+  };
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        // Send initial buffered chunks
+        const initialChunks = await getStreamChunks(streamId, env);
+        if (initialChunks && initialChunks.length > 0) {
+          for (const chunk of initialChunks) {
+            // Chunks are already in SSE format from AI SDK
+            if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
+              return; // Client disconnected
+            }
+          }
+          lastChunkIndex = initialChunks.length;
+        }
+
+        // Check if already complete
+        const metadata = await getStreamMetadata(streamId, env);
+        if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+          safeClose(controller);
+        }
+      } catch {
+        safeClose(controller);
+      }
+    },
+
+    async pull(controller) {
+      if (isClosed) {
+        return;
+      }
+
+      try {
+        // Check timeout
+        if (Date.now() - startTime > maxPollDurationMs) {
+          safeClose(controller);
+          return;
+        }
+
+        // Poll for new chunks
+        const chunks = await getStreamChunks(streamId, env);
+        const metadata = await getStreamMetadata(streamId, env);
+
+        // Send any new chunks
+        if (chunks && chunks.length > lastChunkIndex) {
+          for (let i = lastChunkIndex; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            if (chunk) {
+              if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
+                return; // Client disconnected
+              }
+            }
+          }
+          lastChunkIndex = chunks.length;
+        }
+
+        // Check if stream is complete
+        if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+          safeClose(controller);
+          return;
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      } catch {
+        safeClose(controller);
+      }
+    },
+
+    cancel() {
+      // Client disconnected - mark as closed to prevent further operations
+      isClosed = true;
     },
   });
 }

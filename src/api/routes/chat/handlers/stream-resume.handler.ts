@@ -13,8 +13,9 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
+import { StreamStatuses } from '@/api/core/enums';
 import { getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
-import { chunksToSSEStream, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
+import { createLiveParticipantResumeStream, getStreamMetadata } from '@/api/services/stream-buffer.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -89,25 +90,22 @@ export const resumeStreamHandler: RouteHandler<typeof resumeStreamRoute, ApiEnv>
       return c.body(null, HttpStatusCodes.NO_CONTENT);
     }
 
-    // Get buffered chunks
-    const chunks = await getStreamChunks(streamId, c.env);
+    // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+    // This enables true stream resumption - the stream continues where it left off
+    // and polls for new chunks as they arrive from the original stream
+    const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
+    const liveStream = createLiveParticipantResumeStream(streamId, c.env);
 
-    // No chunks available - return 204 No Content
-    if (!chunks || chunks.length === 0) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
-    }
-
-    // Convert chunks to SSE stream
-    const sseStream = chunksToSSEStream(chunks);
-
-    // Return SSE stream
-    return new Response(sseStream, {
+    // Return live SSE stream
+    return new Response(liveStream, {
       status: HttpStatusCodes.OK,
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'X-Resumed-From-Buffer': 'true',
+        'X-Stream-Active': String(isStreamActive),
       },
     });
   },
@@ -177,25 +175,22 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       return c.body(null, HttpStatusCodes.NO_CONTENT);
     }
 
-    // Get buffered chunks
-    const chunks = await getStreamChunks(activeStream.streamId, c.env);
+    // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+    // This enables true stream resumption - the stream continues where it left off
+    // and polls for new chunks as they arrive from the original stream
+    const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
+    const liveStream = createLiveParticipantResumeStream(activeStream.streamId, c.env);
 
-    // No chunks available - return 204 No Content
-    if (!chunks || chunks.length === 0) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
-    }
-
-    // Convert chunks to SSE stream
-    const sseStream = chunksToSSEStream(chunks);
-
-    // Return SSE stream with metadata headers
-    return new Response(sseStream, {
+    // Return live SSE stream with metadata headers
+    return new Response(liveStream, {
       status: HttpStatusCodes.OK,
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'X-Resumed-From-Buffer': 'true',
+        'X-Stream-Active': String(isStreamActive),
         // Include stream metadata in headers for frontend to update state
         'X-Stream-Id': activeStream.streamId,
         'X-Round-Number': String(activeStream.roundNumber),

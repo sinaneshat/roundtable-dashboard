@@ -367,7 +367,9 @@ export function createLivePreSearchResumeStream(
 
   // Helper to safely close controller (handles already-closed state)
   const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
-    if (isClosed) return;
+    if (isClosed) {
+      return;
+    }
     try {
       isClosed = true;
       controller.close();
@@ -378,7 +380,9 @@ export function createLivePreSearchResumeStream(
 
   // Helper to safely enqueue data (handles already-closed state)
   const safeEnqueue = (controller: ReadableStreamDefaultController<Uint8Array>, data: Uint8Array) => {
-    if (isClosed) return false;
+    if (isClosed) {
+      return false;
+    }
     try {
       controller.enqueue(data);
       return true;
@@ -416,7 +420,9 @@ export function createLivePreSearchResumeStream(
     },
 
     async pull(controller) {
-      if (isClosed) return;
+      if (isClosed) {
+        return;
+      }
 
       try {
         // Check timeout
