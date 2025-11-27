@@ -15,7 +15,7 @@ import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 
 import { useChatScroll } from '../useChatScroll';
 
@@ -62,24 +62,6 @@ function createTestAnalysis(
     completedAt: null,
     errorMessage: null,
   } as StoredModeratorAnalysis;
-}
-
-function createTestPreSearch(
-  id: string,
-  roundNumber: number,
-  status: string = AnalysisStatuses.PENDING,
-): StoredPreSearch {
-  return {
-    id,
-    threadId: 'thread-1',
-    roundNumber,
-    userQuery: 'Test query',
-    status,
-    searchData: null,
-    createdAt: new Date(),
-    completedAt: null,
-    errorMessage: null,
-  } as StoredPreSearch;
 }
 
 // Mock window scroll properties
@@ -364,16 +346,21 @@ describe('useChatScroll', () => {
   });
 
   describe('streaming Auto-Scroll', () => {
-    it('should auto-scroll during participant streaming when at bottom', () => {
+    it('should auto-scroll during participant streaming when new messages arrive', () => {
       mockWindowScroll(1000, 2000, 1000);
 
-      renderHook(() =>
-        useChatScroll({
-          messages: [createTestMessage('m1', 0)],
-          analyses: [],
-          isStreaming: true,
-          scrollContainerId: 'chat-scroll-container',
-        }),
+      // Start with one message
+      const initialMessages = [createTestMessage('m1', 0)];
+
+      const { rerender } = renderHook(
+        ({ messages }) =>
+          useChatScroll({
+            messages,
+            analyses: [],
+            isStreaming: true,
+            scrollContainerId: 'chat-scroll-container',
+          }),
+        { initialProps: { messages: initialMessages } },
       );
 
       // Initialize at bottom
@@ -381,22 +368,31 @@ describe('useChatScroll', () => {
         window.dispatchEvent(new Event('scroll'));
       });
 
-      // Scroll should be called for streaming content
+      scrollToSpy.mockClear();
+
+      // Add a new message to trigger auto-scroll
+      const updatedMessages = [...initialMessages, createTestMessage('m2', 0)];
+      rerender({ messages: updatedMessages });
+
+      // Process RAF and debounce
       act(() => {
         vi.advanceTimersByTime(100);
+        vi.runAllTimers();
       });
 
       expect(scrollToSpy).toHaveBeenCalled();
     });
 
-    it('should auto-scroll during analysis streaming when at bottom', () => {
+    it('should NOT auto-scroll during analysis streaming (participant streaming required)', () => {
+      // ✅ UPDATED: Hook no longer auto-scrolls for analysis streaming
+      // Only participant streaming (isStreaming: true) triggers auto-scroll
       mockWindowScroll(1000, 2000, 1000);
 
       renderHook(() =>
         useChatScroll({
           messages: [createTestMessage('m1', 0)],
           analyses: [createTestAnalysis('a1', 0, AnalysisStatuses.STREAMING)],
-          isStreaming: false,
+          isStreaming: false, // Not participant streaming
           scrollContainerId: 'chat-scroll-container',
         }),
       );
@@ -406,10 +402,13 @@ describe('useChatScroll', () => {
         vi.advanceTimersByTime(100);
       });
 
-      expect(scrollToSpy).toHaveBeenCalled();
+      // No scroll should happen - analysis streaming doesn't trigger auto-scroll
+      expect(scrollToSpy).not.toHaveBeenCalled();
     });
 
-    it('should auto-scroll during pre-search streaming when at bottom', () => {
+    it('should NOT auto-scroll for pre-search (preSearches param removed)', () => {
+      // ✅ UPDATED: preSearches param was removed from hook
+      // Pre-search streaming no longer triggers auto-scroll
       mockWindowScroll(1000, 2000, 1000);
 
       renderHook(() =>
@@ -417,7 +416,6 @@ describe('useChatScroll', () => {
           messages: [createTestMessage('m1', 0)],
           analyses: [],
           isStreaming: false,
-          preSearches: [createTestPreSearch('ps1', 0, AnalysisStatuses.STREAMING)],
           scrollContainerId: 'chat-scroll-container',
         }),
       );
@@ -427,7 +425,8 @@ describe('useChatScroll', () => {
         vi.advanceTimersByTime(100);
       });
 
-      expect(scrollToSpy).toHaveBeenCalled();
+      // No scroll should happen without participant streaming
+      expect(scrollToSpy).not.toHaveBeenCalled();
     });
 
     it('should NOT auto-scroll when user has scrolled up (opted out)', () => {
@@ -464,43 +463,39 @@ describe('useChatScroll', () => {
   });
 
   describe('new Analysis Scroll', () => {
-    it('should track scrolled analyses', () => {
+    it('should track scrolled analyses when new messages arrive during streaming', () => {
       mockWindowScroll(1000, 2000, 1000);
 
-      // ✅ FIX: Use STREAMING status since analysis tracking only happens during active streaming
-      // The hook was updated to only track analyses when isAnyStreaming is true
-      // This prevents unwanted scroll jumps when analyses appear after streaming completes
+      // ✅ UPDATED: Analysis tracking only happens when new messages arrive during streaming
+      // The hook was refactored to prevent scroll jumps from changelog/analysis changes
       const analysis = createTestAnalysis('a1', 0, AnalysisStatuses.STREAMING);
+      const initialMessages = [createTestMessage('m1', 0)];
 
-      const { result } = renderHook(() =>
-        useChatScroll({
-          messages: [createTestMessage('m1', 0)],
-          analyses: [analysis],
-          isStreaming: true, // ✅ FIX: Must be streaming for analysis tracking to work
-        }),
+      const { result, rerender } = renderHook(
+        ({ messages, analyses }) =>
+          useChatScroll({
+            messages,
+            analyses,
+            isStreaming: true,
+          }),
+        { initialProps: { messages: initialMessages, analyses: [analysis] } },
       );
 
+      // Initialize at bottom
       act(() => {
         window.dispatchEvent(new Event('scroll'));
+      });
+
+      // Add new message to trigger the effect that tracks analyses
+      const updatedMessages = [...initialMessages, createTestMessage('m2', 0)];
+      rerender({ messages: updatedMessages, analyses: [analysis] });
+
+      act(() => {
         vi.advanceTimersByTime(100);
+        vi.runAllTimers();
       });
 
       expect(result.current.scrolledToAnalysesRef.current.has('a1')).toBe(true);
-    });
-  });
-
-  describe('backwards Compatibility', () => {
-    it('should provide isNearBottomRef as alias for isAtBottomRef', () => {
-      const { result } = renderHook(() =>
-        useChatScroll({
-          messages: [createTestMessage('m1', 0)],
-          analyses: [],
-          isStreaming: false,
-        }),
-      );
-
-      // Both should reference the same ref
-      expect(result.current.isNearBottomRef).toBe(result.current.isAtBottomRef);
     });
   });
 

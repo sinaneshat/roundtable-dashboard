@@ -1,14 +1,24 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { streamObject } from 'ai';
 import { asc, desc, eq } from 'drizzle-orm';
+import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AIModels } from '@/api/core/ai-models';
-import { AnalysisStatuses, UIMessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
+import {
+  clearActiveAnalysisStream,
+  createBufferedAnalysisResponse,
+  createLiveAnalysisResumeStream,
+  generateAnalysisStreamId,
+  getActiveAnalysisStreamId,
+  getAnalysisStreamMetadata,
+  initializeAnalysisStreamBuffer,
+} from '@/api/services/analysis-stream-buffer.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import { extractModeratorModelName } from '@/api/services/models-config.service';
 import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
@@ -40,6 +50,7 @@ import { isObject } from '@/lib/utils/type-guards';
 import type {
   analyzeRoundRoute,
   getThreadAnalysesRoute,
+  resumeAnalysisStreamRoute,
 } from '../route';
 import type { MessageWithParticipant } from '../schema';
 import {
@@ -56,9 +67,10 @@ function generateModeratorAnalysis(
     userId: string;
     sessionId?: string; // PostHog session ID for Session Replay linking
     executionCtx?: ExecutionContext; // Cloudflare Workers ExecutionContext for waitUntil
+    streamId?: string; // Stream ID for buffer cleanup on completion
   },
 ) {
-  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, userTier, env, analysisId, threadId, userId, sessionId, executionCtx } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, userTier, env, analysisId, threadId, userId, sessionId, executionCtx, streamId } = config;
 
   // ✅ POSTHOG LLM TRACKING: Initialize trace and timing for moderator analysis
   const llmTraceId = generateTraceId();
@@ -108,6 +120,11 @@ function generateModeratorAnalysis(
               errorMessage: finishError instanceof Error ? finishError.message : 'Unknown error',
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+          // ✅ RESUMABLE STREAMS: Clear active stream on failure
+          if (streamId) {
+            await clearActiveAnalysisStream(threadId, roundNumber, env);
+          }
 
           // ✅ PERFORMANCE OPTIMIZATION: Non-blocking error tracking
           // PostHog error tracking runs asynchronously via waitUntil()
@@ -161,6 +178,11 @@ function generateModeratorAnalysis(
               completedAt: new Date(),
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+          // ✅ RESUMABLE STREAMS: Clear active stream on success
+          if (streamId) {
+            await clearActiveAnalysisStream(threadId, roundNumber, env);
+          }
 
           // =========================================================================
           // ✅ POSTHOG LLM TRACKING: Track successful moderator analysis
@@ -326,17 +348,58 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
             })
             .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
 
+          // ✅ RESUMABLE STREAMS: Clear any stale buffer for this round
+          await clearActiveAnalysisStream(threadId, roundNum, c.env);
+
           // Continue to create new analysis below
         } else {
-          // Still within timeout window - reject duplicate request
+          // =========================================================================
+          // ✅ RESUMABLE STREAMS: Try to return buffered stream instead of 409
+          // =========================================================================
+          // Instead of rejecting with 409, try to return the buffered stream data
+          // This allows clients to resume from where they left off after page refresh
+
+          const existingStreamId = await getActiveAnalysisStreamId(threadId, roundNum, c.env);
+
+          if (existingStreamId) {
+            // =========================================================================
+            // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+            // =========================================================================
+            // This creates a stream that:
+            // 1. Returns all buffered chunks immediately
+            // 2. Continues polling KV for new chunks as they arrive
+            // 3. Streams new chunks to client in real-time
+            // 4. Completes when the original stream finishes
+            const liveStream = createLiveAnalysisResumeStream(existingStreamId, c.env);
+            return new Response(liveStream, {
+              status: HttpStatusCodes.OK,
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no',
+                'X-Resumed-From-Buffer': 'true',
+                'X-Stream-Id': existingStreamId,
+              },
+            });
+          }
+
+          // =========================================================================
+          // ✅ FALLBACK: No active stream ID (KV not available in local dev)
+          // =========================================================================
+          // Return 202 to tell frontend to poll for completion
           const ageMs = getTimestampAge(existingAnalysis.createdAt);
-          throw createError.conflict(
-            `Analysis is already being generated (age: ${formatAgeMs(ageMs)}). Please wait for it to complete.`,
+          return c.json(
             {
-              errorType: 'resource',
-              resource: 'moderator_analysis',
-              resourceId: existingAnalysis.id,
+              success: true,
+              data: {
+                status: 'streaming',
+                analysisId: existingAnalysis.id,
+                message: `Analysis is being generated (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
+                retryAfterMs: 2000,
+              },
             },
+            HttpStatusCodes.ACCEPTED,
           );
         }
       }
@@ -357,7 +420,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
             andOp(
               inArray(fields.id, messageIds),
               eqOp(fields.threadId, threadId),
-              eqOp(fields.role, 'assistant'),
+              eqOp(fields.role, MessageRoles.ASSISTANT),
             ),
           with: {
             participant: true,
@@ -470,7 +533,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           andOp(
             inArray(fields.id, messageIds),
             eqOp(fields.threadId, threadId),
-            eqOp(fields.role, 'assistant'),
+            eqOp(fields.role, MessageRoles.ASSISTANT),
           ),
         with: {
           participant: true,
@@ -514,7 +577,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         where: (fields, { and: andOp, eq: eqOp }) =>
           andOp(
             eqOp(fields.threadId, threadId),
-            eqOp(fields.role, 'assistant'),
+            eqOp(fields.role, MessageRoles.ASSISTANT),
             eqOp(fields.roundNumber, roundNum),
           ),
         with: {
@@ -588,7 +651,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
           eqOp(fields.threadId, threadId),
-          eqOp(fields.role, 'user'),
+          eqOp(fields.role, MessageRoles.USER),
           eqOp(fields.roundNumber, roundNum),
         ),
       orderBy: [asc(tables.chatMessage.createdAt)],
@@ -652,6 +715,19 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       participantMessageIds: participantMessages.map(m => m.id),
       createdAt: new Date(),
     });
+
+    // =========================================================================
+    // ✅ RESUMABLE STREAMS: Initialize stream buffer for analysis resumption
+    // =========================================================================
+    const streamId = generateAnalysisStreamId(threadId, roundNum);
+    await initializeAnalysisStreamBuffer(
+      streamId,
+      threadId,
+      roundNum,
+      analysisId,
+      c.env,
+    );
+
     // =========================================================================
     // ✅ POSTHOG SESSION TRACKING: Use Better Auth session for tracking
     // =========================================================================
@@ -678,8 +754,17 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       executionCtx: c.executionCtx, // ✅ Pass executionCtx for waitUntil
       sessionId: session?.id, // Better Auth session ID (stable, reliable)
       env: c.env,
+      streamId, // ✅ RESUMABLE STREAMS: Pass stream ID for cleanup on completion
     });
-    return result.toTextStreamResponse();
+
+    // ✅ RESUMABLE STREAMS: Wrap response with buffer to enable resumption
+    const originalResponse = result.toTextStreamResponse();
+    return createBufferedAnalysisResponse(
+      originalResponse,
+      streamId,
+      c.env,
+      c.executionCtx,
+    );
   },
 );
 export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRoute, ApiEnv> = createHandler(
@@ -735,5 +820,83 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
     const analyses = Array.from(analysesMap.values())
       .sort((a, b) => a.roundNumber - b.roundNumber);
     return Responses.collection(c, analyses);
+  },
+);
+
+// ============================================================================
+// Analysis Stream Resume Handler
+// ============================================================================
+
+/**
+ * GET /chat/threads/:threadId/rounds/:roundNumber/analyze/resume
+ *
+ * Resume analysis stream from buffered chunks
+ * Returns 204 No Content if no buffer exists or stream has no chunks
+ * Returns text stream if buffer has chunks
+ *
+ * @pattern Following stream-resume.handler.ts pattern for chat streams
+ */
+export const resumeAnalysisStreamHandler: RouteHandler<typeof resumeAnalysisStreamRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadRoundParamSchema,
+    operationName: 'resumeAnalysisStream',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId, roundNumber } = c.validated.params;
+
+    const roundNum = Number.parseInt(roundNumber, 10);
+    if (Number.isNaN(roundNum) || roundNum < 0) {
+      throw createError.badRequest(
+        'Invalid round number. Must be a non-negative integer.',
+        { errorType: 'validation', field: 'roundNumber' },
+      );
+    }
+
+    // Verify thread ownership
+    const db = await getDbAsync();
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    // Check for active analysis stream
+    const activeStreamId = await getActiveAnalysisStreamId(threadId, roundNum, c.env);
+
+    // No active stream - return 204 No Content
+    if (!activeStreamId) {
+      return c.body(null, HttpStatusCodes.NO_CONTENT);
+    }
+
+    // Get stream buffer metadata
+    const metadata = await getAnalysisStreamMetadata(activeStreamId, c.env);
+
+    // No buffer exists - return 204 No Content
+    if (!metadata) {
+      return c.body(null, HttpStatusCodes.NO_CONTENT);
+    }
+
+    // =========================================================================
+    // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+    // =========================================================================
+    // This creates a stream that:
+    // 1. Returns all buffered chunks immediately
+    // 2. Continues polling KV for new chunks as they arrive
+    // 3. Streams new chunks to client in real-time
+    // 4. Completes when the original stream finishes
+    const liveStream = createLiveAnalysisResumeStream(activeStreamId, c.env);
+
+    // Return live stream with metadata headers
+    return new Response(liveStream, {
+      status: HttpStatusCodes.OK,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        // Include stream metadata in headers for frontend state tracking
+        'X-Stream-Id': activeStreamId,
+        'X-Round-Number': String(roundNum),
+        'X-Analysis-Id': metadata.analysisId,
+      },
+    });
   },
 );

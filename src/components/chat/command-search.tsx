@@ -33,6 +33,7 @@ function SearchResultItem({
   return (
     <Link
       href={href}
+      prefetch={false}
       onClick={onClose}
       className={cn(
         'flex items-center gap-3 mx-2 my-1 px-3 py-2.5 rounded-full transition-all duration-200',

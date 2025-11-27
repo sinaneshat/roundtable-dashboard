@@ -12,10 +12,10 @@
  * @see src/components/providers/chat-store-provider.tsx (handleComplete)
  */
 
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, MessageRoles, ScreenModes } from '@/api/core/enums';
+import { ScreenModes } from '@/api/core/enums';
 import { createChatStore } from '@/stores/chat';
 
 import {
@@ -48,7 +48,8 @@ function simulateTriggerLock() {
 
   return {
     acquire: () => {
-      if (isLocked) return false;
+      if (isLocked)
+        return false;
       isLocked = true;
       return true;
     },

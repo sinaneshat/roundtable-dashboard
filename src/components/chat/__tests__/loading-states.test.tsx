@@ -13,14 +13,13 @@
  * 4. Different rounds show appropriate loading text
  */
 
-import { render as rtlRender, screen, waitFor } from '@testing-library/react';
-import { NextIntlClientProvider } from 'next-intl';
+import { screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses, MessageStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
-import { testLocale, testMessages, testTimeZone } from '@/lib/testing/test-messages';
+import { render } from '@/lib/testing';
 import {
   createMockAnalysis,
   createMockPreSearch,
@@ -95,6 +94,7 @@ vi.mock('@/components/providers/chat-store-provider', async () => {
     useChatStore: (selector: (state: typeof mockStoreState) => unknown) =>
       selector(mockStoreState),
     ChatStoreContext: MockChatStoreContext,
+    ChatStoreProvider: ({ children }: { children: React.ReactNode }) => children,
   };
 });
 
@@ -111,26 +111,6 @@ vi.mock('@/hooks/utils', () => ({
     scrollToBottom: vi.fn(),
   }),
 }));
-
-// ============================================================================
-// Test Wrapper
-// ============================================================================
-
-function TestWrapper({ children }: { children: ReactNode }) {
-  return (
-    <NextIntlClientProvider
-      locale={testLocale}
-      messages={testMessages}
-      timeZone={testTimeZone}
-    >
-      {children}
-    </NextIntlClientProvider>
-  );
-}
-
-function render(ui: ReactNode) {
-  return rtlRender(ui, { wrapper: TestWrapper });
-}
 
 // ============================================================================
 // ModelMessageCard Loading State Tests
@@ -250,20 +230,18 @@ describe('modelMessageCard Loading States', () => {
     expect(loader.textContent).toContain('GPT-4');
 
     rerender(
-      <TestWrapper>
-        <ModelMessageCard
-          model={{
-            id: 'google/gemini-pro',
-            name: 'Gemini Pro',
-            is_accessible_to_user: true,
-          } as never}
-          participantIndex={1}
-          status={MessageStatuses.PENDING}
-          parts={[]}
-          avatarSrc="/avatar.png"
-          avatarName="Gemini"
-        />
-      </TestWrapper>,
+      <ModelMessageCard
+        model={{
+          id: 'google/gemini-pro',
+          name: 'Gemini Pro',
+          is_accessible_to_user: true,
+        } as never}
+        participantIndex={1}
+        status={MessageStatuses.PENDING}
+        parts={[]}
+        avatarSrc="/avatar.png"
+        avatarName="Gemini"
+      />,
     );
 
     loader = screen.getByTestId('loader-five');
@@ -388,12 +366,10 @@ describe('preSearchStream Loading States', () => {
     });
 
     rerender(
-      <TestWrapper>
-        <PreSearchStream
-          threadId="thread-123"
-          preSearch={preSearchRound2}
-        />
-      </TestWrapper>,
+      <PreSearchStream
+        threadId="thread-123"
+        preSearch={preSearchRound2}
+      />,
     );
 
     // Round 2 should NOT show LoaderFive (has data)
@@ -512,12 +488,10 @@ describe('moderatorAnalysisStream Loading States', () => {
     });
 
     rerender(
-      <TestWrapper>
-        <ModeratorAnalysisStream
-          threadId="thread-123"
-          analysis={analysisRound2}
-        />
-      </TestWrapper>,
+      <ModeratorAnalysisStream
+        threadId="thread-123"
+        analysis={analysisRound2}
+      />,
     );
 
     // Round 2 should NOT show LoaderFive
@@ -596,16 +570,14 @@ describe('loading State Transitions', () => {
 
     // Transition: STREAMING with parts
     rerender(
-      <TestWrapper>
-        <ModelMessageCard
-          model={model}
-          participantIndex={0}
-          status={MessageStatuses.STREAMING}
-          parts={[{ type: 'text', text: 'Starting response...' }]}
-          avatarSrc="/avatar.png"
-          avatarName="Claude"
-        />
-      </TestWrapper>,
+      <ModelMessageCard
+        model={model}
+        participantIndex={0}
+        status={MessageStatuses.STREAMING}
+        parts={[{ type: 'text', text: 'Starting response...' }]}
+        avatarSrc="/avatar.png"
+        avatarName="Claude"
+      />,
     );
 
     // LoaderFive should be hidden, content should be visible
@@ -613,16 +585,14 @@ describe('loading State Transitions', () => {
 
     // Transition: COMPLETE with full content
     rerender(
-      <TestWrapper>
-        <ModelMessageCard
-          model={model}
-          participantIndex={0}
-          status={MessageStatuses.COMPLETE}
-          parts={[{ type: 'text', text: 'Complete response with all content.' }]}
-          avatarSrc="/avatar.png"
-          avatarName="Claude"
-        />
-      </TestWrapper>,
+      <ModelMessageCard
+        model={model}
+        participantIndex={0}
+        status={MessageStatuses.COMPLETE}
+        parts={[{ type: 'text', text: 'Complete response with all content.' }]}
+        avatarSrc="/avatar.png"
+        avatarName="Claude"
+      />,
     );
 
     // LoaderFive should still be hidden
@@ -655,12 +625,10 @@ describe('loading State Transitions', () => {
     });
 
     rerender(
-      <TestWrapper>
-        <PreSearchStream
-          threadId="thread-123"
-          preSearch={completePreSearch}
-        />
-      </TestWrapper>,
+      <PreSearchStream
+        threadId="thread-123"
+        preSearch={completePreSearch}
+      />,
     );
 
     await waitFor(() => {

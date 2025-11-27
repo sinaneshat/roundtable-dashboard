@@ -378,9 +378,30 @@ export function buildModeratorSystemPrompt(
       });
     }
 
-    // ✅ ERROR CONTEXT: Validation error for prompt configuration
+    // ✅ BETTER ERROR CONTEXT: Show which field failed validation
+    // Check for common validation failures
+    const issues: string[] = [];
+    if (!config.userQuestion || config.userQuestion.length === 0) {
+      issues.push('userQuestion is empty');
+    }
+    if (!config.participantResponses || config.participantResponses.length === 0) {
+      issues.push('participantResponses is empty');
+    }
+    if (!config.mode) {
+      issues.push('mode is missing');
+    }
+    if (config.roundNumber === undefined || config.roundNumber < 0) {
+      issues.push('roundNumber is invalid');
+    }
+
+    const errorDetail = issues.length > 0
+      ? `Validation failed: ${issues.join(', ')}`
+      : error instanceof Error
+        ? error.message
+        : 'Unknown validation error';
+
     throw createError.badRequest(
-      'Invalid moderator prompt configuration',
+      `Invalid moderator prompt configuration: ${errorDetail}`,
       {
         errorType: 'validation',
         field: 'moderatorConfig',

@@ -17,7 +17,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { extractAISdkError, getErrorMessage, getErrorName, getErrorStatusCode } from '@/api/common/error-types';
 import { createHandler } from '@/api/core';
-import { UIMessageRoles } from '@/api/core/enums';
+import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -137,22 +137,32 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // RULE: A new user message can only be created in a round if:
     // 1. It's a regeneration (explicit intent to redo the round), OR
     // 2. It's a trigger message (empty message to trigger participants for existing round), OR
-    // 3. The round has NO assistant responses yet (incomplete/new round)
+    // 3. The round has NO participant responses yet (incomplete/new round)
     //
-    // If the round already has assistant messages and this isn't a regeneration/trigger,
+    // NOTE: Pre-search messages have role='assistant' but are NOT participant responses.
+    // We must exclude them from this check to allow mid-conversation web search enable.
+    //
+    // If the round already has PARTICIPANT messages and this isn't a regeneration/trigger,
     // then the frontend incorrectly calculated the round number - reject the request.
     if (!roundResult.isRegeneration && !roundResult.isTriggerMessage && participantIndex === 0) {
       const existingAssistantMessages = await db.query.chatMessage.findMany({
         where: and(
           eq(tables.chatMessage.threadId, threadId),
-          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
           eq(tables.chatMessage.roundNumber, currentRoundNumber),
         ),
-        columns: { id: true },
-        limit: 1,
+        // ✅ FIX: Include participantId for pre-search filtering
+        // Pre-search messages have participantId=null, participant messages have participantId set
+        columns: { id: true, participantId: true },
       });
 
-      if (existingAssistantMessages.length > 0) {
+      // ✅ FIX: Filter to participant messages only (excludes pre-search)
+      // Pre-search messages have role='assistant' but participantId=null
+      // Participant messages always have participantId set (foreign key to chatParticipant)
+      // This allows web search to be enabled mid-conversation without blocking participants
+      const participantResponses = existingAssistantMessages.filter(msg => msg.participantId !== null);
+
+      if (participantResponses.length > 0) {
         throw new HTTPException(409, {
           message: `Round ${currentRoundNumber} already has assistant responses. Cannot create new user message in a completed round. Expected round ${currentRoundNumber + 1}.`,
         });
@@ -328,7 +338,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             const roundMessages = await db.query.chatMessage.findMany({
               where: and(
                 eq(tables.chatMessage.threadId, threadId),
-                eq(tables.chatMessage.role, 'user'),
+                eq(tables.chatMessage.role, MessageRoles.USER),
                 eq(tables.chatMessage.roundNumber, currentRoundNumber),
               ),
               columns: { id: true, parts: true },

@@ -445,13 +445,17 @@ export function mockFetchSSE(events: Array<{
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
-      events.forEach((evt) => {
-        const eventLine = `event: ${evt.event}\n`;
-        const dataLine = `data: ${JSON.stringify(evt.data)}\n\n`;
-        controller.enqueue(encoder.encode(eventLine));
-        controller.enqueue(encoder.encode(dataLine));
-      });
-      controller.close();
+      try {
+        events.forEach((evt) => {
+          const eventLine = `event: ${evt.event}\n`;
+          const dataLine = `data: ${JSON.stringify(evt.data)}\n\n`;
+          controller.enqueue(encoder.encode(eventLine));
+          controller.enqueue(encoder.encode(dataLine));
+        });
+        controller.close();
+      } catch {
+        // Controller already closed - ignore (for test stability)
+      }
     },
   });
 

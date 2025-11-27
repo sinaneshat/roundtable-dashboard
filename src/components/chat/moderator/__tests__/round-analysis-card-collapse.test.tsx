@@ -11,30 +11,15 @@
  *
  * @see src/components/chat/moderator/round-analysis-card.tsx
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { NextIntlClientProvider } from 'next-intl';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
-import { testLocale, testMessages, testTimeZone } from '@/lib/testing/test-messages';
+import { render } from '@/lib/testing';
 
 import { RoundAnalysisCard } from '../round-analysis-card';
-
-// Wrapper with i18n
-function TestWrapper({ children }: { children: ReactNode }) {
-  return (
-    <NextIntlClientProvider
-      locale={testLocale}
-      messages={testMessages}
-      timeZone={testTimeZone}
-    >
-      {children}
-    </NextIntlClientProvider>
-  );
-}
 
 // Helper to create mock analysis
 function createMockAnalysis(overrides: Partial<StoredModeratorAnalysis> = {}): StoredModeratorAnalysis {
@@ -75,14 +60,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       const { rerender } = render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+          streamingRoundNumber={null}
+        />,
       );
 
       // Initially open (isLatest=true and not manually controlled)
@@ -95,14 +78,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       // Simulate new round starting (streamingRoundNumber = 1)
       await act(async () => {
         rerender(
-          <TestWrapper>
-            <RoundAnalysisCard
-              analysis={analysis}
-              threadId="thread-1"
-              isLatest={true} // Still true (timeline not updated yet)
-              streamingRoundNumber={1} // New round is streaming
-            />
-          </TestWrapper>,
+          <RoundAnalysisCard
+            analysis={analysis}
+            threadId="thread-1"
+            isLatest={true} // Still true (timeline not updated yet)
+            streamingRoundNumber={1} // New round is streaming
+          />,
         );
       });
 
@@ -119,27 +100,23 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       const { rerender } = render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={false}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={false}
+          streamingRoundNumber={null}
+        />,
       );
 
       // Start streaming round 1
       await act(async () => {
         rerender(
-          <TestWrapper>
-            <RoundAnalysisCard
-              analysis={analysis}
-              threadId="thread-1"
-              isLatest={false}
-              streamingRoundNumber={1}
-            />
-          </TestWrapper>,
+          <RoundAnalysisCard
+            analysis={analysis}
+            threadId="thread-1"
+            isLatest={false}
+            streamingRoundNumber={1}
+          />,
         );
       });
 
@@ -154,27 +131,23 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 1 });
 
       const { rerender } = render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+          streamingRoundNumber={null}
+        />,
       );
 
       // Streaming same round (this analysis is for round 1, streaming round 1)
       await act(async () => {
         rerender(
-          <TestWrapper>
-            <RoundAnalysisCard
-              analysis={analysis}
-              threadId="thread-1"
-              isLatest={true}
-              streamingRoundNumber={1}
-            />
-          </TestWrapper>,
+          <RoundAnalysisCard
+            analysis={analysis}
+            threadId="thread-1"
+            isLatest={true}
+            streamingRoundNumber={1}
+          />,
         );
       });
 
@@ -189,27 +162,23 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 2 });
 
       const { rerender } = render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+          streamingRoundNumber={null}
+        />,
       );
 
       // Streaming earlier round (shouldn't happen normally, but test edge case)
       await act(async () => {
         rerender(
-          <TestWrapper>
-            <RoundAnalysisCard
-              analysis={analysis}
-              threadId="thread-1"
-              isLatest={true}
-              streamingRoundNumber={1}
-            />
-          </TestWrapper>,
+          <RoundAnalysisCard
+            analysis={analysis}
+            threadId="thread-1"
+            isLatest={true}
+            streamingRoundNumber={1}
+          />,
         );
       });
 
@@ -224,14 +193,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+          streamingRoundNumber={null}
+        />,
       );
 
       // No streaming happening - should stay in default state
@@ -244,14 +211,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={false}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={false}
+          streamingRoundNumber={null}
+        />,
       );
 
       // Find and click the accordion header to toggle
@@ -265,14 +230,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       const { rerender } = render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={false}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={false}
+          streamingRoundNumber={null}
+        />,
       );
 
       // User manually opened (simulated by the component being in manually controlled state)
@@ -280,14 +243,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       // New round starts streaming
       await act(async () => {
         rerender(
-          <TestWrapper>
-            <RoundAnalysisCard
-              analysis={analysis}
-              threadId="thread-1"
-              isLatest={false}
-              streamingRoundNumber={1}
-            />
-          </TestWrapper>,
+          <RoundAnalysisCard
+            analysis={analysis}
+            threadId="thread-1"
+            isLatest={false}
+            streamingRoundNumber={1}
+          />,
         );
       });
 
@@ -307,13 +268,11 @@ describe('roundAnalysisCard collapse behavior', () => {
       });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+        />,
       );
 
       // Accordion should have disabled/cursor-default styling
@@ -326,13 +285,11 @@ describe('roundAnalysisCard collapse behavior', () => {
       });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+        />,
       );
 
       // Accordion should have disabled styling
@@ -345,13 +302,11 @@ describe('roundAnalysisCard collapse behavior', () => {
       });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+        />,
       );
 
       // Accordion should be interactive
@@ -363,14 +318,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={true}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={true}
+          streamingRoundNumber={null}
+        />,
       );
 
       // isOpen = isLatest = true (not manually controlled)
@@ -380,14 +333,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={false}
-            streamingRoundNumber={null}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={false}
+          streamingRoundNumber={null}
+        />,
       );
 
       // isOpen = isLatest = false
@@ -397,14 +348,12 @@ describe('roundAnalysisCard collapse behavior', () => {
       const analysis = createMockAnalysis({ roundNumber: 0 });
 
       render(
-        <TestWrapper>
-          <RoundAnalysisCard
-            analysis={analysis}
-            threadId="thread-1"
-            isLatest={false}
-            demoOpen={true}
-          />
-        </TestWrapper>,
+        <RoundAnalysisCard
+          analysis={analysis}
+          threadId="thread-1"
+          isLatest={false}
+          demoOpen={true}
+        />,
       );
 
       // isOpen = demoOpen = true (overrides isLatest)

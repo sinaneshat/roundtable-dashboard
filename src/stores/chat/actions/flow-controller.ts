@@ -12,6 +12,7 @@
  * - Navigation to thread detail page
  * - Analysis completion detection
  * - Timeout fallbacks for stuck states
+ * - Pre-populating TanStack Query cache before navigation (eliminates loading.tsx)
  *
  * Location: /src/stores/chat/actions/flow-controller.ts
  * Used by: ChatOverviewScreen (and potentially ChatThreadScreen)
@@ -20,13 +21,13 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
+import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 
 export type UseFlowControllerOptions = {
@@ -47,7 +48,7 @@ export type UseFlowControllerOptions = {
 export function useFlowController(options: UseFlowControllerOptions = {}) {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const { data: session } = useSession();
 
   // State selectors
   const streamingState = useChatStore(useShallow(s => ({
@@ -62,7 +63,154 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   })));
 
   const analyses = useChatStore(s => s.analyses);
+  const messages = useChatStore(s => s.messages);
+  const participants = useChatStore(s => s.participants);
+  const preSearches = useChatStore(s => s.preSearches);
   const setThread = useChatStore(s => s.setThread);
+
+  // ============================================================================
+  // PRE-POPULATE QUERY CACHE (Eliminates loading.tsx skeleton)
+  // ============================================================================
+
+  /**
+   * Pre-populate TanStack Query cache with data from Zustand store
+   * This ensures the thread page has data immediately on navigation,
+   * eliminating the loading.tsx skeleton flash.
+   *
+   * The server-side page.tsx will still fetch fresh data, but
+   * HydrationBoundary will merge with existing client cache.
+   */
+  const prepopulateQueryCache = useCallback((threadId: string) => {
+    const thread = threadState.currentThread;
+    if (!thread)
+      return;
+
+    // 1. Pre-populate thread detail (thread, participants, messages, user)
+    // Format matches getThreadBySlugService response
+    queryClient.setQueryData(
+      queryKeys.threads.detail(threadId),
+      {
+        success: true,
+        data: {
+          thread: {
+            ...thread,
+            // Ensure dates are ISO strings for consistency with server response
+            createdAt: thread.createdAt instanceof Date ? thread.createdAt.toISOString() : thread.createdAt,
+            updatedAt: thread.updatedAt instanceof Date ? thread.updatedAt.toISOString() : thread.updatedAt,
+            lastMessageAt: thread.lastMessageAt
+              ? (thread.lastMessageAt instanceof Date ? thread.lastMessageAt.toISOString() : thread.lastMessageAt)
+              : null,
+          },
+          participants: participants.map(p => ({
+            ...p,
+            createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+            updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
+          })),
+          // Messages from store - add createdAt for server format compatibility
+          // UIMessage from AI SDK doesn't have createdAt, but the page expects it
+          messages: messages.map(m => ({
+            ...m,
+            // Use metadata.createdAt if available (our custom field), else default to now
+            createdAt: (m as { createdAt?: Date | string }).createdAt
+              ? ((m as { createdAt?: Date | string }).createdAt instanceof Date
+                  ? ((m as { createdAt?: Date | string }).createdAt as Date).toISOString()
+                  : (m as { createdAt?: Date | string }).createdAt)
+              : new Date().toISOString(),
+          })),
+          user: {
+            name: session?.user?.name || 'You',
+            image: session?.user?.image || null,
+          },
+        },
+        meta: {
+          requestId: 'prefetch',
+          timestamp: new Date().toISOString(),
+          version: 'v1',
+        },
+      },
+    );
+
+    // 2. Pre-populate analyses
+    // Format matches getThreadAnalysesService response
+    if (analyses.length > 0) {
+      queryClient.setQueryData(
+        queryKeys.threads.analyses(threadId),
+        {
+          success: true,
+          data: {
+            items: analyses.map(a => ({
+              ...a,
+              createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : a.createdAt,
+              completedAt: a.completedAt
+                ? (a.completedAt instanceof Date ? a.completedAt.toISOString() : a.completedAt)
+                : null,
+            })),
+          },
+          meta: {
+            requestId: 'prefetch',
+            timestamp: new Date().toISOString(),
+            version: 'v1',
+          },
+        },
+      );
+    }
+
+    // 3. Pre-populate pre-searches (if web search enabled)
+    if (preSearches.length > 0) {
+      queryClient.setQueryData(
+        queryKeys.threads.preSearches(threadId),
+        {
+          success: true,
+          data: {
+            items: preSearches.map(ps => ({
+              ...ps,
+              createdAt: ps.createdAt instanceof Date ? ps.createdAt.toISOString() : ps.createdAt,
+              completedAt: ps.completedAt
+                ? (ps.completedAt instanceof Date ? ps.completedAt.toISOString() : ps.completedAt)
+                : null,
+            })),
+          },
+          meta: {
+            requestId: 'prefetch',
+            timestamp: new Date().toISOString(),
+            version: 'v1',
+          },
+        },
+      );
+    }
+
+    // 4. Pre-populate empty changelog (we don't have this data yet, but prevents loading)
+    queryClient.setQueryData(
+      queryKeys.threads.changelog(threadId),
+      {
+        success: true,
+        data: {
+          items: [],
+        },
+        meta: {
+          requestId: 'prefetch',
+          timestamp: new Date().toISOString(),
+          version: 'v1',
+        },
+      },
+    );
+
+    // 5. Pre-populate empty feedback (we don't have this data yet, but prevents loading)
+    queryClient.setQueryData(
+      queryKeys.threads.feedback(threadId),
+      {
+        success: true,
+        data: {
+          items: [],
+        },
+        meta: {
+          requestId: 'prefetch',
+          timestamp: new Date().toISOString(),
+          version: 'v1',
+        },
+      },
+    );
+  }, [threadState.currentThread, participants, messages, analyses, preSearches, session, queryClient]);
 
   // Navigation tracking
   const [hasNavigated, setHasNavigated] = useState(false);
@@ -200,6 +348,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       }
 
       // Replace URL in background without navigation
+      // NOTE: We no longer call router.push() after this - the user stays on
+      // the overview screen which already shows thread content. This avoids
+      // the loading.tsx skeleton that would show during server render.
       queueMicrotask(() => {
         window.history.replaceState(
           window.history.state,
@@ -260,23 +411,36 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       const threadId = threadState.createdThreadId;
 
       if (slug && threadId) {
-        // ✅ FIX: Don't invalidate analyses query before navigation
-        // The orchestrator on thread screen will naturally sync server data with store
-        // Premature invalidation causes race condition where:
-        // 1. Query cache gets cleared
-        // 2. Thread screen mounts and orchestrator fetches
-        // 3. Server returns incomplete data (analysis still being persisted)
-        // 4. Incomplete server data overwrites complete client data in store
-        // 5. Accordion content disappears (analysisData becomes null)
-        //
-        // The merge logic in useThreadAnalysesQuery already preserves cached analyses
-        // that aren't on server yet, so invalidation is unnecessary and harmful here.
+        // ✅ PREFETCH DATA: Pre-populate TanStack Query cache for future navigation
+        // This ensures data is available if user refreshes or navigates away and back
+        prepopulateQueryCache(threadId);
 
-        startTransition(() => {
-          queueMicrotask(() => {
-            router.push(`/chat/${slug}`);
-          });
-        });
+        // =========================================================================
+        // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
+        // =========================================================================
+        //
+        // WHY: Next.js App Router with `dynamic = 'force-dynamic'` ALWAYS shows
+        // loading.tsx during server render. Prefetching only works for static routes.
+        // For dynamic routes, prefetch only caches down to the loading.js boundary.
+        //
+        // SOLUTION: Don't trigger server navigation at all!
+        // - URL is already `/chat/[slug]` from history.replaceState (Step 1)
+        // - Overview screen already renders thread content when !showInitialUI
+        // - All data (messages, analyses, etc.) is in Zustand store
+        // - User sees seamless transition with NO loading skeleton
+        //
+        // BEHAVIOR:
+        // - User stays on ChatOverviewScreen (which shows thread content)
+        // - URL is correct for sharing/bookmarking
+        // - On refresh/hard navigation, they get proper ChatThreadScreen from server
+        // - Browser back button works correctly
+        //
+        // ❌ REMOVED: router.push() - triggers server render and loading.tsx
+        // ✅ KEPT: history.replaceState (Step 1) - already updated URL
+        //
+        // The overview screen continues to function as the thread view.
+        // When user refreshes, they'll get the full ChatThreadScreen with
+        // server-rendered data and all thread features (actions, changelog, etc.)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -288,7 +452,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     hasAiSlug,
     hasUpdatedThread,
     threadState.createdThreadId,
-    queryClient,
-    router,
+    prepopulateQueryCache,
   ]);
 }

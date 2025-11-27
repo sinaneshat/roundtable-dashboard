@@ -489,7 +489,7 @@ export default function ChatOverviewScreen() {
 
   // Scroll management for window-level scrolling
   // bottomOffset accounts for: sticky input (pt-10 + ~80px input) + shadow gradient (h-8) + bottom margin (16px)
-  // ✅ FIX: Pass preSearches for auto-scroll during pre-search object generation
+  // ✅ FIX: Removed preSearches - auto-scroll only during participant streaming
   useChatScroll({
     messages,
     analyses,
@@ -498,7 +498,6 @@ export default function ChatOverviewScreen() {
     enableNearBottomDetection: true,
     currentParticipantIndex,
     bottomOffset: 180,
-    preSearches,
   });
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
@@ -785,7 +784,7 @@ export default function ChatOverviewScreen() {
                   />
                 </div>
                 {/* Bottom fill - covers gap to screen bottom */}
-                <div className="absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
+                <div className="-z-10 absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
               </div>
             </>
           )}

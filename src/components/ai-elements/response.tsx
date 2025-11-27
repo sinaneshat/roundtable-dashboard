@@ -3,6 +3,7 @@
 import type { ComponentProps } from 'react';
 import { Streamdown } from 'streamdown';
 
+import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { cn } from '@/lib/ui/cn';
 
 type ResponseProps = ComponentProps<typeof Streamdown>;
@@ -16,9 +17,10 @@ export function Response({ className, ...props }: ResponseProps) {
   return (
     <Streamdown
       className={cn(
-        'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+        '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
         className,
       )}
+      components={streamdownComponents}
       {...props}
     />
   );

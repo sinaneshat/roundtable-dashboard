@@ -2,9 +2,12 @@
 
 import { CheckCircle, MessageSquare, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useMemo } from 'react';
 
 import type { Recommendation } from '@/api/routes/chat/schema';
+import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelBadge } from '@/components/chat/model-badge';
+import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
 type KeyInsightsSectionProps = {
@@ -20,6 +23,7 @@ type KeyInsightsSectionProps = {
  * Displays key insights and actionable recommendations:
  * - Summary text (high-level synthesis)
  * - Glass card recommendations with model badges and actionable prompts
+ * - ✅ TIER-AWARE: Only shows models accessible to user's subscription tier
  */
 export function KeyInsightsSection({
   summary,
@@ -27,14 +31,63 @@ export function KeyInsightsSection({
   onActionClick,
   isStreaming: _isStreaming = false,
 }: KeyInsightsSectionProps) {
-  const hasContent = summary || (recommendations && recommendations.length > 0);
+  // Get user tier and models for filtering
+  const { data: modelsData } = useModelsQuery();
+  const userTier = modelsData?.data?.user_tier_config?.tier;
+  const allModels = modelsData?.data?.items;
+
+  // Filter recommendations to only show tier-accessible models
+  const filteredRecommendations = useMemo(() => {
+    if (!recommendations || !userTier || !allModels) {
+      return recommendations;
+    }
+
+    const tierResult = subscriptionTierSchema.safeParse(userTier);
+    if (!tierResult.success) {
+      return recommendations;
+    }
+    const validTier = tierResult.data;
+
+    return recommendations.map((rec) => {
+      if (!rec.suggestedModels?.length) {
+        return rec;
+      }
+
+      // Filter to only tier-accessible models
+      const accessibleModels = rec.suggestedModels.filter((modelId) => {
+        const modelData = allModels.find(m => m.id === modelId);
+        if (!modelData)
+          return false;
+        return canAccessModelByPricing(validTier, modelData);
+      });
+
+      // Filter roles to match accessible models
+      const accessibleRoles = rec.suggestedRoles?.filter((_, index) => {
+        const modelId = rec.suggestedModels?.[index];
+        if (!modelId)
+          return false;
+        const modelData = allModels.find(m => m.id === modelId);
+        if (!modelData)
+          return false;
+        return canAccessModelByPricing(validTier, modelData);
+      });
+
+      return {
+        ...rec,
+        suggestedModels: accessibleModels.length > 0 ? accessibleModels : undefined,
+        suggestedRoles: accessibleRoles?.length ? accessibleRoles : undefined,
+      };
+    });
+  }, [recommendations, userTier, allModels]);
+
+  const hasContent = summary || (filteredRecommendations && filteredRecommendations.length > 0);
 
   if (!hasContent) {
     return null;
   }
 
   // Check if any recommendation has actionable suggestions
-  const hasActionableRecs = recommendations?.some(
+  const hasActionableRecs = filteredRecommendations?.some(
     rec => rec.suggestedModels?.length || rec.suggestedPrompt,
   );
 
@@ -48,7 +101,7 @@ export function KeyInsightsSection({
       )}
 
       {/* Recommendations */}
-      {recommendations && recommendations.length > 0 && (
+      {filteredRecommendations && filteredRecommendations.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <CheckCircle className="size-4 text-emerald-500" />
@@ -56,7 +109,7 @@ export function KeyInsightsSection({
           </div>
 
           <div className="flex flex-col gap-2">
-            {recommendations.map((rec, recIndex) => {
+            {filteredRecommendations.map((rec, recIndex) => {
               const hasModels = rec.suggestedModels && rec.suggestedModels.length > 0;
               const hasPrompt = rec.suggestedPrompt;
               const isClickable = hasModels || hasPrompt || rec.suggestedMode;

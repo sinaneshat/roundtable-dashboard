@@ -20,6 +20,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
 import { streamSSE } from 'hono/streaming';
+import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -28,6 +29,16 @@ import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AnalysisStatuses, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
+import {
+  appendPreSearchStreamChunk,
+  clearActivePreSearchStream,
+  completePreSearchStreamBuffer,
+  createLivePreSearchResumeStream,
+  failPreSearchStreamBuffer,
+  generatePreSearchStreamId,
+  getActivePreSearchStreamId,
+  initializePreSearchStreamBuffer,
+} from '@/api/services/pre-search-stream-buffer.service';
 import { analyzeQueryComplexity } from '@/api/services/prompts.service';
 import { isQuerySearchable, simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
 import {
@@ -243,16 +254,36 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         // Continue to create new search below
       } else {
-        // Still within timeout window - reject duplicate request
+        // ✅ LIVE STREAM RESUMPTION: Try to resume from KV buffer
         const ageMs = getTimestampAge(existingSearch.createdAt);
-        throw createError.conflict(
-          `Pre-search is already in progress (age: ${formatAgeMs(ageMs)}). Please wait for it to complete.`,
-          {
-            errorType: 'resource',
-            resource: 'pre_search',
-            resourceId: existingSearch.id,
+        const existingStreamId = await getActivePreSearchStreamId(threadId, roundNum, c.env);
+
+        if (existingStreamId) {
+          // LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+          const liveStream = createLivePreSearchResumeStream(existingStreamId, c.env);
+          return new Response(liveStream, {
+            status: HttpStatusCodes.OK,
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+              'X-Accel-Buffering': 'no',
+              'X-Resumed-From-Buffer': 'true',
+              'X-Stream-Id': existingStreamId,
+            },
+          });
+        }
+
+        // FALLBACK: No active stream ID (KV not available in local dev)
+        return c.json({
+          success: true,
+          data: {
+            status: 'streaming',
+            preSearchId: existingSearch.id,
+            message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
+            retryAfterMs: 2000,
           },
-        );
+        }, HttpStatusCodes.ACCEPTED);
       }
     }
 
@@ -266,7 +297,21 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // ============================================================================
     // Pattern from analysis.handler.ts:91-120
     // Uses AI SDK v5 streamObject with partialObjectStream iterator
+    // ✅ STREAM BUFFER: Generate stream ID and initialize buffer for resumption
+    const streamId = generatePreSearchStreamId(threadId, roundNum);
+    await initializePreSearchStreamBuffer(streamId, threadId, roundNum, existingSearch.id, c.env);
+
     return streamSSE(c, async (stream) => {
+      // ✅ BUFFERED SSE: Wrapper to buffer all SSE events for stream resumption
+      const bufferedWriteSSE = async (payload: { event: string; data: string }) => {
+        // Write to stream
+        await stream.writeSSE(payload);
+        // Buffer for resumption (fire and forget)
+        c.executionCtx.waitUntil(
+          appendPreSearchStreamChunk(streamId, payload.event, payload.data, c.env),
+        );
+      };
+
       try {
         const searchCache = createSearchCache();
         const startTime = performance.now();
@@ -299,7 +344,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           };
 
           // Send start event for fallback
-          await stream.writeSSE({
+          await bufferedWriteSSE({
             event: PreSearchSseEvents.START,
             data: JSON.stringify({
               timestamp: Date.now(),
@@ -310,7 +355,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           });
 
           // Notify frontend about fallback
-          await stream.writeSSE({
+          await bufferedWriteSSE({
             event: PreSearchSseEvents.QUERY,
             data: JSON.stringify({
               timestamp: Date.now(),
@@ -340,7 +385,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
               if (totalQueries && totalQueries !== lastTotalQueries) {
                 lastTotalQueries = totalQueries;
-                await stream.writeSSE({
+                await bufferedWriteSSE({
                   event: PreSearchSseEvents.START,
                   data: JSON.stringify({
                     timestamp: Date.now(),
@@ -356,7 +401,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 for (let i = 0; i < partialResult.queries.length; i++) {
                   const query = partialResult.queries[i];
                   if (query?.query && query.query !== lastSentQueries[i]) {
-                    await stream.writeSSE({
+                    await bufferedWriteSSE({
                       event: PreSearchSseEvents.QUERY,
                       data: JSON.stringify({
                         timestamp: Date.now(),
@@ -383,7 +428,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               for (let i = 0; i < multiQueryResult.queries.length; i++) {
                 const query = multiQueryResult.queries[i];
                 if (query?.query) {
-                  await stream.writeSSE({
+                  await bufferedWriteSSE({
                     event: PreSearchSseEvents.QUERY,
                     data: JSON.stringify({
                       timestamp: Date.now(),
@@ -414,7 +459,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }
 
               // Send start event for non-streaming result
-              await stream.writeSSE({
+              await bufferedWriteSSE({
                 event: PreSearchSseEvents.START,
                 data: JSON.stringify({
                   timestamp: Date.now(),
@@ -428,7 +473,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               for (let i = 0; i < multiQueryResult.queries.length; i++) {
                 const query = multiQueryResult.queries[i];
                 if (query) {
-                  await stream.writeSSE({
+                  await bufferedWriteSSE({
                     event: PreSearchSseEvents.QUERY,
                     data: JSON.stringify({
                       timestamp: Date.now(),
@@ -463,7 +508,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               };
 
               // Send start event for fallback
-              await stream.writeSSE({
+              await bufferedWriteSSE({
                 event: PreSearchSseEvents.START,
                 data: JSON.stringify({
                   timestamp: Date.now(),
@@ -476,7 +521,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               // Notify frontend about fallback
               const fallbackQuery = multiQueryResult.queries[0];
               if (fallbackQuery) {
-                await stream.writeSSE({
+                await bufferedWriteSSE({
                   event: PreSearchSseEvents.QUERY,
                   data: JSON.stringify({
                     timestamp: Date.now(),
@@ -525,7 +570,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         }
 
         // ✅ STREAM: Notify frontend about complexity decision
-        await stream.writeSSE({
+        await bufferedWriteSSE({
           event: PreSearchSseEvents.START,
           data: JSON.stringify({
             timestamp: Date.now(),
@@ -553,7 +598,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           if (searchCache.has(generatedQuery.query)) {
             result = searchCache.get(generatedQuery.query);
             if (result) {
-              await stream.writeSSE({
+              await bufferedWriteSSE({
                 event: PreSearchSseEvents.RESULT,
                 data: JSON.stringify({
                   timestamp: Date.now(),
@@ -576,7 +621,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             const searchStartTime = performance.now();
 
             // Send initial "searching" state
-            await stream.writeSSE({
+            await bufferedWriteSSE({
               event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
@@ -638,7 +683,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // Stream results progressively
             if (result.results.length > 0) {
               for (let i = 0; i < result.results.length; i++) {
-                await stream.writeSSE({
+                await bufferedWriteSSE({
                   event: PreSearchSseEvents.RESULT,
                   data: JSON.stringify({
                     timestamp: Date.now(),
@@ -660,7 +705,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             }
 
             // Send final result for this query
-            await stream.writeSSE({
+            await bufferedWriteSSE({
               event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
@@ -677,7 +722,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             allResults.push({ query: generatedQuery, result, duration: searchDuration });
           } catch (error) {
-            await stream.writeSSE({
+            await bufferedWriteSSE({
               event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
@@ -706,7 +751,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         const isSuccess = successfulResults.length > 0;
 
         // Send complete event with multi-query statistics
-        await stream.writeSSE({
+        await bufferedWriteSSE({
           event: PreSearchSseEvents.COMPLETE,
           data: JSON.stringify({
             timestamp: Date.now(),
@@ -788,10 +833,18 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             .onConflictDoNothing();
 
           // Send final done event with complete data
-          await stream.writeSSE({
+          await bufferedWriteSSE({
             event: PreSearchSseEvents.DONE,
             data: JSON.stringify(searchData),
           });
+
+          // ✅ BUFFER COMPLETION: Mark stream as complete and clear active
+          c.executionCtx.waitUntil(
+            Promise.all([
+              completePreSearchStreamBuffer(streamId, c.env),
+              clearActivePreSearchStream(threadId, roundNum, c.env),
+            ]),
+          );
         } else {
           // Mark as failed if no successful searches
           // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization
@@ -808,13 +861,21 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             })
             .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
-          await stream.writeSSE({
+          await bufferedWriteSSE({
             event: PreSearchSseEvents.FAILED,
             data: JSON.stringify({
               error: errorMetadata.errorMessage || 'No successful searches completed',
               errorCategory: errorMetadata.errorCategory,
             }),
           });
+
+          // ✅ BUFFER FAILURE: Mark stream as failed and clear active
+          c.executionCtx.waitUntil(
+            Promise.all([
+              failPreSearchStreamBuffer(streamId, errorMetadata.errorMessage || 'No successful searches completed', c.env),
+              clearActivePreSearchStream(threadId, roundNum, c.env),
+            ]),
+          );
         }
       } catch (error) {
         // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization
@@ -833,7 +894,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           })
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
-        await stream.writeSSE({
+        await bufferedWriteSSE({
           event: PreSearchSseEvents.FAILED,
           data: JSON.stringify({
             error: errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Pre-search failed'),
@@ -841,6 +902,15 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             isTransient: errorMetadata.isTransientError,
           }),
         });
+
+        // ✅ BUFFER FAILURE: Mark stream as failed and clear active
+        const errorMsg = errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Pre-search failed');
+        c.executionCtx.waitUntil(
+          Promise.all([
+            failPreSearchStreamBuffer(streamId, errorMsg, c.env),
+            clearActivePreSearchStream(threadId, roundNum, c.env),
+          ]),
+        );
       }
     });
   },

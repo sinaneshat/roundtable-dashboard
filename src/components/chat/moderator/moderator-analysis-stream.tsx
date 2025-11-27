@@ -37,6 +37,72 @@ import { KeyInsightsSection } from './key-insights-section';
 import { RoundOutcomeHeader } from './round-outcome-header';
 import { RoundSummarySection } from './round-summary-section';
 
+// ============================================================================
+// RESUMABLE STREAMS: Attempt to resume analysis from buffer on page reload
+// ============================================================================
+
+/**
+ * Attempt to resume an analysis stream from KV buffer
+ * Returns the parsed analysis data if successful, null otherwise
+ *
+ * @pattern Following stream-resume.handler.ts pattern for chat streams
+ */
+async function attemptAnalysisResume(
+  threadId: string,
+  roundNumber: number,
+): Promise<{ success: true; data: ModeratorAnalysisPayload } | { success: false; reason: 'no-buffer' | 'incomplete' | 'error' }> {
+  try {
+    const response = await fetch(
+      `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/analyze/resume`,
+      { credentials: 'include' },
+    );
+
+    // 204 No Content = no buffer available
+    if (response.status === 204) {
+      return { success: false, reason: 'no-buffer' };
+    }
+
+    // Non-200 = error
+    if (!response.ok) {
+      console.error('[ModeratorAnalysisStream] Resume request failed:', response.status);
+      return { success: false, reason: 'error' };
+    }
+
+    // Read the buffered text chunks
+    const bufferedText = await response.text();
+
+    if (!bufferedText || bufferedText.trim() === '') {
+      return { success: false, reason: 'no-buffer' };
+    }
+
+    // Try to parse as complete JSON object
+    // Object streams send JSON being built incrementally
+    try {
+      const parsed = JSON.parse(bufferedText);
+      const validated = ModeratorAnalysisPayloadSchema.safeParse(parsed);
+
+      if (validated.success) {
+        return { success: true, data: validated.data };
+      }
+
+      // Partial data - schema validation failed (incomplete stream)
+      // Check if we have enough data to be useful
+      if (hasAnalysisData(parsed)) {
+        // Return partial data as complete (best effort)
+        return { success: true, data: parsed as ModeratorAnalysisPayload };
+      }
+
+      return { success: false, reason: 'incomplete' };
+    } catch {
+      // JSON parse failed - incomplete stream
+      return { success: false, reason: 'incomplete' };
+    }
+  } catch (error) {
+    console.error('[ModeratorAnalysisStream] Resume attempt failed:', error);
+    return { success: false, reason: 'error' };
+  }
+}
+
 type ModeratorAnalysisStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
@@ -209,6 +275,12 @@ function ModeratorAnalysisStreamComponent({
             // ✅ CRITICAL FIX: Don't call onStreamComplete on 409 - polling will handle completion
             is409Conflict.onTrue();
             return; // Exit early - polling effect will handle completion
+          } else if (errorMessage.includes('202') || errorMessage.includes('Accepted') || errorMessage.includes('Please poll for completion')) {
+            // ✅ FIX: Handle 202 Accepted - stream in progress but buffer not ready
+            // Treat same as 409 - start polling for completion
+            errorType = StreamErrorTypes.CONFLICT;
+            is409Conflict.onTrue();
+            return; // Exit early - polling effect will handle completion
           } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
             errorType = StreamErrorTypes.NETWORK;
           }
@@ -249,7 +321,7 @@ function ModeratorAnalysisStreamComponent({
 
   // ✅ CRITICAL FIX: Polling for 409 Conflict - stream already in progress
   // When page refreshes during streaming, backend returns 409
-  // Instead of retrying POST, poll GET endpoint for completion
+  // ✅ RESUMABLE STREAMS: First try to resume from buffer, then poll DB for completion
   useEffect(() => {
     if (!is409Conflict.value)
       return undefined;
@@ -259,6 +331,18 @@ function ModeratorAnalysisStreamComponent({
 
     const poll = async () => {
       try {
+        // ✅ RESUMABLE STREAMS: Try to resume from buffer first
+        // If buffer has complete data, we can use it immediately
+        const resumeResult = await attemptAnalysisResume(threadId, analysis.roundNumber);
+
+        if (resumeResult.success) {
+          onStreamCompleteRef.current?.(resumeResult.data);
+          if (isMounted)
+            is409Conflict.onFalse(); // Stop polling
+          return;
+        }
+
+        // Resume failed - fall back to polling the analyses list
         const res = await fetch(`/api/v1/chat/threads/${threadId}/analyses`);
         if (!res.ok)
           throw new Error('Failed to fetch analyses');
@@ -350,11 +434,33 @@ function ModeratorAnalysisStreamComponent({
         triggeredRounds.set(threadId, new Set([analysis.roundNumber]));
       }
 
-      // AI SDK v5 Pattern: Use queueMicrotask for post-render scheduling
-      // Capture participantMessageIds at time of queueing for stability
+      // =========================================================================
+      // ✅ RESUMABLE STREAMS: Try to resume from buffer before starting new stream
+      // =========================================================================
+      // If analysis status is STREAMING, it may have been interrupted by page refresh
+      // Try to resume from KV buffer first before starting a new POST request
       const messageIds = analysis.participantMessageIds;
-      queueMicrotask(() => {
+      const roundNumber = analysis.roundNumber;
+
+      queueMicrotask(async () => {
         onStreamStartRef.current?.();
+
+        // ✅ RESUMABLE STREAMS: For STREAMING status, attempt to resume first
+        if (analysis.status === AnalysisStatuses.STREAMING) {
+          const resumeResult = await attemptAnalysisResume(threadId, roundNumber);
+
+          if (resumeResult.success) {
+            // Successfully resumed from buffer - complete the stream
+            onStreamCompleteRef.current?.(resumeResult.data);
+            return; // Don't start new stream
+          }
+
+          // Resume failed - if incomplete, fall back to polling (409 will be handled)
+          // Stream is still in progress but we couldn't get complete data
+          // Fall through to submit() which will get 409 and trigger polling
+        }
+
+        // Normal flow: start new stream (or retry after failed resume)
         const body = { participantMessageIds: messageIds };
         submitRef.current(body);
       });

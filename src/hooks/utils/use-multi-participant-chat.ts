@@ -7,7 +7,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
-import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { errorCategoryToUIType, ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
@@ -374,7 +374,7 @@ export function useMultiParticipantChat(
       aiSendMessageRef.current({
         text: userText,
         metadata: {
-          role: 'user',
+          role: UIMessageRoles.USER,
           roundNumber: currentRoundRef.current,
           isParticipantTrigger: true,
         },
@@ -700,7 +700,6 @@ export function useMultiParticipantChat(
       // The AI SDK adds the message during streaming; we update it with proper metadata
 
       if (participant && data.message) {
-
         // ✅ CRITICAL FIX: Skip metadata merge for pre-search messages
         // Pre-search messages have isPreSearch: true and complete metadata from backend
         // They should NOT be modified with participant metadata
@@ -1154,7 +1153,7 @@ export function useMultiParticipantChat(
     aiSendMessage({
       text: userText,
       metadata: {
-        role: 'user',
+        role: UIMessageRoles.USER,
         roundNumber,
         isParticipantTrigger: true,
       },
@@ -1250,7 +1249,7 @@ export function useMultiParticipantChat(
     aiSendMessage({
       text: userText,
       metadata: {
-        role: 'user',
+        role: UIMessageRoles.USER,
         roundNumber,
         isParticipantTrigger: true,
       },
@@ -1365,7 +1364,7 @@ export function useMultiParticipantChat(
       aiSendMessage({
         text: trimmed,
         metadata: {
-          role: 'user',
+          role: UIMessageRoles.USER,
           roundNumber: newRoundNumber,
         },
       });

@@ -18,7 +18,6 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { TextPart, UIMessage } from 'ai';
-import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FlowState, ScreenMode } from '@/api/core/enums';
@@ -260,7 +259,6 @@ export function useFlowStateMachine(
 ): UseFlowOrchestratorReturn {
   const { mode } = options;
   const queryClient = useQueryClient();
-  const router = useRouter();
 
   // ============================================================================
   // GATHER CONTEXT FROM STORE
@@ -413,28 +411,36 @@ export function useFlowStateMachine(
             });
           }
 
-          // After invalidating cache, execute navigation in same effect run
-          // This handles the streaming_analysis → navigating transition where we need both actions
+          // =========================================================================
+          // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
+          // =========================================================================
+          //
+          // WHY: Next.js App Router with `dynamic = 'force-dynamic'` ALWAYS shows
+          // loading.tsx during server render. Prefetching only works for static routes.
+          //
+          // SOLUTION: Don't trigger server navigation at all!
+          // - URL is already `/chat/[slug]` from history.replaceState (flow-controller.ts)
+          // - Overview screen already renders thread content when !showInitialUI
+          // - All data (messages, analyses, etc.) is in Zustand store
+          //
+          // Mark as navigated to prevent repeated actions, but don't router.push
           if (mode === ScreenModes.OVERVIEW && context.threadSlug && !context.hasNavigated) {
-            const slug = context.threadSlug; // Capture for closure
             startTransition(() => {
               setHasNavigated(true);
-              queueMicrotask(() => {
-                router.push(`/chat/${slug}`);
-              });
             });
           }
           break;
         }
 
         case 'NAVIGATE': {
-          // Execute navigation
+          // =========================================================================
+          // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
+          // =========================================================================
+          // Mark as navigated but don't trigger router.push - overview screen already
+          // shows thread content and URL is already correct from flow-controller.ts
           if (mode === ScreenModes.OVERVIEW && action.slug) {
             startTransition(() => {
               setHasNavigated(true);
-              queueMicrotask(() => {
-                router.push(`/chat/${action.slug}`);
-              });
             });
           }
           break;
@@ -452,7 +458,6 @@ export function useFlowStateMachine(
     participants,
     thread,
     queryClient,
-    router,
     markAnalysisCreated,
     hasAnalysisBeenCreated,
     createPendingAnalysis,

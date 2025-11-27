@@ -973,3 +973,46 @@ This is the **preferred endpoint** for stream resumption. The frontend doesn't n
     ...createProtectedRouteResponses(),
   },
 });
+
+/**
+ * GET /chat/threads/:threadId/rounds/:roundNumber/analyze/resume
+ * ✅ RESUMABLE STREAMS: Resume buffered analysis stream (object stream)
+ */
+export const resumeAnalysisStreamRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/analyze/resume',
+  tags: ['chat'],
+  summary: 'Resume buffered analysis stream',
+  description: `Resume a moderator analysis stream from buffered chunks. Returns the full stream as text for client consumption.
+
+This endpoint enables analysis stream resumption after page reload. Unlike chat streams which use SSE format, analysis streams use plain text (JSON being built incrementally).
+
+**Response Types**:
+- text/plain: Text stream with buffered chunks (if stream has data)
+- 204 No Content: No stream buffer exists or stream has no chunks
+
+**Usage Pattern**:
+1. Frontend detects page reload during analysis streaming
+2. Calls this endpoint to check for and resume active stream
+3. If 200: Receives buffered chunks, continues rendering
+4. If 204: No active stream, may need to retry analysis
+
+**Example**: GET /chat/threads/thread_123/rounds/0/analyze/resume`,
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Buffered stream chunks returned as text',
+      content: {
+        'text/plain': {
+          schema: z.string().describe('Text stream with buffered JSON object chunks'),
+        },
+      },
+    },
+    [HttpStatusCodes.NO_CONTENT]: {
+      description: 'No stream buffer exists or stream has no chunks',
+    },
+    ...createProtectedRouteResponses(),
+  },
+});

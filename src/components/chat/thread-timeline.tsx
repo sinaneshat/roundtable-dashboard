@@ -143,6 +143,10 @@ export function ThreadTimeline({
         width: '100%',
         // ✅ MOBILE FIX: Add will-change for better mobile transform performance
         willChange: 'height',
+        // ✅ SCROLL FIX: Disable browser scroll anchoring to prevent snap-back
+        // When virtualized items change position, browser tries to maintain anchor
+        // This causes unwanted scroll jumping when changelogs/content changes
+        overflowAnchor: 'none',
       }}
     >
       {virtualItems.map((virtualItem) => {

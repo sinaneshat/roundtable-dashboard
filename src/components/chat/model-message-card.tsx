@@ -12,6 +12,7 @@ import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
+import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import { LoaderFive } from '@/components/ui/loader';
@@ -191,7 +192,8 @@ export const ModelMessageCard = memo(({
                             return (
                               <Streamdown
                                 key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
-                                className="size-full text-foreground text-sm leading-relaxed whitespace-pre-wrap [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                className="text-foreground text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                components={streamdownComponents}
                               >
                                 {part.text}
                               </Streamdown>

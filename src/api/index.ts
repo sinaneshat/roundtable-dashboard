@@ -94,6 +94,7 @@ import {
   getThreadSlugStatusHandler,
   listCustomRolesHandler,
   listThreadsHandler,
+  resumeAnalysisStreamHandler,
   resumeStreamHandler,
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
@@ -125,6 +126,7 @@ import {
   getThreadSlugStatusRoute,
   listCustomRolesRoute,
   listThreadsRoute,
+  resumeAnalysisStreamRoute,
   resumeStreamRoute,
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
@@ -416,6 +418,7 @@ app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches f
 
 // Moderator analysis routes (protected)
 app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze', csrfProtection, requireSession);
+app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze/resume', requireSession); // GET resume (no CSRF for safe method)
 app.use('/chat/threads/:id/analyses', requireSession); // GET analyses for thread
 
 // Round feedback routes (protected)
@@ -508,6 +511,7 @@ const appRoutes = app
   // Moderator Analysis (protected, backend-triggered only)
   .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)
   .openapi(analyzeRoundRoute, analyzeRoundHandler) // Stream moderator analysis for a round
+  .openapi(resumeAnalysisStreamRoute, resumeAnalysisStreamHandler) // Resume buffered analysis stream
   // Round Feedback (protected)
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread

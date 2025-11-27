@@ -1381,39 +1381,10 @@ describe('useMultiParticipantChat Stream Transitions', () => {
   // ============================================================================
 
   describe('10. Animation Wait Flow', () => {
-    it('should call waitForAnimation before triggering next participant', async () => {
-      const participants = createTestParticipants(2);
-      const waitForAnimation = vi.fn().mockResolvedValue(undefined);
-      const onComplete = vi.fn();
-
-      mockMessages = [createTestUserMessage(0)];
-
-      const { result } = renderHook(() =>
-        useMultiParticipantChat({
-          threadId: 'thread-123',
-          participants,
-          messages: mockMessages,
-          onComplete,
-          waitForAnimation,
-        }),
-      );
-
-      await act(async () => {
-        await result.current.sendMessage('Test');
-      });
-
-      // Ensure callback is defined
-      expect(useChatOnFinish).toBeDefined();
-
-      await act(async () => {
-        useChatOnFinish!({ message: createTestAssistantMessage(0, 0) });
-      });
-
-      // Give async triggerWithAnimationWait time to execute
-      await waitFor(() => {
-        expect(waitForAnimation).toHaveBeenCalledWith(0);
-      });
-    });
+    // ✅ REMOVED: waitForAnimation test - waitForAnimation prop was removed from hook
+    // Animation coordination is now handled via store (registerAnimation/completeAnimation)
+    // and cleanup effects in component unmount (ModelMessageCard, PreSearchCard)
+    // See: model-message-card.tsx:80-91, pre-search-card.tsx:88-98
 
     it('should call clearAnimations when starting new round', async () => {
       const participants = createTestParticipants(2);
@@ -1437,41 +1408,8 @@ describe('useMultiParticipantChat Stream Transitions', () => {
       expect(clearAnimations).toHaveBeenCalled();
     });
 
-    it('should not block transitions if waitForAnimation is undefined', async () => {
-      const participants = createTestParticipants(2);
-      const onComplete = vi.fn();
-
-      mockMessages = [createTestUserMessage(0)];
-
-      const { result } = renderHook(() =>
-        useMultiParticipantChat({
-          threadId: 'thread-123',
-          participants,
-          messages: mockMessages,
-          onComplete,
-          // No waitForAnimation provided
-        }),
-      );
-
-      await act(async () => {
-        await result.current.sendMessage('Test');
-      });
-
-      if (useChatOnFinish) {
-        act(() => {
-          useChatOnFinish!({ message: createTestAssistantMessage(0, 0) });
-        });
-
-        act(() => {
-          useChatOnFinish!({ message: createTestAssistantMessage(1, 0) });
-        });
-      }
-
-      // Should complete without animation wait
-      await waitFor(() => {
-        expect(onComplete).toHaveBeenCalled();
-      });
-    });
+    // ✅ REMOVED: waitForAnimation undefined test - waitForAnimation prop was removed
+    // Animation flow is now handled via store subscriptions and component cleanup effects
   });
 
   // ============================================================================

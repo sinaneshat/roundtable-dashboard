@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Streamdown } from 'streamdown';
 
+import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { defaultMarkdownComponents } from '@/components/markdown/unified-markdown-components';
 import { FadeInText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
@@ -34,7 +35,10 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
       <div className="text-sm">
         {isStreaming
           ? (
-              <Streamdown className="leading-relaxed whitespace-pre-wrap text-foreground">
+              <Streamdown
+                className="leading-relaxed text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                components={streamdownComponents}
+              >
                 {answer}
               </Streamdown>
             )

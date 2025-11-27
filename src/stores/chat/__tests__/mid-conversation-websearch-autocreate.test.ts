@@ -697,6 +697,53 @@ describe('mid-Conversation Web Search Auto-Create', () => {
   // ==========================================================================
 
   describe('thread vs Form Web Search State', () => {
+    it('should NOT reset enableWebSearch when hasPendingConfigChanges flips to false with stale thread prop', () => {
+      // BUG FIX: When user enables web search and PATCH completes:
+      // 1. hasPendingConfigChanges flips to false
+      // 2. thread prop is still stale SSR data (enableWebSearch: false)
+      // 3. Sync effect would incorrectly overwrite form state
+      //
+      // This test verifies form state persists after PATCH even with stale thread prop
+
+      // Thread created WITHOUT web search (stale SSR data)
+      const thread = createMockThread({
+        id: 'thread-stale-prop',
+        enableWebSearch: false,
+      });
+
+      store.getState().initializeThread(thread, [createMockParticipant(0)]);
+
+      // Initial state: both thread and form have enableWebSearch: false
+      expect(store.getState().thread?.enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBe(false);
+
+      // User enables web search via form toggle
+      store.getState().setEnableWebSearch(true);
+      store.getState().setHasPendingConfigChanges(true);
+
+      // Form state updated
+      expect(store.getState().enableWebSearch).toBe(true);
+      // Thread prop is still stale
+      expect(store.getState().thread?.enableWebSearch).toBe(false);
+
+      // CRITICAL: When PATCH completes, form state should NOT be reset by stale thread prop
+      // This simulates what happens when hasPendingConfigChanges flips to false
+      store.getState().setHasPendingConfigChanges(false);
+
+      // Form state should STILL be true (not reset by stale thread prop)
+      expect(store.getState().enableWebSearch).toBe(true);
+
+      // Pre-search decision should still use form state
+      const shouldWait = shouldWaitForPreSearch({
+        webSearchEnabled: store.getState().enableWebSearch,
+        preSearches: [],
+        roundNumber: 1,
+      });
+
+      // Should wait because form says web search is enabled
+      expect(shouldWait).toBe(true);
+    });
+
     it('should use form state (not thread state) for pre-search decisions', () => {
       // Thread created WITHOUT web search
       const thread = createMockThread({

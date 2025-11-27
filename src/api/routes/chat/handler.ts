@@ -1,6 +1,7 @@
 export {
   analyzeRoundHandler,
   getThreadAnalysesHandler,
+  resumeAnalysisStreamHandler,
 } from './handlers/analysis.handler';
 export {
   getThreadFeedbackHandler,

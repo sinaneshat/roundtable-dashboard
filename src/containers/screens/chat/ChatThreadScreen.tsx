@@ -536,7 +536,7 @@ export default function ChatThreadScreen({
 
   // Unified scroll management using useChatScroll hook
   // bottomOffset accounts for: sticky input (pt-10 + ~80px input) + shadow gradient (h-8) + bottom margin (16px)
-  // ✅ FIX: Pass preSearches for auto-scroll during pre-search object generation
+  // ✅ FIX: Removed preSearches - auto-scroll only during participant streaming
   const { scrolledToAnalysesRef } = useChatScroll({
     messages,
     analyses,
@@ -545,7 +545,6 @@ export default function ChatThreadScreen({
     enableNearBottomDetection: true,
     currentParticipantIndex,
     bottomOffset: 180,
-    preSearches,
   });
 
   // Streaming loader state calculation
@@ -565,6 +564,14 @@ export default function ChatThreadScreen({
 
   // Get web search toggle state from store (form state, not DB)
   const enableWebSearch = useChatStore(s => s.enableWebSearch);
+
+  // ✅ CRITICAL FIX: Track last synced enableWebSearch to prevent stale prop overwrite
+  // When user toggles web search and PATCH completes:
+  // 1. hasPendingConfigChanges flips to false
+  // 2. But thread prop is still stale SSR data (enableWebSearch: false)
+  // 3. Without this ref, the sync effect would overwrite form state with stale value
+  // This ref ensures we only sync when thread prop actually changes, not when flags change
+  const lastSyncedEnableWebSearchRef = useRef<boolean | undefined>(undefined);
 
   // AI SDK v5 Pattern: Initialize thread on mount and when thread ID changes
   // Following crash course Exercise 01.07, 04.02, 04.03:
@@ -590,7 +597,10 @@ export default function ChatThreadScreen({
       setSelectedMode(thread.mode as ChatModeId);
     }
 
-    setEnableWebSearch(thread.enableWebSearch || false);
+    // Sync enableWebSearch and update ref for change detection
+    const threadEnableWebSearch = thread.enableWebSearch || false;
+    setEnableWebSearch(threadEnableWebSearch);
+    lastSyncedEnableWebSearchRef.current = threadEnableWebSearch;
 
     // ✅ CRITICAL FIX: Set showInitialUI to false on thread screen
     // If we navigated from overview screen, showInitialUI would be true
@@ -604,14 +614,33 @@ export default function ChatThreadScreen({
   // When web search toggle changes mid-conversation and PATCH completes,
   // the thread object updates but form state stays stale
   // This causes subsequent rounds to use old form state instead of DB state
+  //
+  // ✅ BUG FIX: Use ref to track last synced enableWebSearch to prevent stale overwrite
+  // PROBLEM: When user toggles web search and PATCH completes:
+  // 1. hasPendingConfigChanges flips to false
+  // 2. thread prop is still stale SSR data (enableWebSearch: false)
+  // 3. Effect would overwrite correct form state (true) with stale value (false)
+  //
+  // SOLUTION: Only sync enableWebSearch when thread.enableWebSearch actually changes,
+  // not when hasPendingConfigChanges changes. This preserves user's toggle until
+  // the thread prop is actually updated (e.g., on page revalidation).
   useEffect(() => {
-    // Skip if no pending config changes (form is already in sync)
-    if (!state.flags.hasPendingConfigChanges) {
-      // Sync form state with thread state when thread updates
-      if (thread?.mode) {
-        setSelectedMode(thread.mode as ChatModeId);
-      }
-      setEnableWebSearch(thread.enableWebSearch || false);
+    // Skip if pending config changes (user is actively editing)
+    if (state.flags.hasPendingConfigChanges) {
+      return;
+    }
+
+    // Sync mode (always safe to sync)
+    if (thread?.mode) {
+      setSelectedMode(thread.mode as ChatModeId);
+    }
+
+    // ✅ CRITICAL: Only sync enableWebSearch if thread prop actually changed
+    // This prevents overwriting form state when only hasPendingConfigChanges flipped
+    const threadEnableWebSearch = thread.enableWebSearch || false;
+    if (lastSyncedEnableWebSearchRef.current !== threadEnableWebSearch) {
+      lastSyncedEnableWebSearchRef.current = threadEnableWebSearch;
+      setEnableWebSearch(threadEnableWebSearch);
     }
     // Only sync when thread properties change, not on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -747,7 +776,7 @@ export default function ChatThreadScreen({
               />
             </div>
             {/* Bottom fill - covers gap to screen bottom */}
-            <div className="absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
+            <div className="-z-10 absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
           </div>
         </div>
       </UnifiedErrorBoundary>

@@ -523,14 +523,18 @@ export function chunksToSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Ar
 
   return new ReadableStream({
     start(controller) {
-      for (const chunk of chunks) {
-        // ✅ FIX: Pass chunk data through as-is
-        // Chunks are already in SSE format from AI SDK stream
-        // Previously was double-wrapping: `data: ${chunk.data}\n\n`
-        // which produced malformed SSE like `data: 0:"text"\n\n\n\n`
-        controller.enqueue(encoder.encode(chunk.data));
+      try {
+        for (const chunk of chunks) {
+          // ✅ FIX: Pass chunk data through as-is
+          // Chunks are already in SSE format from AI SDK stream
+          // Previously was double-wrapping: `data: ${chunk.data}\n\n`
+          // which produced malformed SSE like `data: 0:"text"\n\n\n\n`
+          controller.enqueue(encoder.encode(chunk.data));
+        }
+        controller.close();
+      } catch {
+        // Controller already closed (client disconnected) - ignore
       }
-      controller.close();
     },
   });
 }

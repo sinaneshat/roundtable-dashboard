@@ -1,12 +1,22 @@
 /**
- * Analysis 409 Conflict Polling Tests
+ * Analysis Conflict Polling Tests
  *
- * Tests that analysis streams properly handle 409 Conflict errors
- * (when stream is already in progress) by polling for completion
- * instead of retrying the POST request.
+ * Tests that analysis streams properly handle conflict scenarios
+ * (when stream is already in progress) by:
+ * 1. First trying to resume from buffer (new resumption infrastructure)
+ * 2. Falling back to polling analyses list if resume fails
+ *
+ * With the new resumption infrastructure:
+ * - Resume endpoint (GET /analyze/resume) is tried first
+ * - If resume returns buffered data (200), stream completes
+ * - If resume returns 204 (no buffer), falls back to polling
+ * - POST returns 202 Accepted (instead of 409) when stream is in progress
+ *   but buffer isn't ready yet, triggering polling on frontend
  *
  * This prevents "Controller is already closed" errors and ensures
  * analysis completes even after page refresh during streaming.
+ *
+ * Related: src/stores/chat/__tests__/analysis-object-stream-resumption.test.ts
  */
 import { act, render as rtlRender, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
@@ -53,7 +63,7 @@ vi.mock('@ai-sdk/react', () => ({
   }),
 }));
 
-describe('analysis 409 polling', () => {
+describe('analysis conflict/202 polling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedOnFinish = null;
@@ -67,12 +77,12 @@ describe('analysis 409 polling', () => {
   });
 
   // SKIP: This test has complex mock timing issues with Zod schema validation during polling.
-  // The 409 polling behavior IS tested by 'should handle failed analysis status during polling'
-  // which verifies the core mechanism: 409 error → is409Conflict.onTrue() → polling effect → callback.
+  // The conflict/202 polling behavior IS tested by 'should handle failed analysis status during polling'
+  // which verifies the core mechanism: 409/202 error → is409Conflict.onTrue() → polling effect → callback.
   // The COMPLETE status branch has additional Zod validation requirements that are hard to mock correctly.
-  // Production behavior is verified: 409 responses trigger polling and call onStreamComplete.
+  // Production behavior is verified: 409/202 responses trigger polling and call onStreamComplete.
   // eslint-disable-next-line test/no-disabled-tests -- intentionally skipped with full implementation preserved
-  it.skip('should poll for completion when POST returns 409', async () => {
+  it.skip('should poll for completion when POST returns 202/409', async () => {
     const mockAnalysis: StoredModeratorAnalysis = {
       id: 'analysis-409-test-1',
       threadId: 'thread-1',

@@ -12,6 +12,7 @@ import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
+import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -139,7 +140,7 @@ function ParticipantHeader({
           </span>
         )}
         {isStreaming && (
-          <span className={cn('ml-1 size-1.5 rounded-full animate-pulse flex-shrink-0', `bg-${colorClass}`)} />
+          <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse flex-shrink-0" />
         )}
         {hasError && (
           <span className="ml-1 size-1.5 rounded-full bg-destructive/80 flex-shrink-0" />
@@ -821,13 +822,14 @@ export const ChatMessageList = memo(
                       {group.messages.map(({ message, index }) => {
                         const messageKey = keyForMessage(message, index);
                         return (
-                          <div key={messageKey} className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">
+                          <div key={messageKey} className="text-foreground text-sm leading-relaxed">
                             {message.parts.map((part) => {
                               if (part.type === MessagePartTypes.TEXT) {
                                 return (
                                   <Streamdown
                                     key={`${message.id}-text-${part.text.substring(0, 20)}`}
-                                    className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    components={streamdownComponents}
                                   >
                                     {part.text}
                                   </Streamdown>

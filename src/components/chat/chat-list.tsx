@@ -112,6 +112,7 @@ function ChatItem({
       >
         <Link
           href={chatUrl}
+          prefetch={false}
           onClick={() => {
             if (isMobile && onNavigate) {
               onNavigate();

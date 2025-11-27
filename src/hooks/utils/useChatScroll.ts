@@ -1,8 +1,7 @@
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 
 type UseChatScrollParams = {
   messages: UIMessage[];
@@ -12,7 +11,7 @@ type UseChatScrollParams = {
   enableNearBottomDetection?: boolean;
   /**
    * Distance from bottom in pixels to consider "at bottom"
-   * When user is within this distance, auto-scroll is engaged
+   * When user is within this distance, sticky mode is engaged
    * Default: 100px
    */
   autoScrollThreshold?: number;
@@ -26,24 +25,15 @@ type UseChatScrollParams = {
    * Default: 0
    */
   bottomOffset?: number;
-  /**
-   * Pre-searches array to track pre-search streaming state
-   * Used to detect when pre-search content is being generated
-   */
-  preSearches?: StoredPreSearch[];
 };
 
 type UseChatScrollResult = {
   /**
-   * Ref tracking if user is currently at bottom (auto-scroll engaged)
+   * Ref tracking if scroll is "sticky" (following new content)
    * - true: User is at bottom, auto-scroll is active
    * - false: User scrolled up, auto-scroll is disabled until they return to bottom
    */
   isAtBottomRef: React.MutableRefObject<boolean>;
-  /**
-   * @deprecated Use isAtBottomRef instead. Kept for backwards compatibility.
-   */
-  isNearBottomRef: React.MutableRefObject<boolean>;
   /**
    * Scroll to bottom of the chat
    * @param behavior - Scroll animation behavior ('smooth' | 'instant')
@@ -58,60 +48,42 @@ type UseChatScrollResult = {
 };
 
 /**
- * Hook for managing chat scroll behavior with body-level scrolling
+ * ✅ REWRITTEN: Following use-stick-to-bottom pattern for window-level scrolling
  *
- * Inspired by use-stick-to-bottom library pattern:
- * - User scrolling UP immediately disengages auto-scroll (no timeout)
- * - User scrolling to bottom re-engages auto-scroll
- * - Auto-scroll only triggers when user is at bottom
+ * KEY PRINCIPLES:
+ * 1. "Sticky" state = whether to auto-scroll (like use-stick-to-bottom's isAtBottom)
+ * 2. User scrolling UP = unstick (immediate)
+ * 3. User reaching bottom = stick (automatic)
+ * 4. Only scroll when sticky AND during active participant streaming
+ * 5. NEVER scroll due to layout shifts, changelogs, analyses, or pre-search
  *
- * USER SCROLL CONTROL:
- * - Scrolling UP = opt-out (immediate, no timeout)
- * - Scrolling to bottom = opt-in (automatic)
- * - No fighting with user intent
- *
- * @example
- * ```tsx
- * const { scrollToBottom, isAtBottomRef } = useChatScroll({
- *   messages,
- *   analyses,
- *   isStreaming,
- * });
- *
- * // Auto-scroll happens automatically when user is at bottom
- * // User can scroll up freely without being forced back
- * // Returning to bottom re-enables auto-scroll
- * ```
+ * This prevents snap-back issues when changelogs or other content appears.
  */
 export function useChatScroll({
   messages,
   analyses,
   isStreaming,
-  scrollContainerId = 'chat-scroll-container',
+  scrollContainerId: _scrollContainerId = 'chat-scroll-container', // Unused after ResizeObserver removal
   enableNearBottomDetection = true,
   autoScrollThreshold = 100,
-  currentParticipantIndex: _currentParticipantIndex, // ✅ FIX: Unused - participant changes no longer trigger scroll
+  currentParticipantIndex: _currentParticipantIndex,
   bottomOffset = 0,
-  preSearches = [],
 }: UseChatScrollParams): UseChatScrollResult {
-  // ✅ SIMPLIFIED: Single state for "is at bottom" - no complex lock mechanism
-  // true = user is at bottom, auto-scroll engaged
-  // false = user scrolled up, auto-scroll disabled
+  // ✅ STICKY STATE: Like use-stick-to-bottom's isAtBottom
+  // true = following new content, false = user opted out by scrolling up
   const isAtBottomRef = useRef(true);
 
   // Track which analyses have been scrolled to (prevent duplicate scrolls)
   const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
 
-  // Track if we're currently doing a programmatic scroll
+  // Track if we're in a programmatic scroll (to ignore scroll events during)
   const isProgrammaticScrollRef = useRef(false);
 
-  // Track last scroll position to detect scroll direction
+  // Track last known scroll position for direction detection
   const lastScrollTopRef = useRef<number>(0);
 
   /**
    * Reset all scroll state to initial values
-   * ✅ NAVIGATION FIX: Call this when navigating to overview or different thread
-   * Prevents stale scroll state from affecting new conversations
    */
   const resetScrollState = useCallback(() => {
     isAtBottomRef.current = true;
@@ -120,36 +92,18 @@ export function useChatScroll({
     isProgrammaticScrollRef.current = false;
   }, []);
 
-  // ✅ NAVIGATION FIX: Auto-reset scroll state when messages become empty
-  // This handles navigation to overview screen where messages array is cleared
-  // Ensures clean scroll state for new conversations
+  // Reset when messages become empty (navigation to overview)
   useEffect(() => {
     if (messages.length === 0) {
       resetScrollState();
     }
   }, [messages.length, resetScrollState]);
 
-  // Compute streaming states from analyses and pre-searches
-  // ✅ FIX: Only consider STREAMING status (not PENDING) for auto-scroll decisions
-  // PENDING status indicates something is about to start, not actively generating content
-  // Auto-scrolling on PENDING causes unwanted scroll jumps before user sees new content
-  const hasAnalysisStreaming = analyses.some(
-    a => a.status === AnalysisStatuses.STREAMING,
-  );
-  const hasPreSearchStreaming = preSearches.some(
-    ps => ps.status === AnalysisStatuses.STREAMING,
-  );
-  // ✅ FIX: isAnyStreaming should ONLY be true when content is actively being generated
-  // This prevents auto-scroll during PENDING states and after streaming completes
-  const isAnyStreaming = isStreaming || hasAnalysisStreaming || hasPreSearchStreaming;
-
   /**
-   * Scroll to bottom of the chat
-   * Uses window/body scrolling for native OS scroll behavior
+   * Scroll to bottom with proper sticky state management
    */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
-      // Mark as programmatic scroll
       isProgrammaticScrollRef.current = true;
 
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight + bottomOffset;
@@ -159,11 +113,10 @@ export function useChatScroll({
         behavior,
       });
 
-      // Re-engage auto-scroll since we're going to bottom
+      // Re-engage sticky mode since we're going to bottom
       isAtBottomRef.current = true;
 
-      // Reset programmatic flag after scroll completes
-      // Use longer delay for smooth scrolling
+      // Reset programmatic flag after scroll animation completes
       const delay = behavior === 'smooth' ? 500 : 100;
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
@@ -172,17 +125,22 @@ export function useChatScroll({
     [bottomOffset],
   );
 
-  // Effect 1: Track scroll position and user intent
-  // ✅ SIMPLIFIED: Just track if at bottom, no complex detection
+  // ============================================================================
+  // EFFECT 1: Track user scroll intent (sticky/unsticky state)
+  // ✅ Following use-stick-to-bottom pattern: scroll up = unstick, reach bottom = stick
+  // ============================================================================
   useEffect(() => {
     if (!enableNearBottomDetection) {
       isAtBottomRef.current = true;
       return undefined;
     }
 
-    const abortController = new AbortController();
-
     const handleScroll = () => {
+      // Ignore scroll events during programmatic scrolling
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = window.innerHeight;
@@ -190,117 +148,101 @@ export function useChatScroll({
 
       // Detect scroll direction
       const scrollDelta = scrollTop - lastScrollTopRef.current;
-      const isScrollingUp = scrollDelta < -5; // Small threshold to filter noise
-
       lastScrollTopRef.current = scrollTop;
 
-      // ✅ KEY LOGIC (inspired by use-stick-to-bottom):
-      // - If user scrolls UP (and it's not programmatic) → disable auto-scroll
-      // - If user is at bottom → enable auto-scroll
-      // - If scrolling down (scrollDelta > 5) but not at bottom → keep current state
-
-      if (!isProgrammaticScrollRef.current && isScrollingUp) {
-        // User is actively scrolling UP → disable auto-scroll
+      // ✅ KEY LOGIC (from use-stick-to-bottom):
+      // - Scrolling UP with meaningful delta = UNSTICK (immediate opt-out)
+      // - Reaching bottom = STICK (automatic opt-in)
+      if (scrollDelta < -10) {
+        // User scrolled UP with intent → unstick
         isAtBottomRef.current = false;
       } else if (distanceFromBottom <= autoScrollThreshold) {
-        // User is at bottom → enable auto-scroll
+        // User is at bottom → stick
         isAtBottomRef.current = true;
       }
       // If scrolling down but not at bottom, keep current state
-      // This prevents re-engaging while user is scrolling down through content
     };
 
-    window.addEventListener('scroll', handleScroll, {
-      passive: true,
-      signal: abortController.signal,
-    });
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Initialize state
+    // Initialize
     lastScrollTopRef.current = window.scrollY || document.documentElement.scrollTop;
-    handleScroll();
 
     return () => {
-      abortController.abort();
+      window.removeEventListener('scroll', handleScroll);
     };
   }, [enableNearBottomDetection, autoScrollThreshold]);
 
-  // Effect 2: Auto-scroll on new content during streaming
-  // ✅ FIX: Only auto-scroll when content is ACTIVELY being generated
-  // Removed currentParticipantIndex dependency - participant changes shouldn't trigger scroll
-  // User opt-out (scrolling up) is respected via isAtBottomRef check
+  // ============================================================================
+  // EFFECT 2: Auto-scroll when streaming starts (participant turn begins)
+  // ✅ This ensures we scroll to bottom when a new participant starts
+  // ============================================================================
+  const wasStreamingRef = useRef(false);
+
   useEffect(() => {
-    if (messages.length === 0) {
-      return;
+    const wasStreaming = wasStreamingRef.current;
+    wasStreamingRef.current = isStreaming;
+
+    // When streaming STARTS (transition from false to true), scroll to bottom
+    if (!wasStreaming && isStreaming && isAtBottomRef.current) {
+      requestAnimationFrame(() => {
+        if (isAtBottomRef.current) {
+          scrollToBottom('smooth');
+        }
+      });
     }
+  }, [isStreaming, scrollToBottom]);
 
-    // ✅ CRITICAL: Respect user opt-out - only scroll if user is at bottom
-    if (!isAtBottomRef.current) {
-      return;
-    }
-
-    // ✅ FIX: Only auto-scroll when actively streaming content
-    // Don't scroll for new analyses when not streaming - user should manually scroll
-    // This prevents unwanted scroll jumps when analyses appear after streaming completes
-    if (!isAnyStreaming) {
-      return;
-    }
-
-    // Track new analyses for scroll tracking (but don't use as scroll trigger)
-    const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
-    if (newAnalyses.length > 0) {
-      newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
-    }
-
-    requestAnimationFrame(() => {
-      // Double-check user is still at bottom before scrolling
-      if (isAtBottomRef.current) {
-        scrollToBottom('smooth');
-      }
-    });
-  }, [messages.length, analyses, isAnyStreaming, scrollToBottom]);
-
-  // Effect 3: Auto-scroll on content resize during streaming
+  // ============================================================================
+  // EFFECT 3: Follow content growth ONLY during participant streaming
+  // ✅ ResizeObserver is ONLY active when isStreaming is true
+  // This prevents scroll on changelogs/layout shifts (which happen when not streaming)
+  // ============================================================================
   useEffect(() => {
-    if (!isAnyStreaming)
+    // ✅ CRITICAL: Only observe when participants are actively streaming
+    // When not streaming, changelogs and other layout changes won't trigger scroll
+    if (!isStreaming) {
       return;
+    }
 
-    const contentContainer = document.getElementById(scrollContainerId);
-    if (!contentContainer)
-      return;
-
-    let lastHeight = document.documentElement.scrollHeight;
     let rafId: number | null = null;
+    let lastScrollHeight = document.documentElement.scrollHeight;
 
-    const resizeObserver = new ResizeObserver(() => {
-      // ✅ SIMPLIFIED: Only scroll if at bottom
+    const handleContentGrowth = () => {
+      // Only scroll if sticky
       if (!isAtBottomRef.current) {
         return;
       }
 
-      const newHeight = document.documentElement.scrollHeight;
-      const heightDelta = newHeight - lastHeight;
+      const newScrollHeight = document.documentElement.scrollHeight;
+      const heightGrew = newScrollHeight > lastScrollHeight;
 
-      // Only scroll if content actually grew by meaningful amount
-      if (heightDelta < 20) {
+      // Only scroll if content actually grew (not shrank or stayed same)
+      if (!heightGrew) {
         return;
       }
 
-      lastHeight = newHeight;
+      lastScrollHeight = newScrollHeight;
 
-      // Cancel pending RAF to prevent stacking
+      // Cancel pending RAF
       if (rafId) {
         cancelAnimationFrame(rafId);
       }
 
       rafId = requestAnimationFrame(() => {
-        if (isAtBottomRef.current) {
+        if (isAtBottomRef.current && isStreaming) {
           scrollToBottom('smooth');
         }
         rafId = null;
       });
-    });
+    };
 
-    resizeObserver.observe(contentContainer);
+    // Use ResizeObserver on document body to detect content growth
+    const resizeObserver = new ResizeObserver(handleContentGrowth);
+    resizeObserver.observe(document.body);
+
+    // Also trigger on message changes during streaming
+    handleContentGrowth();
 
     return () => {
       if (rafId) {
@@ -308,11 +250,18 @@ export function useChatScroll({
       }
       resizeObserver.disconnect();
     };
-  }, [isAnyStreaming, scrollContainerId, scrollToBottom]);
+  }, [isStreaming, scrollToBottom]);
+
+  // Track analyses for scroll tracking (not triggering)
+  useEffect(() => {
+    const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
+    if (newAnalyses.length > 0) {
+      newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
+    }
+  }, [analyses]);
 
   return {
     isAtBottomRef,
-    isNearBottomRef: isAtBottomRef, // Backwards compatibility alias
     scrollToBottom,
     scrolledToAnalysesRef,
     resetScrollState,
