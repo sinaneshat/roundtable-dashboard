@@ -74,8 +74,6 @@ type UseMultiParticipantChatOptions = {
   onPreSearchComplete?: (data: { successfulSearches: number; totalResults: number }) => void;
   /** Callback when pre-search encounters an error */
   onPreSearchError?: (data: { error: string }) => void;
-  /** Animation tracking: wait for animation completion */
-  waitForAnimation?: (participantIndex: number) => Promise<void>;
   /** Animation tracking: clear all pending animations */
   clearAnimations?: () => void;
   /**
@@ -201,7 +199,6 @@ export function useMultiParticipantChat(
     onPreSearchResult,
     onPreSearchComplete,
     onPreSearchError,
-    waitForAnimation,
     clearAnimations,
     hasEarlyOptimisticMessage = false,
   } = options;

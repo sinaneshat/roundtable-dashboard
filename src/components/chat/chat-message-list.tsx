@@ -13,9 +13,10 @@ import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { useAutoScroll, useModelLookup } from '@/hooks/utils';
+import { useModelLookup } from '@/hooks/utils';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
@@ -65,6 +66,165 @@ type MessageGroup
     };
   };
 
+// ============================================================================
+// Reusable Participant Header Component
+// ============================================================================
+
+type ParticipantHeaderProps = {
+  avatarSrc: string;
+  avatarName: string;
+  displayName: string;
+  role?: string | null;
+  requiredTierName?: string;
+  isAccessible?: boolean;
+  isStreaming?: boolean;
+  hasError?: boolean;
+};
+
+/**
+ * Reusable header component for participant messages
+ * Shows avatar, name, role badge, tier requirement, and status indicators
+ */
+function ParticipantHeader({
+  avatarSrc,
+  avatarName,
+  displayName,
+  role,
+  requiredTierName,
+  isAccessible = true,
+  isStreaming = false,
+  hasError = false,
+}: ParticipantHeaderProps) {
+  const [colorClass, setColorClass] = useState<string>('muted-foreground');
+
+  useEffect(() => {
+    let mounted = true;
+    extractColorFromImage(avatarSrc, false)
+      .then((color: string) => {
+        if (mounted)
+          setColorClass(color);
+      })
+      .catch(() => {
+        if (mounted)
+          setColorClass('muted-foreground');
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [avatarSrc]);
+
+  return (
+    <div className="flex items-center gap-3 mb-6">
+      <Avatar className={cn('size-8', `drop-shadow-[0_0_12px_hsl(var(--${colorClass})/0.3)]`)}>
+        <AvatarImage src={avatarSrc} alt={avatarName} className="object-contain p-0.5" />
+        <AvatarFallback className="text-[8px] bg-muted">
+          {avatarName?.slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+        <span className="text-xl font-semibold text-muted-foreground">{displayName}</span>
+        {role && (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
+            style={getRoleBadgeStyle(role)}
+          >
+            {String(role)}
+          </span>
+        )}
+        {!isAccessible && requiredTierName && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/50 text-muted-foreground border-border/50">
+            {requiredTierName}
+            {' '}
+            required
+          </span>
+        )}
+        {isStreaming && (
+          <span className={cn('ml-1 size-1.5 rounded-full animate-pulse flex-shrink-0', `bg-${colorClass}`)} />
+        )}
+        {hasError && (
+          <span className="ml-1 size-1.5 rounded-full bg-destructive/80 flex-shrink-0" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Reusable Participant Message Wrapper
+// ============================================================================
+
+type ParticipantMessageWrapperProps = {
+  participant: ChatParticipant;
+  participantIndex: number;
+  model: EnhancedModelResponse | undefined;
+  status: MessageStatus;
+  parts: MessagePart[];
+  isAccessible: boolean;
+  messageId?: string;
+  metadata?: DbMessageMetadata | null;
+};
+
+/**
+ * Reusable wrapper that renders a participant message with consistent header
+ * Used by both AssistantGroupCard (for completed messages) and pending cards (for streaming)
+ */
+function ParticipantMessageWrapper({
+  participant,
+  participantIndex,
+  model,
+  status,
+  parts,
+  isAccessible,
+  messageId,
+  metadata,
+}: ParticipantMessageWrapperProps) {
+  const avatarProps = getAvatarPropsFromModelId(
+    MessageRoles.ASSISTANT,
+    participant.modelId,
+    null,
+    'AI',
+  );
+  const displayName = model?.name || participant.modelId || 'AI Assistant';
+  const isStreaming = status === MessageStatuses.STREAMING || status === MessageStatuses.PENDING;
+  const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
+  const hasError = status === MessageStatuses.FAILED || assistantMetadata?.hasError;
+
+  return (
+    <div className="mb-4 flex justify-start">
+      <div className="w-full">
+        <ParticipantHeader
+          avatarSrc={avatarProps.src}
+          avatarName={avatarProps.name}
+          displayName={displayName}
+          role={participant.role}
+          requiredTierName={model?.required_tier_name}
+          isAccessible={isAccessible}
+          isStreaming={isStreaming}
+          hasError={!!hasError}
+        />
+        <ModelMessageCard
+          messageId={messageId}
+          model={model}
+          role={participant.role}
+          participantIndex={participantIndex}
+          status={status}
+          parts={parts}
+          avatarSrc={avatarProps.src}
+          avatarName={avatarProps.name}
+          metadata={metadata}
+          isAccessible={isAccessible}
+          hideInlineHeader
+          hideAvatar
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Assistant Group Card Component
+// ============================================================================
+
 /**
  * Assistant Group Component with Header
  * Displays assistant messages with header inside message box
@@ -86,8 +246,6 @@ function AssistantGroupCard({
   t: (key: string) => string;
   keyForMessage: (message: UIMessage, index: number) => string;
 }) {
-  const [colorClass, setColorClass] = useState<string>('muted-foreground');
-
   // Determine if any message in group is streaming or has error
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
   const hasErrorMessage = group.messages.some(({ message }) => {
@@ -96,73 +254,22 @@ function AssistantGroupCard({
     return assistantMetadata?.hasError;
   });
 
-  useEffect(() => {
-    let mounted = true;
-    extractColorFromImage(group.headerInfo.avatarSrc, false)
-      .then((color: string) => {
-        if (mounted) {
-          setColorClass(color);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setColorClass('muted-foreground');
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [group.headerInfo.avatarSrc]);
-
   return (
     <div
       key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
       className="mb-4 flex justify-start"
     >
       <div className="w-full">
-        {/* Header at top of message box */}
-        <div className="flex items-center gap-3 mb-6">
-          <Avatar className={cn(
-            'size-8',
-            `drop-shadow-[0_0_12px_hsl(var(--${colorClass})/0.3)]`,
-          )}
-          >
-            <AvatarImage
-              src={group.headerInfo.avatarSrc}
-              alt={group.headerInfo.avatarName}
-              className="object-contain p-0.5"
-            />
-            <AvatarFallback className="text-[8px] bg-muted">
-              {group.headerInfo.avatarName?.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-            <span className="text-xl font-semibold text-muted-foreground">
-              {group.headerInfo.displayName}
-            </span>
-            {group.headerInfo.role && (
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
-                style={getRoleBadgeStyle(group.headerInfo.role)}
-              >
-                {String(group.headerInfo.role)}
-              </span>
-            )}
-            {!group.headerInfo.isAccessible && group.headerInfo.requiredTierName && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/50 text-muted-foreground border-border/50">
-                {group.headerInfo.requiredTierName}
-                {' '}
-                required
-              </span>
-            )}
-            {hasStreamingMessage && (
-              <span className={cn('ml-1 size-1.5 rounded-full animate-pulse flex-shrink-0', `bg-${colorClass}`)} />
-            )}
-            {hasErrorMessage && (
-              <span className="ml-1 size-1.5 rounded-full bg-destructive/80 flex-shrink-0" />
-            )}
-          </div>
-        </div>
+        <ParticipantHeader
+          avatarSrc={group.headerInfo.avatarSrc}
+          avatarName={group.headerInfo.avatarName}
+          displayName={group.headerInfo.displayName}
+          role={group.headerInfo.role}
+          requiredTierName={group.headerInfo.requiredTierName}
+          isAccessible={group.headerInfo.isAccessible}
+          isStreaming={hasStreamingMessage}
+          hasError={hasErrorMessage}
+        />
         {/* Message content */}
         <div className="space-y-2">
           {group.messages.map(({ message, index, participantInfo }) => {
@@ -171,28 +278,7 @@ function AssistantGroupCard({
             const model = findModel(participantInfo.modelId);
             const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
 
-            // ✅ DEFENSIVE CHECK: Log when parts structure is unexpected
-            if (!message.parts || !Array.isArray(message.parts)) {
-              console.error('[ChatMessageList] Message has invalid parts structure:', {
-                messageId: message.id,
-                role: message.role,
-                participantIndex: participantInfo.participantIndex,
-                parts: message.parts,
-              });
-            }
-
-            // ✅ DEFENSIVE CHECK: Log when trying to access parts that might have undefined elements
             const safeParts = message.parts || [];
-            if (safeParts.some(p => !p || typeof p !== 'object')) {
-              console.error('[ChatMessageList] Message has undefined or invalid parts:', {
-                messageId: message.id,
-                role: message.role,
-                participantIndex: participantInfo.participantIndex,
-                parts: safeParts,
-                invalidPartIndices: safeParts.map((p, idx) => (!p || typeof p !== 'object') ? idx : null).filter(idx => idx !== null),
-              });
-            }
-
             const hasTextContent = safeParts.some(p => p && p.type === MessagePartTypes.TEXT && p.text?.trim().length > 0);
             const hasToolCalls = safeParts.some(p => p && p.type === MessagePartTypes.TOOL_CALL);
             const hasAnyContent = hasTextContent || hasToolCalls;
@@ -227,8 +313,8 @@ function AssistantGroupCard({
                   avatarName={group.headerInfo.avatarName}
                   metadata={hideMetadata ? null : (metadata ?? null)}
                   isAccessible={isAccessible}
-                  hideInlineHeader={true}
-                  hideAvatar={true}
+                  hideInlineHeader
+                  hideAvatar
                 />
                 {sourceParts.length > 0 && (
                   <div className="mt-2 ml-12 space-y-1">
@@ -245,12 +331,7 @@ function AssistantGroupCard({
                                 className="text-primary hover:underline flex items-center gap-1"
                               >
                                 <span>{('title' in sourcePart && sourcePart.title) || sourcePart.url}</span>
-                                <svg
-                                  className="w-3 h-3"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -417,8 +498,9 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
-    // ✅ AI SDK ELEMENTS PATTERN: Auto-scroll during streaming to keep messages in view
-    const bottomRef = useAutoScroll(isStreaming);
+    // ✅ SCROLL MANAGEMENT: Handled by useChatScroll in parent (ChatThreadScreen)
+    // Removed redundant useAutoScroll to prevent dual scroll systems fighting
+    // when changelogs cause virtualization remeasurement
 
     // ✅ DEDUPLICATION: Prevent duplicate message IDs and filter participant trigger messages
     // Note: Component supports grouping multiple consecutive user messages for UI flexibility
@@ -904,14 +986,8 @@ export const ChatMessageList = memo(
                   return (
                     <div className="space-y-4 mt-4">
                       {sortedParticipants.map((participant) => {
-                        const participantIndex = sortedParticipants.findIndex(p => p.id === participant.id);
+                        const participantIdx = sortedParticipants.findIndex(p => p.id === participant.id);
                         const model = findModel(participant.modelId);
-                        const avatarProps = getAvatarPropsFromModelId(
-                          MessageRoles.ASSISTANT,
-                          participant.modelId,
-                          null,
-                          'AI',
-                        );
                         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
 
                         // Check if this participant has a message with content
@@ -950,24 +1026,18 @@ export const ChatMessageList = memo(
                           status = MessageStatuses.PENDING;
                         }
 
+                        // ✅ Use ParticipantMessageWrapper for consistent header rendering
                         return (
-                          <div
+                          <ParticipantMessageWrapper
                             key={`participant-${participant.id}`}
-                            className="mb-4 flex justify-start"
-                          >
-                            <div className="w-full">
-                              <ModelMessageCard
-                                model={model}
-                                role={participant.role}
-                                participantIndex={participantIndex}
-                                status={status}
-                                parts={parts}
-                                avatarSrc={avatarProps.src}
-                                avatarName={avatarProps.name}
-                                isAccessible={isAccessible}
-                              />
-                            </div>
-                          </div>
+                            participant={participant}
+                            participantIndex={participantIdx}
+                            model={model}
+                            status={status}
+                            parts={parts}
+                            isAccessible={isAccessible}
+                            messageId={participantMessage?.id}
+                          />
                         );
                       })}
                     </div>
@@ -995,8 +1065,6 @@ export const ChatMessageList = memo(
 
           return null;
         })}
-        {/* ✅ AI SDK ELEMENTS PATTERN: Scroll anchor for auto-scroll during streaming */}
-        <div ref={bottomRef} />
       </div>
     );
   },

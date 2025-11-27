@@ -601,8 +601,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // This prevents hook from initializing with empty string, which causes startRound to never be available
   const effectiveThreadId = thread?.id || createdThreadId || '';
 
-  // Animation tracking functions from store
-  const waitForAnimation = useStore(store, s => s.waitForAnimation);
+  // Animation tracking: clear all pending animations on round reset
   const clearAnimations = useStore(store, s => s.clearAnimations);
 
   const chat = useMultiParticipantChat({
@@ -614,8 +613,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     enableWebSearch,
     onError: handleError,
     onComplete: handleComplete,
-    // Animation tracking for sequential participant streaming
-    waitForAnimation,
+    // Animation tracking: clear all pending animations on round reset
     clearAnimations,
     // ✅ RACE CONDITION FIX: Prevents resumed stream detection from setting isStreaming=true
     // during form submission, which would create a deadlock state
