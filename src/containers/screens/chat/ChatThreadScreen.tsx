@@ -143,14 +143,10 @@ export default function ChatThreadScreen({
     a => a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING,
   );
 
-  const { flags } = useChatStore(
-    useShallow(s => ({
-      flags: {
-        isRegenerating: s.isRegenerating,
-        regeneratingRoundNumber: s.regeneratingRoundNumber,
-      },
-    })),
-  );
+  // ✅ FIX: Select individual values instead of nested object to avoid infinite loop
+  // useShallow only does shallow comparison - nested objects create new references each time
+  const isRegenerating = useChatStore(s => s.isRegenerating);
+  const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
 
   useScreenInitialization({
     mode: 'thread',
@@ -158,9 +154,9 @@ export default function ChatThreadScreen({
     participants,
     initialMessages: uiMessages,
     chatMode: selectedMode || (thread.mode as ChatModeId),
-    isRegeneration: flags.regeneratingRoundNumber !== null,
-    regeneratingRoundNumber: flags.regeneratingRoundNumber,
-    enableOrchestrator: !flags.isRegenerating && !hasStreamingAnalysis,
+    isRegeneration: regeneratingRoundNumber !== null,
+    regeneratingRoundNumber,
+    enableOrchestrator: !isRegenerating && !hasStreamingAnalysis,
   });
 
   // Input blocking for submit guard only (ChatView handles its own input state)

@@ -128,7 +128,9 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
 
     lastSyncedContextRef.current = contextKey;
     actions.setSelectedParticipants(syncedParticipants);
-  }, [contextParticipants, isRoundInProgress, flags.hasPendingConfigChanges, actions]);
+    // ✅ STABLE DEPS: Zustand store actions are stable, exclude from deps to prevent infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextParticipants, isRoundInProgress, flags.hasPendingConfigChanges]);
 
   /**
    * Clear changelog waiting flag when changelog fetch completes
@@ -165,7 +167,9 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
     }
 
     return undefined;
-  }, [flags.isWaitingForChangelog, isChangelogFetching, actions]);
+    // ✅ STABLE DEPS: Zustand store actions are stable, exclude from deps to prevent infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flags.isWaitingForChangelog, isChangelogFetching]);
 
   /**
    * Factory for creating config change handlers with consistent behavior

@@ -205,10 +205,18 @@ const createFormSlice: StateCreator<
     // Thin wrapper applies updates returned from pure function
     const result = applyRecommendedActionLogic(action, options);
 
-    // ✅ PRESERVE THREAD STATE: When preserveThreadState is true (thread screen),
-    // only update the form without resetting thread/navigation state.
-    // This allows updating chatbox with suggestions while staying on thread screen.
-    if (options?.preserveThreadState) {
+    // ✅ CRITICAL FIX: Check for active conversation at store level
+    // This provides a safety net regardless of what the caller passes for preserveThreadState
+    const currentState = get();
+    const hasActiveConversation = currentState.messages.length > 0
+      || currentState.thread !== null
+      || currentState.createdThreadId !== null;
+
+    // ✅ PRESERVE THREAD STATE: Don't reset when:
+    // 1. Caller explicitly requests preservation (preserveThreadState: true)
+    // 2. There's an active conversation (messages, thread, or createdThreadId exists)
+    // This ensures clicking recommendations updates the chatbox without losing conversation state
+    if (options?.preserveThreadState || hasActiveConversation) {
       // Just apply form updates, don't reset thread state
       set(result.updates, false, 'form/applyRecommendedAction/preserveThread');
 
@@ -220,73 +228,7 @@ const createFormSlice: StateCreator<
       };
     }
 
-    // ✅ CRITICAL FIX: Reset thread state when there's an existing conversation
-    // BUG FIX: When clicking a recommendation from analysis card on overview screen,
-    // the old thread's messages/analyses/preSearches persist and mix with new thread's data.
-    // This causes pre-search detection to find old thread's complete pre-search instead of
-    // new thread's pending one, blocking participant streaming.
-    //
-    // SOLUTION: Reset all thread-related state when applying a recommendation to a conversation
-    // that already has messages. This ensures clean slate for the new thread.
-    const currentState = get();
-    const hasExistingConversation = currentState.messages.length > 0
-      || currentState.thread !== null
-      || currentState.createdThreadId !== null;
-
-    if (hasExistingConversation) {
-      // Clear AI SDK hook's internal messages to prevent sync effect from restoring old messages
-      currentState.chatSetMessages?.([]);
-
-      // Reset thread-related state but preserve form defaults (we'll apply result.updates next)
-      set({
-        // Thread state
-        thread: null,
-        participants: [],
-        messages: [],
-        createdThreadId: null,
-
-        // Analysis and pre-search state
-        analyses: [],
-        preSearches: [],
-        preSearchActivityTimes: new Map<number, number>(),
-
-        // Tracking state - create fresh Set instances
-        createdAnalysisRounds: new Set<number>(),
-        triggeredPreSearchRounds: new Set<number>(),
-
-        // Streaming flags
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        isCreatingThread: false,
-        isCreatingAnalysis: false,
-        streamingRoundNumber: null,
-        currentRoundNumber: null,
-        currentParticipantIndex: 0,
-
-        // Pending message state
-        pendingMessage: null,
-        expectedParticipantIds: null,
-        hasSentPendingMessage: false,
-        hasEarlyOptimisticMessage: false,
-        hasPendingConfigChanges: false,
-
-        // Resumption state
-        streamResumptionState: null,
-        resumptionAttempts: new Set<string>(),
-        nextParticipantToTrigger: null,
-
-        // Animation state
-        pendingAnimations: new Set<number>(),
-        animationResolvers: new Map<number, () => void>(),
-
-        // UI state - back to initial
-        showInitialUI: true,
-        screenMode: ScreenModes.OVERVIEW,
-        error: null,
-      }, false, 'form/applyRecommendedAction/resetThreadState');
-    }
-
-    // Apply form updates from recommendation
+    // No active conversation - apply form updates for new conversation setup
     set(result.updates, false, 'form/applyRecommendedAction');
 
     // ✅ Return result metadata (updates already applied via set() above)

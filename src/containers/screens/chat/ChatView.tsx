@@ -252,12 +252,15 @@ export function ChatView({
 
   // Recommended actions
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
+  const hasActiveConversation = Boolean(thread || createdThreadId);
   const recommendedActions = useRecommendedActions({
     inputContainerRef,
     enableScroll: mode === 'thread',
     markConfigChanged: mode === 'thread',
-    // ✅ PRESERVE THREAD STATE: When on thread screen, don't reset navigation
-    preserveThreadState: mode === 'thread',
+    // ✅ PRESERVE THREAD STATE: Don't reset state when there's an active conversation
+    // On thread screen: always preserve (stay on thread)
+    // On overview screen with active thread: preserve (stay in conversation view)
+    preserveThreadState: mode === 'thread' || hasActiveConversation,
   });
 
   // Thread actions (for both screens - manages changelog waiting flag)
