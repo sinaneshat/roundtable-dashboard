@@ -155,7 +155,7 @@ const createFormSlice: StateCreator<
   [['zustand/devtools', never]],
   [],
   FormSlice
-> = set => ({
+> = (set, get) => ({
   ...FORM_DEFAULTS,
 
   setInputValue: (value: string) =>
@@ -205,6 +205,88 @@ const createFormSlice: StateCreator<
     // Thin wrapper applies updates returned from pure function
     const result = applyRecommendedActionLogic(action, options);
 
+    // ✅ PRESERVE THREAD STATE: When preserveThreadState is true (thread screen),
+    // only update the form without resetting thread/navigation state.
+    // This allows updating chatbox with suggestions while staying on thread screen.
+    if (options?.preserveThreadState) {
+      // Just apply form updates, don't reset thread state
+      set(result.updates, false, 'form/applyRecommendedAction/preserveThread');
+
+      return {
+        success: result.success,
+        error: result.error,
+        modelsAdded: result.modelsAdded,
+        modelsSkipped: result.modelsSkipped,
+      };
+    }
+
+    // ✅ CRITICAL FIX: Reset thread state when there's an existing conversation
+    // BUG FIX: When clicking a recommendation from analysis card on overview screen,
+    // the old thread's messages/analyses/preSearches persist and mix with new thread's data.
+    // This causes pre-search detection to find old thread's complete pre-search instead of
+    // new thread's pending one, blocking participant streaming.
+    //
+    // SOLUTION: Reset all thread-related state when applying a recommendation to a conversation
+    // that already has messages. This ensures clean slate for the new thread.
+    const currentState = get();
+    const hasExistingConversation = currentState.messages.length > 0
+      || currentState.thread !== null
+      || currentState.createdThreadId !== null;
+
+    if (hasExistingConversation) {
+      // Clear AI SDK hook's internal messages to prevent sync effect from restoring old messages
+      currentState.chatSetMessages?.([]);
+
+      // Reset thread-related state but preserve form defaults (we'll apply result.updates next)
+      set({
+        // Thread state
+        thread: null,
+        participants: [],
+        messages: [],
+        createdThreadId: null,
+
+        // Analysis and pre-search state
+        analyses: [],
+        preSearches: [],
+        preSearchActivityTimes: new Map<number, number>(),
+
+        // Tracking state - create fresh Set instances
+        createdAnalysisRounds: new Set<number>(),
+        triggeredPreSearchRounds: new Set<number>(),
+
+        // Streaming flags
+        isStreaming: false,
+        waitingToStartStreaming: false,
+        isCreatingThread: false,
+        isCreatingAnalysis: false,
+        streamingRoundNumber: null,
+        currentRoundNumber: null,
+        currentParticipantIndex: 0,
+
+        // Pending message state
+        pendingMessage: null,
+        expectedParticipantIds: null,
+        hasSentPendingMessage: false,
+        hasEarlyOptimisticMessage: false,
+        hasPendingConfigChanges: false,
+
+        // Resumption state
+        streamResumptionState: null,
+        resumptionAttempts: new Set<string>(),
+        nextParticipantToTrigger: null,
+
+        // Animation state
+        pendingAnimations: new Set<number>(),
+        animationResolvers: new Map<number, () => void>(),
+
+        // UI state - back to initial
+        showInitialUI: true,
+        screenMode: ScreenModes.OVERVIEW,
+        error: null,
+      }, false, 'form/applyRecommendedAction/resetThreadState');
+    }
+
+    // Apply form updates from recommendation
     set(result.updates, false, 'form/applyRecommendedAction');
 
     // ✅ Return result metadata (updates already applied via set() above)
@@ -1190,8 +1272,9 @@ const createOperationsSlice: StateCreator<
   resetForThreadNavigation: () => {
     const state = get();
 
-    // ✅ CRITICAL: Stop any ongoing streams BEFORE resetting state
-    state.stop?.();
+    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
+    // Streams continue in background via waitUntil() regardless of navigation
+    // The AI SDK v6 resumable streams pattern is incompatible with abort
 
     // ✅ CRITICAL: Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
@@ -1214,8 +1297,9 @@ const createOperationsSlice: StateCreator<
   resetToOverview: () => {
     const state = get();
 
-    // ✅ CRITICAL: Stop any ongoing streams BEFORE resetting state
-    state.stop?.();
+    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
+    // Streams continue in background via waitUntil() regardless of navigation
+    // The AI SDK v6 resumable streams pattern is incompatible with abort
 
     // ✅ CRITICAL FIX: Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
@@ -1308,20 +1392,13 @@ const createOperationsSlice: StateCreator<
       // ✅ FIX: Calculate next round number for mid-conversation messages
       const nextRoundNumber = calculateNextRoundNumber(state.messages);
 
-      // ✅ CRITICAL FIX: Only add optimistic user message for THREAD screen (subsequent rounds)
-      // On OVERVIEW screen (initial thread creation), the backend creates the round 0 user message
-      // via initializeThread() - we should NOT add a duplicate optimistic message
+      // ✅ OPTIMISTIC MESSAGE LOGIC:
+      // - Round 0 (handleCreateThread): Backend creates user message, NO optimistic message needed
+      // - Round 1+ (handleUpdateThreadAndSend): Optimistic message added by handleUpdateThreadAndSend
+      //   BEFORE calling prepareForNewMessage (sets hasEarlyOptimisticMessage=true)
       //
-      // OVERVIEW screen flow:
-      //   1. initializeThread() adds round 0 user message from backend
-      //   2. prepareForNewMessage() prepares state but should NOT add optimistic message
-      //   3. Backend streaming starts and includes the user message
-      //
-      // THREAD screen flow (subsequent messages):
-      //   1. prepareForNewMessage() adds optimistic user message immediately (for instant UI feedback)
-      //   2. Pre-search runs and completes
-      //   3. sendMessage() is called, backend responds with real messages
-      //   4. Real messages replace optimistic message
+      // This check handles the legacy path where prepareForNewMessage might be called directly
+      // on thread screen without the early optimistic message being set.
       const isOnThreadScreen = state.screenMode === ScreenModes.THREAD;
 
       // ✅ IMMEDIATE UI FEEDBACK FIX: Use explicit flag instead of heuristic detection
@@ -1371,8 +1448,8 @@ const createOperationsSlice: StateCreator<
           ? participantIds
           : state.expectedParticipantIds,
         hasSentPendingMessage: false,
-        // ✅ FIX: Only add optimistic user message for subsequent rounds on THREAD screen
-        // AND only if one doesn't already exist (prevents duplicates from early UI feedback)
+        // ✅ FIX: Add optimistic user message only if not already added by handleUpdateThreadAndSend
+        // (prevents duplicates from early UI feedback)
         messages: optimisticUserMessage
           ? [...state.messages, optimisticUserMessage]
           : state.messages,
@@ -1442,8 +1519,9 @@ const createOperationsSlice: StateCreator<
   resetToNewChat: () => {
     const state = get();
 
-    // ✅ CRITICAL: Stop any ongoing streams first
-    state.stop?.();
+    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
+    // Streams continue in background via waitUntil() regardless of navigation
+    // The AI SDK v6 resumable streams pattern is incompatible with abort
 
     // ✅ CRITICAL FIX: Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
@@ -1463,21 +1541,26 @@ const createOperationsSlice: StateCreator<
   },
 
   /**
-   * ✅ STREAMING CONTROL: Stop ongoing streaming
+   * ✅ RESUMABLE STREAMS: Streaming state reset (NO abort)
    *
-   * Calls the abort controller and sets streaming to false.
+   * Resets local streaming state WITHOUT calling abort controller.
+   * With AI SDK v6 resumable streams, streams continue in background via waitUntil().
+   * This action only updates local UI state - the backend stream continues.
+   *
    * Used when:
-   * - User clicks stop button
-   * - Component unmounts during streaming
-   * - Navigation away from thread
+   * - Navigation away from thread (stream continues in background)
+   * - Component unmounts during streaming (stream continues)
+   * - Local state needs reset (stream can be resumed via GET endpoint)
+   *
+   * NOTE: User "stop" button is intentionally NOT supported with resumable streams.
+   * Streams should always complete in background for data integrity.
    */
   stopStreaming: () => {
-    const state = get();
+    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
+    // Streams continue in background via waitUntil() regardless of frontend state
+    // The AI SDK v6 resumable streams pattern is incompatible with abort
 
-    // Call abort controller if set
-    state.stop?.();
-
-    // Reset streaming state and participant index
+    // Reset local streaming state only (backend stream continues)
     set({
       isStreaming: false,
       currentParticipantIndex: 0,

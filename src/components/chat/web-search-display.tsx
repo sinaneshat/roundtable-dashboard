@@ -1,20 +1,26 @@
 'use client';
-import { AlertCircle, ChevronDown, ChevronUp, Globe, Search } from 'lucide-react';
+
+import { AlertCircle, Globe, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import type { WebSearchStreamingStage } from '@/api/core/enums';
-import { WebSearchStreamingStages } from '@/api/core/enums';
+import { ChainOfThoughtStepStatuses, WebSearchStreamingStages } from '@/api/core/enums';
 import type { WebSearchDisplayExtendedProps } from '@/api/routes/chat/schema';
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtSearchResult,
+  ChainOfThoughtSearchResults,
+  ChainOfThoughtStep,
+} from '@/components/ai-elements/chain-of-thought';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
-import { WebSearchResultItem } from '@/components/chat/web-search-result-item';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
+import { safeExtractDomain } from '@/lib/utils';
 
 /**
  * Determine current streaming stage based on available data
@@ -27,7 +33,6 @@ function getStreamingStage(query: string | undefined, answer: string | null | un
   return WebSearchStreamingStages.SYNTHESIZE;
 }
 
-// Card-based display component
 export function WebSearchDisplay({
   results,
   className,
@@ -35,7 +40,7 @@ export function WebSearchDisplay({
   answer,
   isStreaming = false,
   requestId: _requestId,
-  query: _query,
+  query,
   autoParameters: _autoParameters,
 }: WebSearchDisplayExtendedProps) {
   const t = useTranslations('chat.tools.webSearch');
@@ -43,43 +48,40 @@ export function WebSearchDisplay({
 
   // Show loading state while streaming
   if (isStreaming && (!results || results.length === 0)) {
-    // Determine current stage based on available data
-    const currentStage = getStreamingStage(_query, answer);
+    const currentStage = getStreamingStage(query, answer);
 
     return (
       <div className={cn('relative py-2', className)}>
-        <div>
-          <div className="mb-3">
-            {/* Simple header */}
-            <div className="flex items-center gap-2 mb-2">
-              <Globe className="size-4 text-muted-foreground animate-pulse" />
-              <span className="text-sm font-medium text-foreground">{t('title')}</span>
-              <span className="text-xs text-muted-foreground animate-pulse">searching...</span>
+        <ChainOfThought open disabled>
+          <ChainOfThoughtHeader disabled>
+            <div className="flex items-center gap-2">
+              <Globe className="size-4 animate-pulse" />
+              <span>{query ? `Searching for "${query}"` : t('title')}</span>
             </div>
-
-            {/* Compact stages */}
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className={cn(currentStage === WebSearchStreamingStages.QUERY && 'font-medium animate-pulse')}>
-                Query
-              </span>
-              <span>→</span>
-              <span className={cn(currentStage === WebSearchStreamingStages.SEARCH && 'font-medium animate-pulse')}>
-                Search
-              </span>
-              <span>→</span>
-              <span className={cn(currentStage === WebSearchStreamingStages.SYNTHESIZE && 'font-medium animate-pulse')}>
-                Answer
-              </span>
+          </ChainOfThoughtHeader>
+          <ChainOfThoughtContent>
+            <ChainOfThoughtStep
+              icon={Search}
+              label="Query"
+              status={currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
+            />
+            <ChainOfThoughtStep
+              icon={Globe}
+              label="Searching the web"
+              status={currentStage === WebSearchStreamingStages.SEARCH ? ChainOfThoughtStepStatuses.ACTIVE : currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.PENDING : ChainOfThoughtStepStatuses.COMPLETE}
+            />
+            <ChainOfThoughtStep
+              icon={Search}
+              label="Synthesizing answer"
+              status={currentStage === WebSearchStreamingStages.SYNTHESIZE ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.PENDING}
+            />
+            <div className="space-y-2 mt-2">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-5/6" />
             </div>
-          </div>
-
-          {/* Simplified skeletons */}
-          <div className="space-y-2">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-5/6" />
-          </div>
-        </div>
+          </ChainOfThoughtContent>
+        </ChainOfThought>
       </div>
     );
   }
@@ -91,115 +93,88 @@ export function WebSearchDisplay({
   const totalResults = results.length;
   const successfulResults = results.filter(r => r.title !== 'Search Failed');
   const hasErrors = successfulResults.length < totalResults;
-
-  // Check if we have images
   const hasImages = successfulResults.some(r => r.metadata?.imageUrl);
+
+  // Extract unique domains for badge display
+  const domains = successfulResults.map((r) => {
+    const domain = r.domain || safeExtractDomain(r.url, 'unknown');
+    return domain.replace('www.', '');
+  });
 
   return (
     <div className={cn('relative py-2', className)}>
-      <div className="border-l-2 border-primary/20 pl-3">
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-between px-2 py-1.5 h-auto hover:bg-muted/30"
+      <ChainOfThought open={isOpen} onOpenChange={setIsOpen}>
+        <ChainOfThoughtHeader>
+          <div className="flex items-center gap-2">
+            <Globe className="size-4" />
+            <span>{query ? `Searched for "${query}"` : t('title')}</span>
+          </div>
+        </ChainOfThoughtHeader>
+
+        <ChainOfThoughtContent>
+          {/* Search Results as Domain Badges */}
+          <ChainOfThoughtStep
+            icon={Search}
+            label={`Found ${successfulResults.length} ${successfulResults.length === 1 ? 'source' : 'sources'}`}
+            status={ChainOfThoughtStepStatuses.COMPLETE}
+          >
+            <ChainOfThoughtSearchResults>
+              {domains.map((domain, index) => (
+                <ChainOfThoughtSearchResult key={`${domain}-${index}`}>
+                  <a
+                    href={successfulResults[index]?.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
+                    {domain}
+                  </a>
+                </ChainOfThoughtSearchResult>
+              ))}
+            </ChainOfThoughtSearchResults>
+          </ChainOfThoughtStep>
+
+          {/* Image Gallery */}
+          {hasImages && (
+            <ChainOfThoughtStep
+              icon={Globe}
+              label="Found images"
+              status={ChainOfThoughtStepStatuses.COMPLETE}
             >
-              <div className="flex items-center gap-2 flex-wrap text-sm">
-                <div className="flex items-center gap-1.5">
-                  <Globe className="size-4 text-muted-foreground" />
-                  <span className="font-medium">{t('title')}</span>
-                </div>
+              <WebSearchImageGallery results={successfulResults} />
+            </ChainOfThoughtStep>
+          )}
 
-                {/* Results summary badges */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="secondary" className="text-xs">
-                    <Search className="size-3 mr-1" />
-                    {successfulResults.length}
-                    {' '}
-                    {t(successfulResults.length === 1 ? 'source.singular' : 'source.plural')}
-                  </Badge>
-
-                  {hasErrors && (
-                    <Badge variant="destructive" className="text-xs">
-                      {totalResults - successfulResults.length}
-                      {' '}
-                      {t('failed')}
-                    </Badge>
-                  )}
-                </div>
+          {/* AI Answer Summary */}
+          {(answer || isStreaming) && (
+            <ChainOfThoughtStep
+              icon={Search}
+              label="Answer"
+              status={isStreaming ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
+            >
+              <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
+                <LLMAnswerDisplay
+                  answer={answer ?? null}
+                  isStreaming={isStreaming}
+                  sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
+                />
               </div>
+            </ChainOfThoughtStep>
+          )}
 
-              <div className="flex items-center gap-2">
-                {isOpen
-                  ? (
-                      <ChevronUp className="size-4 text-muted-foreground" />
-                    )
-                  : (
-                      <ChevronDown className="size-4 text-muted-foreground" />
-                    )}
-              </div>
-            </Button>
-          </CollapsibleTrigger>
-
-          <CollapsibleContent className="border-t border-border/50">
-            <div className="p-4 space-y-4">
-              {/* AI Answer Summary */}
-              {(answer || isStreaming) && (
-                <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
-                  <LLMAnswerDisplay
-                    answer={answer ?? null}
-                    isStreaming={isStreaming}
-                    sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
-                  />
-                </div>
-              )}
-
-              {/* Image Gallery */}
-              {hasImages && (
-                <WebSearchImageGallery results={successfulResults} />
-              )}
-
-              {/* Detailed Sources */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between py-2 border-t border-border/20 pt-4">
-                  <div className="flex items-center gap-2">
-                    <Search className="size-4 text-muted-foreground" />
-                    <p className="text-sm font-medium text-foreground">
-                      Detailed Sources
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {successfulResults.length}
-                    {' '}
-                    {successfulResults.length === 1 ? 'source' : 'sources'}
-                  </Badge>
-                </div>
-                <div className="space-y-0">
-                  {successfulResults.map((result, index) => (
-                    <WebSearchResultItem
-                      key={result.url}
-                      result={result}
-                      showDivider={index < successfulResults.length - 1}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Error display */}
-              {hasErrors && (
-                <Alert variant="destructive" className="mt-4">
-                  <AlertCircle className="size-4" />
-                  <AlertDescription>
-                    {t('error.failedToLoad', {
-                      count: totalResults - successfulResults.length,
-                    })}
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
+          {/* Error display */}
+          {hasErrors && (
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertDescription>
+                {t('error.failedToLoad', {
+                  count: totalResults - successfulResults.length,
+                })}
+              </AlertDescription>
+            </Alert>
+          )}
+        </ChainOfThoughtContent>
+      </ChainOfThought>
     </div>
   );
 }

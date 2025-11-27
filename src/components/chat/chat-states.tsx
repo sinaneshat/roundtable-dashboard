@@ -20,108 +20,85 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EncryptedText } from '@/components/ui/encrypted-text';
-import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { FadeIn, PageTransition } from '@/components/ui/motion';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/ui/cn';
 
 type LoadingStateProps = {
   title?: string;
   message?: string;
-  variant?: 'spinner' | 'page' | 'inline' | 'card' | 'skeleton';
+  variant?: 'inline' | 'centered' | 'card';
   className?: string;
-  style?: 'default' | 'dashed' | 'gradient';
   size?: 'sm' | 'md' | 'lg';
 };
+
+const sizeConfig = {
+  sm: { spinner: 'size-4', title: 'text-sm', container: 'py-4 gap-2' },
+  md: { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' },
+  lg: { spinner: 'size-8', title: 'text-lg', container: 'py-12 gap-4' },
+};
+
+/**
+ * LoadingState - Unified loading indicator
+ *
+ * Variants:
+ * - inline: Horizontal spinner + text (for buttons, inline loading)
+ * - centered: Centered spinner + text with animation (default, for page sections)
+ * - card: Loading state in a card container
+ */
 export function LoadingState({
   title,
   message,
-  variant = 'page',
+  variant = 'centered',
   className,
-  style = 'default',
   size = 'md',
 }: LoadingStateProps) {
   const t = useTranslations();
   const defaultTitle = title || t('states.loading.default');
   const defaultMessage = message || t('states.loading.please_wait');
-  if (variant === 'spinner') {
-    return <LoadingSpinner className={cn('h-6 w-6', className)} />;
-  }
+  const config = sizeConfig[size];
+
   if (variant === 'inline') {
     return (
-      <div className={cn('flex items-center gap-2 text-sm', className)}>
-        <LoadingSpinner className="h-4 w-4" />
-        <EncryptedText
-          text={defaultTitle}
-          revealDelayMs={30}
-          flipDelayMs={40}
-          encryptedClassName="text-muted-foreground/40"
-          revealedClassName="text-muted-foreground"
-        />
+      <div className={cn('flex items-center gap-2', className)}>
+        <Spinner className={cn(config.spinner, 'text-muted-foreground')} />
+        <span className={cn(config.title, 'text-muted-foreground')}>{defaultTitle}</span>
       </div>
     );
   }
-  if (variant === 'skeleton') {
-    const sizeConfig = {
-      sm: { container: 'py-6', cards: 2, height: 'h-24' },
-      md: { container: 'py-8', cards: 3, height: 'h-32' },
-      lg: { container: 'py-12', cards: 4, height: 'h-40' },
-    };
-    const config = sizeConfig[size];
-    return (
-      <div className={cn('space-y-4', config.container, className)}>
-        <div className="flex items-center justify-between">
-          <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-16 animate-pulse rounded bg-muted" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: config.cards }, (_, i) => (
-            <div key={i} className={cn('animate-pulse rounded-lg bg-muted', config.height)} />
-          ))}
-        </div>
-      </div>
-    );
-  }
+
   if (variant === 'card') {
-    const styleConfig = {
-      default: 'border bg-card',
-      dashed: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
-      gradient: 'bg-gradient-to-br from-card to-card/50 shadow-lg border-dashed border-2',
-    };
-    const sizeConfig = {
-      sm: { container: 'py-6', iconContainer: 'w-12 h-12', iconSize: 'h-6 w-6', title: 'text-base' },
-      md: { container: 'py-8', iconContainer: 'w-16 h-16', iconSize: 'h-8 w-8', title: 'text-lg' },
-      lg: { container: 'py-12', iconContainer: 'w-24 h-24', iconSize: 'h-12 w-12', title: 'text-2xl' },
-    };
-    const config = sizeConfig[size];
     return (
-      <Card className={cn(styleConfig[style], className)}>
-        <CardContent className={config.container}>
-          <div className="text-center space-y-6">
-            <div className={cn(
-              config.iconContainer,
-              'rounded-full flex items-center justify-center mx-auto',
-              size === 'lg'
-                ? 'rounded-2xl bg-primary/10 border-2 border-dashed border-primary/20'
-                : 'bg-muted',
-            )}
-            >
-              <LoadingSpinner className={cn(
-                config.iconSize,
-                size === 'lg' ? 'text-primary/60' : 'text-muted-foreground',
-              )}
+      <Card className={cn('border-dashed', className)}>
+        <CardContent className={cn('flex flex-col items-center justify-center text-center', config.container)}>
+          <Spinner className={cn(config.spinner, 'text-primary')} />
+          <div className="space-y-1">
+            <p className={cn(config.title, 'font-medium')}>{defaultTitle}</p>
+            {message && <p className="text-sm text-muted-foreground">{defaultMessage}</p>}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // centered (default)
+  return (
+    <PageTransition>
+      <FadeIn delay={0.05}>
+        <div className={cn('flex flex-col items-center justify-center text-center', config.container, className)}>
+          <Spinner className={cn(config.spinner, 'text-primary')} />
+          <div className="space-y-1">
+            <p className={cn(config.title, 'font-medium')}>
+              <EncryptedText
+                text={defaultTitle}
+                revealDelayMs={25}
+                flipDelayMs={35}
+                encryptedClassName="text-muted-foreground/40"
+                revealedClassName="text-foreground"
               />
-            </div>
-            <div className="space-y-3">
-              <h3 className={cn(config.title, 'font-medium')}>
-                <EncryptedText
-                  text={defaultTitle}
-                  revealDelayMs={25}
-                  flipDelayMs={35}
-                  encryptedClassName="text-muted-foreground/40"
-                  revealedClassName="text-foreground"
-                />
-              </h3>
-              <p className="text-sm max-w-md mx-auto">
+            </p>
+            {message && (
+              <p className="text-sm text-muted-foreground">
                 <EncryptedText
                   text={defaultMessage}
                   revealDelayMs={30}
@@ -130,37 +107,8 @@ export function LoadingState({
                   revealedClassName="text-muted-foreground"
                 />
               </p>
-            </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-  return (
-    <PageTransition>
-      <FadeIn delay={0.05} className={className}>
-        <div className="text-center py-12">
-          <div className="flex items-center justify-center mb-4">
-            <LoadingSpinner className="h-8 w-8 me-2" />
-            <span className="text-xl font-medium">
-              <EncryptedText
-                text={defaultTitle}
-                revealDelayMs={25}
-                flipDelayMs={35}
-                encryptedClassName="text-muted-foreground/40"
-                revealedClassName="text-foreground"
-              />
-            </span>
-          </div>
-          <p>
-            <EncryptedText
-              text={defaultMessage}
-              revealDelayMs={30}
-              flipDelayMs={40}
-              encryptedClassName="text-muted-foreground/40"
-              revealedClassName="text-muted-foreground"
-            />
-          </p>
         </div>
       </FadeIn>
     </PageTransition>

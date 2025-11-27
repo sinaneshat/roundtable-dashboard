@@ -465,10 +465,10 @@ describe('reset Functions Completeness', () => {
   });
 
   describe('resetToNewChat', () => {
-    it('should clear ALL state and stop streaming', () => {
+    it('should clear ALL state without calling stop (resumable streams)', () => {
       setAllStreamingFlags();
 
-      // Mock stop function
+      // Mock stop function - should NOT be called (resumable streams)
       const mockStop = vi.fn();
       store.setState({ stop: mockStop });
 
@@ -481,8 +481,8 @@ describe('reset Functions Completeness', () => {
       // Call resetToNewChat
       store.getState().resetToNewChat();
 
-      // Verify stop was called
-      expect(mockStop).toHaveBeenCalled();
+      // ✅ RESUMABLE STREAMS: stop is NOT called - streams continue in background
+      expect(mockStop).not.toHaveBeenCalled();
 
       // Verify ALL flags are cleared (same as resetToOverview)
       const state = store.getState();

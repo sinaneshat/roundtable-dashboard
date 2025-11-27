@@ -108,16 +108,16 @@ export function RoundOutcomeHeader({
 
   return (
     <div className="space-y-4">
-      {/* Confidence Row - Only show when we have actual confidence data */}
+      {/* Confidence Row - Always inline layout */}
       {hasConfidence && (
         <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{t('roundOutcome.roundConfidence')}</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-medium whitespace-nowrap">{t('roundOutcome.roundConfidence')}</span>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Info className="size-4 text-muted-foreground cursor-help" />
+                    <Info className="size-3.5 text-muted-foreground cursor-help flex-shrink-0" />
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs text-xs">
@@ -128,15 +128,14 @@ export function RoundOutcomeHeader({
               </TooltipProvider>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {confidenceWeighting && (
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-[10px] sm:text-xs h-5 px-1.5 hidden sm:inline-flex">
                   {getWeightingLabel(confidenceWeighting, t)}
                 </Badge>
               )}
-              <span className={cn('text-2xl font-bold', getConfidenceColor(roundConfidence))}>
-                {roundConfidence}
-                %
+              <span className={cn('text-xl sm:text-2xl font-bold', getConfidenceColor(roundConfidence))}>
+                {roundConfidence}%
               </span>
             </div>
           </div>
@@ -151,80 +150,95 @@ export function RoundOutcomeHeader({
         </>
       )}
 
-      {/* Contributors */}
+      {/* Contributors - horizontal scroll on mobile */}
       {hasContributors && (
-        <ScrollArea className="w-full whitespace-nowrap">
-          <div className="flex w-max items-center gap-3 p-4">
+        <ScrollArea className="w-full">
+          <div className="flex items-center gap-2 pb-2">
             {contributors.map(contributor => (
               <ModelBadge
                 key={contributor.participantIndex}
                 modelId={contributor.modelId}
                 role={contributor.role ?? undefined}
                 size="sm"
-                className="shrink-0"
+                className="flex-shrink-0"
               />
             ))}
           </div>
-          <ScrollBar orientation="horizontal" />
+          <ScrollBar orientation="horizontal" className="h-1.5" />
         </ScrollArea>
       )}
 
       {/* Consensus Evolution Timeline */}
       {consensusEvolution && consensusEvolution.length > 0 && (
-        <div className="space-y-4 pt-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium">{t('consensusEvolution.title')}</h4>
-            <span className="text-xs text-muted-foreground">
+        <div className="space-y-2 sm:space-y-3 pt-2">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-medium whitespace-nowrap">{t('consensusEvolution.title')}</h4>
+            <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
               {t('roundOutcome.debatePhases', { count: phaseCount })}
             </span>
           </div>
 
-          {/* Centered Timeline */}
-          <div className="flex justify-center py-4 px-2">
-            <div className="relative px-6">
-              {/* Timeline Line */}
-              <div className="absolute top-6 left-10 right-10 h-px bg-gradient-to-r from-amber-600/60 via-amber-500/80 to-emerald-500" />
+          {/* Horizontally scrollable timeline on mobile */}
+          <ScrollArea className="w-full">
+            <div className="flex justify-center py-4 px-4 min-w-max">
+              {/* Timeline container with relative positioning for the connecting line */}
+              <div className="relative">
+                {/* Connecting line - responsive positioning for circle centers */}
+                {/* Mobile: size-10 (40px) → center at 20px (top-5) */}
+                {/* Desktop: size-12 (48px) → center at 24px (sm:top-6) */}
+                <div
+                  className={cn(
+                    'absolute h-0.5 bg-gradient-to-r from-amber-500/60 via-amber-400/60 to-emerald-500/60',
+                    'top-5 sm:top-6', // 20px mobile, 24px desktop (half of circle size)
+                    'left-5 sm:left-6', // Start from center of first circle
+                    'right-5 sm:right-6', // End at center of last circle
+                  )}
+                />
 
-              {/* Timeline Points */}
-              <div className="relative flex gap-10 sm:gap-12">
-                {consensusEvolution.map((phase, index) => {
-                  const percentage = phase.percentage;
-                  const isLast = index === consensusEvolution.length - 1;
+                {/* Timeline Points */}
+                <div className="relative flex gap-8 sm:gap-12">
+                  {consensusEvolution.map((phase, index) => {
+                    const percentage = phase.percentage;
+                    const isLast = index === consensusEvolution.length - 1;
 
-                  return (
-                    <div
-                      key={phase.phase}
-                      className="flex flex-col items-center"
-                    >
-                      {/* Percentage Circle */}
+                    return (
                       <div
-                        className={cn(
-                          'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-background',
-                          isLast
-                            ? 'border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/30'
-                            : percentage >= 70
-                              ? 'border-emerald-500/60 text-emerald-400'
-                              : percentage >= 50
-                                ? 'border-amber-500/60 text-amber-400'
-                                : 'border-red-500/60 text-red-400',
-                        )}
+                        key={phase.phase}
+                        className="flex flex-col items-center"
                       >
-                        <span className="text-sm font-bold tabular-nums">
-                          {percentage}
-                          %
+                        {/* Percentage Circle */}
+                        <div
+                          className={cn(
+                            'relative z-10 flex items-center justify-center rounded-full border-2 bg-background',
+                            // Fixed square dimensions for perfect circle
+                            'min-w-10 min-h-10 w-10 h-10 sm:min-w-12 sm:min-h-12 sm:w-12 sm:h-12',
+                            'aspect-square flex-shrink-0',
+                            isLast
+                              ? 'border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/30'
+                              : percentage >= 70
+                                ? 'border-emerald-500/60 text-emerald-400'
+                                : percentage >= 50
+                                  ? 'border-amber-500/60 text-amber-400'
+                                  : 'border-red-500/60 text-red-400',
+                          )}
+                        >
+                          <span className="text-xs sm:text-sm font-bold tabular-nums leading-none">
+                            {percentage}%
+                          </span>
+                        </div>
+
+                        {/* Phase Label */}
+                        <span className="mt-2 text-[10px] sm:text-xs text-muted-foreground text-center leading-tight max-w-14 sm:max-w-20">
+                          {phase.label || getPhaseLabel(phase.phase, t)}
                         </span>
                       </div>
-
-                      {/* Phase Label */}
-                      <span className="mt-3 text-xs text-muted-foreground text-center leading-tight max-w-16">
-                        {phase.label || getPhaseLabel(phase.phase, t)}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
+            <ScrollBar orientation="horizontal" className="h-1.5" />
+          </ScrollArea>
         </div>
       )}
 

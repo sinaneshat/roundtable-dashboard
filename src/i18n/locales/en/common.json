@@ -1160,6 +1160,7 @@
     },
     "contributorPerspectives": {
       "title": "Contributor Perspectives",
+      "subtitle": "{convergence}% convergence",
       "scorecard": "Scorecard",
       "logic": "Logic",
       "riskAwareness": "Risk Awareness",
@@ -1174,6 +1175,7 @@
     },
     "consensusAnalysis": {
       "title": "Consensus Analysis",
+      "subtitle": "{alignment} of {total} claims reached consensus",
       "alignmentSummary": "Alignment Summary",
       "alignmentDescription": "Overview of agreement patterns",
       "totalClaims": "Total Claims",
@@ -1194,6 +1196,7 @@
     },
     "evidenceReasoning": {
       "title": "Evidence & Reasoning",
+      "subtitle": "Evidence covers {count} major claims",
       "reasoningThreads": "Reasoning Threads",
       "threadsDescription": "Key claims with supporting synthesis",
       "evidenceCoverage": "Evidence Coverage",
@@ -1202,6 +1205,7 @@
     },
     "alternatives": {
       "title": "Explore Alternatives",
+      "subtitle": "{count} alternative scenarios modeled",
       "explorationTitle": "Alternative Scenarios",
       "explorationDescription": "Different approaches with confidence levels",
       "confidence": "Confidence",
@@ -1266,7 +1270,8 @@
           "description": "Focuses on practical implementation, feasibility, and actionable next steps."
         }
       },
-      "confidenceExplanation": "Confidence Score reflects weighted consensus across models, factoring in evidence strength and reasoning quality."
+      "confidenceExplanation": "Confidence Score reflects weighted consensus across models, factoring in evidence strength and reasoning quality.",
+      "noContributors": "Multiple AI models collaborate through structured debate phases to reach consensus."
     }
   },
   "mostPopular": "Most Popular",

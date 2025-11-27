@@ -24,7 +24,7 @@ import {
 } from '@/api/routes/chat/schema';
 import { LoaderFive } from '@/components/ui/loader';
 import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
-import { useAutoScroll, useBoolean } from '@/hooks/utils';
+import { useBoolean } from '@/hooks/utils';
 import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 import { filterArrayWithSchema, safeParse } from '@/lib/utils/type-guards';
 
@@ -192,9 +192,11 @@ function ModeratorAnalysisStreamComponent({
   // The hasAnalysisData() util handles the type checking at runtime
   const partialAnalysisRef = useRef<unknown>(null);
 
-  // ✅ Unified auto-scroll: Only scrolls if user is at bottom
-  const isStreaming = analysis.status === AnalysisStatuses.STREAMING;
-  const bottomRef = useAutoScroll(isStreaming);
+  // ✅ SCROLL FIX: Removed useAutoScroll - scroll is managed centrally by useChatScroll
+  // Having nested useAutoScroll (with its own ResizeObserver) inside the accordion
+  // caused conflicting scroll systems that fought each other, resulting in excessive
+  // jumping/snapping behavior. The useChatScroll hook in ChatThreadScreen handles all
+  // window-level auto-scroll during streaming via a single ResizeObserver on document.body.
 
   // ✅ Reset the streaming flag when analysis ID changes (new analysis)
   useEffect(() => {
@@ -679,8 +681,6 @@ function ModeratorAnalysisStreamComponent({
                     />
                   </AnimatedStreamingItem>
                 )}
-
-                <div ref={bottomRef} />
               </AnimatedStreamingList>
             </motion.div>
           )}

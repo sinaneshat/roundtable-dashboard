@@ -25,6 +25,13 @@ export type ApplyRecommendedActionOptions = {
   tierName?: string;
   userTier?: SubscriptionTier;
   allModels?: BaseModelResponse[];
+  /**
+   * When true, preserve thread state (stay on thread screen, keep messages)
+   * Used when clicking recommendations from thread screen to update chatbox
+   * without navigating back to overview.
+   * Default: false (resets thread state for new conversation)
+   */
+  preserveThreadState?: boolean;
 };
 
 export type ApplyRecommendedActionResult = {

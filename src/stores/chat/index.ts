@@ -54,3 +54,11 @@ export type { FlowState, ScreenMode } from '@/api/core/enums';
 
 // Re-export commonly used types for tests
 export type { ChatThread } from '@/db/validation';
+
+// Pre-search utilities
+export {
+  executePreSearch,
+  readPreSearchStreamData,
+  shouldWaitForPreSearch,
+} from './utils/pre-search-execution';
+export type { ExecutePreSearchOptions } from './utils/pre-search-execution';

@@ -174,6 +174,116 @@ function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<
   )
 }
 
+/**
+ * Analysis card skeleton - matches RoundAnalysisCard ChainOfThought style
+ * Reusable across thread and public loading pages
+ */
+function AnalysisCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div className={cn("mt-6", className)} {...props}>
+      <div className="rounded-lg bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
+        {/* Analysis header */}
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-4 rounded bg-white/15" />
+          <Skeleton className="h-4 w-32 bg-white/15" />
+          <Skeleton className="h-6 w-20 rounded-full bg-white/10" />
+        </div>
+        {/* Leaderboard skeleton */}
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-24 bg-white/15" />
+          <div className="space-y-1.5">
+            {Array.from({ length: 2 }, (_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Skeleton className="h-3 w-6 bg-white/10" />
+                <Skeleton className="h-3 w-full bg-white/10" />
+                <Skeleton className="h-3 w-12 bg-white/10" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Sticky input skeleton - matches the sticky chat input container
+ * Reusable across overview and thread loading pages
+ */
+function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "sticky bottom-0 z-30 mt-auto",
+        "bg-gradient-to-t from-background via-background to-transparent pt-6",
+        className
+      )}
+      {...props}
+    >
+      <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+        <div className="rounded-xl bg-card/60 backdrop-blur-md border border-white/10 p-4">
+          <Skeleton className="h-12 w-full bg-white/10 rounded-lg" />
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-6 rounded bg-white/10" />
+              <Skeleton className="size-6 rounded bg-white/10" />
+            </div>
+            <Skeleton className="size-8 rounded-full bg-white/15" />
+          </div>
+        </div>
+      </div>
+      {/* Bottom safe area fill */}
+      <div className="h-4 bg-background" />
+    </div>
+  )
+}
+
+/**
+ * Thread messages skeleton - user message + AI responses + analysis
+ * Reusable pattern for chat thread loading states
+ */
+function ThreadMessagesSkeleton({
+  participantCount = 2,
+  showAnalysis = true,
+  className,
+  ...props
+}: {
+  participantCount?: number;
+  showAnalysis?: boolean;
+} & React.ComponentProps<"div">) {
+  return (
+    <div className={cn("space-y-3", className)} {...props}>
+      <UserMessageSkeleton />
+      {Array.from({ length: participantCount }, (_, i) => (
+        <AssistantMessageSkeleton key={i} />
+      ))}
+      {showAnalysis && <AnalysisCardSkeleton />}
+    </div>
+  )
+}
+
+/**
+ * Quick start cards skeleton - matches ChatQuickStart grid
+ * Reusable for overview loading page
+ */
+function QuickStartSkeleton({ count = 3, className, ...props }: { count?: number } & React.ComponentProps<"div">) {
+  return (
+    <div className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3", className)} {...props}>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="rounded-lg bg-card/50 backdrop-blur-sm p-3 sm:p-4 border border-white/5 space-y-2">
+          <Skeleton className="h-4 sm:h-5 w-full bg-white/20" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Skeleton className="size-4 rounded-full bg-white/15" />
+            <Skeleton className="h-3 w-16 bg-white/15" />
+            <Skeleton className="size-4 rounded-full bg-white/15" />
+            <Skeleton className="h-3 w-20 bg-white/15" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export {
   Skeleton,
   CardSkeleton,
@@ -183,6 +293,10 @@ export {
   PaymentMethodSkeleton,
   SubscriptionSkeleton,
   UserMessageSkeleton,
-  AssistantMessageSkeleton
+  AssistantMessageSkeleton,
+  AnalysisCardSkeleton,
+  StickyInputSkeleton,
+  ThreadMessagesSkeleton,
+  QuickStartSkeleton,
 }
 

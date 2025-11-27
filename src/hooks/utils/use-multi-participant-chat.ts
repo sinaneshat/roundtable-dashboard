@@ -82,6 +82,11 @@ type UseMultiParticipantChatOptions = {
    * This avoids a deadlock state where isStreaming=true but pendingMessage=null
    */
   hasEarlyOptimisticMessage?: boolean;
+  /**
+   * ✅ STREAM RESUMPTION: Callback when a resumed stream completes but participants aren't loaded yet
+   * This allows the store to queue the next participant trigger for when participants load
+   */
+  onResumedStreamComplete?: (roundNumber: number, participantIndex: number) => void;
 };
 
 /**
@@ -201,6 +206,7 @@ export function useMultiParticipantChat(
     onPreSearchError,
     clearAnimations,
     hasEarlyOptimisticMessage = false,
+    onResumedStreamComplete,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -219,6 +225,7 @@ export function useMultiParticipantChat(
     enableWebSearch,
     mode, // ✅ FIX: Add mode to refs to prevent transport recreation
     hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
+    onResumedStreamComplete, // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -614,6 +621,20 @@ export function useMultiParticipantChat(
       // ✅ TYPE-SAFE: Use metadata utility functions instead of Record<string, unknown>
       const metadataRoundNumber = getRoundNumber(data.message?.metadata);
       const metadataParticipantIndex = getParticipantIndex(data.message?.metadata);
+
+      // ✅ CRITICAL FIX: Handle case where participants haven't loaded yet after page refresh
+      // If we have valid metadata from resumed stream but participants aren't loaded,
+      // queue the continuation via callback and let provider effect handle it
+      if (roundParticipantsRef.current.length === 0
+        && participantsRef.current.length === 0
+        && metadataParticipantIndex !== null
+        && metadataRoundNumber !== null
+      ) {
+        // Call the callback to queue next participant trigger in the store
+        // Provider effect will pick this up when participants load
+        callbackRefs.onResumedStreamComplete.current?.(metadataRoundNumber, metadataParticipantIndex);
+        return;
+      }
 
       // Determine the actual participant index - prefer metadata for resumed streams
       let currentIndex = currentIndexRef.current;

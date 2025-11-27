@@ -31,20 +31,19 @@ import type { UIMessage } from 'ai';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useRef } from 'react';
-import type { z } from 'zod';
 import { useStore } from 'zustand';
 
-import { AnalysisStatuses, MessagePartTypes, MessageRoles, PreSearchSseEvents, ScreenModes } from '@/api/core/enums';
-import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles, ScreenModes } from '@/api/core/enums';
 import { useCreatePreSearchMutation } from '@/hooks/mutations';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
+import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { ACTIVITY_TIMEOUT_MS, getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
-import { AnimationIndices, createChatStore } from '@/stores/chat';
+import { AnimationIndices, createChatStore, readPreSearchStreamData } from '@/stores/chat';
 
 // ============================================================================
 // CONTEXT (Official Pattern)
@@ -52,88 +51,6 @@ import { AnimationIndices, createChatStore } from '@/stores/chat';
 
 // eslint-disable-next-line react-refresh/only-export-components -- Context export required for provider pattern
 export const ChatStoreContext = createContext<ChatStoreApi | undefined>(undefined);
-
-/** Type inferred from schema - single source of truth */
-type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
-
-/**
- * Safely parse and validate pre-search data using Zod schema
- * Returns validated data or null if invalid
- */
-function parsePreSearchData(jsonString: string): PreSearchDataPayload | null {
-  try {
-    const parsed: unknown = JSON.parse(jsonString);
-    const result = PreSearchDataPayloadSchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Helper function to read and parse SSE stream for pre-search
- * Extracts searchData from the stream events and returns it
- *
- * ✅ BUG FIX: Previously provider read stream bytes without parsing
- * This caused searchData to be undefined when status was set to COMPLETE
- * Now we parse SSE events and return the final searchData from DONE event
- * ✅ Uses Zod schema validation instead of type assertions
- * ✅ ACTIVITY TRACKING: Calls onActivity callback on each SSE event for timeout tracking
- */
-async function readPreSearchStreamAndExtractData(
-  response: Response,
-  onActivity?: () => void,
-): Promise<PreSearchDataPayload | null> {
-  const reader = response.body?.getReader();
-  if (!reader)
-    return null;
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let currentEvent = '';
-  let currentData = '';
-  let searchData: PreSearchDataPayload | null = null;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done)
-        break;
-
-      // ✅ ACTIVITY TRACKING: Call callback on each chunk received
-      onActivity?.();
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('event:')) {
-          currentEvent = line.slice(6).trim();
-        } else if (line.startsWith('data:')) {
-          currentData = line.slice(5).trim();
-        } else if (line === '' && currentEvent && currentData) {
-          // Process complete event - only care about DONE event for final data
-          if (currentEvent === PreSearchSseEvents.DONE) {
-            searchData = parsePreSearchData(currentData);
-          }
-          // Reset for next event
-          currentEvent = '';
-          currentData = '';
-        }
-      }
-    }
-
-    // Process any remaining buffered event
-    if (currentEvent === PreSearchSseEvents.DONE && currentData) {
-      searchData = parsePreSearchData(currentData);
-    }
-  } catch {
-    // Stream error, return what we have
-  }
-
-  return searchData;
-}
 
 export type ChatStoreProviderProps = {
   children: ReactNode;
@@ -267,330 +184,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
     }
 
-    // ============================================================================
-    // TASK 2: PENDING MESSAGE SEND (after changelog + pre-search)
-    // ============================================================================
-    // ✅ CRITICAL FIX: Now uses subscribed state from useStore hooks above
-    // This ensures effect re-runs when state changes (like pre-search status)
-
-    // Guard: Only send on overview/thread screens (not public)
-    if (screenMode === ScreenModes.PUBLIC) {
-      return;
-    }
-
-    // Check if we should send pending message
-    if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
-      return;
-    }
-
-    // Compare participant model IDs
-    const currentModelIds = participants
-      .filter(p => p.isEnabled)
-      .map(p => p.modelId)
-      .sort()
-      .join(',');
-    // ✅ FIX: Copy array before sorting to avoid mutating store state
-    // .sort() mutates in place, which was destroying priority order in expectedParticipantIds
-    const expectedModelIds = [...expectedParticipantIds].sort().join(',');
-
-    if (currentModelIds !== expectedModelIds) {
-      return;
-    }
-
-    // Check changelog wait state
-    // ✅ CRITICAL FIX: Skip changelog check on overview screen (new thread creation)
-    // Overview screen has no changelog query - the thread was just created
-    // The changelog wait flag is designed for thread screen where existing changelog needs to sync
-    // Without this fix, isWaitingForChangelog=true blocks forever on overview screen (DEADLOCK)
-    // See: useThreadActions in ChatThreadScreen clears this flag via isChangelogFetching query
-    // But that hook only runs on thread screen, not overview screen
-    if (isWaitingForChangelog && screenMode !== ScreenModes.OVERVIEW) {
-      return;
-    }
-
-    // ✅ BUG FIX: Use getCurrentRoundNumber instead of calculateNextRoundNumber
-    // After prepareForNewMessage adds an optimistic user message, the current round
-    // is determined by that message's roundNumber in metadata.
-    // calculateNextRoundNumber would return N+1 (wrong), getCurrentRoundNumber returns N (correct)
-    // For empty messages, getCurrentRoundNumber returns DEFAULT_ROUND_NUMBER (0), which is correct.
-    const newRoundNumber = getCurrentRoundNumber(messages);
-
-    // ============================================================================
-    // ✅ CRITICAL FIX: Create pre-search BEFORE participant streaming
-    // ============================================================================
-    // This fixes the web search ordering bug where participants speak before search executes
-    //
-    // OLD FLOW (Broken):
-    //   User message → sendMessage() → Participant streaming → Pre-search created during streaming
-    //
-    // NEW FLOW (Fixed):
-    //   User message → Create PENDING pre-search → Execute search → COMPLETE → sendMessage()
-    //
-    // STEPS:
-    // 1. Check if web search enabled
-    // 2. If pre-search doesn't exist, create it (this effect will re-run after creation)
-    // 3. Wait for pre-search to complete (PENDING → STREAMING → COMPLETE)
-    // 4. Only when COMPLETE, proceed with sendMessage()
-    //
-    // REFERENCE: WEB_SEARCH_ORDERING_FIX_STRATEGY.md
-    // ✅ FIX: Use form state as sole source of truth for web search enabled
-    // Form state is synced with thread on load, then user can toggle
-    const webSearchEnabled = enableWebSearch;
-    const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
-
-    // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
-    if (webSearchEnabled && !preSearchForRound) {
-      // ✅ RACE CONDITION FIX: Check ref FIRST as synchronous lock
-      // This prevents duplicate triggers from both handleComplete and pendingMessage effects
-      // The ref check must happen before store check to prevent concurrent effect races
-      if (preSearchCreationAttemptedRef.current.has(newRoundNumber)) {
-        return; // Already attempted by another effect - wait for it to complete or fail
-      }
-      // Add to ref IMMEDIATELY as synchronous lock before any async operations
-      preSearchCreationAttemptedRef.current.add(newRoundNumber);
-
-      const currentState = store.getState();
-      if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
-        return; // Already triggered - wait for it to complete
-      }
-
-      // Mark as triggered BEFORE async operation
-      currentState.markPreSearchTriggered(newRoundNumber);
-
-      // Create PENDING pre-search record AND immediately execute it
-      // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
-      // PreSearchStream only renders after user message exists, but message waits for pre-search
-      // This breaks the circular dependency: create → execute → complete → send message
-      const effectiveThreadId = thread?.id || '';
-      queueMicrotask(() => {
-        createPreSearch.mutateAsync({
-          param: {
-            threadId: effectiveThreadId,
-            roundNumber: newRoundNumber.toString(),
-          },
-          json: {
-            userQuery: pendingMessage,
-          },
-        }).then((createResponse) => {
-          // ✅ CRITICAL FIX: Add pre-search to store immediately after creation
-          // Without this, updatePreSearchStatus operates on empty array and UI never updates
-          if (createResponse && createResponse.data) {
-            const preSearchWithDates = transformPreSearch(createResponse.data);
-            // ✅ RACE CONDITION FIX: Set status to STREAMING to prevent PreSearchStream from also executing
-            // PreSearchStream only triggers for PENDING status, so STREAMING status prevents duplicate execution
-            // Without this, both provider and PreSearchStream race to execute, causing malformed JSON errors
-            store.getState().addPreSearch({
-              ...preSearchWithDates,
-              status: AnalysisStatuses.STREAMING,
-            });
-          }
-
-          // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
-          // This replaces the PreSearchStream component's POST request
-          return fetch(
-            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-              },
-              body: JSON.stringify({ userQuery: pendingMessage }),
-            },
-          );
-        }).then(async (response) => {
-          if (!response.ok && response.status !== 409) {
-            // 409 = already executing, which is fine
-            console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
-          }
-          // ✅ BUG FIX: Parse SSE events and extract searchData
-          // Previously we just read bytes without parsing, leaving searchData undefined
-          // Now we parse the DONE event to get the final searchData
-          // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
-          const searchData = await readPreSearchStreamAndExtractData(response, () => {
-            store.getState().updatePreSearchActivity(newRoundNumber);
-          });
-
-          // ✅ CRITICAL FIX: Update store with searchData AND status
-          // Use updatePreSearchData which sets both searchData and status to COMPLETE
-          if (searchData) {
-            store.getState().updatePreSearchData(newRoundNumber, searchData);
-          } else {
-            // Fallback: just update status if no searchData extracted
-            store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
-          }
-
-          // Clear activity tracking after completion
-          store.getState().clearPreSearchActivity(newRoundNumber);
-
-          // Also invalidate query for orchestrator sync when enabled
-          queryClientRef.current.invalidateQueries({
-            queryKey: queryKeys.threads.preSearches(effectiveThreadId),
-          });
-        }).catch((error) => {
-          console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
-          // Clear activity tracking on failure
-          store.getState().clearPreSearchActivity(newRoundNumber);
-          // Clear the trigger tracking on failure so retry is possible
-          store.getState().clearPreSearchTracking(newRoundNumber);
-          // If pre-search creation fails, continue with message anyway (degraded UX)
-          // This prevents total failure - participants will stream without search context
-        });
-      });
-
-      return; // Wait for pre-search to complete (direct store update will trigger effect re-run)
-    }
-
-    // ✅ STEP 2: Handle pre-search execution state
-    if (webSearchEnabled && preSearchForRound) {
-      // If pre-search is STREAMING, wait for it to complete
-      if (preSearchForRound.status === AnalysisStatuses.STREAMING) {
-        return; // Don't send message yet - wait for pre-search to complete
-      }
-
-      // ✅ CRITICAL FIX: If pre-search is stuck in PENDING, trigger execution
-      // This handles the case where pre-search was created but never executed
-      // (e.g., due to component unmount, page refresh, or the circular dependency bug)
-      if (preSearchForRound.status === AnalysisStatuses.PENDING) {
-        // ✅ RACE CONDITION FIX: Check ref FIRST as synchronous lock
-        if (preSearchCreationAttemptedRef.current.has(newRoundNumber)) {
-          return; // Already attempted by another effect - wait for it to complete
-        }
-        preSearchCreationAttemptedRef.current.add(newRoundNumber);
-
-        const currentState = store.getState();
-        if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
-          return; // Already triggered - wait for it to complete
-        }
-
-        // Mark as triggered BEFORE async operation
-        currentState.markPreSearchTriggered(newRoundNumber);
-
-        const effectiveThreadId = thread?.id || '';
-
-        // ✅ BUG FIX: Check if this is a client-side placeholder that needs DB record creation
-        // Placeholders are created by form-actions.ts for immediate UI feedback but don't exist in DB
-        // Without this check, executePreSearch returns NOT_FOUND error
-        const isPlaceholder = preSearchForRound.id.startsWith('placeholder-');
-
-        queueMicrotask(() => {
-          // ✅ FIX: If placeholder, create DB record first then execute
-          const executePreSearch = () => fetch(
-            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-              },
-              body: JSON.stringify({ userQuery: pendingMessage }),
-            },
-          );
-
-          const handleResponse = async (response: Response) => {
-            // ✅ BUG FIX: Don't update status to COMPLETE on error responses
-            // Previously, even 404 errors would fall through and set status to COMPLETE
-            if (!response.ok && response.status !== 409) {
-              console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
-              // Mark as FAILED, not COMPLETE, so UI shows error state
-              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.FAILED);
-              store.getState().clearPreSearchActivity(newRoundNumber);
-              return;
-            }
-
-            // ✅ BUG FIX: Parse SSE events and extract searchData
-            // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
-            const searchData = await readPreSearchStreamAndExtractData(response, () => {
-              store.getState().updatePreSearchActivity(newRoundNumber);
-            });
-
-            // ✅ CRITICAL FIX: Update store with searchData AND status
-            if (searchData) {
-              store.getState().updatePreSearchData(newRoundNumber, searchData);
-            } else {
-              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
-            }
-
-            // Clear activity tracking after completion
-            store.getState().clearPreSearchActivity(newRoundNumber);
-
-            // Also invalidate query for orchestrator sync when enabled
-            queryClientRef.current.invalidateQueries({
-              queryKey: queryKeys.threads.preSearches(effectiveThreadId),
-            });
-          };
-
-          if (isPlaceholder) {
-            // Placeholder needs DB record created first
-            createPreSearch.mutateAsync({
-              param: {
-                threadId: effectiveThreadId,
-                roundNumber: newRoundNumber.toString(),
-              },
-              json: {
-                userQuery: pendingMessage,
-              },
-            }).then((createResponse) => {
-              // Update store with real pre-search data (replace placeholder)
-              if (createResponse && createResponse.data) {
-                const preSearchWithDates = transformPreSearch(createResponse.data);
-                store.getState().addPreSearch({
-                  ...preSearchWithDates,
-                  status: AnalysisStatuses.STREAMING,
-                });
-              }
-              return executePreSearch();
-            }).then(handleResponse).catch((error) => {
-              console.error('[ChatStoreProvider] Failed to create/execute placeholder pre-search:', error);
-              store.getState().clearPreSearchActivity(newRoundNumber);
-              store.getState().clearPreSearchTracking(newRoundNumber);
-            });
-          } else {
-            // DB record already exists, just execute
-            executePreSearch().then(handleResponse).catch((error) => {
-              console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
-              store.getState().clearPreSearchActivity(newRoundNumber);
-              store.getState().clearPreSearchTracking(newRoundNumber);
-            });
-          }
-        });
-        return; // Wait for pre-search to complete
-      }
-
-      // Pre-search is COMPLETE or FAILED - continue with sending message
-    }
-
-    // ============================================================================
-    // ✅ STEP 3: All conditions met - send message (participants will start)
-    // ============================================================================
-    // Get setter functions from store (these don't change, so safe to call here)
-    const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges, sendMessage } = store.getState();
-
-    setHasSentPendingMessage(true);
-    setStreamingRoundNumber(newRoundNumber);
-    setHasPendingConfigChanges(false);
-
-    // Send message in next tick (prevents blocking)
-    queueMicrotask(() => {
-      sendMessage?.(pendingMessage);
-    });
-  }, [
-    // ✅ CRITICAL FIX: Include all subscribed state in dependencies
-    // This ensures effect re-runs when any of these values change
-    pendingMessage,
-    expectedParticipantIds,
-    hasSentPendingMessage,
-    isStreaming,
-    participants,
-    messages,
-    isWaitingForChangelog,
-    screenMode,
-    thread,
-    enableWebSearch,
-    preSearches, // ← KEY FIX: Effect re-runs when pre-searches change!
-    createPreSearch,
-    store,
-  ]);
+    // NOTE: TASK 2 (pending message send with pre-search handling) was REMOVED.
+    // It was duplicated in the pendingMessage effect below, causing race conditions.
+    // The pendingMessage effect now handles ALL pre-search + message sending logic.
+  }, [store, participants]);
 
   // Initialize AI SDK hook with store state
   // ✅ CRITICAL FIX: Pass onComplete callback for immediate analysis triggering
@@ -618,6 +215,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ✅ RACE CONDITION FIX: Prevents resumed stream detection from setting isStreaming=true
     // during form submission, which would create a deadlock state
     hasEarlyOptimisticMessage,
+    // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded yet
+    // Provider effect watches nextParticipantToTrigger and calls continueFromParticipant
+    onResumedStreamComplete: (roundNumber, participantIndex) => {
+      store.getState().handleResumedStreamComplete(roundNumber, participantIndex);
+    },
   });
 
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
@@ -634,14 +236,28 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setMessagesRef.current = chat.setMessages;
   }, [chat.sendMessage, chat.startRound, chat.continueFromParticipant, chat.setMessages]);
 
+  // ✅ CRITICAL FIX: Clear pre-search creation tracking when thread changes
+  // BUG FIX: When clicking a recommendation from analysis card on overview screen,
+  // the preSearchCreationAttemptedRef retains round 0 entry from previous thread.
+  // This causes the new thread's round 0 pre-search to be skipped (ref says "already attempted").
+  // SOLUTION: Clear the ref when createdThreadId changes to ensure fresh tracking per thread.
+  const prevCreatedThreadIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (createdThreadId !== prevCreatedThreadIdRef.current) {
+      prevCreatedThreadIdRef.current = createdThreadId;
+      // Clear pre-search tracking when thread changes
+      preSearchCreationAttemptedRef.current = new Set();
+    }
+  }, [createdThreadId]);
+
   // ✅ REMOVED: Old effect that stored unwrapped chat methods
   // This effect was overwriting the wrapped versions with quota/pre-search invalidation
   // The wrapped versions are now stored in the effect below (lines 500-511)
   // which runs once on mount with stable callbacks that include query invalidation logic
 
-  // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger
-  // Watches waitingToStartStreaming and calls FRESH startRound
-  // Avoids stale closure issues from store subscription
+  // ✅ ROUND 0 ONLY: Provider-side streaming trigger for initial thread creation
+  // This effect ONLY handles round 0 when handleCreateThread sets waitingToStartStreaming=true
+  // All subsequent rounds (1+) use the pendingMessage effect via handleUpdateThreadAndSend
   // ✅ PRE-SEARCH BLOCKING: Waits for pre-search completion AND animation before triggering participants
   const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
   const storeParticipants = useStore(store, s => s.participants);
@@ -656,23 +272,27 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
-    // ✅ SINGLE SOURCE OF TRUTH: Only trigger startRound for ChatOverviewScreen
-    // ChatThreadScreen uses sendMessage flow (pendingMessage effect) instead
+    // ✅ ROUND 0 ONLY: This effect only triggers for initial thread creation (round 0)
+    // All subsequent rounds use the pendingMessage effect (unified flow for both screens)
     // This prevents duplicate message creation and ensures correct roundNumber
-    const currentScreenMode = storeScreenMode; // ✅ FIX: Use subscribed value
+    const currentScreenMode = storeScreenMode;
 
     // ✅ CRITICAL FIX: Don't clear flag if screenMode is null (during initialization)
-    // Only clear if we're explicitly on a different screen (like 'thread')
+    // Also don't clear on thread screen - continueFromParticipant effect handles resumption there
     // This prevents race condition where:
     // 1. Thread created, waitingToStartStreaming set to true
     // 2. Provider effect runs BEFORE screen initialization sets screenMode
     // 3. screenMode is null, condition fails, flag gets cleared
     // 4. Screen initialization sets screenMode to 'overview'
     // 5. But flag is already cleared → participants never start
+    //
+    // ✅ STREAM RESUMPTION FIX: Don't clear flag on thread screen
+    // On thread screen, useIncompleteRoundResumption sets waitingToStartStreaming=true
+    // The continueFromParticipant effect (below) handles thread screen resumption
+    // If we clear the flag here, the continueFromParticipant effect never triggers
     if (currentScreenMode !== null && currentScreenMode !== 'overview') {
-      // Not on overview screen - don't trigger startRound
-      // Clear the flag to prevent infinite waiting
-      store.getState().setWaitingToStartStreaming(false);
+      // Not on overview screen - this effect only handles overview screen
+      // Just return, DON'T clear the flag - continueFromParticipant effect needs it
       return;
     }
 
@@ -701,9 +321,116 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return; // Don't trigger participants yet - waiting for pre-search to be synced
       }
 
-      // If pre-search exists and is still pending or streaming, wait
-      if (currentRoundPreSearch.status === AnalysisStatuses.PENDING || currentRoundPreSearch.status === AnalysisStatuses.STREAMING) {
+      // If pre-search is STREAMING, wait for it to complete
+      if (currentRoundPreSearch.status === AnalysisStatuses.STREAMING) {
         return; // Don't trigger participants yet - pre-search still running
+      }
+
+      // ✅ CRITICAL FIX: If pre-search is PENDING, execute it
+      // On overview screen, the pendingMessage effect returns early (waitingToStart guard)
+      // So we need to trigger pre-search execution here instead
+      if (currentRoundPreSearch.status === AnalysisStatuses.PENDING) {
+        // Check if already triggered to prevent duplicate execution
+        const currentState = store.getState();
+        if (currentState.hasPreSearchBeenTriggered(currentRound)) {
+          return; // Already triggered - wait for it to complete
+        }
+
+        // Mark as triggered BEFORE async operation
+        currentState.markPreSearchTriggered(currentRound);
+
+        // Get user query from pending message or first user message in round
+        const pendingMsg = currentState.pendingMessage;
+        const userMessageForRound = storeMessages.find((msg) => {
+          if (msg.role !== MessageRoles.USER)
+            return false;
+          const msgRound = getRoundNumber(msg.metadata);
+          return msgRound === currentRound;
+        });
+        const userQuery = pendingMsg || (userMessageForRound?.parts?.[0] as { text?: string })?.text || '';
+
+        if (!userQuery) {
+          return; // No query to search with
+        }
+
+        const threadIdForSearch = storeThread?.id || effectiveThreadId;
+        const isPlaceholder = currentRoundPreSearch.id.startsWith('placeholder-');
+
+        // Execute pre-search
+        queueMicrotask(() => {
+          const executeSearch = async () => {
+            try {
+              // If placeholder, create DB record first
+              if (isPlaceholder) {
+                const createResponse = await createPreSearch.mutateAsync({
+                  param: {
+                    threadId: threadIdForSearch,
+                    roundNumber: currentRound.toString(),
+                  },
+                  json: { userQuery },
+                });
+
+                if (createResponse?.data) {
+                  const preSearchWithDates = transformPreSearch(createResponse.data);
+                  store.getState().addPreSearch({
+                    ...preSearchWithDates,
+                    status: AnalysisStatuses.STREAMING,
+                  });
+                }
+              } else {
+                // Update status to STREAMING
+                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.STREAMING);
+              }
+
+              // Execute pre-search API
+              const response = await fetch(
+                `/api/v1/chat/threads/${threadIdForSearch}/rounds/${currentRound}/pre-search`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream',
+                  },
+                  body: JSON.stringify({ userQuery }),
+                },
+              );
+
+              if (!response.ok && response.status !== 409) {
+                console.error('[startRound] Pre-search execution failed:', response.status);
+                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.FAILED);
+                store.getState().clearPreSearchActivity(currentRound);
+                return;
+              }
+
+              // Parse SSE stream
+              const searchData = await readPreSearchStreamData(response, () => {
+                store.getState().updatePreSearchActivity(currentRound);
+              });
+
+              // Update store with results
+              if (searchData) {
+                store.getState().updatePreSearchData(currentRound, searchData);
+              } else {
+                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.COMPLETE);
+              }
+
+              store.getState().clearPreSearchActivity(currentRound);
+
+              // Invalidate queries for sync
+              queryClientRef.current.invalidateQueries({
+                queryKey: queryKeys.threads.preSearches(threadIdForSearch),
+              });
+            } catch (error) {
+              console.error('[startRound] Pre-search failed:', error);
+              store.getState().clearPreSearchActivity(currentRound);
+              store.getState().clearPreSearchTracking(currentRound);
+            }
+          };
+
+          executeSearch();
+        });
+
+        return; // Wait for pre-search to complete (effect will re-run when status changes)
       }
 
       // ✅ FIX: Check animation status - multiple defensive layers
@@ -1021,18 +748,25 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         // During streaming, AI SDK generates temporary IDs before backend sends proper IDs
         // These temporary IDs don't match the thread ID format but are NOT stale messages
         // Only validate IDs that look like our format: {threadId}_r{round}_p{participant}
-        const hasUnderscoreFormat = firstAssistantMsg.id.includes('_');
-        if (hasUnderscoreFormat) {
-          // Message IDs typically start with thread ID: {threadId}_r{round}_p{participant}
-          const msgThreadId = firstAssistantMsg.id.split('_')[0];
-          if (msgThreadId && msgThreadId !== currentThreadId && !firstAssistantMsg.id.startsWith('optimistic-')) {
+        //
+        // ✅ CRITICAL FIX: Use startsWith instead of split('_')[0]
+        // Thread IDs may contain underscores (e.g., "abc_123"). The old code used split('_')[0]
+        // which only got "abc", causing false mismatch and clearing all messages on round 2 submit.
+        // Now we check if message ID starts with "{threadId}_r" which is the proper prefix format.
+        const threadIdPrefix = `${currentThreadId}_r`;
+        const hasOurFormat = firstAssistantMsg.id.includes('_r') && firstAssistantMsg.id.includes('_p');
+
+        if (hasOurFormat) {
+          // Message has our format: {threadId}_r{round}_p{participant}
+          // Check if it starts with the current thread ID prefix
+          if (!firstAssistantMsg.id.startsWith(threadIdPrefix) && !firstAssistantMsg.id.startsWith('optimistic-')) {
             // Thread ID mismatch - AI SDK has stale messages from previous thread
             // Clear AI SDK messages to prevent them from syncing
             chat.setMessages?.([]);
             return; // Skip sync - stale messages
           }
         }
-        // If ID doesn't have underscore format (like "gen-..."), it's a streaming message - allow sync
+        // If ID doesn't have our format (like "gen-..."), it's a streaming message - allow sync
       }
     }
 
@@ -1324,22 +1058,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
-    // ✅ CRITICAL FIX: Skip pendingMessage effect when waitingToStartStreaming is true on overview
-    // BUG: handleCreateThread sets BOTH waitingToStartStreaming AND pendingMessage
-    // This causes TWO effects to fire:
-    // 1. waitingToStartStreaming effect → calls startRound() for existing round 0 (CORRECT)
-    // 2. pendingMessage effect → calls sendMessage() which creates NEW round 1 (WRONG!)
-    //
-    // For overview screen (new thread creation):
-    // - User message already exists at round 0 (created by backend during thread creation)
-    // - startRound should trigger participants for this existing round
-    // - sendMessage should NOT be called (it creates a new user message for next round)
-    //
-    // For thread screen (subsequent messages):
-    // - waitingToStartStreaming is NOT set
-    // - pendingMessage effect handles sending new messages correctly
+    // ✅ ROUND 0 GUARD: Skip when waitingToStartStreaming is true on overview (round 0 only)
+    // handleCreateThread sets waitingToStartStreaming for round 0 - streaming trigger effect handles it
+    // This effect handles ALL subsequent rounds (1+) via handleUpdateThreadAndSend on BOTH screens
     if (waitingToStart && screenMode === ScreenModes.OVERVIEW) {
-      return; // startRound effect will handle triggering participants
+      return; // streaming trigger effect handles round 0
     }
 
     // ✅ CRITICAL FIX: Guard against sendMessage being undefined
@@ -1363,13 +1086,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Check changelog wait state
-    // ✅ CRITICAL FIX: Skip changelog check on overview screen (new thread creation)
-    // Overview screen has no changelog query - the thread was just created
-    // The changelog wait flag is designed for thread screen where existing changelog needs to sync
-    // Without this fix, isWaitingForChangelog=true blocks forever on overview screen (DEADLOCK)
-    // See: useThreadActions in ChatThreadScreen clears this flag via isChangelogFetching query
-    // But that hook only runs on thread screen, not overview screen
-    if (isWaitingForChangelog && screenMode !== ScreenModes.OVERVIEW) {
+    // ✅ UNIFIED FLOW: useThreadActions runs in ChatView (both screens) and clears this flag
+    // when changelog query completes. Skip this effect while waiting for changelog to sync.
+    // For round 0 on overview (initial thread creation), skip this check since there's no
+    // prior changelog to wait for.
+    const isInitialThreadCreation = screenMode === ScreenModes.OVERVIEW && waitingToStart;
+    if (isWaitingForChangelog && !isInitialThreadCreation) {
       return;
     }
 
@@ -1388,7 +1110,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {
       // ✅ RACE CONDITION FIX: Check ref FIRST as synchronous lock
-      // This prevents duplicate triggers from both handleComplete and pendingMessage effects
+      // This prevents duplicate triggers within the same effect re-render cycle
       const alreadyAttempted = preSearchCreationAttemptedRef.current.has(newRoundNumber);
       if (!alreadyAttempted) {
         // Add to ref IMMEDIATELY as synchronous lock before any other checks
@@ -1397,7 +1119,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
       const currentState = store.getState();
       if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
-        return; // Already triggered by another effect - wait for it to complete
+        return; // Already triggered - wait for it to complete
       }
 
       // ✅ FIX: If we've already attempted and it failed (not triggered in store), fall through
@@ -1456,7 +1178,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             }
             // ✅ BUG FIX: Parse SSE events and extract searchData
             // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
-            const searchData = await readPreSearchStreamAndExtractData(response, () => {
+            const searchData = await readPreSearchStreamData(response, () => {
               store.getState().updatePreSearchActivity(newRoundNumber);
             });
 
@@ -1499,7 +1221,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       if (preSearchForRound.status === AnalysisStatuses.PENDING) {
         // ✅ RACE CONDITION FIX: Check ref FIRST as synchronous lock
         if (preSearchCreationAttemptedRef.current.has(newRoundNumber)) {
-          return; // Already attempted by another effect - wait for it to complete
+          return; // Already attempted - wait for it to complete
         }
         preSearchCreationAttemptedRef.current.add(newRoundNumber);
 
@@ -1545,7 +1267,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
             // ✅ BUG FIX: Parse SSE events and extract searchData
             // ✅ ACTIVITY TRACKING: Update activity on each SSE chunk for dynamic timeout
-            const searchData = await readPreSearchStreamAndExtractData(response, () => {
+            const searchData = await readPreSearchStreamData(response, () => {
               store.getState().updatePreSearchActivity(newRoundNumber);
             });
 
@@ -1700,10 +1422,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ✅ NEW: Detect navigation from non-chat pages to /chat (e.g., /dashboard → /chat)
     const isComingFromNonChatPage = prevPath && !prevPath.startsWith('/chat') && isGoingToOverview;
 
-    // ✅ FIX 1: Stop any ongoing streaming immediately
-    if (currentState.isStreaming) {
-      currentState.stop?.();
-    }
+    // ✅ RESUMABLE STREAMS: Do NOT stop ongoing streams on navigation
+    // Streams continue in background via waitUntil() regardless of navigation
+    // The AI SDK v6 resumable streams pattern is incompatible with abort
+    // NOTE: currentState.stop?.() was removed - streams should always complete
 
     // ✅ FIX 2: Clear waitingToStartStreaming to prevent deferred streaming from triggering
     if (currentState.waitingToStartStreaming) {

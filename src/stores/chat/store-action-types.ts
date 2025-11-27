@@ -159,6 +159,12 @@ export type StartRound = () => Promise<void>;
 /**
  * Stop current streaming operation
  * Bound from AI SDK v5 chat hook - cancels in-flight requests
+ *
+ * ⚠️ DEPRECATED with AI SDK v6 RESUMABLE STREAMS:
+ * This function is NOT called anywhere in the codebase.
+ * With resumable streams, streams should NEVER be aborted.
+ * The property exists for potential AI SDK binding but is intentionally unused.
+ * Streams continue in background via waitUntil() regardless of frontend state.
  */
 export type Stop = () => void;
 
@@ -453,13 +459,19 @@ export type CompleteRegeneration = (roundNumber: number) => void;
 export type ResetToNewChat = () => void;
 
 /**
- * ✅ STREAMING CONTROL: Stop ongoing streaming
+ * ✅ RESUMABLE STREAMS: Streaming state reset (NO abort)
  *
- * Calls the abort controller and sets streaming to false.
+ * Resets local streaming state WITHOUT calling abort controller.
+ * With AI SDK v6 resumable streams, streams continue in background via waitUntil().
+ * This action only updates local UI state - the backend stream continues.
+ *
  * Used when:
- * - User clicks stop button
- * - Component unmounts during streaming
- * - Navigation away from thread
+ * - Navigation away from thread (stream continues in background)
+ * - Component unmounts during streaming (stream continues)
+ * - Local state needs reset (stream can be resumed via GET endpoint)
+ *
+ * NOTE: User "stop" button is intentionally NOT supported with resumable streams.
+ * Streams should always complete in background for data integrity.
  */
 export type StopStreaming = () => void;
 

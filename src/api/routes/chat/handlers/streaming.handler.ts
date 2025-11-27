@@ -499,10 +499,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ REASONING: Add providerOptions for o1/o3/o4/DeepSeek R1 models
       ...(providerOptions && { providerOptions }),
       maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
-      abortSignal: AbortSignal.any([
-        c.req.raw.signal,
-        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
-      ]),
+      // ✅ BACKGROUND STREAMING: Only use timeout signal, NOT HTTP abort signal
+      // This allows AI generation to continue even if client disconnects
+      // Chunks are buffered to KV via consumeSseStream for resumption
+      // Reference: plan.md Phase 1.1 - Stream Resumption Architecture
+      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
       // ✅ AI SDK V5 TELEMETRY: Enable experimental telemetry for OpenTelemetry integration
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/telemetry
       // This enables automatic trace generation that can be exported to any OpenTelemetry-compatible backend
@@ -764,10 +765,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // This includes errors thrown from onFinish (like empty response errors)
       // AI SDK v5 will automatically handle these errors and propagate them to the client
       onError: async ({ error }) => {
-        // ✅ RESUMABLE STREAMS: Detect abort errors (page refresh/close)
-        // AI SDK Docs: "Stream resumption is not compatible with abort functionality.
-        // Closing a tab or refreshing the page triggers an abort signal."
-        // On abort, we MUST preserve stream state for resumption - don't clear KV!
+        // ✅ BACKGROUND STREAMING: Detect timeout aborts
+        // Since we removed HTTP abort signal (Phase 1.1), abort errors now only come from:
+        // - AbortSignal.timeout() - stream exceeded time limit
+        // On timeout, we preserve stream state for potential resumption
         const isAbortError = error instanceof Error && (
           error.name === 'AbortError'
           || error.message.includes('abort')
@@ -776,9 +777,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         );
 
         if (isAbortError) {
-          // ✅ CRITICAL: Do NOT clear stream state on abort!
-          // The stream buffer in KV should remain intact for resumption
-          // Frontend will call GET /api/v1/chat/threads/{id}/stream to resume
+          // ✅ TIMEOUT: Preserve stream state - partial content may be valid
+          // Frontend can poll KV to retrieve buffered chunks
           return;
         }
 
@@ -1098,8 +1098,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               await appendStreamChunk(streamMessageId, value, c.env);
             }
           } catch (error) {
-            // ✅ RESUMABLE STREAMS: Detect abort errors (page refresh/close)
-            // On abort, we preserve the buffer state for resumption
+            // ✅ BACKGROUND STREAMING: Detect timeout aborts
+            // Since we removed HTTP abort signal (Phase 1.1), abort errors now only come from timeouts
+            // On timeout, we preserve the buffer state - partial content may be valid
             const isAbortError = error instanceof Error && (
               error.name === 'AbortError'
               || error.message.includes('abort')
@@ -1108,9 +1109,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             );
 
             if (isAbortError) {
-              // ✅ CRITICAL: Do NOT fail buffer on abort!
+              // ✅ TIMEOUT: Do NOT fail buffer on timeout!
               // The partially buffered chunks are still valid for resumption
-              // Frontend will receive whatever was buffered before the abort
+              // Frontend can poll KV to retrieve whatever was buffered
               return;
             }
 
@@ -1133,9 +1134,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         const streamErrorMessage = getErrorMessage(error);
         const errorName = getErrorName(error);
 
-        // ✅ RESUMABLE STREAMS: Detect abort errors (page refresh/close)
-        // AI SDK Docs: "Stream resumption is not compatible with abort functionality."
-        // On abort, we preserve stream state for resumption - don't mark as failed!
+        // ✅ BACKGROUND STREAMING: Detect timeout aborts
+        // Since we removed HTTP abort signal (Phase 1.1), abort errors now only come from:
+        // - AbortSignal.timeout() - stream exceeded time limit
+        // On timeout, we preserve stream state - partial content may be valid
         const isAbortError = error instanceof Error && (
           error.name === 'AbortError'
           || streamErrorMessage.includes('abort')
@@ -1145,9 +1147,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         );
 
         if (isAbortError) {
-          // ✅ CRITICAL: Return empty string to suppress error on abort
+          // ✅ TIMEOUT: Return empty string to suppress error
           // Stream buffer remains intact in KV for resumption
-          // Frontend will call GET /api/v1/chat/threads/{id}/stream to resume
+          // Frontend can poll GET /api/v1/chat/threads/{id}/stream to retrieve chunks
           return '';
         }
 

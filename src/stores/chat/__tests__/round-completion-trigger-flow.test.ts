@@ -474,7 +474,7 @@ describe('screen-Specific Flows', () => {
         waitingToStartStreaming: true,
       });
 
-      // Overview uses startRound triggered by waitingToStartStreaming
+      // Round 0 on overview uses startRound triggered by waitingToStartStreaming
       expect(getState().waitingToStartStreaming).toBe(true);
       expect(getState().screenMode).toBe(ScreenModes.OVERVIEW);
     });

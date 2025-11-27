@@ -60,23 +60,21 @@ export function ConsensusAnalysisSection({
 
   const { alignmentSummary, agreementHeatmap, argumentStrengthProfile } = analysis;
 
-  // Build radar data
-  const metrics = ['Logic', 'Risk', 'Creativity', 'Consensus', 'Evidence'];
-  const fullRadarData = argumentStrengthProfile
-    ? metrics.map((metric) => {
-        const dataPoint: RadarDataPoint = { metric };
+  // Metric keys mapping to schema fields and translation keys
+  const metricConfig = [
+    { key: 'logic', field: 'logic' as const },
+    { key: 'evidence', field: 'evidence' as const },
+    { key: 'riskAwareness', field: 'riskAwareness' as const },
+    { key: 'consensus', field: 'consensus' as const },
+    { key: 'creativity', field: 'creativity' as const },
+  ];
+
+  // Build radar data dynamically from argumentStrengthProfile
+  const fullRadarData = argumentStrengthProfile && Object.keys(argumentStrengthProfile).length > 0
+    ? metricConfig.map(({ key, field }) => {
+        const dataPoint: RadarDataPoint = { metric: t(`consensusAnalysis.profile${key.charAt(0).toUpperCase() + key.slice(1)}`) };
         Object.entries(argumentStrengthProfile).forEach(([role, profile]) => {
-          const metricKey = metric.toLowerCase();
-          if (metricKey === 'logic')
-            dataPoint[role] = profile.logic;
-          else if (metricKey === 'risk')
-            dataPoint[role] = profile.riskAwareness;
-          else if (metricKey === 'creativity')
-            dataPoint[role] = profile.creativity;
-          else if (metricKey === 'consensus')
-            dataPoint[role] = profile.consensus;
-          else if (metricKey === 'evidence')
-            dataPoint[role] = profile.evidence;
+          dataPoint[role] = profile[field];
         });
         return dataPoint;
       })
@@ -105,29 +103,33 @@ export function ConsensusAnalysisSection({
     ? Object.keys(agreementHeatmap[0]?.perspectives || {})
     : [];
 
+  // Only render if we have alignment data
+  const hasAlignmentData = alignmentSummary && alignmentSummary.totalClaims > 0;
+  const hasAgreementData = agreementHeatmap && agreementHeatmap.length > 0;
+  const hasStrengthData = argumentStrengthProfile && Object.keys(argumentStrengthProfile).length > 0;
+
+  // Don't render if no data
+  if (!hasAlignmentData && !hasAgreementData && !hasStrengthData) {
+    return null;
+  }
+
   return (
     <div className="space-y-4">
-      {/* Alignment Summary */}
-      <div className="text-sm">
-        <span className="text-muted-foreground">Alignment: </span>
-        <span className="font-medium">
-          {alignmentSummary.majorAlignment}
-          {' '}
-          of
-          {' '}
-          {alignmentSummary.totalClaims}
-          {' '}
-          claims
-        </span>
-        {alignmentSummary.contestedClaims > 0 && (
-          <span className="text-amber-500 ml-2">
-            <AlertTriangle className="inline size-3.5 -mt-0.5 mr-1" />
-            {alignmentSummary.contestedClaims}
-            {' '}
-            contested
+      {/* Alignment Summary - only if data exists */}
+      {hasAlignmentData && (
+        <div className="text-sm">
+          <span className="text-muted-foreground">{t('consensusAnalysis.alignmentSummary')}: </span>
+          <span className="font-medium">
+            {alignmentSummary.majorAlignment} / {alignmentSummary.totalClaims} {t('consensusAnalysis.totalClaims').toLowerCase()}
           </span>
-        )}
-      </div>
+          {alignmentSummary.contestedClaims > 0 && (
+            <span className="text-amber-500 ml-2">
+              <AlertTriangle className="inline size-3.5 -mt-0.5 mr-1" />
+              {alignmentSummary.contestedClaims} {t('consensusAnalysis.contested').toLowerCase()}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Contested Claims */}
       {alignmentSummary.contestedClaimsList && alignmentSummary.contestedClaimsList.length > 0 && (
@@ -151,15 +153,15 @@ export function ConsensusAnalysisSection({
         </div>
       )}
 
-      {/* Agreement Matrix - Simplified */}
-      {agreementHeatmap && agreementHeatmap.length > 0 && contributors.length > 0 && (
+      {/* Agreement Matrix - only if data exists */}
+      {hasAgreementData && contributors.length > 0 && (
         <div className="space-y-2">
           <span className="text-sm font-medium">{t('consensusAnalysis.agreementHeatmap')}</span>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Claim</th>
+                  <th className="text-left py-2 pr-4 text-muted-foreground font-medium">{t('consensusAnalysis.claim')}</th>
                   {contributors.map(contributor => (
                     <th key={contributor} className="text-center py-2 px-2 text-muted-foreground font-medium">
                       {contributor}
@@ -199,14 +201,23 @@ export function ConsensusAnalysisSection({
         </div>
       )}
 
-      {/* Argument Strength Radar */}
-      {argumentStrengthProfile && Object.keys(argumentStrengthProfile).length > 0 && (
+      {/* Argument Strength Radar - only if data exists */}
+      {hasStrengthData && fullRadarData.length > 0 && (
         <div className="space-y-2">
           <span className="text-sm font-medium">{t('consensusAnalysis.argumentStrength')}</span>
-          <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[280px]">
+          {/* Mobile-optimized chart container with responsive sizing */}
+          <ChartContainer
+            config={chartConfig}
+            className="mx-auto aspect-square w-full max-w-[240px] sm:max-w-[280px] max-h-[240px] sm:max-h-[280px]"
+          >
             <RadarChart data={fullRadarData}>
               <PolarGrid className="stroke-border/30" />
-              <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11 }} />
+              {/* Responsive font size for axis labels */}
+              <PolarAngleAxis
+                dataKey="metric"
+                tick={{ fontSize: 10, className: 'sm:text-[11px]' }}
+                tickLine={false}
+              />
               <ChartTooltip content={<ChartTooltipContent />} />
               {Object.keys(argumentStrengthProfile).map((role, index) => (
                 <Radar
@@ -218,7 +229,7 @@ export function ConsensusAnalysisSection({
                   strokeWidth={1.5}
                 />
               ))}
-              <ChartLegend content={<ChartLegendContent />} />
+              <ChartLegend content={<ChartLegendContent className="text-[10px] sm:text-xs" />} />
             </RadarChart>
           </ChartContainer>
         </div>

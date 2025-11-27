@@ -10,6 +10,13 @@
  * - Other participants may not have had a chance to respond
  * - This hook detects incomplete rounds and triggers remaining participants
  *
+ * ORPHANED PRE-SEARCH USE CASE (NEW):
+ * When a user refreshes during pre-search/changelog phase:
+ * - Pre-search for round N is complete
+ * - But NO user message for round N exists (lost on refresh)
+ * - This hook detects this state and recovers the userQuery from pre-search
+ * - Sets pendingMessage to resume the round normally
+ *
  * FLOW:
  * 1. On page load, check if current round has all expected participants
  * 2. If incomplete, determine which participant is next
@@ -29,7 +36,7 @@
 
 import { useEffect, useRef } from 'react';
 
-import { MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
@@ -84,12 +91,17 @@ export function useIncompleteRoundResumption(
   // Store subscriptions
   const messages = useChatStore(s => s.messages);
   const participants = useChatStore(s => s.participants);
+  const preSearches = useChatStore(s => s.preSearches);
   const isStreaming = useChatStore(s => s.isStreaming);
   const setNextParticipantToTrigger = useChatStore(s => s.setNextParticipantToTrigger);
   const setStreamingRoundNumber = useChatStore(s => s.setStreamingRoundNumber);
   const setCurrentParticipantIndex = useChatStore(s => s.setCurrentParticipantIndex);
   const waitingToStartStreaming = useChatStore(s => s.waitingToStartStreaming);
   const setWaitingToStartStreaming = useChatStore(s => s.setWaitingToStartStreaming);
+
+  // ✅ ORPHANED PRE-SEARCH FIX: Actions needed to recover from orphaned pre-search state
+  const prepareForNewMessage = useChatStore(s => s.prepareForNewMessage);
+  const setExpectedParticipantIds = useChatStore(s => s.setExpectedParticipantIds);
 
   // ✅ INFINITE LOOP FIX: Subscribe to submission state to avoid interfering with normal submissions
   // When user submits a message, pendingMessage is set. The resumption hook should NOT try to
@@ -100,10 +112,34 @@ export function useIncompleteRoundResumption(
 
   // Track if we've already attempted resumption for this thread
   const resumptionAttemptedRef = useRef<string | null>(null);
+  // Track if we've already attempted orphaned pre-search recovery for this thread
+  const orphanedPreSearchRecoveryAttemptedRef = useRef<string | null>(null);
 
   // Calculate incomplete round state
   const enabledParticipants = participants.filter(p => p.isEnabled);
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
+
+  // ✅ ORPHANED PRE-SEARCH DETECTION
+  // Check if there's a completed pre-search for a round that has no user message
+  // This happens when user refreshes during pre-search/changelog phase
+  const orphanedPreSearch = preSearches.find((ps) => {
+    // Only check complete pre-searches
+    if (ps.status !== AnalysisStatuses.COMPLETE) {
+      return false;
+    }
+
+    // Check if there's a user message for this round
+    const hasUserMessageForRound = messages.some((msg) => {
+      if (msg.role !== MessageRoles.USER) {
+        return false;
+      }
+      const msgRound = getRoundNumber(msg.metadata);
+      return msgRound === ps.roundNumber;
+    });
+
+    // If no user message exists for this pre-search's round, it's orphaned
+    return !hasUserMessageForRound;
+  });
 
   // Find which participants have responded in the current round
   // Also track their model IDs to detect participant config changes
@@ -174,6 +210,76 @@ export function useIncompleteRoundResumption(
       }
     }
   }
+
+  // ✅ ORPHANED PRE-SEARCH RECOVERY EFFECT
+  // When a user refreshes during pre-search/changelog phase, the pre-search completes
+  // but the user message is never sent. This effect recovers the userQuery from the
+  // pre-search and sets up the store state to resume sending the message normally.
+  useEffect(() => {
+    // Skip if not enabled or already streaming
+    if (!enabled || isStreaming || waitingToStartStreaming) {
+      return;
+    }
+
+    // Skip if a submission is already in progress
+    if (hasEarlyOptimisticMessage || (pendingMessage !== null && !hasSentPendingMessage)) {
+      return;
+    }
+
+    // Skip if no orphaned pre-search detected
+    if (!orphanedPreSearch || !orphanedPreSearch.userQuery) {
+      return;
+    }
+
+    // Skip if no enabled participants
+    if (enabledParticipants.length === 0) {
+      return;
+    }
+
+    // Skip if already attempted for this thread
+    if (orphanedPreSearchRecoveryAttemptedRef.current === threadId) {
+      return;
+    }
+
+    // Mark as attempted to prevent duplicate triggers
+    orphanedPreSearchRecoveryAttemptedRef.current = threadId;
+
+    // Recover the userQuery from the orphaned pre-search
+    // This sets up the store state to resume the round normally via pendingMessage effect
+    const recoveredQuery = orphanedPreSearch.userQuery;
+
+    // Get enabled participant IDs for the expected participants
+    const expectedIds = enabledParticipants.map(p => p.id);
+
+    // Set expected participant IDs (required by pendingMessage effect)
+    setExpectedParticipantIds(expectedIds);
+
+    // Prepare for new message - this sets pendingMessage and adds optimistic user message
+    // The prepareForNewMessage action will:
+    // 1. Add optimistic user message for the next round (which should match orphanedPreSearch.roundNumber)
+    // 2. Set pendingMessage to the recovered query
+    // 3. Set hasSentPendingMessage to false
+    // 4. Clear hasEarlyOptimisticMessage
+    // This triggers the pendingMessage effect in ChatStoreProvider to send the message
+    prepareForNewMessage(recoveredQuery, expectedIds);
+  }, [
+    enabled,
+    isStreaming,
+    waitingToStartStreaming,
+    hasEarlyOptimisticMessage,
+    pendingMessage,
+    hasSentPendingMessage,
+    orphanedPreSearch,
+    enabledParticipants,
+    threadId,
+    prepareForNewMessage,
+    setExpectedParticipantIds,
+  ]);
+
+  // Reset the orphaned pre-search recovery ref when threadId changes
+  useEffect(() => {
+    orphanedPreSearchRecoveryAttemptedRef.current = null;
+  }, [threadId]);
 
   // Effect to trigger resumption
   useEffect(() => {

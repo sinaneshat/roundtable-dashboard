@@ -388,20 +388,27 @@ export type StreamingEventType = (typeof STREAMING_EVENT_TYPES)[number];
 // STREAM BUFFER STATUS (Resumable Streams)
 // ============================================================================
 
-export const STREAM_STATUSES = ['active', 'completed', 'failed', 'expired'] as const;
+export const STREAM_STATUSES = ['pending', 'initializing', 'streaming', 'completing', 'active', 'completed', 'failed', 'expired', 'timeout'] as const;
 
 export const StreamStatusSchema = z.enum(STREAM_STATUSES).openapi({
   description: 'Stream buffer status for resumable AI SDK streams',
-  example: 'active',
+  example: 'streaming',
 });
 
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
 export const StreamStatuses = {
-  ACTIVE: 'active' as const,
-  COMPLETED: 'completed' as const,
-  FAILED: 'failed' as const,
-  EXPIRED: 'expired' as const,
+  // ✅ EXTENDED STATES: More granular stream lifecycle tracking (Phase 1.3)
+  PENDING: 'pending' as const, // Stream requested, not started
+  INITIALIZING: 'initializing' as const, // AI model loading
+  STREAMING: 'streaming' as const, // Actively generating content
+  COMPLETING: 'completing' as const, // Finishing up, saving to DB
+  // Legacy states (kept for backward compatibility)
+  ACTIVE: 'active' as const, // Alias for STREAMING
+  COMPLETED: 'completed' as const, // Successfully finished
+  FAILED: 'failed' as const, // Error occurred
+  EXPIRED: 'expired' as const, // TTL expired
+  TIMEOUT: 'timeout' as const, // Exceeded time limit
 } as const;
 
 // ============================================================================

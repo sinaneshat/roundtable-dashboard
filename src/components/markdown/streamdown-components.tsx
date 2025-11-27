@@ -205,6 +205,7 @@ export const streamdownComponents = {
       alt={alt || ''}
       className={cn('max-w-full h-auto rounded-lg my-2', className)}
       loading="lazy"
+      referrerPolicy="no-referrer"
       {...props}
     />
   ),

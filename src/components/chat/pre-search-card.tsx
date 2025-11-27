@@ -172,20 +172,28 @@ export function PreSearchCard({
       >
         <div className="relative">
           <ChainOfThoughtHeader>
-            <div className="flex items-center gap-2.5 w-full">
+            {/* Mobile-optimized header layout - inline title and badge */}
+            <div className="flex items-center gap-2 w-full min-w-0">
               <Zap className="size-4 text-blue-500 flex-shrink-0" />
-              <span className="text-sm font-medium">
+              {/* Title and badge - always inline, no wrap */}
+              <span className="text-sm font-medium whitespace-nowrap">
                 {t('chat.preSearch.title')}
               </span>
 
-              {/* Status badges */}
+              {/* Status badges - inline */}
               {isStreamingOrPending && (
-                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/20">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] sm:text-xs h-5 px-1.5 sm:px-2 flex-shrink-0 bg-blue-500/10 text-blue-500 border-blue-500/20"
+                >
                   {t('chat.preSearch.searching')}
                 </Badge>
               )}
               {hasError && (
-                <Badge variant="outline" className="text-xs bg-red-500/10 text-red-500 border-red-500/20">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] sm:text-xs h-5 px-1.5 sm:px-2 flex-shrink-0 bg-red-500/10 text-red-500 border-red-500/20"
+                >
                   {t('chat.preSearch.error')}
                 </Badge>
               )}

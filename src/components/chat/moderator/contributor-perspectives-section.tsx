@@ -8,6 +8,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import type { ContributorPerspective } from '@/api/routes/chat/schema';
@@ -50,6 +51,7 @@ export function ContributorPerspectivesSection({
   perspectives,
   isStreaming: _isStreaming = false,
 }: ContributorPerspectivesSectionProps) {
+  const t = useTranslations('moderator');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
 
   if (!perspectives || perspectives.length === 0) {
@@ -101,72 +103,70 @@ export function ContributorPerspectivesSection({
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <div className="px-4 pb-4 pt-2 space-y-6">
-                  {/* Scorecard Section */}
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scorecard</h4>
-                    <div className="grid gap-4">
+                <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 sm:pt-2 space-y-4">
+                  {/* Scorecard Section - Dynamic from backend */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t('contributorPerspectives.scorecard')}
+                    </h4>
+                    <div className="grid gap-3">
                       {/* Logic */}
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium" style={{ color: '#60a5fa' }}>Logic</span>
-                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#60a5fa' }}>
-                            {perspective.scorecard.logic}
-                            %
+                          <span className="text-sm font-medium text-blue-400">{t('contributorPerspectives.logic')}</span>
+                          <span className="text-sm font-semibold tabular-nums text-blue-400">
+                            {perspective.scorecard.logic}%
                           </span>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)' }}>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-500/20">
                           <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.logic}%`, backgroundColor: '#3b82f6' }}
+                            className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.logic}%` }}
                           />
                         </div>
                       </div>
                       {/* Creativity */}
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium" style={{ color: '#c084fc' }}>Creativity</span>
-                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#c084fc' }}>
-                            {perspective.scorecard.creativity}
-                            %
+                          <span className="text-sm font-medium text-purple-400">{t('contributorPerspectives.creativity')}</span>
+                          <span className="text-sm font-semibold tabular-nums text-purple-400">
+                            {perspective.scorecard.creativity}%
                           </span>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)' }}>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-purple-500/20">
                           <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.creativity}%`, backgroundColor: '#a855f7' }}
+                            className="h-full rounded-full bg-purple-500 transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.creativity}%` }}
                           />
                         </div>
                       </div>
                       {/* Risk Awareness */}
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium" style={{ color: '#fbbf24' }}>Risk Awareness</span>
-                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#fbbf24' }}>
-                            {perspective.scorecard.riskAwareness}
-                            %
+                          <span className="text-sm font-medium text-amber-400">{t('contributorPerspectives.riskAwareness')}</span>
+                          <span className="text-sm font-semibold tabular-nums text-amber-400">
+                            {perspective.scorecard.riskAwareness}%
                           </span>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)' }}>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-500/20">
                           <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.riskAwareness}%`, backgroundColor: '#f59e0b' }}
+                            className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.riskAwareness}%` }}
                           />
                         </div>
                       </div>
                       {/* Evidence */}
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium" style={{ color: '#34d399' }}>Evidence</span>
-                          <span className="text-sm font-semibold tabular-nums" style={{ color: '#34d399' }}>
-                            {perspective.scorecard.evidence}
-                            %
+                          <span className="text-sm font-medium text-emerald-400">{t('contributorPerspectives.evidence')}</span>
+                          <span className="text-sm font-semibold tabular-nums text-emerald-400">
+                            {perspective.scorecard.evidence}%
                           </span>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)' }}>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-500/20">
                           <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: `${perspective.scorecard.evidence}%`, backgroundColor: '#10b981' }}
+                            className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                            style={{ width: `${perspective.scorecard.evidence}%` }}
                           />
                         </div>
                       </div>
@@ -174,21 +174,27 @@ export function ContributorPerspectivesSection({
                   </div>
 
                   {/* Stance Section */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stance</h4>
-                    <p className="text-sm text-foreground/90 leading-relaxed">
-                      {perspective.stance}
-                    </p>
-                  </div>
+                  {perspective.stance && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {t('contributorPerspectives.stance')}
+                      </h4>
+                      <p className="text-sm text-foreground/90 leading-relaxed">
+                        {perspective.stance}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Supporting Evidence Section */}
                   {perspective.evidence && perspective.evidence.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Supporting Evidence</h4>
-                      <ul className="space-y-2">
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {t('evidenceReasoning.evidenceCoverage')}
+                      </h4>
+                      <ul className="space-y-1.5">
                         {perspective.evidence.map(item => (
-                          <li key={`evidence-${perspective.participantIndex}-${item}`} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                            <span className="text-primary/60 mt-0.5">•</span>
+                          <li key={`evidence-${perspective.participantIndex}-${item}`} className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <span className="text-primary/60 mt-1 size-1 rounded-full bg-current flex-shrink-0" />
                             <span className="leading-relaxed">{item}</span>
                           </li>
                         ))}

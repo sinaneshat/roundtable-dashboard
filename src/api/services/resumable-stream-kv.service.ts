@@ -37,6 +37,7 @@ import type { TypedLogger } from '@/api/types/logger';
 /**
  * Stream state stored in KV
  * ✅ ENUM PATTERN: Uses StreamStatus from core enums
+ * ✅ EXTENDED: Added heartbeat tracking for dead stream detection (Phase 1.3)
  */
 export type StreamState = {
   threadId: string;
@@ -47,6 +48,9 @@ export type StreamState = {
   createdAt: string;
   completedAt: string | null;
   errorMessage: string | null;
+  // ✅ HEARTBEAT: Track stream liveness (Phase 1.3)
+  lastHeartbeatAt: string | null;
+  chunkCount: number;
 };
 
 /**
@@ -254,15 +258,19 @@ export async function markStreamActive(
   }
 
   try {
+    const now = new Date().toISOString();
     const state: StreamState = {
       threadId,
       roundNumber,
       participantIndex,
       status: StreamStatuses.ACTIVE,
       messageId: null,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
       completedAt: null,
       errorMessage: null,
+      // ✅ HEARTBEAT: Initialize liveness tracking (Phase 1.3)
+      lastHeartbeatAt: now,
+      chunkCount: 0,
     };
 
     await env.KV.put(
@@ -316,15 +324,21 @@ export async function markStreamCompleted(
   }
 
   try {
+    const now = new Date().toISOString();
+    // ✅ PRESERVE ORIGINAL STATE: Get existing state to preserve createdAt and chunkCount
+    const existingState = await getStreamState(threadId, roundNumber, participantIndex, env);
+
     const state: StreamState = {
       threadId,
       roundNumber,
       participantIndex,
       status: StreamStatuses.COMPLETED,
       messageId,
-      createdAt: new Date().toISOString(),
-      completedAt: new Date().toISOString(),
+      createdAt: existingState?.createdAt || now,
+      completedAt: now,
       errorMessage: null,
+      lastHeartbeatAt: now,
+      chunkCount: existingState?.chunkCount || 0,
     };
 
     await env.KV.put(
@@ -378,15 +392,21 @@ export async function markStreamFailed(
   }
 
   try {
+    const now = new Date().toISOString();
+    // ✅ PRESERVE ORIGINAL STATE: Get existing state to preserve createdAt and chunkCount
+    const existingState = await getStreamState(threadId, roundNumber, participantIndex, env);
+
     const state: StreamState = {
       threadId,
       roundNumber,
       participantIndex,
       status: StreamStatuses.FAILED,
       messageId: null,
-      createdAt: new Date().toISOString(),
-      completedAt: new Date().toISOString(),
+      createdAt: existingState?.createdAt || now,
+      completedAt: now,
       errorMessage,
+      lastHeartbeatAt: now,
+      chunkCount: existingState?.chunkCount || 0,
     };
 
     await env.KV.put(
@@ -509,4 +529,137 @@ export async function clearStreamState(
       });
     }
   }
+}
+
+// ============================================================================
+// Heartbeat & Liveness Tracking (Phase 1.3)
+// ============================================================================
+
+/**
+ * Update stream heartbeat
+ * Called periodically during streaming to indicate liveness
+ *
+ * ✅ BACKGROUND STREAMING: Heartbeat allows detection of dead streams
+ * Streams without heartbeat for 30+ seconds are considered dead
+ *
+ * @param threadId - Thread ID
+ * @param roundNumber - Round number
+ * @param participantIndex - Participant index
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ */
+export async function updateStreamHeartbeat(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  if (!env?.KV) {
+    return;
+  }
+
+  try {
+    const existingState = await getStreamState(threadId, roundNumber, participantIndex, env);
+
+    if (!existingState) {
+      return; // No stream to update
+    }
+
+    // Only update heartbeat for active streams
+    if (existingState.status !== StreamStatuses.ACTIVE && existingState.status !== StreamStatuses.STREAMING) {
+      return;
+    }
+
+    const state: StreamState = {
+      ...existingState,
+      lastHeartbeatAt: new Date().toISOString(),
+    };
+
+    await env.KV.put(
+      getStreamStateKey(threadId, roundNumber, participantIndex),
+      JSON.stringify(state),
+      { expirationTtl: STREAM_STATE_TTL },
+    );
+  } catch (error) {
+    if (logger) {
+      logger.warn('Failed to update stream heartbeat', {
+        logType: 'edge_case',
+        threadId,
+        roundNumber,
+        participantIndex,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+}
+
+/**
+ * Increment stream chunk count
+ * Called when a new chunk is buffered
+ *
+ * @param threadId - Thread ID
+ * @param roundNumber - Round number
+ * @param participantIndex - Participant index
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ */
+export async function incrementStreamChunkCount(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  if (!env?.KV) {
+    return;
+  }
+
+  try {
+    const existingState = await getStreamState(threadId, roundNumber, participantIndex, env);
+
+    if (!existingState) {
+      return;
+    }
+
+    const state: StreamState = {
+      ...existingState,
+      chunkCount: (existingState.chunkCount || 0) + 1,
+      lastHeartbeatAt: new Date().toISOString(), // Also update heartbeat on chunk
+    };
+
+    await env.KV.put(
+      getStreamStateKey(threadId, roundNumber, participantIndex),
+      JSON.stringify(state),
+      { expirationTtl: STREAM_STATE_TTL },
+    );
+  } catch (error) {
+    if (logger) {
+      logger.warn('Failed to increment stream chunk count', {
+        logType: 'edge_case',
+        threadId,
+        roundNumber,
+        participantIndex,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+}
+
+/**
+ * Check if stream is stale (no heartbeat for specified duration)
+ *
+ * @param state - Stream state to check
+ * @param maxStaleMs - Maximum time without heartbeat (default 30 seconds)
+ * @returns true if stream is stale
+ */
+export function isStreamStale(state: StreamState, maxStaleMs = 30000): boolean {
+  if (!state.lastHeartbeatAt) {
+    return true;
+  }
+
+  const lastHeartbeat = new Date(state.lastHeartbeatAt).getTime();
+  const now = Date.now();
+
+  return now - lastHeartbeat > maxStaleMs;
 }

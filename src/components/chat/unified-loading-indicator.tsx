@@ -156,22 +156,18 @@ export function UnifiedLoadingIndicator({
   }
 
   return (
-    <div className="sticky bottom-48 z-10 pointer-events-none">
-      <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mt-6 mb-8 text-left"
-          >
-            <div className="text-sm py-2">
-              {/* Key ensures component remounts and resets cycling when message set changes */}
-              <CyclingMessage key={messageSetKey} messages={messageSet} />
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </div>
+    <AnimatePresence mode="wait">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="text-left pointer-events-none"
+      >
+        <div className="text-sm py-2">
+          {/* Key ensures component remounts and resets cycling when message set changes */}
+          <CyclingMessage key={messageSetKey} messages={messageSet} />
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

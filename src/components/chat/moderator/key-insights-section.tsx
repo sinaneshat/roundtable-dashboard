@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import type { Recommendation } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelBadge } from '@/components/chat/model-badge';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
@@ -167,9 +168,32 @@ export function KeyInsightsSection({
                       </div>
                     )}
 
-                    {/* Mode and Models inline */}
+                    {/* Mode and Models - horizontal scroll on mobile, wrap on desktop */}
                     {(rec.suggestedMode || hasModels) && (
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <ScrollArea className="w-full sm:hidden">
+                        <div className="flex items-center gap-2 pb-2">
+                          {rec.suggestedMode && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex-shrink-0">
+                              <MessageSquare className="size-3 text-muted-foreground" />
+                              <span className="text-[11px] font-medium text-white/80 whitespace-nowrap">{rec.suggestedMode}</span>
+                            </div>
+                          )}
+                          {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
+                            <div key={`${rec.title}-${modelId}-${modelIndex}`} className="flex-shrink-0">
+                              <ModelBadge
+                                modelId={modelId}
+                                role={rec.suggestedRoles?.[modelIndex]}
+                                size="sm"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <ScrollBar orientation="horizontal" className="h-1.5" />
+                      </ScrollArea>
+                    )}
+                    {/* Desktop: wrap normally */}
+                    {(rec.suggestedMode || hasModels) && (
+                      <div className="hidden sm:flex items-center gap-2 flex-wrap">
                         {rec.suggestedMode && (
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
                             <MessageSquare className="size-3 text-muted-foreground" />

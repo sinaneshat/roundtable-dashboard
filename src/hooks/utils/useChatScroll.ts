@@ -195,62 +195,85 @@ export function useChatScroll({
 
   // ============================================================================
   // EFFECT 3: Follow content growth ONLY during participant streaming
-  // ✅ ResizeObserver is ONLY active when isStreaming is true
-  // This prevents scroll on changelogs/layout shifts (which happen when not streaming)
+  // ✅ SCROLL FIX: Track message-specific content, NOT body height
+  // This prevents snapping when accordions expand/collapse during streaming
+  //
+  // STRATEGY: Instead of ResizeObserver on document.body (too broad),
+  // track actual message content changes:
+  // 1. New messages added → scroll
+  // 2. Streaming message content grows → scroll with heavy debounce
+  // 3. Accordion/layout shifts → NO scroll (not tracked)
   // ============================================================================
+  const lastMessageCountRef = useRef(messages.length);
+  const lastContentLengthRef = useRef(0);
+  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
-    // ✅ CRITICAL: Only observe when participants are actively streaming
+    // ✅ CRITICAL: Only scroll when participants are actively streaming
     // When not streaming, changelogs and other layout changes won't trigger scroll
     if (!isStreaming) {
+      // Clear debounce on streaming stop
+      if (scrollDebounceRef.current) {
+        clearTimeout(scrollDebounceRef.current);
+        scrollDebounceRef.current = null;
+      }
       return;
     }
 
-    let rafId: number | null = null;
-    let lastScrollHeight = document.documentElement.scrollHeight;
+    // ✅ SCROLL FIX: Track TWO things:
+    // 1. Message count changes (new messages added)
+    // 2. Last message content length (streaming content growth)
+    const messageCountGrew = messages.length > lastMessageCountRef.current;
+    lastMessageCountRef.current = messages.length;
 
-    const handleContentGrowth = () => {
-      // Only scroll if sticky
-      if (!isAtBottomRef.current) {
-        return;
+    // Calculate total content length of last 2 messages (streaming messages)
+    // This detects content growth during streaming without tracking body height
+    // UIMessage uses 'parts' array, we extract text content from text parts
+    const lastMessages = messages.slice(-2);
+    const currentContentLength = lastMessages.reduce((total, msg) => {
+      const textContent = msg.parts
+        ?.filter(part => part.type === 'text')
+        .map(part => ('text' in part ? part.text : ''))
+        .join('') || '';
+      return total + textContent.length;
+    }, 0);
+    const contentGrew = currentContentLength > lastContentLengthRef.current;
+    const contentDelta = currentContentLength - lastContentLengthRef.current;
+    lastContentLengthRef.current = currentContentLength;
+
+    // Only scroll if sticky AND content actually changed
+    if (!isAtBottomRef.current) {
+      return;
+    }
+
+    // Skip if no meaningful change (prevents layout shift scrolls)
+    // A new message should always scroll, content growth needs meaningful delta
+    if (!messageCountGrew && (!contentGrew || contentDelta < 20)) {
+      return;
+    }
+
+    // ✅ SCROLL FIX: Debounce scroll to prevent rapid-fire scrolling
+    // Multiple message chunks arrive quickly during streaming
+    // Use longer debounce for content growth vs new messages
+    if (scrollDebounceRef.current) {
+      clearTimeout(scrollDebounceRef.current);
+    }
+
+    const debounceMs = messageCountGrew ? 50 : 200; // Faster for new messages, slower for content growth
+    scrollDebounceRef.current = setTimeout(() => {
+      if (isAtBottomRef.current && isStreaming) {
+        scrollToBottom('smooth');
       }
-
-      const newScrollHeight = document.documentElement.scrollHeight;
-      const heightGrew = newScrollHeight > lastScrollHeight;
-
-      // Only scroll if content actually grew (not shrank or stayed same)
-      if (!heightGrew) {
-        return;
-      }
-
-      lastScrollHeight = newScrollHeight;
-
-      // Cancel pending RAF
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
-
-      rafId = requestAnimationFrame(() => {
-        if (isAtBottomRef.current && isStreaming) {
-          scrollToBottom('smooth');
-        }
-        rafId = null;
-      });
-    };
-
-    // Use ResizeObserver on document body to detect content growth
-    const resizeObserver = new ResizeObserver(handleContentGrowth);
-    resizeObserver.observe(document.body);
-
-    // Also trigger on message changes during streaming
-    handleContentGrowth();
+      scrollDebounceRef.current = null;
+    }, debounceMs);
 
     return () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
+      if (scrollDebounceRef.current) {
+        clearTimeout(scrollDebounceRef.current);
+        scrollDebounceRef.current = null;
       }
-      resizeObserver.disconnect();
     };
-  }, [isStreaming, scrollToBottom]);
+  }, [isStreaming, messages, scrollToBottom]);
 
   // Track analyses for scroll tracking (not triggering)
   useEffect(() => {

@@ -91,6 +91,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                 alt={image.alt || image.title}
                 className="object-cover size-full group-hover:scale-105 transition-transform duration-200"
                 loading="lazy"
+                referrerPolicy="no-referrer"
                 onError={() => handleImageError(image.url)}
               />
 

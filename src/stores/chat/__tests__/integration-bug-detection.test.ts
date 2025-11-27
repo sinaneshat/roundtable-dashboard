@@ -310,7 +310,7 @@ describe('state Consistency', () => {
     expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
-  it('should stop ongoing streams in resetToNewChat', () => {
+  it('should NOT stop ongoing streams in resetToNewChat (resumable streams)', () => {
     const mockStop = vi.fn();
 
     act(() => {
@@ -319,7 +319,10 @@ describe('state Consistency', () => {
       store.getState().resetToNewChat();
     });
 
-    expect(mockStop).toHaveBeenCalledTimes(1);
+    // ✅ RESUMABLE STREAMS: stop is NOT called - streams continue in background via waitUntil()
+    expect(mockStop).not.toHaveBeenCalled();
+    // Local state is cleared, but backend stream continues
+    expect(store.getState().isStreaming).toBe(false);
   });
 });
 

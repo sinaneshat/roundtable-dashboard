@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
  *
  * Improvements:
  * - Detects zoom vs keyboard events (only responds to keyboard)
+ * - Filters browser chrome changes (URL bar hide/show on iOS Safari)
  * - Debounced updates to prevent jitter during scroll
  * - Ignores pinch-zoom and browser zoom events
  *
@@ -17,11 +18,21 @@ import { useEffect, useRef, useState } from 'react';
  *
  * Formula: bottom = innerHeight - visualViewport.height (when scale = 1)
  * This calculates how much the keyboard is covering the viewport
+ *
+ * Keyboard vs Browser Chrome Detection:
+ * - Mobile keyboards typically take 200-400px+ of screen height
+ * - Browser chrome (URL bar) changes are typically 50-100px
+ * - We use a threshold (150px) to distinguish between them
+ * - This prevents jitter during fast scrolling when browser chrome hides/shows
  */
 export function useVisualViewportPosition(): number {
   const [bottom, setBottom] = useState(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastScaleRef = useRef(1);
+  // Track if keyboard is confirmed open (significant height reduction)
+  const isKeyboardOpenRef = useRef(false);
+  // Track initial viewport height to detect changes
+  const initialHeightRef = useRef<number | null>(null);
 
   useEffect(() => {
     function resizeHandler() {
@@ -36,6 +47,11 @@ export function useVisualViewportPosition(): number {
       const currentScale = viewport.scale ?? 1;
       const viewportHeight = viewport.height;
       const innerHeight = window.innerHeight;
+
+      // Store initial height on first call
+      if (initialHeightRef.current === null) {
+        initialHeightRef.current = innerHeight;
+      }
 
       // ✅ FIX: Detect zoom events and ignore them
       // Only respond to keyboard events (scale remains 1.0)
@@ -54,10 +70,37 @@ export function useVisualViewportPosition(): number {
         return;
       }
 
-      // Calculate keyboard offset: how much viewport is covered by keyboard
-      // When keyboard opens: visualViewport.height < innerHeight
-      // bottom offset = difference between full height and visible height
-      const keyboardOffset = Math.max(0, innerHeight - viewportHeight);
+      // Calculate potential keyboard offset
+      const potentialOffset = Math.max(0, innerHeight - viewportHeight);
+
+      // ✅ FIX: Filter browser chrome changes vs actual keyboard events
+      // Keyboard threshold: 150px - keyboards are typically 200-400px+
+      // Browser chrome (URL bar) hide/show is typically 50-100px
+      const KEYBOARD_THRESHOLD = 150;
+
+      // Determine if this is a keyboard event
+      const isSignificantChange = potentialOffset > KEYBOARD_THRESHOLD;
+
+      // Track keyboard state transitions
+      if (isSignificantChange && !isKeyboardOpenRef.current) {
+        // Keyboard just opened
+        isKeyboardOpenRef.current = true;
+      } else if (potentialOffset < 20 && isKeyboardOpenRef.current) {
+        // Keyboard just closed (< 20px accounts for small variations)
+        isKeyboardOpenRef.current = false;
+      }
+
+      // Only update position for:
+      // 1. Keyboard opening (significant change)
+      // 2. Keyboard closing (going back to ~0)
+      // 3. Adjustments while keyboard is open
+      // Ignore browser chrome changes (small changes when keyboard not open)
+      if (!isKeyboardOpenRef.current && potentialOffset > 0 && potentialOffset < KEYBOARD_THRESHOLD) {
+        // Small change but keyboard not open = browser chrome change, ignore
+        return;
+      }
+
+      const keyboardOffset = isKeyboardOpenRef.current ? potentialOffset : 0;
 
       // ✅ FIX: Debounce updates to prevent jitter during rapid resize events
       if (debounceTimerRef.current) {

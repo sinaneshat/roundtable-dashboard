@@ -226,6 +226,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
         alt={alt || ''}
         className="max-w-full h-auto rounded-lg my-3"
         loading="lazy"
+        referrerPolicy="no-referrer"
         {...props}
       />
     ),

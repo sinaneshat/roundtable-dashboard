@@ -1,7 +1,7 @@
 'use client';
 import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, Recommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
@@ -111,21 +111,14 @@ export function RoundAnalysisCard({
     setIsManuallyControlled(true);
     setManuallyOpen(open);
   }, [isStreamingOrPending]);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const previousStatusRef = useRef(analysis.status);
-  useEffect(() => {
-    // Auto-scroll to bottom when streaming or completed
-    if (analysis.status === AnalysisStatuses.STREAMING || analysis.status === AnalysisStatuses.COMPLETE) {
-      // Use requestAnimationFrame to ensure DOM is updated
-      requestAnimationFrame(() => {
-        containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      });
-    }
-    previousStatusRef.current = analysis.status;
-  }, [analysis.status, analysis.analysisData]);
+
+  // ✅ SCROLL FIX: Removed independent scrollIntoView - scroll is managed centrally by useChatScroll
+  // Having each RoundAnalysisCard call scrollIntoView caused multiple scroll anchors to conflict,
+  // resulting in excessive jumping/snapping behavior. The useChatScroll hook handles all auto-scroll
+  // during streaming via ResizeObserver on document.body.
 
   return (
-    <div ref={containerRef} className={cn('py-1.5', className)}>
+    <div className={cn('py-1.5', className)}>
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}
@@ -134,18 +127,29 @@ export function RoundAnalysisCard({
       >
         <div className="relative">
           <ChainOfThoughtHeader>
-            <div className="flex items-center gap-2.5 w-full pr-24">
+            {/* Mobile-optimized header layout - inline title and badge */}
+            <div className="flex items-center gap-2 w-full min-w-0">
               <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm font-medium">
+              {/* Title and badge - always inline, no wrap */}
+              <span className="text-sm font-medium whitespace-nowrap">
                 {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
               </span>
-              <Badge variant="outline" className={cn('text-xs h-6', config.color)}>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-[10px] sm:text-xs h-5 px-1.5 sm:px-2 flex-shrink-0',
+                  config.color,
+                )}
+              >
                 {config.label}
               </Badge>
-              <span className="hidden md:inline text-sm text-muted-foreground">•</span>
-              <span className="hidden md:inline text-xs text-muted-foreground capitalize">
-                {t(`mode.${analysis.mode}`)}
-              </span>
+              {/* Mode indicator - hidden on mobile */}
+              <div className="hidden sm:flex items-center gap-2 flex-shrink-0 ml-auto">
+                <span className="text-sm text-muted-foreground">•</span>
+                <span className="text-xs text-muted-foreground capitalize">
+                  {t(`mode.${analysis.mode}`)}
+                </span>
+              </div>
             </div>
           </ChainOfThoughtHeader>
         </div>

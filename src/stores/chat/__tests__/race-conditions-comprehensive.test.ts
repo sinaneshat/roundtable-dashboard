@@ -981,7 +981,7 @@ describe('race Conditions: Comprehensive Test Suite (COMPREHENSIVE_TEST_PLAN Sec
         expect(store.getState().hasAnalysisBeenCreated(1)).toBe(false);
       });
 
-      it('should stop ongoing streams during cleanup', () => {
+      it('should NOT stop ongoing streams during cleanup (resumable streams)', () => {
         const mockStop = vi.fn();
         store.getState().setStop(mockStop);
         store.getState().setIsStreaming(true);
@@ -989,8 +989,9 @@ describe('race Conditions: Comprehensive Test Suite (COMPREHENSIVE_TEST_PLAN Sec
         // Reset with active stream
         store.getState().resetToNewChat();
 
-        // Stop should be called
-        expect(mockStop).toHaveBeenCalled();
+        // ✅ RESUMABLE STREAMS: stop is NOT called - streams continue in background via waitUntil()
+        expect(mockStop).not.toHaveBeenCalled();
+        // Local state is cleared, but backend stream continues
         expect(store.getState().isStreaming).toBe(false);
       });
 

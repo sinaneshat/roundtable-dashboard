@@ -161,7 +161,7 @@ describe('thread Navigation Reset', () => {
       expect(mockSetMessages).toHaveBeenCalledWith([]);
     });
 
-    it('should call stop() to cancel ongoing streams', () => {
+    it('should NOT call stop() - resumable streams continue in background', () => {
       const mockStop = vi.fn();
 
       store.setState({
@@ -171,7 +171,8 @@ describe('thread Navigation Reset', () => {
 
       store.getState().resetForThreadNavigation();
 
-      expect(mockStop).toHaveBeenCalled();
+      // ✅ RESUMABLE STREAMS: stop is NOT called - streams continue in background via waitUntil()
+      expect(mockStop).not.toHaveBeenCalled();
     });
 
     it('should create fresh Set instances for tracking state', () => {
@@ -241,7 +242,7 @@ describe('thread Navigation Reset', () => {
       expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
     });
 
-    it('should stop ongoing streams', () => {
+    it('should NOT stop ongoing streams - resumable streams continue in background', () => {
       const mockStop = vi.fn();
 
       store.setState({
@@ -251,7 +252,8 @@ describe('thread Navigation Reset', () => {
 
       store.getState().resetToOverview();
 
-      expect(mockStop).toHaveBeenCalled();
+      // ✅ RESUMABLE STREAMS: stop is NOT called - streams continue in background via waitUntil()
+      expect(mockStop).not.toHaveBeenCalled();
     });
   });
 

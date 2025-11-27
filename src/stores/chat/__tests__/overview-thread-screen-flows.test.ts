@@ -1,22 +1,20 @@
 /**
  * Overview and Thread Screen Flow Tests
  *
- * Tests the distinct flows for ChatOverviewScreen and ChatThreadScreen:
+ * Tests the UNIFIED flow for both ChatOverviewScreen and ChatThreadScreen:
  *
- * OVERVIEW SCREEN (new thread creation):
- * - User creates new thread with first message
- * - waitingToStartStreaming triggers startRound
- * - Round 0 completes, navigates to thread screen
+ * ROUND 0 (initial thread creation - overview screen only):
+ * - User creates new thread with first message via handleCreateThread
+ * - waitingToStartStreaming triggers startRound for round 0
  *
- * THREAD SCREEN (existing thread):
- * - User sends follow-up messages
+ * ROUND 1+ (subsequent messages - BOTH screens):
+ * - User sends follow-up messages via handleUpdateThreadAndSend
  * - pendingMessage effect triggers sendMessage
- * - Multiple rounds can complete
+ * - This is the SINGLE SOURCE OF TRUTH for all subsequent rounds
  *
- * KEY DIFFERENCES:
- * - Overview uses waitingToStartStreaming + startRound
- * - Thread uses pendingMessage + sendMessage
- * - Both must NOT interfere with each other
+ * KEY FLOW:
+ * - Round 0: handleCreateThread → waitingToStartStreaming → startRound
+ * - Round 1+: handleUpdateThreadAndSend → pendingMessage → sendMessage (BOTH screens)
  *
  * @see src/containers/screens/chat/ChatOverviewScreen.tsx
  * @see src/containers/screens/chat/ChatThreadScreen.tsx

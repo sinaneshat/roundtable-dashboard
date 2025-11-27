@@ -45,6 +45,8 @@ function Avatar({
  * @param loading - Controls image loading behavior (default: "lazy")
  *   - "lazy": Defers loading until image is near viewport (recommended)
  *   - "eager": Loads immediately (use only for above-the-fold content)
+ * @param referrerPolicy - Controls referrer header sent with image requests
+ *   - "no-referrer": Prevents hotlink protection blocking (default for external images)
  *
  * Native lazy loading is enabled by default for optimal performance,
  * especially in scrollable lists with many images (e.g., model dropdowns).
@@ -52,15 +54,18 @@ function Avatar({
 function AvatarImage({
   className,
   loading = "lazy", // Default to lazy loading for performance
+  referrerPolicy = "no-referrer", // Bypass hotlink protection for external images
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image> & {
   loading?: "lazy" | "eager";
+  referrerPolicy?: React.HTMLAttributeReferrerPolicy;
 }) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
       className={cn("aspect-square size-full", className)}
       loading={loading}
+      referrerPolicy={referrerPolicy}
       {...props}
     />
   )

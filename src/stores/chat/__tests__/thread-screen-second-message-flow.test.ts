@@ -1,15 +1,16 @@
 /**
- * Thread Screen Second Message Flow Tests
+ * Second Message Flow Tests (Round 1+)
  *
- * Tests the bug where sending a second message on the thread screen
- * causes infinite errors/renders. This happens after the first round
- * completes and the user is navigated from overview to thread screen.
+ * Tests the flow for sending subsequent messages (round 1+) on BOTH screens.
+ * After round 0 completes, all subsequent messages use handleUpdateThreadAndSend
+ * regardless of whether the user is on overview or thread screen.
  *
- * ROOT CAUSE HYPOTHESIS:
- * - Both provider and flow-state-machine try to create analysis
- * - Race condition in analysis creation tracking
- * - completeStreaming() called prematurely/multiple times
- * - Flags get cleared before actual completion
+ * UNIFIED FLOW (Round 1+):
+ * - handleUpdateThreadAndSend sets pendingMessage
+ * - pendingMessage effect triggers sendMessage
+ * - Works identically on both overview and thread screens
+ *
+ * This is the SINGLE SOURCE OF TRUTH for all subsequent rounds.
  *
  * Location: /src/stores/chat/__tests__/thread-screen-second-message-flow.test.ts
  */

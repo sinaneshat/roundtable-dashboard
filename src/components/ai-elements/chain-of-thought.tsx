@@ -116,19 +116,24 @@ export function ChainOfThoughtHeader({
   return (
     <CollapsibleTrigger
       className={cn(
-        'flex w-full items-center justify-between px-4 py-3 text-sm font-medium',
+        // Base styles with consistent padding
+        'flex w-full items-center justify-between',
+        'px-3 py-2.5 sm:px-4 sm:py-3', // Consistent vertical padding
+        'text-sm font-medium',
         'text-muted-foreground hover:text-foreground transition-colors',
         'focus:outline-none focus-visible:outline-none',
+        // Minimum touch target height (44px recommended)
+        'min-h-[44px]',
         disabled && 'cursor-not-allowed opacity-60',
         className,
       )}
       disabled={disabled}
       {...props}
     >
-      <span>{children}</span>
+      <span className="flex-1 min-w-0">{children}</span>
       <ChevronDown
         className={cn(
-          'size-4',
+          'size-4 flex-shrink-0 ml-2 transition-transform duration-200',
           open && 'rotate-180',
           disabled && 'opacity-50',
         )}
@@ -160,13 +165,14 @@ export function ChainOfThoughtContent({
     return (
       <CollapsibleContent
         className={cn(
-          'px-4 pb-4',
+          // Consistent Y padding for body content
+          'px-3 pt-1 pb-4 sm:px-4 sm:pt-2 sm:pb-5',
           className,
         )}
         {...props}
       >
         <motion.div
-          className="space-y-3"
+          className="space-y-3 sm:space-y-4"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
@@ -180,7 +186,8 @@ export function ChainOfThoughtContent({
   return (
     <CollapsibleContent
       className={cn(
-        'px-4 pb-4 space-y-3',
+        // Consistent Y padding and spacing for body content
+        'px-3 pt-1 pb-4 space-y-3 sm:px-4 sm:pt-2 sm:pb-5 sm:space-y-4',
         className,
       )}
       {...props}

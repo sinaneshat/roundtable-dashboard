@@ -29,6 +29,13 @@ export type UseRecommendedActionsOptions = {
   enableScroll?: boolean;
   /** Whether to mark config as changed when applying suggestions */
   markConfigChanged?: boolean;
+  /**
+   * When true, preserve thread state (stay on thread screen)
+   * Used when clicking recommendations from thread screen to update chatbox
+   * without navigating back to overview.
+   * Default: false
+   */
+  preserveThreadState?: boolean;
 };
 
 export type UseRecommendedActionsReturn = {
@@ -66,6 +73,7 @@ export function useRecommendedActions(
     inputContainerRef,
     enableScroll = false,
     markConfigChanged = false,
+    preserveThreadState = false,
   } = options;
 
   // Store actions
@@ -89,6 +97,8 @@ export function useRecommendedActions(
       tierName: userTierConfig?.tier_name,
       userTier: userTierConfig?.tier,
       allModels,
+      // ✅ PRESERVE THREAD STATE: When on thread screen, don't reset navigation
+      preserveThreadState,
     });
 
     // ✅ UI CONCERN: Mark config as changed if enabled (thread screen)
@@ -118,6 +128,7 @@ export function useRecommendedActions(
     inputContainerRef,
     userTierConfig,
     allModels,
+    preserveThreadState,
   ]);
 
   // Memoize return object to prevent unnecessary re-renders

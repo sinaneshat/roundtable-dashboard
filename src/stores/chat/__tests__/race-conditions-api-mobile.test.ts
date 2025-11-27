@@ -1544,8 +1544,9 @@ describe('section 14: Browser & Performance Edge Cases', () => {
     describe('pERF-03: Rapid navigation without orphaned requests', () => {
       /**
        * Tests cleanup during rapid navigation patterns.
+       * ✅ RESUMABLE STREAMS: Streams continue in background via waitUntil()
        */
-      it('should stop streaming on navigation away', () => {
+      it('should NOT stop streaming on navigation away (resumable streams)', () => {
         const thread = createMockThread({ id: 'thread-nav-stop' });
         store.getState().initializeThread(thread, [createMockParticipant(0)]);
         store.getState().setIsStreaming(true);
@@ -1558,7 +1559,9 @@ describe('section 14: Browser & Performance Edge Cases', () => {
         // Navigate away
         store.getState().resetToNewChat();
 
-        expect(stopCalled).toBe(true);
+        // ✅ RESUMABLE STREAMS: stop is NOT called - streams continue in background
+        expect(stopCalled).toBe(false);
+        // Local state is cleared, but backend stream continues
         expect(store.getState().isStreaming).toBe(false);
       });
 
