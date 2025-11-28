@@ -102,9 +102,10 @@ vi.mock('@/components/providers/chat-store-provider', async () => {
 vi.mock('@/hooks/utils', () => ({
   useBoolean: () => ({
     value: false,
-    setTrue: vi.fn(),
-    setFalse: vi.fn(),
-    toggle: vi.fn(),
+    onTrue: vi.fn(),
+    onFalse: vi.fn(),
+    onToggle: vi.fn(),
+    setValue: vi.fn(),
   }),
   useAutoScroll: () => ({
     containerRef: { current: null },

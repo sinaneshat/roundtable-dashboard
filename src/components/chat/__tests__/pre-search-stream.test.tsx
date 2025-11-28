@@ -99,25 +99,31 @@ describe('preSearchStream Component', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: [{
-            ...mockPreSearch,
-            status: AnalysisStatuses.STREAMING,
-          }],
+          data: {
+            items: [{
+              ...mockPreSearch,
+              status: AnalysisStatuses.STREAMING,
+            }],
+            count: 1,
+          },
         }),
       })
       // 3. Mock polling response (second poll: complete)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: [{
-            ...mockPreSearch,
-            status: AnalysisStatuses.COMPLETE,
-            searchData: {
-              queries: [{ query: 'test', index: 0 }],
-              results: [{ query: 'test', results: [{ title: 'Result 1' }] }],
-              totalResults: 1,
-            },
-          }],
+          data: {
+            items: [{
+              ...mockPreSearch,
+              status: AnalysisStatuses.COMPLETE,
+              searchData: {
+                queries: [{ query: 'test', index: 0 }],
+                results: [{ query: 'test', results: [{ title: 'Result 1' }] }],
+                totalResults: 1,
+              },
+            }],
+            count: 1,
+          },
         }),
       });
 

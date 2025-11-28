@@ -109,6 +109,16 @@ export type LLMTrackingOptions = {
   // Dynamic model pricing from OpenRouter API (per 1M tokens)
   modelPricing?: { input: number; output: number };
 
+  // ✅ PostHog Official: Custom pricing override (per token, NOT per 1M)
+  // Use this to override automatic pricing calculations
+  // Reference: https://posthog.com/docs/llm-analytics/cost-tracking
+  customPricing?: {
+    inputTokenPrice?: number; // Cost per input token in USD
+    outputTokenPrice?: number; // Cost per output token in USD
+    cacheReadTokenPrice?: number; // Cost per cached input token in USD
+    cacheWriteTokenPrice?: number; // Cost per cache creation token in USD
+  };
+
   // Model configuration
   modelConfig?: {
     temperature?: number;
@@ -140,6 +150,13 @@ export type LLMTrackingOptions = {
 
   // Reasoning tokens (from AI SDK or estimated)
   reasoningTokens?: number;
+
+  // ✅ PostHog Official: Provider URL tracking
+  // Reference: https://posthog.com/docs/llm-analytics/generations
+  providerUrls?: {
+    baseUrl?: string; // Base URL of the LLM provider (e.g., "https://openrouter.ai")
+    requestUrl?: string; // Full URL of the request (e.g., "https://openrouter.ai/api/v1/chat/completions")
+  };
 
   // Additional custom properties
   additionalProperties?: Record<string, unknown>;
@@ -193,6 +210,17 @@ type LLMGenerationProperties = {
   $ai_input_cost_usd?: number;
   $ai_output_cost_usd?: number;
   $ai_total_cost_usd?: number; // ✅ PostHog Official: Total cost as separate property
+
+  // ✅ PostHog Official: Custom pricing override properties (per token)
+  // Use these to specify custom pricing when PostHog's automatic pricing doesn't apply
+  $ai_input_token_price?: number; // Cost per input token in USD
+  $ai_output_token_price?: number; // Cost per output token in USD
+  $ai_cache_read_token_price?: number; // Cost per cached input token in USD
+  $ai_cache_write_token_price?: number; // Cost per cache creation token in USD
+
+  // ✅ PostHog Official: Provider URL tracking
+  $ai_base_url?: string; // Base URL of the LLM provider
+  $ai_request_url?: string; // Full URL of the request
 
   // Tool tracking
   $ai_tools?: Array<{ type: string; function: { name: string; description?: string; parameters?: unknown } }>; // ✅ Available tools
@@ -513,6 +541,29 @@ export async function trackLLMGeneration(
       // ✅ POSTHOG OFFICIAL: Anthropic cache creation tokens (write to cache)
       ...(options?.cacheCreationInputTokens !== undefined && {
         $ai_cache_creation_input_tokens: options.cacheCreationInputTokens,
+      }),
+
+      // ✅ POSTHOG OFFICIAL: Custom pricing override (per token)
+      // Use when PostHog's automatic pricing doesn't apply to your provider
+      ...(options?.customPricing?.inputTokenPrice !== undefined && {
+        $ai_input_token_price: options.customPricing.inputTokenPrice,
+      }),
+      ...(options?.customPricing?.outputTokenPrice !== undefined && {
+        $ai_output_token_price: options.customPricing.outputTokenPrice,
+      }),
+      ...(options?.customPricing?.cacheReadTokenPrice !== undefined && {
+        $ai_cache_read_token_price: options.customPricing.cacheReadTokenPrice,
+      }),
+      ...(options?.customPricing?.cacheWriteTokenPrice !== undefined && {
+        $ai_cache_write_token_price: options.customPricing.cacheWriteTokenPrice,
+      }),
+
+      // ✅ POSTHOG OFFICIAL: Provider URL tracking for debugging
+      ...(options?.providerUrls?.baseUrl && {
+        $ai_base_url: options.providerUrls.baseUrl,
+      }),
+      ...(options?.providerUrls?.requestUrl && {
+        $ai_request_url: options.providerUrls.requestUrl,
       }),
 
       // POSTHOG BEST PRACTICE: Prompt tracking for A/B testing
@@ -920,5 +971,696 @@ export async function trackSpan(
     await posthog.shutdown();
   } catch {
     // Silently fail - don't break the application
+  }
+}
+
+// ============================================================================
+// TRACE TRACKING ($ai_trace)
+// ============================================================================
+
+/**
+ * Track explicit trace event for grouping related AI operations
+ *
+ * ✅ POSTHOG OFFICIAL: $ai_trace provides explicit trace grouping
+ * Reference: https://posthog.com/docs/llm-analytics/traces
+ *
+ * Use this when:
+ * - Starting a new AI workflow (conversation round, analysis, etc.)
+ * - Grouping multiple related operations under a single trace
+ * - Capturing input/output state for complex workflows
+ *
+ * @param context - Basic tracking context
+ * @param context.userId - User ID for tracking
+ * @param context.sessionId - Session ID for tracking (optional)
+ * @param params - Trace parameters
+ * @param params.traceId - Unique trace identifier
+ * @param params.traceName - Human-readable trace name
+ * @param params.inputState - Initial input state (any JSON-serializable data)
+ * @param params.outputState - Final output state (any JSON-serializable data)
+ * @param latencyMs - Total trace duration in milliseconds
+ * @param options - Optional tracking enrichment
+ * @param options.isError - Whether trace failed
+ * @param options.error - Error details
+ * @param options.additionalProperties - Custom properties
+ */
+export async function trackTrace(
+  context: { userId: string; sessionId?: string },
+  params: {
+    traceId: string;
+    traceName: string;
+    inputState: unknown;
+    outputState: unknown;
+  },
+  latencyMs: number,
+  options?: {
+    isError?: boolean;
+    error?: Error;
+    additionalProperties?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+
+  if (!posthog) {
+    return; // PostHog not initialized (non-production env)
+  }
+
+  try {
+    const latencySeconds = latencyMs / 1000;
+
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_trace',
+      properties: {
+        // Required trace properties
+        $ai_trace_id: params.traceId,
+        $ai_trace_name: params.traceName,
+        $ai_input_state: params.inputState,
+        $ai_output_state: params.outputState,
+
+        // Session linking
+        ...(context.sessionId && {
+          $session_id: context.sessionId,
+        }),
+
+        // Performance
+        $ai_latency: latencySeconds,
+        $ai_is_error: options?.isError || false,
+
+        // Error details
+        ...(options?.error && {
+          $ai_error: {
+            message: options.error.message,
+            name: options.error.name,
+            stack: options.error.stack,
+          },
+        }),
+
+        // Additional properties
+        ...options?.additionalProperties,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail - don't break the application
+  }
+}
+
+// ============================================================================
+// FEEDBACK TRACKING ($ai_feedback)
+// ============================================================================
+
+/**
+ * Track user feedback on AI-generated content
+ *
+ * ✅ POSTHOG OFFICIAL: $ai_feedback captures user ratings and feedback
+ * Reference: https://posthog.com/docs/llm-analytics/feedback
+ *
+ * Use this when:
+ * - User rates a response (thumbs up/down, stars, etc.)
+ * - User provides qualitative feedback on AI output
+ * - Tracking quality metrics for AI generations
+ *
+ * @param context - Basic tracking context
+ * @param context.userId - User ID for tracking
+ * @param context.sessionId - Session ID for tracking (optional)
+ * @param params - Feedback parameters
+ * @param params.traceId - Trace ID of the AI generation being rated
+ * @param params.score - Numeric score (e.g., 1-5, 0-1, -1 to 1)
+ * @param params.feedbackType - Type of feedback (e.g., 'rating', 'thumbs', 'text')
+ * @param params.comment - Optional text feedback/comment
+ * @param params.generationId - Optional specific generation ID being rated
+ * @param options - Optional tracking enrichment
+ * @param options.feedbackCategory - Category of feedback (e.g., 'accuracy', 'helpfulness', 'tone')
+ * @param options.additionalProperties - Custom properties
+ */
+export async function trackFeedback(
+  context: { userId: string; sessionId?: string },
+  params: {
+    traceId: string;
+    score: number;
+    feedbackType: 'rating' | 'thumbs' | 'text' | 'custom';
+    comment?: string;
+    generationId?: string;
+  },
+  options?: {
+    feedbackCategory?: string;
+    additionalProperties?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+
+  if (!posthog) {
+    return; // PostHog not initialized (non-production env)
+  }
+
+  try {
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_feedback',
+      properties: {
+        // Required feedback properties
+        $ai_trace_id: params.traceId,
+        $ai_feedback_score: params.score,
+        $ai_feedback_type: params.feedbackType,
+
+        // Session linking
+        ...(context.sessionId && {
+          $session_id: context.sessionId,
+        }),
+
+        // Optional feedback details
+        ...(params.comment && {
+          $ai_feedback_comment: params.comment,
+        }),
+        ...(params.generationId && {
+          $ai_generation_id: params.generationId,
+        }),
+        ...(options?.feedbackCategory && {
+          $ai_feedback_category: options.feedbackCategory,
+        }),
+
+        // Additional properties
+        ...options?.additionalProperties,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail - don't break the application
+  }
+}
+
+// ============================================================================
+// METRIC TRACKING ($ai_metric)
+// ============================================================================
+
+/**
+ * Track custom AI metrics for observability
+ *
+ * ✅ POSTHOG OFFICIAL: $ai_metric captures custom AI performance metrics
+ * Reference: https://posthog.com/docs/llm-analytics/metrics
+ *
+ * Use this when:
+ * - Tracking custom performance metrics (e.g., quality scores, accuracy)
+ * - Recording aggregate metrics for a trace or generation
+ * - Capturing business-specific AI KPIs
+ *
+ * @param context - Basic tracking context
+ * @param context.userId - User ID for tracking
+ * @param context.sessionId - Session ID for tracking (optional)
+ * @param params - Metric parameters
+ * @param params.traceId - Trace ID to associate metric with
+ * @param params.metricName - Name of the metric
+ * @param params.metricValue - Numeric value of the metric
+ * @param params.metricUnit - Unit of measurement (optional)
+ * @param options - Optional tracking enrichment
+ * @param options.additionalProperties - Custom properties
+ */
+export async function trackMetric(
+  context: { userId: string; sessionId?: string },
+  params: {
+    traceId: string;
+    metricName: string;
+    metricValue: number;
+    metricUnit?: string;
+  },
+  options?: {
+    additionalProperties?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+
+  if (!posthog) {
+    return; // PostHog not initialized (non-production env)
+  }
+
+  try {
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_metric',
+      properties: {
+        // Required metric properties
+        $ai_trace_id: params.traceId,
+        $ai_metric_name: params.metricName,
+        $ai_metric_value: params.metricValue,
+
+        // Session linking
+        ...(context.sessionId && {
+          $session_id: context.sessionId,
+        }),
+
+        // Optional metric details
+        ...(params.metricUnit && {
+          $ai_metric_unit: params.metricUnit,
+        }),
+
+        // Additional properties
+        ...options?.additionalProperties,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail - don't break the application
+  }
+}
+
+// ============================================================================
+// PRE-SEARCH / WEB SEARCH TRACKING
+// ============================================================================
+
+/**
+ * Pre-search tracking context
+ *
+ * ✅ POSTHOG OFFICIAL: Tracks web search operations as $ai_span events
+ * Web searches are spans within the larger conversation trace
+ */
+export type PreSearchTrackingContext = {
+  userId: string;
+  sessionId?: string;
+  threadId: string;
+  roundNumber: number;
+  userQuery: string;
+  userTier?: string;
+};
+
+/**
+ * Pre-search tracking result
+ */
+export type PreSearchTrackingResult = {
+  traceId: string;
+  parentSpanId: string;
+};
+
+/**
+ * Initialize pre-search tracking and return trace/span IDs
+ *
+ * ✅ POSTHOG OFFICIAL: Creates parent span for all pre-search operations
+ * Allows grouping of query generation, web searches, and results in tree-view
+ */
+export function initializePreSearchTracking(): PreSearchTrackingResult {
+  return {
+    traceId: generateTraceId(),
+    parentSpanId: `span_${ulid()}`,
+  };
+}
+
+/**
+ * Track query generation as $ai_span
+ *
+ * ✅ POSTHOG OFFICIAL: Track AI query generation for web search
+ * This captures the AI's decision-making for multi-query generation
+ */
+export async function trackQueryGeneration(
+  context: PreSearchTrackingContext,
+  params: {
+    traceId: string;
+    parentSpanId: string;
+    queriesGenerated: number;
+    analysisRationale: string;
+    complexity: string;
+    modelId: string;
+  },
+  latencyMs: number,
+  usage?: { inputTokens: number; outputTokens: number },
+  options?: {
+    isError?: boolean;
+    error?: Error;
+    fallbackUsed?: boolean;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+  if (!posthog) {
+    return;
+  }
+
+  try {
+    const latencySeconds = latencyMs / 1000;
+    const provider = params.modelId.split('/')[0] || 'unknown';
+
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_span',
+      properties: {
+        // Required span properties
+        $ai_trace_id: params.traceId,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_parent_id: params.parentSpanId,
+        $ai_span_name: 'query_generation',
+
+        // Session linking
+        ...(context.sessionId && { $session_id: context.sessionId }),
+
+        // Input/Output state
+        $ai_input_state: { user_query: context.userQuery },
+        $ai_output_state: {
+          queries_generated: params.queriesGenerated,
+          complexity: params.complexity,
+          analysis_rationale: params.analysisRationale,
+        },
+
+        // Performance
+        $ai_latency: latencySeconds,
+        $ai_is_error: options?.isError || false,
+        $ai_model: params.modelId,
+        $ai_provider: provider,
+
+        // Token usage (if available from AI SDK)
+        ...(usage && {
+          $ai_input_tokens: usage.inputTokens,
+          $ai_output_tokens: usage.outputTokens,
+        }),
+
+        // Error details
+        ...(options?.error && {
+          $ai_error: {
+            message: options.error.message,
+            name: options.error.name,
+          },
+        }),
+
+        // Custom properties
+        thread_id: context.threadId,
+        round_number: context.roundNumber,
+        user_query: context.userQuery,
+        subscription_tier: context.userTier || 'free',
+        fallback_used: options?.fallbackUsed || false,
+        operation_type: 'pre_search_query_generation',
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail
+  }
+}
+
+/**
+ * Track web search execution as $ai_span
+ *
+ * ✅ POSTHOG OFFICIAL: Track individual web search operations
+ * Captures search query, results count, and timing
+ */
+export async function trackWebSearchExecution(
+  context: PreSearchTrackingContext,
+  params: {
+    traceId: string;
+    parentSpanId: string;
+    searchQuery: string;
+    searchIndex: number;
+    totalSearches: number;
+    resultsCount: number;
+    searchDepth: string;
+  },
+  latencyMs: number,
+  options?: {
+    isError?: boolean;
+    error?: Error;
+    cacheHit?: boolean;
+    searchCostUsd?: number;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+  if (!posthog) {
+    return;
+  }
+
+  try {
+    const latencySeconds = latencyMs / 1000;
+
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_span',
+      properties: {
+        // Required span properties
+        $ai_trace_id: params.traceId,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_parent_id: params.parentSpanId,
+        $ai_span_name: `web_search_${params.searchIndex + 1}_of_${params.totalSearches}`,
+
+        // Session linking
+        ...(context.sessionId && { $session_id: context.sessionId }),
+
+        // Input/Output state
+        $ai_input_state: {
+          search_query: params.searchQuery,
+          search_depth: params.searchDepth,
+          search_index: params.searchIndex,
+        },
+        $ai_output_state: {
+          results_count: params.resultsCount,
+          cache_hit: options?.cacheHit || false,
+        },
+
+        // Performance
+        $ai_latency: latencySeconds,
+        $ai_is_error: options?.isError || false,
+
+        // ✅ POSTHOG OFFICIAL: Web search cost tracking
+        ...(options?.searchCostUsd !== undefined && {
+          $ai_web_search_cost_usd: options.searchCostUsd,
+        }),
+
+        // Error details
+        ...(options?.error && {
+          $ai_error: {
+            message: options.error.message,
+            name: options.error.name,
+          },
+        }),
+
+        // Custom properties
+        thread_id: context.threadId,
+        round_number: context.roundNumber,
+        subscription_tier: context.userTier || 'free',
+        search_query: params.searchQuery,
+        search_index: params.searchIndex,
+        total_searches: params.totalSearches,
+        results_count: params.resultsCount,
+        search_depth: params.searchDepth,
+        cache_hit: options?.cacheHit || false,
+        operation_type: 'web_search_execution',
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail
+  }
+}
+
+/**
+ * Track complete pre-search operation
+ *
+ * ✅ POSTHOG OFFICIAL: Summary event for entire pre-search flow
+ * Links all child spans and provides aggregate metrics
+ */
+export async function trackPreSearchComplete(
+  context: PreSearchTrackingContext,
+  params: {
+    traceId: string;
+    parentSpanId: string;
+    totalQueries: number;
+    successfulSearches: number;
+    failedSearches: number;
+    totalResults: number;
+    totalWebSearchCostUsd?: number;
+  },
+  totalLatencyMs: number,
+  options?: {
+    isError?: boolean;
+    error?: Error;
+    errorCategory?: string;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+  if (!posthog) {
+    return;
+  }
+
+  try {
+    const latencySeconds = totalLatencyMs / 1000;
+
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_span',
+      properties: {
+        // Required span properties
+        $ai_trace_id: params.traceId,
+        $ai_span_id: params.parentSpanId, // Use parent span ID for the summary
+        $ai_span_name: 'pre_search_complete',
+
+        // Session linking
+        ...(context.sessionId && { $session_id: context.sessionId }),
+
+        // Input/Output state
+        $ai_input_state: { user_query: context.userQuery },
+        $ai_output_state: {
+          total_queries: params.totalQueries,
+          successful_searches: params.successfulSearches,
+          failed_searches: params.failedSearches,
+          total_results: params.totalResults,
+        },
+
+        // Performance
+        $ai_latency: latencySeconds,
+        $ai_is_error: options?.isError || false,
+
+        // ✅ POSTHOG OFFICIAL: Total web search cost
+        ...(params.totalWebSearchCostUsd !== undefined && {
+          $ai_web_search_cost_usd: params.totalWebSearchCostUsd,
+        }),
+
+        // Error details
+        ...(options?.error && {
+          $ai_error: {
+            message: options.error.message,
+            name: options.error.name,
+          },
+        }),
+
+        // Custom properties
+        thread_id: context.threadId,
+        round_number: context.roundNumber,
+        user_query: context.userQuery,
+        subscription_tier: context.userTier || 'free',
+        total_queries: params.totalQueries,
+        successful_searches: params.successfulSearches,
+        failed_searches: params.failedSearches,
+        total_results: params.totalResults,
+        success_rate: params.totalQueries > 0
+          ? params.successfulSearches / params.totalQueries
+          : 0,
+        operation_type: 'pre_search_summary',
+        ...(options?.errorCategory && { error_category: options.errorCategory }),
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail
+  }
+}
+
+// ============================================================================
+// ROUND & THREAD LIFECYCLE TRACKING
+// ============================================================================
+
+/**
+ * Track round completion event
+ *
+ * ✅ POSTHOG OFFICIAL: Track when a conversation round completes
+ * Captures aggregate metrics for the entire round
+ */
+export async function trackRoundComplete(
+  context: {
+    userId: string;
+    sessionId?: string;
+    threadId: string;
+    roundNumber: number;
+    threadMode: string;
+    userTier?: string;
+  },
+  params: {
+    participantCount: number;
+    totalTokens: number;
+    totalCostUsd: number;
+    hasWebSearch: boolean;
+    hasAnalysis: boolean;
+    roundDurationMs: number;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+  if (!posthog) {
+    return;
+  }
+
+  try {
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: 'round_complete',
+      properties: {
+        // Session linking
+        ...(context.sessionId && { $session_id: context.sessionId }),
+
+        // Round context
+        thread_id: context.threadId,
+        round_number: context.roundNumber,
+        thread_mode: context.threadMode,
+        subscription_tier: context.userTier || 'free',
+
+        // Metrics
+        participant_count: params.participantCount,
+        total_tokens: params.totalTokens,
+        total_cost_usd: params.totalCostUsd,
+        has_web_search: params.hasWebSearch,
+        has_analysis: params.hasAnalysis,
+        round_duration_seconds: params.roundDurationMs / 1000,
+
+        // Efficiency metrics
+        cost_per_participant: params.participantCount > 0
+          ? params.totalCostUsd / params.participantCount
+          : 0,
+        tokens_per_participant: params.participantCount > 0
+          ? params.totalTokens / params.participantCount
+          : 0,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail
+  }
+}
+
+/**
+ * Track thread creation event
+ *
+ * ✅ POSTHOG OFFICIAL: Track when a new conversation thread is created
+ */
+export async function trackThreadCreated(
+  context: {
+    userId: string;
+    sessionId?: string;
+    threadId: string;
+    threadMode: string;
+    userTier?: string;
+  },
+  params: {
+    participantCount: number;
+    enableWebSearch: boolean;
+    models: string[];
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+  if (!posthog) {
+    return;
+  }
+
+  try {
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: 'thread_created',
+      properties: {
+        // Session linking
+        ...(context.sessionId && { $session_id: context.sessionId }),
+
+        // Thread context
+        thread_id: context.threadId,
+        thread_mode: context.threadMode,
+        subscription_tier: context.userTier || 'free',
+
+        // Configuration
+        participant_count: params.participantCount,
+        enable_web_search: params.enableWebSearch,
+        models: params.models,
+        unique_models: [...new Set(params.models)].length,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail
   }
 }

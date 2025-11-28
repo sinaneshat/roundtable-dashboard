@@ -23,6 +23,7 @@ import type { ChatMode, ThreadStatus } from '@/api/core/enums';
 import { AnalysisStatuses, ChangelogTypes, DEFAULT_CHAT_MODE, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
+import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
 import {
   canAccessModelByPricing,
   getRequiredTierForModel,
@@ -308,6 +309,38 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     } catch {
       // Silent failure - thread is already created
       // Return with default "New Thread" title
+    }
+
+    // =========================================================================
+    // ✅ POSTHOG TRACKING: Track thread creation for analytics
+    // =========================================================================
+    // Non-blocking - use waitUntil to prevent blocking the response
+    const { session } = c.auth();
+    const trackThread = async () => {
+      try {
+        await trackThreadCreated(
+          {
+            userId: user.id,
+            sessionId: session?.id,
+            threadId,
+            threadMode: (body.mode || DEFAULT_CHAT_MODE) as string,
+            userTier,
+          },
+          {
+            participantCount: participants.length,
+            enableWebSearch: body.enableWebSearch ?? false,
+            models: participants.map(p => p.modelId),
+          },
+        );
+      } catch {
+        // Silently fail - analytics should never break thread creation
+      }
+    };
+
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(trackThread());
+    } else {
+      trackThread().catch(() => {});
     }
 
     return Responses.ok(c, {

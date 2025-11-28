@@ -42,6 +42,8 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
+import { shouldWaitForPreSearch } from './pending-message-sender';
+
 export type UseIncompleteRoundResumptionOptions = {
   /**
    * Thread ID to check for incomplete rounds
@@ -111,6 +113,10 @@ export function useIncompleteRoundResumption(
   const hasSentPendingMessage = useChatStore(s => s.hasSentPendingMessage);
   const hasEarlyOptimisticMessage = useChatStore(s => s.hasEarlyOptimisticMessage);
 
+  // ✅ PRE-SEARCH BLOCKING FIX: Subscribe to web search state for pre-search blocking check
+  // Resumption should NOT trigger participants if pre-search is still in progress
+  const enableWebSearch = useChatStore(s => s.enableWebSearch);
+
   // Track if we've already attempted resumption for this thread
   const resumptionAttemptedRef = useRef<string | null>(null);
   // Track if we've already attempted orphaned pre-search recovery for this thread
@@ -128,11 +134,17 @@ export function useIncompleteRoundResumption(
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 
   // ✅ ORPHANED PRE-SEARCH DETECTION
-  // Check if there's a completed pre-search for a round that has no user message
+  // Check if there's a pre-search for a round that has no user message
   // This happens when user refreshes during pre-search/changelog phase
+  //
+  // ✅ RESUMPTION FIX: Also detect STREAMING pre-searches as orphaned
+  // If user refreshes during streaming, the pre-search will be in STREAMING status
+  // but the user message hasn't been persisted yet, so we need to recover
   const orphanedPreSearch = preSearches.find((ps) => {
-    // Only check complete pre-searches
-    if (ps.status !== AnalysisStatuses.COMPLETE) {
+    // Check COMPLETE or STREAMING status - both can be orphaned
+    // PENDING is skipped because it means streaming hasn't started
+    // FAILED is skipped because recovery isn't possible
+    if (ps.status !== AnalysisStatuses.COMPLETE && ps.status !== AnalysisStatuses.STREAMING) {
       return false;
     }
 
@@ -385,6 +397,18 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ PRE-SEARCH BLOCKING FIX: Don't resume participants if pre-search is still in progress
+    // When user refreshes during pre-search streaming, we must wait for pre-search to complete
+    // before triggering participants. This reuses the same blocking logic as pendingMessage sender.
+    // The effect will re-run when preSearches updates (status changes from STREAMING to COMPLETE).
+    if (shouldWaitForPreSearch({
+      webSearchEnabled: enableWebSearch,
+      preSearches,
+      roundNumber: currentRoundNumber,
+    })) {
+      return;
+    }
+
     // Mark as attempted to prevent duplicate triggers
     resumptionAttemptedRef.current = threadId;
 
@@ -409,6 +433,10 @@ export function useIncompleteRoundResumption(
     hasEarlyOptimisticMessage,
     pendingMessage,
     hasSentPendingMessage,
+    // ✅ PRE-SEARCH BLOCKING FIX: Include pre-search state in dependencies
+    // Effect re-runs when preSearches changes (e.g., STREAMING → COMPLETE)
+    preSearches,
+    enableWebSearch,
     // Note: refs (activeStreamCheckCompleteRef, backendNextParticipantRef) are not in deps
     // because they don't cause re-renders - the effect checks their values when it runs
     setNextParticipantToTrigger,

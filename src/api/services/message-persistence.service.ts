@@ -75,28 +75,61 @@ export type SaveMessageParams = {
  * Extract reasoning from multiple sources
  *
  * Priority:
- * 1. Accumulated reasoning deltas from stream chunks
- * 2. finishResult.reasoning (OpenAI o1/o3)
- * 3. providerMetadata reasoning fields
+ * 1. Accumulated reasoning deltas from stream chunks (extractReasoningMiddleware output)
+ * 2. finishResult.reasoning as string (some models)
+ * 3. finishResult.reasoning as array (Claude extended thinking, AI SDK v5)
+ * 4. finishResult.reasoningText (Claude 4 models)
+ * 5. providerMetadata reasoning fields
  *
- * Reference: streaming.handler.ts lines 1146-1204
+ * ✅ AI SDK v5 FIX: Handle array format for Claude models with extended thinking
+ * Claude models return reasoning as an array of parts: { type: 'thinking' | 'redacted', text: string }[]
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#reasoning
  */
 function extractReasoning(
   reasoningDeltas: string[],
   finishResult: SaveMessageParams['finishResult'],
 ): string | null {
   // Priority 1: Use accumulated reasoning deltas from stream chunks
+  // This captures reasoning from extractReasoningMiddleware (DeepSeek, models with <think> tags)
   if (reasoningDeltas.length > 0) {
     return reasoningDeltas.join('');
   }
 
-  // Priority 2: Extract reasoning from finishResult directly (for OpenAI o1/o3)
-  const finishResultWithReasoning = finishResult as typeof finishResult & { reasoning?: string };
-  if (typeof finishResultWithReasoning.reasoning === 'string') {
-    return finishResultWithReasoning.reasoning;
+  // Priority 2: Extract reasoning from finishResult directly (string format)
+  if (typeof finishResult.reasoning === 'string' && finishResult.reasoning.trim()) {
+    return finishResult.reasoning.trim();
   }
 
-  // Priority 3: Extract from providerMetadata
+  // Priority 3: Extract reasoning from finishResult as array (Claude extended thinking, AI SDK v5)
+  // Claude models return: { type: 'thinking' | 'redacted', text: string }[]
+  // Other models may return: { text: string }[]
+  if (Array.isArray(finishResult.reasoning) && finishResult.reasoning.length > 0) {
+    const reasoningTexts: string[] = [];
+    for (const part of finishResult.reasoning) {
+      if (part && typeof part === 'object') {
+        // Handle ReasoningPart with text property
+        if ('text' in part && typeof part.text === 'string' && part.text.trim()) {
+          // Skip redacted reasoning parts (Claude can redact sensitive thinking)
+          if ('type' in part && part.type === 'redacted') {
+            continue;
+          }
+          reasoningTexts.push(part.text.trim());
+        }
+      }
+    }
+    if (reasoningTexts.length > 0) {
+      return reasoningTexts.join('\n\n');
+    }
+  }
+
+  // Priority 4: Extract from reasoningText (Claude 4 models via AI SDK)
+  // Claude 4 with interleaved thinking returns reasoningText as a separate property
+  const finishResultWithReasoningText = finishResult as typeof finishResult & { reasoningText?: string };
+  if (typeof finishResultWithReasoningText.reasoningText === 'string' && finishResultWithReasoningText.reasoningText.trim()) {
+    return finishResultWithReasoningText.reasoningText.trim();
+  }
+
+  // Priority 5: Extract from providerMetadata
   const metadata = finishResult.providerMetadata;
   if (!metadata || typeof metadata !== 'object') {
     return null;

@@ -22,6 +22,7 @@ import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-sc
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
 import { RoundAnalysisCard } from './moderator/round-analysis-card';
+import { PreSearchCard } from './pre-search-card';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
@@ -108,11 +109,18 @@ export function ThreadTimeline({
     }
   });
 
-  // Add analysis streaming rounds (check for streaming/pending status in timeline items)
-  // Include PENDING state to protect analyses that are about to stream
+  // Add analysis and pre-search streaming rounds (check for streaming/pending status in timeline items)
+  // Include PENDING state to protect items that are about to stream
   timelineItems.forEach((item) => {
     if (
       item.type === 'analysis'
+      && (item.data.status === AnalysisStatuses.STREAMING || item.data.status === AnalysisStatuses.PENDING)
+    ) {
+      streamingRounds.add(item.data.roundNumber);
+    }
+    // ✅ RESUMPTION FIX: Also protect pre-search timeline items
+    if (
+      item.type === 'pre-search'
       && (item.data.status === AnalysisStatuses.STREAMING || item.data.status === AnalysisStatuses.PENDING)
     ) {
       streamingRounds.add(item.data.roundNumber);
@@ -155,13 +163,16 @@ export function ThreadTimeline({
         if (!item)
           return null;
 
+        // ✅ RESUMPTION FIX: Handle all timeline item types including 'pre-search'
         const roundNumber = item.type === 'messages'
           ? extractRoundNumber(item.data[0]?.metadata)
           : item.type === 'analysis'
             ? item.data.roundNumber
             : item.type === 'changelog'
               ? item.data[0]?.roundNumber ?? DEFAULT_ROUND_NUMBER
-              : DEFAULT_ROUND_NUMBER;
+              : item.type === 'pre-search'
+                ? item.data.roundNumber
+                : DEFAULT_ROUND_NUMBER;
 
         return (
           <div
@@ -184,6 +195,24 @@ export function ThreadTimeline({
                       timestamp: new Date(item.data[0]!.createdAt),
                       changes: item.data,
                     }}
+                  />
+                </UnifiedErrorBoundary>
+              </div>
+            )}
+
+            {/* ✅ RESUMPTION FIX: Pre-search rendered at timeline level
+                This enables rendering pre-search cards even when user message
+                hasn't been persisted yet (e.g., page refresh during web search phase) */}
+            {item.type === 'pre-search' && (
+              <div className="mb-6">
+                <UnifiedErrorBoundary context="pre-search">
+                  <PreSearchCard
+                    threadId={threadId}
+                    preSearch={item.data}
+                    isLatest={itemIndex === timelineItems.length - 1}
+                    streamingRoundNumber={streamingRoundNumber}
+                    demoOpen={demoPreSearchOpen}
+                    demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
                   />
                 </UnifiedErrorBoundary>
               </div>

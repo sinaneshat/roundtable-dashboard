@@ -758,6 +758,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       maxRetries: AI_RETRY_CONFIG.maxAttempts - 1, // -1 because maxRetries doesn't count initial attempt
 
       onChunk: async ({ chunk }) => {
+        // ✅ AI SDK v5: Capture reasoning deltas from extractReasoningMiddleware
+        // For models with native reasoning (Claude, OpenAI o1/o3), reasoning is captured via
+        // finishResult.reasoning in onFinish and handled by extractReasoning() in message-persistence
         if (chunk.type === 'reasoning-delta') {
           reasoningDeltas.push(chunk.text);
         }
@@ -970,6 +973,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
                   // ✅ REASONING TOKENS: Pass calculated reasoning tokens
                   reasoningTokens,
+
+                  // ✅ POSTHOG OFFICIAL: Provider URL tracking for debugging
+                  providerUrls: {
+                    baseUrl: 'https://openrouter.ai',
+                    requestUrl: 'https://openrouter.ai/api/v1/chat/completions',
+                  },
 
                   // Additional custom properties for analytics
                   additionalProperties: {

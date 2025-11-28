@@ -3,6 +3,7 @@
 import { Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
 import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -137,12 +138,23 @@ function PreSearchStreamComponent({
   }, [onStreamStart]);
 
   // Custom SSE handler for backend's custom event format (POST with fetch)
+  // ✅ RESUMABLE STREAMS: Now also triggers for STREAMING status to attempt resumption
   useEffect(() => {
+    // Debug: Log when effect runs
+    console.debug('[PreSearchStream] Effect triggered', {
+      id: preSearch.id,
+      roundNumber: preSearch.roundNumber,
+      status: preSearch.status,
+      providerTriggered,
+      threadId,
+    });
+
     // ✅ CRITICAL FIX: Skip if provider is already handling this pre-search
     // The provider marks rounds as triggered in the store before executing
     // This prevents race condition during navigation (overview → thread screen)
     // where provider starts fetch, navigation aborts it, then PreSearchStream tries to start
     if (providerTriggered) {
+      console.debug('[PreSearchStream] Skipping - provider triggered');
       return;
     }
 
@@ -152,13 +164,16 @@ function PreSearchStreamComponent({
     // If provider already marked this round, we skip to prevent duplicate fetch
     const currentStoreState = store?.getState();
     if (currentStoreState?.hasPreSearchBeenTriggered(preSearch.roundNumber)) {
+      console.debug('[PreSearchStream] Skipping - store has triggered');
       return;
     }
 
-    // ✅ FIX: Only trigger for PENDING status, not STREAMING/COMPLETE/FAILED
-    // STREAMING status means the backend has already started processing
-    // COMPLETE/FAILED means it's done - no need to trigger
-    if (preSearch.status !== AnalysisStatuses.PENDING) {
+    // ✅ RESUMABLE STREAMS: Trigger for both PENDING and STREAMING status
+    // PENDING: Start new stream
+    // STREAMING: Attempt to resume from KV buffer (backend handles this automatically)
+    // COMPLETE/FAILED: No action needed
+    if (preSearch.status !== AnalysisStatuses.PENDING && preSearch.status !== AnalysisStatuses.STREAMING) {
+      console.debug('[PreSearchStream] Skipping - status not PENDING/STREAMING:', preSearch.status);
       return;
     }
 
@@ -168,6 +183,7 @@ function PreSearchStreamComponent({
 
     // If EITHER check passes, don't trigger
     if (idAlreadyTriggered || roundAlreadyTriggered) {
+      console.debug('[PreSearchStream] Skipping - already triggered', { idAlreadyTriggered, roundAlreadyTriggered });
       return;
     }
 
@@ -198,6 +214,12 @@ function PreSearchStreamComponent({
 
     // Start fetch-based SSE stream (backend uses POST)
     const startStream = async () => {
+      console.debug('[PreSearchStream] Starting stream POST request', {
+        threadId,
+        roundNumber: preSearch.roundNumber,
+        status: preSearch.status,
+      });
+
       try {
         // ✅ FIX: Guard against undefined userQuery (malformed JSON error)
         if (!preSearch.userQuery || typeof preSearch.userQuery !== 'string') {
@@ -223,6 +245,22 @@ function PreSearchStreamComponent({
           },
         );
 
+        // ✅ RESUMABLE STREAMS: Handle various response codes
+        // 200: Normal stream or resumed stream
+        // 202: Stream is active but no buffer yet - poll for completion (KV not available in local dev)
+        // 409: Conflict (legacy - should use 202 now)
+        if (response.status === 202) {
+          // Stream is active but buffer not ready - trigger polling
+          // This happens in local dev where KV isn't available for stream buffering
+          console.debug('[PreSearchStream] Received 202 - stream active but no buffer (KV unavailable). Falling back to polling.', {
+            threadId,
+            roundNumber: preSearch.roundNumber,
+            status: preSearch.status,
+          });
+          is409Conflict.onTrue();
+          return;
+        }
+
         if (!response.ok) {
           if (response.status === 409) {
             is409Conflict.onTrue();
@@ -233,6 +271,7 @@ function PreSearchStreamComponent({
         }
 
         // Parse SSE stream manually
+        // Note: Response may have X-Resumed-From-Buffer header if stream was resumed
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
 
@@ -246,6 +285,9 @@ function PreSearchStreamComponent({
 
         // ✅ CRITICAL FIX: Process events helper function
         // Extracted to be used both during streaming AND after stream ends
+        // ✅ PROGRESSIVE UI UPDATE: Uses flushSync to force immediate DOM updates
+        // Without flushSync, React 18 batches all state updates from rapid SSE events
+        // into a single render, causing UI to wait until all events are received
         const processEvent = (event: string, data: string) => {
           try {
             if (event === PreSearchSseEvents.START) {
@@ -262,7 +304,12 @@ function PreSearchStreamComponent({
               // Convert Maps to arrays sorted by index
               const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
               const results = Array.from(resultsMap.values());
-              setPartialSearchData({ queries, results });
+              // ✅ flushSync forces React to update DOM immediately
+              // This makes each query appear as it streams in
+              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              flushSync(() => {
+                setPartialSearchData({ queries, results });
+              });
             } else if (event === PreSearchSseEvents.RESULT) {
               const resultData = JSON.parse(data);
               resultsMap.set(resultData.index, {
@@ -274,14 +321,25 @@ function PreSearchStreamComponent({
               // Convert Maps to arrays sorted by index
               const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
               const results = Array.from(resultsMap.values());
-              setPartialSearchData({ queries, results });
+              // ✅ flushSync forces React to update DOM immediately
+              // This makes each result appear as it streams in
+              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              flushSync(() => {
+                setPartialSearchData({ queries, results });
+              });
             } else if (event === PreSearchSseEvents.DONE) {
               const finalData = JSON.parse(data);
-              setPartialSearchData(finalData);
+              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              flushSync(() => {
+                setPartialSearchData(finalData);
+              });
               onStreamCompleteRef.current?.(finalData);
             } else if (event === PreSearchSseEvents.FAILED) {
               const errorData = JSON.parse(data);
-              setError(new Error(errorData.error || 'Pre-search failed'));
+              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+              flushSync(() => {
+                setError(new Error(errorData.error || 'Pre-search failed'));
+              });
             }
           } catch {
             // Failed to parse event, continue
@@ -397,21 +455,30 @@ function PreSearchStreamComponent({
         if (!res.ok)
           throw new Error('Failed to fetch pre-searches');
 
-        const json = (await res.json()) as { data: StoredPreSearch[] };
-        const preSearches = json.data;
+        const json = await res.json() as { data?: { items?: StoredPreSearch[] } };
+        // ✅ FIX: Safely extract items array with proper validation
+        const items = json?.data?.items;
+        const preSearches = Array.isArray(items) ? items : [];
         const current = preSearches.find(ps => ps.id === preSearch.id);
 
         if (current) {
           if (current.status === AnalysisStatuses.COMPLETE && current.searchData) {
-            setPartialSearchData(current.searchData);
-            onStreamCompleteRef.current?.(current.searchData);
+            const completedData = current.searchData;
+            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
+            flushSync(() => {
+              setPartialSearchData(completedData);
+            });
+            onStreamCompleteRef.current?.(completedData);
             if (isMounted) {
               is409Conflict.onFalse(); // Stop polling
               isAutoRetrying.onFalse(); // Clear auto-retry state
             }
             return;
           } else if (current.status === AnalysisStatuses.FAILED) {
-            setError(new Error(current.errorMessage || 'Pre-search failed'));
+            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
+            flushSync(() => {
+              setError(new Error(current.errorMessage || 'Pre-search failed'));
+            });
             if (isMounted) {
               is409Conflict.onFalse(); // Stop polling
               isAutoRetrying.onFalse(); // Clear auto-retry state
@@ -439,16 +506,21 @@ function PreSearchStreamComponent({
     };
   }, [is409Conflict.value, threadId, preSearch.id, is409Conflict, isAutoRetrying]);
 
-  // Mark completed/failed/streaming pre-searches as triggered to prevent re-streaming
-  // ✅ FIX: Also mark STREAMING status to prevent duplicate triggers during status transitions
+  // ✅ REMOVED: Separate STREAMING polling effect is no longer needed
+  // The main SSE effect now handles STREAMING status via stream resumption
+  // Backend returns resumed stream (200 with X-Resumed-From-Buffer header) or 202 (poll)
+  // 202 triggers the 409 conflict polling mechanism above
+
+  // Mark completed/failed pre-searches as triggered to prevent re-triggering on re-renders
+  // ✅ RESUMABLE STREAMS: Do NOT mark STREAMING here - that would prevent useEffect from
+  // triggering the stream resumption. STREAMING is handled by the main effect now.
   const roundAlreadyMarked = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
 
   if (
     !triggeredSearchIds.has(preSearch.id)
     && !roundAlreadyMarked
     && (preSearch.status === AnalysisStatuses.COMPLETE
-      || preSearch.status === AnalysisStatuses.FAILED
-      || preSearch.status === AnalysisStatuses.STREAMING)
+      || preSearch.status === AnalysisStatuses.FAILED)
   ) {
     triggeredSearchIds.set(preSearch.id, true);
 

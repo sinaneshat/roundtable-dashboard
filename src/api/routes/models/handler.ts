@@ -20,7 +20,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { isRestrictedFreeModel } from '@/api/services/model-validation.service';
+import { filterModelsForEnvironment, isLocalDevMode } from '@/api/services/model-validation.service';
 import { getAllModels } from '@/api/services/models-config.service';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
@@ -93,12 +93,10 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // - Starter: $0.50/M (6 models) - DeepSeek + fast models (excellent value)
     // - Pro: $3.00/M (8 models) - Claude, GPT-4o, flagships ← MAIN UPSELL
     // - Power: Unlimited (4 models) - GPT-5, Claude Opus, ultra-premium
+    // ✅ FILTER MODELS BY ENVIRONMENT
+    // Free/dev models only available in local, filtered out in preview/prod
     const allModels = getAllModels();
-
-    // ✅ FILTER OUT RESTRICTED FREE MODELS
-    // Remove models that require special OpenRouter privacy policy settings
-    // These models fail with 404 "No endpoints found matching your data policy"
-    const enhancedModels = allModels.filter(model => !isRestrictedFreeModel(model.id));
+    const enhancedModels = filterModelsForEnvironment(allModels);
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
@@ -141,17 +139,16 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ============================================================================
     // ✅ DEFAULT MODEL: Select best accessible model
     // ============================================================================
-    // In development mode, prefer Gemini Flash Lite (free) to reduce costs
-    const isDevMode = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.env.NODE_ENV === 'development';
+    // In local dev, prefer Gemini Flash Lite (cheap) to reduce costs
     const devDefaultModel = 'google/gemini-2.5-flash-lite';
 
     let defaultModelId: string;
-    if (isDevMode) {
-      // In dev, prefer Gemini Flash Lite if accessible, otherwise fall back to first accessible
+    if (isLocalDevMode()) {
+      // In local, prefer Gemini Flash Lite if accessible, otherwise fall back to first accessible
       const devModel = sortedModels.find(m => m.id === devDefaultModel && m.is_accessible_to_user);
       defaultModelId = devModel?.id || sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
     } else {
-      // In production, use best accessible model (sorted by flagship score)
+      // In preview/prod, use best accessible model (sorted by flagship score)
       defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
     }
 

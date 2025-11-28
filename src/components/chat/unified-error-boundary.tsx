@@ -17,7 +17,7 @@ import { Card } from '@/components/ui/card';
 // Types
 // ============================================================================
 
-type ErrorContext = 'chat' | 'message-list' | 'configuration' | 'general';
+type ErrorContext = 'chat' | 'message-list' | 'configuration' | 'pre-search' | 'general';
 
 type UnifiedErrorBoundaryProps = {
   children: ReactNode;
@@ -59,6 +59,8 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
         return 'There was an error displaying messages. The messages are saved and will appear after refreshing.';
       case 'configuration':
         return 'Configuration changes could not be applied. Please try again.';
+      case 'pre-search':
+        return 'Web search results could not be loaded. Please try again.';
       default:
         return 'Something went wrong. Please refresh the page to continue.';
     }

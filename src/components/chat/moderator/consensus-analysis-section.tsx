@@ -99,9 +99,28 @@ export function ConsensusAnalysisSection({
     ) satisfies ChartConfig
     : ({} satisfies ChartConfig);
 
-  const contributors = agreementHeatmap && agreementHeatmap.length > 0
-    ? Object.keys(agreementHeatmap[0]?.perspectives || {})
-    : [];
+  // Collect ALL unique contributors from ALL heatmap entries AND argumentStrengthProfile
+  const contributors = (() => {
+    const uniqueContributors = new Set<string>();
+
+    // Add contributors from ALL heatmap entries
+    if (agreementHeatmap && agreementHeatmap.length > 0) {
+      agreementHeatmap.forEach((entry) => {
+        Object.keys(entry.perspectives || {}).forEach((contributor) => {
+          uniqueContributors.add(contributor);
+        });
+      });
+    }
+
+    // Also add from argumentStrengthProfile to ensure consistency
+    if (argumentStrengthProfile) {
+      Object.keys(argumentStrengthProfile).forEach((contributor) => {
+        uniqueContributors.add(contributor);
+      });
+    }
+
+    return Array.from(uniqueContributors);
+  })();
 
   // Only render if we have alignment data
   const hasAlignmentData = alignmentSummary && alignmentSummary.totalClaims > 0;

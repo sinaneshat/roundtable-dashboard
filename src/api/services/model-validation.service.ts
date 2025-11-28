@@ -1,11 +1,7 @@
 /**
  * Model Validation Service
  *
- * Validates model availability before use and filters unavailable models
- * from being shown to users. Handles OpenRouter-specific issues like
- * `:free` models requiring specific data privacy policy settings.
- *
- * @see /docs/backend-patterns.md - Service layer patterns
+ * Filters free models (only shown in local dev) and validates model availability.
  */
 
 import { createError } from '@/api/common/error-handling';
@@ -16,15 +12,8 @@ import type { HardcodedModel, ModelId } from './models-config.service';
 import { getAllModels } from './models-config.service';
 import { openRouterService } from './openrouter.service';
 
-// ============================================================================
-// MODEL AVAILABILITY VALIDATION
-// ============================================================================
-
-/**
- * Models that require special OpenRouter privacy policy settings
- * These models fail with 404 if the account doesn't have "Free model publication" enabled
- */
-const RESTRICTED_FREE_MODELS = new Set<string>([
+/** Free models - only available in local dev mode */
+const FREE_MODELS = new Set<string>([
   'deepseek/deepseek-chat-v3.1:free',
   'deepseek/deepseek-r1:free',
   'deepseek/deepseek-chat-v3-0324:free',
@@ -33,31 +22,26 @@ const RESTRICTED_FREE_MODELS = new Set<string>([
   'meta-llama/llama-3.3-70b-instruct:free',
 ]);
 
-/**
- * Mapping of free models to their paid equivalents
- * Note: Some free models don't have paid equivalents in our enum, so they're excluded
- */
+/** Fallback to paid equivalents if free model fails */
 const FREE_MODEL_FALLBACKS: Record<string, ModelId> = {
   'deepseek/deepseek-chat-v3.1:free': 'deepseek/deepseek-chat-v3.1',
   'deepseek/deepseek-r1:free': 'deepseek/deepseek-r1',
   'deepseek/deepseek-chat-v3-0324:free': 'deepseek/deepseek-chat-v3-0324',
   'meta-llama/llama-4-scout:free': 'meta-llama/llama-4-scout',
   'meta-llama/llama-4-maverick:free': 'meta-llama/llama-4-maverick',
-  // Note: meta-llama/llama-3.3-70b-instruct (non-free) is not in our enum
-  // If :free version fails, we have no fallback - model will be filtered out
 } as const;
 
-/**
- * Check if a model is a restricted free model
- */
-export function isRestrictedFreeModel(modelId: string): boolean {
-  return RESTRICTED_FREE_MODELS.has(modelId);
+/** Check if running in local dev mode */
+export function isLocalDevMode(): boolean {
+  return process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
 }
 
-/**
- * Get fallback model for a restricted free model
- * Returns undefined if no fallback exists
- */
+/** Check if model is a free model (local dev only) */
+export function isFreeModel(modelId: string): boolean {
+  return FREE_MODELS.has(modelId);
+}
+
+/** Get paid fallback for a free model */
 export function getFallbackModel(modelId: string): ModelId | undefined {
   return FREE_MODEL_FALLBACKS[modelId];
 }
@@ -96,23 +80,34 @@ export async function validateModelAvailability(
 }
 
 /**
+ * Filter models based on environment
+ * Free/dev models only available in local, filtered out in preview/prod
+ */
+export function filterModelsForEnvironment(models: readonly HardcodedModel[]): HardcodedModel[] {
+  if (isLocalDevMode()) {
+    return [...models]; // Include all models in local dev
+  }
+  return models.filter(model => !isFreeModel(model.id));
+}
+
+/**
  * Filter models to only include available ones
- * Removes restricted free models that aren't accessible
+ * Removes restricted free models in non-local environments
  */
 export async function getAvailableModels(
   env: ApiEnv['Bindings'],
   skipValidation = false,
 ): Promise<HardcodedModel[]> {
   const allModels = getAllModels();
+  const filteredModels = filterModelsForEnvironment(allModels);
 
-  // In development or if validation is skipped, filter out restricted free models
-  if (skipValidation || process.env.NODE_ENV === 'development') {
-    return allModels.filter(model => !isRestrictedFreeModel(model.id));
+  if (skipValidation || isLocalDevMode()) {
+    return filteredModels;
   }
 
   // In production, validate each model (with caching in future)
   const availabilityChecks = await Promise.all(
-    allModels.map(async model => ({
+    filteredModels.map(async model => ({
       model,
       available: await validateModelAvailability(model.id, env),
     })),
@@ -128,7 +123,7 @@ export async function getAvailableModels(
  * If a restricted free model is requested but unavailable, returns the paid equivalent
  */
 export function resolveModelWithFallback(requestedModelId: ModelId): ModelId {
-  if (isRestrictedFreeModel(requestedModelId)) {
+  if (isFreeModel(requestedModelId)) {
     const fallback = getFallbackModel(requestedModelId);
     if (fallback) {
       return fallback;
@@ -167,7 +162,7 @@ export function createModelUnavailableError(modelId: string): Error {
 
   let message = `Model '${modelId}' is not available.`;
 
-  if (isRestrictedFreeModel(modelId)) {
+  if (isFreeModel(modelId)) {
     const fallback = getFallbackModel(modelId);
     message += ` This free model requires specific OpenRouter privacy settings.`;
     if (fallback) {

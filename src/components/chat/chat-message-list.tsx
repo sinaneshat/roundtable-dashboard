@@ -831,7 +831,7 @@ export const ChatMessageList = memo(
       }
 
       return groups;
-    }, [messagesWithParticipantInfo, findModel, userTier, userInfo, userAvatarSrc, userAvatarName, allStreamingRoundParticipantsHaveContent, isStreaming, _streamingRoundNumber]);
+    }, [messagesWithParticipantInfo, findModel, userTier, userInfo, userAvatarSrc, userAvatarName, allStreamingRoundParticipantsHaveContent, _streamingRoundNumber]);
 
     // Group messages by round for pre-search injection
     const messageGroupsByRound = new Map<number, MessageGroup[]>();

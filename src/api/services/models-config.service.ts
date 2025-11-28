@@ -13,12 +13,19 @@
  * - Runtime validation with compile-time type safety
  * - Single source exports used across entire codebase
  *
- * ✅ TOP 20 MODELS (October 2025):
+ * ✅ TOP MODELS (November 28, 2025):
  * Curated from authoritative sources:
+ * - OpenRouter leaderboard rankings (real-world token usage)
  * - Chatbot Arena / LMArena leaderboards (performance rankings)
- * - OpenRouter usage statistics (real-world adoption)
  * - Industry benchmarks (SWE-bench, MMLU, HumanEval)
  * - Expert reviews and community feedback
+ *
+ * TOP RANKINGS BY TOKEN USAGE (Nov 2025):
+ * 1. x-ai/grok-code-fast-1 (42.3%)
+ * 2. anthropic/claude-sonnet-4.5 (13.0%)
+ * 3. google/gemini-3-pro-preview (4.6%)
+ * 4. x-ai/grok-4.1-fast (3.6%)
+ * 5. anthropic/claude-opus-4.5 (3.1%)
  *
  * ⚠️ DO NOT:
  * - Create duplicate model lists elsewhere
@@ -41,9 +48,12 @@ import { ModelCategorySchema } from '@/api/core/enums';
 /**
  * ✅ MODEL ID ENUM: All allowed model IDs as Zod enum
  * This is the single source of truth for what models are allowed in the app
+ *
+ * Updated: November 28, 2025 - Based on OpenRouter leaderboard rankings
  */
 export const ModelIdEnum = z.enum([
   // Google Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/google)
+  'google/gemini-3-pro-preview', // NEW: #4 on OpenRouter rankings (Nov 2025)
   'google/gemini-2.5-pro',
   'google/gemini-2.5-flash',
   'google/gemini-2.5-flash-lite',
@@ -55,6 +65,7 @@ export const ModelIdEnum = z.enum([
   'openai/gpt-5-mini',
   'openai/gpt-5-nano',
   'openai/gpt-4o',
+  'openai/gpt-4.1-mini', // NEW: Updated model ID
   'openai/o1',
   'openai/o3-mini',
   'openai/o3-mini-high',
@@ -63,6 +74,7 @@ export const ModelIdEnum = z.enum([
   'openai/gpt-4-turbo',
 
   // Anthropic Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/anthropic)
+  'anthropic/claude-opus-4.5', // NEW: Released Nov 24, 2025 - #6 on rankings
   'anthropic/claude-sonnet-4.5',
   'anthropic/claude-haiku-4.5',
   'anthropic/claude-sonnet-4',
@@ -75,9 +87,10 @@ export const ModelIdEnum = z.enum([
   // xAI Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/x-ai)
   'x-ai/grok-4',
   'x-ai/grok-4-fast',
+  'x-ai/grok-4.1-fast', // NEW: #5 on OpenRouter rankings
   'x-ai/grok-3',
   'x-ai/grok-3-mini',
-  'x-ai/grok-code-fast-1',
+  'x-ai/grok-code-fast-1', // #1 on OpenRouter rankings (42.3% token usage!)
 
   // DeepSeek Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/deepseek)
   'deepseek/deepseek-chat-v3.1',
@@ -192,7 +205,7 @@ export const HardcodedModelSchema = z.object({
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
 
 // ============================================================================
-// COMPREHENSIVE MODEL CATALOG (November 2025)
+// COMPREHENSIVE MODEL CATALOG (November 28, 2025)
 // ============================================================================
 
 /**
@@ -200,8 +213,8 @@ export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
  *
  * Selected based on:
  * - OpenRouter availability and verified model IDs
- * - Chatbot Arena / LMArena rankings (Nov 2025)
- * - OpenRouter usage statistics
+ * - OpenRouter leaderboard rankings (Nov 28, 2025)
+ * - Chatbot Arena / LMArena rankings
  * - Performance benchmarks and industry reviews
  * - Text-only models (excludes image generation like Nano Banana/Imagen)
  *
@@ -214,11 +227,53 @@ export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
 export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   // ========== GOOGLE MODELS ==========
 
+  // NEW: Gemini 3 Pro Preview - #4 on OpenRouter rankings (Nov 2025)
+  {
+    id: 'google/gemini-3-pro-preview',
+    name: 'Gemini 3 Pro Preview',
+    description:
+      'Google\'s flagship frontier model for high-precision multimodal reasoning. State-of-the-art on LMArena, GPQA Diamond, MathArena Apex. 1M token context with tiered pricing.',
+    context_length: 1000000,
+    created: 1731888000, // Nov 18, 2025
+    pricing: {
+      prompt: '0.00000200', // $2.00 per 1M tokens (<200k context)
+      completion: '0.00001200', // $12.00 per 1M tokens
+    },
+    top_provider: {
+      context_length: 1000000,
+      max_completion_tokens: 64000,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image+video+audio->text',
+      tokenizer: 'Gemini',
+      instruct_type: 'gemini',
+    },
+    provider: 'google',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$2.00/1M tokens',
+      output: '$12.00/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
+  },
+
   {
     id: 'google/gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
     description:
-      '#1 on Chatbot Arena. Google\'s most advanced multimodal model with 2M token context and exceptional reasoning capabilities.',
+      'Google\'s advanced multimodal model with 2M token context. Previous flagship now superseded by Gemini 3.',
     context_length: 2000000,
     created: 1709251200, // March 2025
     pricing: {
@@ -337,13 +392,55 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     supports_reasoning_stream: true,
   },
 
-  // ========== PREMIUM MODELS (Rank 6-12) ==========
+  // ========== PREMIUM MODELS ==========
+
+  // NEW: Claude Opus 4.5 - Released Nov 24, 2025 - #6 on OpenRouter rankings
+  {
+    id: 'anthropic/claude-opus-4.5',
+    name: 'Claude 4.5 Opus',
+    description:
+      'Anthropic\'s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. Strong multimodal capabilities with improved robustness.',
+    context_length: 200000,
+    created: 1732406400, // Nov 24, 2025
+    pricing: {
+      prompt: '0.00000500', // $5 per 1M tokens (much cheaper than Opus 4!)
+      completion: '0.00002500', // $25 per 1M tokens
+    },
+    top_provider: {
+      context_length: 200000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'Claude',
+      instruct_type: 'claude',
+    },
+    provider: 'anthropic',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$5/1M tokens',
+      output: '$25/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
+  },
 
   {
     id: 'anthropic/claude-opus-4',
     name: 'Claude 4 Opus',
     description:
-      'Anthropic\'s most powerful Claude 4 model. Exceptional for complex reasoning, creative tasks, and detailed analysis.',
+      'Anthropic\'s Claude 4 Opus model. Exceptional for complex reasoning, creative tasks, and detailed analysis. Superseded by Opus 4.5.',
     context_length: 200000,
     created: 1709251200, // March 2024
     pricing: {
@@ -384,7 +481,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     id: 'openai/gpt-4o',
     name: 'GPT-4o',
     description:
-      'OpenAI\'s most popular chatbot model with 60.4% market share. Balanced performance for general-purpose tasks with vision capabilities.',
+      'OpenAI\'s popular chatbot model. Balanced performance for general-purpose tasks with vision capabilities.',
     context_length: 128000,
     created: 1715385600, // May 2024
     pricing: {
@@ -416,6 +513,48 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: true,
+    is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
+  },
+
+  // NEW: GPT 4.1 Mini - Updated model on OpenRouter (Nov 2025)
+  {
+    id: 'openai/gpt-4.1-mini',
+    name: 'GPT-4.1 Mini',
+    description:
+      'OpenAI\'s compact and efficient GPT-4.1 model. Great for high-throughput tasks with strong general capabilities.',
+    context_length: 128000,
+    created: 1731801600, // Nov 2025
+    pricing: {
+      prompt: '0.00000015', // $0.15 per 1M tokens
+      completion: '0.00000060', // $0.60 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 16384,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.15/1M tokens',
+      output: '$0.60/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
     is_reasoning_model: false,
     supports_temperature: true,
     supports_reasoning_stream: false,
@@ -794,13 +933,14 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
 
   // ========== SPECIALIZED MODELS (Rank 13-20) ==========
 
+  // #1 ON OPENROUTER RANKINGS (42.3% token usage - Nov 2025)
   {
     id: 'x-ai/grok-code-fast-1',
     name: 'Grok Code Fast',
     description:
-      'xAI\'s specialized coding model optimized for speed. Top performer for rapid code generation and developer workflows.',
+      '#1 on OpenRouter. xAI\'s specialized coding model with ~190 tokens/sec. Excels at agentic coding, bug fixes, code reviews. Best price-performance ratio.',
     context_length: 128000,
-    created: 1720051200, // July 2024
+    created: 1724803200, // Aug 28, 2025
     pricing: {
       prompt: '0.00000020', // $0.20 per 1M tokens
       completion: '0.00000150', // $1.50 per 1M tokens
@@ -921,9 +1061,51 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     id: 'x-ai/grok-4-fast',
     name: 'Grok 4 Fast',
     description:
-      'xAI\'s latest multimodal model with SOTA cost-efficiency and 2M token context. Optimized for speed without sacrificing quality.',
+      'xAI\'s multimodal model with SOTA cost-efficiency and 2M token context. Optimized for speed without sacrificing quality.',
     context_length: 2000000,
     created: 1706832000, // Feb 2025
+    pricing: {
+      prompt: '0.00000050', // $0.50 per 1M tokens
+      completion: '0.00000150', // $1.50 per 1M tokens
+    },
+    top_provider: {
+      context_length: 2000000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'Grok',
+      instruct_type: 'grok',
+    },
+    provider: 'x-ai',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.50/1M tokens',
+      output: '$1.50/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
+  },
+
+  // NEW: Grok 4.1 Fast - #5 on OpenRouter rankings (Nov 2025)
+  {
+    id: 'x-ai/grok-4.1-fast',
+    name: 'Grok 4.1 Fast',
+    description:
+      'xAI\'s latest Grok 4.1 with enhanced speed and reasoning. Top performer on OpenRouter rankings. Optimized for fast inference.',
+    context_length: 2000000,
+    created: 1731801600, // Nov 2025
     pricing: {
       prompt: '0.00000050', // $0.50 per 1M tokens
       completion: '0.00000150', // $1.50 per 1M tokens

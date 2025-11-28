@@ -80,6 +80,13 @@ export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
  */
 const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
   // Claude Models (Excellent JSON mode support)
+  'anthropic/claude-opus-4.5': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.EXCELLENT,
+  },
   'anthropic/claude-sonnet-4.5': {
     structuredOutput: true,
     streaming: true,
@@ -139,8 +146,22 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     vision: true,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
+  'openai/gpt-4.1-mini': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
 
   // Gemini Models (Good JSON mode support)
+  'google/gemini-3-pro-preview': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.EXCELLENT,
+  },
   'google/gemini-2.5-flash': {
     structuredOutput: true,
     streaming: true,
@@ -160,6 +181,36 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     streaming: true,
     functionCalling: true,
     vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+
+  // xAI Grok Models (Good JSON mode support)
+  'x-ai/grok-code-fast-1': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'x-ai/grok-4': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'x-ai/grok-4-fast': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'x-ai/grok-4.1-fast': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
 

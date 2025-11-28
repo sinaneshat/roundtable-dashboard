@@ -215,11 +215,15 @@ export function ChatView({
       .filter(Boolean) as typeof orderedModels;
   }, [selectedParticipants, allEnabledModels, modelOrder]);
 
-  // Timeline with messages, analyses, and changelog
+  // Timeline with messages, analyses, changelog, and pre-searches
+  // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
+  // This enables rendering pre-search cards even when user message
+  // hasn't been persisted yet (e.g., page refresh during web search phase)
   const timelineItems: TimelineItem[] = useThreadTimeline({
     messages,
     analyses,
     changelog,
+    preSearches,
   });
 
   // ============================================================================

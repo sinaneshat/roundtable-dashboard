@@ -29,6 +29,13 @@ import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AnalysisStatuses, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
+import type { PreSearchTrackingContext } from '@/api/services/posthog-llm-tracking.service';
+import {
+  initializePreSearchTracking,
+  trackPreSearchComplete,
+  trackQueryGeneration,
+  trackWebSearchExecution,
+} from '@/api/services/posthog-llm-tracking.service';
 import {
   appendPreSearchStreamChunk,
   clearActivePreSearchStream,
@@ -41,6 +48,7 @@ import {
 } from '@/api/services/pre-search-stream-buffer.service';
 import { analyzeQueryComplexity } from '@/api/services/prompts.service';
 import { isQuerySearchable, simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
+import { getUserTier } from '@/api/services/usage-tracking.service';
 import {
   createSearchCache,
   generateSearchQuery,
@@ -301,6 +309,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     const streamId = generatePreSearchStreamId(threadId, roundNum);
     await initializePreSearchStreamBuffer(streamId, threadId, roundNum, existingSearch.id, c.env);
 
+    // ✅ POSTHOG LLM TRACKING: Initialize pre-search tracking
+    const { session } = c.auth();
+    const userTier = await getUserTier(user.id);
+    const { traceId: preSearchTraceId, parentSpanId: preSearchParentSpanId } = initializePreSearchTracking();
+
     return streamSSE(c, async (stream) => {
       // ✅ BUFFERED SSE: Wrapper to buffer all SSE events for stream resumption
       const bufferedWriteSSE = async (payload: { event: string; data: string }) => {
@@ -312,9 +325,22 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         );
       };
 
+      // ✅ POSTHOG TRACKING CONTEXT
+      const trackingContext: PreSearchTrackingContext = {
+        userId: user.id,
+        sessionId: session?.id,
+        threadId,
+        roundNumber: roundNum,
+        userQuery: body.userQuery,
+        userTier,
+      };
+
+      // ✅ Define startTime outside try for error tracking access
+      const startTime = performance.now();
+
       try {
         const searchCache = createSearchCache();
-        const startTime = performance.now();
+        const queryGenerationStartTime = performance.now();
 
         // ✅ MULTI-QUERY: Stream query generation and get all queries
         let multiQueryResult: MultiQueryGeneration | null = null;
@@ -582,6 +608,23 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           }),
         });
 
+        // ✅ POSTHOG TRACKING: Track query generation completion
+        const queryGenerationDuration = performance.now() - queryGenerationStartTime;
+        c.executionCtx.waitUntil(
+          trackQueryGeneration(
+            trackingContext,
+            {
+              traceId: preSearchTraceId,
+              parentSpanId: preSearchParentSpanId,
+              queriesGenerated: totalQueries,
+              analysisRationale: multiQueryResult.analysisRationale || '',
+              complexity: complexityResult.complexity,
+              modelId: 'google/gemini-2.5-flash', // WEB_SEARCH model from AIModels
+            },
+            queryGenerationDuration,
+          ),
+        );
+
         // ✅ MULTI-QUERY EXECUTION: Execute all queries and collect results
         const allResults: Array<{ query: GeneratedSearchQuery; result: WebSearchResult | null; duration: number }> = [];
 
@@ -617,9 +660,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           }
 
           // Execute search for this query
+          const searchStartTime = performance.now();
           try {
-            const searchStartTime = performance.now();
-
             // Send initial "searching" state
             await bufferedWriteSSE({
               event: PreSearchSseEvents.RESULT,
@@ -721,7 +763,27 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             });
 
             allResults.push({ query: generatedQuery, result, duration: searchDuration });
+
+            // ✅ POSTHOG TRACKING: Track successful web search execution
+            c.executionCtx.waitUntil(
+              trackWebSearchExecution(
+                trackingContext,
+                {
+                  traceId: preSearchTraceId,
+                  parentSpanId: preSearchParentSpanId,
+                  searchQuery: generatedQuery.query,
+                  searchIndex: queryIndex,
+                  totalSearches: totalQueries,
+                  resultsCount: result.results.length,
+                  searchDepth: generatedQuery.searchDepth || 'basic',
+                },
+                searchDuration,
+                { cacheHit: false },
+              ),
+            );
           } catch (error) {
+            const searchDurationOnError = performance.now() - searchStartTime;
+
             await bufferedWriteSSE({
               event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
@@ -738,6 +800,27 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }),
             });
             allResults.push({ query: generatedQuery, result: null, duration: 0 });
+
+            // ✅ POSTHOG TRACKING: Track failed web search execution
+            c.executionCtx.waitUntil(
+              trackWebSearchExecution(
+                trackingContext,
+                {
+                  traceId: preSearchTraceId,
+                  parentSpanId: preSearchParentSpanId,
+                  searchQuery: generatedQuery.query,
+                  searchIndex: queryIndex,
+                  totalSearches: totalQueries,
+                  resultsCount: 0,
+                  searchDepth: generatedQuery.searchDepth || 'basic',
+                },
+                searchDurationOnError,
+                {
+                  isError: true,
+                  error: error instanceof Error ? error : new Error(String(error)),
+                },
+              ),
+            );
           }
         }
 
@@ -838,6 +921,22 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             data: JSON.stringify(searchData),
           });
 
+          // ✅ POSTHOG TRACKING: Track successful pre-search completion
+          c.executionCtx.waitUntil(
+            trackPreSearchComplete(
+              trackingContext,
+              {
+                traceId: preSearchTraceId,
+                parentSpanId: preSearchParentSpanId,
+                totalQueries,
+                successfulSearches: successfulResults.length,
+                failedSearches: totalQueries - successfulResults.length,
+                totalResults: allSearchResults.length,
+              },
+              totalTime,
+            ),
+          );
+
           // ✅ BUFFER COMPLETION: Mark stream as complete and clear active
           c.executionCtx.waitUntil(
             Promise.all([
@@ -868,6 +967,26 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               errorCategory: errorMetadata.errorCategory,
             }),
           });
+
+          // ✅ POSTHOG TRACKING: Track failed pre-search (no successful searches)
+          c.executionCtx.waitUntil(
+            trackPreSearchComplete(
+              trackingContext,
+              {
+                traceId: preSearchTraceId,
+                parentSpanId: preSearchParentSpanId,
+                totalQueries,
+                successfulSearches: 0,
+                failedSearches: totalQueries,
+                totalResults: 0,
+              },
+              totalTime,
+              {
+                isError: true,
+                errorCategory: errorMetadata.errorCategory,
+              },
+            ),
+          );
 
           // ✅ BUFFER FAILURE: Mark stream as failed and clear active
           c.executionCtx.waitUntil(
@@ -902,6 +1021,27 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             isTransient: errorMetadata.isTransientError,
           }),
         });
+
+        // ✅ POSTHOG TRACKING: Track pre-search error
+        c.executionCtx.waitUntil(
+          trackPreSearchComplete(
+            trackingContext,
+            {
+              traceId: preSearchTraceId,
+              parentSpanId: preSearchParentSpanId,
+              totalQueries: 0,
+              successfulSearches: 0,
+              failedSearches: 0,
+              totalResults: 0,
+            },
+            performance.now() - startTime,
+            {
+              isError: true,
+              error: error instanceof Error ? error : new Error(String(error)),
+              errorCategory: errorMetadata.errorCategory,
+            },
+          ),
+        );
 
         // ✅ BUFFER FAILURE: Mark stream as failed and clear active
         const errorMsg = errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Pre-search failed');

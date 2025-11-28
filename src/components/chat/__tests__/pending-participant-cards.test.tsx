@@ -66,8 +66,13 @@ function calculatePendingParticipants(params: {
     preSearchStatus,
   } = params;
 
+  // ✅ CRITICAL FIX: Filter by isEnabled BEFORE sorting (matching component fix)
+  // Only enabled participants should be considered for pending cards
+  // Disabled participants from previous configurations should not render
+  const enabledParticipants = participants.filter(p => p.isEnabled);
+
   // ✅ CRITICAL FIX: Sort participants by priority FIRST, matching actual component behavior
-  const sortedParticipants = [...participants].sort((a, b) => a.priority - b.priority);
+  const sortedParticipants = [...enabledParticipants].sort((a, b) => a.priority - b.priority);
 
   // Get assistant messages for this round
   const assistantMessages = messages.filter(
@@ -103,7 +108,7 @@ function calculatePendingParticipants(params: {
   const preSearchComplete = preSearchStatus === AnalysisStatuses.COMPLETE;
   const isLatestRound = roundNumber === streamingRoundNumber || preSearchActive || preSearchComplete;
 
-  if (!isLatestRound || participants.length === 0) {
+  if (!isLatestRound || enabledParticipants.length === 0) {
     return [];
   }
 
@@ -1193,6 +1198,156 @@ describe('duplicate Rendering Prevention', () => {
 
       // Participant 1 has empty content, so should show pending card
       expect(pending).toEqual([1]);
+    });
+  });
+
+  /**
+   * ✅ CRITICAL BUG FIX: isEnabled Filtering
+   *
+   * These tests cover the bug where disabled participants (from previous
+   * configurations) were being rendered as pending cards.
+   *
+   * Root cause: When user changes participants mid-conversation, old
+   * participants are set to isEnabled: false but remain in the participants
+   * array. The ChatMessageList component must filter by isEnabled BEFORE
+   * rendering pending cards.
+   *
+   * @see src/components/chat/chat-message-list.tsx - sortedParticipants filtering
+   */
+  describe('isEnabled filtering - prevents disabled participants from rendering', () => {
+    /**
+     * Creates mock participants with specific enabled/disabled states
+     */
+    function createMixedParticipants() {
+      return [
+        // Disabled participants from previous configuration
+        { id: 'old-p0', modelId: 'old-model-0', role: 'Old Role 0', isEnabled: false, priority: 0, sortOrder: 0, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'old-p1', modelId: 'old-model-1', role: 'Old Role 1', isEnabled: false, priority: 1, sortOrder: 1, threadId: 'test-thread', createdAt: new Date() },
+        // Enabled participants from current configuration
+        { id: 'new-p0', modelId: 'new-model-0', role: 'New Role 0', isEnabled: true, priority: 0, sortOrder: 2, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'new-p1', modelId: 'new-model-1', role: 'New Role 1', isEnabled: true, priority: 1, sortOrder: 3, threadId: 'test-thread', createdAt: new Date() },
+      ];
+    }
+
+    it('should exclude disabled participants from pending cards count', () => {
+      const participants = createMixedParticipants(); // 2 disabled + 2 enabled
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true,
+        currentParticipantIndex: 0,
+        preSearchStatus: null,
+      });
+
+      // ✅ Should only show 2 pending cards (for enabled participants)
+      // NOT 4 cards (which would include disabled participants)
+      expect(pending).toHaveLength(2);
+      // Indices are from the original array - enabled participants are at indices 2 and 3
+      expect(pending).toEqual([2, 3]);
+    });
+
+    it('should show no pending cards when all participants are disabled', () => {
+      const allDisabled = [
+        { id: 'p0', modelId: 'model-0', role: 'Role 0', isEnabled: false, priority: 0, sortOrder: 0, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'p1', modelId: 'model-1', role: 'Role 1', isEnabled: false, priority: 1, sortOrder: 1, threadId: 'test-thread', createdAt: new Date() },
+      ];
+      const userMessage = createTestUserMessage({
+        id: 'user-1',
+        content: 'Hello',
+        roundNumber: 0,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants: allDisabled,
+        messages: [userMessage],
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true,
+        currentParticipantIndex: 0,
+        preSearchStatus: null,
+      });
+
+      // ✅ No pending cards when no participants are enabled
+      expect(pending).toEqual([]);
+    });
+
+    it('should correctly handle participant config change mid-conversation', () => {
+      // Scenario: User had 4 participants, changed to 2
+      // Old participants are disabled, new ones are enabled
+      const participants = [
+        // OLD CONFIG: 4 participants (now disabled)
+        { id: 'old-gpt', modelId: 'openai/gpt-5.1', role: 'Ecological Economist', isEnabled: false, priority: 0, sortOrder: 0, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'old-claude', modelId: 'anthropic/claude-sonnet-4', role: 'Free Market Theorist', isEnabled: false, priority: 1, sortOrder: 1, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'old-grok', modelId: 'x-ai/grok-4', role: 'Systems Thinker', isEnabled: false, priority: 2, sortOrder: 2, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'old-deepseek', modelId: 'deepseek/deepseek-r1', role: 'Resource Analyst', isEnabled: false, priority: 3, sortOrder: 3, threadId: 'test-thread', createdAt: new Date() },
+        // NEW CONFIG: 2 participants (enabled)
+        { id: 'new-claude', modelId: 'anthropic/claude-sonnet-4', role: 'The Ideator', isEnabled: true, priority: 0, sortOrder: 4, threadId: 'test-thread', createdAt: new Date() },
+        { id: 'new-gpt', modelId: 'openai/gpt-5.1', role: 'Practical Evaluator', isEnabled: true, priority: 1, sortOrder: 5, threadId: 'test-thread', createdAt: new Date() },
+      ];
+
+      // Round 1: User sent message with new config
+      const userMessage = createTestUserMessage({
+        id: 'user-r1',
+        content: 'Can you explain your actual origins?',
+        roundNumber: 1,
+      });
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages: [userMessage],
+        roundNumber: 1,
+        streamingRoundNumber: 1,
+        isStreaming: true,
+        currentParticipantIndex: 0,
+        preSearchStatus: null,
+      });
+
+      // ✅ CRITICAL: Should only show 2 pending cards (for new enabled participants)
+      // This was the actual bug - 8 cards were showing instead of 2
+      expect(pending).toHaveLength(2);
+    });
+
+    it('should handle enabled participant with response and disabled without response', () => {
+      const participants = createMixedParticipants();
+
+      const messages = [
+        createTestUserMessage({
+          id: 'user-1',
+          content: 'Hello',
+          roundNumber: 0,
+        }),
+        // First enabled participant has responded
+        createTestAssistantMessage({
+          id: 'assistant-1',
+          content: 'Response from enabled participant',
+          roundNumber: 0,
+          participantId: 'new-p0', // This is an enabled participant
+          participantIndex: 0,
+        }),
+      ];
+
+      const pending = calculatePendingParticipants({
+        participants,
+        messages,
+        roundNumber: 0,
+        streamingRoundNumber: 0,
+        isStreaming: true,
+        currentParticipantIndex: 1, // Now streaming second enabled participant
+        preSearchStatus: null,
+      });
+
+      // ✅ Only second enabled participant should be pending
+      // Disabled participants should NOT appear even if they never responded
+      // Index 3 is the second enabled participant (new-p1) in the original array
+      expect(pending).toEqual([3]);
     });
   });
 });

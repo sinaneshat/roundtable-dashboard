@@ -59,7 +59,7 @@ describe('pre-search 409 polling', () => {
       if (url.includes('/pre-searches')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ data: [completedSearch] }),
+          json: async () => ({ data: { items: [completedSearch], count: 1 } }),
         } as Response);
       }
       // Mock 409 for stream endpoint
@@ -119,7 +119,7 @@ describe('pre-search 409 polling', () => {
       if (url.includes('/pre-searches')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ data: [failedSearch] }),
+          json: async () => ({ data: { items: [failedSearch], count: 1 } }),
         } as Response);
       }
       return Promise.resolve({
@@ -166,10 +166,13 @@ describe('pre-search 409 polling', () => {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            data: [{
-              ...mockPreSearch,
-              status: AnalysisStatuses.STREAMING, // Still streaming
-            }],
+            data: {
+              items: [{
+                ...mockPreSearch,
+                status: AnalysisStatuses.STREAMING, // Still streaming
+              }],
+              count: 1,
+            },
           }),
         } as Response);
       }

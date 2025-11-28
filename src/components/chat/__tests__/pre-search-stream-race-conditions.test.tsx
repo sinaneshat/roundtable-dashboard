@@ -220,12 +220,35 @@ describe('preSearchStream Race Condition Fixes', () => {
       });
     });
 
-    it('skips execution when status is not PENDING', async () => {
+    it('attempts stream resumption when initial status is STREAMING', async () => {
+      // ✅ STREAM RESUMPTION: When user refreshes during streaming, the status will be STREAMING
+      // The component tries to resume the stream via POST, and backend either:
+      // - Returns resumed stream (200 with X-Resumed-From-Buffer header)
+      // - Returns 202 (stream active but buffer not ready) → triggers polling
       const mockPreSearch = createMockPreSearch({
         status: AnalysisStatuses.STREAMING,
       });
 
-      fetchMock.mockResolvedValue({ ok: true, body: new ReadableStream() });
+      // Mock 202 response (stream active, buffer not ready) which triggers polling
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 202,
+          statusText: 'Accepted',
+        })
+        // Then mock the polling endpoint response
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            data: {
+              items: [{
+                ...mockPreSearch,
+                status: AnalysisStatuses.COMPLETE,
+                searchData: { queries: [], results: [], successCount: 0, failureCount: 0, totalResults: 0, totalTime: 100 },
+              }],
+            },
+          }),
+        });
 
       render(
         <PreSearchStream
@@ -235,10 +258,22 @@ describe('preSearchStream Race Condition Fixes', () => {
         />,
       );
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Verify: First tries to resume stream via POST
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          `/api/v1/chat/threads/${mockThreadId}/rounds/0/pre-search`,
+          expect.objectContaining({
+            method: 'POST',
+          }),
+        );
+      });
 
-      // Verify: No fetch because status is STREAMING, not PENDING
-      expect(fetchMock).not.toHaveBeenCalled();
+      // Verify: After 202, falls back to polling
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          `/api/v1/chat/threads/${mockThreadId}/pre-searches`,
+        );
+      });
     });
 
     it('skips execution when status is COMPLETE', async () => {
@@ -646,28 +681,34 @@ describe('preSearchStream Race Condition Fixes', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            data: [{
-              ...mockPreSearch,
-              status: AnalysisStatuses.STREAMING,
-            }],
+            data: {
+              items: [{
+                ...mockPreSearch,
+                status: AnalysisStatuses.STREAMING,
+              }],
+              count: 1,
+            },
           }),
         })
         // Polling call: Complete
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
-            data: [{
-              ...mockPreSearch,
-              status: AnalysisStatuses.COMPLETE,
-              searchData: {
-                queries: [],
-                results: [],
-                successCount: 0,
-                failureCount: 0,
-                totalResults: 0,
-                totalTime: 100,
-              },
-            }],
+            data: {
+              items: [{
+                ...mockPreSearch,
+                status: AnalysisStatuses.COMPLETE,
+                searchData: {
+                  queries: [],
+                  results: [],
+                  successCount: 0,
+                  failureCount: 0,
+                  totalResults: 0,
+                  totalTime: 100,
+                },
+              }],
+              count: 1,
+            },
           }),
         });
 

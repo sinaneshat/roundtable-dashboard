@@ -1,7 +1,7 @@
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
-import type { ChatThreadChangelog, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatThreadChangelog, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 
 /**
@@ -15,6 +15,10 @@ type ChangelogItem = Omit<ChatThreadChangelog, 'createdAt'> & {
 /**
  * Timeline Item Types
  * Discriminated union for type-safe timeline rendering
+ *
+ * ✅ RESUMPTION FIX: Added 'pre-search' type to support rendering pre-search cards
+ * at the timeline level, enabling proper display during page refresh scenarios
+ * where user message hasn't been persisted yet.
  */
 export type TimelineItem
   = | {
@@ -32,6 +36,12 @@ export type TimelineItem
   | {
     type: 'changelog';
     data: ChangelogItem[];
+    key: string;
+    roundNumber: number;
+  }
+  | {
+    type: 'pre-search';
+    data: StoredPreSearch;
     key: string;
     roundNumber: number;
   };
@@ -53,6 +63,13 @@ export type UseThreadTimelineOptions = {
    * Accepts both Date and string for createdAt to match API JSON responses
    */
   changelog: ChangelogItem[];
+
+  /**
+   * Pre-searches to include in timeline
+   * ✅ RESUMPTION FIX: Required for rendering pre-search cards when user message
+   * hasn't been persisted yet (e.g., page refresh during web search phase)
+   */
+  preSearches?: StoredPreSearch[];
 };
 
 /**
@@ -93,6 +110,7 @@ export function useThreadTimeline({
   messages,
   analyses = [],
   changelog,
+  preSearches = [],
 }: UseThreadTimelineOptions): TimelineItem[] {
   return useMemo(() => {
     // STEP 1: Group messages by round number
@@ -125,14 +143,24 @@ export function useThreadTimeline({
       }
     });
 
-    // STEP 3: Collect all unique round numbers from all sources
+    // STEP 3: Index pre-searches by round number
+    // ✅ RESUMPTION FIX: Pre-searches are now tracked at timeline level
+    const preSearchByRound = new Map<number, StoredPreSearch>();
+    preSearches.forEach((preSearch) => {
+      preSearchByRound.set(preSearch.roundNumber, preSearch);
+    });
+
+    // STEP 4: Collect all unique round numbers from all sources
+    // ✅ RESUMPTION FIX: Include pre-search rounds to ensure they render
+    // even when user message hasn't been persisted yet
     const allRoundNumbers = new Set<number>([
       ...messagesByRound.keys(),
       ...changelogByRound.keys(),
       ...analyses.map(a => a.roundNumber),
+      ...preSearchByRound.keys(),
     ]);
 
-    // STEP 4: Build timeline items in chronological order
+    // STEP 5: Build timeline items in chronological order
     const timeline: TimelineItem[] = [];
     const sortedRounds = Array.from(allRoundNumbers).sort((a, b) => a - b);
 
@@ -140,14 +168,22 @@ export function useThreadTimeline({
       const roundMessages = messagesByRound.get(roundNumber);
       const roundChangelog = changelogByRound.get(roundNumber);
       const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
+      const roundPreSearch = preSearchByRound.get(roundNumber);
 
-      // Skip rounds without messages
-      if (!roundMessages || roundMessages.length === 0) {
+      // ✅ RESUMPTION FIX: Don't skip rounds that have pre-search or changelog
+      // This enables rendering changelog + pre-search even when user message
+      // hasn't been persisted yet (e.g., page refresh during web search phase)
+      const hasMessages = roundMessages && roundMessages.length > 0;
+      const hasPreSearch = !!roundPreSearch;
+      const hasChangelog = roundChangelog && roundChangelog.length > 0;
+
+      // Skip rounds that have nothing to show
+      if (!hasMessages && !hasPreSearch && !hasChangelog) {
         return;
       }
 
       // Add changelog first (shows configuration changes before messages)
-      if (roundChangelog && roundChangelog.length > 0) {
+      if (hasChangelog) {
         timeline.push({
           type: 'changelog',
           data: roundChangelog,
@@ -156,13 +192,32 @@ export function useThreadTimeline({
         });
       }
 
-      // Add messages for this round
-      timeline.push({
-        type: 'messages',
-        data: roundMessages,
-        key: `round-${roundNumber}-messages`,
-        roundNumber,
-      });
+      // ✅ RESUMPTION FIX: Pre-search renders at timeline level ONLY for orphaned rounds
+      // (rounds without messages). For normal rounds with messages, ChatMessageList
+      // renders PreSearchCard in the correct position (after user message, before assistant messages).
+      //
+      // This ensures:
+      // - Normal flow: changelog → user message → pre-search → assistant messages (via ChatMessageList)
+      // - Orphaned flow: changelog → pre-search (standalone timeline item)
+      if (hasPreSearch && !hasMessages) {
+        timeline.push({
+          type: 'pre-search',
+          data: roundPreSearch,
+          key: `round-${roundNumber}-pre-search`,
+          roundNumber,
+        });
+      }
+
+      // Add messages for this round (if any)
+      // ChatMessageList handles pre-search rendering in correct position when messages exist
+      if (hasMessages) {
+        timeline.push({
+          type: 'messages',
+          data: roundMessages,
+          key: `round-${roundNumber}-messages`,
+          roundNumber,
+        });
+      }
 
       // Add analysis after messages (if exists and should be shown)
       // ✅ REVISED: Only filter out PENDING placeholder analyses (empty participantMessageIds)
@@ -185,5 +240,5 @@ export function useThreadTimeline({
     });
 
     return timeline;
-  }, [messages, analyses, changelog]);
+  }, [messages, analyses, changelog, preSearches]);
 }
