@@ -215,6 +215,8 @@ function ModeratorAnalysisStreamComponent({
   // ✅ Error handling state for UI display
   const streamErrorTypeRef = useRef<StreamErrorType>(StreamErrorTypes.UNKNOWN);
   const is409Conflict = useBoolean(false);
+  // ✅ AUTO-RETRY UI: Track when polling for streaming completion
+  const isAutoRetrying = useBoolean(false);
 
   // ✅ FIX: Track if we've already started streaming to prevent infinite loop
   // Without this, calling onStreamStart → updateAnalysisStatus creates new state
@@ -417,6 +419,9 @@ function ModeratorAnalysisStreamComponent({
     let isMounted = true;
     let timeoutId: ReturnType<typeof setTimeout>;
 
+    // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
+    isAutoRetrying.onTrue();
+
     const poll = async () => {
       try {
         // ✅ RESUMABLE STREAMS: Try to resume from buffer first
@@ -425,8 +430,10 @@ function ModeratorAnalysisStreamComponent({
 
         if (resumeResult.success) {
           onStreamCompleteRef.current?.(resumeResult.data);
-          if (isMounted)
+          if (isMounted) {
             is409Conflict.onFalse(); // Stop polling
+            isAutoRetrying.onFalse(); // Clear auto-retry state
+          }
           return;
         }
 
@@ -459,13 +466,17 @@ function ModeratorAnalysisStreamComponent({
               userQuestion: current.userQuestion,
             };
             onStreamCompleteRef.current?.(fullPayload);
-            if (isMounted)
+            if (isMounted) {
               is409Conflict.onFalse(); // Stop polling
+              isAutoRetrying.onFalse(); // Clear auto-retry state
+            }
             return;
           } else if (current.status === AnalysisStatuses.FAILED) {
             onStreamCompleteRef.current?.(null, new Error(current.errorMessage ?? 'Analysis failed'));
-            if (isMounted)
+            if (isMounted) {
               is409Conflict.onFalse(); // Stop polling
+              isAutoRetrying.onFalse(); // Clear auto-retry state
+            }
             return;
           }
           // If still STREAMING or PENDING, continue polling
@@ -485,8 +496,9 @@ function ModeratorAnalysisStreamComponent({
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
+      isAutoRetrying.onFalse(); // Clear auto-retry state on cleanup
     };
-  }, [is409Conflict.value, threadId, analysis.roundNumber, is409Conflict]);
+  }, [is409Conflict.value, threadId, analysis.roundNumber, is409Conflict, isAutoRetrying]);
 
   // Cleanup on unmount: stop streaming
   useEffect(() => {
@@ -664,7 +676,7 @@ function ModeratorAnalysisStreamComponent({
               }}
               className="flex items-center justify-center py-8 text-muted-foreground text-sm"
             >
-              <LoaderFive text={t('pendingAnalysis')} />
+              <LoaderFive text={isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')} />
             </motion.div>
           )
         : (

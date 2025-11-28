@@ -1057,6 +1057,7 @@
     "analyzeRound": "Analyze Round",
     "analyzing": "Analyzing",
     "pendingAnalysis": "Analyzing participant responses...",
+    "autoRetryingAnalysis": "Analysis in progress, auto-retrying...",
     "waitingForParticipants": "Waiting for participants to finish",
     "roundAnalysis": "Round {number} Analysis",
     "overallRating": "Overall Rating",
