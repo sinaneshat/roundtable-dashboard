@@ -48,24 +48,22 @@ export function useThreadPreSearchesQuery(
     refetchOnWindowFocus: false, // Don't refetch when user switches back to tab
     refetchOnReconnect: false, // Don't refetch when network reconnects
 
-    // ✅ CRITICAL FIX: Poll for pre-search status updates in preview environments
-    // In Cloudflare Workers edge environments, query invalidation may not propagate immediately
-    // Poll every 500ms when pre-search is pending/streaming to catch status updates quickly
-    // Stop polling once all pre-searches are complete/failed
+    // ✅ OPTIMIZED: Only poll when pre-search is PENDING (waiting to start)
+    // When status is STREAMING, SSE streaming handles real-time updates - polling is redundant
+    // This prevents duplicate network calls (SSE stream + polling) during active streaming
     //
-    // ✅ PERFORMANCE FIX: Reduced from 2000ms to 500ms for better UX
-    // - Reduces race condition window from 0-2s to 0-500ms
-    // - Faster UI updates when backend creates/updates pre-search records
-    // - Minimal API cost increase (pre-search requests are lightweight)
+    // Poll PENDING: Catch the transition when execution starts (PENDING → STREAMING)
+    // Don't poll STREAMING: SSE stream provides updates via chat-store-provider.tsx
+    // Don't poll COMPLETE/FAILED: Final states, no updates needed
     refetchInterval: (query) => {
-      // Check if any pre-search is pending or streaming
-      const hasActivePreSearch = query.state.data?.data?.items?.some(
-        ps => ps.status === AnalysisStatuses.PENDING || ps.status === AnalysisStatuses.STREAMING,
+      // Only poll when pre-search is PENDING (waiting for execution to start)
+      // Don't poll during STREAMING - SSE handles updates
+      const hasPendingPreSearch = query.state.data?.data?.items?.some(
+        ps => ps.status === AnalysisStatuses.PENDING,
       );
 
-      // Poll every 500ms if there are active pre-searches, otherwise don't poll
-      // This provides responsive UX while minimizing unnecessary API calls
-      return hasActivePreSearch ? 500 : false;
+      // Poll every 500ms only for PENDING status to catch execution start
+      return hasPendingPreSearch ? 500 : false;
     },
     refetchIntervalInBackground: false, // Only poll when tab is active
   });

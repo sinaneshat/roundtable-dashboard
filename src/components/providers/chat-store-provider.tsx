@@ -669,6 +669,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
+    // ✅ CRITICAL FIX: Wait for AI SDK to be ready before calling continueFromParticipant
+    // AI SDK needs time to initialize and hydrate messages after page refresh.
+    // Without this check, continueFromParticipant returns early silently, leaving
+    // waitingToStartStreaming=true and the UI stuck in a waiting state.
+    if (!chat.isReady) {
+      // Effect will re-run when chat.isReady becomes true
+      return;
+    }
+
     // ✅ CRITICAL: Call continueFromParticipant to resume from the specific participant
     // This triggers streaming for the missing participant, not from the beginning
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);

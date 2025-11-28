@@ -123,6 +123,11 @@ type UseMultiParticipantChatReturn = {
   retry: () => void;
   /** Manually set messages (used for optimistic updates or message deletion) */
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
+  /**
+   * Whether the AI SDK is ready to accept new messages
+   * Used by provider to delay continueFromParticipant until SDK is initialized
+   */
+  isReady: boolean;
 };
 
 /**
@@ -1509,6 +1514,11 @@ export function useMultiParticipantChat(
   // This allows synchronous checks in microtasks to use the latest value
   isStreamingRef.current = isActuallyStreaming;
 
+  // ✅ AI SDK READINESS: Derive from status for provider's continueFromParticipant guard
+  // When AI SDK isn't ready, continueFromParticipant returns early silently.
+  // Provider needs this flag to wait before calling continueFromParticipant.
+  const isReady = status === AiSdkStatuses.READY && messages.length > 0;
+
   // ✅ INFINITE LOOP FIX: Memoize return value to prevent new object reference on every render
   // Without this, the chat object creates a new reference each render, causing any effect
   // that depends on `chat` to re-run infinitely (e.g., message sync effect in chat-store-provider)
@@ -1525,6 +1535,7 @@ export function useMultiParticipantChat(
       error: chatError || null,
       retry,
       setMessages,
+      isReady,
     }),
     [
       messages,
@@ -1537,6 +1548,7 @@ export function useMultiParticipantChat(
       chatError,
       retry,
       setMessages,
+      isReady,
     ],
   );
 }

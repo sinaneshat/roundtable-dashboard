@@ -188,25 +188,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // and the msg box of what user just said shows on the round"
       actions.setInputValue('');
 
-      // ✅ CRITICAL FIX: Set pending message so provider can trigger participants
-      // BUG FIX: Without this, pendingMessage stays null after pre-search completes
-      // and participants never start streaming (provider effect exits immediately)
-      //
-      // This is the same pattern used by handleUpdateThreadAndSend in thread detail page
-      // Now overview page will work correctly with web search enabled
-      // ✅ BUG FIX: Use modelId instead of participant record id
-      // Provider compares against modelIds, not participant record IDs
-      const participantModelIds = participants.map(p => p.modelId);
-      actions.prepareForNewMessage(prompt, participantModelIds);
-
-      // ✅ EAGER RENDERING: Create placeholder pre-search immediately for round 0 when web search enabled
-      // This allows the streaming trigger effect to see a pre-search exists
-      // PreSearchStream component will execute the search when it renders and sees PENDING status
-      //
-      // NOTE: Backend also creates PENDING pre-search during thread creation, but:
-      // - PreSearchOrchestrator only runs on thread screen, not overview screen
-      // - Without this placeholder, streaming trigger effect returns early (no pre-search exists)
-      // - PreSearchStream needs a pre-search record with userQuery to execute
+      // ✅ TIMING FIX: Add placeholder pre-search BEFORE prepareForNewMessage
+      // This ensures the pre-search exists in the SAME render cycle as the pending message state,
+      // preventing timing issues where UI renders without pre-search data
       if (formState.enableWebSearch) {
         actions.addPreSearch({
           id: `placeholder-presearch-${thread.id}-0`,
@@ -220,6 +204,17 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           errorMessage: null,
         });
       }
+
+      // ✅ CRITICAL FIX: Set pending message so provider can trigger participants
+      // BUG FIX: Without this, pendingMessage stays null after pre-search completes
+      // and participants never start streaming (provider effect exits immediately)
+      //
+      // This is the same pattern used by handleUpdateThreadAndSend in thread detail page
+      // Now overview page will work correctly with web search enabled
+      // ✅ BUG FIX: Use modelId instead of participant record id
+      // Provider compares against modelIds, not participant record IDs
+      const participantModelIds = participants.map(p => p.modelId);
+      actions.prepareForNewMessage(prompt, participantModelIds);
 
       // ✅ IMMEDIATE UI FEEDBACK: Set streamingRoundNumber IMMEDIATELY for round 0
       // This enables ChatMessageList to show pending participant cards with shimmer animation
@@ -309,6 +304,24 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       // Set streamingRoundNumber IMMEDIATELY for accordion collapse
       actions.setStreamingRoundNumber(nextRoundNumber);
+
+      // ✅ TIMING FIX: Add placeholder pre-search BEFORE user message
+      // This ensures the pre-search accordion appears in the SAME render cycle as the user message,
+      // preventing the "late accordion" issue where user message renders first without pre-search,
+      // then pre-search appears in a subsequent render causing layout shift and placeholder duplications
+      if (formState.enableWebSearch) {
+        actions.addPreSearch({
+          id: `placeholder-presearch-${threadId}-${nextRoundNumber}`,
+          threadId,
+          roundNumber: nextRoundNumber,
+          userQuery: trimmed,
+          status: AnalysisStatuses.PENDING,
+          searchData: null,
+          createdAt: new Date(),
+          completedAt: null,
+          errorMessage: null,
+        });
+      }
 
       // Add optimistic user message IMMEDIATELY for instant UI feedback
       const optimisticUserMessage: UIMessage = {
@@ -440,30 +453,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Prepare for new message (sets flags and pending message)
       // On THREAD screen, this also adds optimistic user message to UI
       actions.prepareForNewMessage(trimmed, []);
-
-      // ✅ EAGER RENDERING: Create placeholder pre-search immediately for round 2+ when web search enabled
-      // This matches the pattern in handleCreateThread (overview screen) for round 0
-      // Without this placeholder:
-      // - Web search accordion doesn't appear with loading/shimmer state
-      // - Participant placeholders don't show "waiting for web search"
-      // - UI appears broken because pre-search is created asynchronously by provider effect
-      //
-      // The provider will later execute the actual pre-search, but the placeholder ensures
-      // immediate visual feedback while waiting for the backend to create/execute the search
-      if (formState.enableWebSearch) {
-        // ✅ IMMEDIATE UI FEEDBACK: Reuse nextRoundNumber calculated at start of function
-        actions.addPreSearch({
-          id: `placeholder-presearch-${threadId}-${nextRoundNumber}`,
-          threadId,
-          roundNumber: nextRoundNumber,
-          userQuery: trimmed,
-          status: AnalysisStatuses.PENDING,
-          searchData: null,
-          createdAt: new Date(),
-          completedAt: null,
-          errorMessage: null,
-        });
-      }
 
       // ✅ FIX: Clear input AFTER prepareForNewMessage so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through

@@ -13,6 +13,7 @@ import {
 } from '@react-email/components';
 
 import { BRAND } from '@/constants/brand';
+import { Logo } from '@/emails/components/header/logo';
 import { colors, spacing, typography } from '@/emails/design-tokens';
 
 type MagicLinkProps = {
@@ -33,6 +34,11 @@ const container = {
   margin: '0 auto',
   padding: `${spacing[10]} ${spacing[5]} ${spacing[10]} ${spacing[5]}`,
   maxWidth: '465px',
+};
+
+const logoContainer = {
+  textAlign: 'center' as const,
+  margin: `0 0 ${spacing[6]} 0`,
 };
 
 const h1 = {
@@ -107,6 +113,11 @@ export function MagicLink({
       </Preview>
       <Body style={main}>
         <Container style={container}>
+          {/* Logo centered at the top */}
+          <Section style={logoContainer}>
+            <Logo size={64} />
+          </Section>
+
           <Heading style={h1}>
             Sign in to
             {' '}

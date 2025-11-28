@@ -1,26 +1,31 @@
+import { Img } from '@react-email/components';
 import React from 'react';
 
 import { BRAND } from '@/constants/brand';
 import { assets } from '@/emails/design-tokens';
 
 type LogoProps = {
-  width?: number;
-  height?: number;
+  size?: number;
 };
 
-export function Logo({ width = 160, height = 40 }: LogoProps) {
+/**
+ * Logo Component for Email Templates
+ *
+ * Loads the logo from URL. The logo PNG must be hosted and accessible
+ * for email clients to display it properly.
+ */
+export function Logo({ size = 60 }: LogoProps) {
   return (
-    <div style={{ display: 'block' }}>
-      {/* eslint-disable-next-line next/no-img-element */}
-      <img
-        src={assets.logo}
-        alt={`${BRAND.displayName} Logo`}
-        style={{
-          width,
-          height,
-          display: 'block',
-        }}
-      />
-    </div>
+    <Img
+      src={assets.logo}
+      width={size}
+      height={size}
+      alt={`${BRAND.displayName} Logo`}
+      style={{
+        display: 'block',
+        margin: '0 auto',
+        borderRadius: '50%',
+      }}
+    />
   );
 }

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, ConfidenceWeightings, MessagePartTypes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
+import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadTimeline } from '@/hooks/utils';
 import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animations';
@@ -255,9 +256,16 @@ const INITIAL_STREAMING_TEXT: StreamingText = {
 export function LiveChatDemo() {
   const [stage, setStage] = useState<Stage>(DemoStages.IDLE);
   const [streamingText, setStreamingText] = useState<StreamingText>(INITIAL_STREAMING_TEXT);
-  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollAnchorRef = useRef<HTMLDivElement>(null);
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
   const intervalsRef = useRef<NodeJS.Timeout[]>([]);
+
+  // ✅ SCROLL STATE: Track sticky state like useChatScroll
+  const isAtBottomRef = useRef(true);
+  const isProgrammaticScrollRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const scrollThrottleRef = useRef(0);
 
   // Clear all timeouts and intervals on unmount
   useEffect(() => {
@@ -608,78 +616,139 @@ export function LiveChatDemo() {
     };
   }, [stage]);
 
-  // Smooth scroll to bottom when new content appears (but preserve user scroll)
-  const isUserScrollingRef = useRef(false);
-  const lastStageRef = useRef<Stage>(stage);
-
   // Helper to get the actual viewport element from ScrollArea
-  const getViewportElement = () => {
-    const root = scrollViewportRef.current;
+  const getViewportElement = useCallback(() => {
+    const root = scrollContainerRef.current;
     if (!root)
       return null;
     return root.querySelector('[data-slot="scroll-area-viewport"]') as HTMLElement | null;
-  };
+  }, []);
 
+  // ✅ SCROLL TO BOTTOM: Proper scrollIntoView-based scrolling like ChatView
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const viewport = getViewportElement();
+    if (!scrollAnchorRef.current || !viewport)
+      return;
+
+    isProgrammaticScrollRef.current = true;
+
+    requestAnimationFrame(() => {
+      scrollAnchorRef.current?.scrollIntoView({
+        behavior,
+        block: 'end',
+      });
+
+      isAtBottomRef.current = true;
+
+      // Reset programmatic flag after animation
+      const delay = behavior === 'smooth' ? 300 : 50;
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, delay);
+    });
+  }, [getViewportElement]);
+
+  // ✅ SCROLL DETECTION: Track user scroll intent (sticky/unsticky)
   useEffect(() => {
     const viewport = getViewportElement();
     if (!viewport)
       return;
 
+    let ticking = false;
+
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = viewport;
-      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      isUserScrollingRef.current = !isNearBottom;
+      if (isProgrammaticScrollRef.current || ticking)
+        return;
+
+      ticking = true;
+      requestAnimationFrame(() => {
+        const { scrollTop, scrollHeight, clientHeight } = viewport;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+        const scrollDelta = scrollTop - lastScrollTopRef.current;
+        lastScrollTopRef.current = scrollTop;
+
+        // ✅ STICKY LOGIC: scroll up (delta < -10) = unstick, reach bottom = stick
+        if (scrollDelta < -10) {
+          // User scrolled UP - unstick immediately
+          isAtBottomRef.current = false;
+        } else if (distanceFromBottom <= 50) {
+          // User reached bottom - re-stick
+          isAtBottomRef.current = true;
+        }
+
+        ticking = false;
+      });
     };
 
-    viewport.addEventListener('scroll', handleScroll);
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, []);
+    viewport.addEventListener('scroll', handleScroll, { passive: true });
+    lastScrollTopRef.current = viewport.scrollTop;
 
-  // Auto-scroll smoothly when stage changes (only if user hasn't scrolled away)
+    return () => {
+      viewport.removeEventListener('scroll', handleScroll);
+    };
+  }, [getViewportElement]);
+
+  // ✅ RESIZE/MUTATION OBSERVER: Auto-scroll when content grows (if sticky)
+  const isActivelyStreaming = stage === DemoStages.PRE_SEARCH_STREAMING
+    || stage === DemoStages.PARTICIPANT_0_STREAMING
+    || stage === DemoStages.PARTICIPANT_1_STREAMING
+    || stage === DemoStages.PARTICIPANT_2_STREAMING
+    || stage === DemoStages.ANALYSIS_STREAMING
+    || stage === DemoStages.LOADING_INDICATOR;
+
+  useEffect(() => {
+    const viewport = getViewportElement();
+    if (!viewport || !isActivelyStreaming)
+      return;
+
+    const mutationObserver = new MutationObserver(() => {
+      if (!isAtBottomRef.current || isProgrammaticScrollRef.current)
+        return;
+
+      // Throttle: max once per 50ms
+      const now = Date.now();
+      if (now - scrollThrottleRef.current < 50)
+        return;
+      scrollThrottleRef.current = now;
+
+      requestAnimationFrame(() => {
+        if (isAtBottomRef.current && !isProgrammaticScrollRef.current) {
+          scrollToBottom('auto');
+        }
+      });
+    });
+
+    mutationObserver.observe(viewport, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => {
+      mutationObserver.disconnect();
+    };
+  }, [isActivelyStreaming, scrollToBottom, getViewportElement]);
+
+  // ✅ INITIAL SCROLL: When streaming starts, scroll to bottom
+  const lastStageRef = useRef<Stage>(stage);
   useEffect(() => {
     if (lastStageRef.current === stage)
       return;
     lastStageRef.current = stage;
 
-    const viewport = getViewportElement();
-    if (!viewport || isUserScrollingRef.current)
+    // Only auto-scroll if user is at bottom
+    if (!isAtBottomRef.current)
       return;
 
-    // Smooth scroll to bottom with a slight delay to allow content to render
+    // Small delay to allow content to render
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        viewport.scrollTo({
-          top: viewport.scrollHeight,
-          behavior: 'smooth',
-        });
+        if (isAtBottomRef.current) {
+          scrollToBottom('smooth');
+        }
       });
     });
-  }, [stage]);
-
-  // Also auto-scroll during streaming text updates
-  useEffect(() => {
-    const viewport = getViewportElement();
-    if (!viewport || isUserScrollingRef.current)
-      return;
-
-    // Only scroll during active streaming stages
-    const isActivelyStreaming = stage === DemoStages.PRE_SEARCH_STREAMING
-      || stage === DemoStages.PARTICIPANT_0_STREAMING
-      || stage === DemoStages.PARTICIPANT_1_STREAMING
-      || stage === DemoStages.PARTICIPANT_2_STREAMING
-      || stage === DemoStages.ANALYSIS_STREAMING;
-
-    if (!isActivelyStreaming)
-      return;
-
-    // Scroll to bottom as content streams in
-    requestAnimationFrame(() => {
-      viewport.scrollTo({
-        top: viewport.scrollHeight,
-        behavior: 'smooth',
-      });
-    });
-  }, [streamingText, stage]);
+  }, [stage, scrollToBottom]);
 
   // Build messages array based on current stage
   const messages: ChatMessage[] = [];
@@ -1133,9 +1202,27 @@ export function LiveChatDemo() {
 
   const isStreaming = currentStreamingIndex !== null;
 
+  // ✅ LOADING STATE: Show matrix loading indicator during loading stage
+  const showLoader = stage === DemoStages.LOADING_INDICATOR
+    || stage === DemoStages.PRE_SEARCH_STREAMING
+    || stage === DemoStages.PARTICIPANT_0_STREAMING
+    || stage === DemoStages.PARTICIPANT_1_STREAMING
+    || stage === DemoStages.PARTICIPANT_2_STREAMING
+    || stage === DemoStages.ANALYSIS_STREAMING;
+
+  const loadingDetails = {
+    isCreatingThread: false,
+    isStreamingParticipants: stage === DemoStages.PARTICIPANT_0_STREAMING
+      || stage === DemoStages.PARTICIPANT_1_STREAMING
+      || stage === DemoStages.PARTICIPANT_2_STREAMING,
+    isStreamingAnalysis: stage === DemoStages.ANALYSIS_STREAMING,
+    isNavigating: false,
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0 relative">
-      <ScrollArea className="h-full min-h-0 flex-1" ref={scrollViewportRef}>
+      {/* ✅ SHADCN SCROLL AREA: Consistent scrollbar styling */}
+      <ScrollArea className="h-full min-h-0 flex-1" ref={scrollContainerRef}>
         <div className="w-full px-4 sm:px-6 pt-6 pb-6">
           {stage !== 'idle' && (
             <ThreadTimeline
@@ -1157,6 +1244,25 @@ export function LiveChatDemo() {
               demoAnalysisOpen={analysisIsOpen}
             />
           )}
+
+          {/* ✅ LOADING INDICATOR: Matrix text loader during streaming stages */}
+          {showLoader && (
+            <div className="mt-4 mb-2">
+              <UnifiedLoadingIndicator
+                showLoader={showLoader}
+                loadingDetails={loadingDetails}
+                preSearches={preSearchWithStreamingData ? [preSearchWithStreamingData] : []}
+              />
+            </div>
+          )}
+
+          {/* ✅ SCROLL ANCHOR: Single marker at the very bottom of all content */}
+          <div
+            ref={scrollAnchorRef}
+            aria-hidden="true"
+            className="h-px w-full"
+            data-scroll-anchor="demo-bottom"
+          />
         </div>
       </ScrollArea>
     </div>

@@ -85,7 +85,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
       </div>
 
       {/* Right Column - Chat Showcase (Tablet & Desktop) */}
-      <div className="relative hidden md:flex md:flex-col p-6 lg:p-10 overflow-hidden">
+      <div className="relative hidden md:flex md:flex-col p-3 lg:p-4 overflow-hidden">
         {/* Floating glass card */}
         <Card
           className="w-full h-full min-h-0 shadow-2xl overflow-hidden py-0"

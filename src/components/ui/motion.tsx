@@ -131,6 +131,10 @@ type AnimatedAccordionContentProps = {
  * Animated content wrapper for accordion/collapsible components.
  * Uses layout animations for smooth height transitions.
  *
+ * ✅ FIX: Removed inner layout div to prevent flashing during streaming.
+ * The outer div handles height animation, inner layout caused constant
+ * re-animation as text content changed during streaming.
+ *
  * @example
  * ```tsx
  * <AnimatedAccordionContent isOpen={isExpanded}>
@@ -148,7 +152,10 @@ export function AnimatedAccordionContent({
     <AnimatePresence mode="wait" initial={false}>
       {isOpen && (
         <motion.div
+          // ✅ FIX: Use layoutDependency to only animate on open/close state change
+          // Not on every content change during streaming
           layout
+          layoutDependency={isOpen}
           initial={{ opacity: 0, height: 0 }}
           animate={{
             opacity: 1,
@@ -177,9 +184,10 @@ export function AnimatedAccordionContent({
           onAnimationComplete={onAnimationComplete}
           className={cn('overflow-hidden', className)}
         >
-          <motion.div layout>
+          {/* ✅ FIX: Removed layout from inner div - was causing flashing during streaming */}
+          <div>
             {children}
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -197,17 +205,27 @@ type AnimatedSectionProps = {
   sectionKey?: string;
   /** Index for staggered animations */
   index?: number;
+  /**
+   * Disable layout animations during streaming to prevent flashing.
+   * When true, layout changes won't trigger animation recalculation.
+   */
+  disableLayoutDuringStreaming?: boolean;
 };
 
 /**
  * Animated section wrapper with layout support.
  * Use for sections that may appear/disappear during streaming.
+ *
+ * ✅ FIX: Added disableLayoutDuringStreaming prop to prevent flashing
+ * during content streaming. When streaming, layout animations cause
+ * constant re-measurement and ghosting effects.
  */
 export function AnimatedSection({
   children,
   className,
   sectionKey,
   index = 0,
+  disableLayoutDuringStreaming = false,
 }: AnimatedSectionProps) {
   const variants: Variants = {
     hidden: { opacity: 0, y: 20 },
@@ -225,13 +243,14 @@ export function AnimatedSection({
 
   return (
     <motion.div
-      layout
-      layoutId={sectionKey}
+      // ✅ FIX: Disable layout during streaming to prevent flashing
+      layout={!disableLayoutDuringStreaming}
+      layoutId={disableLayoutDuringStreaming ? undefined : sectionKey}
       variants={variants}
       initial="hidden"
       animate="visible"
       className={cn(className)}
-      transition={{
+      transition={disableLayoutDuringStreaming ? undefined : {
         layout: layoutTransition,
       }}
     >
@@ -251,19 +270,25 @@ type AnimatedStaggerContainerProps = {
   staggerDelay?: number;
   /** Initial delay before first child animates */
   delayChildren?: number;
-  /** Enable layout animations for height changes */
+  /**
+   * Enable layout animations for height changes.
+   * ✅ FIX: Default changed to false to prevent flashing during streaming.
+   */
   enableLayout?: boolean;
 };
 
 /**
  * Container that staggers children animations with optional layout support.
+ *
+ * ✅ FIX: Layout animations disabled by default to prevent flashing
+ * during content streaming. Enable only when needed for structural changes.
  */
 export function AnimatedStaggerContainer({
   children,
   className,
   staggerDelay = 0.08,
   delayChildren = 0.1,
-  enableLayout = true,
+  enableLayout = false, // ✅ FIX: Default to false to prevent streaming flashing
 }: AnimatedStaggerContainerProps) {
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
@@ -293,17 +318,23 @@ export function AnimatedStaggerContainer({
 type AnimatedStaggerItemProps = {
   children: ReactNode;
   className?: string;
-  /** Enable layout animations */
+  /**
+   * Enable layout animations.
+   * ✅ FIX: Default changed to false to prevent flashing during streaming.
+   */
   enableLayout?: boolean;
 };
 
 /**
  * Child item for AnimatedStaggerContainer with coordinated animations.
+ *
+ * ✅ FIX: Layout animations disabled by default to prevent flashing
+ * during content streaming. Enable only when needed for structural changes.
  */
 export function AnimatedStaggerItem({
   children,
   className,
-  enableLayout = true,
+  enableLayout = false, // ✅ FIX: Default to false to prevent streaming flashing
 }: AnimatedStaggerItemProps) {
   const itemVariants: Variants = {
     hidden: { opacity: 0, y: 12 },

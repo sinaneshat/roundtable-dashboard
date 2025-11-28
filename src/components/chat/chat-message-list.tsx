@@ -695,7 +695,10 @@ export const ChatMessageList = memo(
 
       // ✅ Use reusable utility for multi-strategy participant message lookup
       const participantMaps = buildParticipantMessageMaps(streamingRoundMessages);
-      const sortedParticipants = sortByPriority(participants);
+      // ✅ CRITICAL FIX: Filter by isEnabled BEFORE sorting
+      // Only check enabled participants for content completeness
+      const enabledParticipants = participants.filter(p => p.isEnabled);
+      const sortedParticipants = sortByPriority(enabledParticipants);
 
       return allParticipantsHaveVisibleContent(participantMaps, sortedParticipants);
     }, [deduplicatedMessages, isStreaming, _streamingRoundNumber, participants]);
@@ -757,7 +760,10 @@ export const ChatMessageList = memo(
         const messageRoundNumber = getRoundNumber(messageMetadata);
         const isCurrentStreamingRound = messageRoundNumber === _streamingRoundNumber;
 
-        if (isCurrentStreamingRound && isStreaming && !allStreamingRoundParticipantsHaveContent) {
+        // ✅ FIX: Skip messages for streaming round when pending cards will handle them
+        // Removed `isStreaming` requirement - during resumption, isStreaming can be false
+        // but isCurrentStreamingRound is true (streamingRoundNumber is set from local calculation)
+        if (isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent) {
           continue; // Let pending cards section handle ALL participants for streaming round
         }
 
@@ -1000,8 +1006,11 @@ export const ChatMessageList = memo(
                     return msgRound === roundNumber;
                   });
 
-                  // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-                  const sortedParticipants = sortByPriority(participants);
+                  // ✅ CRITICAL FIX: Filter by isEnabled BEFORE sorting
+                  // Only show enabled participants in pending cards
+                  // Disabled participants from previous configurations should not render
+                  const enabledParticipants = participants.filter(p => p.isEnabled);
+                  const sortedParticipants = sortByPriority(enabledParticipants);
 
                   // ✅ Use reusable utility for multi-strategy participant message lookup
                   // Handles DB messages, resumed streams with partial metadata, and AI SDK temp IDs

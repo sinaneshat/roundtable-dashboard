@@ -116,15 +116,12 @@ export function useIncompleteRoundResumption(
   // Track if we've already attempted orphaned pre-search recovery for this thread
   const orphanedPreSearchRecoveryAttemptedRef = useRef<string | null>(null);
 
-  // ✅ FIX: Track backend active stream check state using refs (avoids setState in useEffect)
-  // - activeStreamCheckRef: Which thread we've checked
+  // ✅ OPTIMIZED: Track check state using refs (no longer makes network calls)
+  // - activeStreamCheckRef: Which thread we've checked (prevents duplicate checks)
   // - activeStreamCheckCompleteRef: Whether check is done (used by resumption effect)
-  // - backendNextParticipantRef: Backend-provided next participant index
-  // - hasActiveStreamRef: Whether an active stream was found (AI SDK handles it)
+  // AI SDK handles stream resumption via resume:true in useChat - we don't need separate fetch
   const activeStreamCheckRef = useRef<string | null>(null);
   const activeStreamCheckCompleteRef = useRef(false);
-  const backendNextParticipantRef = useRef<number | null>(null);
-  const hasActiveStreamRef = useRef(false);
 
   // Calculate incomplete round state
   const enabledParticipants = participants.filter(p => p.isEnabled);
@@ -222,9 +219,10 @@ export function useIncompleteRoundResumption(
     }
   }
 
-  // ✅ FIX: Effect to check backend for active streams on mount
-  // Uses refs to avoid setState in useEffect (ESLint rule)
-  // This runs BEFORE the resumption effect to prevent triggering new AI calls
+  // ✅ OPTIMIZED: Set streamingRoundNumber immediately when incomplete round detected
+  // This enables placeholder rendering WITHOUT waiting for backend check
+  // Previously we made a duplicate /stream call just to get headers - now we use local calculation
+  // AI SDK's resume:true already handles the stream resumption via prepareReconnectToStreamRequest
   useEffect(() => {
     if (!enabled || !threadId) {
       return;
@@ -235,83 +233,25 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // Mark as checking this thread
+    // ✅ IMMEDIATE PLACEHOLDER SUPPORT: Set store state from local calculation
+    // When round is incomplete, set streamingRoundNumber immediately for placeholder rendering
+    // This removes the need for a duplicate backend fetch just to read headers
+    if (isIncomplete && currentRoundNumber !== null && nextParticipantIndex !== null) {
+      setStreamingRoundNumber(currentRoundNumber);
+      setCurrentParticipantIndex(nextParticipantIndex);
+    }
+
+    // Mark as checked - no longer need async backend call
+    // AI SDK handles stream resumption via resume:true in useChat
     activeStreamCheckRef.current = threadId;
-    activeStreamCheckCompleteRef.current = false;
-    backendNextParticipantRef.current = null;
-    hasActiveStreamRef.current = false;
+    activeStreamCheckCompleteRef.current = true;
+  }, [enabled, threadId, isIncomplete, currentRoundNumber, nextParticipantIndex, setStreamingRoundNumber, setCurrentParticipantIndex]);
 
-    // Async check - updates refs only
-    const checkBackend = async () => {
-      try {
-        const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            Accept: 'text/event-stream',
-          },
-        });
-
-        // Parse round completion info from headers
-        const roundComplete = response.headers.get('X-Round-Complete');
-        const nextParticipantIndex = response.headers.get('X-Next-Participant-Index');
-
-        if (response.status === 204) {
-          // No active stream - check headers for round info
-          if (roundComplete === 'false' && nextParticipantIndex) {
-            backendNextParticipantRef.current = Number.parseInt(nextParticipantIndex, 10);
-          }
-          activeStreamCheckCompleteRef.current = true;
-          return;
-        }
-
-        if (response.status === 200) {
-          // Active stream exists - AI SDK should be handling resumption
-          hasActiveStreamRef.current = true;
-          if (roundComplete === 'false' && nextParticipantIndex) {
-            backendNextParticipantRef.current = Number.parseInt(nextParticipantIndex, 10);
-          }
-
-          // ✅ FIX: Set store state IMMEDIATELY so placeholders can render during AI SDK resumption
-          // Extract round number and participant index from headers
-          const roundNumber = response.headers.get('X-Round-Number');
-          const participantIndex = response.headers.get('X-Participant-Index');
-
-          if (roundNumber !== null && participantIndex !== null) {
-            const round = Number.parseInt(roundNumber, 10);
-            const partIdx = Number.parseInt(participantIndex, 10);
-
-            // Set state immediately - this enables placeholder rendering during AI SDK resumption
-            // The AI SDK will set isStreaming=true, and these values enable correct placeholder display
-            setStreamingRoundNumber(round);
-            setCurrentParticipantIndex(partIdx);
-          }
-
-          // Cancel the stream since we don't need it here (AI SDK handles it)
-          response.body?.cancel().catch(() => {});
-          // DON'T mark check complete - wait for AI SDK resume to complete first
-          // The resumption effect will check hasActiveStreamRef and wait for isStreaming
-          return;
-        }
-
-        // Other status - consider check complete
-        activeStreamCheckCompleteRef.current = true;
-      } catch {
-        // Error checking - consider check complete to not block
-        activeStreamCheckCompleteRef.current = true;
-      }
-    };
-
-    checkBackend();
-  }, [enabled, threadId, setStreamingRoundNumber, setCurrentParticipantIndex]);
-
-  // ✅ FIX: Reset refs when threadId changes
+  // ✅ OPTIMIZED: Reset refs when threadId changes
   useEffect(() => {
     // Reset all refs on thread change (synchronous, no setState)
     activeStreamCheckRef.current = null;
     activeStreamCheckCompleteRef.current = false;
-    backendNextParticipantRef.current = null;
-    hasActiveStreamRef.current = false;
   }, [threadId]);
 
   // ✅ ORPHANED PRE-SEARCH RECOVERY EFFECT
@@ -391,16 +331,8 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // ✅ FIX: Skip if backend active stream check hasn't completed yet (using refs)
-    // This prevents triggering new AI calls while AI SDK is resuming a stream
-    // If there was an active stream (hasActiveStreamRef), wait until isStreaming becomes false
-    // before marking the check as complete (this effect re-runs when isStreaming changes)
-    if (hasActiveStreamRef.current && !activeStreamCheckCompleteRef.current) {
-      // Active stream was found, and AI SDK resume just completed (isStreaming is now false)
-      // Mark check as complete so we can proceed
-      activeStreamCheckCompleteRef.current = true;
-    }
-
+    // ✅ OPTIMIZED: Wait for initial check to complete (no longer makes network call)
+    // The check effect sets activeStreamCheckCompleteRef.current = true synchronously
     if (!activeStreamCheckCompleteRef.current) {
       return;
     }
@@ -419,9 +351,8 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // ✅ FIX: Use backend-provided next participant if available (using ref)
-    // This ensures we trigger the correct participant based on backend state
-    const effectiveNextParticipant = backendNextParticipantRef.current ?? nextParticipantIndex;
+    // Use local calculation for next participant (no longer depends on backend ref)
+    const effectiveNextParticipant = nextParticipantIndex;
 
     // Skip if round is complete
     if (!isIncomplete || effectiveNextParticipant === null || currentRoundNumber === null) {
