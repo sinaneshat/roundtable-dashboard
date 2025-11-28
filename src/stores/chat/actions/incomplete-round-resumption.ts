@@ -35,6 +35,7 @@
 
 'use client';
 
+import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
 import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
@@ -303,9 +304,13 @@ export function useIncompleteRoundResumption(
   }, [threadId]);
 
   // ✅ ORPHANED PRE-SEARCH RECOVERY EFFECT
-  // When a user refreshes during pre-search/changelog phase, the pre-search completes
-  // but the user message is never sent. This effect recovers the userQuery from the
-  // pre-search and sets up the store state to resume sending the message normally.
+  // When a user refreshes during pre-search/changelog phase, the pre-search may be
+  // STREAMING or COMPLETE but the user message is never sent. This effect recovers
+  // the userQuery from the pre-search and sets up the store state appropriately.
+  //
+  // STREAMING: Add user message for UI display + set streamingRoundNumber for placeholders
+  //            DON'T trigger participants - wait for pre-search to complete
+  // COMPLETE: Add user message + trigger participants via prepareForNewMessage
   useEffect(() => {
     // Skip if not enabled or already streaming
     if (!enabled || isStreaming || waitingToStartStreaming) {
@@ -338,11 +343,11 @@ export function useIncompleteRoundResumption(
     orphanedPreSearchRecoveryAttemptedRef.current = orphanedPreSearchId;
 
     // Recover the userQuery from the orphaned pre-search
-    // This sets up the store state to resume the round normally via pendingMessage effect
     const recoveredQuery = orphanedPreSearch.userQuery;
     const orphanedRoundNumber = orphanedPreSearch.roundNumber;
+    const isPreSearchStillStreaming = orphanedPreSearch.status === AnalysisStatuses.STREAMING;
 
-    // ✅ FIX: Remove existing optimistic messages for this round BEFORE prepareForNewMessage
+    // ✅ FIX: Remove existing optimistic messages for this round
     // On page refresh, the optimistic message might persist in store (via Zustand persist)
     // but wasn't actually sent to backend. If we don't remove it:
     // 1. calculateNextRoundNumber would return orphanedRoundNumber + 1 (wrong)
@@ -363,31 +368,62 @@ export function useIncompleteRoundResumption(
     });
     setMessages(messagesWithoutOrphanedOptimistic);
 
-    // Get enabled participant MODEL IDs for the expected participants
-    // ✅ CRITICAL FIX: Use modelId (e.g., 'anthropic/claude-sonnet-4'), NOT record id
-    // pending-message-sender.ts compares against modelId, not database record id
-    const expectedModelIds = enabledParticipants.map(p => p.modelId);
+    // ✅ FIX: Handle STREAMING vs COMPLETE differently
+    if (isPreSearchStillStreaming) {
+      // PRE-SEARCH STILL STREAMING: Add user message for UI, show placeholders, but DON'T trigger participants
+      // When pre-search completes, this effect will re-run with status=COMPLETE and trigger participants
 
-    // Set expected participant IDs (required by pendingMessage effect)
-    setExpectedParticipantIds(expectedModelIds);
+      // Add optimistic user message for UI display
+      // AI SDK v5 UIMessage uses parts array, not content property
+      const optimisticUserMessage: UIMessage = {
+        id: `optimistic-user-${orphanedRoundNumber}-${Date.now()}`,
+        role: MessageRoles.USER,
+        parts: [{ type: 'text', text: recoveredQuery }],
+        metadata: {
+          role: MessageRoles.USER,
+          roundNumber: orphanedRoundNumber,
+          isOptimistic: true,
+        },
+      };
 
-    // Prepare for new message - this sets pendingMessage and adds optimistic user message
-    // The prepareForNewMessage action will:
-    // 1. Add optimistic user message for the orphanedRoundNumber (now correct after cleanup)
-    // 2. Set pendingMessage to the recovered query
-    // 3. Set hasSentPendingMessage to false
-    // 4. Clear hasEarlyOptimisticMessage
-    // 5. Set isWaitingForChangelog to true (BUT we need to clear it!)
-    // This triggers the pendingMessage effect in ChatStoreProvider to send the message
-    prepareForNewMessage(recoveredQuery, expectedModelIds);
+      // Add the message to display
+      setMessages([...messagesWithoutOrphanedOptimistic, optimisticUserMessage]);
 
-    // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
-    // During normal flow, useThreadActions clears this flag when changelog query completes.
-    // But during orphaned pre-search recovery, there's no new changelog to fetch - we're
-    // recovering from a state where pre-search already completed but participants never started.
-    // Without clearing this flag, the pending message effect returns early (line ~1109 in provider)
-    // and participants never get triggered, causing the "stuck" state the user reported.
-    setIsWaitingForChangelog(false);
+      // Set streaming round number for placeholder rendering
+      setStreamingRoundNumber(orphanedRoundNumber);
+
+      // ✅ CRITICAL: Reset the ref so we can trigger again when pre-search completes
+      // Without this, when status changes to COMPLETE, we won't re-trigger
+      orphanedPreSearchRecoveryAttemptedRef.current = null;
+    } else {
+      // PRE-SEARCH COMPLETE: Full recovery - add message AND trigger participants
+
+      // Get enabled participant MODEL IDs for the expected participants
+      // ✅ CRITICAL FIX: Use modelId (e.g., 'anthropic/claude-sonnet-4'), NOT record id
+      // pending-message-sender.ts compares against modelId, not database record id
+      const expectedModelIds = enabledParticipants.map(p => p.modelId);
+
+      // Set expected participant IDs (required by pendingMessage effect)
+      setExpectedParticipantIds(expectedModelIds);
+
+      // Prepare for new message - this sets pendingMessage and adds optimistic user message
+      // The prepareForNewMessage action will:
+      // 1. Add optimistic user message for the orphanedRoundNumber (now correct after cleanup)
+      // 2. Set pendingMessage to the recovered query
+      // 3. Set hasSentPendingMessage to false
+      // 4. Clear hasEarlyOptimisticMessage
+      // 5. Set isWaitingForChangelog to true (BUT we need to clear it!)
+      // This triggers the pendingMessage effect in ChatStoreProvider to send the message
+      prepareForNewMessage(recoveredQuery, expectedModelIds);
+
+      // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
+      // During normal flow, useThreadActions clears this flag when changelog query completes.
+      // But during orphaned pre-search recovery, there's no new changelog to fetch - we're
+      // recovering from a state where pre-search already completed but participants never started.
+      // Without clearing this flag, the pending message effect returns early (line ~1109 in provider)
+      // and participants never get triggered, causing the "stuck" state the user reported.
+      setIsWaitingForChangelog(false);
+    }
   }, [
     enabled,
     isStreaming,
@@ -403,6 +439,7 @@ export function useIncompleteRoundResumption(
     setExpectedParticipantIds,
     setMessages,
     setIsWaitingForChangelog,
+    setStreamingRoundNumber,
   ]);
 
   // Reset the orphaned pre-search recovery ref when threadId changes
