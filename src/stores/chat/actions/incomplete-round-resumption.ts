@@ -106,6 +106,8 @@ export function useIncompleteRoundResumption(
   const prepareForNewMessage = useChatStore(s => s.prepareForNewMessage);
   const setExpectedParticipantIds = useChatStore(s => s.setExpectedParticipantIds);
   const setMessages = useChatStore(s => s.setMessages);
+  // ✅ FIX: Need to clear isWaitingForChangelog after recovery since there's no changelog to wait for
+  const setIsWaitingForChangelog = useChatStore(s => s.setIsWaitingForChangelog);
 
   // ✅ INFINITE LOOP FIX: Subscribe to submission state to avoid interfering with normal submissions
   // When user submits a message, pendingMessage is set. The resumption hook should NOT try to
@@ -124,7 +126,9 @@ export function useIncompleteRoundResumption(
 
   // Track if we've already attempted resumption for this thread
   const resumptionAttemptedRef = useRef<string | null>(null);
-  // Track if we've already attempted orphaned pre-search recovery for this thread
+  // Track if we've already attempted orphaned pre-search recovery for this specific pre-search
+  // ✅ FIX: Track by pre-search ID instead of thread ID to allow recovery for different rounds
+  // Previously used threadId which blocked ALL recovery attempts on the same thread
   const orphanedPreSearchRecoveryAttemptedRef = useRef<string | null>(null);
 
   // ✅ OPTIMIZED: Track check state using refs (no longer makes network calls)
@@ -318,13 +322,15 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // Skip if already attempted for this thread
-    if (orphanedPreSearchRecoveryAttemptedRef.current === threadId) {
+    // Skip if already attempted for this specific pre-search
+    // ✅ FIX: Use pre-search ID instead of thread ID to allow recovery for different rounds
+    const orphanedPreSearchId = orphanedPreSearch.id;
+    if (orphanedPreSearchRecoveryAttemptedRef.current === orphanedPreSearchId) {
       return;
     }
 
-    // Mark as attempted to prevent duplicate triggers
-    orphanedPreSearchRecoveryAttemptedRef.current = threadId;
+    // Mark as attempted to prevent duplicate triggers for this specific pre-search
+    orphanedPreSearchRecoveryAttemptedRef.current = orphanedPreSearchId;
 
     // Recover the userQuery from the orphaned pre-search
     // This sets up the store state to resume the round normally via pendingMessage effect
@@ -366,8 +372,17 @@ export function useIncompleteRoundResumption(
     // 2. Set pendingMessage to the recovered query
     // 3. Set hasSentPendingMessage to false
     // 4. Clear hasEarlyOptimisticMessage
+    // 5. Set isWaitingForChangelog to true (BUT we need to clear it!)
     // This triggers the pendingMessage effect in ChatStoreProvider to send the message
     prepareForNewMessage(recoveredQuery, expectedModelIds);
+
+    // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
+    // During normal flow, useThreadActions clears this flag when changelog query completes.
+    // But during orphaned pre-search recovery, there's no new changelog to fetch - we're
+    // recovering from a state where pre-search already completed but participants never started.
+    // Without clearing this flag, the pending message effect returns early (line ~1109 in provider)
+    // and participants never get triggered, causing the "stuck" state the user reported.
+    setIsWaitingForChangelog(false);
   }, [
     enabled,
     isStreaming,
@@ -382,6 +397,7 @@ export function useIncompleteRoundResumption(
     prepareForNewMessage,
     setExpectedParticipantIds,
     setMessages,
+    setIsWaitingForChangelog,
   ]);
 
   // Reset the orphaned pre-search recovery ref when threadId changes
