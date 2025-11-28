@@ -46,7 +46,7 @@ vi.mock('@/components/ui/loader', () => ({
   ),
 }));
 
-// Mock framer-motion to avoid animation issues in tests
+// Mock motion/react to avoid animation issues in tests
 vi.mock('motion/react', () => ({
   motion: {
     span: ({ children, ...props }: { children: ReactNode }) => <span {...props}>{children}</span>,

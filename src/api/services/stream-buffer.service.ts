@@ -153,6 +153,8 @@ export async function initializeStreamBuffer(
 /**
  * Append chunk to stream buffer
  * Called as SSE data arrives from AI SDK stream
+ *
+ * ✅ FIX: Added retry logic and better error handling for KV eventual consistency
  */
 export async function appendStreamChunk(
   streamId: string,
@@ -165,53 +167,85 @@ export async function appendStreamChunk(
     return;
   }
 
-  try {
-    const chunk: StreamChunk = {
-      data,
-      timestamp: Date.now(),
-    };
+  const chunk: StreamChunk = {
+    data,
+    timestamp: Date.now(),
+  };
 
-    // Get existing chunks
-    const chunksKey = getChunksKey(streamId);
-    const existingChunks = await env.KV.get(chunksKey, 'json') as StreamChunk[] | null;
+  const chunksKey = getChunksKey(streamId);
+  const maxRetries = 3;
+  let retryCount = 0;
 
-    if (!existingChunks) {
-      logger?.warn('Stream chunks not found during append', {
-        logType: 'edge_case',
-        streamId,
-      });
-      return;
-    }
+  while (retryCount < maxRetries) {
+    try {
+      // Get existing chunks
+      let existingChunks = await env.KV.get(chunksKey, 'json') as StreamChunk[] | null;
 
-    // Append new chunk
-    const updatedChunks = [...existingChunks, chunk];
+      // ✅ FIX: If chunks don't exist, wait and retry (KV eventual consistency)
+      if (!existingChunks) {
+        if (retryCount < maxRetries - 1) {
+          logger?.info('Stream chunks not found, waiting for KV consistency', {
+            logType: 'operation',
+            streamId,
+            retryCount: retryCount + 1,
+          });
+          await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
+          retryCount++;
+          continue;
+        }
 
-    // Store updated chunks
-    await env.KV.put(
-      chunksKey,
-      JSON.stringify(updatedChunks),
-      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-    );
+        // ✅ FIX: If still not found after retries, initialize empty array
+        // This handles race condition where appendStreamChunk is called before initializeStreamBuffer completes
+        logger?.warn('Stream chunks not found after retries, initializing empty array', {
+          logType: 'edge_case',
+          streamId,
+          retriesAttempted: retryCount,
+        });
+        existingChunks = [];
+      }
 
-    // Update metadata chunk count
-    const metadataKey = getMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as StreamBufferMetadata | null;
+      // Append new chunk
+      const updatedChunks = [...existingChunks, chunk];
 
-    if (metadata) {
-      metadata.chunkCount = updatedChunks.length;
+      // Store updated chunks
       await env.KV.put(
-        metadataKey,
-        JSON.stringify(metadata),
+        chunksKey,
+        JSON.stringify(updatedChunks),
         { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
       );
+
+      // Update metadata chunk count
+      const metadataKey = getMetadataKey(streamId);
+      const metadata = await env.KV.get(metadataKey, 'json') as StreamBufferMetadata | null;
+
+      if (metadata) {
+        metadata.chunkCount = updatedChunks.length;
+        await env.KV.put(
+          metadataKey,
+          JSON.stringify(metadata),
+          { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
+        );
+      }
+
+      // Success - exit retry loop
+      return;
+    } catch (error) {
+      retryCount++;
+      if (retryCount >= maxRetries) {
+        // ✅ FIX: Log error with more context for debugging stream resumption issues
+        logger?.error('Failed to append stream chunk after retries', {
+          logType: 'error',
+          streamId,
+          retriesAttempted: retryCount,
+          chunkDataLength: data.length,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        });
+      } else {
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
-  } catch (error) {
-    // Don't throw - chunk append failures shouldn't break streaming
-    logger?.warn('Failed to append stream chunk', {
-      logType: 'edge_case',
-      streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
   }
 }
 

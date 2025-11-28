@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
       'recharts',
       'date-fns',
       '@radix-ui/react-icons',
-      'framer-motion',
+      'motion',
     ],
   },
 

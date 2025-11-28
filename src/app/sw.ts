@@ -33,6 +33,25 @@ const serwist = new Serwist({
   disableDevLogs: process.env.NODE_ENV === 'production',
 
   runtimeCaching: [
+    // ✅ CRITICAL: CSS/JS assets - StaleWhileRevalidate to ensure fresh styles
+    // This runs BEFORE defaultCache to take priority for script/style assets
+    // Fixes issue where old cached CSS/JS causes broken styles after deployment
+    {
+      matcher: ({ request }) =>
+        request.destination === 'script' || request.destination === 'style',
+      handler: new StaleWhileRevalidate({
+        cacheName: 'static-resources',
+        plugins: [
+          {
+            cacheWillUpdate: async ({ response }) => {
+              // Only cache successful responses
+              return response?.ok ? response : null;
+            },
+          },
+        ],
+      }),
+    },
+
     // Start with defaultCache (Next.js optimized strategies)
     ...defaultCache,
 
@@ -103,72 +122,33 @@ const serwist = new Serwist({
       }),
     },
 
-    // Google Favicons - Network First with fallback
+    // External images (cross-origin) - fetch directly, return transparent GIF on any failure
+    // This prevents service worker from throwing no-response errors on external image fetches
     {
-      matcher: ({ url }) => url.origin === 'https://www.google.com' && url.pathname.startsWith('/s2/favicons'),
-      handler: new NetworkFirst({
-        cacheName: 'google-favicons',
-        networkTimeoutSeconds: 3,
-        plugins: [
-          {
-            handlerDidError: async () => {
-              // Return transparent 1x1 GIF as fallback for failed favicon fetches
-              // This prevents no-response errors while UI can show its own fallback
-              const fallbackGif = new Uint8Array([
-                0x47,
-                0x49,
-                0x46,
-                0x38,
-                0x39,
-                0x61,
-                0x01,
-                0x00,
-                0x01,
-                0x00,
-                0x80,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0xFF,
-                0xFF,
-                0xFF,
-                0x21,
-                0xF9,
-                0x04,
-                0x01,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x2C,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x01,
-                0x00,
-                0x01,
-                0x00,
-                0x00,
-                0x02,
-                0x01,
-                0x44,
-                0x00,
-                0x3B,
-              ]);
-              return new Response(fallbackGif, {
-                status: 200,
-                headers: {
-                  'Content-Type': 'image/gif',
-                  'Cache-Control': 'no-cache',
-                },
-              });
-            },
-          },
-        ],
-      }),
+      matcher: ({ request, sameOrigin }) => request.destination === 'image' && !sameOrigin,
+      handler: async ({ request }) => {
+        try {
+          const response = await fetch(request);
+          if (response.ok || response.type === 'opaque') {
+            return response;
+          }
+          throw new Error('Failed to fetch');
+        } catch {
+          // Return transparent 1x1 GIF as fallback
+          // prettier-ignore
+          const fallbackGif = new Uint8Array([
+            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, // eslint-disable-line antfu/consistent-list-newline
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, // eslint-disable-line antfu/consistent-list-newline
+            0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x00, // eslint-disable-line antfu/consistent-list-newline
+            0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x01, 0x44, // eslint-disable-line antfu/consistent-list-newline
+            0x00, 0x3B, // eslint-disable-line antfu/consistent-list-newline
+          ]);
+          return new Response(fallbackGif, {
+            status: 200,
+            headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-cache' },
+          });
+        }
+      },
     },
 
     // External resources - only cache from CSP-allowed domains

@@ -1,7 +1,6 @@
 'use client';
 
 import { Search } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 
@@ -10,7 +9,7 @@ import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/sc
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { LoaderFive } from '@/components/ui/loader';
-import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
+import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
@@ -62,6 +61,16 @@ function PreSearchStreamComponent({
 }: PreSearchStreamProps) {
   const t = useTranslations('chat.preSearch');
   const is409Conflict = useBoolean(false);
+  // ✅ AUTO-RETRY UI: Track when retrying after stream failure
+  const isAutoRetrying = useBoolean(false);
+
+  // ✅ AUTO-RETRY: Track retry attempts for stream failures
+  // Stream failures often succeed on retry (transient network/model issues)
+  // Auto-retry provides better UX than showing error immediately
+  const MAX_STREAM_RETRIES = 3;
+  const RETRY_INTERVAL_MS = 3000; // Fixed 3-second intervals
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // ✅ CRITICAL FIX: Get store directly to check state synchronously inside effects
   // Using useContext instead of useChatStore allows us to call getState() at execution time
@@ -81,6 +90,20 @@ function PreSearchStreamComponent({
   // ✅ DEBUG: Track component renders
   const renderCountRef = useRef(0);
   renderCountRef.current++;
+
+  // ✅ Reset retry count when preSearch ID changes (new search)
+  useEffect(() => {
+    retryCountRef.current = 0;
+  }, [preSearch.id]);
+
+  // ✅ AUTO-RETRY: Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Store callbacks in refs for stability and to allow calling after unmount
   const onStreamCompleteRef = useRef(onStreamComplete);
@@ -300,6 +323,41 @@ function PreSearchStreamComponent({
         if (err instanceof Error && err.name === 'AbortError') {
           return; // Normal abort, don't show error
         }
+
+        // ✅ AUTO-RETRY: Automatically retry stream failures
+        // Stream failures often succeed on retry (transient network/model issues)
+        if (retryCountRef.current < MAX_STREAM_RETRIES) {
+          retryCountRef.current++;
+          console.error(`[PreSearchStream] Stream failed - auto-retry ${retryCountRef.current}/${MAX_STREAM_RETRIES} in ${RETRY_INTERVAL_MS}ms`);
+
+          // Show "Retrying..." UI to user instead of raw error
+          isAutoRetrying.onTrue();
+
+          // Clear any existing timeout
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current);
+          }
+
+          // Schedule retry after interval
+          retryTimeoutRef.current = setTimeout(() => {
+            // Reset deduplication flags to allow retry
+            triggeredSearchIds.delete(preSearch.id);
+            const roundSet = triggeredRounds.get(threadId);
+            if (roundSet) {
+              roundSet.delete(preSearch.roundNumber);
+            }
+
+            // Retry by calling startStream again
+            startStream().catch(() => {
+              // Retry failed, error state will be handled by next catch
+            });
+          }, RETRY_INTERVAL_MS);
+          return; // Don't set error yet - retry in progress
+        }
+
+        // Max retries exceeded - show error
+        retryCountRef.current = 0; // Reset for next attempt
+        isAutoRetrying.onFalse(); // Clear retrying state
         setError(err instanceof Error ? err : new Error('Stream failed'));
       }
     };
@@ -330,6 +388,9 @@ function PreSearchStreamComponent({
     let timeoutId: NodeJS.Timeout;
     let isMounted = true;
 
+    // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
+    isAutoRetrying.onTrue();
+
     const poll = async () => {
       try {
         const res = await fetch(`/api/v1/chat/threads/${threadId}/pre-searches`);
@@ -344,13 +405,17 @@ function PreSearchStreamComponent({
           if (current.status === AnalysisStatuses.COMPLETE && current.searchData) {
             setPartialSearchData(current.searchData);
             onStreamCompleteRef.current?.(current.searchData);
-            if (isMounted)
+            if (isMounted) {
               is409Conflict.onFalse(); // Stop polling
+              isAutoRetrying.onFalse(); // Clear auto-retry state
+            }
             return;
           } else if (current.status === AnalysisStatuses.FAILED) {
             setError(new Error(current.errorMessage || 'Pre-search failed'));
-            if (isMounted)
+            if (isMounted) {
               is409Conflict.onFalse(); // Stop polling
+              isAutoRetrying.onFalse(); // Clear auto-retry state
+            }
             return;
           }
           // If still STREAMING or PENDING, continue polling
@@ -370,8 +435,9 @@ function PreSearchStreamComponent({
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
+      isAutoRetrying.onFalse(); // Clear auto-retry state on cleanup
     };
-  }, [is409Conflict.value, threadId, preSearch.id, is409Conflict]);
+  }, [is409Conflict.value, threadId, preSearch.id, is409Conflict, isAutoRetrying]);
 
   // Mark completed/failed/streaming pre-searches as triggered to prevent re-streaming
   // ✅ FIX: Also mark STREAMING status to prevent duplicate triggers during status transitions
@@ -451,119 +517,94 @@ function PreSearchStreamComponent({
 
   const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
 
-  // Track section indices for staggered top-to-bottom animations
-  let sectionIndex = 0;
+  // ✅ SIMPLIFIED: No easing animations - sections appear instantly
+  // Only the typing effect inside items is animated
+
+  if (isPendingWithNoData || isAutoRetrying.value) {
+    return (
+      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+        <LoaderFive text={isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')} />
+      </div>
+    );
+  }
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      {isPendingWithNoData
-        ? (
-            <motion.div
-              key="presearch-loader"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{
-                duration: ANIMATION_DURATION.fast,
-                ease: ANIMATION_EASE.standard,
-              }}
-              className="flex items-center justify-center py-8 text-muted-foreground text-sm"
-            >
-              <LoaderFive text={t('pendingSearch')} />
-            </motion.div>
-          )
-        : (
-            <motion.div
-              key="presearch-content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{
-                duration: ANIMATION_DURATION.normal,
-                ease: ANIMATION_EASE.enter,
-              }}
-            >
-              <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-4">
-                {/* Search Summary - only show if we have analysis text */}
-                {analysis && (
-                  <AnimatedStreamingItem
-                    key="search-config"
-                    itemKey="search-config"
-                    index={sectionIndex++}
-                  >
-                    <WebSearchConfigurationDisplay
-                      queries={validQueries.filter(q => q?.query).map(q => ({
-                        query: q.query,
-                        rationale: q.rationale,
-                        searchDepth: q.searchDepth,
-                        index: q.index,
-                      }))}
-                      results={validResults.flatMap(r => r.results || [])}
-                      searchPlan={analysis}
-                      isStreamingPlan={isStreamingNow && !analysis}
-                      totalResults={totalResults}
-                      totalTime={totalTime}
+    <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-4">
+      {/* Search Summary - only show if we have analysis text */}
+      {analysis && (
+        <AnimatedStreamingItem
+          key="search-config"
+          itemKey="search-config"
+        >
+          <WebSearchConfigurationDisplay
+            queries={validQueries.filter(q => q?.query).map(q => ({
+              query: q.query,
+              rationale: q.rationale,
+              searchDepth: q.searchDepth,
+              index: q.index,
+            }))}
+            results={validResults.flatMap(r => r.results || [])}
+            searchPlan={analysis}
+            isStreamingPlan={isStreamingNow && !analysis}
+            totalResults={totalResults}
+            totalTime={totalTime}
+          />
+        </AnimatedStreamingItem>
+      )}
+
+      {validQueries.map((query, queryIndex) => {
+        if (!query?.query) {
+          return null;
+        }
+
+        const searchResult = validResults.find(r => r?.query === query?.query);
+        const hasResult = !!searchResult;
+        const uniqueKey = `query-${query?.query || queryIndex}`;
+        const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
+
+        return (
+          <AnimatedStreamingItem
+            key={uniqueKey}
+            itemKey={uniqueKey}
+          >
+            <div className="space-y-2">
+              {/* Query header - minimal */}
+              <div className="flex items-start gap-2">
+                <Search className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground">{query?.query}</p>
+                  {hasResult && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {searchResult.results.length}
+                      {' '}
+                      {searchResult.results.length === 1 ? 'result' : 'results'}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Results list */}
+              {hasResults && (
+                <div className="pl-6">
+                  {searchResult.results.map((result, idx) => (
+                    <WebSearchResultItem
+                      key={result.url}
+                      result={result}
+                      showDivider={idx < searchResult.results.length - 1}
                     />
-                  </AnimatedStreamingItem>
-                )}
+                  ))}
+                </div>
+              )}
 
-                {validQueries.map((query, queryIndex) => {
-                  if (!query?.query) {
-                    return null;
-                  }
-
-                  const searchResult = validResults.find(r => r?.query === query?.query);
-                  const hasResult = !!searchResult;
-                  const uniqueKey = `query-${query?.query || queryIndex}`;
-                  const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
-                  const currentIndex = sectionIndex++;
-
-                  return (
-                    <AnimatedStreamingItem
-                      key={uniqueKey}
-                      itemKey={uniqueKey}
-                      index={currentIndex}
-                    >
-                      <div className="space-y-2">
-                        {/* Query header - minimal */}
-                        <div className="flex items-start gap-2">
-                          <Search className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-foreground">{query?.query}</p>
-                            {hasResult && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {searchResult.results.length}
-                                {' '}
-                                {searchResult.results.length === 1 ? 'result' : 'results'}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Results list */}
-                        {hasResults && (
-                          <div className="pl-6">
-                            {searchResult.results.map((result, idx) => (
-                              <WebSearchResultItem
-                                key={result.url}
-                                result={result}
-                                showDivider={idx < searchResult.results.length - 1}
-                              />
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Separator between searches */}
-                        {queryIndex < validQueries.length - 1 && (
-                          <Separator className="!mt-4" />
-                        )}
-                      </div>
-                    </AnimatedStreamingItem>
-                  );
-                })}
-              </AnimatedStreamingList>
-            </motion.div>
-          )}
-    </AnimatePresence>
+              {/* Separator between searches */}
+              {queryIndex < validQueries.length - 1 && (
+                <Separator className="!mt-4" />
+              )}
+            </div>
+          </AnimatedStreamingItem>
+        );
+      })}
+    </AnimatedStreamingList>
   );
 }
 

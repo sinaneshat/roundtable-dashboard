@@ -11,7 +11,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-// Mock framer-motion to render static elements for testing
+// Mock motion/react to render static elements for testing
 vi.mock('motion/react', () => ({
   motion: {
     span: ({

@@ -1,8 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Mail } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense, useEffect, useState } from 'react';
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { useBoolean } from '@/hooks/utils';
+import { authClient } from '@/lib/auth/client';
 import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
 import { getApiErrorDetails } from '@/lib/utils/error-handling';
 
@@ -85,15 +86,12 @@ function AuthFormContent() {
   const handleMagicLink = async (data: MagicLinkFormData) => {
     isLoading.onTrue();
     try {
-      // SIMULATED MOCK LOGIN for demo purposes
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // await authClient.signIn.magicLink({
-      //   email: data.email,
-      //   callbackURL: '/chat',
-      //   newUserCallbackURL: '/chat',
-      //   errorCallbackURL: '/auth/error',
-      // });
+      await authClient.signIn.magicLink({
+        email: data.email,
+        callbackURL: '/chat',
+        newUserCallbackURL: '/chat',
+        errorCallbackURL: '/auth/error',
+      });
       setSentEmail(data.email);
       magicLinkSent.onTrue();
     } catch (error) {

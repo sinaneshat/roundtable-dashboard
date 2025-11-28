@@ -1015,7 +1015,8 @@ export const ChatMessageList = memo(
                   // - Pre-search PENDING/STREAMING: Show all participants as pending
                   // - Pre-search COMPLETE but not streaming yet: Keep showing pending (transition phase)
                   // - Streaming: Show participants who haven't started streaming yet
-                  const shouldShowPendingCards = !allParticipantsHaveContentForRound && (preSearchActive || preSearchComplete || isStreaming);
+                  // - Stream resumption: isStreamingRound is true but isStreaming may be false during AI SDK resumption
+                  const shouldShowPendingCards = !allParticipantsHaveContentForRound && (preSearchActive || preSearchComplete || isStreaming || isStreamingRound);
 
                   if (!shouldShowPendingCards) {
                     return null;
@@ -1023,7 +1024,9 @@ export const ChatMessageList = memo(
 
                   // ✅ UNIFIED RENDERING: Render ALL participants in priority order
                   // Each participant shows either their actual content or shimmer, maintaining stable positions.
-                  const currentStreamingParticipantForRound = sortedParticipants[currentParticipantIndex];
+                  // ✅ FIX: Handle null currentParticipantIndex during stream resumption
+                  const effectiveParticipantIndex = currentParticipantIndex ?? 0;
+                  const currentStreamingParticipantForRound = sortedParticipants[effectiveParticipantIndex];
 
                   return (
                     // ✅ mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
@@ -1037,7 +1040,8 @@ export const ChatMessageList = memo(
                         const hasContent = participantHasVisibleContent(participantMaps, participant, participantIdx);
 
                         // Determine status and parts based on message state
-                        const isCurrentlyStreaming = isStreaming
+                        // ✅ FIX: Include isStreamingRound to show streaming status during AI SDK resumption
+                        const isCurrentlyStreaming = (isStreaming || isStreamingRound)
                           && currentStreamingParticipantForRound
                           && participant.id === currentStreamingParticipantForRound.id;
 
@@ -1066,8 +1070,13 @@ export const ChatMessageList = memo(
                         // ✅ Compute context-aware loading text for pending participants
                         let loadingText: string | undefined;
                         if (!hasContent) {
+                          // ✅ FIX: Handle null currentParticipantIndex during stream resumption
+                          // During early resumption phase, currentParticipantIndex may still be null
+                          // In this case, assume first participant (index 0) is current
+                          const effectiveCurrentIndex = currentParticipantIndex ?? 0;
+
                           // Check if it's this participant's turn
-                          const isTheirTurn = participantIdx <= currentParticipantIndex;
+                          const isTheirTurn = participantIdx <= effectiveCurrentIndex;
 
                           if (isTheirTurn) {
                             // It's their turn - check pre-search status for first participant
@@ -1079,7 +1088,7 @@ export const ChatMessageList = memo(
                             }
                           } else {
                             // Not their turn yet - show who they're waiting for
-                            const currentSpeaker = sortedParticipants[currentParticipantIndex];
+                            const currentSpeaker = sortedParticipants[effectiveCurrentIndex];
                             const currentSpeakerModel = currentSpeaker ? findModel(currentSpeaker.modelId) : null;
                             const currentSpeakerName = currentSpeakerModel?.name || currentSpeaker?.modelId || 'AI';
                             loadingText = tParticipant('waitingNamed', { name: currentSpeakerName });

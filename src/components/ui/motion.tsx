@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, LayoutGroup, motion, type HTMLMotionProps, type Variants } from 'motion/react';
+import { AnimatePresence, motion, type HTMLMotionProps, type Variants } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/ui/cn';
@@ -46,7 +46,8 @@ type AnimatedStreamingListProps = {
 
 /**
  * Container for lists that grow during streaming.
- * Wraps children in LayoutGroup and provides coordinated height animations.
+ * ✅ SIMPLIFIED: No animations - items appear instantly.
+ * Only the typing effect inside items should be animated.
  *
  * @example
  * ```tsx
@@ -62,24 +63,13 @@ type AnimatedStreamingListProps = {
 export function AnimatedStreamingList({
   children,
   className,
-  groupId,
+  groupId: _groupId,
 }: AnimatedStreamingListProps) {
+  // ✅ No animations - render children directly
   return (
-    <LayoutGroup id={groupId}>
-      <motion.div
-        layout
-        className={cn(className)}
-        transition={layoutTransition}
-      >
-        {/* ✅ React 19 Fix: Changed from "popLayout" to "sync" to avoid element.ref deprecation warning
-         * popLayout mode requires internal ref access which triggers React 19 deprecation warning
-         * sync mode provides similar behavior without the ref access pattern
-         * See: https://github.com/motiondivision/motion/issues/2668 */}
-        <AnimatePresence mode="sync" initial={false}>
-          {children}
-        </AnimatePresence>
-      </motion.div>
-    </LayoutGroup>
+    <div className={cn(className)}>
+      {children}
+    </div>
   );
 }
 
@@ -103,60 +93,24 @@ type AnimatedStreamingItemProps = {
 };
 
 /**
- * Individual item in a streaming list with enter/exit animations.
- * Uses layout prop for smooth height transitions when siblings change.
- *
- * Animation timing ensures top-to-bottom ordering:
- * - Each item's delay = baseDelay + (index * staggerDelay)
- * - Default stagger: 40ms per item for responsive streaming feel
- * - Items appear sequentially from top to bottom
- *
- * For already-complete content, pass `skipAnimation={true}` to render
- * without the initial fade-in animation.
+ * Individual item in a streaming list.
+ * ✅ SIMPLIFIED: No animations - items appear instantly.
+ * Only the typing effect inside items should be animated.
  */
 export function AnimatedStreamingItem({
   children,
   className,
-  itemKey,
-  index = 0,
-  delay = 0,
-  staggerDelay = 0.04,
-  skipAnimation = false,
+  itemKey: _itemKey,
+  index: _index = 0,
+  delay: _delay = 0,
+  staggerDelay: _staggerDelay = 0.04,
+  skipAnimation: _skipAnimation = false,
 }: AnimatedStreamingItemProps) {
-  const itemDelay = delay + (index * staggerDelay);
-
+  // ✅ No animations - render children directly
   return (
-    <motion.div
-      key={itemKey}
-      layout
-      layoutId={itemKey}
-      className={cn(className)}
-      // ✅ ANIMATION ALIGNMENT: When skipAnimation is true, start in final state
-      // initial={false} tells Motion to skip the initial animation entirely
-      initial={skipAnimation ? false : { opacity: 0, y: 8 }}
-      animate={{
-        opacity: 1,
-        y: 0,
-        transition: skipAnimation
-          ? { duration: 0 } // Instant for already-loaded content
-          : {
-              opacity: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
-              y: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
-            }
-      }}
-      exit={{
-        opacity: 0,
-        y: -8,
-        transition: {
-          duration: ANIMATION_DURATION.fast,
-        }
-      }}
-      transition={{
-        layout: layoutTransition,
-      }}
-    >
+    <div className={cn(className)}>
       {children}
-    </motion.div>
+    </div>
   );
 }
 

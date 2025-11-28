@@ -14,7 +14,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { createError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
 import { StreamStatuses } from '@/api/core/enums';
-import { getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
+import { getNextParticipantToStream, getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
 import { createLiveParticipantResumeStream, getStreamMetadata } from '@/api/services/stream-buffer.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -167,11 +167,37 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       return c.body(null, HttpStatusCodes.NO_CONTENT);
     }
 
-    // Get stream buffer metadata
-    const metadata = await getStreamMetadata(activeStream.streamId, c.env);
+    // ✅ FIX: Get the next participant that needs to stream (may be different from activeStream.participantIndex)
+    // This handles the case where one participant finished but another still needs to stream
+    const nextParticipant = await getNextParticipantToStream(threadId, c.env);
 
-    // No buffer exists - return 204 No Content
+    // If no next participant and all are done, the round is complete
+    const roundComplete = !nextParticipant;
+
+    // Determine which stream to return:
+    // - If there's an actively streaming participant, return their stream
+    // - Otherwise, return the last active stream's buffered data
+    const streamIdToResume = activeStream.streamId;
+
+    // Get stream buffer metadata
+    const metadata = await getStreamMetadata(streamIdToResume, c.env);
+
+    // No buffer exists - return 204 with round info so frontend can trigger remaining participants
     if (!metadata) {
+      // ✅ FIX: Even without buffer, return round info so frontend knows what to do
+      if (nextParticipant && !roundComplete) {
+        return new Response(null, {
+          status: HttpStatusCodes.NO_CONTENT,
+          headers: {
+            // Include round info even on 204 so frontend can trigger next participant
+            'X-Round-Number': String(activeStream.roundNumber),
+            'X-Total-Participants': String(activeStream.totalParticipants),
+            'X-Next-Participant-Index': String(nextParticipant.participantIndex),
+            'X-Participant-Statuses': JSON.stringify(activeStream.participantStatuses),
+            'X-Round-Complete': 'false',
+          },
+        });
+      }
       return c.body(null, HttpStatusCodes.NO_CONTENT);
     }
 
@@ -179,9 +205,10 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     // This enables true stream resumption - the stream continues where it left off
     // and polls for new chunks as they arrive from the original stream
     const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
-    const liveStream = createLiveParticipantResumeStream(activeStream.streamId, c.env);
+    const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env);
 
     // Return live SSE stream with metadata headers
+    // ✅ FIX: Include round completion info so frontend can trigger remaining participants
     return new Response(liveStream, {
       status: HttpStatusCodes.OK,
       headers: {
@@ -192,9 +219,14 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         'X-Resumed-From-Buffer': 'true',
         'X-Stream-Active': String(isStreamActive),
         // Include stream metadata in headers for frontend to update state
-        'X-Stream-Id': activeStream.streamId,
+        'X-Stream-Id': streamIdToResume,
         'X-Round-Number': String(activeStream.roundNumber),
         'X-Participant-Index': String(activeStream.participantIndex),
+        // ✅ FIX: Include round completion info for proper multi-participant resumption
+        'X-Total-Participants': String(activeStream.totalParticipants),
+        'X-Participant-Statuses': JSON.stringify(activeStream.participantStatuses),
+        'X-Round-Complete': String(roundComplete),
+        ...(nextParticipant ? { 'X-Next-Participant-Index': String(nextParticipant.participantIndex) } : {}),
       },
     });
   },

@@ -3,7 +3,6 @@
 import { cva } from 'class-variance-authority';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
-import { motion } from 'motion/react';
 import type { ComponentProps, ReactNode } from 'react';
 import { createContext, use, useCallback, useMemo, useState } from 'react';
 
@@ -11,7 +10,6 @@ import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { staggerContainer } from '@/lib/ui/animations';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -154,35 +152,11 @@ type ChainOfThoughtContentProps = ComponentProps<typeof CollapsibleContent> & {
 export function ChainOfThoughtContent({
   className,
   children,
-  staggerChildren = false,
+  staggerChildren: _staggerChildren = false,
   ...props
 }: ChainOfThoughtContentProps) {
-  const { open } = useChainOfThought();
-
-  // When staggerChildren is enabled, wrap children in motion container for sequenced animations
-  // Note: Individual child staggering relies on parent motion container with staggerChildren
-  if (staggerChildren && open) {
-    return (
-      <CollapsibleContent
-        className={cn(
-          // Consistent Y padding for body content
-          'px-3 pt-1 pb-4 sm:px-4 sm:pt-2 sm:pb-5',
-          className,
-        )}
-        {...props}
-      >
-        <motion.div
-          className="space-y-3 sm:space-y-4"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-        >
-          {children}
-        </motion.div>
-      </CollapsibleContent>
-    );
-  }
-
+  // ✅ SIMPLIFIED: No stagger animations - content appears instantly
+  // Only the typing effect inside items should be animated
   return (
     <CollapsibleContent
       className={cn(

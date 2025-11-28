@@ -25,8 +25,8 @@
  * @module api/services/resumable-stream-kv
  */
 
-import type { StreamStatus } from '@/api/core/enums';
-import { StreamStatuses } from '@/api/core/enums';
+import type { ParticipantStreamStatus, StreamStatus } from '@/api/core/enums';
+import { ParticipantStreamStatuses, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 
@@ -76,24 +76,36 @@ function getThreadActiveStreamKey(threadId: string): string {
 /**
  * Active stream info stored at thread level
  * ✅ RESUMABLE STREAMS: Following AI SDK documentation pattern
+ *
+ * ✅ FIX: Now tracks round-level state to support multi-participant resumption
+ * - Tracks which round is active and total participants expected
+ * - Individual participant completion tracked via participantStatuses
+ * - Active stream only cleared when ALL participants in round complete
+ * ✅ ENUM PATTERN: Uses ParticipantStreamStatus from core enums
  */
 export type ThreadActiveStream = {
   streamId: string;
   roundNumber: number;
   participantIndex: number;
   createdAt: string;
+  // ✅ NEW: Track round-level completion for proper resumption
+  totalParticipants: number;
+  // ✅ ENUM PATTERN: Uses ParticipantStreamStatus instead of inline union type
+  participantStatuses: Record<number, ParticipantStreamStatus>;
 };
 
 /**
  * Set thread-level active stream
  * Called when participant stream starts to enable resume detection
  *
- * ✅ RESUMABLE STREAMS: AI SDK pattern - one active stream per thread
+ * ✅ RESUMABLE STREAMS: AI SDK pattern - track active round with all participants
+ * ✅ FIX: Now tracks round-level state for proper multi-participant resumption
  *
  * @param threadId - Thread ID
  * @param streamId - Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})
  * @param roundNumber - Round number
  * @param participantIndex - Participant index
+ * @param totalParticipants - Total number of participants in this round
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
  */
@@ -102,6 +114,7 @@ export async function setThreadActiveStream(
   streamId: string,
   roundNumber: number,
   participantIndex: number,
+  totalParticipants: number,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
@@ -111,11 +124,27 @@ export async function setThreadActiveStream(
   }
 
   try {
+    // ✅ FIX: Check if there's an existing active round
+    // If same round, update participant status; if different round, create new
+    const existing = await getThreadActiveStream(threadId, env);
+
+    let participantStatuses: Record<number, 'active' | 'completed' | 'failed'> = {};
+
+    if (existing && existing.roundNumber === roundNumber) {
+      // Same round - preserve existing participant statuses
+      participantStatuses = { ...existing.participantStatuses };
+    }
+
+    // Mark this participant as active
+    participantStatuses[participantIndex] = ParticipantStreamStatuses.ACTIVE;
+
     const activeStream: ThreadActiveStream = {
       streamId,
       roundNumber,
       participantIndex,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.roundNumber === roundNumber ? existing.createdAt : new Date().toISOString(),
+      totalParticipants,
+      participantStatuses,
     };
 
     await env.KV.put(
@@ -131,6 +160,8 @@ export async function setThreadActiveStream(
         streamId,
         roundNumber,
         participantIndex,
+        totalParticipants,
+        participantStatuses,
       });
     }
   } catch (error) {
@@ -196,10 +227,157 @@ export async function getThreadActiveStream(
 }
 
 /**
+ * Update participant status in thread-level active stream
+ * ✅ FIX: Called when individual participant completes/fails
+ * Only clears the active stream when ALL participants have finished
+ * ✅ ENUM PATTERN: Uses ParticipantStreamStatus from core enums
+ *
+ * @param threadId - Thread ID
+ * @param roundNumber - Round number
+ * @param participantIndex - Participant index
+ * @param status - New status (ParticipantStreamStatuses.COMPLETED | ParticipantStreamStatuses.FAILED)
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ * @returns true if round is complete (all participants finished), false otherwise
+ */
+export async function updateParticipantStatus(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+  status: typeof ParticipantStreamStatuses.COMPLETED | typeof ParticipantStreamStatuses.FAILED,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<boolean> {
+  // ✅ LOCAL DEV: Skip if KV not available
+  if (!env?.KV) {
+    return false;
+  }
+
+  try {
+    const existing = await getThreadActiveStream(threadId, env);
+
+    if (!existing) {
+      logger?.warn('No active stream to update participant status', {
+        logType: 'edge_case',
+        threadId,
+        roundNumber,
+        participantIndex,
+      });
+      return false;
+    }
+
+    // Update participant status
+    const participantStatuses = { ...existing.participantStatuses };
+    participantStatuses[participantIndex] = status;
+
+    // Check if ALL participants have finished (completed or failed)
+    const finishedCount = Object.values(participantStatuses).filter(
+      s => s === ParticipantStreamStatuses.COMPLETED || s === ParticipantStreamStatuses.FAILED,
+    ).length;
+
+    const allFinished = finishedCount >= existing.totalParticipants;
+
+    if (allFinished) {
+      // All participants done - clear the active stream
+      await env.KV.delete(getThreadActiveStreamKey(threadId));
+      logger?.info('All participants finished - cleared thread active stream', {
+        logType: 'operation',
+        threadId,
+        roundNumber,
+        totalParticipants: existing.totalParticipants,
+        participantStatuses,
+      });
+      return true;
+    }
+
+    // Not all finished yet - update the statuses
+    const updated: ThreadActiveStream = {
+      ...existing,
+      participantStatuses,
+    };
+
+    await env.KV.put(
+      getThreadActiveStreamKey(threadId),
+      JSON.stringify(updated),
+      { expirationTtl: STREAM_STATE_TTL },
+    );
+
+    logger?.info('Updated participant status', {
+      logType: 'operation',
+      threadId,
+      roundNumber,
+      participantIndex,
+      status,
+      finishedCount,
+      totalParticipants: existing.totalParticipants,
+    });
+
+    return false;
+  } catch (error) {
+    logger?.warn('Failed to update participant status', {
+      logType: 'edge_case',
+      threadId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return false;
+  }
+}
+
+/**
+ * Get next participant to stream for an incomplete round
+ * ✅ FIX: Used by resume endpoint to determine which participant to resume
+ *
+ * @param threadId - Thread ID
+ * @param env - Cloudflare environment bindings
+ * @param logger - Optional logger
+ * @returns Next participant index to stream, or null if round is complete
+ */
+export async function getNextParticipantToStream(
+  threadId: string,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<{ roundNumber: number; participantIndex: number; totalParticipants: number } | null> {
+  if (!env?.KV) {
+    return null;
+  }
+
+  try {
+    const existing = await getThreadActiveStream(threadId, env);
+
+    if (!existing) {
+      return null;
+    }
+
+    // Find first participant that is NOT completed or failed
+    for (let i = 0; i < existing.totalParticipants; i++) {
+      const status = existing.participantStatuses[i];
+      if (status === ParticipantStreamStatuses.ACTIVE || status === undefined) {
+        return {
+          roundNumber: existing.roundNumber,
+          participantIndex: i,
+          totalParticipants: existing.totalParticipants,
+        };
+      }
+    }
+
+    // All participants finished
+    return null;
+  } catch (error) {
+    logger?.error('Failed to get next participant to stream', {
+      logType: 'error',
+      threadId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return null;
+  }
+}
+
+/**
  * Clear thread-level active stream
  * Called when stream completes, fails, or is no longer needed
  *
  * ✅ RESUMABLE STREAMS: AI SDK pattern - clear when stream finishes
+ * ✅ FIX: Prefer using updateParticipantStatus() which handles multi-participant rounds
  *
  * @param threadId - Thread ID
  * @param env - Cloudflare environment bindings

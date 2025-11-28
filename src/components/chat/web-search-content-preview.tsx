@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import {
   ChevronDown,
   ChevronUp,
@@ -9,6 +8,7 @@ import {
   FileText,
   Hash,
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';

@@ -414,6 +414,7 @@
       "title": "Web Research",
       "searching": "Searching",
       "pendingSearch": "Searching the web...",
+      "autoRetryingSearch": "Search in progress, auto-retrying...",
       "error": "Error",
       "retry": "Retry",
       "searchDepth": {

@@ -234,7 +234,9 @@ function ModeratorAnalysisStreamComponent({
   // ✅ AUTO-RETRY: Track retry attempts for empty response errors
   // Empty responses happen due to: model timeout, rate limiting, network issues
   // Auto-retry provides better UX than showing error immediately
-  const MAX_EMPTY_RESPONSE_RETRIES = 2;
+  // ✅ FIX: Increased retries and fixed 3-second intervals for better UX
+  const MAX_EMPTY_RESPONSE_RETRIES = 3;
+  const RETRY_INTERVAL_MS = 3000; // Fixed 3-second intervals as requested
   const emptyResponseRetryCountRef = useRef(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -324,28 +326,31 @@ function ModeratorAnalysisStreamComponent({
 
           // ✅ AUTO-RETRY: Automatically retry empty response errors
           // Empty responses often succeed on retry (transient network/model issues)
+          // ✅ FIX: Use fixed 3-second intervals and show retrying UI to user
           if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
             emptyResponseRetryCountRef.current++;
-            console.error(`[ModeratorAnalysisStream] Empty response - auto-retry ${emptyResponseRetryCountRef.current}/${MAX_EMPTY_RESPONSE_RETRIES}`);
+            console.error(`[ModeratorAnalysisStream] Empty response - auto-retry ${emptyResponseRetryCountRef.current}/${MAX_EMPTY_RESPONSE_RETRIES} in ${RETRY_INTERVAL_MS}ms`);
+
+            // ✅ FIX: Show "Retrying..." UI to user instead of raw error
+            isAutoRetrying.onTrue();
 
             // Clear any existing timeout
             if (retryTimeoutRef.current) {
               clearTimeout(retryTimeoutRef.current);
             }
 
-            // Retry after a short delay (exponential backoff: 1s, 2s)
-            const retryDelay = emptyResponseRetryCountRef.current * 1000;
+            // ✅ FIX: Use fixed 3-second intervals as requested
             retryTimeoutRef.current = setTimeout(() => {
-              // Reset streaming state for retry
+              // Reset streaming state for retry but KEEP partial data visible
               hasStartedStreamingRef.current = false;
-              partialAnalysisRef.current = null;
+              // NOTE: Don't reset partialAnalysisRef - keep showing streamed content
 
               // Trigger retry via submit
               const messageIds = analysis.participantMessageIds;
               if (messageIds?.length && submitRef.current) {
                 submitRef.current({ participantMessageIds: messageIds });
               }
-            }, retryDelay);
+            }, RETRY_INTERVAL_MS);
             return; // Don't report error yet - retry in progress
           }
 
@@ -353,6 +358,7 @@ function ModeratorAnalysisStreamComponent({
           errorType = StreamErrorTypes.EMPTY_RESPONSE;
           streamErrorTypeRef.current = errorType;
           emptyResponseRetryCountRef.current = 0; // Reset for next attempt
+          isAutoRetrying.onFalse(); // Clear retrying state
           // User-friendly error message instead of raw Zod validation error
           onStreamCompleteRef.current?.(null, new Error(t('errors.emptyResponseError')));
           return;

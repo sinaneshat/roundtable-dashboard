@@ -1,7 +1,6 @@
 'use client';
 
 import { Brain, ChevronDown } from 'lucide-react';
-import { motion } from 'motion/react';
 import type { ComponentProps } from 'react';
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -207,33 +206,18 @@ type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
 /**
  * Shimmer text component for thinking state
  * Creates a smooth, character-by-character shimmer animation
+ * Uses CSS-based animations for better caching reliability in deployed environments
  */
 function ShimmerText({ text }: { text: string }) {
   return (
     <span className="font-medium">
       {text.split('').map((char, i) => (
-        <motion.span
+        <span
           key={i}
-          className="inline-block"
-          initial={{ opacity: 0.4 }}
-          animate={{
-            opacity: [0.4, 1, 0.4],
-            textShadow: [
-              '0 0 0 transparent',
-              '0 0 8px hsl(var(--primary) / 0.5)',
-              '0 0 0 transparent',
-            ],
-          }}
-          transition={{
-            duration: 1.5,
-            repeat: Infinity,
-            repeatType: 'loop',
-            delay: i * 0.05,
-            ease: 'easeInOut',
-          }}
+          className={`animate-shimmer-char shimmer-delay-${i % 16}`}
         >
           {char === ' ' ? '\u00A0' : char}
-        </motion.span>
+        </span>
       ))}
     </span>
   );
@@ -343,8 +327,6 @@ export function ReasoningContent({
     <CollapsibleContent
       className={cn(
         'mt-4 w-full text-sm text-muted-foreground',
-        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2',
-        'data-[state=open]:animate-in data-[state=open]:slide-in-from-top-2',
         className,
       )}
       {...props}

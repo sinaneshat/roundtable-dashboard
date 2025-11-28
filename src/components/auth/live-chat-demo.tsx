@@ -783,76 +783,125 @@ export function LiveChatDemo() {
 
   // Determine if we're actively streaming pre-search (use partial text) vs completed (use full text)
   const isPreSearchStreaming = stage === DemoStages.PRE_SEARCH_STREAMING;
+  // ✅ FIX: Also check for content fading stage - content is visible but streaming hasn't started
+  const isPreSearchFadingIn = stage === DemoStages.PRE_SEARCH_CONTENT_FADING;
+  // ✅ FIX: Pre-search is only truly complete after these stages
+  const isPreSearchComplete = [
+    DemoStages.PRE_SEARCH_COMPLETE,
+    DemoStages.PRE_SEARCH_COLLAPSING,
+    DemoStages.LOADING_INDICATOR,
+    ...PARTICIPANT_STAGES,
+  ].includes(stage);
 
+  // Build pre-search data incrementally - only include items that have content
+  // This prevents height jumping by not rendering empty containers
+  const buildPreSearchData = () => {
+    if (!showPreSearch || !MOCK_PRE_SEARCH.searchData || !preSearchShowContent) {
+      return null;
+    }
+
+    // ✅ FIX: During content fading, return null to prevent height jump
+    // The accordion opens but content streams in gradually
+    if (isPreSearchFadingIn) {
+      return {
+        queries: [],
+        results: [],
+        analysis: '',
+        successCount: 0,
+        failureCount: 0,
+        totalResults: 0,
+        totalTime: 0,
+      };
+    }
+
+    // After streaming complete: show full data
+    if (isPreSearchComplete) {
+      return MOCK_PRE_SEARCH.searchData;
+    }
+
+    // During streaming: build arrays incrementally based on what has content
+    if (isPreSearchStreaming) {
+      // Build queries array - only include queries that have started streaming
+      const streamingQueries = [];
+      if (streamingText.preSearchQuery0.length > 0) {
+        streamingQueries.push({
+          ...MOCK_PRE_SEARCH.searchData.queries[0]!,
+          query: streamingText.preSearchQuery0,
+          rationale: streamingText.preSearchRationale0,
+        });
+      }
+      if (streamingText.preSearchQuery1.length > 0) {
+        streamingQueries.push({
+          ...MOCK_PRE_SEARCH.searchData.queries[1]!,
+          query: streamingText.preSearchQuery1,
+          rationale: streamingText.preSearchRationale1,
+        });
+      }
+
+      // Build results array - only include results that have started streaming
+      const streamingResults = [];
+      if (streamingText.preSearchResult0Answer.length > 0) {
+        const result0Sites = [];
+        if (streamingText.preSearchResult0Site0Title.length > 0) {
+          result0Sites.push({
+            title: streamingText.preSearchResult0Site0Title,
+            url: MOCK_PRE_SEARCH.searchData.results[0]!.results[0]!.url,
+            content: streamingText.preSearchResult0Site0Content,
+            score: MOCK_PRE_SEARCH.searchData.results[0]!.results[0]!.score,
+          });
+        }
+        if (streamingText.preSearchResult0Site1Title.length > 0) {
+          result0Sites.push({
+            title: streamingText.preSearchResult0Site1Title,
+            url: MOCK_PRE_SEARCH.searchData.results[0]!.results[1]!.url,
+            content: streamingText.preSearchResult0Site1Content,
+            score: MOCK_PRE_SEARCH.searchData.results[0]!.results[1]!.score,
+          });
+        }
+        streamingResults.push({
+          ...MOCK_PRE_SEARCH.searchData.results[0]!,
+          answer: streamingText.preSearchResult0Answer,
+          results: result0Sites,
+        });
+      }
+      if (streamingText.preSearchResult1Answer.length > 0) {
+        const result1Sites = [];
+        if (streamingText.preSearchResult1Site0Title.length > 0) {
+          result1Sites.push({
+            title: streamingText.preSearchResult1Site0Title,
+            url: MOCK_PRE_SEARCH.searchData.results[1]!.results[0]!.url,
+            content: streamingText.preSearchResult1Site0Content,
+            score: MOCK_PRE_SEARCH.searchData.results[1]!.results[0]!.score,
+          });
+        }
+        streamingResults.push({
+          ...MOCK_PRE_SEARCH.searchData.results[1]!,
+          answer: streamingText.preSearchResult1Answer,
+          results: result1Sites,
+        });
+      }
+
+      return {
+        queries: streamingQueries,
+        results: streamingResults,
+        analysis: streamingText.preSearchAnalysis,
+        successCount: MOCK_PRE_SEARCH.searchData.successCount,
+        failureCount: MOCK_PRE_SEARCH.searchData.failureCount,
+        totalResults: MOCK_PRE_SEARCH.searchData.totalResults,
+        totalTime: MOCK_PRE_SEARCH.searchData.totalTime,
+      };
+    }
+
+    // After streaming complete: show full data
+    return MOCK_PRE_SEARCH.searchData;
+  };
+
+  const preSearchStreamingData = buildPreSearchData();
   const preSearchWithStreamingData = showPreSearch && MOCK_PRE_SEARCH.searchData
     ? {
         ...MOCK_PRE_SEARCH,
         status: isPreSearchStreaming ? AnalysisStatuses.STREAMING : AnalysisStatuses.COMPLETE,
-        searchData: preSearchShowContent
-          ? {
-              queries: [
-                {
-                  ...MOCK_PRE_SEARCH.searchData.queries[0]!,
-                  // During streaming: show partial text (even empty). After complete: show full text.
-                  query: isPreSearchStreaming ? streamingText.preSearchQuery0 : MOCK_PRE_SEARCH.searchData.queries[0]!.query,
-                  rationale: isPreSearchStreaming ? streamingText.preSearchRationale0 : MOCK_PRE_SEARCH.searchData.queries[0]!.rationale,
-                },
-                {
-                  ...MOCK_PRE_SEARCH.searchData.queries[1]!,
-                  query: isPreSearchStreaming ? streamingText.preSearchQuery1 : MOCK_PRE_SEARCH.searchData.queries[1]!.query,
-                  rationale: isPreSearchStreaming ? streamingText.preSearchRationale1 : MOCK_PRE_SEARCH.searchData.queries[1]!.rationale,
-                },
-              ],
-              results: [
-                {
-                  ...MOCK_PRE_SEARCH.searchData.results[0]!,
-                  answer: isPreSearchStreaming ? streamingText.preSearchResult0Answer : MOCK_PRE_SEARCH.searchData.results[0]!.answer,
-                  results: isPreSearchStreaming
-                    ? [
-                        // Only show sites that have started streaming
-                        ...(streamingText.preSearchResult0Site0Title.length > 0
-                          ? [{
-                              title: streamingText.preSearchResult0Site0Title,
-                              url: MOCK_PRE_SEARCH.searchData.results[0]!.results[0]!.url,
-                              content: streamingText.preSearchResult0Site0Content,
-                              score: MOCK_PRE_SEARCH.searchData.results[0]!.results[0]!.score,
-                            }]
-                          : []),
-                        ...(streamingText.preSearchResult0Site1Title.length > 0
-                          ? [{
-                              title: streamingText.preSearchResult0Site1Title,
-                              url: MOCK_PRE_SEARCH.searchData.results[0]!.results[1]!.url,
-                              content: streamingText.preSearchResult0Site1Content,
-                              score: MOCK_PRE_SEARCH.searchData.results[0]!.results[1]!.score,
-                            }]
-                          : []),
-                      ]
-                    : MOCK_PRE_SEARCH.searchData.results[0]!.results,
-                },
-                {
-                  ...MOCK_PRE_SEARCH.searchData.results[1]!,
-                  answer: isPreSearchStreaming ? streamingText.preSearchResult1Answer : MOCK_PRE_SEARCH.searchData.results[1]!.answer,
-                  results: isPreSearchStreaming
-                    ? [
-                        ...(streamingText.preSearchResult1Site0Title.length > 0
-                          ? [{
-                              title: streamingText.preSearchResult1Site0Title,
-                              url: MOCK_PRE_SEARCH.searchData.results[1]!.results[0]!.url,
-                              content: streamingText.preSearchResult1Site0Content,
-                              score: MOCK_PRE_SEARCH.searchData.results[1]!.results[0]!.score,
-                            }]
-                          : []),
-                      ]
-                    : MOCK_PRE_SEARCH.searchData.results[1]!.results,
-                },
-              ],
-              analysis: isPreSearchStreaming ? streamingText.preSearchAnalysis : MOCK_PRE_SEARCH.searchData.analysis,
-              successCount: MOCK_PRE_SEARCH.searchData.successCount,
-              failureCount: MOCK_PRE_SEARCH.searchData.failureCount,
-              totalResults: MOCK_PRE_SEARCH.searchData.totalResults,
-              totalTime: MOCK_PRE_SEARCH.searchData.totalTime,
-            }
-          : undefined,
+        searchData: preSearchStreamingData || undefined,
       }
     : null;
 
@@ -861,102 +910,200 @@ export function LiveChatDemo() {
   const analysisIsOpen = ANALYSIS_OPEN_STAGES.includes(stage);
   const analysisShowContent = ANALYSIS_CONTENT_STAGES.includes(stage);
 
-  // Determine if we're actively streaming analysis (use partial text) vs completed (use full text)
-  const isAnalysisStreaming = stage === DemoStages.ANALYSIS_STREAMING;
+  // ✅ FIX: Check for content fading stage - content is visible but streaming hasn't started
+  const isAnalysisFadingIn = stage === DemoStages.ANALYSIS_CONTENT_FADING;
+  // ✅ FIX: Analysis is only truly complete after streaming finishes
+  const isAnalysisComplete = stage === DemoStages.COMPLETE;
 
+  // Build analysis data incrementally - only include items that have content
+  // This prevents height jumping by not rendering empty containers
+  const buildAnalysisData = () => {
+    if (!showAnalysis || !MOCK_ANALYSIS.analysisData || !analysisShowContent) {
+      return null;
+    }
+
+    // ✅ FIX: During content fading, return minimal data to prevent height jump
+    if (isAnalysisFadingIn) {
+      return {
+        roundConfidence: 0,
+        confidenceWeighting: ConfidenceWeightings.BALANCED,
+        consensusEvolution: MOCK_ANALYSIS.analysisData.consensusEvolution,
+        summary: '',
+        recommendations: [],
+        contributorPerspectives: [],
+        consensusAnalysis: {
+          ...MOCK_ANALYSIS.analysisData.consensusAnalysis,
+          agreementHeatmap: [],
+        },
+        evidenceAndReasoning: {
+          ...MOCK_ANALYSIS.analysisData.evidenceAndReasoning,
+          reasoningThreads: [],
+        },
+        alternatives: [],
+        roundSummary: {
+          ...MOCK_ANALYSIS.analysisData.roundSummary,
+          keyThemes: '',
+          unresolvedQuestions: [],
+        },
+      };
+    }
+
+    // After streaming complete: show full data
+    if (isAnalysisComplete) {
+      return MOCK_ANALYSIS.analysisData;
+    }
+
+    // During streaming: build arrays incrementally based on what has content
+    // Recommendations - only include if title has content
+    const streamingRecommendations = [];
+    if (streamingText.analysisRecommendation0Title.length > 0) {
+      streamingRecommendations.push({
+        ...MOCK_ANALYSIS.analysisData.recommendations[0]!,
+        title: streamingText.analysisRecommendation0Title,
+        description: streamingText.analysisRecommendation0Desc,
+      });
+    }
+    if (streamingText.analysisRecommendation1Title.length > 0) {
+      streamingRecommendations.push({
+        ...MOCK_ANALYSIS.analysisData.recommendations[1]!,
+        title: streamingText.analysisRecommendation1Title,
+        description: streamingText.analysisRecommendation1Desc,
+      });
+    }
+
+    // Contributor perspectives - only include if stance has content
+    const streamingContributors = [];
+    if (streamingText.analysisContributor0Stance.length > 0) {
+      const evidence = [
+        streamingText.analysisContributor0Evidence0,
+        streamingText.analysisContributor0Evidence1,
+      ].filter(e => e.length > 0);
+      streamingContributors.push({
+        ...MOCK_ANALYSIS.analysisData.contributorPerspectives[0]!,
+        stance: streamingText.analysisContributor0Stance,
+        evidence,
+      });
+    }
+    if (streamingText.analysisContributor1Stance.length > 0) {
+      const evidence = [
+        streamingText.analysisContributor1Evidence0,
+        streamingText.analysisContributor1Evidence1,
+      ].filter(e => e.length > 0);
+      streamingContributors.push({
+        ...MOCK_ANALYSIS.analysisData.contributorPerspectives[1]!,
+        stance: streamingText.analysisContributor1Stance,
+        evidence,
+      });
+    }
+    if (streamingText.analysisContributor2Stance.length > 0) {
+      const evidence = [
+        streamingText.analysisContributor2Evidence0,
+        streamingText.analysisContributor2Evidence1,
+      ].filter(e => e.length > 0);
+      streamingContributors.push({
+        ...MOCK_ANALYSIS.analysisData.contributorPerspectives[2]!,
+        stance: streamingText.analysisContributor2Stance,
+        evidence,
+      });
+    }
+
+    // Consensus claims - only include if claim has content
+    const streamingHeatmap = [];
+    if (streamingText.analysisConsensusClaim0.length > 0) {
+      streamingHeatmap.push({
+        ...MOCK_ANALYSIS.analysisData.consensusAnalysis.agreementHeatmap[0]!,
+        claim: streamingText.analysisConsensusClaim0,
+      });
+    }
+    if (streamingText.analysisConsensusClaim1.length > 0) {
+      streamingHeatmap.push({
+        ...MOCK_ANALYSIS.analysisData.consensusAnalysis.agreementHeatmap[1]!,
+        claim: streamingText.analysisConsensusClaim1,
+      });
+    }
+    if (streamingText.analysisConsensusClaim2.length > 0) {
+      streamingHeatmap.push({
+        ...MOCK_ANALYSIS.analysisData.consensusAnalysis.agreementHeatmap[2]!,
+        claim: streamingText.analysisConsensusClaim2,
+      });
+    }
+
+    // Reasoning threads - only include if claim has content
+    const streamingReasoningThreads = [];
+    if (streamingText.analysisReasoningClaim0.length > 0) {
+      streamingReasoningThreads.push({
+        ...MOCK_ANALYSIS.analysisData.evidenceAndReasoning.reasoningThreads[0]!,
+        claim: streamingText.analysisReasoningClaim0,
+        synthesis: streamingText.analysisReasoningSynthesis0,
+      });
+    }
+    if (streamingText.analysisReasoningClaim1.length > 0) {
+      streamingReasoningThreads.push({
+        ...MOCK_ANALYSIS.analysisData.evidenceAndReasoning.reasoningThreads[1]!,
+        claim: streamingText.analysisReasoningClaim1,
+        synthesis: streamingText.analysisReasoningSynthesis1,
+      });
+    }
+
+    // Alternatives - only include if scenario has content
+    const streamingAlternatives = [];
+    if (streamingText.analysisAlternative0.length > 0) {
+      streamingAlternatives.push({
+        ...MOCK_ANALYSIS.analysisData.alternatives[0]!,
+        scenario: streamingText.analysisAlternative0,
+      });
+    }
+    if (streamingText.analysisAlternative1.length > 0) {
+      streamingAlternatives.push({
+        ...MOCK_ANALYSIS.analysisData.alternatives[1]!,
+        scenario: streamingText.analysisAlternative1,
+      });
+    }
+    if (streamingText.analysisAlternative2.length > 0) {
+      streamingAlternatives.push({
+        ...MOCK_ANALYSIS.analysisData.alternatives[2]!,
+        scenario: streamingText.analysisAlternative2,
+      });
+    }
+
+    // Unresolved questions - only include if content exists
+    const streamingUnresolvedQuestions = [
+      streamingText.analysisRoundSummaryQuestion0,
+      streamingText.analysisRoundSummaryQuestion1,
+    ].filter(q => q.length > 0);
+
+    return {
+      roundConfidence: MOCK_ANALYSIS.analysisData.roundConfidence,
+      confidenceWeighting: ConfidenceWeightings.BALANCED,
+      consensusEvolution: MOCK_ANALYSIS.analysisData.consensusEvolution,
+      summary: streamingText.analysisSummary,
+      recommendations: streamingRecommendations,
+      contributorPerspectives: streamingContributors,
+      consensusAnalysis: {
+        ...MOCK_ANALYSIS.analysisData.consensusAnalysis,
+        agreementHeatmap: streamingHeatmap,
+      },
+      evidenceAndReasoning: {
+        ...MOCK_ANALYSIS.analysisData.evidenceAndReasoning,
+        reasoningThreads: streamingReasoningThreads,
+      },
+      alternatives: streamingAlternatives,
+      roundSummary: {
+        ...MOCK_ANALYSIS.analysisData.roundSummary,
+        keyThemes: streamingText.analysisRoundSummaryThemes,
+        unresolvedQuestions: streamingUnresolvedQuestions,
+      },
+    };
+  };
+
+  const analysisStreamingData = buildAnalysisData();
   const analysisWithStreamingText = showAnalysis && MOCK_ANALYSIS.analysisData
     ? {
         ...MOCK_ANALYSIS,
         // Always use COMPLETE status to prevent ModeratorAnalysisStream from making API calls
         // The streaming visual effect is achieved through text animations, not actual API streaming
         status: AnalysisStatuses.COMPLETE,
-        analysisData: analysisShowContent
-          ? {
-              // Multi-AI Deliberation Framework - New Schema
-              roundConfidence: MOCK_ANALYSIS.analysisData.roundConfidence,
-              confidenceWeighting: ConfidenceWeightings.BALANCED,
-              consensusEvolution: MOCK_ANALYSIS.analysisData.consensusEvolution,
-              summary: isAnalysisStreaming ? streamingText.analysisSummary : MOCK_ANALYSIS.analysisData.summary,
-
-              recommendations: MOCK_ANALYSIS.analysisData.recommendations.map((rec, idx) => ({
-                ...rec,
-                title: isAnalysisStreaming
-                  ? (idx === 0 ? streamingText.analysisRecommendation0Title : streamingText.analysisRecommendation1Title)
-                  : rec.title,
-                description: isAnalysisStreaming
-                  ? (idx === 0 ? streamingText.analysisRecommendation0Desc : streamingText.analysisRecommendation1Desc)
-                  : rec.description,
-              })),
-
-              contributorPerspectives: MOCK_ANALYSIS.analysisData.contributorPerspectives.map((contributor, idx) => ({
-                ...contributor,
-                stance: isAnalysisStreaming
-                  ? (idx === 0
-                      ? streamingText.analysisContributor0Stance
-                      : idx === 1
-                        ? streamingText.analysisContributor1Stance
-                        : streamingText.analysisContributor2Stance)
-                  : contributor.stance,
-                evidence: contributor.evidence.map((ev, evIdx) =>
-                  isAnalysisStreaming && evIdx < 2
-                    ? (idx === 0
-                        ? (evIdx === 0 ? streamingText.analysisContributor0Evidence0 : streamingText.analysisContributor0Evidence1)
-                        : idx === 1
-                          ? (evIdx === 0 ? streamingText.analysisContributor1Evidence0 : streamingText.analysisContributor1Evidence1)
-                          : (evIdx === 0 ? streamingText.analysisContributor2Evidence0 : streamingText.analysisContributor2Evidence1))
-                    : ev,
-                ).filter(text => text.length > 0),
-              })),
-
-              consensusAnalysis: {
-                ...MOCK_ANALYSIS.analysisData.consensusAnalysis,
-                agreementHeatmap: MOCK_ANALYSIS.analysisData.consensusAnalysis.agreementHeatmap.map((hm, idx) => ({
-                  ...hm,
-                  claim: isAnalysisStreaming
-                    ? (idx === 0
-                        ? streamingText.analysisConsensusClaim0
-                        : idx === 1
-                          ? streamingText.analysisConsensusClaim1
-                          : streamingText.analysisConsensusClaim2)
-                    : hm.claim,
-                })),
-              },
-
-              evidenceAndReasoning: {
-                ...MOCK_ANALYSIS.analysisData.evidenceAndReasoning,
-                reasoningThreads: MOCK_ANALYSIS.analysisData.evidenceAndReasoning.reasoningThreads.map((thread, idx) => ({
-                  ...thread,
-                  claim: isAnalysisStreaming
-                    ? (idx === 0 ? streamingText.analysisReasoningClaim0 : streamingText.analysisReasoningClaim1)
-                    : thread.claim,
-                  synthesis: isAnalysisStreaming
-                    ? (idx === 0 ? streamingText.analysisReasoningSynthesis0 : streamingText.analysisReasoningSynthesis1)
-                    : thread.synthesis,
-                })).filter(thread => thread.claim.length > 0),
-              },
-
-              alternatives: MOCK_ANALYSIS.analysisData.alternatives.map((alt, idx) => ({
-                ...alt,
-                scenario: isAnalysisStreaming
-                  ? (idx === 0
-                      ? streamingText.analysisAlternative0
-                      : idx === 1
-                        ? streamingText.analysisAlternative1
-                        : streamingText.analysisAlternative2)
-                  : alt.scenario,
-              })).filter(alt => alt.scenario.length > 0),
-
-              roundSummary: {
-                ...MOCK_ANALYSIS.analysisData.roundSummary,
-                keyThemes: isAnalysisStreaming ? streamingText.analysisRoundSummaryThemes : MOCK_ANALYSIS.analysisData.roundSummary.keyThemes,
-                unresolvedQuestions: MOCK_ANALYSIS.analysisData.roundSummary.unresolvedQuestions.map((q, idx) =>
-                  isAnalysisStreaming
-                    ? (idx === 0 ? streamingText.analysisRoundSummaryQuestion0 : streamingText.analysisRoundSummaryQuestion1)
-                    : q,
-                ).filter(q => q.length > 0),
-              },
-            }
-          : undefined,
+        analysisData: analysisStreamingData || undefined,
       }
     : null;
 

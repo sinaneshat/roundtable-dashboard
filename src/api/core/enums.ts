@@ -412,6 +412,29 @@ export const StreamStatuses = {
 } as const;
 
 // ============================================================================
+// PARTICIPANT STREAM STATUS (Round-Level Stream Tracking)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const PARTICIPANT_STREAM_STATUSES = ['active', 'completed', 'failed'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES).openapi({
+  description: 'Individual participant stream status within a round',
+  example: 'active',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type ParticipantStreamStatus = z.infer<typeof ParticipantStreamStatusSchema>;
+
+// 4️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const ParticipantStreamStatuses = {
+  ACTIVE: 'active' as const, // Participant is currently streaming
+  COMPLETED: 'completed' as const, // Participant finished successfully
+  FAILED: 'failed' as const, // Participant stream failed
+} as const;
+
+// ============================================================================
 // FEEDBACK TYPE
 // ============================================================================
 

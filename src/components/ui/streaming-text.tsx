@@ -120,6 +120,7 @@ type ShimmerTextProps = {
  *
  * Creates a wave-like shimmer effect across all characters.
  * Use for loading states like "Thinking...", "Analyzing...", etc.
+ * Uses CSS-based animations for better caching reliability in deployed environments.
  *
  * @example
  * ```tsx
@@ -129,34 +130,16 @@ type ShimmerTextProps = {
 export const ShimmerText = memo(function ShimmerText({
   text,
   className,
-  duration = 1.5,
-  staggerDelay = 0.05,
 }: ShimmerTextProps) {
   return (
     <span className={cn('font-medium', className)}>
       {text.split('').map((char, i) => (
-        <motion.span
+        <span
           key={i}
-          className="inline-block"
-          initial={{ opacity: 0.4 }}
-          animate={{
-            opacity: [0.4, 1, 0.4],
-            textShadow: [
-              '0 0 0 transparent',
-              '0 0 8px hsl(var(--primary) / 0.5)',
-              '0 0 0 transparent',
-            ],
-          }}
-          transition={{
-            duration,
-            repeat: Infinity,
-            repeatType: 'loop',
-            delay: i * staggerDelay,
-            ease: 'easeInOut',
-          }}
+          className={`animate-shimmer-char shimmer-delay-${i % 16}`}
         >
           {char === ' ' ? '\u00A0' : char}
-        </motion.span>
+        </span>
       ))}
     </span>
   );

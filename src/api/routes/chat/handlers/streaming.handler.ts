@@ -17,7 +17,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { extractAISdkError, getErrorMessage, getErrorName, getErrorStatusCode } from '@/api/common/error-types';
 import { createHandler } from '@/api/core';
-import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { MessageRoles, ParticipantStreamStatuses, UIMessageRoles } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -35,7 +35,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
-import { clearThreadActiveStream, markStreamActive, markStreamCompleted, markStreamFailed, setThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
+import { markStreamActive, markStreamCompleted, markStreamFailed, setThreadActiveStream, updateParticipantStatus } from '@/api/services/resumable-stream-kv.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
 import { appendStreamChunk, completeStreamBuffer, failStreamBuffer, initializeStreamBuffer } from '@/api/services/stream-buffer.service';
 import type { CloudflareAiBinding } from '@/api/services/streaming-orchestration.service';
@@ -738,11 +738,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
     // This enables the frontend to detect and resume this stream after page reload
+    // ✅ FIX: Pass total participants count for proper round-level tracking
     await setThreadActiveStream(
       threadId,
       streamMessageId,
       currentRoundNumber,
       participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+      participants.length, // ✅ FIX: Track total participants for round completion detection
       c.env,
     );
 
@@ -792,7 +794,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             error instanceof Error ? error.message : String(error),
             c.env,
           );
-          await clearThreadActiveStream(threadId, c.env);
+          // ✅ FIX: Update participant status to 'failed' instead of clearing entirely
+          // Only clears thread active stream when ALL participants have finished
+          await updateParticipantStatus(
+            threadId,
+            currentRoundNumber,
+            participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+            ParticipantStreamStatuses.FAILED,
+            c.env,
+          );
         } catch {
           // Cleanup errors shouldn't break error handling flow
         }
@@ -1000,9 +1010,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           c.env,
         );
 
-        // ✅ RESUMABLE STREAMS: Clear thread-level active stream on completion
-        // This signals that no stream is active and prevents stale resume attempts
-        await clearThreadActiveStream(threadId, c.env);
+        // ✅ FIX: Update participant status instead of clearing thread active stream
+        // Only clears thread active stream when ALL participants have finished
+        // This enables proper multi-participant stream resumption after page reload
+        await updateParticipantStatus(
+          threadId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          ParticipantStreamStatuses.COMPLETED,
+          c.env,
+        );
       },
     });
 

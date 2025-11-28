@@ -170,7 +170,6 @@
     "drizzle-kit": "^0.31.5",
     "drizzle-orm": "^0.44.6",
     "drizzle-zod": "^0.8.3",
-    "framer-motion": "^12.23.24",
     "fuse.js": "^7.1.0",
     "geist": "^1.5.1",
     "hono": "^4.10.1",
