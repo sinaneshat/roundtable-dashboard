@@ -28,28 +28,35 @@ describe('pre-search 409 polling', () => {
       errorMessage: null,
       completedAt: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     const onComplete = vi.fn();
 
-    // Mock completed search data
+    // Mock completed search data with full valid structure
     const completedSearch = {
       ...mockPreSearch,
       status: AnalysisStatuses.COMPLETE,
       searchData: {
         queries: [
-          { query: 'search 1', index: 0 },
-          { query: 'search 2', index: 1 },
+          { query: 'search 1', rationale: 'test rationale', searchDepth: 'basic' as const, index: 0, total: 2 },
+          { query: 'search 2', rationale: 'test rationale', searchDepth: 'basic' as const, index: 1, total: 2 },
         ],
         results: [
           {
-            index: 0,
-            url: 'https://example.com',
-            title: 'Example',
-            content: 'Test content',
-            relevanceScore: 0.9,
+            query: 'search 1',
+            answer: 'Test answer',
+            results: [
+              { url: 'https://example.com', title: 'Example', content: 'Test content', score: 0.9 },
+            ],
+            responseTime: 100,
           },
         ],
+        analysis: 'Test analysis',
+        successCount: 1,
+        failureCount: 0,
+        totalResults: 1,
+        totalTime: 100,
       },
     };
 
@@ -59,7 +66,7 @@ describe('pre-search 409 polling', () => {
       if (url.includes('/pre-searches')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ data: { items: [completedSearch], count: 1 } }),
+          json: async () => ({ success: true, data: { items: [completedSearch], count: 1 } }),
         } as Response);
       }
       // Mock 409 for stream endpoint
@@ -103,6 +110,7 @@ describe('pre-search 409 polling', () => {
       errorMessage: null,
       completedAt: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     const onComplete = vi.fn();
@@ -119,7 +127,7 @@ describe('pre-search 409 polling', () => {
       if (url.includes('/pre-searches')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ data: { items: [failedSearch], count: 1 } }),
+          json: async () => ({ success: true, data: { items: [failedSearch], count: 1 } }),
         } as Response);
       }
       return Promise.resolve({
@@ -157,6 +165,7 @@ describe('pre-search 409 polling', () => {
       errorMessage: null,
       completedAt: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     // Mock never-completing search to test cleanup
@@ -166,6 +175,7 @@ describe('pre-search 409 polling', () => {
         return Promise.resolve({
           ok: true,
           json: async () => ({
+            success: true,
             data: {
               items: [{
                 ...mockPreSearch,

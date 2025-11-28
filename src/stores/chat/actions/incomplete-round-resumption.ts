@@ -116,6 +116,10 @@ export function useIncompleteRoundResumption(
   // ✅ PRE-SEARCH BLOCKING FIX: Subscribe to web search state for pre-search blocking check
   // Resumption should NOT trigger participants if pre-search is still in progress
   const enableWebSearch = useChatStore(s => s.enableWebSearch);
+  // ✅ RACE CONDITION FIX: Also subscribe to thread to check its enableWebSearch
+  // Store's enableWebSearch defaults to false and takes time to sync from thread
+  // We need to check the thread's value directly to avoid race conditions
+  const thread = useChatStore(s => s.thread);
 
   // Track if we've already attempted resumption for this thread
   const resumptionAttemptedRef = useRef<string | null>(null);
@@ -140,26 +144,31 @@ export function useIncompleteRoundResumption(
   // ✅ RESUMPTION FIX: Also detect STREAMING pre-searches as orphaned
   // If user refreshes during streaming, the pre-search will be in STREAMING status
   // but the user message hasn't been persisted yet, so we need to recover
-  const orphanedPreSearch = preSearches.find((ps) => {
-    // Check COMPLETE or STREAMING status - both can be orphaned
-    // PENDING is skipped because it means streaming hasn't started
-    // FAILED is skipped because recovery isn't possible
-    if (ps.status !== AnalysisStatuses.COMPLETE && ps.status !== AnalysisStatuses.STREAMING) {
-      return false;
-    }
+  //
+  // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
+  // During hydration or store initialization, preSearches might momentarily be undefined
+  const orphanedPreSearch = Array.isArray(preSearches)
+    ? preSearches.find((ps) => {
+        // Check COMPLETE or STREAMING status - both can be orphaned
+        // PENDING is skipped because it means streaming hasn't started
+        // FAILED is skipped because recovery isn't possible
+        if (ps.status !== AnalysisStatuses.COMPLETE && ps.status !== AnalysisStatuses.STREAMING) {
+          return false;
+        }
 
-    // Check if there's a user message for this round
-    const hasUserMessageForRound = messages.some((msg) => {
-      if (msg.role !== MessageRoles.USER) {
-        return false;
-      }
-      const msgRound = getRoundNumber(msg.metadata);
-      return msgRound === ps.roundNumber;
-    });
+        // Check if there's a user message for this round
+        const hasUserMessageForRound = messages.some((msg) => {
+          if (msg.role !== MessageRoles.USER) {
+            return false;
+          }
+          const msgRound = getRoundNumber(msg.metadata);
+          return msgRound === ps.roundNumber;
+        });
 
-    // If no user message exists for this pre-search's round, it's orphaned
-    return !hasUserMessageForRound;
-  });
+        // If no user message exists for this pre-search's round, it's orphaned
+        return !hasUserMessageForRound;
+      })
+    : undefined;
 
   // Find which participants have responded in the current round
   // Also track their model IDs to detect participant config changes
@@ -401,8 +410,13 @@ export function useIncompleteRoundResumption(
     // When user refreshes during pre-search streaming, we must wait for pre-search to complete
     // before triggering participants. This reuses the same blocking logic as pendingMessage sender.
     // The effect will re-run when preSearches updates (status changes from STREAMING to COMPLETE).
+    //
+    // ✅ RACE CONDITION FIX: Use thread's enableWebSearch if available (more reliable)
+    // Store's enableWebSearch defaults to false and may not be synced from thread yet on page load
+    // The thread is loaded before the store form state is synced, so it's the source of truth
+    const effectiveWebSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
     if (shouldWaitForPreSearch({
-      webSearchEnabled: enableWebSearch,
+      webSearchEnabled: effectiveWebSearchEnabled,
       preSearches,
       roundNumber: currentRoundNumber,
     })) {
@@ -437,6 +451,8 @@ export function useIncompleteRoundResumption(
     // Effect re-runs when preSearches changes (e.g., STREAMING → COMPLETE)
     preSearches,
     enableWebSearch,
+    // ✅ RACE CONDITION FIX: Include thread to detect when thread.enableWebSearch is loaded
+    thread,
     // Note: refs (activeStreamCheckCompleteRef, backendNextParticipantRef) are not in deps
     // because they don't cause re-renders - the effect checks their values when it runs
     setNextParticipantToTrigger,

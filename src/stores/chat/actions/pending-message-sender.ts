@@ -118,7 +118,10 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   const webSearchEnabled = state.enableWebSearch;
 
   if (webSearchEnabled) {
-    const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === currentRoundNumber);
+    // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
+    const preSearchForRound = Array.isArray(state.preSearches)
+      ? state.preSearches.find(ps => ps.roundNumber === currentRoundNumber)
+      : undefined;
 
     // ✅ FIX #2: Optimistic wait when pre-search doesn't exist yet
     // Race condition: Backend creates PENDING pre-search, but orchestrator hasn't synced it yet
@@ -190,7 +193,10 @@ export function shouldWaitForPreSearch(params: {
     return false;
   }
 
-  const preSearch = params.preSearches.find(ps => ps.roundNumber === params.roundNumber);
+  // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
+  const preSearch = Array.isArray(params.preSearches)
+    ? params.preSearches.find(ps => ps.roundNumber === params.roundNumber)
+    : undefined;
 
   // ✅ FIX: Wait if pre-search doesn't exist yet (backend creating it, orchestrator syncing)
   if (!preSearch) {

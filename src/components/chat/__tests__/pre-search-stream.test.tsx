@@ -75,7 +75,10 @@ describe('preSearchStream Component', () => {
     userQuery: 'test query',
     status: AnalysisStatuses.PENDING,
     createdAt: new Date(),
+    updatedAt: new Date(),
     searchData: null,
+    errorMessage: null,
+    completedAt: null,
   };
 
   beforeEach(() => {
@@ -99,6 +102,7 @@ describe('preSearchStream Component', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          success: true,
           data: {
             items: [{
               ...mockPreSearch,
@@ -112,14 +116,19 @@ describe('preSearchStream Component', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
+          success: true,
           data: {
             items: [{
               ...mockPreSearch,
               status: AnalysisStatuses.COMPLETE,
               searchData: {
-                queries: [{ query: 'test', index: 0 }],
-                results: [{ query: 'test', results: [{ title: 'Result 1' }] }],
+                queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
+                results: [{ query: 'test', answer: 'Answer', results: [{ url: 'https://example.com', title: 'Result 1', content: 'Content', score: 0.9 }], responseTime: 100 }],
+                analysis: 'Test analysis',
+                successCount: 1,
+                failureCount: 0,
                 totalResults: 1,
+                totalTime: 100,
               },
             }],
             count: 1,

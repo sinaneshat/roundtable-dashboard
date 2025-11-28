@@ -543,7 +543,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           }
         } else {
           const currentRound = getCurrentRoundNumber(latestState.messages);
-          const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === currentRound);
+          // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
+          const preSearchForRound = Array.isArray(latestState.preSearches)
+            ? latestState.preSearches.find(ps => ps.roundNumber === currentRound)
+            : undefined;
 
           // If pre-search doesn't exist yet, wait for creation (up to 60s from start)
           if (!preSearchForRound) {
@@ -926,7 +929,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     if (webSearchEnabled && currentState.messages.length > 0) {
       const currentRound = getCurrentRoundNumber(currentState.messages);
-      const preSearchForRound = currentState.preSearches.find(ps => ps.roundNumber === currentRound);
+      // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
+      const preSearchForRound = Array.isArray(currentState.preSearches)
+        ? currentState.preSearches.find(ps => ps.roundNumber === currentRound)
+        : undefined;
 
       // If pre-search has data, increase timeout based on content complexity
       // More results = more content for AI to process = longer gaps between updates
@@ -1114,7 +1120,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ============================================================================
     // ✅ FIX: Use form state as sole source of truth for web search enabled
     const webSearchEnabled = enableWebSearch;
-    const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
+    // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
+    const preSearchForRound = Array.isArray(preSearches)
+      ? preSearches.find(ps => ps.roundNumber === newRoundNumber)
+      : undefined;
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {

@@ -240,12 +240,14 @@ describe('preSearchStream Race Condition Fixes', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({
+            success: true,
             data: {
               items: [{
                 ...mockPreSearch,
                 status: AnalysisStatuses.COMPLETE,
-                searchData: { queries: [], results: [], successCount: 0, failureCount: 0, totalResults: 0, totalTime: 100 },
+                searchData: { queries: [], results: [], analysis: 'Test analysis', successCount: 0, failureCount: 0, totalResults: 0, totalTime: 100 },
               }],
+              count: 1,
             },
           }),
         });
@@ -681,6 +683,7 @@ describe('preSearchStream Race Condition Fixes', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
+            success: true,
             data: {
               items: [{
                 ...mockPreSearch,
@@ -694,6 +697,7 @@ describe('preSearchStream Race Condition Fixes', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
+            success: true,
             data: {
               items: [{
                 ...mockPreSearch,
@@ -701,6 +705,7 @@ describe('preSearchStream Race Condition Fixes', () => {
                 searchData: {
                   queries: [],
                   results: [],
+                  analysis: 'Test analysis',
                   successCount: 0,
                   failureCount: 0,
                   totalResults: 0,

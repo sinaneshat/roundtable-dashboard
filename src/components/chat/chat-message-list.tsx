@@ -859,7 +859,8 @@ export const ChatMessageList = memo(
 
           // Check if this is the user message group for this round
           const isUserGroupForRound = group.type === 'user-group';
-          const preSearch = isUserGroupForRound && _threadId
+          // ✅ DEFENSIVE GUARD: Ensure _preSearches is an array before calling .find()
+          const preSearch = isUserGroupForRound && _threadId && Array.isArray(_preSearches)
             ? _preSearches.find(ps => ps.roundNumber === roundNumber)
             : null;
 
