@@ -797,7 +797,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     // but they're rendered separately using the pre_search table via PreSearchCard.
     // Including them here causes ordering issues and duplicate rendering logic.
     // Filter criteria: Exclude messages where id starts with 'pre-search-'
-    const messages = await db
+    const allMessages = await db
       .select()
       .from(tables.chatMessage)
       .where(
@@ -811,28 +811,73 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
       );
-    const changelog = await db.query.chatThreadChangelog.findMany({
+
+    // ✅ PUBLIC PAGE FIX: Exclude incomplete rounds from public view
+    // Incomplete rounds (mid-stream) can cause duplications when the same user
+    // views the public page. Only show rounds that are fully complete.
+    // A round is complete when it has all enabled participant responses.
+    const enabledParticipantCount = participants.length;
+
+    // Count participant responses per round
+    const roundParticipantCounts = new Map<number, number>();
+    const roundHasUserMessage = new Map<number, boolean>();
+
+    for (const msg of allMessages) {
+      const round = msg.roundNumber;
+      if (msg.role === MessageRoles.USER) {
+        roundHasUserMessage.set(round, true);
+      } else if (msg.role === MessageRoles.ASSISTANT) {
+        roundParticipantCounts.set(round, (roundParticipantCounts.get(round) ?? 0) + 1);
+      }
+    }
+
+    // Determine which rounds are complete
+    // A round is complete if it has a user message AND all participants have responded
+    const completeRounds = new Set<number>();
+    for (const [round, hasUser] of roundHasUserMessage) {
+      if (hasUser) {
+        const participantCount = roundParticipantCounts.get(round) ?? 0;
+        // Round is complete if all enabled participants have responded
+        if (participantCount >= enabledParticipantCount) {
+          completeRounds.add(round);
+        }
+      }
+    }
+
+    // Filter messages to only include complete rounds
+    const messages = allMessages.filter(msg => completeRounds.has(msg.roundNumber));
+
+    const allChangelog = await db.query.chatThreadChangelog.findMany({
       where: eq(tables.chatThreadChangelog.threadId, thread.id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
-    // Fetch all analyses - frontend will handle display based on status
-    const analyses = await db.query.chatModeratorAnalysis.findMany({
+    // Filter changelog to only include complete rounds
+    const changelog = allChangelog.filter(cl => completeRounds.has(cl.roundNumber));
+
+    // Fetch all analyses - filter to only include complete rounds
+    const allAnalyses = await db.query.chatModeratorAnalysis.findMany({
       where: eq(tables.chatModeratorAnalysis.threadId, thread.id),
       orderBy: [tables.chatModeratorAnalysis.roundNumber],
     });
-    const feedback = await db.query.chatRoundFeedback.findMany({
+    const analyses = allAnalyses.filter(a => completeRounds.has(a.roundNumber));
+
+    const allFeedback = await db.query.chatRoundFeedback.findMany({
       where: eq(tables.chatRoundFeedback.threadId, thread.id),
       orderBy: [tables.chatRoundFeedback.roundNumber],
     });
+    const feedback = allFeedback.filter(f => completeRounds.has(f.roundNumber));
+
     // ✅ PUBLIC PAGE FIX: Include pre-searches for web search display
-    // Only return COMPLETE pre-searches (not pending/streaming/failed)
-    const preSearches = await db.query.chatPreSearch.findMany({
+    // Only return COMPLETE pre-searches for complete rounds
+    const allPreSearches = await db.query.chatPreSearch.findMany({
       where: and(
         eq(tables.chatPreSearch.threadId, thread.id),
         eq(tables.chatPreSearch.status, AnalysisStatuses.COMPLETE),
       ),
       orderBy: [tables.chatPreSearch.roundNumber],
     });
+    const preSearches = allPreSearches.filter(ps => completeRounds.has(ps.roundNumber));
+
     return Responses.ok(c, {
       thread,
       participants,

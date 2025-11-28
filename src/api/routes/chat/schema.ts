@@ -309,6 +309,9 @@ const ThreadDetailPayloadSchema = z.object({
   feedback: z.array(chatRoundFeedbackSelectSchema).optional().openapi({
     description: 'User feedback for each round (optional - excluded for public threads)',
   }),
+  preSearches: z.array(chatPreSearchSelectSchema).optional().openapi({
+    description: 'Pre-search results for each round (optional - included for public threads with web search)',
+  }),
   user: userSelectSchema.pick({
     id: true,
     name: true,

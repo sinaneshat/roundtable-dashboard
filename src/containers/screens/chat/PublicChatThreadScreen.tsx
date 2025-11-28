@@ -13,7 +13,7 @@ import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
-import { transformModeratorAnalysis } from '@/lib/utils/date-transforms';
+import { transformModeratorAnalysis, transformPreSearches } from '@/lib/utils/date-transforms';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
@@ -48,14 +48,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   );
 
   // ✅ PUBLIC PAGE FIX: Include pre-searches for web search display
-  const rawPreSearches = useMemo(() => threadResponse?.preSearches || [], [threadResponse]);
+  // ✅ SINGLE SOURCE OF TRUTH: Use transformPreSearches for type-safe date conversion
   const preSearches: StoredPreSearch[] = useMemo(
-    () => rawPreSearches.map((ps: StoredPreSearch & { createdAt: string; completedAt?: string | null }) => ({
-      ...ps,
-      createdAt: new Date(ps.createdAt),
-      completedAt: ps.completedAt ? new Date(ps.completedAt) : null,
-    })),
-    [rawPreSearches],
+    () => transformPreSearches(threadResponse?.preSearches || []),
+    [threadResponse],
   );
 
   // Build feedback map for quick lookup - transform dates
