@@ -47,8 +47,16 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     [rawAnalyses],
   );
 
-  // Public threads don't include pre-searches
-  const preSearches: StoredPreSearch[] = [];
+  // ✅ PUBLIC PAGE FIX: Include pre-searches for web search display
+  const rawPreSearches = useMemo(() => threadResponse?.preSearches || [], [threadResponse]);
+  const preSearches: StoredPreSearch[] = useMemo(
+    () => rawPreSearches.map((ps: StoredPreSearch & { createdAt: string; completedAt?: string | null }) => ({
+      ...ps,
+      createdAt: new Date(ps.createdAt),
+      completedAt: ps.completedAt ? new Date(ps.completedAt) : null,
+    })),
+    [rawPreSearches],
+  );
 
   // Build feedback map for quick lookup - transform dates
   const feedbackByRound = useMemo(() => {
@@ -65,6 +73,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     messages,
     changelog,
     analyses,
+    preSearches,
   });
 
   // Scroll management for window-level scrolling

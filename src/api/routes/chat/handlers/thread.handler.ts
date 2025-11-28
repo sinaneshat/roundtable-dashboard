@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { AnalysisStatuses, ChangelogTypes, DEFAULT_CHAT_MODE, ThreadStatusSchema } from '@/api/core/enums';
+import { AnalysisStatuses, ChangelogTypes, DEFAULT_CHAT_MODE, MessageRoles, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
@@ -250,11 +250,11 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       .values({
         id: ulid(),
         threadId,
-        role: 'user' as const,
+        role: MessageRoles.USER,
         parts: [{ type: 'text', text: body.firstMessage }],
         roundNumber: 0, // ✅ 0-BASED: First round is 0
         metadata: {
-          role: 'user',
+          role: MessageRoles.USER,
           roundNumber: 0, // ✅ CRITICAL: Must be in metadata for frontend transform
         },
         createdAt: now,
@@ -683,8 +683,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     } = {
       updatedAt: now,
     };
-    if (body.title !== undefined && body.title !== null)
+    if (body.title !== undefined && body.title !== null && typeof body.title === 'string') {
       updateData.title = body.title;
+    }
     if (body.mode !== undefined)
       updateData.mode = body.mode;
     if (body.status !== undefined)
@@ -823,6 +824,15 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       where: eq(tables.chatRoundFeedback.threadId, thread.id),
       orderBy: [tables.chatRoundFeedback.roundNumber],
     });
+    // ✅ PUBLIC PAGE FIX: Include pre-searches for web search display
+    // Only return COMPLETE pre-searches (not pending/streaming/failed)
+    const preSearches = await db.query.chatPreSearch.findMany({
+      where: and(
+        eq(tables.chatPreSearch.threadId, thread.id),
+        eq(tables.chatPreSearch.status, AnalysisStatuses.COMPLETE),
+      ),
+      orderBy: [tables.chatPreSearch.roundNumber],
+    });
     return Responses.ok(c, {
       thread,
       participants,
@@ -830,6 +840,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       changelog,
       analyses,
       feedback,
+      preSearches,
       user: {
         id: threadOwner.id,
         name: threadOwner.name,
