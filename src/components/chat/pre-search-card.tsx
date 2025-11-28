@@ -97,23 +97,18 @@ export function PreSearchCard({
     };
   }, [completeAnimation]);
 
-  // ✅ FIX: Use requestAnimationFrame instead of setTimeout for deterministic timing
-  // RAF aligns with browser paint cycle, more reliable than arbitrary 16ms delay
+  // ✅ FIX: Complete animation SYNCHRONOUSLY on status transition
+  // Previous RAF approach had a bug: cleanup could cancel RAF before it fired,
+  // leaving animation stuck forever (especially on refresh where state changes quickly)
   useLayoutEffect(() => {
     const wasStreaming = prevStatusRef.current === AnalysisStatuses.STREAMING;
     const nowComplete = preSearch.status !== AnalysisStatuses.STREAMING
       && preSearch.status !== AnalysisStatuses.PENDING;
 
     if (wasStreaming && nowComplete && hasRegisteredRef.current) {
-      // Use RAF to complete animation on next frame
-      // This is more deterministic than setTimeout and aligns with browser rendering
-      const rafId = requestAnimationFrame(() => {
-        completeAnimation(AnimationIndices.PRE_SEARCH);
-        hasRegisteredRef.current = false;
-      });
-
-      prevStatusRef.current = preSearch.status;
-      return () => cancelAnimationFrame(rafId);
+      // Complete synchronously - no RAF that could be canceled
+      completeAnimation(AnimationIndices.PRE_SEARCH);
+      hasRegisteredRef.current = false;
     }
 
     prevStatusRef.current = preSearch.status;

@@ -1,6 +1,7 @@
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 
@@ -224,7 +225,7 @@ export function useThreadTimeline({
       // STREAMING/COMPLETE/FAILED analyses should ALWAYS show for proper stream resumption
       // Placeholder states (PENDING + empty participantMessageIds) are handled by participant cards instead
       if (roundAnalysis) {
-        const isPendingPlaceholder = roundAnalysis.status === 'pending'
+        const isPendingPlaceholder = roundAnalysis.status === AnalysisStatuses.PENDING
           && (!roundAnalysis.participantMessageIds || roundAnalysis.participantMessageIds.length === 0);
 
         // Show analysis if it's NOT a pending placeholder

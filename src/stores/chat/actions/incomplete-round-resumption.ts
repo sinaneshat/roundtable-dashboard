@@ -152,14 +152,19 @@ export function useIncompleteRoundResumption(
   //
   // ✅ DEFENSIVE GUARD: Ensure preSearches is an array before calling .find()
   // During hydration or store initialization, preSearches might momentarily be undefined
+  //
+  // ✅ FIX: Detect orphaned pre-searches in BOTH STREAMING and COMPLETE status
+  // - STREAMING: Add user message for UI display, but don't trigger participants yet
+  // - COMPLETE: Add user message AND trigger participants
+  // This ensures the UI shows the user message while pre-search is still streaming
   const orphanedPreSearch = Array.isArray(preSearches)
     ? preSearches.find((ps) => {
-        // ✅ FIX: Only COMPLETE status can be orphaned
-        // STREAMING: Pre-search is still in progress - do NOT trigger recovery yet!
-        //           Wait for pre-search to complete before triggering participants.
+        // ✅ FIX: Both STREAMING and COMPLETE can be orphaned
+        // STREAMING: Need to show user message in UI while search runs
+        // COMPLETE: Ready to trigger participants
         // PENDING: Hasn't started execution yet
         // FAILED: Recovery isn't possible
-        if (ps.status !== AnalysisStatuses.COMPLETE) {
+        if (ps.status !== AnalysisStatuses.COMPLETE && ps.status !== AnalysisStatuses.STREAMING) {
           return false;
         }
 
