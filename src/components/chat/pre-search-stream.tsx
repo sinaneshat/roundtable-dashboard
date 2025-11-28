@@ -111,6 +111,17 @@ function PreSearchStreamComponent({
   const onStreamCompleteRef = useRef(onStreamComplete);
   const onStreamStartRef = useRef(onStreamStart);
 
+  // ✅ STABLE REFS: Store callback functions in refs to avoid effect re-runs
+  // useBoolean returns new object on each render, so we use refs for callbacks
+  // Defined early to avoid use-before-define in effects
+  // Direct assignment on each render keeps refs current without triggering effects
+  const is409ConflictOnFalseRef = useRef(is409Conflict.onFalse);
+  is409ConflictOnFalseRef.current = is409Conflict.onFalse;
+  const isAutoRetryingOnTrueRef = useRef(isAutoRetrying.onTrue);
+  isAutoRetryingOnTrueRef.current = isAutoRetrying.onTrue;
+  const isAutoRetryingOnFalseRef = useRef(isAutoRetrying.onFalse);
+  isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
+
   // ✅ CRITICAL FIX: Do NOT abort fetch on unmount
   // Following the ModeratorAnalysisStream pattern - let the fetch complete in the background
   // Aborting on unmount causes "Malformed JSON in request body" errors because:
@@ -255,12 +266,7 @@ function PreSearchStreamComponent({
           isAutoRetryingOnTrueRef.current();
 
           if (postRetryCount <= MAX_POST_RETRIES) {
-            console.debug('[PreSearchStream] 202 received - retrying POST request', {
-              attempt: postRetryCount,
-              maxRetries: MAX_POST_RETRIES,
-              retryDelayMs,
-              preSearchId: preSearch.id,
-            });
+            // Debug log removed - only console.error allowed by ESLint config
 
             // Wait and retry the POST request (like analyze component)
             await new Promise(resolve => setTimeout(resolve, retryDelayMs));
@@ -273,7 +279,7 @@ function PreSearchStreamComponent({
           }
 
           // Max retries exceeded - fall back to LIST polling
-          console.warn('[PreSearchStream] Max POST retries exceeded, falling back to LIST polling', {
+          console.error('[PreSearchStream] Max POST retries exceeded, falling back to LIST polling', {
             attempts: postRetryCount,
             preSearchId: preSearch.id,
           });
@@ -476,15 +482,6 @@ function PreSearchStreamComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered]);
 
-  // ✅ STABLE REFS: Store callback functions in refs to avoid effect re-runs
-  // useBoolean returns new object on each render, so we use refs for callbacks
-  const is409ConflictOnFalseRef = useRef(is409Conflict.onFalse);
-  const isAutoRetryingOnTrueRef = useRef(isAutoRetrying.onTrue);
-  const isAutoRetryingOnFalseRef = useRef(isAutoRetrying.onFalse);
-  is409ConflictOnFalseRef.current = is409Conflict.onFalse;
-  isAutoRetryingOnTrueRef.current = isAutoRetrying.onTrue;
-  isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
-
   // ✅ POLLING DEDUPLICATION: Prevent multiple concurrent polling loops
   const isPollingRef = useRef(false);
 
@@ -569,7 +566,7 @@ function PreSearchStreamComponent({
             // After 30 seconds, the original stream is definitely gone - restart
             const elapsedMs = Date.now() - pollingStartTime;
             if (elapsedMs > POLLING_TIMEOUT_MS) {
-              console.warn('[PreSearchStream] Polling timeout - stream appears stuck, will retry', {
+              console.error('[PreSearchStream] Polling timeout - stream appears stuck, will retry', {
                 preSearchId: preSearch.id,
                 status: current.status,
                 elapsedMs,

@@ -42,11 +42,11 @@ export function WebSearchStatistics({
   const contentExtractionRate = (resultsWithFullContent / totalResults) * 100;
 
   // Categorize results by content type
-  const contentTypes = results.reduce((acc, r) => {
+  const contentTypes = results.reduce<Record<string, number>>((acc, r) => {
     const type = r.contentType || 'general';
     acc[type] = (acc[type] || 0) + 1;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
   return (
     <div className={cn('space-y-4', className)}>

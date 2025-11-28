@@ -105,6 +105,7 @@ export function useIncompleteRoundResumption(
   // ✅ ORPHANED PRE-SEARCH FIX: Actions needed to recover from orphaned pre-search state
   const prepareForNewMessage = useChatStore(s => s.prepareForNewMessage);
   const setExpectedParticipantIds = useChatStore(s => s.setExpectedParticipantIds);
+  const setMessages = useChatStore(s => s.setMessages);
 
   // ✅ INFINITE LOOP FIX: Subscribe to submission state to avoid interfering with normal submissions
   // When user submits a message, pendingMessage is set. The resumption hook should NOT try to
@@ -157,8 +158,16 @@ export function useIncompleteRoundResumption(
         }
 
         // Check if there's a user message for this round
+        // ✅ FIX: Ignore optimistic messages - they haven't been persisted to backend
+        // When user refreshes during pre-search, the optimistic message exists in store
+        // but wasn't persisted. We need to treat this as "no user message" so recovery triggers.
         const hasUserMessageForRound = messages.some((msg) => {
           if (msg.role !== MessageRoles.USER) {
+            return false;
+          }
+          // Ignore optimistic messages - they haven't been persisted
+          const metadata = msg.metadata;
+          if (metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true) {
             return false;
           }
           const msgRound = getRoundNumber(msg.metadata);
@@ -254,15 +263,22 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ TIMING FIX: Don't mark as checked until we have enough data to make a decision
+    // If currentRoundNumber is null, data hasn't loaded yet - don't mark as checked
+    // Otherwise we skip checking when data arrives and miss incomplete rounds
+    if (currentRoundNumber === null) {
+      return; // Wait for data to load
+    }
+
     // ✅ IMMEDIATE PLACEHOLDER SUPPORT: Set store state from local calculation
     // When round is incomplete, set streamingRoundNumber immediately for placeholder rendering
     // This removes the need for a duplicate backend fetch just to read headers
-    if (isIncomplete && currentRoundNumber !== null && nextParticipantIndex !== null) {
+    if (isIncomplete && nextParticipantIndex !== null) {
       setStreamingRoundNumber(currentRoundNumber);
       setCurrentParticipantIndex(nextParticipantIndex);
     }
 
-    // Mark as checked - no longer need async backend call
+    // Mark as checked - we've made a decision (either incomplete or complete)
     // AI SDK handles stream resumption via resume:true in useChat
     activeStreamCheckRef.current = threadId;
     activeStreamCheckCompleteRef.current = true;
@@ -311,6 +327,28 @@ export function useIncompleteRoundResumption(
     // Recover the userQuery from the orphaned pre-search
     // This sets up the store state to resume the round normally via pendingMessage effect
     const recoveredQuery = orphanedPreSearch.userQuery;
+    const orphanedRoundNumber = orphanedPreSearch.roundNumber;
+
+    // ✅ FIX: Remove existing optimistic messages for this round BEFORE prepareForNewMessage
+    // On page refresh, the optimistic message might persist in store (via Zustand persist)
+    // but wasn't actually sent to backend. If we don't remove it:
+    // 1. calculateNextRoundNumber would return orphanedRoundNumber + 1 (wrong)
+    // 2. prepareForNewMessage would add message for wrong round
+    // 3. Participants would be triggered for wrong round
+    const messagesWithoutOrphanedOptimistic = messages.filter((msg) => {
+      if (msg.role !== MessageRoles.USER) {
+        return true; // Keep all non-user messages
+      }
+      const metadata = msg.metadata;
+      const isOptimistic = metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true;
+      if (!isOptimistic) {
+        return true; // Keep non-optimistic user messages
+      }
+      // Remove optimistic messages for the orphaned round
+      const msgRound = getRoundNumber(metadata);
+      return msgRound !== orphanedRoundNumber;
+    });
+    setMessages(messagesWithoutOrphanedOptimistic);
 
     // Get enabled participant IDs for the expected participants
     const expectedIds = enabledParticipants.map(p => p.id);
@@ -320,7 +358,7 @@ export function useIncompleteRoundResumption(
 
     // Prepare for new message - this sets pendingMessage and adds optimistic user message
     // The prepareForNewMessage action will:
-    // 1. Add optimistic user message for the next round (which should match orphanedPreSearch.roundNumber)
+    // 1. Add optimistic user message for the orphanedRoundNumber (now correct after cleanup)
     // 2. Set pendingMessage to the recovered query
     // 3. Set hasSentPendingMessage to false
     // 4. Clear hasEarlyOptimisticMessage
@@ -336,8 +374,10 @@ export function useIncompleteRoundResumption(
     orphanedPreSearch,
     enabledParticipants,
     threadId,
+    messages,
     prepareForNewMessage,
     setExpectedParticipantIds,
+    setMessages,
   ]);
 
   // Reset the orphaned pre-search recovery ref when threadId changes

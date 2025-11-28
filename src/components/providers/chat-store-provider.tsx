@@ -283,14 +283,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // 1. Thread created, waitingToStartStreaming set to true
     // 2. Provider effect runs BEFORE screen initialization sets screenMode
     // 3. screenMode is null, condition fails, flag gets cleared
-    // 4. Screen initialization sets screenMode to 'overview'
+    // 4. Screen initialization sets screenMode to ScreenModes.OVERVIEW
     // 5. But flag is already cleared → participants never start
     //
     // ✅ STREAM RESUMPTION FIX: Don't clear flag on thread screen
     // On thread screen, useIncompleteRoundResumption sets waitingToStartStreaming=true
     // The continueFromParticipant effect (below) handles thread screen resumption
     // If we clear the flag here, the continueFromParticipant effect never triggers
-    if (currentScreenMode !== null && currentScreenMode !== 'overview') {
+    if (currentScreenMode !== null && currentScreenMode !== ScreenModes.OVERVIEW) {
       // Not on overview screen - this effect only handles overview screen
       // Just return, DON'T clear the flag - continueFromParticipant effect needs it
       return;
