@@ -303,16 +303,89 @@ export function useIncompleteRoundResumption(
     activeStreamCheckCompleteRef.current = false;
   }, [threadId]);
 
-  // ✅ ORPHANED PRE-SEARCH RECOVERY EFFECT
+  // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT
   // When a user refreshes during pre-search/changelog phase, the pre-search may be
-  // STREAMING or COMPLETE but the user message is never sent. This effect recovers
-  // the userQuery from the pre-search and sets up the store state appropriately.
+  // STREAMING or COMPLETE but the user message is never sent. This effect adds the
+  // user message for UI display IMMEDIATELY, even if another round is streaming.
   //
-  // STREAMING: Add user message for UI display + set streamingRoundNumber for placeholders
-  //            DON'T trigger participants - wait for pre-search to complete
-  // COMPLETE: Add user message + trigger participants via prepareForNewMessage
+  // This is split from participant triggering because:
+  // - User might refresh while round N is completing AND round N+1 pre-search is running
+  // - We want to show round N+1 user message immediately (UI feedback)
+  // - But we don't trigger participants until round N finishes AND pre-search completes
+  const orphanedPreSearchUIRecoveryRef = useRef<string | null>(null);
+
   useEffect(() => {
-    // Skip if not enabled or already streaming
+    // Skip if not enabled
+    if (!enabled) {
+      return;
+    }
+
+    // Skip if no orphaned pre-search detected
+    if (!orphanedPreSearch || !orphanedPreSearch.userQuery) {
+      return;
+    }
+
+    // Skip if already added UI for this specific pre-search
+    const orphanedPreSearchId = orphanedPreSearch.id;
+    if (orphanedPreSearchUIRecoveryRef.current === orphanedPreSearchId) {
+      return;
+    }
+
+    // Check if user message for this round already exists
+    const orphanedRoundNumber = orphanedPreSearch.roundNumber;
+    const hasUserMessageForRound = messages.some((msg) => {
+      if (msg.role !== MessageRoles.USER) return false;
+      // Include optimistic messages - they count as having a user message
+      const msgRound = getRoundNumber(msg.metadata);
+      return msgRound === orphanedRoundNumber;
+    });
+
+    // If user message already exists, skip UI recovery
+    if (hasUserMessageForRound) {
+      orphanedPreSearchUIRecoveryRef.current = orphanedPreSearchId;
+      return;
+    }
+
+    // Mark as done for this pre-search
+    orphanedPreSearchUIRecoveryRef.current = orphanedPreSearchId;
+
+    const recoveredQuery = orphanedPreSearch.userQuery;
+
+    // Add optimistic user message for UI display
+    // AI SDK v5 UIMessage uses parts array, not content property
+    const optimisticUserMessage: UIMessage = {
+      id: `optimistic-user-${orphanedRoundNumber}-${Date.now()}`,
+      role: MessageRoles.USER,
+      parts: [{ type: 'text', text: recoveredQuery }],
+      metadata: {
+        role: MessageRoles.USER,
+        roundNumber: orphanedRoundNumber,
+        isOptimistic: true,
+      },
+    };
+
+    // Add the message to display (preserving existing messages)
+    setMessages([...messages, optimisticUserMessage]);
+
+    // ✅ FIX: Also set streamingRoundNumber if pre-search is still streaming
+    // This enables participant placeholder rendering
+    if (orphanedPreSearch.status === AnalysisStatuses.STREAMING) {
+      setStreamingRoundNumber(orphanedRoundNumber);
+    }
+  }, [enabled, orphanedPreSearch, messages, setMessages, setStreamingRoundNumber]);
+
+  // Reset UI recovery ref when threadId changes
+  useEffect(() => {
+    orphanedPreSearchUIRecoveryRef.current = null;
+  }, [threadId]);
+
+  // ✅ ORPHANED PRE-SEARCH PARTICIPANT TRIGGERING EFFECT
+  // This effect triggers participants ONLY when:
+  // 1. Not currently streaming (round N must complete first)
+  // 2. Pre-search is COMPLETE (search results are ready)
+  // 3. User message exists (added by UI recovery above)
+  useEffect(() => {
+    // Skip if not enabled or currently streaming another round
     if (!enabled || isStreaming || waitingToStartStreaming) {
       return;
     }
@@ -327,103 +400,56 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // Skip if pre-search is still streaming - wait for it to complete
+    if (orphanedPreSearch.status !== AnalysisStatuses.COMPLETE) {
+      return;
+    }
+
     // Skip if no enabled participants
     if (enabledParticipants.length === 0) {
       return;
     }
 
     // Skip if already attempted for this specific pre-search
-    // ✅ FIX: Use pre-search ID instead of thread ID to allow recovery for different rounds
     const orphanedPreSearchId = orphanedPreSearch.id;
     if (orphanedPreSearchRecoveryAttemptedRef.current === orphanedPreSearchId) {
       return;
     }
 
-    // Mark as attempted to prevent duplicate triggers for this specific pre-search
+    // Mark as attempted to prevent duplicate triggers
     orphanedPreSearchRecoveryAttemptedRef.current = orphanedPreSearchId;
 
-    // Recover the userQuery from the orphaned pre-search
     const recoveredQuery = orphanedPreSearch.userQuery;
     const orphanedRoundNumber = orphanedPreSearch.roundNumber;
-    const isPreSearchStillStreaming = orphanedPreSearch.status === AnalysisStatuses.STREAMING;
 
-    // ✅ FIX: Remove existing optimistic messages for this round
+    // ✅ FIX: Remove existing optimistic messages for this round BEFORE prepareForNewMessage
     // On page refresh, the optimistic message might persist in store (via Zustand persist)
-    // but wasn't actually sent to backend. If we don't remove it:
-    // 1. calculateNextRoundNumber would return orphanedRoundNumber + 1 (wrong)
-    // 2. prepareForNewMessage would add message for wrong round
-    // 3. Participants would be triggered for wrong round
+    // but wasn't actually sent to backend.
     const messagesWithoutOrphanedOptimistic = messages.filter((msg) => {
       if (msg.role !== MessageRoles.USER) {
-        return true; // Keep all non-user messages
+        return true;
       }
       const metadata = msg.metadata;
       const isOptimistic = metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true;
       if (!isOptimistic) {
-        return true; // Keep non-optimistic user messages
+        return true;
       }
-      // Remove optimistic messages for the orphaned round
       const msgRound = getRoundNumber(metadata);
       return msgRound !== orphanedRoundNumber;
     });
     setMessages(messagesWithoutOrphanedOptimistic);
 
-    // ✅ FIX: Handle STREAMING vs COMPLETE differently
-    if (isPreSearchStillStreaming) {
-      // PRE-SEARCH STILL STREAMING: Add user message for UI, show placeholders, but DON'T trigger participants
-      // When pre-search completes, this effect will re-run with status=COMPLETE and trigger participants
+    // Get enabled participant MODEL IDs for the expected participants
+    const expectedModelIds = enabledParticipants.map(p => p.modelId);
 
-      // Add optimistic user message for UI display
-      // AI SDK v5 UIMessage uses parts array, not content property
-      const optimisticUserMessage: UIMessage = {
-        id: `optimistic-user-${orphanedRoundNumber}-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: recoveredQuery }],
-        metadata: {
-          role: MessageRoles.USER,
-          roundNumber: orphanedRoundNumber,
-          isOptimistic: true,
-        },
-      };
+    // Set expected participant IDs (required by pendingMessage effect)
+    setExpectedParticipantIds(expectedModelIds);
 
-      // Add the message to display
-      setMessages([...messagesWithoutOrphanedOptimistic, optimisticUserMessage]);
+    // Prepare for new message - this sets pendingMessage and adds optimistic user message
+    prepareForNewMessage(recoveredQuery, expectedModelIds);
 
-      // Set streaming round number for placeholder rendering
-      setStreamingRoundNumber(orphanedRoundNumber);
-
-      // ✅ CRITICAL: Reset the ref so we can trigger again when pre-search completes
-      // Without this, when status changes to COMPLETE, we won't re-trigger
-      orphanedPreSearchRecoveryAttemptedRef.current = null;
-    } else {
-      // PRE-SEARCH COMPLETE: Full recovery - add message AND trigger participants
-
-      // Get enabled participant MODEL IDs for the expected participants
-      // ✅ CRITICAL FIX: Use modelId (e.g., 'anthropic/claude-sonnet-4'), NOT record id
-      // pending-message-sender.ts compares against modelId, not database record id
-      const expectedModelIds = enabledParticipants.map(p => p.modelId);
-
-      // Set expected participant IDs (required by pendingMessage effect)
-      setExpectedParticipantIds(expectedModelIds);
-
-      // Prepare for new message - this sets pendingMessage and adds optimistic user message
-      // The prepareForNewMessage action will:
-      // 1. Add optimistic user message for the orphanedRoundNumber (now correct after cleanup)
-      // 2. Set pendingMessage to the recovered query
-      // 3. Set hasSentPendingMessage to false
-      // 4. Clear hasEarlyOptimisticMessage
-      // 5. Set isWaitingForChangelog to true (BUT we need to clear it!)
-      // This triggers the pendingMessage effect in ChatStoreProvider to send the message
-      prepareForNewMessage(recoveredQuery, expectedModelIds);
-
-      // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
-      // During normal flow, useThreadActions clears this flag when changelog query completes.
-      // But during orphaned pre-search recovery, there's no new changelog to fetch - we're
-      // recovering from a state where pre-search already completed but participants never started.
-      // Without clearing this flag, the pending message effect returns early (line ~1109 in provider)
-      // and participants never get triggered, causing the "stuck" state the user reported.
-      setIsWaitingForChangelog(false);
-    }
+    // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
+    setIsWaitingForChangelog(false);
   }, [
     enabled,
     isStreaming,
@@ -433,13 +459,11 @@ export function useIncompleteRoundResumption(
     hasSentPendingMessage,
     orphanedPreSearch,
     enabledParticipants,
-    threadId,
     messages,
     prepareForNewMessage,
     setExpectedParticipantIds,
     setMessages,
     setIsWaitingForChangelog,
-    setStreamingRoundNumber,
   ]);
 
   // Reset the orphaned pre-search recovery ref when threadId changes
