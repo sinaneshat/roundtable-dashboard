@@ -461,9 +461,9 @@ function PreSearchStreamComponent({
 
         // ✅ AUTO-RETRY: Automatically retry stream failures
         // Stream failures often succeed on retry (transient network/model issues)
+        // This is expected during page refresh recovery - don't alarm with console.error
         if (retryCountRef.current < MAX_STREAM_RETRIES) {
           retryCountRef.current++;
-          console.error(`[PreSearchStream] Stream failed - auto-retry ${retryCountRef.current}/${MAX_STREAM_RETRIES} in ${RETRY_INTERVAL_MS}ms`);
 
           // Show "Retrying..." UI to user instead of raw error
           isAutoRetrying.onTrue();

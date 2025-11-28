@@ -42,6 +42,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
 import type {
   ChatCustomRole,
 } from '@/db/validation';
@@ -668,6 +669,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
     }
 
+    // ✅ TYPE-SAFE: Use properly typed update data derived from validated body
+    // Body is already typed by UpdateThreadRequestSchema, no force casts needed
     const updateData: {
       title?: string;
       mode?: ChatMode;
@@ -675,17 +678,17 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       isFavorite?: boolean;
       isPublic?: boolean;
       enableWebSearch?: boolean;
-      metadata?: Record<string, unknown>;
+      metadata?: DbThreadMetadata;
       updatedAt: Date;
     } = {
       updatedAt: now,
     };
     if (body.title !== undefined && body.title !== null)
-      updateData.title = body.title as string;
+      updateData.title = body.title;
     if (body.mode !== undefined)
-      updateData.mode = body.mode as ChatMode;
+      updateData.mode = body.mode;
     if (body.status !== undefined)
-      updateData.status = body.status as ThreadStatus;
+      updateData.status = body.status;
     if (body.isFavorite !== undefined)
       updateData.isFavorite = body.isFavorite;
     if (body.isPublic !== undefined)
@@ -811,6 +814,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       where: eq(tables.chatThreadChangelog.threadId, thread.id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
+    // Fetch all analyses - frontend will handle display based on status
     const analyses = await db.query.chatModeratorAnalysis.findMany({
       where: eq(tables.chatModeratorAnalysis.threadId, thread.id),
       orderBy: [tables.chatModeratorAnalysis.roundNumber],

@@ -326,10 +326,10 @@ function ModeratorAnalysisStreamComponent({
 
           // ✅ AUTO-RETRY: Automatically retry empty response errors
           // Empty responses often succeed on retry (transient network/model issues)
+          // This is expected during page refresh recovery - don't alarm with console.error
           // ✅ FIX: Use fixed 3-second intervals and show retrying UI to user
           if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
             emptyResponseRetryCountRef.current++;
-            console.error(`[ModeratorAnalysisStream] Empty response - auto-retry ${emptyResponseRetryCountRef.current}/${MAX_EMPTY_RESPONSE_RETRIES} in ${RETRY_INTERVAL_MS}ms`);
 
             // ✅ FIX: Show "Retrying..." UI to user instead of raw error
             isAutoRetrying.onTrue();

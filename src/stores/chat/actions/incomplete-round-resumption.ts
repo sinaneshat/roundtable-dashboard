@@ -334,7 +334,9 @@ export function useIncompleteRoundResumption(
     // Check if user message for this round already exists
     const orphanedRoundNumber = orphanedPreSearch.roundNumber;
     const hasUserMessageForRound = messages.some((msg) => {
-      if (msg.role !== MessageRoles.USER) return false;
+      if (msg.role !== MessageRoles.USER) {
+        return false;
+      }
       // Include optimistic messages - they count as having a user message
       const msgRound = getRoundNumber(msg.metadata);
       return msgRound === orphanedRoundNumber;

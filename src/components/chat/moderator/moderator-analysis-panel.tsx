@@ -43,7 +43,10 @@ export function ModeratorAnalysisPanel({
     return (
       <div className="flex items-center gap-2 py-2 text-sm text-destructive">
         <span className="size-1.5 rounded-full bg-destructive/80" />
-        <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
+        {/* ✅ FIX: Always show user-friendly message for FAILED analyses
+            Technical errorMessage (e.g., "Stream timeout after 25s") is not helpful
+            for end-users - it's stored for debugging purposes only */}
+        <span>{t('errorAnalyzing')}</span>
       </div>
     );
   }
