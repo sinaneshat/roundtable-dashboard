@@ -120,6 +120,7 @@ export function WebSearchDisplay({
           >
             <ChainOfThoughtSearchResults>
               {domains.map((domain, index) => (
+                // eslint-disable-next-line react/no-array-index-key -- domains can be duplicated across results; index ensures uniqueness
                 <ChainOfThoughtSearchResult key={`${domain}-${index}`}>
                   <a
                     href={successfulResults[index]?.url}

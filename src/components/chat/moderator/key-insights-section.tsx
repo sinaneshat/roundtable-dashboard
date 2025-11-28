@@ -181,6 +181,7 @@ export function KeyInsightsSection({
                             </div>
                           )}
                           {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
+                            // eslint-disable-next-line react/no-array-index-key -- modelId can be duplicated in suggestions; index ensures uniqueness
                             <div key={`${rec.title}-${modelId}-${modelIndex}`} className="flex-shrink-0">
                               <ModelBadge
                                 modelId={modelId}

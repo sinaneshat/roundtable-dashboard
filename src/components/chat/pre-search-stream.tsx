@@ -247,17 +247,42 @@ function PreSearchStreamComponent({
         // ✅ RESUMABLE STREAMS: Handle various response codes
         // 200: Normal stream or resumed stream
         // 202: Stream is active but no buffer yet - RETRY POST (like analyze component)
+        //      BUT if data.status is 'complete', the pre-search finished during our retries!
         // 409: Conflict (legacy - should use 202 now)
         if (response.status === 202) {
-          // Parse retry delay from response body
+          // Parse response body to check status and get retry delay
           let retryDelayMs = DEFAULT_RETRY_DELAY_MS;
+          type ResponseData = {
+            data?: {
+              status?: string;
+              searchData?: PreSearchDataPayload;
+              retryAfterMs?: number;
+            };
+          };
+          let responseData: ResponseData | undefined;
+
           try {
-            const json = await response.json() as { data?: { retryAfterMs?: number } };
-            if (json?.data?.retryAfterMs) {
-              retryDelayMs = json.data.retryAfterMs;
+            responseData = await response.json() as ResponseData;
+            if (responseData?.data?.retryAfterMs) {
+              retryDelayMs = responseData.data.retryAfterMs;
             }
           } catch {
             // Use default delay if body parsing fails
+          }
+
+          // ✅ CRITICAL FIX: Check if pre-search completed during our retries
+          // Backend returns 202 with status:'complete' and searchData when pre-search finishes
+          // We must detect this and call onStreamComplete instead of continuing to retry
+          if (responseData?.data?.status === AnalysisStatuses.COMPLETE && responseData.data.searchData) {
+            // Pre-search is complete! Update UI and call completion callback
+            const completedSearchData = responseData.data.searchData;
+            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
+            flushSync(() => {
+              setPartialSearchData(completedSearchData);
+              isAutoRetryingOnFalseRef.current();
+            });
+            onStreamCompleteRef.current?.(completedSearchData);
+            return;
           }
 
           postRetryCount++;
@@ -274,6 +299,7 @@ function PreSearchStreamComponent({
             // Debug log removed - only console.error allowed by ESLint config
 
             // Wait and retry the POST request (like analyze component)
+            // eslint-disable-next-line react-web-api/no-leaked-timeout -- Promise resolves when timeout fires; no cleanup needed for awaited delays
             await new Promise(resolve => setTimeout(resolve, retryDelayMs));
 
             // Recursive retry - this makes the stream request again

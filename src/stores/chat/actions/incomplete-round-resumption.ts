@@ -352,11 +352,13 @@ export function useIncompleteRoundResumption(
     });
     setMessages(messagesWithoutOrphanedOptimistic);
 
-    // Get enabled participant IDs for the expected participants
-    const expectedIds = enabledParticipants.map(p => p.id);
+    // Get enabled participant MODEL IDs for the expected participants
+    // ✅ CRITICAL FIX: Use modelId (e.g., 'anthropic/claude-sonnet-4'), NOT record id
+    // pending-message-sender.ts compares against modelId, not database record id
+    const expectedModelIds = enabledParticipants.map(p => p.modelId);
 
     // Set expected participant IDs (required by pendingMessage effect)
-    setExpectedParticipantIds(expectedIds);
+    setExpectedParticipantIds(expectedModelIds);
 
     // Prepare for new message - this sets pendingMessage and adds optimistic user message
     // The prepareForNewMessage action will:
@@ -365,7 +367,7 @@ export function useIncompleteRoundResumption(
     // 3. Set hasSentPendingMessage to false
     // 4. Clear hasEarlyOptimisticMessage
     // This triggers the pendingMessage effect in ChatStoreProvider to send the message
-    prepareForNewMessage(recoveredQuery, expectedIds);
+    prepareForNewMessage(recoveredQuery, expectedModelIds);
   }, [
     enabled,
     isStreaming,

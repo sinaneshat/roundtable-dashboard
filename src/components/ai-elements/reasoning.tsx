@@ -208,12 +208,13 @@ type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
  * Creates a smooth, character-by-character shimmer animation
  * Uses CSS-based animations for better caching reliability in deployed environments
  */
+/* eslint-disable react/no-array-index-key -- Character animation requires position-based keys; chars aren't unique */
 function ShimmerText({ text }: { text: string }) {
   return (
     <span className="font-medium">
       {text.split('').map((char, i) => (
         <span
-          key={i}
+          key={`char-${i}`}
           className={`animate-shimmer-char shimmer-delay-${i % 16}`}
         >
           {char === ' ' ? '\u00A0' : char}
@@ -222,6 +223,7 @@ function ShimmerText({ text }: { text: string }) {
     </span>
   );
 }
+/* eslint-enable react/no-array-index-key */
 
 export function ReasoningTrigger({
   title,

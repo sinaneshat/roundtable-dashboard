@@ -66,6 +66,7 @@ vi.mock('streamdown', () => ({
 }));
 
 vi.mock('next/image', () => ({
+  // eslint-disable-next-line next/no-img-element -- Test mock; next/image optimization not needed in tests
   default: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 
