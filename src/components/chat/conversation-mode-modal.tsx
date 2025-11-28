@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 
+import { ChatModes } from '@/api/core/enums';
 import {
   Dialog,
   DialogBody,
@@ -105,19 +106,19 @@ export function ConversationModeModal({
                 <div
                   className={cn(
                     'flex size-10 shrink-0 items-center justify-center rounded-full',
-                    mode.id === 'debating' && 'bg-blue-500/20',
-                    mode.id === 'brainstorming' && 'bg-yellow-500/20',
-                    mode.id === 'solving' && 'bg-green-500/20',
-                    mode.id === 'analyzing' && 'bg-purple-500/20',
+                    mode.id === ChatModes.DEBATING && 'bg-blue-500/20',
+                    mode.id === ChatModes.BRAINSTORMING && 'bg-yellow-500/20',
+                    mode.id === ChatModes.SOLVING && 'bg-green-500/20',
+                    mode.id === ChatModes.ANALYZING && 'bg-purple-500/20',
                   )}
                 >
                   <ModeIcon
                     className={cn(
                       'size-6',
-                      mode.id === 'debating' && 'text-blue-400',
-                      mode.id === 'brainstorming' && 'text-yellow-400',
-                      mode.id === 'solving' && 'text-green-400',
-                      mode.id === 'analyzing' && 'text-purple-400',
+                      mode.id === ChatModes.DEBATING && 'text-blue-400',
+                      mode.id === ChatModes.BRAINSTORMING && 'text-yellow-400',
+                      mode.id === ChatModes.SOLVING && 'text-green-400',
+                      mode.id === ChatModes.ANALYZING && 'text-purple-400',
                     )}
                   />
                 </div>

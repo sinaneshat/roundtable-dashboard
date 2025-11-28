@@ -13,6 +13,7 @@ import { useState } from 'react';
 
 import type { ContributorPerspective } from '@/api/routes/chat/schema';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 import { cn } from '@/lib/ui/cn';
 
 import { getVoteCardColor, getVoteIcon } from './moderator-ui-utils';
@@ -49,7 +50,7 @@ function getRoleIcon(role: string) {
  */
 export function ContributorPerspectivesSection({
   perspectives,
-  isStreaming: _isStreaming = false,
+  isStreaming = false,
 }: ContributorPerspectivesSectionProps) {
   const t = useTranslations('moderator');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
@@ -172,10 +173,11 @@ export function ContributorPerspectivesSection({
                     </div>
                   </div>
 
-                  {/* Stance */}
+                  {/* Stance with streaming cursor */}
                   {perspective.stance && (
                     <p className="text-sm text-foreground/80 leading-relaxed">
                       {perspective.stance}
+                      {isStreaming && index === perspectives.length - 1 && <StreamingCursor />}
                     </p>
                   )}
 

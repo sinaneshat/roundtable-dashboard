@@ -26,6 +26,12 @@ import { getMessageStatus } from '@/lib/utils/message-status';
 import { getMessageMetadata } from '@/lib/utils/message-transforms';
 import { getRoundNumber, getUserMetadata, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
 import { sortByPriority } from '@/lib/utils/participant';
+import {
+  allParticipantsHaveVisibleContent,
+  buildParticipantMessageMaps,
+  getParticipantMessageFromMaps,
+  participantHasVisibleContent,
+} from '@/lib/utils/participant-message-lookup';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
 const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
@@ -163,6 +169,8 @@ type ParticipantMessageWrapperProps = {
   isAccessible: boolean;
   messageId?: string;
   metadata?: DbMessageMetadata | null;
+  /** Custom loading text for pending state */
+  loadingText?: string;
 };
 
 /**
@@ -178,6 +186,7 @@ function ParticipantMessageWrapper({
   isAccessible,
   messageId,
   metadata,
+  loadingText,
 }: ParticipantMessageWrapperProps) {
   const avatarProps = getAvatarPropsFromModelId(
     MessageRoles.ASSISTANT,
@@ -191,7 +200,7 @@ function ParticipantMessageWrapper({
   const hasError = status === MessageStatuses.FAILED || assistantMetadata?.hasError;
 
   return (
-    <div className="mb-4 flex justify-start">
+    <div className="flex justify-start">
       <div className="w-full">
         <ParticipantHeader
           avatarSrc={avatarProps.src}
@@ -216,6 +225,7 @@ function ParticipantMessageWrapper({
           isAccessible={isAccessible}
           hideInlineHeader
           hideAvatar
+          loadingText={loadingText}
         />
       </div>
     </div>
@@ -258,7 +268,7 @@ function AssistantGroupCard({
   return (
     <div
       key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
-      className="mb-4 flex justify-start"
+      className="flex justify-start"
     >
       <div className="w-full">
         <ParticipantHeader
@@ -272,7 +282,7 @@ function AssistantGroupCard({
           hasError={hasErrorMessage}
         />
         {/* Message content */}
-        <div className="space-y-2">
+        <div className="space-y-4">
           {group.messages.map(({ message, index, participantInfo }) => {
             const messageKey = keyForMessage(message, index);
             const metadata = getMessageMetadata(message.metadata);
@@ -489,6 +499,7 @@ export const ChatMessageList = memo(
     demoPreSearchOpen,
   }: ChatMessageListProps) => {
     const t = useTranslations();
+    const tParticipant = useTranslations('chat.participant');
     // Consolidated model lookup hook
     const { findModel } = useModelLookup();
     const { data: usageData } = useUsageStatsQuery();
@@ -505,8 +516,15 @@ export const ChatMessageList = memo(
 
     // ✅ DEDUPLICATION: Prevent duplicate message IDs and filter participant trigger messages
     // Note: Component supports grouping multiple consecutive user messages for UI flexibility
+    // ✅ CRITICAL FIX: Also deduplicate assistant messages by (roundNumber, participantIndex/modelId)
+    // On page refresh with resumed streams, we may have:
+    // 1. DB message with deterministic ID: thread_r1_p0
+    // 2. AI SDK resumed message with temp ID: gen-abc123
+    // Both represent the same participant response and should be deduplicated
     const deduplicatedMessages = useMemo(() => {
       const seenMessageIds = new Set<string>(); // Track message IDs to prevent actual duplicates
+      // ✅ NEW: Track assistant messages by roundNumber+participantIndex to prevent duplicate rendering
+      const seenAssistantMessages = new Set<string>();
       const result: UIMessage[] = [];
 
       for (const message of messages) {
@@ -531,7 +549,68 @@ export const ChatMessageList = memo(
           seenMessageIds.add(message.id);
           result.push(message);
         } else {
-          // For assistant/system messages, keep all (participants can have multiple messages)
+          // For assistant messages, deduplicate by (roundNumber, participantIndex OR modelId)
+          // This handles the case where resumed streams create messages with different IDs
+          const meta = getMessageMetadata(message.metadata);
+          const assistantMeta = meta && isAssistantMessageMetadata(meta) ? meta : null;
+
+          if (assistantMeta) {
+            const roundNum = assistantMeta.roundNumber;
+            const participantIdx = assistantMeta.participantIndex;
+            const participantId = assistantMeta.participantId;
+            const modelId = assistantMeta.model;
+
+            // Create a unique key for this participant's response in this round
+            // Try participantId first (most reliable), then participantIndex, then modelId
+            let dedupeKey: string | null = null;
+            if (roundNum !== undefined && roundNum !== null) {
+              if (participantId) {
+                dedupeKey = `r${roundNum}_pid${participantId}`;
+              } else if (participantIdx !== undefined && participantIdx !== null) {
+                dedupeKey = `r${roundNum}_p${participantIdx}`;
+              } else if (modelId) {
+                dedupeKey = `r${roundNum}_m${modelId}`;
+              }
+            }
+
+            // Skip if we've already seen a message for this participant in this round
+            if (dedupeKey && seenAssistantMessages.has(dedupeKey)) {
+              // ✅ PREFER: Keep the message with the deterministic ID (contains _r{N}_p{M})
+              // and skip the temp ID message (gen-xxxxx)
+              const isDeterministicId = message.id.includes('_r') && message.id.includes('_p');
+              if (!isDeterministicId) {
+                // This is a temp ID message, skip it in favor of the DB message
+                continue;
+              }
+              // This is a deterministic ID message - find and replace the temp ID message
+              const existingTempIdx = result.findIndex((m) => {
+                const mMeta = getMessageMetadata(m.metadata);
+                const mAssistantMeta = mMeta && isAssistantMessageMetadata(mMeta) ? mMeta : null;
+                if (!mAssistantMeta)
+                  return false;
+                const mRound = mAssistantMeta.roundNumber;
+                const mPid = mAssistantMeta.participantId;
+                const mIdx = mAssistantMeta.participantIndex;
+                const mModel = mAssistantMeta.model;
+                // Check if it's the same participant in the same round
+                return mRound === roundNum
+                  && ((participantId && mPid === participantId)
+                    || (participantIdx !== undefined && mIdx === participantIdx)
+                    || (modelId && mModel === modelId));
+              });
+              if (existingTempIdx !== -1) {
+                // Replace temp ID message with deterministic ID message
+                result[existingTempIdx] = message;
+                seenMessageIds.add(message.id);
+                continue;
+              }
+            }
+
+            if (dedupeKey) {
+              seenAssistantMessages.add(dedupeKey);
+            }
+          }
+
           seenMessageIds.add(message.id);
           result.push(message);
         }
@@ -614,29 +693,11 @@ export const ChatMessageList = memo(
         return roundNum === _streamingRoundNumber;
       });
 
-      // Build a map of participant messages
-      const participantMessages = new Map<string, UIMessage>();
-      streamingRoundMessages.forEach((m) => {
-        const meta = getMessageMetadata(m.metadata);
-        const assistantMeta = meta && isAssistantMessageMetadata(meta) ? meta : null;
-        if (assistantMeta?.participantId) {
-          participantMessages.set(assistantMeta.participantId, m);
-        }
-      });
-
-      // Check if ALL participants have visible content
+      // ✅ Use reusable utility for multi-strategy participant message lookup
+      const participantMaps = buildParticipantMessageMaps(streamingRoundMessages);
       const sortedParticipants = sortByPriority(participants);
-      return sortedParticipants.every((p) => {
-        const msg = participantMessages.get(p.id);
-        if (!msg)
-          return false;
-        return msg.parts?.some(
-          part =>
-            (part.type === MessagePartTypes.TEXT && 'text' in part && (part.text as string)?.trim().length > 0)
-            || part.type === MessagePartTypes.TOOL_CALL
-            || part.type === MessagePartTypes.REASONING,
-        ) ?? false;
-      });
+
+      return allParticipantsHaveVisibleContent(participantMaps, sortedParticipants);
     }, [deduplicatedMessages, isStreaming, _streamingRoundNumber, participants]);
 
     // Group consecutive messages by participant for sticky headers
@@ -782,7 +843,7 @@ export const ChatMessageList = memo(
     });
 
     return (
-      <div className="touch-pan-y">
+      <div className="touch-pan-y space-y-8">
         {messageGroups.map((group, groupIndex) => {
           const roundNumber = group.type === 'user-group'
             ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
@@ -799,10 +860,10 @@ export const ChatMessageList = memo(
           // User message group with header inside message box
           if (group.type === 'user-group') {
             return (
-              <div key={`user-group-wrapper-${group.messages[0]?.index}`}>
+              <div key={`user-group-wrapper-${group.messages[0]?.index}`} className="mb-8">
                 <div
                   key={`user-group-${group.messages[0]?.index}`}
-                  className="mb-4 flex justify-end"
+                  className="flex justify-end"
                 >
                   <div className="w-full">
                     {/* Header at top of message box */}
@@ -818,7 +879,7 @@ export const ChatMessageList = memo(
                       </span>
                     </div>
                     {/* Message content */}
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {group.messages.map(({ message, index }) => {
                         const messageKey = keyForMessage(message, index);
                         return (
@@ -884,25 +945,28 @@ export const ChatMessageList = memo(
                 </div>
 
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
+                {/* ✅ mt-8 provides consistent spacing from user message content to PreSearchCard */}
                 {preSearch && (
-                  <PreSearchCard
-                    key={`pre-search-${roundNumber}`}
-                    threadId={_threadId!}
-                    preSearch={preSearch}
-                    isLatest={roundNumber === (() => {
-                      const lastGroup = messageGroups[messageGroups.length - 1];
-                      if (!lastGroup)
-                        return 0;
-                      return lastGroup.type === 'user-group'
-                        ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
-                        : lastGroup.type === 'assistant-group'
+                  <div className="mt-8">
+                    <PreSearchCard
+                      key={`pre-search-${roundNumber}`}
+                      threadId={_threadId!}
+                      preSearch={preSearch}
+                      isLatest={roundNumber === (() => {
+                        const lastGroup = messageGroups[messageGroups.length - 1];
+                        if (!lastGroup)
+                          return 0;
+                        return lastGroup.type === 'user-group'
                           ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
-                          : 0;
-                    })()}
-                    streamingRoundNumber={_streamingRoundNumber}
-                    demoOpen={demoPreSearchOpen}
-                    demoShowContent={demoPreSearchOpen ? preSearch.searchData !== undefined : undefined}
-                  />
+                          : lastGroup.type === 'assistant-group'
+                            ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
+                            : 0;
+                      })()}
+                      streamingRoundNumber={_streamingRoundNumber}
+                      demoOpen={demoPreSearchOpen}
+                      demoShowContent={demoPreSearchOpen ? preSearch.searchData !== undefined : undefined}
+                    />
+                  </div>
                 )}
 
                 {/* ✅ EAGER RENDERING: Show pending participant placeholders when waiting for pre-search or streaming
@@ -928,8 +992,7 @@ export const ChatMessageList = memo(
                     return null;
                   }
 
-                  // Get participant indices that already have COMPLETED messages (with metadata) for this round
-                  // Get all assistant messages for this round
+                  // Get assistant messages for this round and build participant message maps
                   const assistantMessagesForRound = messages.filter((m) => {
                     if (m.role === MessageRoles.USER)
                       return false;
@@ -940,39 +1003,19 @@ export const ChatMessageList = memo(
                   // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
                   const sortedParticipants = sortByPriority(participants);
 
-                  // Build a map of participant messages for quick lookup
-                  const participantMessages = new Map<string, UIMessage>();
-                  assistantMessagesForRound.forEach((m) => {
-                    const meta = getMessageMetadata(m.metadata);
-                    const assistantMeta = meta && isAssistantMessageMetadata(meta) ? meta : null;
-                    if (assistantMeta?.participantId) {
-                      participantMessages.set(assistantMeta.participantId, m);
-                    }
-                  });
+                  // ✅ Use reusable utility for multi-strategy participant message lookup
+                  // Handles DB messages, resumed streams with partial metadata, and AI SDK temp IDs
+                  const participantMaps = buildParticipantMessageMaps(assistantMessagesForRound);
 
-                  // ✅ CRITICAL FIX: Check if ALL participants have complete messages with visible content
+                  // ✅ Check if ALL participants have complete messages with visible content
                   // If so, don't show pending cards - the regular AssistantGroupCard rendering will handle it
-                  // This prevents duplicate rendering when preSearchComplete=true but streaming is done
-                  const allParticipantsHaveContent = sortedParticipants.every((p) => {
-                    const msg = participantMessages.get(p.id);
-                    if (!msg)
-                      return false;
-                    return msg.parts?.some(
-                      part =>
-                        (part.type === MessagePartTypes.TEXT && 'text' in part && (part.text as string)?.trim().length > 0)
-                        || part.type === MessagePartTypes.TOOL_CALL
-                        || part.type === MessagePartTypes.REASONING,
-                    ) ?? false;
-                  });
+                  const allParticipantsHaveContentForRound = allParticipantsHaveVisibleContent(participantMaps, sortedParticipants);
 
-                  // ✅ CRITICAL FIX: Show pending cards during these phases ONLY if not all participants have content:
+                  // ✅ Show pending cards during these phases ONLY if not all participants have content:
                   // - Pre-search PENDING/STREAMING: Show all participants as pending
                   // - Pre-search COMPLETE but not streaming yet: Keep showing pending (transition phase)
                   // - Streaming: Show participants who haven't started streaming yet
-                  //
-                  // IMPORTANT: If all participants have visible content, skip pending cards entirely
-                  // to prevent duplicate rendering with AssistantGroupCard
-                  const shouldShowPendingCards = !allParticipantsHaveContent && (preSearchActive || preSearchComplete || isStreaming);
+                  const shouldShowPendingCards = !allParticipantsHaveContentForRound && (preSearchActive || preSearchComplete || isStreaming);
 
                   if (!shouldShowPendingCards) {
                     return null;
@@ -980,31 +1023,23 @@ export const ChatMessageList = memo(
 
                   // ✅ UNIFIED RENDERING: Render ALL participants in priority order
                   // Each participant shows either their actual content or shimmer, maintaining stable positions.
-                  // This prevents completed messages from jumping to the bottom when streams arrive.
-
-                  // Get the current streaming participant for status determination
-                  const currentStreamingParticipant = sortedParticipants[currentParticipantIndex];
+                  const currentStreamingParticipantForRound = sortedParticipants[currentParticipantIndex];
 
                   return (
-                    <div className="space-y-4 mt-4">
-                      {sortedParticipants.map((participant) => {
-                        const participantIdx = sortedParticipants.findIndex(p => p.id === participant.id);
+                    // ✅ mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
+                    <div className="mt-8 space-y-8">
+                      {sortedParticipants.map((participant, participantIdx) => {
                         const model = findModel(participant.modelId);
                         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
 
-                        // Check if this participant has a message with content
-                        const participantMessage = participantMessages.get(participant.id);
-                        const hasContent = participantMessage?.parts?.some(
-                          p =>
-                            (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
-                            || p.type === MessagePartTypes.TOOL_CALL
-                            || p.type === MessagePartTypes.REASONING,
-                        ) ?? false;
+                        // ✅ Use reusable utility for multi-strategy lookup
+                        const participantMessage = getParticipantMessageFromMaps(participantMaps, participant, participantIdx);
+                        const hasContent = participantHasVisibleContent(participantMaps, participant, participantIdx);
 
                         // Determine status and parts based on message state
                         const isCurrentlyStreaming = isStreaming
-                          && currentStreamingParticipant
-                          && participant.id === currentStreamingParticipant.id;
+                          && currentStreamingParticipantForRound
+                          && participant.id === currentStreamingParticipantForRound.id;
 
                         let status: MessageStatus;
                         let parts: MessagePart[] = [];
@@ -1028,6 +1063,29 @@ export const ChatMessageList = memo(
                           status = MessageStatuses.PENDING;
                         }
 
+                        // ✅ Compute context-aware loading text for pending participants
+                        let loadingText: string | undefined;
+                        if (!hasContent) {
+                          // Check if it's this participant's turn
+                          const isTheirTurn = participantIdx <= currentParticipantIndex;
+
+                          if (isTheirTurn) {
+                            // It's their turn - check pre-search status for first participant
+                            if (participantIdx === 0 && preSearchActive) {
+                              loadingText = tParticipant('waitingForWebResults');
+                            } else {
+                              // Their turn but no content yet - "Gathering thoughts"
+                              loadingText = tParticipant('gatheringThoughts');
+                            }
+                          } else {
+                            // Not their turn yet - show who they're waiting for
+                            const currentSpeaker = sortedParticipants[currentParticipantIndex];
+                            const currentSpeakerModel = currentSpeaker ? findModel(currentSpeaker.modelId) : null;
+                            const currentSpeakerName = currentSpeakerModel?.name || currentSpeaker?.modelId || 'AI';
+                            loadingText = tParticipant('waitingNamed', { name: currentSpeakerName });
+                          }
+                        }
+
                         // ✅ Use ParticipantMessageWrapper for consistent header rendering
                         return (
                           <ParticipantMessageWrapper
@@ -1039,6 +1097,7 @@ export const ChatMessageList = memo(
                             parts={parts}
                             isAccessible={isAccessible}
                             messageId={participantMessage?.id}
+                            loadingText={loadingText}
                           />
                         );
                       })}
@@ -1106,9 +1165,10 @@ export const ChatMessageList = memo(
         const getTextLength = (parts: typeof prevLast.parts): number => {
           let length = 0;
           for (const p of parts) {
-            if (p.type === 'text' && 'text' in p) {
-              const text = (p as { type: 'text'; text: string }).text;
-              length += text?.length || 0;
+            // ✅ ENUM PATTERN: Use MessagePartTypes enum for type narrowing
+            if (p.type === MessagePartTypes.TEXT && 'text' in p) {
+              // Type narrowing ensures p.text exists after the check
+              length += p.text?.length || 0;
             }
           }
           return length;

@@ -14,7 +14,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import {
   createMockPreSearch,
   createTestAssistantMessage,
@@ -91,9 +91,9 @@ function calculatePendingParticipants(params: {
     if (!msg)
       return false;
     return msg.parts?.some((part: { type: string; text?: string }) =>
-      (part.type === 'text' && part.text && part.text.trim().length > 0)
-      || part.type === 'tool-invocation'
-      || part.type === 'reasoning',
+      (part.type === MessagePartTypes.TEXT && part.text && part.text.trim().length > 0)
+      || part.type === MessagePartTypes.TOOL_CALL
+      || part.type === MessagePartTypes.REASONING,
     ) ?? false;
   });
 
@@ -136,12 +136,12 @@ function calculatePendingParticipants(params: {
     && isLastMessageStreaming // ✅ Only count as streaming message if no participantId
     && lastMessage?.parts?.some(
       (p: { type: string; text?: string }) =>
-        p.type === 'text' && p.text && p.text.trim().length > 0,
+        p.type === MessagePartTypes.TEXT && p.text && p.text.trim().length > 0,
     );
 
   const streamingParticipantHasContent = currentStreamingMessage?.parts?.some(
     (p: { type: string; text?: string }) =>
-      p.type === 'text' && p.text && p.text.trim().length > 0,
+      p.type === MessagePartTypes.TEXT && p.text && p.text.trim().length > 0,
   ) || lastMessageHasContent;
 
   // ✅ FIX: Filter pending participants - check for VISIBLE content, not just having a message
@@ -151,9 +151,9 @@ function calculatePendingParticipants(params: {
     // ✅ Check if this participant has VISIBLE content (not just a message)
     const hasVisibleContent = msg?.parts?.some(
       (p: { type: string; text?: string }) =>
-        (p.type === 'text' && p.text && p.text.trim().length > 0)
-        || p.type === 'tool-invocation'
-        || p.type === 'reasoning',
+        (p.type === MessagePartTypes.TEXT && p.text && p.text.trim().length > 0)
+        || p.type === MessagePartTypes.TOOL_CALL
+        || p.type === MessagePartTypes.REASONING,
     ) ?? false;
 
     // Skip if has visible content (already rendered)

@@ -8,7 +8,7 @@ import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AIModels } from '@/api/core/ai-models';
-import { AnalysisStatuses, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles, StreamStatuses, UIMessageRoles } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import {
   clearActiveAnalysisStream,
@@ -16,6 +16,7 @@ import {
   createLiveAnalysisResumeStream,
   generateAnalysisStreamId,
   getActiveAnalysisStreamId,
+  getAnalysisStreamChunks,
   getAnalysisStreamMetadata,
   initializeAnalysisStreamBuffer,
 } from '@/api/services/analysis-stream-buffer.service';
@@ -875,28 +876,48 @@ export const resumeAnalysisStreamHandler: RouteHandler<typeof resumeAnalysisStre
     }
 
     // =========================================================================
-    // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+    // ✅ STREAM STATUS CHECK: Return appropriately based on stream state
     // =========================================================================
-    // This creates a stream that:
-    // 1. Returns all buffered chunks immediately
-    // 2. Continues polling KV for new chunks as they arrive
-    // 3. Streams new chunks to client in real-time
-    // 4. Completes when the original stream finishes
-    const liveStream = createLiveAnalysisResumeStream(activeStreamId, c.env);
+    // If stream is COMPLETED, return all buffered chunks as complete text
+    // If stream is ACTIVE, return 202 to indicate polling should continue
+    // This prevents frontend from waiting indefinitely on active streams
 
-    // Return live stream with metadata headers
-    return new Response(liveStream, {
-      status: HttpStatusCodes.OK,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
-        // Include stream metadata in headers for frontend state tracking
-        'X-Stream-Id': activeStreamId,
-        'X-Round-Number': String(roundNum),
-        'X-Analysis-Id': metadata.analysisId,
+    if (metadata.status === StreamStatuses.COMPLETED) {
+      // Stream completed - return all buffered chunks as complete text
+      const chunks = await getAnalysisStreamChunks(activeStreamId, c.env);
+      if (!chunks || chunks.length === 0) {
+        return c.body(null, HttpStatusCodes.NO_CONTENT);
+      }
+
+      // Concatenate all chunks into complete JSON
+      const completeText = chunks.map(chunk => chunk.data).join('');
+
+      return new Response(completeText, {
+        status: HttpStatusCodes.OK,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-cache',
+          'X-Stream-Id': activeStreamId,
+          'X-Round-Number': String(roundNum),
+          'X-Analysis-Id': metadata.analysisId,
+          'X-Stream-Status': 'completed', // ✅ Indicates data is complete
+        },
+      });
+    }
+
+    // Stream is still active - return 202 to indicate polling should continue
+    // Frontend should poll /analyses endpoint for completion
+    return c.json(
+      {
+        success: true,
+        data: {
+          status: 'streaming',
+          streamId: activeStreamId,
+          message: 'Analysis stream is still active. Poll for completion.',
+          retryAfterMs: 2000,
+        },
       },
-    });
+      HttpStatusCodes.ACCEPTED,
+    );
   },
 );

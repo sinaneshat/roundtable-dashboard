@@ -10,6 +10,8 @@ type TypingTextProps = {
   className?: string;
   onComplete?: () => void;
   enabled?: boolean;
+  /** Show streaming cursor at end of text (for external streaming control) */
+  showStreamingCursor?: boolean;
 };
 
 /**
@@ -30,6 +32,7 @@ export function TypingText({
   className,
   onComplete,
   enabled = true,
+  showStreamingCursor = false,
 }: TypingTextProps) {
   const [currentIndex, setCurrentIndex] = useState(enabled ? 0 : text.length);
 
@@ -72,14 +75,17 @@ export function TypingText({
     };
   }, [text, speed, delay, onComplete, enabled]);
 
+  // Show cursor during typing animation OR when externally flagged as streaming
+  const showCursor = (enabled && speed > 0 && currentIndex < text.length) || showStreamingCursor;
+
   return (
     <span className={className}>
       {displayedText}
-      {enabled && speed > 0 && currentIndex < text.length && (
+      {showCursor && (
         <motion.span
-          className="inline-block w-0.5 h-[1em] ml-0.5 bg-current align-middle"
-          animate={{ opacity: [0, 1, 0] }}
-          transition={{ duration: 0.8, repeat: Infinity }}
+          className="inline-block w-0.5 h-[1em] ml-0.5 bg-primary/70 rounded-sm align-middle"
+          animate={{ opacity: [1, 0.2, 1] }}
+          transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
     </span>

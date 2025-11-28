@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import type { Recommendation, RoundSummary } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 
 type RoundSummarySectionProps = {
   roundSummary: Partial<RoundSummary>;
@@ -23,7 +24,7 @@ type RoundSummarySectionProps = {
 export function RoundSummarySection({
   roundSummary,
   onActionClick: _onActionClick,
-  isStreaming: _isStreaming = false,
+  isStreaming = false,
 }: RoundSummarySectionProps) {
   const t = useTranslations('moderator');
 
@@ -67,12 +68,13 @@ export function RoundSummarySection({
         </div>
       )}
 
-      {/* Key Themes */}
+      {/* Key Themes with streaming cursor */}
       {keyThemes && (
         <div className="space-y-2">
           <span className="text-sm font-medium">{t('roundSummary.keyThemes')}</span>
           <p className="text-sm text-muted-foreground leading-relaxed">
             {keyThemes}
+            {isStreaming && <StreamingCursor />}
           </p>
         </div>
       )}

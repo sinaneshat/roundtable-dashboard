@@ -95,14 +95,8 @@ export function CollapsibleSection({
         </div>
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-        {/* Content with consistent padding matching established patterns */}
-        <div
-          className={cn(
-            'px-4 pt-2 pb-4',
-            // Indent content to align with title (past icon)
-            icon && 'pl-11',
-          )}
-        >
+        {/* Content with consistent padding matching ChainOfThoughtContent pattern */}
+        <div className="px-3 pt-1 pb-4 sm:px-4 sm:pt-2 sm:pb-5">
           {children}
         </div>
       </CollapsibleContent>

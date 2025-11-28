@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { AnalysisStatuses, ConfidenceWeightings } from '@/api/core/enums';
+import { AnalysisStatuses, ConfidenceWeightings, MessagePartTypes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -402,7 +402,7 @@ export function LiveChatDemo() {
       return;
 
     const message = MOCK_PARTICIPANT_MESSAGES[0];
-    const fullText = message?.parts[0]?.type === 'text' ? message.parts[0].text : '';
+    const fullText = message?.parts[0]?.type === MessagePartTypes.TEXT ? message.parts[0].text : '';
     let charIndex = 0;
     let interval: NodeJS.Timeout | null = null;
 
@@ -437,7 +437,7 @@ export function LiveChatDemo() {
       return;
 
     const message = MOCK_PARTICIPANT_MESSAGES[1];
-    const fullText = message?.parts[0]?.type === 'text' ? message.parts[0].text : '';
+    const fullText = message?.parts[0]?.type === MessagePartTypes.TEXT ? message.parts[0].text : '';
     let charIndex = 0;
     let interval: NodeJS.Timeout | null = null;
 
@@ -472,7 +472,7 @@ export function LiveChatDemo() {
       return;
 
     const message = MOCK_PARTICIPANT_MESSAGES[2];
-    const fullText = message?.parts[0]?.type === 'text' ? message.parts[0].text : '';
+    const fullText = message?.parts[0]?.type === MessagePartTypes.TEXT ? message.parts[0].text : '';
     let charIndex = 0;
     let interval: NodeJS.Timeout | null = null;
 
@@ -741,7 +741,7 @@ export function LiveChatDemo() {
         const text = isStreaming
           ? streamingText[key]
           : isComplete || stage === completeStage
-            ? mockMsg.parts[0]?.type === 'text'
+            ? mockMsg.parts[0]?.type === MessagePartTypes.TEXT
               ? mockMsg.parts[0].text
               : ''
             : ''; // Container visible but no text yet
@@ -751,7 +751,7 @@ export function LiveChatDemo() {
           threadId: 'demo-thread',
           participantId: `participant-${idx}`,
           role: mockMsg.role,
-          parts: [{ type: 'text' as const, text }],
+          parts: [{ type: MessagePartTypes.TEXT, text }],
           roundNumber: 1,
           createdAt: new Date(),
           metadata: mockMsg.metadata,

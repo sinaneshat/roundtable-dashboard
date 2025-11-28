@@ -17,7 +17,7 @@ type AboutFrameworkSectionProps = {
 /**
  * AboutFrameworkSection - Multi-AI Deliberation Framework
  *
- * Shows framework explanation with dynamic stats and contributors.
+ * Clean, minimal display of framework stats and contributors.
  */
 export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionProps) {
   const t = useTranslations('moderator');
@@ -34,80 +34,72 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
     const rejectCount = contributors.filter(c => c.vote === VoteTypes.REJECT).length;
     const cautionCount = contributors.filter(c => c.vote === VoteTypes.CAUTION || c.vote === null).length;
 
-    // Calculate average scorecard metrics
     const avgLogic = Math.round(contributors.reduce((sum, c) => sum + (c.scorecard?.logic || 0), 0) / totalContributors);
     const avgCreativity = Math.round(contributors.reduce((sum, c) => sum + (c.scorecard?.creativity || 0), 0) / totalContributors);
     const avgEvidence = Math.round(contributors.reduce((sum, c) => sum + (c.scorecard?.evidence || 0), 0) / totalContributors);
 
-    return {
-      totalContributors,
-      approveCount,
-      rejectCount,
-      cautionCount,
-      avgLogic,
-      avgCreativity,
-      avgEvidence,
-    };
+    return { approveCount, rejectCount, cautionCount, avgLogic, avgCreativity, avgEvidence };
   }, [contributors, hasContributors]);
 
   return (
     <div className="space-y-4">
-      {/* Section Subtitle */}
+      {/* Description */}
       <p className="text-sm text-muted-foreground leading-relaxed">
-        {t('aboutFramework.subtitle')}
-      </p>
-
-      {/* Main Description */}
-      <p className="text-sm text-foreground/80 leading-relaxed">
         {t('aboutFramework.description')}
       </p>
 
-      {/* Vote Summary */}
+      {/* Vote Summary - Inline with colored numbers */}
       {stats && (
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10">
-            <span className="text-sm font-semibold text-emerald-400">{stats.approveCount}</span>
-            <span className="text-xs text-muted-foreground">Approve</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/10">
-            <span className="text-sm font-semibold text-red-400">{stats.rejectCount}</span>
-            <span className="text-xs text-muted-foreground">Reject</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10">
-            <span className="text-sm font-semibold text-amber-400">{stats.cautionCount}</span>
-            <span className="text-xs text-muted-foreground">Caution</span>
-          </div>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="flex items-center gap-1.5">
+            <span className="font-semibold text-emerald-400">{stats.approveCount}</span>
+            <span className="text-muted-foreground">Approve</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-semibold text-red-400">{stats.rejectCount}</span>
+            <span className="text-muted-foreground">Reject</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-semibold text-amber-400">{stats.cautionCount}</span>
+            <span className="text-muted-foreground">Caution</span>
+          </span>
         </div>
       )}
 
-      {/* Average Quality Scores */}
+      {/* Average Scores - Simple inline display */}
       {stats && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Avg Scores:</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span className="text-muted-foreground">Avg:</span>
+          <span>
+            <span className="text-blue-400 font-medium">
+              {stats.avgLogic}
+              %
+            </span>
+            {' '}
             Logic
-            {' '}
-            {stats.avgLogic}
-            %
           </span>
-          <span className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-400">
+          <span>
+            <span className="text-purple-400 font-medium">
+              {stats.avgCreativity}
+              %
+            </span>
+            {' '}
             Creativity
-            {' '}
-            {stats.avgCreativity}
-            %
           </span>
-          <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
-            Evidence
+          <span>
+            <span className="text-emerald-400 font-medium">
+              {stats.avgEvidence}
+              %
+            </span>
             {' '}
-            {stats.avgEvidence}
-            %
+            Evidence
           </span>
         </div>
       )}
 
-      {/* Contributors List */}
+      {/* Contributors - Clean list */}
       {hasContributors && (
-        <div className="space-y-2">
+        <div className="space-y-2 pt-1">
           <span className="text-xs text-muted-foreground">
             {t('roundOutcome.contributors')}
             {' '}
@@ -115,24 +107,23 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
             {contributors.length}
             )
           </span>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {contributors.map((contributor, index) => {
               const color = getContributorColor(index);
-
               return (
                 <div
                   key={contributor.participantIndex}
-                  className="flex items-center gap-2 py-1.5"
+                  className="flex items-center gap-2 py-1"
                 >
                   <Bot className={cn('size-3.5 flex-shrink-0', color)} />
-                  <span className={cn('text-sm font-medium', color)}>
+                  <span className={cn('text-sm font-medium flex-1 min-w-0 truncate', color)}>
                     {contributor.role || contributor.modelName}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground truncate max-w-24 sm:max-w-none">
                     {contributor.modelName}
                   </span>
                   {contributor.vote && (
-                    <span className="ml-auto flex-shrink-0">{getVoteIcon(contributor.vote)}</span>
+                    <span className="flex-shrink-0">{getVoteIcon(contributor.vote)}</span>
                   )}
                 </div>
               );
@@ -149,9 +140,9 @@ export function AboutFrameworkSection({ contributors }: AboutFrameworkSectionPro
       )}
 
       {/* Confidence Explanation */}
-      <div className="flex items-start gap-2 pt-3 border-t border-border/40">
-        <Sparkles className="size-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
-        <p className="text-xs text-muted-foreground leading-relaxed">
+      <div className="flex items-start gap-2 pt-3 border-t border-border/30">
+        <Sparkles className="size-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
           {t('aboutFramework.confidenceExplanation')}
         </p>
       </div>

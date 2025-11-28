@@ -46,11 +46,17 @@ import { RoundSummarySection } from './round-summary-section';
  * Returns the parsed analysis data if successful, null otherwise
  *
  * @pattern Following stream-resume.handler.ts pattern for chat streams
+ *
+ * Response handling:
+ * - 204 No Content: No buffer available
+ * - 202 Accepted: Stream is still active, should poll for completion
+ * - 200 OK with X-Stream-Status: completed: Complete data available
+ * - 200 OK without header: Legacy/fallback, try to parse
  */
 async function attemptAnalysisResume(
   threadId: string,
   roundNumber: number,
-): Promise<{ success: true; data: ModeratorAnalysisPayload } | { success: false; reason: 'no-buffer' | 'incomplete' | 'error' }> {
+): Promise<{ success: true; data: ModeratorAnalysisPayload } | { success: false; reason: 'no-buffer' | 'incomplete' | 'streaming' | 'error' }> {
   try {
     const response = await fetch(
       `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/analyze/resume`,
@@ -62,21 +68,56 @@ async function attemptAnalysisResume(
       return { success: false, reason: 'no-buffer' };
     }
 
+    // 202 Accepted = stream is still active, poll for completion
+    if (response.status === 202) {
+      return { success: false, reason: 'streaming' };
+    }
+
     // Non-200 = error
     if (!response.ok) {
       console.error('[ModeratorAnalysisStream] Resume request failed:', response.status);
       return { success: false, reason: 'error' };
     }
 
-    // Read the buffered text chunks
+    // Check X-Stream-Status header
+    const streamStatus = response.headers.get('X-Stream-Status');
+
+    // If status header indicates completed, data should be complete
+    if (streamStatus === 'completed') {
+      const bufferedText = await response.text();
+
+      if (!bufferedText || bufferedText.trim() === '') {
+        return { success: false, reason: 'no-buffer' };
+      }
+
+      try {
+        const parsed = JSON.parse(bufferedText);
+        const validated = ModeratorAnalysisPayloadSchema.safeParse(parsed);
+
+        if (validated.success) {
+          return { success: true, data: validated.data };
+        }
+
+        // Even with completed status, schema validation might fail
+        // Check if we have enough data to be useful
+        if (hasAnalysisData(parsed)) {
+          return { success: true, data: parsed as ModeratorAnalysisPayload };
+        }
+
+        return { success: false, reason: 'incomplete' };
+      } catch {
+        // JSON parse failed even though status said completed
+        return { success: false, reason: 'incomplete' };
+      }
+    }
+
+    // No status header (legacy) or unknown status - try to parse
     const bufferedText = await response.text();
 
     if (!bufferedText || bufferedText.trim() === '') {
       return { success: false, reason: 'no-buffer' };
     }
 
-    // Try to parse as complete JSON object
-    // Object streams send JSON being built incrementally
     try {
       const parsed = JSON.parse(bufferedText);
       const validated = ModeratorAnalysisPayloadSchema.safeParse(parsed);
@@ -85,16 +126,12 @@ async function attemptAnalysisResume(
         return { success: true, data: validated.data };
       }
 
-      // Partial data - schema validation failed (incomplete stream)
-      // Check if we have enough data to be useful
       if (hasAnalysisData(parsed)) {
-        // Return partial data as complete (best effort)
         return { success: true, data: parsed as ModeratorAnalysisPayload };
       }
 
       return { success: false, reason: 'incomplete' };
     } catch {
-      // JSON parse failed - incomplete stream
       return { success: false, reason: 'incomplete' };
     }
   } catch (error) {
@@ -192,6 +229,17 @@ function ModeratorAnalysisStreamComponent({
   // The hasAnalysisData() util handles the type checking at runtime
   const partialAnalysisRef = useRef<unknown>(null);
 
+  // ✅ AUTO-RETRY: Track retry attempts for empty response errors
+  // Empty responses happen due to: model timeout, rate limiting, network issues
+  // Auto-retry provides better UX than showing error immediately
+  const MAX_EMPTY_RESPONSE_RETRIES = 2;
+  const emptyResponseRetryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ Submit function ref - declared early to be available in onFinish callback
+  // The actual submit function is set after useObject returns
+  const submitRef = useRef<((input: { participantMessageIds: string[] }) => void) | null>(null);
+
   // ✅ SCROLL FIX: Removed useAutoScroll - scroll is managed centrally by useChatScroll
   // Having nested useAutoScroll (with its own ResizeObserver) inside the accordion
   // caused conflicting scroll systems that fought each other, resulting in excessive
@@ -202,7 +250,17 @@ function ModeratorAnalysisStreamComponent({
   useEffect(() => {
     hasStartedStreamingRef.current = false;
     partialAnalysisRef.current = null; // Reset fallback data for new analysis
+    emptyResponseRetryCountRef.current = 0; // Reset retry count for new analysis
   }, [analysis.id]);
+
+  // ✅ AUTO-RETRY: Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // ✅ MOCK MODE: Mock streaming effect (disabled in favor of real API)
   // useEffect(() => {
@@ -257,13 +315,42 @@ function ModeratorAnalysisStreamComponent({
           const fallbackData = partialAnalysisRef.current;
           if (fallbackData && hasAnalysisData(fallbackData)) {
             // We have valid streamed data - treat as success
+            emptyResponseRetryCountRef.current = 0; // Reset on success
             onStreamCompleteRef.current?.(fallbackData as ModeratorAnalysisPayload);
             return;
           }
 
-          // ✅ NEW: Empty response detection - AI model returned no valid data
+          // ✅ AUTO-RETRY: Automatically retry empty response errors
+          // Empty responses often succeed on retry (transient network/model issues)
+          if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
+            emptyResponseRetryCountRef.current++;
+            console.error(`[ModeratorAnalysisStream] Empty response - auto-retry ${emptyResponseRetryCountRef.current}/${MAX_EMPTY_RESPONSE_RETRIES}`);
+
+            // Clear any existing timeout
+            if (retryTimeoutRef.current) {
+              clearTimeout(retryTimeoutRef.current);
+            }
+
+            // Retry after a short delay (exponential backoff: 1s, 2s)
+            const retryDelay = emptyResponseRetryCountRef.current * 1000;
+            retryTimeoutRef.current = setTimeout(() => {
+              // Reset streaming state for retry
+              hasStartedStreamingRef.current = false;
+              partialAnalysisRef.current = null;
+
+              // Trigger retry via submit
+              const messageIds = analysis.participantMessageIds;
+              if (messageIds?.length && submitRef.current) {
+                submitRef.current({ participantMessageIds: messageIds });
+              }
+            }, retryDelay);
+            return; // Don't report error yet - retry in progress
+          }
+
+          // ✅ Max retries exceeded - report error
           errorType = StreamErrorTypes.EMPTY_RESPONSE;
           streamErrorTypeRef.current = errorType;
+          emptyResponseRetryCountRef.current = 0; // Reset for next attempt
           // User-friendly error message instead of raw Zod validation error
           onStreamCompleteRef.current?.(null, new Error(t('errors.emptyResponseError')));
           return;
@@ -305,8 +392,7 @@ function ModeratorAnalysisStreamComponent({
     },
   });
 
-  // ✅ Store submit function in ref for stable access in effects
-  const submitRef = useRef(submit);
+  // ✅ Update submitRef with the actual submit function from useObject
   useEffect(() => {
     submitRef.current = submit;
   }, [submit]);
@@ -457,14 +543,23 @@ function ModeratorAnalysisStreamComponent({
             return; // Don't start new stream
           }
 
-          // Resume failed - if incomplete, fall back to polling (409 will be handled)
-          // Stream is still in progress but we couldn't get complete data
-          // Fall through to submit() which will get 409 and trigger polling
+          // ✅ FIX: Handle 'streaming' reason explicitly - start polling directly
+          // When backend returns 202 (streaming), don't try to submit (would get 409)
+          // Instead, go directly to the polling mechanism
+          if (resumeResult.reason === 'streaming') {
+            is409Conflict.onTrue(); // Trigger polling
+            return;
+          }
+
+          // Resume failed with 'incomplete', 'no-buffer', or 'error'
+          // Fall through to submit() which will either:
+          // - Start a new stream (if analysis was stale)
+          // - Get 409 and trigger polling (if another stream started)
         }
 
         // Normal flow: start new stream (or retry after failed resume)
         const body = { participantMessageIds: messageIds };
-        submitRef.current(body);
+        submitRef.current?.(body);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis.participantMessageIds intentionally excluded to prevent re-trigger on metadata updates for reasoning models
@@ -540,6 +635,11 @@ function ModeratorAnalysisStreamComponent({
   // Content checking
   const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING;
 
+  // ✅ ANIMATION ALIGNMENT: Skip animations for already-complete content
+  // When analysis is COMPLETE (loaded from DB), render instantly without animation
+  // When STREAMING, animate sections as they appear
+  const skipAnimation = analysis.status === AnalysisStatuses.COMPLETE;
+
   // ✅ Check for header data availability
   const hasHeaderData = roundConfidence !== undefined && roundConfidence > 0;
 
@@ -584,6 +684,7 @@ function ModeratorAnalysisStreamComponent({
                     key="round-outcome-header"
                     itemKey="round-outcome-header"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <RoundOutcomeHeader
                       roundConfidence={roundConfidence}
@@ -601,6 +702,7 @@ function ModeratorAnalysisStreamComponent({
                     key="key-insights"
                     itemKey="key-insights"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <KeyInsightsSection
                       summary={summary}
@@ -617,6 +719,7 @@ function ModeratorAnalysisStreamComponent({
                     key="contributor-perspectives"
                     itemKey="contributor-perspectives"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <ContributorPerspectivesSection
                       perspectives={validContributorPerspectives}
@@ -631,6 +734,7 @@ function ModeratorAnalysisStreamComponent({
                     key="consensus-analysis"
                     itemKey="consensus-analysis"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <ConsensusAnalysisSection
                       analysis={validConsensusAnalysis}
@@ -645,6 +749,7 @@ function ModeratorAnalysisStreamComponent({
                     key="evidence-reasoning"
                     itemKey="evidence-reasoning"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <EvidenceReasoningSection
                       evidenceAndReasoning={validEvidenceAndReasoning}
@@ -659,6 +764,7 @@ function ModeratorAnalysisStreamComponent({
                     key="alternatives"
                     itemKey="alternatives"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <AlternativesSection
                       alternatives={validAlternatives}
@@ -673,6 +779,7 @@ function ModeratorAnalysisStreamComponent({
                     key="round-summary"
                     itemKey="round-summary"
                     index={sectionIndex++}
+                    skipAnimation={skipAnimation}
                   >
                     <RoundSummarySection
                       roundSummary={validRoundSummary}

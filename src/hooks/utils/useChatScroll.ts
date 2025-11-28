@@ -25,6 +25,16 @@ type UseChatScrollParams = {
    * Default: 0
    */
   bottomOffset?: number;
+  /**
+   * Ref to the scroll anchor element at the bottom of the chat
+   * ResizeObserver watches this to detect ANY content growth
+   */
+  scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
+  /**
+   * Whether any loading indicator is visible (loader, pre-search, analysis streaming)
+   * When true, scroll should follow content even before participant streaming starts
+   */
+  showLoader?: boolean;
 };
 
 type UseChatScrollResult = {
@@ -48,45 +58,50 @@ type UseChatScrollResult = {
 };
 
 /**
- * ✅ REWRITTEN: Following use-stick-to-bottom pattern for window-level scrolling
+ * ✅ REWRITTEN: ResizeObserver-based auto-scroll for smooth window-level scrolling
  *
  * KEY PRINCIPLES:
- * 1. "Sticky" state = whether to auto-scroll (like use-stick-to-bottom's isAtBottom)
- * 2. User scrolling UP = unstick (immediate)
- * 3. User reaching bottom = stick (automatic)
- * 4. Only scroll when sticky AND during active participant streaming
- * 5. NEVER scroll due to layout shifts, changelogs, analyses, or pre-search
+ * 1. Use ResizeObserver on scroll anchor to detect ANY content growth (loader, text, etc)
+ * 2. "Sticky" state = whether to auto-scroll (like use-stick-to-bottom's isAtBottom)
+ * 3. User scrolling UP = unstick (immediate)
+ * 4. User reaching bottom = stick (automatic)
+ * 5. When sticky AND content grows, auto-scroll to keep bottom in view
+ * 6. Use requestAnimationFrame for smooth animation timing
  *
- * This prevents snap-back issues when changelogs or other content appears.
+ * This ensures auto-scroll works for ALL content: loader text, streaming messages, etc.
  */
 export function useChatScroll({
   messages,
   analyses,
   isStreaming,
-  scrollContainerId: _scrollContainerId = 'chat-scroll-container', // Unused after ResizeObserver removal
+  scrollContainerId: _scrollContainerId = 'chat-scroll-container',
   enableNearBottomDetection = true,
   autoScrollThreshold = 100,
   currentParticipantIndex: _currentParticipantIndex,
   bottomOffset = 0,
+  scrollAnchorRef,
+  showLoader = false,
 }: UseChatScrollParams): UseChatScrollResult {
   // ✅ STICKY STATE: Like use-stick-to-bottom's isAtBottom
-  // true = following new content, false = user opted out by scrolling up
   const isAtBottomRef = useRef(true);
 
-  // Track which analyses have been scrolled to (prevent duplicate scrolls)
+  // Track which analyses have been scrolled to
   const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
 
-  // Track if we're in a programmatic scroll (to ignore scroll events during)
+  // Track if we're in a programmatic scroll
   const isProgrammaticScrollRef = useRef(false);
 
   // Track last known scroll position for direction detection
   const lastScrollTopRef = useRef<number>(0);
 
-  // ✅ SCROLL FIX: Track if we've done the initial scroll for the current streaming session
-  // This prevents scrolling on every new participant message within the same round
-  // Only the FIRST scroll of a streaming session should snap to bottom,
-  // then content growth follows via contentGrew (not messageCountGrew)
-  const hasScrolledForStreamingSessionRef = useRef(false);
+  // RAF-based scroll queue for smooth animation
+  const scrollRafRef = useRef<number | null>(null);
+
+  // Throttle for content-based scrolling
+  const scrollThrottleRef = useRef<number>(0);
+
+  // Track last anchor position for resize detection
+  const lastAnchorTopRef = useRef<number>(0);
 
   /**
    * Reset all scroll state to initial values
@@ -96,10 +111,14 @@ export function useChatScroll({
     scrolledToAnalysesRef.current = new Set();
     lastScrollTopRef.current = 0;
     isProgrammaticScrollRef.current = false;
-    hasScrolledForStreamingSessionRef.current = false;
+    lastAnchorTopRef.current = 0;
+    if (scrollRafRef.current) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = null;
+    }
   }, []);
 
-  // Reset when messages become empty (navigation to overview)
+  // Reset when messages become empty (navigation)
   useEffect(() => {
     if (messages.length === 0) {
       resetScrollState();
@@ -107,34 +126,50 @@ export function useChatScroll({
   }, [messages.length, resetScrollState]);
 
   /**
-   * Scroll to bottom with proper sticky state management
+   * Scroll to bottom using window.scrollTo for consistent body-based scrolling
    */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
+      // Cancel any pending scroll
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+
       isProgrammaticScrollRef.current = true;
 
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight + bottomOffset;
+      // Use RAF for smooth timing
+      scrollRafRef.current = requestAnimationFrame(() => {
+        let targetScrollTop: number;
 
-      window.scrollTo({
-        top: Math.max(0, maxScroll),
-        behavior,
+        if (scrollAnchorRef?.current) {
+          const anchorRect = scrollAnchorRef.current.getBoundingClientRect();
+          const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+          targetScrollTop = currentScrollTop + anchorRect.bottom - window.innerHeight + bottomOffset;
+        } else {
+          targetScrollTop = document.documentElement.scrollHeight - window.innerHeight + bottomOffset;
+        }
+
+        window.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior,
+        });
+
+        isAtBottomRef.current = true;
+
+        // Reset programmatic flag after animation
+        const delay = behavior === 'smooth' ? 300 : 50;
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, delay);
+
+        scrollRafRef.current = null;
       });
-
-      // Re-engage sticky mode since we're going to bottom
-      isAtBottomRef.current = true;
-
-      // Reset programmatic flag after scroll animation completes
-      const delay = behavior === 'smooth' ? 500 : 100;
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, delay);
     },
-    [bottomOffset],
+    [bottomOffset, scrollAnchorRef],
   );
 
   // ============================================================================
   // EFFECT 1: Track user scroll intent (sticky/unsticky state)
-  // ✅ Following use-stick-to-bottom pattern: scroll up = unstick, reach bottom = stick
   // ============================================================================
   useEffect(() => {
     if (!enableNearBottomDetection) {
@@ -142,37 +177,34 @@ export function useChatScroll({
       return undefined;
     }
 
+    let ticking = false;
+
     const handleScroll = () => {
-      // Ignore scroll events during programmatic scrolling
-      if (isProgrammaticScrollRef.current) {
+      if (isProgrammaticScrollRef.current || ticking)
         return;
-      }
 
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = window.innerHeight;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const scrollHeight = document.documentElement.scrollHeight;
+        const clientHeight = window.innerHeight;
+        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      // Detect scroll direction
-      const scrollDelta = scrollTop - lastScrollTopRef.current;
-      lastScrollTopRef.current = scrollTop;
+        const scrollDelta = scrollTop - lastScrollTopRef.current;
+        lastScrollTopRef.current = scrollTop;
 
-      // ✅ KEY LOGIC (from use-stick-to-bottom):
-      // - Scrolling UP with meaningful delta = UNSTICK (immediate opt-out)
-      // - Reaching bottom = STICK (automatic opt-in)
-      if (scrollDelta < -10) {
-        // User scrolled UP with intent → unstick
-        isAtBottomRef.current = false;
-      } else if (distanceFromBottom <= autoScrollThreshold) {
-        // User is at bottom → stick
-        isAtBottomRef.current = true;
-      }
-      // If scrolling down but not at bottom, keep current state
+        // ✅ STICKY LOGIC: scroll up = unstick, reach bottom = stick
+        if (scrollDelta < -10) {
+          isAtBottomRef.current = false;
+        } else if (distanceFromBottom <= autoScrollThreshold) {
+          isAtBottomRef.current = true;
+        }
+
+        ticking = false;
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-
-    // Initialize
     lastScrollTopRef.current = window.scrollY || document.documentElement.scrollTop;
 
     return () => {
@@ -181,139 +213,130 @@ export function useChatScroll({
   }, [enableNearBottomDetection, autoScrollThreshold]);
 
   // ============================================================================
-  // EFFECT 2: Auto-scroll when streaming starts (round begins)
-  // ✅ This ensures we scroll to bottom ONCE when the round starts
-  // ✅ SCROLL FIX: Only scroll once per streaming session (round), not per participant
+  // EFFECT 2: ResizeObserver on scroll anchor to detect ANY content growth
+  // ✅ This catches loader text, streaming text, new messages - EVERYTHING
   // ============================================================================
-  const wasStreamingRef = useRef(false);
+  const isActive = isStreaming || showLoader;
 
   useEffect(() => {
-    const wasStreaming = wasStreamingRef.current;
-    wasStreamingRef.current = isStreaming;
+    if (!scrollAnchorRef?.current || !isActive) {
+      return;
+    }
 
-    // When streaming STARTS (transition from false to true), reset session flag and scroll
-    if (!wasStreaming && isStreaming) {
-      // Reset the flag for the new streaming session
-      hasScrolledForStreamingSessionRef.current = false;
+    const anchor = scrollAnchorRef.current;
 
-      if (isAtBottomRef.current) {
-        requestAnimationFrame(() => {
-          if (isAtBottomRef.current) {
-            scrollToBottom('smooth');
-            // Mark that we've done the initial scroll for this session
-            hasScrolledForStreamingSessionRef.current = true;
+    // Initialize last position
+    const initialRect = anchor.getBoundingClientRect();
+    lastAnchorTopRef.current = initialRect.top + window.scrollY;
+
+    // ✅ RESIZE OBSERVER: Watches anchor position changes caused by content growth
+    const resizeObserver = new ResizeObserver(() => {
+      if (!isAtBottomRef.current || isProgrammaticScrollRef.current)
+        return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const currentAnchorTop = anchorRect.top + window.scrollY;
+
+      // Content grew if anchor moved down
+      const contentGrew = currentAnchorTop > lastAnchorTopRef.current + 5; // 5px threshold
+      lastAnchorTopRef.current = currentAnchorTop;
+
+      if (!contentGrew)
+        return;
+
+      // ✅ THROTTLE: Max once per 50ms for smooth but not excessive scrolling
+      const now = Date.now();
+      if (now - scrollThrottleRef.current < 50)
+        return;
+      scrollThrottleRef.current = now;
+
+      // Auto-scroll to keep bottom in view
+      requestAnimationFrame(() => {
+        if (isAtBottomRef.current && !isProgrammaticScrollRef.current) {
+          scrollToBottom('auto');
+        }
+      });
+    });
+
+    // ✅ MUTATION OBSERVER: Catches DOM changes that don't trigger resize
+    const mutationObserver = new MutationObserver(() => {
+      if (!isAtBottomRef.current || isProgrammaticScrollRef.current)
+        return;
+
+      // ✅ THROTTLE
+      const now = Date.now();
+      if (now - scrollThrottleRef.current < 50)
+        return;
+      scrollThrottleRef.current = now;
+
+      requestAnimationFrame(() => {
+        if (isAtBottomRef.current && !isProgrammaticScrollRef.current) {
+          // Check if we need to scroll (content might have grown)
+          const scrollTop = window.scrollY || document.documentElement.scrollTop;
+          const scrollHeight = document.documentElement.scrollHeight;
+          const clientHeight = window.innerHeight;
+          const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+          // Only scroll if we're not at actual bottom (content grew)
+          if (distanceFromBottom > 10) {
+            scrollToBottom('auto');
           }
-        });
-      }
+        }
+      });
+    });
+
+    // Observe the anchor's parent (content container) for changes
+    const contentContainer = anchor.parentElement;
+    if (contentContainer) {
+      resizeObserver.observe(contentContainer);
+      mutationObserver.observe(contentContainer, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
     }
-
-    // When streaming STOPS, reset the flag for the next round
-    if (wasStreaming && !isStreaming) {
-      hasScrolledForStreamingSessionRef.current = false;
-    }
-  }, [isStreaming, scrollToBottom]);
-
-  // ============================================================================
-  // EFFECT 3: Follow content growth ONLY during participant streaming
-  // ✅ SCROLL FIX: Track message-specific content, NOT body height
-  // This prevents snapping when accordions expand/collapse during streaming
-  //
-  // STRATEGY: Instead of ResizeObserver on document.body (too broad),
-  // track actual message content changes:
-  // 1. New messages added → scroll ONLY if first participant (not subsequent)
-  // 2. Streaming message content grows → scroll with heavy debounce
-  // 3. Accordion/layout shifts → NO scroll (not tracked)
-  //
-  // ✅ KEY FIX: Only scroll once per round when participants start, then follow content
-  // This prevents the "snap to where participant started" bug where each new
-  // participant triggered a scroll to their starting position
-  // ============================================================================
-  const lastMessageCountRef = useRef(messages.length);
-  const lastContentLengthRef = useRef(0);
-  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    // ✅ CRITICAL: Only scroll when participants are actively streaming
-    // When not streaming, changelogs and other layout changes won't trigger scroll
-    if (!isStreaming) {
-      // Clear debounce on streaming stop
-      if (scrollDebounceRef.current) {
-        clearTimeout(scrollDebounceRef.current);
-        scrollDebounceRef.current = null;
-      }
-      return;
-    }
-
-    // ✅ SCROLL FIX: Track TWO things:
-    // 1. Message count changes (new messages added)
-    // 2. Last message content length (streaming content growth)
-    const messageCountGrew = messages.length > lastMessageCountRef.current;
-    lastMessageCountRef.current = messages.length;
-
-    // Calculate total content length of last 2 messages (streaming messages)
-    // This detects content growth during streaming without tracking body height
-    // UIMessage uses 'parts' array, we extract text content from text parts
-    const lastMessages = messages.slice(-2);
-    const currentContentLength = lastMessages.reduce((total, msg) => {
-      const textContent = msg.parts
-        ?.filter(part => part.type === 'text')
-        .map(part => ('text' in part ? part.text : ''))
-        .join('') || '';
-      return total + textContent.length;
-    }, 0);
-    const contentGrew = currentContentLength > lastContentLengthRef.current;
-    const contentDelta = currentContentLength - lastContentLengthRef.current;
-    lastContentLengthRef.current = currentContentLength;
-
-    // Only scroll if sticky AND content actually changed
-    if (!isAtBottomRef.current) {
-      return;
-    }
-
-    // ✅ KEY FIX: Don't scroll on new participant messages after the initial scroll
-    // This prevents the "snap to where participant started" bug
-    // Effect 2 handles the initial scroll when the round starts
-    // This effect should ONLY follow content growth, not snap on new messages
-    const shouldScrollForNewMessage = messageCountGrew && !hasScrolledForStreamingSessionRef.current;
-    const shouldScrollForContentGrowth = contentGrew && contentDelta >= 20;
-
-    // Skip if no meaningful change that we should respond to
-    if (!shouldScrollForNewMessage && !shouldScrollForContentGrowth) {
-      return;
-    }
-
-    // ✅ SCROLL FIX: Debounce scroll to prevent rapid-fire scrolling
-    // Multiple message chunks arrive quickly during streaming
-    // Use longer debounce for content growth vs initial scroll
-    if (scrollDebounceRef.current) {
-      clearTimeout(scrollDebounceRef.current);
-    }
-
-    const debounceMs = shouldScrollForNewMessage ? 50 : 200; // Faster for initial, slower for content growth
-    scrollDebounceRef.current = setTimeout(() => {
-      if (isAtBottomRef.current && isStreaming) {
-        scrollToBottom('smooth');
-        // Mark that we've scrolled for this session
-        hasScrolledForStreamingSessionRef.current = true;
-      }
-      scrollDebounceRef.current = null;
-    }, debounceMs);
 
     return () => {
-      if (scrollDebounceRef.current) {
-        clearTimeout(scrollDebounceRef.current);
-        scrollDebounceRef.current = null;
-      }
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
     };
-  }, [isStreaming, messages, scrollToBottom]);
+  }, [isActive, scrollAnchorRef, scrollToBottom]);
 
-  // Track analyses for scroll tracking (not triggering)
+  // ============================================================================
+  // EFFECT 3: Initial scroll when loading/streaming starts
+  // ============================================================================
+  const wasActiveRef = useRef(false);
+
+  useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = isActive;
+
+    // When activity STARTS, do initial scroll
+    if (!wasActive && isActive && isAtBottomRef.current) {
+      requestAnimationFrame(() => {
+        if (isAtBottomRef.current) {
+          scrollToBottom('smooth');
+        }
+      });
+    }
+  }, [isActive, scrollToBottom]);
+
+  // Track analyses
   useEffect(() => {
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     if (newAnalyses.length > 0) {
       newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
     }
   }, [analyses]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
 
   return {
     isAtBottomRef,

@@ -1,6 +1,6 @@
 'use client';
 import { ArrowDown } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
@@ -15,33 +15,25 @@ export function ChatScrollButton({
   className,
 }: ChatScrollButtonProps) {
   const [showButton, setShowButton] = useState(false);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Use window-based scrolling for native OS scroll behavior
-    let rafId: number | null = null;
-    let lastScrollTime = 0;
-    const throttleMs = 100;
+    let ticking = false;
 
     const checkScrollPosition = () => {
-      const now = Date.now();
-      if (now - lastScrollTime < throttleMs) {
-        rafId = requestAnimationFrame(checkScrollPosition);
-        return;
-      }
-      lastScrollTime = now;
-
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = window.innerHeight;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: updating state based on scroll position
       setShowButton(distanceFromBottom > 200);
-      rafId = null;
+      ticking = false;
     };
 
     const handleScroll = () => {
-      if (rafId === null) {
-        rafId = requestAnimationFrame(checkScrollPosition);
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(checkScrollPosition);
       }
     };
 
@@ -50,20 +42,37 @@ export function ChatScrollButton({
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
     };
   }, []);
 
-  const scrollToBottom = () => {
-    // Use window-based scrolling for native OS scroll behavior
-    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo({
-      top: maxScroll,
-      behavior: 'smooth',
+  const scrollToBottom = useCallback(() => {
+    // Cancel any pending scroll
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+    }
+
+    // ✅ BODY-BASED SCROLL: Use anchor position for accurate targeting
+    rafRef.current = requestAnimationFrame(() => {
+      const scrollAnchor = document.querySelector('[data-scroll-anchor="chat-bottom"]');
+      let targetScrollTop: number;
+
+      if (scrollAnchor) {
+        // Calculate position based on anchor
+        const anchorRect = scrollAnchor.getBoundingClientRect();
+        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
+        targetScrollTop = currentScrollTop + anchorRect.bottom - window.innerHeight;
+      } else {
+        // Fallback to document bottom
+        targetScrollTop = document.documentElement.scrollHeight - window.innerHeight;
+      }
+
+      window.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth',
+      });
+      rafRef.current = null;
     });
-  };
+  }, []);
 
   if (!showButton)
     return null;

@@ -17,6 +17,7 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import { LoaderFive } from '@/components/ui/loader';
 import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
@@ -37,6 +38,8 @@ type ModelMessageCardProps = {
   isAccessible?: boolean;
   hideInlineHeader?: boolean;
   hideAvatar?: boolean;
+  /** Custom loading text to display instead of "Generating response from {model}..." */
+  loadingText?: string;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
 
@@ -54,6 +57,7 @@ export const ModelMessageCard = memo(({
   isAccessible,
   hideInlineHeader = false,
   hideAvatar = false,
+  loadingText,
 }: ModelMessageCardProps) => {
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
@@ -125,7 +129,7 @@ export const ModelMessageCard = memo(({
         <MessageContent variant="flat" className={hasError ? 'text-destructive' : undefined}>
           <>
             {!hideInlineHeader && (
-              <div className="flex items-center gap-3 mb-6 flex-wrap">
+              <div className="flex items-center gap-3 mb-5 flex-wrap">
                 <span className="text-xl font-semibold text-muted-foreground">
                   {modelName}
                 </span>
@@ -173,7 +177,7 @@ export const ModelMessageCard = memo(({
                       }}
                       className="py-2 text-muted-foreground text-sm"
                     >
-                      <LoaderFive text={t('generating', { model: modelName })} />
+                      <LoaderFive text={loadingText ?? t('generating', { model: modelName })} />
                     </motion.div>
                   )
                 : parts.length > 0
@@ -187,59 +191,76 @@ export const ModelMessageCard = memo(({
                           ease: ANIMATION_EASE.enter,
                         }}
                       >
-                        {parts.map((part, partIndex) => {
-                          if (part.type === MessagePartTypes.TEXT) {
-                            return (
-                              <Streamdown
-                                key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
-                                className="text-foreground text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                                components={streamdownComponents}
-                              >
-                                {part.text}
-                              </Streamdown>
-                            );
-                          }
-                          if (part.type === MessagePartTypes.REASONING) {
-                            return (
-                              <Reasoning
-                                key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
-                                isStreaming={status === MessageStatuses.STREAMING}
-                                className="w-full"
-                              >
-                                <ReasoningTrigger />
-                                <ReasoningContent>{part.text}</ReasoningContent>
-                              </Reasoning>
-                            );
-                          }
-                          if (part.type === MessagePartTypes.TOOL_CALL) {
-                            return (
-                              <ToolCallPart
-                                key={messageId ? `${messageId}-tool-call-${partIndex}` : `tool-call-${partIndex}`}
-                                part={part}
-                                className="my-2"
-                              />
-                            );
-                          }
-                          if (part.type === MessagePartTypes.TOOL_RESULT) {
-                            return (
-                              <ToolResultPart
-                                key={messageId ? `${messageId}-tool-result-${partIndex}` : `tool-result-${partIndex}`}
-                                part={part}
-                                className="my-2"
-                              />
-                            );
-                          }
-                          if (isDataPart(part)) {
-                            return (
-                              <CustomDataPart
-                                key={messageId ? `${messageId}-data-${partIndex}` : `data-${partIndex}`}
-                                part={part}
-                                className="my-2"
-                              />
-                            );
-                          }
-                          return null;
-                        })}
+                        {/* ✅ Sort parts: REASONING first, then TEXT, then others */}
+                        {(() => {
+                          const sortedParts = [...parts].sort((a, b) => {
+                            const order = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
+                            const aOrder = order[a.type as keyof typeof order] ?? 4;
+                            const bOrder = order[b.type as keyof typeof order] ?? 4;
+                            return aOrder - bOrder;
+                          });
+
+                          return sortedParts.map((part, partIndex) => {
+                            if (part.type === MessagePartTypes.TEXT) {
+                              const isLastTextPart = sortedParts.slice(partIndex + 1).every(p => p.type !== MessagePartTypes.TEXT);
+                              return (
+                                <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
+                                  <Streamdown
+                                    className="text-foreground text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    components={streamdownComponents}
+                                  >
+                                    {part.text}
+                                  </Streamdown>
+                                  {/* ✅ STREAMING CURSOR: Show blinking cursor at end of streaming text */}
+                                  {isStreaming && isLastTextPart && <StreamingCursor />}
+                                </div>
+                              );
+                            }
+                            if (part.type === MessagePartTypes.REASONING) {
+                              return (
+                                <Reasoning
+                                  key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
+                                  isStreaming={status === MessageStatuses.STREAMING}
+                                  // ✅ FIX: Pass initial content length to prevent false "Thinking..." on refresh
+                                  // For historical messages, this ensures we don't detect the existing content as "growth"
+                                  initialContentLength={status === MessageStatuses.COMPLETE ? part.text.length : 0}
+                                  className="w-full"
+                                >
+                                  <ReasoningTrigger />
+                                  <ReasoningContent>{part.text}</ReasoningContent>
+                                </Reasoning>
+                              );
+                            }
+                            if (part.type === MessagePartTypes.TOOL_CALL) {
+                              return (
+                                <ToolCallPart
+                                  key={messageId ? `${messageId}-tool-call-${partIndex}` : `tool-call-${partIndex}`}
+                                  part={part}
+                                  className="my-2"
+                                />
+                              );
+                            }
+                            if (part.type === MessagePartTypes.TOOL_RESULT) {
+                              return (
+                                <ToolResultPart
+                                  key={messageId ? `${messageId}-tool-result-${partIndex}` : `tool-result-${partIndex}`}
+                                  part={part}
+                                  className="my-2"
+                                />
+                              );
+                            }
+                            if (isDataPart(part)) {
+                              return (
+                                <CustomDataPart
+                                  key={messageId ? `${messageId}-data-${partIndex}` : `data-${partIndex}`}
+                                  part={part}
+                                  className="my-2"
+                                />
+                              );
+                            }
+                            return null;
+                          });
+                        })()}
                       </motion.div>
                     )
                   : null}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { MessagePartTypes } from '@/api/core/enums';
+
 import {
   MOCK_ANALYSIS,
   MOCK_PARTICIPANT_MESSAGES,
@@ -141,12 +143,12 @@ describe('chat-showcase-data', () => {
     it('should have text content in all messages', () => {
       MOCK_PARTICIPANT_MESSAGES.forEach((msg) => {
         expect(msg.parts.length).toBeGreaterThan(0);
-        const textPart = msg.parts.find(p => p.type === 'text');
+        const textPart = msg.parts.find(p => p.type === MessagePartTypes.TEXT);
         expect(textPart).toBeDefined();
         expect(textPart).toHaveProperty('text');
-        // Assert text content is non-empty after verifying property exists
-        const textContent = (textPart as { type: 'text'; text: string }).text;
-        expect(textContent.length).toBeGreaterThan(0);
+        // Type assertion after validation - textPart is guaranteed to be defined and have TEXT type
+        const validatedTextPart = textPart as { type: typeof MessagePartTypes.TEXT; text: string };
+        expect(validatedTextPart.text.length).toBeGreaterThan(0);
       });
     });
   });

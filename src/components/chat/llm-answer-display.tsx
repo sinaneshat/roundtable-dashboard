@@ -6,6 +6,7 @@ import { Streamdown } from 'streamdown';
 
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { defaultMarkdownComponents } from '@/components/markdown/unified-markdown-components';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 import { FadeInText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
 
@@ -35,12 +36,16 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
       <div className="text-sm">
         {isStreaming
           ? (
-              <Streamdown
-                className="leading-relaxed text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                components={streamdownComponents}
-              >
-                {answer}
-              </Streamdown>
+              <div>
+                <Streamdown
+                  className="leading-relaxed text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                  components={streamdownComponents}
+                >
+                  {answer}
+                </Streamdown>
+                {/* ✅ STREAMING CURSOR: Show blinking cursor while streaming */}
+                <StreamingCursor />
+              </div>
             )
           : (
               <div className="prose prose-sm dark:prose-invert max-w-none">

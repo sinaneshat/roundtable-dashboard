@@ -94,6 +94,12 @@ type AnimatedStreamingItemProps = {
   delay?: number;
   /** Stagger delay multiplier per item (default: 0.04 = 40ms) */
   staggerDelay?: number;
+  /**
+   * Skip initial animation (for already-complete content on page load)
+   * When true, component renders in final state without animation
+   * Use for pre-existing content that shouldn't animate on initial render
+   */
+  skipAnimation?: boolean;
 };
 
 /**
@@ -104,6 +110,9 @@ type AnimatedStreamingItemProps = {
  * - Each item's delay = baseDelay + (index * staggerDelay)
  * - Default stagger: 40ms per item for responsive streaming feel
  * - Items appear sequentially from top to bottom
+ *
+ * For already-complete content, pass `skipAnimation={true}` to render
+ * without the initial fade-in animation.
  */
 export function AnimatedStreamingItem({
   children,
@@ -112,6 +121,7 @@ export function AnimatedStreamingItem({
   index = 0,
   delay = 0,
   staggerDelay = 0.04,
+  skipAnimation = false,
 }: AnimatedStreamingItemProps) {
   const itemDelay = delay + (index * staggerDelay);
 
@@ -121,14 +131,18 @@ export function AnimatedStreamingItem({
       layout
       layoutId={itemKey}
       className={cn(className)}
-      initial={{ opacity: 0, y: 8 }}
+      // ✅ ANIMATION ALIGNMENT: When skipAnimation is true, start in final state
+      // initial={false} tells Motion to skip the initial animation entirely
+      initial={skipAnimation ? false : { opacity: 0, y: 8 }}
       animate={{
         opacity: 1,
         y: 0,
-        transition: {
-          opacity: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
-          y: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
-        }
+        transition: skipAnimation
+          ? { duration: 0 } // Instant for already-loaded content
+          : {
+              opacity: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
+              y: { duration: ANIMATION_DURATION.normal, delay: itemDelay },
+            }
       }}
       exit={{
         opacity: 0,

@@ -20,6 +20,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+// ✅ SCROLL ANCHOR: Used by useChatScroll for smooth auto-scrolling
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -253,6 +254,9 @@ export function ChatView({
   // Recommended actions
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const hasActiveConversation = Boolean(thread || createdThreadId);
+
+  // ✅ SCROLL ANCHOR: Single marker at bottom of chat for smooth auto-scrolling
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
   const recommendedActions = useRecommendedActions({
     inputContainerRef,
     enableScroll: mode === 'thread',
@@ -273,7 +277,10 @@ export function ChatView({
   // Form actions
   const formActions = useChatFormActions();
 
-  // Scroll management
+  // Loading state - needed before scroll hook
+  const { showLoader, loadingDetails } = useFlowLoading({ mode });
+
+  // Scroll management - uses single scroll anchor for smooth auto-scrolling
   useChatScroll({
     messages,
     analyses,
@@ -282,10 +289,9 @@ export function ChatView({
     enableNearBottomDetection: true,
     currentParticipantIndex,
     bottomOffset: 180,
+    scrollAnchorRef, // ✅ SMOOTH SCROLL: Enables scrollIntoView for smoother mobile scrolling
+    showLoader, // ✅ LOADING STATE: Triggers scroll when loader appears
   });
-
-  // Loading state
-  const { showLoader, loadingDetails } = useFlowLoading({ mode });
 
   // Input blocking - unified calculation for both screens
   // Blocks input during streaming, thread creation, or when loading indicator is visible
@@ -503,6 +509,16 @@ export function ChatView({
                 preSearches={preSearches}
               />
             </div>
+
+            {/* ✅ SCROLL ANCHOR: Single marker for smooth auto-scroll snapping
+                This element is the ONLY target for scroll behavior
+                Placed at the very bottom of the chat content area */}
+            <div
+              ref={scrollAnchorRef}
+              aria-hidden="true"
+              className="h-px w-full"
+              data-scroll-anchor="chat-bottom"
+            />
           </div>
 
           {/* Chat input - sticky at bottom */}

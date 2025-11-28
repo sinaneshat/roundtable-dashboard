@@ -71,9 +71,9 @@ const serwist = new Serwist({
       }),
     },
 
-    // Static images - Cache First
+    // Static images - Cache First (same-origin only, let external images pass through)
     {
-      matcher: ({ request }) => request.destination === 'image',
+      matcher: ({ request, sameOrigin }) => request.destination === 'image' && sameOrigin,
       handler: new CacheFirst({
         cacheName: 'image-cache',
       }),
@@ -171,19 +171,30 @@ const serwist = new Serwist({
       }),
     },
 
-    // External resources - Stale While Revalidate with error handling
+    // External resources - only cache from CSP-allowed domains
     {
-      matcher: ({ url, sameOrigin }) => !sameOrigin && url.protocol === 'https:',
+      matcher: ({ url, sameOrigin }) => {
+        if (sameOrigin || url.protocol !== 'https:')
+          return false;
+        // Only cache from domains allowed by CSP connect-src
+        const allowedHosts = [
+          'fonts.googleapis.com',
+          'fonts.gstatic.com',
+          'accounts.google.com',
+          'oauth2.googleapis.com',
+          'googleusercontent.com',
+          'posthog.com',
+        ];
+        return allowedHosts.some(host => url.hostname === host || url.hostname.endsWith(`.${host}`));
+      },
       handler: new StaleWhileRevalidate({
         cacheName: 'external-cache',
         plugins: [
           {
             handlerDidError: async () => {
-              // Return null for failed external resources
               return null;
             },
             fetchDidFail: async () => {
-              // Suppress console errors for failed external fetches
               return undefined;
             },
           },

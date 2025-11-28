@@ -3,6 +3,7 @@
 import { motion } from 'motion/react';
 
 import type { AlternativeScenario } from '@/api/routes/chat/schema';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 
 import { getConfidenceProgressColors } from './moderator-ui-utils';
 
@@ -20,7 +21,7 @@ type AlternativesSectionProps = {
  */
 export function AlternativesSection({
   alternatives,
-  isStreaming: _isStreaming = false,
+  isStreaming = false,
 }: AlternativesSectionProps) {
   if (!alternatives || alternatives.length === 0) {
     return null;
@@ -48,6 +49,8 @@ export function AlternativesSection({
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm flex-1">
                 {alternative.scenario}
+                {/* Show cursor on last item when streaming */}
+                {isStreaming && index === sortedAlternatives.length - 1 && <StreamingCursor />}
               </p>
               <span className="text-sm font-medium tabular-nums">
                 {alternative.confidence}

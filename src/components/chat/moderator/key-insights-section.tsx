@@ -8,6 +8,7 @@ import type { Recommendation } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelBadge } from '@/components/chat/model-badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
@@ -30,7 +31,7 @@ export function KeyInsightsSection({
   summary,
   recommendations,
   onActionClick,
-  isStreaming: _isStreaming = false,
+  isStreaming = false,
 }: KeyInsightsSectionProps) {
   // Get user tier and models for filtering
   const { data: modelsData } = useModelsQuery();
@@ -94,10 +95,11 @@ export function KeyInsightsSection({
 
   return (
     <div className="space-y-4">
-      {/* Summary */}
+      {/* Summary with streaming cursor */}
       {summary && (
         <p className="text-sm leading-relaxed text-foreground/90">
           {summary}
+          {isStreaming && <StreamingCursor />}
         </p>
       )}
 

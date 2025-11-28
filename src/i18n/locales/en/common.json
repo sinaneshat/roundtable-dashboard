@@ -846,7 +846,9 @@
     "participant": {
       "waiting": "Waiting for response...",
       "waitingNamed": "Waiting for {name}'s response...",
-      "generating": "Generating response from {model}..."
+      "generating": "Generating response from {model}...",
+      "gatheringThoughts": "Gathering thoughts...",
+      "waitingForWebResults": "Waiting for results from the web..."
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",

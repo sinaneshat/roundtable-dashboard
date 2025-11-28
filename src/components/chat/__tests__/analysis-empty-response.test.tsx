@@ -19,17 +19,120 @@
  *
  * @see src/components/chat/moderator/moderator-analysis-stream.tsx
  */
-import { act, render as rtlRender, waitFor } from '@testing-library/react';
+import { act, render as rtlRender } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { AnalysisStatuses, ChatModes, StreamErrorTypes } from '@/api/core/enums';
+import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { testLocale, testMessages, testTimeZone } from '@/lib/testing/test-messages';
 import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 
 import { clearTriggeredAnalysesForRound, ModeratorAnalysisStream } from '../moderator/moderator-analysis-stream';
+
+// =============================================================================
+// TEST TYPES - Following AI SDK v5 patterns for type-safe mocking
+// =============================================================================
+
+/**
+ * AI SDK v5 onFinish callback result type
+ * Mirrors the actual AI SDK type for proper testing
+ */
+type AiSdkOnFinishResult = {
+  object: ModeratorAnalysisPayload | undefined;
+  error: Error | null;
+};
+
+/**
+ * AI SDK v5 onFinish callback type
+ */
+type AiSdkOnFinishCallback = (result: AiSdkOnFinishResult) => void;
+
+/**
+ * AI SDK v5 useObject hook options (subset used for testing)
+ */
+type AiSdkUseObjectOptions = {
+  onFinish?: AiSdkOnFinishCallback;
+};
+
+/**
+ * Partial analysis data type - represents streaming data that may be incomplete
+ * Uses Partial<ModeratorAnalysisPayload> to allow incremental data
+ */
+type PartialAnalysisData = Partial<ModeratorAnalysisPayload>;
+
+/**
+ * Ref type for storing partial analysis during streaming
+ */
+type PartialAnalysisRef = {
+  current: PartialAnalysisData | null;
+};
+
+/**
+ * Stream completion callback type - matches the component's callback signature
+ */
+type OnStreamCompleteCallback = (
+  data: ModeratorAnalysisPayload | PartialAnalysisData | null,
+  error?: Error | null,
+) => void;
+
+/**
+ * Parameters for simulating onFinish callback behavior
+ * Used by the shared test helper function
+ */
+type SimulateOnFinishParams = {
+  finalObject: PartialAnalysisData | undefined;
+  error?: Error;
+  partialAnalysisRef: PartialAnalysisRef;
+  onStreamComplete: OnStreamCompleteCallback;
+};
+
+// =============================================================================
+// SHARED TEST HELPERS - Single source of truth for test utilities
+// =============================================================================
+
+/**
+ * Simulates the onFinish callback behavior from moderator-analysis-stream.tsx
+ * This is the exact logic that was fixed for empty response handling with fallback.
+ *
+ * SINGLE SOURCE OF TRUTH: This function should be used across all test suites
+ * that need to test the onFinish callback behavior.
+ */
+function simulateOnFinishWithFallback(params: SimulateOnFinishParams): void {
+  const { finalObject, error, partialAnalysisRef, onStreamComplete } = params;
+
+  if (finalObject === undefined) {
+    const errorMessage = error?.message ?? String(error ?? 'Unknown error');
+
+    const isEmptyResponse = errorMessage.includes('expected object, received undefined')
+      || errorMessage.includes('Invalid input: expected object, received undefined')
+      || (errorMessage.includes('invalid_type') && errorMessage.includes('path": []'));
+
+    if (isEmptyResponse) {
+      // CRITICAL FIX: Check if we have valid partial data from streaming
+      const fallbackData = partialAnalysisRef.current;
+      if (fallbackData && hasAnalysisData(fallbackData)) {
+        // We have valid streamed data - treat as success
+        onStreamComplete(fallbackData);
+        return;
+      }
+
+      // No valid fallback - report error
+      onStreamComplete(null, new Error('Analysis generation failed. The AI model did not return a response.'));
+      return;
+    }
+
+    onStreamComplete(null, error ?? new Error(errorMessage));
+    return;
+  }
+
+  onStreamComplete(finalObject);
+}
+
+// =============================================================================
+// TEST SETUP
+// =============================================================================
 
 // Custom wrapper for tests
 function TestWrapper({ children }: { children: ReactNode }) {
@@ -49,18 +152,36 @@ function render(ui: ReactNode) {
   return rtlRender(ui, { wrapper: TestWrapper });
 }
 
-// Store onFinish callback to trigger manually
-let capturedOnFinish: ((result: { object: unknown; error: Error | null }) => void) | null = null;
+// Store onFinish callback and submit mock to trigger manually
+let capturedOnFinish: AiSdkOnFinishCallback | null = null;
+let mockSubmit: ReturnType<typeof vi.fn>;
+// Queue of errors/objects to return on subsequent submit calls (for retry testing)
+let submitReturnQueue: AiSdkOnFinishResult[] = [];
 
 // Mock AI SDK v5 useObject hook
 vi.mock('@ai-sdk/react', () => ({
-  experimental_useObject: vi.fn((options: { onFinish?: (result: { object: unknown; error: Error | null }) => void }) => {
+  experimental_useObject: vi.fn((options: AiSdkUseObjectOptions) => {
     // Capture the onFinish callback when hook is called
     capturedOnFinish = options.onFinish ?? null;
+
+    // Create submit mock that can trigger onFinish with queued responses
+    mockSubmit = vi.fn(() => {
+      // When submit is called (e.g., during retry), trigger onFinish with next queued response
+      if (submitReturnQueue.length > 0 && capturedOnFinish) {
+        const nextResponse = submitReturnQueue.shift();
+        if (nextResponse) {
+          // Use setTimeout to simulate async behavior
+          setTimeout(() => {
+            capturedOnFinish?.(nextResponse);
+          }, 0);
+        }
+      }
+    });
+
     return {
       object: null,
       error: null,
-      submit: vi.fn(),
+      submit: mockSubmit,
     };
   }),
 }));
@@ -68,7 +189,9 @@ vi.mock('@ai-sdk/react', () => ({
 describe('analysis empty response error handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers(); // Enable fake timers for retry testing
     capturedOnFinish = null;
+    submitReturnQueue = []; // Clear the queue
     // Clear triggered state from previous tests
     clearTriggeredAnalysesForRound(0);
     clearTriggeredAnalysesForRound(1);
@@ -76,6 +199,7 @@ describe('analysis empty response error handling', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers(); // Restore real timers
     vi.restoreAllMocks();
   });
 
@@ -85,15 +209,16 @@ describe('analysis empty response error handling', () => {
    * This is the exact error that occurs when AI SDK's useObject receives
    * an empty stream (undefined root object). The component should:
    * 1. Detect this specific error pattern
-   * 2. Classify it as EMPTY_RESPONSE error type
-   * 3. Pass a user-friendly error message to onStreamComplete
+   * 2. Auto-retry up to MAX_EMPTY_RESPONSE_RETRIES (2) times
+   * 3. Classify it as EMPTY_RESPONSE error type after retries exhausted
+   * 4. Pass a user-friendly error message to onStreamComplete
    */
   it('should handle "expected object, received undefined" error with user-friendly message', async () => {
     const mockAnalysis: StoredModeratorAnalysis = {
       id: 'analysis-empty-response-1',
       threadId: 'thread-empty-1',
       roundNumber: 0,
-      mode: 'debating',
+      mode: ChatModes.DEBATING,
       userQuestion: 'Test question',
       status: AnalysisStatuses.STREAMING,
       participantMessageIds: ['msg-1', 'msg-2'],
@@ -105,6 +230,18 @@ describe('analysis empty response error handling', () => {
 
     const onComplete = vi.fn();
 
+    // Simulate the exact error from AI SDK when root object is undefined
+    const zodError = new Error(
+      'Type validation failed: Value: undefined. Error message: [ { "expected": "object", "code": "invalid_type", "path": [], "message": "Invalid input: expected object, received undefined" } ]',
+    );
+    zodError.name = 'TypeValidationError';
+
+    // Queue up responses for retry attempts (retry #1 and retry #2 will both fail)
+    submitReturnQueue = [
+      { object: undefined, error: zodError }, // Retry #1 response
+      { object: undefined, error: zodError }, // Retry #2 response
+    ];
+
     render(
       <ModeratorAnalysisStream
         threadId="thread-empty-1"
@@ -114,17 +251,12 @@ describe('analysis empty response error handling', () => {
     );
 
     // Wait for hook to be initialized and callback captured
-    await waitFor(() => {
-      expect(capturedOnFinish).not.toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
+    expect(capturedOnFinish).not.toBeNull();
 
-    // Simulate the exact error from AI SDK when root object is undefined
-    // This is the Zod TypeValidationError format
-    const zodError = new Error(
-      'Type validation failed: Value: undefined. Error message: [ { "expected": "object", "code": "invalid_type", "path": [], "message": "Invalid input: expected object, received undefined" } ]',
-    );
-    zodError.name = 'TypeValidationError';
-
+    // First call - triggers retry #1 (1s delay)
     await act(async () => {
       capturedOnFinish?.({
         object: undefined,
@@ -132,12 +264,39 @@ describe('analysis empty response error handling', () => {
       });
     });
 
-    // Wait for callback to be called
-    await waitFor(() => {
-      expect(onComplete).toHaveBeenCalled();
+    // onComplete should NOT be called yet (retry in progress)
+    expect(onComplete).not.toHaveBeenCalled();
+
+    // Advance past first retry delay (1s) and process the queued setTimeout
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
     });
 
-    // Verify onComplete was called with null data and user-friendly error message
+    // mockSubmit should have been called for retry #1
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+
+    // Advance to let the setTimeout(0) in mock fire
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // onComplete should still NOT be called (retry #2 in progress)
+    expect(onComplete).not.toHaveBeenCalled();
+
+    // Advance past second retry delay (2s)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    // mockSubmit should have been called for retry #2
+    expect(mockSubmit).toHaveBeenCalledTimes(2);
+
+    // Advance to let the setTimeout(0) in mock fire
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Now onComplete should be called with the error (retries exhausted)
     expect(onComplete).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
@@ -150,13 +309,14 @@ describe('analysis empty response error handling', () => {
    * Test: Alternative error message format
    *
    * Tests the shortened version of the error message that might occur
+   * (with auto-retry exhaustion)
    */
   it('should detect "Invalid input: expected object, received undefined" variant', async () => {
     const mockAnalysis: StoredModeratorAnalysis = {
       id: 'analysis-empty-response-2',
       threadId: 'thread-empty-2',
       roundNumber: 1,
-      mode: 'brainstorming',
+      mode: ChatModes.BRAINSTORMING,
       userQuestion: 'Another test',
       status: AnalysisStatuses.STREAMING,
       participantMessageIds: ['msg-3', 'msg-4'],
@@ -168,6 +328,16 @@ describe('analysis empty response error handling', () => {
 
     const onComplete = vi.fn();
 
+    // Simulate error with shorter message format
+    const zodError = new Error('Invalid input: expected object, received undefined');
+    zodError.name = 'TypeValidationError';
+
+    // Queue up responses for retry attempts
+    submitReturnQueue = [
+      { object: undefined, error: zodError }, // Retry #1 response
+      { object: undefined, error: zodError }, // Retry #2 response
+    ];
+
     render(
       <ModeratorAnalysisStream
         threadId="thread-empty-2"
@@ -176,26 +346,29 @@ describe('analysis empty response error handling', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(capturedOnFinish).not.toBeNull();
-    });
-
-    // Simulate error with shorter message format
-    const zodError = new Error('Invalid input: expected object, received undefined');
-    zodError.name = 'TypeValidationError';
-
     await act(async () => {
-      capturedOnFinish?.({
-        object: undefined,
-        error: zodError,
-      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(capturedOnFinish).not.toBeNull();
+
+    // First call - triggers retry #1
+    await act(async () => {
+      capturedOnFinish?.({ object: undefined, error: zodError });
     });
 
-    await waitFor(() => {
-      expect(onComplete).toHaveBeenCalled();
+    // Advance through retry #1 (1s delay) + setTimeout(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(0);
     });
 
-    // Should still get user-friendly error
+    // Advance through retry #2 (2s delay) + setTimeout(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Should get user-friendly error after retries exhausted
     expect(onComplete).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
@@ -208,13 +381,14 @@ describe('analysis empty response error handling', () => {
    * Test: JSON-formatted error with invalid_type and empty path
    *
    * Tests the JSON array format that Zod sometimes returns
+   * (with auto-retry exhaustion)
    */
   it('should detect invalid_type with empty path in JSON format', async () => {
     const mockAnalysis: StoredModeratorAnalysis = {
       id: 'analysis-empty-response-3',
       threadId: 'thread-empty-3',
       roundNumber: 2,
-      mode: 'solving',
+      mode: ChatModes.SOLVING,
       userQuestion: 'JSON format test',
       status: AnalysisStatuses.STREAMING,
       participantMessageIds: ['msg-5', 'msg-6'],
@@ -226,6 +400,17 @@ describe('analysis empty response error handling', () => {
 
     const onComplete = vi.fn();
 
+    // Simulate error with JSON format containing invalid_type and path": []
+    const zodError = new Error(
+      '[ { "code": "invalid_type", "expected": "object", "received": "undefined", "path": [] } ]',
+    );
+
+    // Queue up responses for retry attempts
+    submitReturnQueue = [
+      { object: undefined, error: zodError }, // Retry #1 response
+      { object: undefined, error: zodError }, // Retry #2 response
+    ];
+
     render(
       <ModeratorAnalysisStream
         threadId="thread-empty-3"
@@ -234,27 +419,29 @@ describe('analysis empty response error handling', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(capturedOnFinish).not.toBeNull();
-    });
-
-    // Simulate error with JSON format containing invalid_type and path": []
-    const zodError = new Error(
-      '[ { "code": "invalid_type", "expected": "object", "received": "undefined", "path": [] } ]',
-    );
-
     await act(async () => {
-      capturedOnFinish?.({
-        object: undefined,
-        error: zodError,
-      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(capturedOnFinish).not.toBeNull();
+
+    // First call - triggers retry #1
+    await act(async () => {
+      capturedOnFinish?.({ object: undefined, error: zodError });
     });
 
-    await waitFor(() => {
-      expect(onComplete).toHaveBeenCalled();
+    // Advance through retry #1 (1s delay) + setTimeout(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(0);
     });
 
-    // Should get user-friendly error
+    // Advance through retry #2 (2s delay) + setTimeout(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Should get user-friendly error after retries exhausted
     expect(onComplete).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
@@ -267,7 +454,7 @@ describe('analysis empty response error handling', () => {
    * Test: Regular validation error (not empty response) should NOT get special handling
    *
    * Ensures that validation errors with specific paths (not root) don't get
-   * misclassified as empty response errors
+   * misclassified as empty response errors and are reported immediately (no retry)
    */
   it('should NOT treat regular validation errors as empty response', async () => {
     // Clear the triggered state for round 0 for this test
@@ -277,7 +464,7 @@ describe('analysis empty response error handling', () => {
       id: 'analysis-validation-not-empty',
       threadId: 'thread-validation',
       roundNumber: 0,
-      mode: 'analyzing',
+      mode: ChatModes.ANALYZING,
       userQuestion: 'Validation test',
       status: AnalysisStatuses.STREAMING,
       participantMessageIds: ['msg-7', 'msg-8'],
@@ -289,6 +476,9 @@ describe('analysis empty response error handling', () => {
 
     const onComplete = vi.fn();
 
+    // No queue needed - regular validation errors shouldn't trigger retries
+    submitReturnQueue = [];
+
     render(
       <ModeratorAnalysisStream
         threadId="thread-validation"
@@ -297,17 +487,20 @@ describe('analysis empty response error handling', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(capturedOnFinish).not.toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
+    expect(capturedOnFinish).not.toBeNull();
 
     // Simulate a regular validation error with a specific path (not empty)
     // This should be treated as a regular VALIDATION error, not EMPTY_RESPONSE
+    // It should NOT trigger auto-retry since it's not an empty response error
     const zodError = new Error(
       '[ { "code": "invalid_type", "expected": "string", "received": "number", "path": ["summary"] } ]',
     );
     zodError.name = 'TypeValidationError';
 
+    // Single call should immediately report error (no retry for non-empty-response errors)
     await act(async () => {
       capturedOnFinish?.({
         object: undefined,
@@ -315,9 +508,12 @@ describe('analysis empty response error handling', () => {
       });
     });
 
-    await waitFor(() => {
-      expect(onComplete).toHaveBeenCalled();
-    });
+    // Should be called immediately (no retry delay)
+    expect(onComplete).toHaveBeenCalled();
+
+    // mockSubmit should have been called exactly once for initial stream (no retry triggered)
+    // If retry was triggered, it would be called more than once
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
 
     // Should pass through the original error (not the user-friendly empty response message)
     // Because path is ["summary"] not [], it's a field validation error
@@ -344,48 +540,10 @@ describe('analysis empty response error handling', () => {
  *
  * Tests the fix where AI SDK reports undefined at stream end but valid
  * data was successfully streamed. Uses hasAnalysisData to validate fallback.
+ *
+ * NOTE: Uses shared simulateOnFinishWithFallback helper from TEST HELPERS section
  */
 describe('fallback logic for valid streamed data', () => {
-  /**
-   * Simulates the onFinish callback behavior from moderator-analysis-stream.tsx
-   * This is the exact logic that was fixed
-   */
-  function simulateOnFinishWithFallback(params: {
-    finalObject: Record<string, unknown> | undefined;
-    error?: Error;
-    partialAnalysisRef: { current: unknown };
-    onStreamComplete: (data: unknown, error?: Error | null) => void;
-  }) {
-    const { finalObject, error, partialAnalysisRef, onStreamComplete } = params;
-
-    if (finalObject === undefined) {
-      const errorMessage = error?.message || String(error || 'Unknown error');
-
-      const isEmptyResponse = errorMessage.includes('expected object, received undefined')
-        || errorMessage.includes('Invalid input: expected object, received undefined')
-        || (errorMessage.includes('invalid_type') && errorMessage.includes('path": []'));
-
-      if (isEmptyResponse) {
-        // CRITICAL FIX: Check if we have valid partial data from streaming
-        const fallbackData = partialAnalysisRef.current;
-        if (fallbackData && hasAnalysisData(fallbackData as Record<string, unknown>)) {
-          // We have valid streamed data - treat as success
-          onStreamComplete(fallbackData);
-          return;
-        }
-
-        // No valid fallback - report error
-        onStreamComplete(null, new Error('Analysis generation failed. The AI model did not return a response.'));
-        return;
-      }
-
-      onStreamComplete(null, error || new Error(errorMessage));
-      return;
-    }
-
-    onStreamComplete(finalObject);
-  }
-
   describe('when valid data was streamed but AI SDK returns undefined', () => {
     it('should use fallback data with roundConfidence', () => {
       const streamedData = { roundConfidence: 85 };
@@ -441,7 +599,7 @@ describe('fallback logic for valid streamed data', () => {
     it('should use fallback data with complete analysis payload', () => {
       const streamedData = {
         roundNumber: 1,
-        mode: 'brainstorming',
+        mode: ChatModes.BRAINSTORMING,
         userQuestion: 'How can we improve?',
         roundConfidence: 82,
         summary: 'The participants provided diverse perspectives...',
@@ -509,7 +667,7 @@ describe('fallback logic for valid streamed data', () => {
       const partialAnalysisRef = {
         current: {
           roundNumber: 0,
-          mode: 'debating',
+          mode: ChatModes.DEBATING,
           // No analysis content
         },
       };
@@ -550,7 +708,7 @@ describe('fallback logic for valid streamed data', () => {
     it('should use final object and ignore fallback', () => {
       const validFinalObject = {
         roundNumber: 0,
-        mode: 'debating',
+        mode: ChatModes.DEBATING,
         userQuestion: 'Test',
         roundConfidence: 90,
         summary: 'Final analysis',
@@ -587,7 +745,7 @@ describe('regression prevention: analysis marked as failed with valid data', () 
     // Exact data structure the user reported seeing streamed
     const userVisibleStreamedData = {
       roundNumber: 1,
-      mode: 'brainstorming',
+      mode: ChatModes.BRAINSTORMING,
       userQuestion: 'How can we improve our product?',
       roundConfidence: 82,
       confidenceWeighting: {
@@ -691,39 +849,6 @@ describe('regression prevention: analysis marked as failed with valid data', () 
 
     expect(onStreamComplete).toHaveBeenCalledWith(null, expect.any(Error));
   });
-
-  // Local helper
-  function simulateOnFinishWithFallback(params: {
-    finalObject: Record<string, unknown> | undefined;
-    error?: Error;
-    partialAnalysisRef: { current: unknown };
-    onStreamComplete: (data: unknown, error?: Error | null) => void;
-  }) {
-    const { finalObject, error, partialAnalysisRef, onStreamComplete } = params;
-
-    if (finalObject === undefined) {
-      const errorMessage = error?.message || String(error || 'Unknown error');
-
-      const isEmptyResponse = errorMessage.includes('expected object, received undefined')
-        || errorMessage.includes('Invalid input: expected object, received undefined')
-        || (errorMessage.includes('invalid_type') && errorMessage.includes('path": []'));
-
-      if (isEmptyResponse) {
-        const fallbackData = partialAnalysisRef.current;
-        if (fallbackData && hasAnalysisData(fallbackData as Record<string, unknown>)) {
-          onStreamComplete(fallbackData);
-          return;
-        }
-        onStreamComplete(null, new Error('Analysis generation failed. The AI model did not return a response.'));
-        return;
-      }
-
-      onStreamComplete(null, error || new Error(errorMessage));
-      return;
-    }
-
-    onStreamComplete(finalObject);
-  }
 });
 
 /**
@@ -733,10 +858,10 @@ describe('regression prevention: analysis marked as failed with valid data', () 
  */
 describe('partialAnalysisRef synchronization', () => {
   it('should update ref as data streams progressively', () => {
-    const partialAnalysisRef = { current: null as unknown };
+    const partialAnalysisRef: PartialAnalysisRef = { current: null };
 
     // Simulate the effect: if (partialAnalysis) { partialAnalysisRef.current = partialAnalysis; }
-    const updateRef = (partialAnalysis: unknown) => {
+    const updateRef = (partialAnalysis: PartialAnalysisData | null | undefined) => {
       if (partialAnalysis) {
         partialAnalysisRef.current = partialAnalysis;
       }
@@ -764,9 +889,9 @@ describe('partialAnalysisRef synchronization', () => {
   });
 
   it('should NOT clear ref when partialAnalysis becomes null', () => {
-    const partialAnalysisRef = { current: { roundConfidence: 85 } as unknown };
+    const partialAnalysisRef: PartialAnalysisRef = { current: { roundConfidence: 85 } };
 
-    const updateRef = (partialAnalysis: unknown) => {
+    const updateRef = (partialAnalysis: PartialAnalysisData | null | undefined) => {
       if (partialAnalysis) {
         partialAnalysisRef.current = partialAnalysis;
       }
@@ -781,7 +906,7 @@ describe('partialAnalysisRef synchronization', () => {
   });
 
   it('should reset ref when analysis ID changes', () => {
-    const partialAnalysisRef = { current: { roundConfidence: 85 } as unknown };
+    const partialAnalysisRef: PartialAnalysisRef = { current: { roundConfidence: 85 } };
 
     // Simulate the reset effect on analysis.id change
     const resetOnIdChange = () => {

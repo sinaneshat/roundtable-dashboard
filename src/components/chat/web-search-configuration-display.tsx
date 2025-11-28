@@ -69,14 +69,20 @@ export function WebSearchConfigurationDisplay({
 
   return (
     <div className={cn('space-y-3', className)}>
-      {/* Search Plan - Animated */}
+      {/* Search Plan - Animated with streaming cursor */}
       {searchPlan && (
         <div className="space-y-1">
           <FadeInText>
             <span className="text-xs font-medium text-muted-foreground">{tPreSearch('title')}</span>
           </FadeInText>
           <div className="text-sm text-foreground/80 leading-relaxed">
-            <TypingText text={searchPlan} speed={0} delay={0} enabled={isStreamingPlan} />
+            <TypingText
+              text={searchPlan}
+              speed={0}
+              delay={0}
+              enabled={isStreamingPlan}
+              showStreamingCursor={isStreamingPlan}
+            />
           </div>
         </div>
       )}

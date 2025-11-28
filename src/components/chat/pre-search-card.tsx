@@ -163,7 +163,7 @@ export function PreSearchCard({
   const isOpen = demoOpen !== undefined ? demoOpen : (isManuallyControlled ? manuallyOpen : isLatest);
 
   return (
-    <div className={cn('py-1.5 mb-4', className)}>
+    <div className={cn('mb-4', className)}>
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}

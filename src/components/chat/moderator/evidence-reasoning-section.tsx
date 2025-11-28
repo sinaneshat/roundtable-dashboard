@@ -8,6 +8,7 @@ import { EvidenceStrengths } from '@/api/core/enums';
 import type { EvidenceAndReasoning } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { StreamingCursor } from '@/components/ui/streaming-text';
 
 import {
   getEvidenceStrengthBadgeColor,
@@ -29,7 +30,7 @@ type EvidenceReasoningSectionProps = {
  */
 export function EvidenceReasoningSection({
   evidenceAndReasoning,
-  isStreaming: _isStreaming = false,
+  isStreaming = false,
 }: EvidenceReasoningSectionProps) {
   const t = useTranslations('moderator');
   const [showAllThreads, setShowAllThreads] = useState(false);
@@ -72,6 +73,8 @@ export function EvidenceReasoningSection({
                 </p>
                 <p className="text-xs text-muted-foreground pl-3 border-l-2 border-primary/20">
                   {thread.synthesis}
+                  {/* Show cursor on last visible thread when streaming */}
+                  {isStreaming && visibleThreads && index === visibleThreads.length - 1 && <StreamingCursor />}
                 </p>
               </motion.div>
             ))}

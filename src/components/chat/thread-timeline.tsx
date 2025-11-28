@@ -259,7 +259,7 @@ export function ThreadTimeline({
             )}
 
             {item.type === 'analysis' && (
-              <div className="mt-6 mb-4">
+              <div className="mb-4">
                 <RoundAnalysisCard
                   analysis={item.data}
                   threadId={threadId}
