@@ -263,7 +263,12 @@ function PreSearchStreamComponent({
           postRetryCount++;
 
           // ✅ AUTO-RETRY: Show user we're retrying the stream request (like analyze)
-          isAutoRetryingOnTrueRef.current();
+          // Use flushSync to force immediate re-render so user sees "Auto-retrying..." text
+          // Without flushSync, React 18 batches the update and user sees "Searching..." during retries
+          // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI feedback
+          flushSync(() => {
+            isAutoRetryingOnTrueRef.current();
+          });
 
           if (postRetryCount <= MAX_POST_RETRIES) {
             // Debug log removed - only console.error allowed by ESLint config
@@ -508,7 +513,11 @@ function PreSearchStreamComponent({
     const POLLING_TIMEOUT_MS = 30_000; // 30 seconds - if still STREAMING after this, restart
 
     // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
-    isAutoRetryingOnTrueRef.current();
+    // Use flushSync to force immediate re-render so user sees "Auto-retrying..." text
+    // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI feedback
+    flushSync(() => {
+      isAutoRetryingOnTrueRef.current();
+    });
 
     const poll = async () => {
       try {

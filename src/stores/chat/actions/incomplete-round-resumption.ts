@@ -150,10 +150,12 @@ export function useIncompleteRoundResumption(
   // During hydration or store initialization, preSearches might momentarily be undefined
   const orphanedPreSearch = Array.isArray(preSearches)
     ? preSearches.find((ps) => {
-        // Check COMPLETE or STREAMING status - both can be orphaned
-        // PENDING is skipped because it means streaming hasn't started
-        // FAILED is skipped because recovery isn't possible
-        if (ps.status !== AnalysisStatuses.COMPLETE && ps.status !== AnalysisStatuses.STREAMING) {
+        // ✅ FIX: Only COMPLETE status can be orphaned
+        // STREAMING: Pre-search is still in progress - do NOT trigger recovery yet!
+        //           Wait for pre-search to complete before triggering participants.
+        // PENDING: Hasn't started execution yet
+        // FAILED: Recovery isn't possible
+        if (ps.status !== AnalysisStatuses.COMPLETE) {
           return false;
         }
 

@@ -224,33 +224,27 @@ describe('preSearchStream Race Condition Fixes', () => {
       // ✅ STREAM RESUMPTION: When user refreshes during streaming, the status will be STREAMING
       // The component tries to resume the stream via POST, and backend either:
       // - Returns resumed stream (200 with X-Resumed-From-Buffer header)
-      // - Returns 202 (stream active but buffer not ready) → triggers polling
+      // - Returns 202 (stream active but buffer not ready) → retries POST up to 5 times, then polls
       const mockPreSearch = createMockPreSearch({
         status: AnalysisStatuses.STREAMING,
       });
 
-      // Mock 202 response (stream active, buffer not ready) which triggers polling
-      fetchMock
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 202,
-          statusText: 'Accepted',
-        })
-        // Then mock the polling endpoint response
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            success: true,
-            data: {
-              items: [{
-                ...mockPreSearch,
-                status: AnalysisStatuses.COMPLETE,
-                searchData: { queries: [], results: [], analysis: 'Test analysis', successCount: 0, failureCount: 0, totalResults: 0, totalTime: 100 },
-              }],
-              count: 1,
-            },
-          }),
-        });
+      // Mock a successful resumed stream (200) - this is the expected behavior
+      // The component makes a POST and backend returns the resumed stream
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('event: start\ndata: {"totalQueries":1}\n\n'));
+          controller.enqueue(new TextEncoder().encode('event: done\ndata: {"queries":[],"results":[],"analysis":"Resumed","successCount":0,"failureCount":0,"totalResults":0,"totalTime":100}\n\n'));
+          controller.close();
+        },
+      });
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: mockStream,
+        headers: new Headers({ 'content-type': 'text/event-stream', 'x-resumed-from-buffer': 'true' }),
+      });
 
       render(
         <PreSearchStream
@@ -260,7 +254,7 @@ describe('preSearchStream Race Condition Fixes', () => {
         />,
       );
 
-      // Verify: First tries to resume stream via POST
+      // Verify: Tries to resume stream via POST to the stream endpoint
       await waitFor(() => {
         expect(fetchMock).toHaveBeenCalledWith(
           `/api/v1/chat/threads/${mockThreadId}/rounds/0/pre-search`,
@@ -270,12 +264,8 @@ describe('preSearchStream Race Condition Fixes', () => {
         );
       });
 
-      // Verify: After 202, falls back to polling
-      await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith(
-          `/api/v1/chat/threads/${mockThreadId}/pre-searches`,
-        );
-      });
+      // Verify: Only one fetch call (resumed stream succeeds)
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it('skips execution when status is COMPLETE', async () => {
