@@ -200,8 +200,14 @@ function PreSearchStreamComponent({
     const queriesMap = new Map<number, PreSearchDataPayload['queries'][number]>();
     const resultsMap = new Map<number, PreSearchDataPayload['results'][number]>();
 
+    // ✅ POST RETRY CONFIG: Like analyze component, retry POST before falling back to LIST polling
+    const MAX_POST_RETRIES = 5;
+    const DEFAULT_RETRY_DELAY_MS = 2000;
+    let postRetryCount = 0;
+
     // Start fetch-based SSE stream (backend uses POST)
-    const startStream = async () => {
+    // ✅ RETRY LOGIC: Recursive function that retries POST on 202 response
+    const startStream = async (): Promise<void> => {
       try {
         // ✅ FIX: Guard against undefined userQuery (malformed JSON error)
         if (!preSearch.userQuery || typeof preSearch.userQuery !== 'string') {
@@ -229,11 +235,48 @@ function PreSearchStreamComponent({
 
         // ✅ RESUMABLE STREAMS: Handle various response codes
         // 200: Normal stream or resumed stream
-        // 202: Stream is active but no buffer yet - poll for completion (KV not available in local dev)
+        // 202: Stream is active but no buffer yet - RETRY POST (like analyze component)
         // 409: Conflict (legacy - should use 202 now)
         if (response.status === 202) {
-          // Stream is active but buffer not ready - trigger polling
-          // This happens in local dev where KV isn't available for stream buffering
+          // Parse retry delay from response body
+          let retryDelayMs = DEFAULT_RETRY_DELAY_MS;
+          try {
+            const json = await response.json() as { data?: { retryAfterMs?: number } };
+            if (json?.data?.retryAfterMs) {
+              retryDelayMs = json.data.retryAfterMs;
+            }
+          } catch {
+            // Use default delay if body parsing fails
+          }
+
+          postRetryCount++;
+
+          // ✅ AUTO-RETRY: Show user we're retrying the stream request (like analyze)
+          isAutoRetryingOnTrueRef.current();
+
+          if (postRetryCount <= MAX_POST_RETRIES) {
+            console.debug('[PreSearchStream] 202 received - retrying POST request', {
+              attempt: postRetryCount,
+              maxRetries: MAX_POST_RETRIES,
+              retryDelayMs,
+              preSearchId: preSearch.id,
+            });
+
+            // Wait and retry the POST request (like analyze component)
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+
+            // Recursive retry - this makes the stream request again
+            if (!abortController.signal.aborted) {
+              return startStream();
+            }
+            return;
+          }
+
+          // Max retries exceeded - fall back to LIST polling
+          console.warn('[PreSearchStream] Max POST retries exceeded, falling back to LIST polling', {
+            attempts: postRetryCount,
+            preSearchId: preSearch.id,
+          });
           is409Conflict.onTrue();
           return;
         }
@@ -246,6 +289,9 @@ function PreSearchStreamComponent({
           const errorMsg = `Pre-search failed: ${response.statusText}`;
           throw new Error(errorMsg);
         }
+
+        // ✅ SUCCESS: Clear auto-retry state if it was set
+        isAutoRetryingOnFalseRef.current();
 
         // ✅ IDEMPOTENT RESPONSE: Handle JSON response for already-complete pre-searches
         // When the backend sees a pre-search is already COMPLETE, it returns JSON instead of SSE
@@ -445,6 +491,10 @@ function PreSearchStreamComponent({
   // ✅ POLLING RECOVERY: Handle 409 Conflict (Stream already active)
   // If we reconnect to a stream that's already running (e.g. after reload),
   // we poll the status until it completes, then sync the data.
+  //
+  // ✅ STUCK STREAM RECOVERY: If polling sees STREAMING for too long (30s),
+  // the original stream likely got interrupted by the page refresh.
+  // In this case, we clear deduplication flags and trigger a fresh POST request.
   useEffect(() => {
     if (!is409Conflict.value)
       return;
@@ -457,6 +507,8 @@ function PreSearchStreamComponent({
 
     let timeoutId: NodeJS.Timeout;
     let isMounted = true;
+    const pollingStartTime = Date.now();
+    const POLLING_TIMEOUT_MS = 30_000; // 30 seconds - if still STREAMING after this, restart
 
     // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
     isAutoRetryingOnTrueRef.current();
@@ -508,15 +560,46 @@ function PreSearchStreamComponent({
               isAutoRetryingOnFalseRef.current(); // Clear auto-retry state
             }
             return;
-          } else if (current.searchData) {
-            // ✅ PROGRESSIVE POLLING: Show partial data even during STREAMING/PENDING
-            // In local dev without KV, we can't resume the actual SSE stream
-            // But we CAN show any partial data that has been saved to the DB
-            // This gives users some visual feedback while waiting for completion
-            // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
-            flushSync(() => {
-              setPartialSearchData(current.searchData!);
-            });
+          } else if (current.status === AnalysisStatuses.STREAMING || current.status === AnalysisStatuses.PENDING) {
+            // ✅ STUCK STREAM DETECTION: Check if we've been polling for too long
+            // This happens in local dev when:
+            // 1. User refreshes during streaming
+            // 2. Backend has no KV buffer (returns 202)
+            // 3. Original stream was interrupted but DB still shows STREAMING
+            // After 30 seconds, the original stream is definitely gone - restart
+            const elapsedMs = Date.now() - pollingStartTime;
+            if (elapsedMs > POLLING_TIMEOUT_MS) {
+              console.warn('[PreSearchStream] Polling timeout - stream appears stuck, will retry', {
+                preSearchId: preSearch.id,
+                status: current.status,
+                elapsedMs,
+                timeoutMs: POLLING_TIMEOUT_MS,
+              });
+
+              // Clear deduplication to allow fresh POST request
+              triggeredSearchIds.delete(preSearch.id);
+              const threadRounds = triggeredRounds.get(threadId);
+              if (threadRounds) {
+                threadRounds.delete(preSearch.roundNumber);
+              }
+
+              // Clear conflict state - this will stop this polling effect
+              // and the main SSE effect will re-trigger due to status still being STREAMING
+              if (isMounted) {
+                isPollingRef.current = false;
+                is409ConflictOnFalseRef.current();
+                isAutoRetryingOnFalseRef.current();
+              }
+              return;
+            }
+
+            // Show partial data if available
+            if (current.searchData) {
+              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
+              flushSync(() => {
+                setPartialSearchData(current.searchData!);
+              });
+            }
           }
           // Continue polling for STREAMING or PENDING
         }
