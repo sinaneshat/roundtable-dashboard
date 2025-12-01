@@ -30,6 +30,10 @@ import {
 } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
 import { deleteFile, getFile, isLocalDevelopment, putFile } from '@/api/services/storage.service';
+import {
+  isCleanupSchedulerAvailable,
+  scheduleUploadCleanup,
+} from '@/api/services/upload-cleanup.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -186,6 +190,30 @@ export const uploadFileHandler: RouteHandler<typeof uploadFileRoute, ApiEnv> = c
         updatedAt: new Date(),
       })
       .returning();
+
+    // Schedule automatic cleanup for orphaned uploads (15 minutes)
+    // This is non-blocking and best-effort
+    if (isCleanupSchedulerAvailable(c.env)) {
+      const scheduleCleanupTask = async () => {
+        try {
+          await scheduleUploadCleanup(
+            c.env.UPLOAD_CLEANUP_SCHEDULER,
+            uploadId,
+            user.id,
+            r2Key,
+          );
+        } catch (error) {
+          console.error(`[Upload] Failed to schedule cleanup for ${uploadId}:`, error);
+          // Don't throw - cleanup scheduling failure shouldn't break upload
+        }
+      };
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(scheduleCleanupTask());
+      } else {
+        scheduleCleanupTask().catch(() => {});
+      }
+    }
 
     c.status(201);
     return Responses.ok(c, {
@@ -738,6 +766,29 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       })
       .where(eq(tables.upload.id, uploadId))
       .returning();
+
+    // Schedule automatic cleanup for orphaned uploads (15 minutes)
+    // This is non-blocking and best-effort
+    if (isCleanupSchedulerAvailable(c.env)) {
+      const scheduleCleanupTask = async () => {
+        try {
+          await scheduleUploadCleanup(
+            c.env.UPLOAD_CLEANUP_SCHEDULER,
+            uploadId,
+            uploadMeta.userId,
+            uploadMeta.r2Key,
+          );
+        } catch (error) {
+          console.error(`[Upload] Failed to schedule cleanup for ${uploadId}:`, error);
+        }
+      };
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(scheduleCleanupTask());
+      } else {
+        scheduleCleanupTask().catch(() => {});
+      }
+    }
 
     // Clean up metadata
     multipartUploads.delete(uploadId);

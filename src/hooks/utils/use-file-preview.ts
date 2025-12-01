@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { FilePreviewType } from '@/api/core/enums';
 import {
   FilePreviewTypeSchema,
+  getFileTypeLabelFromMime,
   MIME_TYPE_CATEGORIES,
 } from '@/api/core/enums';
 
@@ -366,6 +367,14 @@ export function getFileIconName(mimeType: string): string {
     default:
       return 'file';
   }
+}
+
+/**
+ * Get human-readable file type label
+ * Delegates to single source of truth in @/api/core/enums
+ */
+export function getFileTypeLabel(mimeType: string): string {
+  return getFileTypeLabelFromMime(mimeType);
 }
 
 /**

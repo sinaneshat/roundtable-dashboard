@@ -9,7 +9,6 @@ import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import {
   ChatInputAttachments,
   ChatInputDropzoneOverlay,
-  useChatInputDragDrop,
 } from '@/components/chat/chat-input-attachments';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
@@ -21,6 +20,7 @@ import {
   useSpeechRecognition,
 } from '@/hooks/utils';
 import type { PendingAttachment } from '@/hooks/utils/use-chat-attachments';
+import { useDragDrop } from '@/hooks/utils/use-drag-drop';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
@@ -163,7 +163,7 @@ export const ChatInput = memo(({
   }, [onRegisterAttachmentClick, handleAttachmentClick, enableAttachments]);
 
   // Drag and drop support
-  const { isDragging, dragHandlers } = useChatInputDragDrop(handleFilesSelected);
+  const { isDragging, dragHandlers } = useDragDrop(handleFilesSelected);
 
   // Auto-resizing textarea
   useAutoResizeTextarea(textareaRef, {

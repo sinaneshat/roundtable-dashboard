@@ -1270,6 +1270,16 @@ export const FilePreviewTypes = {
   UNKNOWN: 'unknown' as const,
 } as const;
 
+// 6️⃣ LABELS OBJECT - Human-readable labels for each type
+export const FILE_PREVIEW_TYPE_LABELS: Record<FilePreviewType, string> = {
+  [FilePreviewTypes.IMAGE]: 'Image',
+  [FilePreviewTypes.PDF]: 'PDF',
+  [FilePreviewTypes.TEXT]: 'Text',
+  [FilePreviewTypes.CODE]: 'Code',
+  [FilePreviewTypes.DOCUMENT]: 'Document',
+  [FilePreviewTypes.UNKNOWN]: 'File',
+};
+
 // ============================================================================
 // FILE VALIDATION ERROR CODE
 // ============================================================================

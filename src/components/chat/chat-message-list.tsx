@@ -24,8 +24,7 @@ import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { getMessageStatus } from '@/lib/utils/message-status';
-import { getMessageMetadata } from '@/lib/utils/message-transforms';
-import { getRoundNumber, getUserMetadata, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
+import { getMessageMetadata, getRoundNumber, getUserMetadata, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
 import { sortByPriority } from '@/lib/utils/participant';
 import {
   allParticipantsHaveVisibleContent,

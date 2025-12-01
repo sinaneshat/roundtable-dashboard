@@ -14,7 +14,7 @@ import type { UIMessage } from 'ai';
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
@@ -26,6 +26,8 @@ import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
+
+import { createPlaceholderAnalysis, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 
 /**
  * Attachment info for building optimistic file parts
@@ -185,19 +187,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ EAGER RENDERING: Create placeholder analysis immediately for round 0
       // This allows the RoundAnalysisCard to render in PENDING state with loading UI
       // before participants finish streaming. Creates better UX with immediate visual feedback.
-      actions.addAnalysis({
-        id: `placeholder-analysis-${thread.id}-0`,
+      actions.addAnalysis(createPlaceholderAnalysis({
         threadId: thread.id,
         roundNumber: 0,
         mode: thread.mode,
         userQuestion: prompt,
-        status: AnalysisStatuses.PENDING,
-        analysisData: null,
-        participantMessageIds: [],
-        createdAt: new Date(),
-        completedAt: null,
-        errorMessage: null,
-      });
+      }));
 
       // ✅ FIX: Clear input AFTER initializeThread so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through
@@ -212,17 +207,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // This ensures the pre-search exists in the SAME render cycle as the pending message state,
       // preventing timing issues where UI renders without pre-search data
       if (formState.enableWebSearch) {
-        actions.addPreSearch({
-          id: `placeholder-presearch-${thread.id}-0`,
+        actions.addPreSearch(createPlaceholderPreSearch({
           threadId: thread.id,
           roundNumber: 0,
           userQuery: prompt,
-          status: AnalysisStatuses.PENDING,
-          searchData: null,
-          createdAt: new Date(),
-          completedAt: null,
-          errorMessage: null,
-        });
+        }));
       }
 
       // ✅ CRITICAL FIX: Set pending message so provider can trigger participants
@@ -333,17 +322,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // preventing the "late accordion" issue where user message renders first without pre-search,
       // then pre-search appears in a subsequent render causing layout shift and placeholder duplications
       if (formState.enableWebSearch) {
-        actions.addPreSearch({
-          id: `placeholder-presearch-${threadId}-${nextRoundNumber}`,
+        actions.addPreSearch(createPlaceholderPreSearch({
           threadId,
           roundNumber: nextRoundNumber,
           userQuery: trimmed,
-          status: AnalysisStatuses.PENDING,
-          searchData: null,
-          createdAt: new Date(),
-          completedAt: null,
-          errorMessage: null,
-        });
+        }));
       }
 
       // Add optimistic user message IMMEDIATELY for instant UI feedback

@@ -34,13 +34,6 @@ import {
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
 
-// Convenience type aliases for backward compatibility
-type MessageMetadata = DbMessageMetadata;
-type UserMessageMetadata = DbUserMessageMetadata;
-type AssistantMessageMetadata = DbAssistantMessageMetadata;
-type PreSearchMessageMetadata = DbPreSearchMessageMetadata;
-type ParticipantMessageMetadata = DbAssistantMessageMetadata; // Participant messages are assistant messages with participantId
-
 // ============================================================================
 // Type Guards with Zod Validation
 // ============================================================================
@@ -62,7 +55,7 @@ type ParticipantMessageMetadata = DbAssistantMessageMetadata; // Participant mes
  * }
  * ```
  */
-export function getMessageMetadata(metadata: unknown): MessageMetadata | undefined {
+export function getMessageMetadata(metadata: unknown): DbMessageMetadata | undefined {
   if (!metadata)
     return undefined;
 
@@ -76,7 +69,7 @@ export function getMessageMetadata(metadata: unknown): MessageMetadata | undefin
  */
 export function getUserMetadata(
   metadata: unknown,
-): UserMessageMetadata | null {
+): DbUserMessageMetadata | null {
   const result = DbUserMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : null;
 }
@@ -87,7 +80,7 @@ export function getUserMetadata(
  */
 export function getAssistantMetadata(
   metadata: unknown,
-): AssistantMessageMetadata | null {
+): DbAssistantMessageMetadata | null {
   const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : null;
 }
@@ -98,7 +91,7 @@ export function getAssistantMetadata(
  */
 export function getParticipantMetadata(
   metadata: unknown,
-): ParticipantMessageMetadata | null {
+): DbAssistantMessageMetadata | null {
   // Participant metadata is assistant metadata with participantId
   const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
@@ -115,7 +108,7 @@ export function getParticipantMetadata(
  */
 export function getPreSearchMetadata(
   metadata: unknown,
-): PreSearchMessageMetadata | null {
+): DbPreSearchMessageMetadata | null {
   const result = DbPreSearchMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : null;
 }
@@ -130,7 +123,7 @@ export function getPreSearchMetadata(
  */
 export function extractMessageMetadata(
   message: UIMessage | ChatMessage,
-): UserMessageMetadata | AssistantMessageMetadata | PreSearchMessageMetadata | null {
+): DbUserMessageMetadata | DbAssistantMessageMetadata | DbPreSearchMessageMetadata | null {
   if (!message.metadata) {
     return null;
   }
@@ -322,7 +315,7 @@ export function isPreSearch(metadata: unknown): boolean {
  */
 export function requireParticipantMetadata(
   metadata: unknown,
-): ParticipantMessageMetadata {
+): DbAssistantMessageMetadata {
   const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid participant metadata: ${result.error.message}`);
@@ -339,7 +332,7 @@ export function requireParticipantMetadata(
  */
 export function requireAssistantMetadata(
   metadata: unknown,
-): AssistantMessageMetadata {
+): DbAssistantMessageMetadata {
   const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid assistant metadata: ${result.error.message}`);
@@ -353,7 +346,7 @@ export function requireAssistantMetadata(
  */
 export function requireUserMetadata(
   metadata: unknown,
-): UserMessageMetadata {
+): DbUserMessageMetadata {
   const result = DbUserMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid user metadata: ${result.error.message}`);
@@ -367,7 +360,7 @@ export function requireUserMetadata(
  */
 export function requirePreSearchMetadata(
   metadata: unknown,
-): PreSearchMessageMetadata {
+): DbPreSearchMessageMetadata {
   const result = DbPreSearchMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid pre-search metadata: ${result.error.message}`);
@@ -427,7 +420,7 @@ const AssistantMetadataBuilderSchema = DbAssistantMessageMetadataSchema.partial(
 });
 
 export function buildAssistantMetadata(
-  baseMetadata: Partial<AssistantMessageMetadata>,
+  baseMetadata: Partial<DbAssistantMessageMetadata>,
   options: {
     participantId?: string;
     participantIndex?: number;
@@ -439,7 +432,7 @@ export function buildAssistantMetadata(
     errorMessage?: string;
     additionalFields?: Record<string, unknown>;
   },
-): AssistantMessageMetadata {
+): DbAssistantMessageMetadata {
   // Build the metadata object with role as discriminator
   const metadata = {
     role: 'assistant' as const,
@@ -469,16 +462,15 @@ export function buildAssistantMetadata(
   const result = AssistantMetadataBuilderSchema.safeParse(metadata);
 
   if (result.success) {
-    // ✅ SAFE RETURN: Zod-validated data as AssistantMessageMetadata
+    // Zod-validated data - safe to return
     // The partial schema validates types but allows missing required fields
     // This is intentional for streaming scenarios where metadata is built incrementally
-    return result.data as AssistantMessageMetadata;
+    return result.data as DbAssistantMessageMetadata;
   }
 
   // Fallback: Return constructed object when validation fails
-  // This maintains backwards compatibility while logging validation issues
-  // ✅ DOCUMENTED CAST: Builder pattern requires this for incremental construction
-  return metadata as AssistantMessageMetadata;
+  // Builder pattern requires this for incremental construction during streaming
+  return metadata as DbAssistantMessageMetadata;
 }
 
 /**
@@ -549,14 +541,14 @@ const ParticipantEnrichmentSchema = z.object({
 });
 
 export function enrichMessageWithParticipant(
-  baseMetadata: MessageMetadata | undefined,
+  baseMetadata: DbMessageMetadata | undefined,
   participant: {
     id: string;
     modelId: string;
     role: string | null;
     index: number;
   },
-): MessageMetadata {
+): DbMessageMetadata {
   // Validate participant input first
   const enrichmentResult = ParticipantEnrichmentSchema.safeParse({
     participantId: participant.id,
@@ -584,15 +576,14 @@ export function enrichMessageWithParticipant(
     return finalResult.data;
   }
 
-  // ✅ FALLBACK: For assistant messages being enriched, use builder schema
+  // Fallback: For assistant messages being enriched, use builder schema
   // This handles cases where base metadata is partial (e.g., from streaming)
   const builderResult = AssistantMetadataBuilderSchema.safeParse(enrichedMetadata);
 
   if (builderResult.success) {
-    return builderResult.data as MessageMetadata;
+    return builderResult.data as DbMessageMetadata;
   }
 
-  // Last resort: return with documented cast for backwards compatibility
-  // This path should rarely be hit if inputs are properly validated
-  return enrichedMetadata as MessageMetadata;
+  // Last resort: return enriched metadata for incremental construction
+  return enrichedMetadata as DbMessageMetadata;
 }

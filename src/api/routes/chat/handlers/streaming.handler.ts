@@ -48,6 +48,10 @@ import {
 } from '@/api/services/streaming-orchestration.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
 import {
+  cancelUploadCleanup,
+  isCleanupSchedulerAvailable,
+} from '@/api/services/upload-cleanup.service';
+import {
   enforceMessageQuota,
   getUserTier,
   incrementMessageUsage,
@@ -392,6 +396,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 }));
 
                 await db.insert(tables.messageUpload).values(messageUploadValues);
+
+                // Cancel scheduled cleanup for attached uploads (non-blocking)
+                if (isCleanupSchedulerAvailable(c.env)) {
+                  const cancelCleanupTasks = attachmentIds.map(uploadId =>
+                    cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
+                  );
+                  if (c.executionCtx) {
+                    c.executionCtx.waitUntil(Promise.all(cancelCleanupTasks));
+                  } else {
+                    Promise.all(cancelCleanupTasks).catch(() => {});
+                  }
+                }
               }
             }
           }

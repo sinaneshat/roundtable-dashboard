@@ -28,10 +28,14 @@ import {
   StoredModeratorAnalysisSchema,
   StoredPreSearchSchema,
 } from '@/api/routes/chat/schema';
+import type { FilePreview } from '@/hooks/utils/use-file-preview';
+import type { UploadItem } from '@/hooks/utils/use-file-upload';
+import { FilePartSchema } from '@/lib/schemas/message-schemas';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 
 import type {
   AddAnalysis,
+  AddAttachments,
   AddParticipant,
   AddPreSearch,
   AnimationResolver,
@@ -43,6 +47,7 @@ import type {
   ClearAllPreSearches,
   ClearAnalysisTracking,
   ClearAnimations,
+  ClearAttachments,
   ClearFeedback,
   ClearPreSearchActivity,
   ClearPreSearchTracking,
@@ -51,11 +56,13 @@ import type {
   CompleteRegeneration,
   CompleteStreaming,
   CreatePendingAnalysis,
+  GetAttachments,
   GetNextParticipantToTrigger,
   GetPreSearchActivityTime,
   HandleResumedStreamComplete,
   HandleStreamResumptionFailure,
   HasAnalysisBeenCreated,
+  HasAttachments,
   HasPreSearchBeenTriggered,
   InitializeThread,
   IsStreamResumptionStale,
@@ -70,6 +77,7 @@ import type {
   PrepareForNewMessage,
   RegisterAnimation,
   RemoveAnalysis,
+  RemoveAttachment,
   RemoveParticipant,
   RemovePreSearch,
   ReorderParticipants,
@@ -124,6 +132,8 @@ import type {
   UpdateAnalysisData,
   UpdateAnalysisError,
   UpdateAnalysisStatus,
+  UpdateAttachmentPreview,
+  UpdateAttachmentUpload,
   UpdateParticipant,
   UpdateParticipants,
   UpdatePreSearchActivity,
@@ -339,23 +349,12 @@ export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSch
 // DATA SLICE SCHEMAS
 // ============================================================================
 
-/**
- * File part for AI SDK message creation
- * Used to pass file attachment info to hook for display in UI
- */
-export const PendingFilePartSchema = z.object({
-  type: z.literal('file'),
-  url: z.string(),
-  filename: z.string(),
-  mediaType: z.string(),
-});
-
 export const DataStateSchema = z.object({
   regeneratingRoundNumber: z.number().nullable(),
   pendingMessage: z.string().nullable(),
   pendingAttachmentIds: z.array(z.string()).nullable(),
   /** File parts for AI SDK message creation - set before clearAttachments() */
-  pendingFileParts: z.array(PendingFilePartSchema).nullable(),
+  pendingFileParts: z.array(FilePartSchema).nullable(),
   expectedParticipantIds: z.array(z.string()).nullable(),
   streamingRoundNumber: z.number().nullable(),
   currentRoundNumber: z.number().nullable(),
@@ -504,12 +503,14 @@ export const AnimationSliceSchema = z.intersection(AnimationStateSchema, Animati
 /**
  * Pending attachment schema for chat input file attachments
  * Combines file with optional upload item and preview
+ *
+ * Uses proper type imports from hooks (imported at top of file)
  */
 export const PendingAttachmentSchema = z.object({
   id: z.string(),
   file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
-  uploadItem: z.custom<import('@/hooks/utils/use-file-upload').UploadItem>().optional(),
-  preview: z.custom<import('@/hooks/utils/use-file-preview').FilePreview>().optional(),
+  uploadItem: z.custom<UploadItem>().optional(),
+  preview: z.custom<FilePreview>().optional(),
 });
 
 export const AttachmentsStateSchema = z.object({
@@ -517,13 +518,13 @@ export const AttachmentsStateSchema = z.object({
 });
 
 export const AttachmentsActionsSchema = z.object({
-  addAttachments: z.custom<import('./store-action-types').AddAttachments>(),
-  removeAttachment: z.custom<import('./store-action-types').RemoveAttachment>(),
-  clearAttachments: z.custom<import('./store-action-types').ClearAttachments>(),
-  updateAttachmentUpload: z.custom<import('./store-action-types').UpdateAttachmentUpload>(),
-  updateAttachmentPreview: z.custom<import('./store-action-types').UpdateAttachmentPreview>(),
-  getAttachments: z.custom<import('./store-action-types').GetAttachments>(),
-  hasAttachments: z.custom<import('./store-action-types').HasAttachments>(),
+  addAttachments: z.custom<AddAttachments>(),
+  removeAttachment: z.custom<RemoveAttachment>(),
+  clearAttachments: z.custom<ClearAttachments>(),
+  updateAttachmentUpload: z.custom<UpdateAttachmentUpload>(),
+  updateAttachmentPreview: z.custom<UpdateAttachmentPreview>(),
+  getAttachments: z.custom<GetAttachments>(),
+  hasAttachments: z.custom<HasAttachments>(),
 });
 
 export const AttachmentsSliceSchema = z.intersection(AttachmentsStateSchema, AttachmentsActionsSchema);

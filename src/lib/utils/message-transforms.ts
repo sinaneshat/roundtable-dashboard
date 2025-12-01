@@ -48,21 +48,12 @@ import {
   buildAssistantMetadata,
   enrichMessageWithParticipant,
   getAssistantMetadata,
-  getMessageMetadata,
   getParticipantId,
   getRoundNumber,
   getUserMetadata,
   hasParticipantEnrichment,
   isPreSearch,
 } from './metadata';
-
-// Convenience type aliases for backward compatibility
-type MessageMetadata = DbMessageMetadata;
-type PreSearchMessageMetadata = DbPreSearchMessageMetadata;
-type ParticipantMessageMetadata = DbMessageMetadata & { role: 'assistant'; participantId: string };
-
-// Re-export for convenience
-export { getMessageMetadata };
 
 // ============================================================================
 // Type Exports
@@ -92,7 +83,7 @@ function isUIMessageRole(role: string): role is 'user' | 'assistant' | 'system' 
  */
 export function isPreSearchMessage(
   message: UIMessage,
-): message is UIMessage & { metadata: PreSearchMessageMetadata } {
+): message is UIMessage & { metadata: DbPreSearchMessageMetadata } {
   if (!message.metadata)
     return false;
   const validation = DbPreSearchMessageMetadataSchema.safeParse(message.metadata);
@@ -107,7 +98,7 @@ export function isPreSearchMessage(
  */
 export function isParticipantMessage(
   message: UIMessage,
-): message is UIMessage & { metadata: ParticipantMessageMetadata } {
+): message is UIMessage & { metadata: DbAssistantMessageMetadata } {
   if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
     return false;
   const validation = DbAssistantMessageMetadataSchema.safeParse(message.metadata);
@@ -215,7 +206,7 @@ export function chatMessagesToUIMessages(
             return {
               ...message,
               metadata: enrichMessageWithParticipant(
-                baseMetadata ? { ...baseMetadata, role: message.role } as MessageMetadata : { role: message.role, roundNumber: explicitRound } as MessageMetadata,
+                baseMetadata ? { ...baseMetadata, role: message.role } as DbMessageMetadata : { role: message.role, roundNumber: explicitRound } as DbMessageMetadata,
                 {
                   id: participant.id,
                   modelId: participant.modelId,
@@ -360,7 +351,7 @@ export function filterByRound(
  */
 export function filterToParticipantMessages(
   messages: UIMessage[],
-): Array<UIMessage & { metadata: ParticipantMessageMetadata }> {
+): Array<UIMessage & { metadata: DbAssistantMessageMetadata }> {
   return messages.filter(isParticipantMessage);
 }
 
@@ -369,7 +360,7 @@ export function filterToParticipantMessages(
  */
 export function filterToPreSearchMessages(
   messages: UIMessage[],
-): Array<UIMessage & { metadata: PreSearchMessageMetadata }> {
+): Array<UIMessage & { metadata: DbPreSearchMessageMetadata }> {
   return messages.filter(isPreSearchMessage);
 }
 
@@ -572,7 +563,7 @@ export function mergeParticipantMetadata(
   currentIndex: number,
   roundNumber: number,
   options?: { hasGeneratedText?: boolean },
-): Extract<MessageMetadata, { role: 'assistant' }> {
+): Extract<DbMessageMetadata, { role: 'assistant' }> {
   const validatedMetadata = getAssistantMetadata(message.metadata);
 
   // Trust backend error flags - these are authoritative
@@ -667,7 +658,7 @@ export function mergeParticipantMetadata(
         errorMessage,
       }),
     },
-  ) as Extract<MessageMetadata, { role: 'assistant' }>;
+  ) as Extract<DbMessageMetadata, { role: 'assistant' }>;
 }
 
 // ============================================================================

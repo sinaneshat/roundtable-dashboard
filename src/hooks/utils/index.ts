@@ -14,6 +14,9 @@ export { useBoolean } from './use-boolean';
 export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';
 export { PendingAttachmentSchema, useChatAttachments } from './use-chat-attachments';
 export { useDebouncedValue } from './use-debounced-value';
+// Drag and drop utilities
+export type { UseDragDropReturn } from './use-drag-drop';
+export { useDragDrop } from './use-drag-drop';
 // File Upload Utilities
 export type { FilePreview, UseFilePreviewOptions, UseFilePreviewReturn } from './use-file-preview';
 export { FilePreviewSchema, getFileIconName, getFileTypeLabel, supportsInlinePreview, useFilePreview, UseFilePreviewOptionsSchema } from './use-file-preview';

@@ -15,6 +15,10 @@ import { IdParamSchema } from '@/api/core/schemas';
 import {
   getAggregatedProjectContext,
 } from '@/api/services/project-context.service';
+import {
+  cancelUploadCleanup,
+  isCleanupSchedulerAvailable,
+} from '@/api/services/upload-cleanup.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -513,6 +517,14 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
         updatedAt: new Date(),
       })
       .returning();
+
+    // Cancel scheduled cleanup for the attached upload (non-blocking)
+    if (isCleanupSchedulerAvailable(c.env)) {
+      const cancelTask = cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, body.uploadId).catch(() => {});
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(cancelTask);
+      }
+    }
 
     // Get the upload details for response
     const { r2Key: _r2Key, ...uploadWithoutR2Key } = existingUpload;

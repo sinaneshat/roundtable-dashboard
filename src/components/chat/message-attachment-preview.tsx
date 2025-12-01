@@ -164,9 +164,9 @@ export function MessageAttachmentPreview({
   return (
     <TooltipProvider>
       <div className="flex flex-wrap gap-2 mb-3">
-        {attachments.map((attachment, index) => (
+        {attachments.map(attachment => (
           <AttachmentThumbnail
-            key={`${messageId}-att-${index}`}
+            key={`${messageId}-att-${attachment.url}`}
             attachment={attachment}
             messageId={messageId}
           />

@@ -34,6 +34,10 @@ import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
 import {
+  cancelUploadCleanup,
+  isCleanupSchedulerAvailable,
+} from '@/api/services/upload-cleanup.service';
+import {
   enforceMessageQuota,
   enforceThreadQuota,
   getUserTier,
@@ -290,6 +294,18 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         createdAt: now,
       }));
       await db.insert(tables.messageUpload).values(messageUploadValues);
+
+      // Cancel scheduled cleanup for attached uploads (non-blocking)
+      if (isCleanupSchedulerAvailable(c.env)) {
+        const cancelCleanupTasks = body.attachmentIds.map(uploadId =>
+          cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
+        );
+        if (c.executionCtx) {
+          c.executionCtx.waitUntil(Promise.all(cancelCleanupTasks));
+        } else {
+          Promise.all(cancelCleanupTasks).catch(() => {});
+        }
+      }
 
       // ✅ FIX: Construct file parts and add to message for immediate UI display
       // Without this, the returned message only has text parts and attachments

@@ -74,7 +74,7 @@ type UseMultiParticipantChatOptions = {
   pendingFileParts?: Array<{
     type: 'file';
     url: string;
-    filename: string;
+    filename?: string;
     mediaType: string;
   }> | null;
   /** Callback when pre-search starts */
@@ -1430,8 +1430,8 @@ export function useMultiParticipantChat(
       // Same fix as triggerNextParticipantWithRefs - prevents race conditions
       isTriggeringRef.current = false;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
     [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming],
-    // callbackRefs provides stable ref access to threadId (no deps needed)
   );
 
   /**

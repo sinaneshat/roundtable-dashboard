@@ -18,6 +18,43 @@ import { z } from '@hono/zod-openapi';
 import { MESSAGE_PART_TYPES, MESSAGE_STATUSES, MessagePartTypes, MessageStatusSchema } from '@/api/core/enums';
 
 // ============================================================================
+// FILE PART SCHEMA (extracted for reuse)
+// ============================================================================
+
+/**
+ * ✅ FILE PART: For multi-modal messages (images, PDFs, etc.)
+ * AI SDK v5 format for file attachments in messages.
+ *
+ * SINGLE SOURCE OF TRUTH for file parts used by:
+ * - MessagePartSchema (discriminated union member)
+ * - Store PendingFileParts (form-actions.ts attachment handling)
+ * - Chat hooks (use-chat-attachments.ts)
+ *
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
+ */
+export const FilePartSchema = z.object({
+  type: z.literal('file'),
+  url: z.string().openapi({
+    description: 'URL to the file (can be data URL or HTTP URL)',
+    example: 'https://example.com/image.png',
+  }),
+  mediaType: z.string().openapi({
+    description: 'MIME type of the file',
+    example: 'image/png',
+  }),
+  filename: z.string().optional().openapi({
+    description: 'Original filename for display',
+    example: 'screenshot.png',
+  }),
+});
+
+/**
+ * File part TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type FilePart = z.infer<typeof FilePartSchema>;
+
+// ============================================================================
 // MESSAGE PART SCHEMAS
 // ============================================================================
 
@@ -112,23 +149,9 @@ export const MessagePartSchema = z.discriminatedUnion('type', [
       example: false,
     }),
   }),
-  // ✅ AI SDK v5 FILE PART: For multi-modal messages (images, PDFs, etc.)
+  // ✅ AI SDK v5 FILE PART: Reuse extracted FilePartSchema
   // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
-  z.object({
-    type: z.literal('file'),
-    url: z.string().openapi({
-      description: 'URL to the file (can be data URL or HTTP URL)',
-      example: 'https://example.com/image.png',
-    }),
-    mediaType: z.string().openapi({
-      description: 'MIME type of the file',
-      example: 'image/png',
-    }),
-    filename: z.string().optional().openapi({
-      description: 'Original filename for display',
-      example: 'screenshot.png',
-    }),
-  }),
+  FilePartSchema,
   // ✅ AI SDK v5 STEP-START PART: Marks beginning of a step in streaming
   z.object({
     type: z.literal('step-start'),

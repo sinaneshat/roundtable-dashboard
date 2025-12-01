@@ -1,0 +1,118 @@
+/**
+ * Upload Cleanup Service
+ *
+ * Provides a clean API for scheduling and cancelling automatic cleanup
+ * of orphaned uploads via the UploadCleanupScheduler Durable Object.
+ *
+ * Usage:
+ * - Call scheduleCleanup() after a file is uploaded to R2
+ * - Call cancelCleanup() when an upload is attached to a message/thread/project
+ */
+
+import type { UploadCleanupScheduler } from '@/workers/upload-cleanup-scheduler';
+
+/**
+ * Schedule automatic cleanup for an upload
+ *
+ * Should be called immediately after a file is uploaded.
+ * The cleanup will be executed 15 minutes later if the upload
+ * hasn't been attached to any message/thread/project.
+ */
+export async function scheduleUploadCleanup(
+  cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
+  uploadId: string,
+  userId: string,
+  r2Key: string,
+): Promise<{ scheduled: boolean; alarmTime: number }> {
+  // Get or create DO instance for this upload
+  // Using uploadId as the name ensures each upload gets its own instance
+  const stub = cleanupScheduler.get(
+    cleanupScheduler.idFromName(uploadId),
+  );
+
+  const response = await stub.fetch('https://cleanup.internal/schedule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId, userId, r2Key }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`[UploadCleanup] Failed to schedule cleanup for ${uploadId}:`, error);
+    throw new Error(`Failed to schedule upload cleanup: ${error}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Cancel scheduled cleanup for an upload
+ *
+ * Should be called when an upload is successfully attached to
+ * a message, thread, or project. This prevents the upload from
+ * being deleted as orphaned.
+ */
+export async function cancelUploadCleanup(
+  cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
+  uploadId: string,
+): Promise<{ cancelled: boolean }> {
+  const stub = cleanupScheduler.get(
+    cleanupScheduler.idFromName(uploadId),
+  );
+
+  const response = await stub.fetch('https://cleanup.internal/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`[UploadCleanup] Failed to cancel cleanup for ${uploadId}:`, error);
+    // Don't throw - cancellation failure shouldn't break attachment flow
+    return { cancelled: false };
+  }
+
+  return response.json();
+}
+
+/**
+ * Get the current cleanup state for an upload
+ *
+ * Useful for debugging or checking if cleanup is scheduled.
+ */
+export async function getUploadCleanupState(
+  cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
+  uploadId: string,
+): Promise<{
+  state: {
+    uploadId: string;
+    userId: string;
+    r2Key: string;
+    scheduledAt: number;
+    createdAt: number;
+  } | null;
+}> {
+  const stub = cleanupScheduler.get(
+    cleanupScheduler.idFromName(uploadId),
+  );
+
+  const response = await stub.fetch(`https://cleanup.internal/state/${uploadId}`, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    return { state: null };
+  }
+
+  return response.json();
+}
+
+/**
+ * Helper to check if cleanup scheduler is available
+ *
+ * In local development without proper DO support, this may return false.
+ */
+export function isCleanupSchedulerAvailable(env: CloudflareEnv): boolean {
+  return env.UPLOAD_CLEANUP_SCHEDULER !== undefined;
+}

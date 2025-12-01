@@ -724,7 +724,7 @@ export type UseSingleFileUploadReturn = {
  * };
  */
 export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): UseSingleFileUploadReturn {
-  const { threadId, onComplete, onError } = options;
+  const { threadId: _threadId, onComplete, onError } = options;
 
   const [progress, setProgress] = useState<UploadProgress>(() => createInitialProgress());
   const [status, setStatus] = useState<UploadStatus>('pending');
@@ -791,7 +791,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
         return null;
       }
     },
-    [onComplete, onError, threadId, uploadMutation, validation],
+    [onComplete, onError, uploadMutation, validation],
   );
 
   return {
