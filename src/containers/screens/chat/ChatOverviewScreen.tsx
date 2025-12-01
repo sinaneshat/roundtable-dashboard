@@ -37,6 +37,7 @@ import { useCustomRolesQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
 import {
   useBoolean,
+  useChatAttachments,
   useModelLookup,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
@@ -123,6 +124,18 @@ export default function ChatOverviewScreen() {
   const modeModal = useBoolean(false);
   const modelModal = useBoolean(false);
 
+  // Chat attachments
+  const chatAttachments = useChatAttachments();
+
+  // Attachment click handler (registered by ChatInput, used by toolbar)
+  const attachmentClickRef = useRef<(() => void) | null>(null);
+  const handleRegisterAttachmentClick = useCallback((clickHandler: () => void) => {
+    attachmentClickRef.current = clickHandler;
+  }, []);
+  const handleAttachmentClick = useCallback(() => {
+    attachmentClickRef.current?.();
+  }, []);
+
   // ============================================================================
   // QUERIES
   // ============================================================================
@@ -166,8 +179,7 @@ export default function ChatOverviewScreen() {
     return [];
   }, [defaultModelId]);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const orderedModels = useMemo((): OrderedModel[] => {
+  const orderedModels = useMemo<OrderedModel[]>(() => {
     if (allEnabledModels.length === 0)
       return [];
 
@@ -175,18 +187,18 @@ export default function ChatOverviewScreen() {
     const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
     const orderedIds = modelOrder.length > 0 ? modelOrder : allEnabledModels.map(m => m.id);
 
-    return orderedIds
-      .map((modelId) => {
-        const model = modelMap.get(modelId);
-        if (!model)
-          return null;
-        return {
+    const result: OrderedModel[] = [];
+    for (const modelId of orderedIds) {
+      const model = modelMap.get(modelId);
+      if (model) {
+        result.push({
           model,
-          participant: participantMap.get(modelId) || null,
+          participant: participantMap.get(modelId) ?? null,
           order: orderedIds.indexOf(modelId),
-        };
-      })
-      .filter(Boolean) as typeof orderedModels;
+        });
+      }
+    }
+    return result;
   }, [selectedParticipants, allEnabledModels, modelOrder]);
 
   // ============================================================================
@@ -251,12 +263,20 @@ export default function ChatOverviewScreen() {
   // Reset on navigation to /chat
   const prevPathnameRef = useRef<string | null>(null);
   const hasResetOnMount = useRef(false);
+  // ✅ Stable ref for clearAttachments to avoid re-running effect on every render
+  const clearAttachmentsRef = useRef(chatAttachments.clearAttachments);
+  // Update ref in effect to avoid refs-during-render lint error
+  useEffect(() => {
+    clearAttachmentsRef.current = chatAttachments.clearAttachments;
+  }, [chatAttachments.clearAttachments]);
 
   useLayoutEffect(() => {
     if (!hasResetOnMount.current && pathname === '/chat') {
       hasResetOnMount.current = true;
       resetToOverview();
       hasSentInitialPromptRef.current = false;
+      // ✅ Clear hook's local attachment state (separate from store)
+      clearAttachmentsRef.current();
 
       if (defaultModelId && initialParticipants.length > 0) {
         setSelectedMode(getDefaultChatMode());
@@ -270,6 +290,8 @@ export default function ChatOverviewScreen() {
     if (isNavigatingToChat) {
       resetToOverview();
       hasSentInitialPromptRef.current = false;
+      // ✅ Clear hook's local attachment state (separate from store)
+      clearAttachmentsRef.current();
 
       if (defaultModelId && initialParticipants.length > 0) {
         setSelectedMode(getDefaultChatMode());
@@ -337,8 +359,26 @@ export default function ChatOverviewScreen() {
           return;
         }
 
+        // Wait for all uploads to complete before sending
+        if (!chatAttachments.allUploaded) {
+          return;
+        }
+
         try {
-          await formActions.handleUpdateThreadAndSend(existingThreadId);
+          const attachmentIds = chatAttachments.getUploadIds();
+          // Build attachment info for optimistic message file parts
+          const attachmentInfos = chatAttachments.attachments
+            .filter(att => att.status === 'completed' && att.uploadId)
+            .map(att => ({
+              uploadId: att.uploadId!,
+              filename: att.file.name,
+              mimeType: att.file.type,
+              previewUrl: att.preview?.url,
+            }));
+          await formActions.handleUpdateThreadAndSend(existingThreadId, attachmentIds, attachmentInfos);
+          // ✅ Clear store attachments is called inside handleUpdateThreadAndSend
+          // ✅ Clear hook local state AFTER thread is created (user request)
+          chatAttachments.clearAttachments();
         } catch (error) {
           showApiErrorToast('Error sending message', error);
         }
@@ -348,15 +388,33 @@ export default function ChatOverviewScreen() {
           return;
         }
 
+        // Wait for all uploads to complete before creating thread
+        if (!chatAttachments.allUploaded) {
+          return;
+        }
+
         try {
-          await formActions.handleCreateThread();
+          const attachmentIds = chatAttachments.getUploadIds();
+          // Build attachment info for optimistic message file parts (for handleCreateThread if needed)
+          const attachmentInfos = chatAttachments.attachments
+            .filter(att => att.status === 'completed' && att.uploadId)
+            .map(att => ({
+              uploadId: att.uploadId!,
+              filename: att.file.name,
+              mimeType: att.file.type,
+              previewUrl: att.preview?.url,
+            }));
+          await formActions.handleCreateThread(attachmentIds, attachmentInfos);
           hasSentInitialPromptRef.current = true;
+          // ✅ Clear store attachments is called inside handleCreateThread
+          // ✅ Clear hook local state AFTER thread is created (user request)
+          chatAttachments.clearAttachments();
         } catch (error) {
           showApiErrorToast('Error creating thread', error);
         }
       }
     },
-    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId],
+    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments],
   );
 
   // Model modal callbacks
@@ -547,6 +605,11 @@ export default function ChatOverviewScreen() {
                   participants={selectedParticipants}
                   quotaCheckType="threads"
                   onRemoveParticipant={isInitialUIInputBlocked ? undefined : removeParticipant}
+                  attachments={chatAttachments.attachments}
+                  onAddAttachments={chatAttachments.addFiles}
+                  onRemoveAttachment={chatAttachments.removeAttachment}
+                  enableAttachments={!isInitialUIInputBlocked}
+                  onRegisterAttachmentClick={handleRegisterAttachmentClick}
                   toolbar={(
                     <ChatInputToolbarMenu
                       selectedParticipants={selectedParticipants}
@@ -556,6 +619,9 @@ export default function ChatOverviewScreen() {
                       onOpenModeModal={() => modeModal.onTrue()}
                       enableWebSearch={enableWebSearch}
                       onWebSearchToggle={setEnableWebSearch}
+                      onAttachmentClick={handleAttachmentClick}
+                      attachmentCount={chatAttachments.attachments.length}
+                      enableAttachments={!isInitialUIInputBlocked}
                       disabled={isInitialUIInputBlocked}
                     />
                   )}
@@ -573,6 +639,7 @@ export default function ChatOverviewScreen() {
               }}
               mode="overview"
               onSubmit={handlePromptSubmit}
+              chatAttachments={chatAttachments}
             />
           )}
 

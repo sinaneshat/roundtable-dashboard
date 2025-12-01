@@ -262,6 +262,10 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       description: 'Initial user message to start the conversation',
       example: 'What are innovative product ideas for sustainability?',
     }),
+    attachmentIds: z.array(z.string()).optional().openapi({
+      description: 'Upload IDs to attach to the first message',
+      example: ['01HXYZ123ABC', '01HXYZ456DEF'],
+    }),
   })
   .openapi('CreateThreadRequest');
 export const UpdateThreadRequestSchema = chatThreadUpdateSchema
@@ -743,6 +747,10 @@ export const StreamChatRequestSchema = z.object({
     description: 'Enable/disable web search for this thread. If changed, generates changelog entry.',
     example: true,
   }),
+  attachmentIds: z.array(z.string()).optional().openapi({
+    description: 'Upload IDs to attach to this message',
+    example: ['01HXYZ123ABC', '01HXYZ456DEF'],
+  }),
 }).openapi('StreamChatRequest');
 const MessagesListPayloadSchema = z.object({
   messages: z.array(ChatMessageSchema),
@@ -1170,6 +1178,37 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
 // ============================================================================
+// STREAM PARAM SCHEMAS
+// ============================================================================
+
+/**
+ * Thread ID param schema for stream endpoints
+ */
+export const ThreadIdParamSchema = z.object({
+  threadId: z.string().openapi({
+    param: { name: 'threadId', in: 'path' },
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+}).openapi('ThreadIdParam');
+
+/**
+ * Stream ID param schema (threadId + streamId)
+ */
+export const StreamIdParamSchema = z.object({
+  threadId: z.string().openapi({
+    param: { name: 'threadId', in: 'path' },
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  streamId: z.string().openapi({
+    param: { name: 'streamId', in: 'path' },
+    description: 'Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
+    example: 'thread_abc123_r0_p0',
+  }),
+}).openapi('StreamIdParam');
+
+// ============================================================================
 // RESUMABLE STREAM SCHEMAS
 // ============================================================================
 
@@ -1322,6 +1361,236 @@ export const PreSearchQuerySchema = z.object({
 }).openapi('PreSearchQuery');
 
 export type PreSearchQuery = z.infer<typeof PreSearchQuerySchema>;
+
+// ============================================================================
+// PRE-SEARCH SSE EVENT SCHEMAS
+// ============================================================================
+// Server-Sent Event type definitions for pre-search streaming
+// Frontend: Import these types for EventSource handlers
+
+/**
+ * Base event data with timestamp
+ */
+const BaseSSEEventDataSchema = z.object({
+  timestamp: z.number(),
+});
+
+/**
+ * Start event - sent when pre-search begins
+ */
+export const PreSearchStartEventSchema = z.object({
+  event: z.literal('start'),
+  data: BaseSSEEventDataSchema.extend({
+    userQuery: z.string(),
+    totalQueries: z.number(),
+  }),
+}).openapi('PreSearchStartEvent');
+
+export type PreSearchStartEvent = z.infer<typeof PreSearchStartEventSchema>;
+
+/**
+ * Query event - streams AI-generated search query incrementally
+ */
+export const PreSearchQueryEventSchema = z.object({
+  event: z.literal('query'),
+  data: BaseSSEEventDataSchema.extend({
+    query: z.string(),
+    rationale: z.string(),
+    searchDepth: z.enum(['basic', 'advanced']),
+    index: z.number(),
+    total: z.number(),
+    fallback: z.boolean().optional(),
+  }),
+}).openapi('PreSearchQueryEvent');
+
+export type PreSearchQueryEvent = z.infer<typeof PreSearchQueryEventSchema>;
+
+/**
+ * Result event - streams search results as fetched
+ */
+export const PreSearchResultEventSchema = z.object({
+  event: z.literal('result'),
+  data: BaseSSEEventDataSchema.extend({
+    query: z.string(),
+    answer: z.string().nullable(),
+    results: z.array(z.object({
+      title: z.string(),
+      url: z.string(),
+      content: z.string(),
+      excerpt: z.string().optional(),
+      fullContent: z.string().optional(),
+      score: z.number(),
+      publishedDate: z.string().nullable(),
+      domain: z.string().optional(),
+    })),
+    resultCount: z.number(),
+    responseTime: z.number(),
+    index: z.number(),
+    status: z.enum(['searching', 'processing', 'complete', 'error']).optional(),
+    error: z.string().optional(),
+  }),
+}).openapi('PreSearchResultEvent');
+
+export type PreSearchResultEvent = z.infer<typeof PreSearchResultEventSchema>;
+
+/**
+ * Answer chunk event - streams AI answer progressively (buffered 100ms)
+ */
+export const PreSearchAnswerChunkEventSchema = z.object({
+  event: z.literal('answer_chunk'),
+  data: z.object({
+    chunk: z.string(),
+  }),
+}).openapi('PreSearchAnswerChunkEvent');
+
+export type PreSearchAnswerChunkEvent = z.infer<typeof PreSearchAnswerChunkEventSchema>;
+
+/**
+ * Answer complete event - signals answer streaming finished
+ */
+export const PreSearchAnswerCompleteEventSchema = z.object({
+  event: z.literal('answer_complete'),
+  data: z.object({
+    answer: z.string(),
+    mode: z.enum(['basic', 'advanced']),
+    generatedAt: z.string(),
+  }),
+}).openapi('PreSearchAnswerCompleteEvent');
+
+export type PreSearchAnswerCompleteEvent = z.infer<typeof PreSearchAnswerCompleteEventSchema>;
+
+/**
+ * Answer error event - non-blocking answer generation failure
+ */
+export const PreSearchAnswerErrorEventSchema = z.object({
+  event: z.literal('answer_error'),
+  data: z.object({
+    error: z.string(),
+    message: z.string(),
+  }),
+}).openapi('PreSearchAnswerErrorEvent');
+
+export type PreSearchAnswerErrorEvent = z.infer<typeof PreSearchAnswerErrorEventSchema>;
+
+/**
+ * Complete event - all searches executed (before answer streaming)
+ */
+export const PreSearchCompleteEventSchema = z.object({
+  event: z.literal('complete'),
+  data: BaseSSEEventDataSchema.extend({
+    totalSearches: z.number(),
+    successfulSearches: z.number(),
+    failedSearches: z.number(),
+    totalResults: z.number(),
+  }),
+}).openapi('PreSearchCompleteEvent');
+
+export type PreSearchCompleteEvent = z.infer<typeof PreSearchCompleteEventSchema>;
+
+/**
+ * Done event - final event with complete searchData payload
+ */
+export const PreSearchDoneEventSchema = z.object({
+  event: z.literal('done'),
+  data: z.object({
+    queries: z.array(z.object({
+      query: z.string(),
+      rationale: z.string(),
+      searchDepth: z.enum(['basic', 'advanced']),
+      index: z.number(),
+      total: z.number(),
+    })),
+    results: z.array(z.object({
+      query: z.string(),
+      answer: z.string().nullable(),
+      results: z.array(z.object({
+        title: z.string(),
+        url: z.string(),
+        content: z.string(),
+        excerpt: z.string().optional(),
+        fullContent: z.string().optional(),
+        score: z.number(),
+        publishedDate: z.string().nullable(),
+        domain: z.string().optional(),
+      })),
+      responseTime: z.number(),
+    })),
+    analysis: z.string(),
+    successCount: z.number(),
+    failureCount: z.number(),
+    totalResults: z.number(),
+    totalTime: z.number(),
+  }),
+}).openapi('PreSearchDoneEvent');
+
+export type PreSearchDoneEvent = z.infer<typeof PreSearchDoneEventSchema>;
+
+/**
+ * Failed event - critical search failure
+ */
+export const PreSearchFailedEventSchema = z.object({
+  event: z.literal('failed'),
+  data: z.object({
+    error: z.string(),
+    errorCategory: z.string().optional(),
+    isTransient: z.boolean().optional(),
+  }),
+}).openapi('PreSearchFailedEvent');
+
+export type PreSearchFailedEvent = z.infer<typeof PreSearchFailedEventSchema>;
+
+/**
+ * Union of all pre-search SSE events
+ */
+export const PreSearchSSEEventSchema = z.discriminatedUnion('event', [
+  PreSearchStartEventSchema,
+  PreSearchQueryEventSchema,
+  PreSearchResultEventSchema,
+  PreSearchAnswerChunkEventSchema,
+  PreSearchAnswerCompleteEventSchema,
+  PreSearchAnswerErrorEventSchema,
+  PreSearchCompleteEventSchema,
+  PreSearchDoneEventSchema,
+  PreSearchFailedEventSchema,
+]).openapi('PreSearchSSEEvent');
+
+export type PreSearchSSEEvent = z.infer<typeof PreSearchSSEEventSchema>;
+
+/**
+ * Type guard: check if event is answer chunk
+ */
+export function isAnswerChunkEvent(event: PreSearchSSEEvent): event is PreSearchAnswerChunkEvent {
+  return event.event === 'answer_chunk';
+}
+
+/**
+ * Type guard: check if event is answer complete
+ */
+export function isAnswerCompleteEvent(event: PreSearchSSEEvent): event is PreSearchAnswerCompleteEvent {
+  return event.event === 'answer_complete';
+}
+
+/**
+ * Type guard: check if event is answer error
+ */
+export function isAnswerErrorEvent(event: PreSearchSSEEvent): event is PreSearchAnswerErrorEvent {
+  return event.event === 'answer_error';
+}
+
+/**
+ * Parse SSE event data with type safety
+ */
+export function parsePreSearchEvent<T extends PreSearchSSEEvent>(
+  messageEvent: MessageEvent,
+  expectedType: T['event'],
+): T['data'] | null {
+  try {
+    return JSON.parse(messageEvent.data) as T['data'];
+  } catch {
+    console.error(`Failed to parse ${expectedType} event data`);
+    return null;
+  }
+}
 
 // ============================================================================
 // DATABASE QUERY RESULT SCHEMAS

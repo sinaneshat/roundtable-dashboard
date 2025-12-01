@@ -3,6 +3,8 @@
  *
  * TanStack Mutation hooks for project operations
  * Following patterns from checkout.ts, subscription-management.ts, and api-key-mutations.ts
+ *
+ * Updated to use new attachment-based pattern (S3/R2 best practice)
  */
 
 'use client';
@@ -12,11 +14,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { listProjectsService } from '@/services/api';
 import {
+  addAttachmentToProjectService,
+  createProjectMemoryService,
   createProjectService,
-  deleteKnowledgeFileService,
+  deleteProjectMemoryService,
   deleteProjectService,
+  removeAttachmentFromProjectService,
+  updateProjectAttachmentService,
+  updateProjectMemoryService,
   updateProjectService,
-  uploadKnowledgeFileService,
 } from '@/services/api';
 
 // ============================================================================
@@ -184,26 +190,27 @@ export function useDeleteProjectMutation() {
 }
 
 // ============================================================================
-// Knowledge File Mutations
+// Project Attachment Mutations (Reference-based, S3/R2 Best Practice)
 // ============================================================================
 
 /**
- * Hook to upload a knowledge file to a project
+ * Hook to add an existing attachment to a project
+ * S3/R2 Best Practice: Reference existing uploads instead of direct file upload
  * Protected endpoint - requires authentication
  *
- * After successful upload:
- * - Invalidates knowledge file list and project detail (to update fileCount)
+ * After successful addition:
+ * - Invalidates attachment list and project detail (to update attachmentCount)
  */
-export function useUploadKnowledgeFileMutation() {
+export function useAddAttachmentToProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: uploadKnowledgeFileService,
+    mutationFn: addAttachmentToProjectService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 
-      // Invalidate knowledge files list and project detail (to update fileCount)
-      invalidationPatterns.knowledgeFiles(projectId).forEach((key) => {
+      // Invalidate attachments list and project detail (to update attachmentCount)
+      invalidationPatterns.projectAttachments(projectId).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
@@ -213,27 +220,151 @@ export function useUploadKnowledgeFileMutation() {
 }
 
 /**
- * Hook to delete a knowledge file from a project
+ * Hook to update project attachment metadata
  * Protected endpoint - requires authentication
  *
- * After successful deletion:
- * - Invalidates knowledge file list and project detail (to update fileCount)
+ * After successful update:
+ * - Invalidates attachment list
  */
-export function useDeleteKnowledgeFileMutation() {
+export function useUpdateProjectAttachmentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteKnowledgeFileService,
+    mutationFn: updateProjectAttachmentService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 
-      // Invalidate knowledge files list and project detail (to update fileCount)
-      invalidationPatterns.knowledgeFiles(projectId).forEach((key) => {
+      // Invalidate attachments list
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
+    },
+    retry: (failureCount, error: unknown) => {
+      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+        ? error.status
+        : null;
+      if (status !== null && status >= 400 && status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to remove an attachment from a project (reference removal, not file deletion)
+ * S3/R2 Best Practice: Only removes the reference, the underlying file remains
+ * Protected endpoint - requires authentication
+ *
+ * After successful removal:
+ * - Invalidates attachment list and project detail (to update attachmentCount)
+ */
+export function useRemoveAttachmentFromProjectMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: removeAttachmentFromProjectService,
+    onSuccess: (_data, variables) => {
+      const projectId = variables.param.id;
+
+      // Invalidate attachments list and project detail (to update attachmentCount)
+      invalidationPatterns.projectAttachments(projectId).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
     retry: (failureCount, error: unknown) => {
-      // Type-safe status extraction
+      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+        ? error.status
+        : null;
+      if (status !== null && status >= 400 && status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    throwOnError: false,
+  });
+}
+
+// ============================================================================
+// Project Memory Mutations
+// ============================================================================
+
+/**
+ * Hook to create a project memory
+ * Protected endpoint - requires authentication
+ *
+ * After successful creation:
+ * - Invalidates memory list
+ */
+export function useCreateProjectMemoryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createProjectMemoryService,
+    onSuccess: (_data, variables) => {
+      const projectId = variables.param.id;
+
+      // Invalidate memories list
+      invalidationPatterns.projectMemories(projectId).forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to update a project memory
+ * Protected endpoint - requires authentication
+ *
+ * After successful update:
+ * - Invalidates memory list
+ */
+export function useUpdateProjectMemoryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateProjectMemoryService,
+    onSuccess: (_data, variables) => {
+      const projectId = variables.param.id;
+
+      // Invalidate memories list
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.memories(projectId) });
+    },
+    retry: (failureCount, error: unknown) => {
+      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
+        ? error.status
+        : null;
+      if (status !== null && status >= 400 && status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to delete a project memory
+ * Protected endpoint - requires authentication
+ *
+ * After successful deletion:
+ * - Invalidates memory list
+ */
+export function useDeleteProjectMemoryMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteProjectMemoryService,
+    onSuccess: (_data, variables) => {
+      const projectId = variables.param.id;
+
+      // Invalidate memories list
+      invalidationPatterns.projectMemories(projectId).forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
+    retry: (failureCount, error: unknown) => {
       const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
         ? error.status
         : null;

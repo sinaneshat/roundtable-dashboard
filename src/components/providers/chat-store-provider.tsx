@@ -94,6 +94,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ CRITICAL FIX: Subscribe to state needed by pending message sender effect
   // These subscriptions ensure effect re-runs when state changes
   const pendingMessage = useStore(store, s => s.pendingMessage);
+  const pendingAttachmentIds = useStore(store, s => s.pendingAttachmentIds);
+  const pendingFileParts = useStore(store, s => s.pendingFileParts);
   const expectedParticipantIds = useStore(store, s => s.expectedParticipantIds);
   const hasSentPendingMessage = useStore(store, s => s.hasSentPendingMessage);
   const isStreaming = useStore(store, s => s.isStreaming);
@@ -208,6 +210,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     mode: thread?.mode,
     // ✅ FIX: Use form state as sole source of truth for web search enabled
     enableWebSearch,
+    // ✅ ATTACHMENTS: Pass attachment IDs for message association
+    pendingAttachmentIds,
+    // ✅ ATTACHMENTS: Pass file parts so AI SDK creates user message with file parts
+    // This ensures file attachments appear immediately in UI without full page refresh
+    pendingFileParts,
     onError: handleError,
     onComplete: handleComplete,
     // Animation tracking: clear all pending animations on round reset

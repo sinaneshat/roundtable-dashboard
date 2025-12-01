@@ -1,10 +1,11 @@
 /**
- * MCP (Model Context Protocol) Route Definitions
+ * MCP (Model Context Protocol) Routes
  *
- * OpenAPI route definitions for MCP server endpoints
- * Following established patterns from chat/route.ts and models/route.ts
+ * Official MCP protocol implementation with JSON-RPC 2.0 transport
+ * Plus REST convenience endpoints for HTTP-based integrations (n8n, etc.)
  *
- * MCP Protocol Reference: https://modelcontextprotocol.io/introduction
+ * Protocol Reference: https://modelcontextprotocol.io/specification
+ * OpenAI Compatibility: https://platform.openai.com/docs/guides/function-calling
  */
 
 import { createRoute } from '@hono/zod-openapi';
@@ -13,47 +14,95 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { StandardApiResponses } from '@/api/core/response-schemas';
 
 import {
-  AddParticipantInputSchema,
-  CreateThreadInputSchema,
-  GenerateAnalysisInputSchema,
-  GenerateResponsesInputSchema,
-  GetRoundAnalysisInputSchema,
-  GetThreadInputSchema,
-  ListModelsInputSchema,
-  ListRoundsInputSchema,
+  JsonRpcRequestSchema,
+  JsonRpcResponseSchema,
   MCPResourcesListResponseSchema,
   MCPToolCallResponseSchema,
   MCPToolsListResponseSchema,
-  RegenerateRoundInputSchema,
-  RemoveParticipantInputSchema,
-  RoundFeedbackInputSchema,
-  SendMessageInputSchema,
-  UpdateParticipantInputSchema,
+  ToolCallParamsSchema,
 } from './schema';
 
 // ============================================================================
-// MCP Server Discovery Routes
+// JSON-RPC Transport (Official MCP Protocol)
 // ============================================================================
 
 /**
- * List Available MCP Tools
- * Returns all tools that can be called via MCP protocol
+ * MCP JSON-RPC Endpoint
+ *
+ * Main MCP protocol endpoint supporting all standard methods:
+ * - initialize: Handshake and capability negotiation
+ * - tools/list: List available tools
+ * - tools/call: Execute a tool
+ * - resources/list: List available resources
+ * - resources/read: Read resource content
  *
  * @auth API Key (x-api-key header)
- * @returns List of available MCP tools with their schemas
+ */
+export const mcpJsonRpcRoute = createRoute({
+  method: 'post',
+  path: '/mcp',
+  tags: ['mcp'],
+  summary: 'MCP JSON-RPC endpoint',
+  description: `
+Main Model Context Protocol endpoint using JSON-RPC 2.0 transport.
+
+**Supported Methods:**
+- \`initialize\` - Protocol handshake
+- \`tools/list\` - List available tools
+- \`tools/call\` - Execute a tool with arguments
+- \`resources/list\` - List user resources (threads)
+- \`resources/read\` - Read resource content
+
+**Example Request:**
+\`\`\`json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}
+\`\`\`
+  `,
+  security: [{ ApiKeyAuth: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: JsonRpcRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'JSON-RPC response',
+      content: {
+        'application/json': {
+          schema: JsonRpcResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+// ============================================================================
+// REST Convenience Endpoints (For HTTP Integrations)
+// ============================================================================
+
+/**
+ * List Tools (REST)
+ * Convenience endpoint for listing tools without JSON-RPC
  */
 export const listToolsRoute = createRoute({
   method: 'get',
   path: '/mcp/tools',
   tags: ['mcp'],
-  summary: 'List available MCP tools',
-  description: 'Returns all tools available via the MCP protocol for AI model integration',
-  security: [
-    { ApiKeyAuth: [] }, // API key authentication via x-api-key header
-  ],
+  summary: 'List MCP tools',
+  description: 'Returns all available tools in MCP format. OpenAI function calling compatible.',
+  security: [{ ApiKeyAuth: [] }],
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'List of available MCP tools',
+      description: 'Tools list with server info',
       content: {
         'application/json': {
           schema: MCPToolsListResponseSchema,
@@ -65,24 +114,19 @@ export const listToolsRoute = createRoute({
 });
 
 /**
- * List Available MCP Resources
- * Returns resources that can be accessed via MCP protocol
- *
- * @auth API Key (x-api-key header)
- * @returns List of accessible resources (threads, models, etc.)
+ * List Resources (REST)
+ * Convenience endpoint for listing resources
  */
 export const listResourcesRoute = createRoute({
   method: 'get',
   path: '/mcp/resources',
   tags: ['mcp'],
-  summary: 'List available MCP resources',
-  description: 'Returns resources accessible via MCP protocol (chat threads, models, etc.)',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
+  summary: 'List MCP resources',
+  description: 'Returns user resources (chat threads) accessible via MCP.',
+  security: [{ ApiKeyAuth: [] }],
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'List of available resources',
+      description: 'Resources list',
       content: {
         'application/json': {
           schema: MCPResourcesListResponseSchema,
@@ -93,546 +137,122 @@ export const listResourcesRoute = createRoute({
   },
 });
 
+/**
+ * Call Tool (REST)
+ * Convenience endpoint for tool execution via HTTP POST
+ */
+export const callToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/call',
+  tags: ['mcp', 'tools'],
+  summary: 'Execute MCP tool',
+  description: `
+Execute a tool by name with arguments. Returns MCP-compliant response.
+
+**Available Tools:**
+- \`create_thread\` - Create multi-model chat thread
+- \`get_thread\` - Get thread with messages
+- \`list_threads\` - List user threads
+- \`delete_thread\` - Delete a thread
+- \`send_message\` - Send message to thread
+- \`generate_responses\` - Generate AI responses
+- \`list_rounds\` - List thread rounds
+- \`regenerate_round\` - Regenerate round responses
+- \`round_feedback\` - Submit round feedback
+- \`generate_analysis\` - Generate round analysis
+- \`get_round_analysis\` - Get existing analysis
+- \`add_participant\` - Add participant to thread
+- \`update_participant\` - Update participant settings
+- \`remove_participant\` - Remove participant
+- \`list_models\` - List available AI models
+
+**Example:**
+\`\`\`json
+{
+  "name": "create_thread",
+  "arguments": {
+    "title": "Product Strategy",
+    "participants": [{"modelId": "anthropic/claude-sonnet-4"}]
+  }
+}
+\`\`\`
+  `,
+  security: [{ ApiKeyAuth: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: ToolCallParamsSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Tool execution result (MCP format)',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * OpenAI Functions Format (REST)
+ * Returns tools in OpenAI function calling format
+ */
+export const openAIFunctionsRoute = createRoute({
+  method: 'get',
+  path: '/mcp/openai/functions',
+  tags: ['mcp'],
+  summary: 'Get tools in OpenAI format',
+  description: 'Returns tools formatted for OpenAI function calling API. Use for n8n AI Agent nodes.',
+  security: [{ ApiKeyAuth: [] }],
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'OpenAI functions array',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object' as const,
+            properties: {
+              success: { type: 'boolean' as const },
+              data: {
+                type: 'array' as const,
+                items: {
+                  type: 'object' as const,
+                  properties: {
+                    type: { type: 'string' as const, enum: ['function'] },
+                    function: {
+                      type: 'object' as const,
+                      properties: {
+                        name: { type: 'string' as const },
+                        description: { type: 'string' as const },
+                        parameters: { type: 'object' as const },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
 // ============================================================================
-// MCP Tool Execution Routes
+// Route Types Export
 // ============================================================================
 
-/**
- * Execute MCP Tool: Create Chat Thread
- * Creates a new multi-model chat thread
- *
- * @auth API Key (x-api-key header)
- * @body CreateThreadInput - Thread configuration
- * @returns Created thread with participants
- */
-export const createThreadToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/create-thread',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Create chat thread',
-  description: 'Creates a new multi-model brainstorming thread via MCP protocol',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: CreateThreadInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Thread created successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Send Message
- * Sends a message to a chat thread and gets AI responses
- *
- * @auth API Key (x-api-key header)
- * @body SendMessageInput - Message content and thread ID
- * @returns Message sent confirmation with AI responses
- */
-export const sendMessageToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/send-message',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Send message to thread',
-  description: 'Sends a message to a chat thread and receives AI participant responses',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: SendMessageInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Message sent successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Get Thread
- * Retrieves a chat thread with its messages and participants
- *
- * @auth API Key (x-api-key header)
- * @body GetThreadInput - Thread ID and options
- * @returns Thread data with messages
- */
-export const getThreadToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/get-thread',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Get chat thread',
-  description: 'Retrieves a chat thread with messages and participant information',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: GetThreadInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Thread retrieved successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: List Models
- * Lists available AI models with filtering options
- *
- * @auth API Key (x-api-key header)
- * @body ListModelsInput - Filter criteria
- * @returns List of available models
- */
-export const listModelsToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/list-models',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: List available models',
-  description: 'Lists AI models available for chat participants with optional filtering',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: ListModelsInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Models list retrieved successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Add Participant
- * Adds a new AI participant to an existing thread
- *
- * @auth API Key (x-api-key header)
- * @body AddParticipantInput - Participant configuration
- * @returns Added participant information
- */
-export const addParticipantToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/add-participant',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Add participant to thread',
-  description: 'Adds a new AI model participant to an existing chat thread',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: AddParticipantInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Participant added successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Generate Responses
- * Triggers server-side AI response generation for all participants
- *
- * @auth API Key (x-api-key header)
- * @body GenerateResponsesInput - Message content and options
- * @returns Generated AI responses
- */
-export const generateResponsesToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/generate-responses',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Generate AI responses',
-  description: 'Triggers sequential AI response generation from all participants (non-streaming)',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: GenerateResponsesInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Responses generated successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Generate Analysis
- * Creates moderator analysis for a round
- *
- * @auth API Key (x-api-key header)
- * @body GenerateAnalysisInput - Thread and round info
- * @returns Generated analysis
- */
-export const generateAnalysisToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/generate-analysis',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Generate round analysis',
-  description: 'Creates AI moderator analysis comparing participant responses',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: GenerateAnalysisInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Analysis generated successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Regenerate Round
- * Deletes and regenerates AI responses for a round
- *
- * @auth API Key (x-api-key header)
- * @body RegenerateRoundInput - Thread and round info
- * @returns Regenerated responses
- */
-export const regenerateRoundToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/regenerate-round',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Regenerate round',
-  description: 'Deletes and regenerates all AI responses for a specific round',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: RegenerateRoundInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Round regenerated successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Round Feedback
- * Submit like/dislike feedback for a round
- *
- * @auth API Key (x-api-key header)
- * @body RoundFeedbackInput - Feedback data
- * @returns Feedback saved confirmation
- */
-export const roundFeedbackToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/round-feedback',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Submit round feedback',
-  description: 'Submit like/dislike feedback for a round',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: RoundFeedbackInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Feedback submitted successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Remove Participant
- * Removes a participant from a thread
- *
- * @auth API Key (x-api-key header)
- * @body RemoveParticipantInput - Participant ID
- * @returns Removal confirmation
- */
-export const removeParticipantToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/remove-participant',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Remove participant',
-  description: 'Removes a participant from a chat thread',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: RemoveParticipantInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Participant removed successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Update Participant
- * Updates participant settings
- *
- * @auth API Key (x-api-key header)
- * @body UpdateParticipantInput - New settings
- * @returns Update confirmation
- */
-export const updateParticipantToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/update-participant',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Update participant',
-  description: 'Updates participant role, system prompt, or priority',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: UpdateParticipantInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Participant updated successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: Get Round Analysis
- * Retrieves moderator analysis for a specific round
- *
- * @auth API Key (x-api-key header)
- * @body GetRoundAnalysisInput - Thread and round info
- * @returns Round analysis data
- */
-export const getRoundAnalysisToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/get-round-analysis',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: Get round analysis',
-  description: 'Retrieves moderator analysis for a specific round',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: GetRoundAnalysisInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Analysis retrieved successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
-
-/**
- * Execute MCP Tool: List Rounds
- * Lists all rounds in a thread
- *
- * @auth API Key (x-api-key header)
- * @body ListRoundsInput - Thread ID
- * @returns List of rounds with metadata
- */
-export const listRoundsToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/list-rounds',
-  tags: ['mcp', 'tools'],
-  summary: 'MCP Tool: List rounds',
-  description: 'Lists all rounds in a chat thread with metadata',
-  security: [
-    { ApiKeyAuth: [] },
-  ],
-  request: {
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: ListRoundsInputSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Rounds listed successfully',
-      content: {
-        'application/json': {
-          schema: MCPToolCallResponseSchema,
-        },
-      },
-    },
-    ...StandardApiResponses.NOT_FOUND,
-    ...StandardApiResponses.UNAUTHORIZED,
-  },
-});
+export type MCPJsonRpcRoute = typeof mcpJsonRpcRoute;
+export type ListToolsRoute = typeof listToolsRoute;
+export type ListResourcesRoute = typeof listResourcesRoute;
+export type CallToolRoute = typeof callToolRoute;
+export type OpenAIFunctionsRoute = typeof openAIFunctionsRoute;

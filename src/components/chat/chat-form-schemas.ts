@@ -31,6 +31,7 @@ export const ThreadInputFormSchema = z.object({
 export type ThreadInputFormData = z.infer<typeof ThreadInputFormSchema>;
 export function toCreateThreadRequest(
   data: ChatInputFormData,
+  attachmentIds?: string[],
 ): z.infer<typeof CreateThreadRequestSchema> {
   return {
     title: 'New Chat',
@@ -46,5 +47,6 @@ export function toCreateThreadRequest(
       systemPrompt: p.settings?.systemPrompt,
     })),
     firstMessage: data.message,
+    attachmentIds: attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
   };
 }

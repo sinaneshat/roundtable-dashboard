@@ -48,3 +48,17 @@ export {
   useCancelSubscriptionMutation,
   useSwitchSubscriptionMutation,
 } from './subscription-management';
+
+// Upload (attachment) mutations (protected)
+export {
+  // Multipart upload lifecycle
+  useAbortMultipartUploadMutation,
+  useCompleteMultipartUploadMutation,
+  useCreateMultipartUploadMutation,
+  // Single-request uploads
+  useDeleteAttachmentMutation,
+  useMultipartUpload,
+  useUpdateAttachmentMutation,
+  useUploadAttachmentMutation,
+  useUploadPartMutation,
+} from './upload-mutations';

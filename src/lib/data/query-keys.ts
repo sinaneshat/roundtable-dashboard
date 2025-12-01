@@ -119,7 +119,22 @@ export const queryKeys = {
         : QueryKeyFactory.list('projects'),
     details: () => [...queryKeys.projects.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('projects', id),
-    knowledgeFiles: (id: string) => QueryKeyFactory.action('projects', 'knowledge', id),
+    attachments: (id: string) => QueryKeyFactory.action('projects', 'attachments', id),
+    memories: (id: string) => QueryKeyFactory.action('projects', 'memories', id),
+    context: (id: string) => QueryKeyFactory.action('projects', 'context', id),
+  },
+
+  // Uploads (Centralized file storage)
+  // Note: Thread/message associations are via junction tables, not direct queries
+  uploads: {
+    all: QueryKeyFactory.base('uploads'),
+    lists: () => [...queryKeys.uploads.all, 'list'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('uploads', 'list', cursor)
+        : QueryKeyFactory.list('uploads'),
+    details: () => [...queryKeys.uploads.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('uploads', id),
   },
 } as const;
 
@@ -228,12 +243,34 @@ export const invalidationPatterns = {
   projectDetail: (projectId: string) => [
     queryKeys.projects.detail(projectId),
     queryKeys.projects.lists(),
-    queryKeys.projects.knowledgeFiles(projectId),
+    queryKeys.projects.attachments(projectId),
+    queryKeys.projects.memories(projectId),
   ],
 
-  // Knowledge file operations
-  knowledgeFiles: (projectId: string) => [
-    queryKeys.projects.knowledgeFiles(projectId),
-    queryKeys.projects.detail(projectId), // Update file counts
+  // Project attachment operations
+  projectAttachments: (projectId: string) => [
+    queryKeys.projects.attachments(projectId),
+    queryKeys.projects.detail(projectId), // Update attachment counts
+  ],
+
+  // Project memory operations
+  projectMemories: (projectId: string) => [
+    queryKeys.projects.memories(projectId),
+    queryKeys.projects.detail(projectId),
+  ],
+
+  // Upload (attachment) operations
+  uploads: [
+    queryKeys.uploads.lists(),
+  ],
+
+  uploadDetail: (uploadId: string) => [
+    queryKeys.uploads.detail(uploadId),
+    queryKeys.uploads.lists(),
+  ],
+
+  // After upload - invalidate upload list
+  afterUpload: () => [
+    queryKeys.uploads.lists(),
   ],
 } as const;

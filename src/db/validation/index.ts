@@ -16,4 +16,5 @@ export * from './auth';
 export * from './billing';
 export * from './chat';
 export * from './project';
+export * from './upload';
 export * from './usage';

@@ -52,6 +52,13 @@ export {
   useSubscriptionsQuery,
 } from './subscriptions';
 
+// Upload queries (protected)
+// Note: Thread/message associations are via junction tables
+export {
+  useUploadQuery,
+  useUploadsQuery,
+} from './uploads';
+
 // Usage queries (protected)
 export {
   useUsageStatsQuery,

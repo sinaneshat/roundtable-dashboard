@@ -8,8 +8,10 @@ import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
+import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
+import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
@@ -22,6 +24,7 @@ import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
+import { hasCitations } from '@/lib/utils/citation-parser';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
 type ModelMessageCardProps = {
@@ -203,6 +206,26 @@ export const ModelMessageCard = memo(({
                           return sortedParts.map((part, partIndex) => {
                             if (part.type === MessagePartTypes.TEXT) {
                               const isLastTextPart = sortedParts.slice(partIndex + 1).every(p => p.type !== MessagePartTypes.TEXT);
+
+                              // ✅ CITATIONS: Use CitedMessageContent when text has citation markers
+                              // Citations are in format [mem_abc123], [thd_xyz456], etc.
+                              const textHasCitations = hasCitations(part.text);
+                              const resolvedCitations = assistantMetadata?.citations;
+
+                              if (textHasCitations) {
+                                return (
+                                  <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
+                                    <CitedMessageContent
+                                      text={part.text}
+                                      citations={resolvedCitations}
+                                      isStreaming={isStreaming}
+                                      className="text-foreground text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    />
+                                    {isStreaming && isLastTextPart && <StreamingCursor />}
+                                  </div>
+                                );
+                              }
+
                               return (
                                 <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
                                   <Streamdown
@@ -265,6 +288,12 @@ export const ModelMessageCard = memo(({
                     )
                   : null}
             </AnimatePresence>
+
+            {/* ✅ SOURCES: Show files/context available to AI */}
+            {/* Displayed even when AI doesn't cite inline, so users know what files were used */}
+            {assistantMetadata?.availableSources && assistantMetadata.availableSources.length > 0 && (
+              <MessageSources sources={assistantMetadata.availableSources} />
+            )}
           </>
         </MessageContent>
         {!hideAvatar && <MessageAvatar src={avatarSrc} name={avatarName} />}

@@ -22,7 +22,7 @@ import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { useBoolean } from '@/hooks/utils';
+import { useBoolean, useChatAttachments } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import {
@@ -87,6 +87,9 @@ export default function ChatThreadScreen({
 }: ChatThreadScreenProps) {
   // Delete dialog
   const isDeleteDialogOpen = useBoolean(false);
+
+  // Chat attachments
+  const chatAttachments = useChatAttachments();
 
   // Thread header
   useThreadHeaderUpdater({
@@ -202,9 +205,27 @@ export default function ChatThreadScreen({
         return;
       }
 
-      await formActions.handleUpdateThreadAndSend(thread.id);
+      // Wait for all uploads to complete before sending
+      if (!chatAttachments.allUploaded) {
+        return;
+      }
+
+      const attachmentIds = chatAttachments.getUploadIds();
+      // Build attachment info for optimistic message file parts
+      const attachmentInfos = chatAttachments.attachments
+        .filter(att => att.status === 'completed' && att.uploadId)
+        .map(att => ({
+          uploadId: att.uploadId!,
+          filename: att.file.name,
+          mimeType: att.file.type,
+          previewUrl: att.preview?.url,
+        }));
+      await formActions.handleUpdateThreadAndSend(thread.id, attachmentIds, attachmentInfos);
+      // ✅ Clear store attachments is called inside handleUpdateThreadAndSend
+      // ✅ Clear hook local state AFTER message is sent (keeps UI consistent with overview)
+      chatAttachments.clearAttachments();
     },
-    [inputValue, selectedParticipants, formActions, thread.id, isSubmitBlocked],
+    [inputValue, selectedParticipants, formActions, thread.id, isSubmitBlocked, chatAttachments],
   );
 
   // ============================================================================
@@ -218,6 +239,7 @@ export default function ChatThreadScreen({
         slug={slug}
         mode="thread"
         onSubmit={handlePromptSubmit}
+        chatAttachments={chatAttachments}
       />
 
       <ChatDeleteDialog

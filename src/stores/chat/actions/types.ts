@@ -15,6 +15,197 @@ import { AnalysisStatusSchema, ChatModeSchema } from '@/api/core/enums';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
 // ============================================================================
+// API RESPONSE SCHEMAS - Single Source of Truth
+// ============================================================================
+
+/**
+ * Standard API response wrapper schema
+ * Validates the common API response structure across all endpoints
+ */
+export const ApiResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.unknown(),
+});
+
+export type ApiResponse = z.infer<typeof ApiResponseSchema>;
+
+// ============================================================================
+// USAGE STATS CACHE SCHEMAS
+// ============================================================================
+
+/**
+ * Usage stats data structure schema
+ * Validates optimistic cache updates for thread/message counts
+ *
+ * SINGLE SOURCE OF TRUTH for usage stats cache validation in mutations
+ */
+export const UsageStatsDataSchema = z.object({
+  messages: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+  }),
+  threads: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+  }),
+  subscription: z.unknown(),
+  period: z.unknown(),
+});
+
+export type UsageStatsData = z.infer<typeof UsageStatsDataSchema>;
+
+/**
+ * Helper function to safely parse usage stats cache data
+ *
+ * **USE THIS INSTEAD OF**: Manual parsing in each mutation
+ *
+ * @param data - Raw cache data from React Query
+ * @returns Validated usage stats data or null if invalid
+ */
+export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
+  // Handle uninitialized queries silently
+  if (data === undefined || data === null) {
+    return null;
+  }
+
+  const response = ApiResponseSchema.safeParse(data);
+  if (!response.success || !response.data.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid API response structure for usage stats:', response.error);
+    }
+    return null;
+  }
+
+  const usageData = UsageStatsDataSchema.safeParse(response.data.data);
+  if (!usageData.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid usage stats data structure:', usageData.error);
+    }
+    return null;
+  }
+
+  return usageData.data;
+}
+
+// ============================================================================
+// THREAD CACHE SCHEMAS
+// ============================================================================
+
+/**
+ * Thread data schema for cache operations
+ * Validates thread object structure for optimistic updates
+ */
+export const ThreadCacheDataSchema = z.object({
+  id: z.string(),
+  title: z.string().optional(),
+  mode: z.string().optional(),
+  status: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  metadata: z.unknown().optional(),
+});
+
+export type ThreadCacheData = z.infer<typeof ThreadCacheDataSchema>;
+
+/**
+ * Thread detail payload schema for cache operations
+ * Validates thread detail payload structure
+ */
+export const ThreadDetailPayloadCacheSchema = z.object({
+  thread: z.unknown(),
+  participants: z.array(z.unknown()).optional(),
+  messages: z.array(z.unknown()).optional(),
+  changelog: z.array(z.unknown()).optional(),
+  user: z.unknown().optional(),
+});
+
+export type ThreadDetailPayloadCache = z.infer<typeof ThreadDetailPayloadCacheSchema>;
+
+/**
+ * Helper function to safely parse thread detail data from cache
+ *
+ * @param data - Raw cache data from React Query
+ * @returns Validated cache data or null if invalid
+ */
+export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPayloadCache | null {
+  // Handle uninitialized queries silently
+  if (data === undefined || data === null) {
+    return null;
+  }
+
+  const response = ApiResponseSchema.safeParse(data);
+  if (!response.success || !response.data.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid API response structure for thread detail:', response.error);
+    }
+    return null;
+  }
+
+  const threadData = ThreadDetailPayloadCacheSchema.safeParse(response.data.data);
+  if (!threadData.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid thread detail data structure:', threadData.error);
+    }
+    return null;
+  }
+
+  return threadData.data;
+}
+
+/**
+ * Paginated page schema for infinite query cache
+ * Validates infinite query page structure
+ */
+export const PaginatedPageCacheSchema = z.object({
+  success: z.boolean(),
+  data: z
+    .object({
+      items: z.array(ThreadCacheDataSchema).optional(),
+    })
+    .optional(),
+});
+
+export type PaginatedPageCache = z.infer<typeof PaginatedPageCacheSchema>;
+
+/**
+ * Infinite query data schema
+ * Validates the complete infinite query structure
+ */
+export const InfiniteQueryCacheSchema = z.object({
+  pages: z.array(PaginatedPageCacheSchema),
+  pageParams: z.array(z.unknown()).optional(),
+});
+
+export type InfiniteQueryCache = z.infer<typeof InfiniteQueryCacheSchema>;
+
+/**
+ * Helper function to safely parse infinite query data from cache
+ *
+ * @param data - Raw cache data from React Query
+ * @returns Validated infinite query data or null if invalid
+ */
+export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | null {
+  // Handle uninitialized queries silently
+  if (data === undefined || data === null) {
+    return null;
+  }
+
+  const queryData = InfiniteQueryCacheSchema.safeParse(data);
+  if (!queryData.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid infinite query data structure:', queryData.error);
+    }
+    return null;
+  }
+
+  return queryData.data;
+}
+
+// ============================================================================
 // DEDUPLICATION OPTIONS SCHEMAS
 // ============================================================================
 

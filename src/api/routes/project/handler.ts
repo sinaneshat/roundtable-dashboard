@@ -11,24 +11,43 @@ import {
   getCursorOrderBy,
   Responses,
 } from '@/api/core';
+import { IdParamSchema } from '@/api/core/schemas';
+import {
+  getAggregatedProjectContext,
+} from '@/api/services/project-context.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import type {
+  addAttachmentToProjectRoute,
+  createProjectMemoryRoute,
   createProjectRoute,
-  deleteKnowledgeFileRoute,
+  deleteProjectMemoryRoute,
   deleteProjectRoute,
+  getProjectAttachmentRoute,
+  getProjectContextRoute,
+  getProjectMemoryRoute,
   getProjectRoute,
-  listKnowledgeFilesRoute,
+  listProjectAttachmentsRoute,
+  listProjectMemoriesRoute,
   listProjectsRoute,
+  removeAttachmentFromProjectRoute,
+  updateProjectAttachmentRoute,
+  updateProjectMemoryRoute,
   updateProjectRoute,
-  uploadKnowledgeFileRoute,
 } from './route';
 import {
+  AddAttachmentToProjectRequestSchema,
+  CreateProjectMemoryRequestSchema,
   CreateProjectRequestSchema,
-  ListKnowledgeFilesQuerySchema,
+  ListProjectAttachmentsQuerySchema,
+  ListProjectMemoriesQuerySchema,
   ListProjectsQuerySchema,
+  ProjectAttachmentParamSchema,
+  ProjectMemoryParamSchema,
+  UpdateProjectAttachmentRequestSchema,
+  UpdateProjectMemoryRequestSchema,
   UpdateProjectRequestSchema,
 } from './schema';
 
@@ -69,11 +88,11 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
       limit: query.limit + 1,
     });
 
-    // Get file counts and thread counts for each project
+    // Get attachment counts and thread counts for each project
     const projectsWithCounts = await Promise.all(
       projects.map(async (project) => {
-        const files = await db.query.projectKnowledgeFile.findMany({
-          where: eq(tables.projectKnowledgeFile.projectId, project.id),
+        const attachments = await db.query.projectAttachment.findMany({
+          where: eq(tables.projectAttachment.projectId, project.id),
         });
 
         const threads = await db.query.chatThread.findMany({
@@ -82,7 +101,7 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
 
         return {
           ...project,
-          fileCount: files.length,
+          attachmentCount: attachments.length,
           threadCount: threads.length,
         };
       }),
@@ -105,18 +124,12 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
 export const getProjectHandler: RouteHandler<typeof getProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateParams: IdParamSchema,
     operationName: 'getProject',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id } = c.req.param();
-
-    if (!id) {
-      throw createError.badRequest('Project ID is required', {
-        errorType: 'validation',
-        field: 'id',
-      });
-    }
+    const { id } = c.validated.params;
 
     const db = await getDbAsync();
 
@@ -137,8 +150,8 @@ export const getProjectHandler: RouteHandler<typeof getProjectRoute, ApiEnv> = c
     }
 
     // Get counts
-    const files = await db.query.projectKnowledgeFile.findMany({
-      where: eq(tables.projectKnowledgeFile.projectId, project.id),
+    const attachments = await db.query.projectAttachment.findMany({
+      where: eq(tables.projectAttachment.projectId, project.id),
     });
 
     const threads = await db.query.chatThread.findMany({
@@ -147,7 +160,7 @@ export const getProjectHandler: RouteHandler<typeof getProjectRoute, ApiEnv> = c
 
     return Responses.ok(c, {
       ...project,
-      fileCount: files.length,
+      attachmentCount: attachments.length,
       threadCount: threads.length,
     });
   },
@@ -186,6 +199,8 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
         userId: user.id,
         name: body.name,
         description: body.description,
+        color: body.color || 'blue',
+        customInstructions: body.customInstructions,
         autoragInstanceId,
         r2FolderPrefix,
         settings: body.settings,
@@ -198,7 +213,7 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
     c.status(201);
     return Responses.ok(c, {
       ...project,
-      fileCount: 0,
+      attachmentCount: 0,
       threadCount: 0,
     });
   },
@@ -210,19 +225,13 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
 export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateParams: IdParamSchema,
     validateBody: UpdateProjectRequestSchema,
     operationName: 'updateProject',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id } = c.req.param();
-
-    if (!id) {
-      throw createError.badRequest('Project ID is required', {
-        errorType: 'validation',
-        field: 'id',
-      });
-    }
+    const { id } = c.validated.params;
 
     const body = c.validated.body;
     const db = await getDbAsync();
@@ -247,6 +256,8 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
     const updateData: {
       name?: string;
       description?: string | null;
+      color?: typeof body.color;
+      customInstructions?: string | null;
       autoragInstanceId?: string | null;
       settings?: typeof body.settings;
       metadata?: typeof body.metadata;
@@ -257,6 +268,10 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       updateData.name = String(body.name);
     if (body.description !== undefined)
       updateData.description = body.description ? String(body.description) : null;
+    if (body.color !== undefined)
+      updateData.color = body.color ?? undefined;
+    if (body.customInstructions !== undefined)
+      updateData.customInstructions = body.customInstructions || null;
     if (body.autoragInstanceId !== undefined)
       updateData.autoragInstanceId = body.autoragInstanceId;
     if (body.settings !== undefined)
@@ -271,8 +286,8 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       .returning();
 
     // Get counts
-    const files = await db.query.projectKnowledgeFile.findMany({
-      where: eq(tables.projectKnowledgeFile.projectId, id),
+    const attachments = await db.query.projectAttachment.findMany({
+      where: eq(tables.projectAttachment.projectId, id),
     });
 
     const threads = await db.query.chatThread.findMany({
@@ -281,30 +296,24 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
 
     return Responses.ok(c, {
       ...updated,
-      fileCount: files.length,
+      attachmentCount: attachments.length,
       threadCount: threads.length,
     });
   },
 );
 
 /**
- * Delete a project (cascades to files and updates threads)
+ * Delete a project (cascades to attachments and updates threads)
  */
 export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateParams: IdParamSchema,
     operationName: 'deleteProject',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id } = c.req.param();
-
-    if (!id) {
-      throw createError.badRequest('Project ID is required', {
-        errorType: 'validation',
-        field: 'id',
-      });
-    }
+    const { id } = c.validated.params;
 
     const db = await getDbAsync();
 
@@ -324,32 +333,9 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
       });
     }
 
-    // Get all knowledge files for R2 cleanup
-    const knowledgeFiles = await db.query.projectKnowledgeFile.findMany({
-      where: eq(tables.projectKnowledgeFile.projectId, id),
-    });
-
-    // Delete project from DB first (critical - must complete)
+    // Delete project from DB (cascade will handle projectAttachment and projectMemory)
+    // Note: We don't delete R2 files here since they're managed via the upload table
     await db.delete(tables.chatProject).where(eq(tables.chatProject.id, id));
-
-    // ✅ PERFORMANCE OPTIMIZATION: Non-blocking R2 cleanup
-    // Delete R2 files asynchronously via waitUntil() to avoid blocking response
-    // Expected gain: 50-200ms per project deletion (depends on file count)
-    const deleteR2Files = async () => {
-      for (const file of knowledgeFiles) {
-        try {
-          await c.env.UPLOADS_R2_BUCKET.delete(file.r2Key);
-        } catch {
-          // Silent failure - R2 cleanup is best-effort
-        }
-      }
-    };
-
-    if (c.executionCtx) {
-      c.executionCtx.waitUntil(deleteR2Files());
-    } else {
-      deleteR2Files().catch(() => {});
-    }
 
     return Responses.ok(c, {
       id,
@@ -359,29 +345,22 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
 );
 
 // ============================================================================
-// KNOWLEDGE FILE HANDLERS
+// PROJECT ATTACHMENT HANDLERS (Reference-based, S3/R2 Best Practice)
 // ============================================================================
 
 /**
- * List knowledge files for a project
+ * List attachments for a project
  */
-export const listKnowledgeFilesHandler: RouteHandler<typeof listKnowledgeFilesRoute, ApiEnv> = createHandler(
+export const listProjectAttachmentsHandler: RouteHandler<typeof listProjectAttachmentsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: ListKnowledgeFilesQuerySchema,
-    operationName: 'listKnowledgeFiles',
+    validateParams: IdParamSchema,
+    validateQuery: ListProjectAttachmentsQuerySchema,
+    operationName: 'listProjectAttachments',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: projectId } = c.req.param();
-
-    if (!projectId) {
-      throw createError.badRequest('Project ID is required', {
-        errorType: 'validation',
-        field: 'id',
-      });
-    }
-
+    const { id: projectId } = c.validated.params;
     const query = c.validated.query;
     const db = await getDbAsync();
 
@@ -402,24 +381,25 @@ export const listKnowledgeFilesHandler: RouteHandler<typeof listKnowledgeFilesRo
     }
 
     // Build filters
-    const filters = [eq(tables.projectKnowledgeFile.projectId, projectId)];
+    const filters = [eq(tables.projectAttachment.projectId, projectId)];
 
-    if (query.status) {
-      filters.push(eq(tables.projectKnowledgeFile.status, query.status));
+    if (query.indexStatus) {
+      filters.push(eq(tables.projectAttachment.indexStatus, query.indexStatus));
     }
 
-    // Fetch files with cursor pagination
-    const files = await db.query.projectKnowledgeFile.findMany({
+    // Fetch attachments with cursor pagination
+    const attachments = await db.query.projectAttachment.findMany({
       where: buildCursorWhereWithFilters(
-        tables.projectKnowledgeFile.createdAt,
+        tables.projectAttachment.createdAt,
         query.cursor,
         'desc',
         filters,
       ),
-      orderBy: getCursorOrderBy(tables.projectKnowledgeFile.createdAt, 'desc'),
+      orderBy: getCursorOrderBy(tables.projectAttachment.createdAt, 'desc'),
       limit: query.limit + 1,
       with: {
-        uploadedByUser: {
+        upload: true,
+        addedByUser: {
           columns: {
             id: true,
             name: true,
@@ -429,11 +409,20 @@ export const listKnowledgeFilesHandler: RouteHandler<typeof listKnowledgeFilesRo
       },
     });
 
+    // Transform to response format (omit r2Key from nested upload)
+    const transformedAttachments = attachments.map((pa) => {
+      const { r2Key: _r2Key, ...uploadWithoutR2Key } = pa.upload;
+      return {
+        ...pa,
+        upload: uploadWithoutR2Key,
+      };
+    });
+
     // Apply pagination
     const { items, pagination } = applyCursorPagination(
-      files,
+      transformedAttachments,
       query.limit,
-      file => createTimestampCursor(file.createdAt),
+      attachment => createTimestampCursor(attachment.createdAt),
     );
 
     return Responses.cursorPaginated(c, items, pagination);
@@ -441,24 +430,20 @@ export const listKnowledgeFilesHandler: RouteHandler<typeof listKnowledgeFilesRo
 );
 
 /**
- * Upload a knowledge file to a project
+ * Add an existing upload to a project (reference-based)
+ * S3/R2 Best Practice: Reference existing uploads instead of direct file upload
  */
-export const uploadKnowledgeFileHandler: RouteHandler<typeof uploadKnowledgeFileRoute, ApiEnv> = createHandler(
+export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    operationName: 'uploadKnowledgeFile',
+    validateParams: IdParamSchema,
+    validateBody: AddAttachmentToProjectRequestSchema,
+    operationName: 'addUploadToProject',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: projectId } = c.req.param();
-
-    if (!projectId) {
-      throw createError.badRequest('Project ID is required', {
-        errorType: 'validation',
-        field: 'id',
-      });
-    }
-
+    const { id: projectId } = c.validated.params;
+    const body = c.validated.body;
     const db = await getDbAsync();
 
     // Verify project ownership
@@ -477,114 +462,86 @@ export const uploadKnowledgeFileHandler: RouteHandler<typeof uploadKnowledgeFile
       });
     }
 
-    // Parse multipart form data
-    const body = await c.req.parseBody();
-    const file = body.file as File;
+    // Verify upload exists and user has access
+    const existingUpload = await db.query.upload.findFirst({
+      where: and(
+        eq(tables.upload.id, body.uploadId),
+        eq(tables.upload.userId, user.id),
+      ),
+    });
 
-    if (!file) {
-      throw createError.badRequest('No file provided', {
-        errorType: 'validation',
-        field: 'file',
+    if (!existingUpload) {
+      throw createError.notFound(`Upload not found: ${body.uploadId}`, {
+        errorType: 'resource',
+        resource: 'upload',
+        resourceId: body.uploadId,
       });
     }
 
-    // Validate file size (check project settings)
-    const maxFileSize = project.settings?.maxFileSize || 10 * 1024 * 1024; // 10MB default
-    if (file.size > maxFileSize) {
-      throw createError.badRequest(
-        `File too large (max ${maxFileSize / 1024 / 1024}MB)`,
-        {
-          errorType: 'validation',
-          field: 'file',
-        },
-      );
-    }
-
-    // Validate file type (check project settings)
-    const allowedTypes = project.settings?.allowedFileTypes || [
-      'application/pdf',
-      'text/plain',
-      'text/html',
-      'text/markdown',
-      'text/csv',
-      'image/png',
-      'image/jpeg',
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      throw createError.badRequest(
-        `File type not allowed: ${file.type}`,
-        {
-          errorType: 'validation',
-          field: 'file',
-        },
-      );
-    }
-
-    // Generate R2 key
-    const fileId = ulid();
-    const sanitizedFilename = file.name.replace(/[^\w.-]/g, '_');
-    const r2Key = `${project.r2FolderPrefix}${fileId}_${sanitizedFilename}`;
-
-    // Upload to R2
-    const fileBuffer = await file.arrayBuffer();
-    await c.env.UPLOADS_R2_BUCKET.put(r2Key, fileBuffer, {
-      httpMetadata: {
-        contentType: file.type,
-      },
-      customMetadata: {
-        projectId,
-        uploadedBy: user.id,
-        filename: file.name,
-        context: (body.context as string) || '',
-      },
+    // Check if upload is already in project
+    const existingProjectAttachment = await db.query.projectAttachment.findFirst({
+      where: and(
+        eq(tables.projectAttachment.projectId, projectId),
+        eq(tables.projectAttachment.uploadId, body.uploadId),
+      ),
     });
 
-    // Create DB record
-    const [knowledgeFile] = await db
-      .insert(tables.projectKnowledgeFile)
+    if (existingProjectAttachment) {
+      throw createError.conflict(`Upload already in project`, {
+        errorType: 'resource',
+        resource: 'projectAttachment',
+        resourceId: existingProjectAttachment.id,
+      });
+    }
+
+    // Create project attachment reference
+    const projectAttachmentId = ulid();
+    const [projectAttachment] = await db
+      .insert(tables.projectAttachment)
       .values({
-        id: fileId,
+        id: projectAttachmentId,
         projectId,
-        filename: file.name,
-        r2Key,
-        uploadedBy: user.id,
-        fileSize: file.size,
-        fileType: file.type,
-        status: 'uploaded', // AutoRAG will index asynchronously
-        metadata: {
-          description: (body.description as string) || undefined,
-          context: (body.context as string) || undefined,
-          tags: body.tags ? JSON.parse(body.tags as string) : undefined,
+        uploadId: body.uploadId,
+        addedBy: user.id,
+        indexStatus: 'pending',
+        ragMetadata: {
+          context: body.context,
+          description: body.description,
+          tags: body.tags,
         },
         createdAt: new Date(),
+        updatedAt: new Date(),
       })
       .returning();
 
+    // Get the upload details for response
+    const { r2Key: _r2Key, ...uploadWithoutR2Key } = existingUpload;
+
     c.status(201);
-    return Responses.ok(c, knowledgeFile);
+    return Responses.ok(c, {
+      ...projectAttachment,
+      upload: uploadWithoutR2Key,
+      addedByUser: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    });
   },
 );
 
 /**
- * Delete a knowledge file
+ * Get a single project attachment
  */
-export const deleteKnowledgeFileHandler: RouteHandler<typeof deleteKnowledgeFileRoute, ApiEnv> = createHandler(
+export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachmentRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    operationName: 'deleteKnowledgeFile',
+    validateParams: ProjectAttachmentParamSchema,
+    operationName: 'getProjectAttachment',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: projectId, fileId } = c.req.param();
-
-    if (!projectId || !fileId) {
-      throw createError.badRequest('Project ID and File ID are required', {
-        errorType: 'validation',
-        field: !projectId ? 'id' : 'fileId',
-      });
-    }
-
+    const { id: projectId, attachmentId } = c.validated.params;
     const db = await getDbAsync();
 
     // Verify project ownership
@@ -603,47 +560,639 @@ export const deleteKnowledgeFileHandler: RouteHandler<typeof deleteKnowledgeFile
       });
     }
 
-    // Get file
-    const file = await db.query.projectKnowledgeFile.findFirst({
+    // Get project attachment with related data
+    const projectAttachment = await db.query.projectAttachment.findFirst({
       where: and(
-        eq(tables.projectKnowledgeFile.id, fileId),
-        eq(tables.projectKnowledgeFile.projectId, projectId),
+        eq(tables.projectAttachment.id, attachmentId),
+        eq(tables.projectAttachment.projectId, projectId),
       ),
+      with: {
+        upload: true,
+        addedByUser: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
-    if (!file) {
-      throw createError.notFound(`File not found: ${fileId}`, {
+    if (!projectAttachment) {
+      throw createError.notFound(`Attachment not found: ${attachmentId}`, {
         errorType: 'resource',
-        resource: 'knowledgeFile',
-        resourceId: fileId,
+        resource: 'projectAttachment',
+        resourceId: attachmentId,
       });
     }
 
-    // Delete from DB first (critical - must complete)
+    // Transform to response format (omit r2Key)
+    const { r2Key: _r2Key, ...uploadWithoutR2Key } = projectAttachment.upload;
+
+    return Responses.ok(c, {
+      ...projectAttachment,
+      upload: uploadWithoutR2Key,
+    });
+  },
+);
+
+/**
+ * Update project attachment metadata
+ */
+export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAttachmentRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ProjectAttachmentParamSchema,
+    validateBody: UpdateProjectAttachmentRequestSchema,
+    operationName: 'updateProjectAttachment',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId, attachmentId } = c.validated.params;
+    const body = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Get existing project attachment
+    const existing = await db.query.projectAttachment.findFirst({
+      where: and(
+        eq(tables.projectAttachment.id, attachmentId),
+        eq(tables.projectAttachment.projectId, projectId),
+      ),
+      with: {
+        upload: true,
+        addedByUser: {
+          columns: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      throw createError.notFound(`Attachment not found: ${attachmentId}`, {
+        errorType: 'resource',
+        resource: 'projectAttachment',
+        resourceId: attachmentId,
+      });
+    }
+
+    // Update ragMetadata - explicitly typed to match schema
+    const currentMetadata = existing.ragMetadata || {};
+    const updatedMetadata: {
+      context?: string;
+      description?: string;
+      tags?: string[];
+      indexedAt?: string;
+      errorMessage?: string;
+    } = { ...currentMetadata };
+
+    if (body.context !== undefined)
+      updatedMetadata.context = body.context ?? undefined;
+    if (body.description !== undefined)
+      updatedMetadata.description = body.description ?? undefined;
+    if (body.tags !== undefined)
+      updatedMetadata.tags = body.tags;
+
+    const [updated] = await db
+      .update(tables.projectAttachment)
+      .set({
+        ragMetadata: updatedMetadata,
+        updatedAt: new Date(),
+      })
+      .where(eq(tables.projectAttachment.id, attachmentId))
+      .returning();
+
+    // Transform response (omit r2Key)
+    const { r2Key: _r2Key, ...uploadWithoutR2Key } = existing.upload;
+
+    return Responses.ok(c, {
+      ...updated,
+      upload: uploadWithoutR2Key,
+      addedByUser: existing.addedByUser,
+    });
+  },
+);
+
+/**
+ * Remove an attachment from a project (reference removal, not file deletion)
+ * S3/R2 Best Practice: Only removes the reference, the underlying file remains in the upload table
+ */
+export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttachmentFromProjectRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ProjectAttachmentParamSchema,
+    operationName: 'removeAttachmentFromProject',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId, attachmentId } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Verify attachment exists in project
+    const projectAttachment = await db.query.projectAttachment.findFirst({
+      where: and(
+        eq(tables.projectAttachment.id, attachmentId),
+        eq(tables.projectAttachment.projectId, projectId),
+      ),
+    });
+
+    if (!projectAttachment) {
+      throw createError.notFound(`Attachment not found: ${attachmentId}`, {
+        errorType: 'resource',
+        resource: 'projectAttachment',
+        resourceId: attachmentId,
+      });
+    }
+
+    // Remove reference (not the underlying file)
     await db
-      .delete(tables.projectKnowledgeFile)
-      .where(eq(tables.projectKnowledgeFile.id, fileId));
+      .delete(tables.projectAttachment)
+      .where(eq(tables.projectAttachment.id, attachmentId));
 
-    // ✅ PERFORMANCE OPTIMIZATION: Non-blocking R2 cleanup
-    // Delete R2 file asynchronously via waitUntil() to avoid blocking response
-    // Expected gain: 50-200ms per file deletion
-    const deleteR2File = async () => {
-      try {
-        await c.env.UPLOADS_R2_BUCKET.delete(file.r2Key);
-      } catch {
-        // Silent failure - R2 cleanup is best-effort
-      }
-    };
+    return Responses.ok(c, {
+      id: attachmentId,
+      deleted: true,
+    });
+  },
+);
 
-    if (c.executionCtx) {
-      c.executionCtx.waitUntil(deleteR2File());
-    } else {
-      deleteR2File().catch(() => {});
+// ============================================================================
+// PROJECT MEMORY HANDLERS
+// ============================================================================
+
+/**
+ * List memories for a project
+ */
+export const listProjectMemoriesHandler: RouteHandler<typeof listProjectMemoriesRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    validateQuery: ListProjectMemoriesQuerySchema,
+    operationName: 'listProjectMemories',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId } = c.validated.params;
+    const query = c.validated.query;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Build filters
+    const filters = [eq(tables.projectMemory.projectId, projectId)];
+
+    if (query.source) {
+      filters.push(eq(tables.projectMemory.source, query.source));
+    }
+
+    if (query.isActive !== undefined) {
+      filters.push(eq(tables.projectMemory.isActive, query.isActive === 'true'));
+    }
+
+    // Fetch memories with cursor pagination
+    const memories = await db.query.projectMemory.findMany({
+      where: buildCursorWhereWithFilters(
+        tables.projectMemory.createdAt,
+        query.cursor,
+        'desc',
+        filters,
+      ),
+      orderBy: getCursorOrderBy(tables.projectMemory.createdAt, 'desc'),
+      limit: query.limit + 1,
+      with: {
+        sourceThread: {
+          columns: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    // Transform to include sourceThreadTitle
+    const transformedMemories = memories.map((memory) => {
+      const { sourceThread, ...rest } = memory;
+      return {
+        ...rest,
+        sourceThreadTitle: sourceThread?.title || null,
+      };
+    });
+
+    // Apply pagination
+    const { items, pagination } = applyCursorPagination(
+      transformedMemories,
+      query.limit,
+      memory => createTimestampCursor(memory.createdAt),
+    );
+
+    return Responses.cursorPaginated(c, items, pagination);
+  },
+);
+
+/**
+ * Create a memory for a project
+ */
+export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemoryRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    validateBody: CreateProjectMemoryRequestSchema,
+    operationName: 'createProjectMemory',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId } = c.validated.params;
+    const body = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    const memoryId = ulid();
+    const [memory] = await db
+      .insert(tables.projectMemory)
+      .values({
+        id: memoryId,
+        projectId,
+        content: body.content,
+        summary: body.summary,
+        source: body.source || 'explicit',
+        importance: body.importance || 5,
+        isActive: true,
+        metadata: body.metadata,
+        createdBy: user.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    c.status(201);
+    return Responses.ok(c, {
+      ...memory,
+      sourceThreadTitle: null,
+    });
+  },
+);
+
+/**
+ * Get a single project memory
+ */
+export const getProjectMemoryHandler: RouteHandler<typeof getProjectMemoryRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ProjectMemoryParamSchema,
+    operationName: 'getProjectMemory',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId, memoryId } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Get memory with source thread
+    const memory = await db.query.projectMemory.findFirst({
+      where: and(
+        eq(tables.projectMemory.id, memoryId),
+        eq(tables.projectMemory.projectId, projectId),
+      ),
+      with: {
+        sourceThread: {
+          columns: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    if (!memory) {
+      throw createError.notFound(`Memory not found: ${memoryId}`, {
+        errorType: 'resource',
+        resource: 'projectMemory',
+        resourceId: memoryId,
+      });
+    }
+
+    const { sourceThread, ...rest } = memory;
+    return Responses.ok(c, {
+      ...rest,
+      sourceThreadTitle: sourceThread?.title || null,
+    });
+  },
+);
+
+/**
+ * Update a project memory
+ */
+export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemoryRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ProjectMemoryParamSchema,
+    validateBody: UpdateProjectMemoryRequestSchema,
+    operationName: 'updateProjectMemory',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId, memoryId } = c.validated.params;
+    const body = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Verify memory exists
+    const existing = await db.query.projectMemory.findFirst({
+      where: and(
+        eq(tables.projectMemory.id, memoryId),
+        eq(tables.projectMemory.projectId, projectId),
+      ),
+    });
+
+    if (!existing) {
+      throw createError.notFound(`Memory not found: ${memoryId}`, {
+        errorType: 'resource',
+        resource: 'projectMemory',
+        resourceId: memoryId,
+      });
+    }
+
+    // Build update object
+    const updateData: {
+      content?: string;
+      summary?: string | null;
+      importance?: number;
+      isActive?: boolean;
+      metadata?: typeof body.metadata;
+      updatedAt: Date;
+    } = { updatedAt: new Date() };
+
+    if (body.content !== undefined)
+      updateData.content = body.content;
+    if (body.summary !== undefined)
+      updateData.summary = body.summary;
+    if (body.importance !== undefined)
+      updateData.importance = body.importance;
+    if (body.isActive !== undefined)
+      updateData.isActive = body.isActive;
+    if (body.metadata !== undefined)
+      updateData.metadata = body.metadata;
+
+    const [updated] = await db
+      .update(tables.projectMemory)
+      .set(updateData)
+      .where(eq(tables.projectMemory.id, memoryId))
+      .returning();
+
+    if (!updated) {
+      throw createError.notFound(`Memory not found: ${memoryId}`, {
+        errorType: 'resource',
+        resource: 'projectMemory',
+        resourceId: memoryId,
+      });
+    }
+
+    // Get source thread for response
+    let sourceThreadTitle: string | null = null;
+    if (updated.sourceThreadId) {
+      const thread = await db.query.chatThread.findFirst({
+        where: eq(tables.chatThread.id, updated.sourceThreadId),
+        columns: { title: true },
+      });
+      sourceThreadTitle = thread?.title || null;
     }
 
     return Responses.ok(c, {
-      id: fileId,
+      ...updated,
+      sourceThreadTitle,
+    });
+  },
+);
+
+/**
+ * Delete a project memory
+ */
+export const deleteProjectMemoryHandler: RouteHandler<typeof deleteProjectMemoryRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ProjectMemoryParamSchema,
+    operationName: 'deleteProjectMemory',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId, memoryId } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Verify memory exists
+    const memory = await db.query.projectMemory.findFirst({
+      where: and(
+        eq(tables.projectMemory.id, memoryId),
+        eq(tables.projectMemory.projectId, projectId),
+      ),
+    });
+
+    if (!memory) {
+      throw createError.notFound(`Memory not found: ${memoryId}`, {
+        errorType: 'resource',
+        resource: 'projectMemory',
+        resourceId: memoryId,
+      });
+    }
+
+    // Delete memory
+    await db
+      .delete(tables.projectMemory)
+      .where(eq(tables.projectMemory.id, memoryId));
+
+    return Responses.ok(c, {
+      id: memoryId,
       deleted: true,
+    });
+  },
+);
+
+// ============================================================================
+// PROJECT CONTEXT HANDLER
+// ============================================================================
+
+/**
+ * Get aggregated project context for RAG
+ * Includes memories, cross-chat context, search history, and analyses
+ */
+export const getProjectContextHandler: RouteHandler<typeof getProjectContextRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    operationName: 'getProjectContext',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Get aggregated context (using empty thread ID for all threads)
+    const context = await getAggregatedProjectContext({
+      projectId,
+      currentThreadId: '', // Get context from all threads
+      userQuery: '', // Not filtering by query
+      db,
+    });
+
+    return Responses.ok(c, {
+      memories: {
+        items: context.memories.memories.map(m => ({
+          id: m.id,
+          content: m.content,
+          summary: m.summary,
+          source: m.source,
+          importance: m.importance,
+        })),
+        totalCount: context.memories.totalCount,
+      },
+      recentChats: {
+        threads: context.chats.threads.map(t => ({
+          id: t.id,
+          title: t.title,
+          messageExcerpt: t.messages[0]?.content.slice(0, 200) || '',
+        })),
+        totalCount: context.chats.totalThreads,
+      },
+      searches: {
+        items: context.searches.searches.map(s => ({
+          threadTitle: s.threadTitle,
+          userQuery: s.userQuery,
+          analysis: s.analysis,
+        })),
+        totalCount: context.searches.totalCount,
+      },
+      analyses: {
+        items: context.analyses.analyses.map(a => ({
+          threadTitle: a.threadTitle,
+          userQuestion: a.userQuestion,
+          summary: a.summary,
+        })),
+        totalCount: context.analyses.totalCount,
+      },
     });
   },
 );

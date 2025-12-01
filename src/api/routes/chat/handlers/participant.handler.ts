@@ -22,7 +22,6 @@ import type {
   deleteParticipantRoute,
   updateParticipantRoute,
 } from '../route';
-import type { AddParticipantRequest, UpdateParticipantRequest } from '../schema';
 import {
   AddParticipantRequestSchema,
   UpdateParticipantRequestSchema,
@@ -38,8 +37,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
   async (c, batch) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
-    const body: AddParticipantRequest = AddParticipantRequestSchema.parse(c.validated.body);
+    // ✅ TYPE-SAFE: createHandler validates body via validateBody config
+    const body = c.validated.body;
     const db = batch.db;
     await verifyThreadOwnership(id, user.id, db);
     const userTier = await getUserTier(user.id);
@@ -101,8 +100,8 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
-    const body: UpdateParticipantRequest = UpdateParticipantRequestSchema.parse(c.validated.body);
+    // ✅ TYPE-SAFE: createHandler validates body via validateBody config
+    const body = c.validated.body;
     const db = await getDbAsync();
     const participant = await verifyParticipantOwnership(id, user.id, db);
     const [updatedParticipant] = await db

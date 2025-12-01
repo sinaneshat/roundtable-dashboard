@@ -12,6 +12,7 @@ import type { UIMessage } from 'ai';
 import { extractReasoningMiddleware, RetryError, streamText, wrapLanguageModel } from 'ai';
 import { and, asc, eq } from 'drizzle-orm';
 import { HTTPException } from 'hono/http-exception';
+import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
@@ -79,7 +80,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const executionCtx = c.executionCtx;
 
     const { user } = c.auth();
-    const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode, enableWebSearch: providedEnableWebSearch } = c.validated.body;
+    const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode, enableWebSearch: providedEnableWebSearch, attachmentIds } = c.validated.body;
 
     // =========================================================================
     // STEP 1: Validate incoming message
@@ -379,6 +380,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 createdAt: new Date(),
               });
               await incrementMessageUsage(user.id, 1);
+
+              // ✅ Associate attachments with the user message
+              if (attachmentIds && attachmentIds.length > 0) {
+                const messageUploadValues = attachmentIds.map((uploadId, index) => ({
+                  id: ulid(),
+                  messageId: lastMessage.id,
+                  uploadId,
+                  displayOrder: index,
+                  createdAt: new Date(),
+                }));
+
+                await db.insert(tables.messageUpload).values(messageUploadValues);
+              }
             }
           }
         }
@@ -403,12 +417,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       : undefined;
 
     // Prepare and validate messages
+    // ✅ MULTI-MODAL: Pass R2 bucket and attachmentIds to enable image/file processing
+    // The conversion to base64 data URLs happens inside prepareValidatedMessages (backend only)
     const { modelMessages } = await prepareValidatedMessages({
       previousDbMessages,
       newMessage: message as UIMessage,
+      r2Bucket: c.env.UPLOADS_R2_BUCKET,
+      db,
+      attachmentIds,
     });
 
-    // Build system prompt with RAG context
+    // Build system prompt with RAG context and citation support
     const userQuery = extractUserQuery([...previousMessages, message as UIMessage]);
     const baseSystemPrompt = participant.settings?.systemPrompt
       || buildParticipantSystemPrompt(participant.role, thread.mode);
@@ -417,15 +436,35 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Type cast needed because Cloudflare Ai type is more general than CloudflareAiBinding
     // Safe because: autorag() exists on actual Cloudflare AI binding at runtime
     // Service handles undefined AI gracefully (falls back to non-RAG prompt)
-    const systemPrompt = await buildSystemPromptWithContext({
+    // ✅ CITATIONS: buildSystemPromptWithContext returns citation source map for resolution
+    // citationSourceMap is passed to saveStreamedMessage to resolve [source_id] markers
+    // ✅ AVAILABLE SOURCES: citableSources converted to availableSources for "Sources" UI
+    // ✅ ATTACHMENTS: Pass attachmentIds for AI to access uploaded file content
+    const { systemPrompt, citationSourceMap, citableSources } = await buildSystemPromptWithContext({
       participant,
       thread,
       userQuery,
       previousDbMessages,
       currentRoundNumber,
-      env: { AI: c.env.AI as unknown as CloudflareAiBinding },
+      env: { AI: c.env.AI as unknown as CloudflareAiBinding, UPLOADS_R2_BUCKET: c.env.UPLOADS_R2_BUCKET },
       db,
+      attachmentIds,
     });
+
+    // ✅ AVAILABLE SOURCES: Convert citableSources to availableSources format for "Sources" UI
+    // This ensures the UI can show what files/context the AI had access to
+    // Even if the AI doesn't cite inline, users see what sources were available
+    const availableSources = citableSources
+      .filter(source => source.type === 'attachment') // Only show attachments in Sources UI for now
+      .map(source => ({
+        id: source.id,
+        sourceType: source.type,
+        title: source.title,
+        downloadUrl: source.metadata.downloadUrl,
+        filename: source.metadata.filename,
+        mimeType: source.metadata.mimeType,
+        fileSize: source.metadata.fileSize,
+      }));
 
     // Calculate token limits
     const systemPromptTokens = Math.ceil(systemPrompt.length / 4);
@@ -862,6 +901,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         }
 
         // Delegate to message persistence service
+        // ✅ CITATIONS: Pass citationSourceMap for resolving [source_id] markers in AI response
+        // ✅ AVAILABLE SOURCES: Pass availableSources for "Sources" UI even without inline citations
         await saveStreamedMessage({
           messageId,
           threadId,
@@ -877,6 +918,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           participants,
           threadMode: thread.mode,
           db,
+          citationSourceMap,
+          availableSources,
         });
 
         // =========================================================================

@@ -84,6 +84,8 @@ import type {
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
+import type { FilePreview } from '@/hooks/utils/use-file-preview';
+import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { sortByPriority } from '@/lib/utils/participant';
@@ -97,6 +99,7 @@ import {
   ANALYSIS_DEFAULTS,
   ANALYSIS_STATE_RESET,
   ANIMATION_DEFAULTS,
+  ATTACHMENTS_DEFAULTS,
   CALLBACKS_DEFAULTS,
   COMPLETE_RESET_STATE,
   DATA_DEFAULTS,
@@ -118,6 +121,7 @@ import {
 import type {
   AnalysisSlice,
   AnimationSlice,
+  AttachmentsSlice,
   CallbacksSlice,
   ChatStore,
   DataSlice,
@@ -126,6 +130,7 @@ import type {
   FormSlice,
   OperationsSlice,
   ParticipantConfig,
+  PendingAttachment,
   PreSearchSlice,
   ScreenSlice,
   StreamResumptionSlice,
@@ -863,6 +868,8 @@ const createDataSlice: StateCreator<
     set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
   setPendingMessage: (value: string | null) =>
     set({ pendingMessage: value }, false, 'data/setPendingMessage'),
+  setPendingAttachmentIds: (value: string[] | null) =>
+    set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
   setStreamingRoundNumber: (value: number | null) =>
@@ -1185,6 +1192,76 @@ const createAnimationSlice: StateCreator<
 });
 
 /**
+ * Attachments Slice - File attachment management
+ * Manages pending file attachments for chat input before message submission
+ */
+const createAttachmentsSlice: StateCreator<
+  ChatStore,
+  [['zustand/devtools', never]],
+  [],
+  AttachmentsSlice
+> = (set, get) => ({
+  ...ATTACHMENTS_DEFAULTS,
+
+  addAttachments: (files: File[]) => {
+    const newAttachments: PendingAttachment[] = files.map(file => ({
+      id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      file,
+    }));
+
+    set(
+      state => ({
+        pendingAttachments: [...state.pendingAttachments, ...newAttachments],
+      }),
+      false,
+      'attachments/addAttachments',
+    );
+  },
+
+  removeAttachment: (id: string) => {
+    set(
+      state => ({
+        pendingAttachments: state.pendingAttachments.filter(a => a.id !== id),
+      }),
+      false,
+      'attachments/removeAttachment',
+    );
+  },
+
+  clearAttachments: () => {
+    set({ pendingAttachments: [] }, false, 'attachments/clearAttachments');
+  },
+
+  updateAttachmentUpload: (id: string, uploadItem: UploadItem) => {
+    set(
+      state => ({
+        pendingAttachments: state.pendingAttachments.map(a =>
+          a.id === id ? { ...a, uploadItem } : a,
+        ),
+      }),
+      false,
+      'attachments/updateAttachmentUpload',
+    );
+  },
+
+  updateAttachmentPreview: (id: string, preview: FilePreview) => {
+    set(
+      state => ({
+        pendingAttachments: state.pendingAttachments.map(a =>
+          a.id === id ? { ...a, preview } : a,
+        ),
+      }),
+      false,
+      'attachments/updateAttachmentPreview',
+    );
+  },
+
+  getAttachments: () => get().pendingAttachments,
+
+  hasAttachments: () => get().pendingAttachments.length > 0,
+});
+
+/**
  * Operations Slice - Composite operations
  * Complex multi-slice operations (reset, initialization, streaming lifecycle)
  */
@@ -1329,7 +1406,7 @@ const createOperationsSlice: StateCreator<
     // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants'),
 
-  prepareForNewMessage: (message: string, participantIds: string[]) =>
+  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[]) =>
     set((state) => {
       // ✅ FIX: Calculate next round number for mid-conversation messages
       const nextRoundNumber = calculateNextRoundNumber(state.messages);
@@ -1353,11 +1430,26 @@ const createOperationsSlice: StateCreator<
       const hasExistingOptimisticMessage = state.hasEarlyOptimisticMessage;
 
       // Only create optimistic message for THREAD screen AND if one doesn't already exist
+      // ✅ FIX: Include file parts so attachments show in optimistic message
+      const fileParts = attachmentIds && attachmentIds.length > 0
+        ? state.pendingAttachments
+            .filter(att => att.uploadItem?.uploadId && attachmentIds.includes(att.uploadItem.uploadId))
+            .map(att => ({
+              type: 'file' as const,
+              url: att.preview?.url || '',
+              filename: att.file.name,
+              mediaType: att.file.type,
+            }))
+        : [];
+
       const optimisticUserMessage: UIMessage | null = isOnThreadScreen && !hasExistingOptimisticMessage
         ? {
             id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
             role: MessageRoles.USER,
-            parts: [{ type: MessagePartTypes.TEXT, text: message }],
+            parts: [
+              ...fileParts, // Files first (matches UI layout)
+              { type: MessagePartTypes.TEXT, text: message },
+            ],
             metadata: {
               role: MessageRoles.USER,
               roundNumber: nextRoundNumber,
@@ -1386,6 +1478,11 @@ const createOperationsSlice: StateCreator<
         // Prepare new message state
         isWaitingForChangelog: true,
         pendingMessage: message,
+        pendingAttachmentIds: attachmentIds && attachmentIds.length > 0 ? attachmentIds : null,
+        // ✅ ATTACHMENTS: Store file parts for AI SDK message creation
+        // This must be set BEFORE clearAttachments() is called in form-actions
+        // The hook reads this to include files in aiSendMessage
+        pendingFileParts: fileParts.length > 0 ? fileParts : null,
         expectedParticipantIds: participantIds.length > 0
           ? participantIds
           : state.expectedParticipantIds,
@@ -1552,6 +1649,7 @@ export function createChatStore() {
         ...createScreenSlice(...args),
         ...createStreamResumptionSlice(...args),
         ...createAnimationSlice(...args),
+        ...createAttachmentsSlice(...args),
         ...createOperationsSlice(...args),
       }),
       {

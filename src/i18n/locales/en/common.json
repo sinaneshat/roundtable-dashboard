@@ -718,7 +718,13 @@
       "listeningPlaceholder": "Listening... speak now",
       "label": "Message input",
       "streamingLabel": "Message input (disabled while AI responds)",
-      "stopStreaming": "Stop streaming"
+      "stopStreaming": "Stop streaming",
+      "attachFiles": "Attach files",
+      "attach": "Attach",
+      "dropFilesHere": "Drop files here",
+      "uploadFilesDescription": "Upload files to include in your message",
+      "removeAttachment": "Remove attachment",
+      "attachmentUploadFailed": "Upload failed"
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {

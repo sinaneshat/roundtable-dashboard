@@ -1,6 +1,10 @@
 import { z } from '@hono/zod-openapi';
 
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+// ============================================================================
+// INTERNAL HANDLER SCHEMAS - Single Source of Truth
+// ============================================================================
+import type { ApiEnv } from '@/api/types';
 
 const HealthPayloadSchema = z.object({
   ok: z.boolean().openapi({
@@ -126,6 +130,16 @@ const ClearCachePayloadSchema = z.object({
 }).openapi('ClearCachePayload');
 
 export const ClearCacheResponseSchema = createApiResponseSchema(ClearCachePayloadSchema).openapi('ClearCacheResponse');
+
+/**
+ * Health check context type
+ *
+ * SINGLE SOURCE OF TRUTH for health check handler context
+ * Used internally by health check helper functions
+ */
+export type HealthCheckContext = {
+  env: ApiEnv['Bindings'];
+};
 
 // ============================================================================
 // TYPE EXPORTS FOR FRONTEND

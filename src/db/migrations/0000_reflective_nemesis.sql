@@ -281,6 +281,7 @@ CREATE TABLE `chat_participant` (
 CREATE INDEX `chat_participant_thread_idx` ON `chat_participant` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_participant_priority_idx` ON `chat_participant` (`priority`);--> statement-breakpoint
 CREATE INDEX `chat_participant_custom_role_idx` ON `chat_participant` (`custom_role_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `chat_participant_thread_model_unique` ON `chat_participant` (`thread_id`,`model_id`);--> statement-breakpoint
 CREATE TABLE `chat_pre_search` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -363,6 +364,7 @@ CREATE TABLE `chat_project` (
 	`user_id` text NOT NULL,
 	`name` text NOT NULL,
 	`description` text,
+	`color` text DEFAULT 'blue',
 	`custom_instructions` text,
 	`autorag_instance_id` text,
 	`r2_folder_prefix` text NOT NULL,
@@ -376,27 +378,98 @@ CREATE TABLE `chat_project` (
 CREATE INDEX `chat_project_user_idx` ON `chat_project` (`user_id`);--> statement-breakpoint
 CREATE INDEX `chat_project_created_idx` ON `chat_project` (`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_project_name_idx` ON `chat_project` (`name`);--> statement-breakpoint
-CREATE TABLE `project_knowledge_file` (
+CREATE TABLE `project_attachment` (
 	`id` text PRIMARY KEY NOT NULL,
 	`project_id` text NOT NULL,
+	`upload_id` text NOT NULL,
+	`index_status` text DEFAULT 'pending' NOT NULL,
+	`rag_metadata` text,
+	`added_by` text NOT NULL,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`project_id`) REFERENCES `chat_project`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`upload_id`) REFERENCES `upload`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`added_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `project_attachment_project_idx` ON `project_attachment` (`project_id`);--> statement-breakpoint
+CREATE INDEX `project_attachment_upload_idx` ON `project_attachment` (`upload_id`);--> statement-breakpoint
+CREATE INDEX `project_attachment_status_idx` ON `project_attachment` (`index_status`);--> statement-breakpoint
+CREATE INDEX `project_attachment_added_by_idx` ON `project_attachment` (`added_by`);--> statement-breakpoint
+CREATE INDEX `project_attachment_created_idx` ON `project_attachment` (`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `project_attachment_unique_idx` ON `project_attachment` (`project_id`,`upload_id`);--> statement-breakpoint
+CREATE TABLE `project_memory` (
+	`id` text PRIMARY KEY NOT NULL,
+	`project_id` text NOT NULL,
+	`content` text NOT NULL,
+	`summary` text,
+	`source` text DEFAULT 'chat' NOT NULL,
+	`source_thread_id` text,
+	`source_round_number` integer,
+	`importance` integer DEFAULT 5 NOT NULL,
+	`is_active` integer DEFAULT true NOT NULL,
+	`metadata` text,
+	`created_by` text NOT NULL,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`project_id`) REFERENCES `chat_project`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`source_thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`created_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `project_memory_project_idx` ON `project_memory` (`project_id`);--> statement-breakpoint
+CREATE INDEX `project_memory_source_idx` ON `project_memory` (`source`);--> statement-breakpoint
+CREATE INDEX `project_memory_thread_idx` ON `project_memory` (`source_thread_id`);--> statement-breakpoint
+CREATE INDEX `project_memory_active_idx` ON `project_memory` (`is_active`);--> statement-breakpoint
+CREATE INDEX `project_memory_importance_idx` ON `project_memory` (`importance`);--> statement-breakpoint
+CREATE INDEX `project_memory_created_idx` ON `project_memory` (`created_at`);--> statement-breakpoint
+CREATE INDEX `project_memory_project_active_importance_idx` ON `project_memory` (`project_id`,`is_active`,`importance`);--> statement-breakpoint
+CREATE TABLE `message_upload` (
+	`id` text PRIMARY KEY NOT NULL,
+	`message_id` text NOT NULL,
+	`upload_id` text NOT NULL,
+	`display_order` integer DEFAULT 0 NOT NULL,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`upload_id`) REFERENCES `upload`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `message_upload_message_idx` ON `message_upload` (`message_id`);--> statement-breakpoint
+CREATE INDEX `message_upload_upload_idx` ON `message_upload` (`upload_id`);--> statement-breakpoint
+CREATE INDEX `message_upload_created_idx` ON `message_upload` (`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `message_upload_unique_idx` ON `message_upload` (`message_id`,`upload_id`);--> statement-breakpoint
+CREATE TABLE `thread_upload` (
+	`id` text PRIMARY KEY NOT NULL,
+	`thread_id` text NOT NULL,
+	`upload_id` text NOT NULL,
+	`context` text,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`upload_id`) REFERENCES `upload`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `thread_upload_thread_idx` ON `thread_upload` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `thread_upload_upload_idx` ON `thread_upload` (`upload_id`);--> statement-breakpoint
+CREATE INDEX `thread_upload_created_idx` ON `thread_upload` (`created_at`);--> statement-breakpoint
+CREATE UNIQUE INDEX `thread_upload_unique_idx` ON `thread_upload` (`thread_id`,`upload_id`);--> statement-breakpoint
+CREATE TABLE `upload` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
 	`filename` text NOT NULL,
 	`r2_key` text NOT NULL,
-	`uploaded_by` text NOT NULL,
 	`file_size` integer NOT NULL,
-	`file_type` text NOT NULL,
+	`mime_type` text NOT NULL,
 	`status` text DEFAULT 'uploaded' NOT NULL,
 	`metadata` text,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	FOREIGN KEY (`project_id`) REFERENCES `chat_project`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`uploaded_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `project_knowledge_file_r2_key_unique` ON `project_knowledge_file` (`r2_key`);--> statement-breakpoint
-CREATE INDEX `project_knowledge_file_project_idx` ON `project_knowledge_file` (`project_id`);--> statement-breakpoint
-CREATE INDEX `project_knowledge_file_status_idx` ON `project_knowledge_file` (`status`);--> statement-breakpoint
-CREATE INDEX `project_knowledge_file_uploaded_by_idx` ON `project_knowledge_file` (`uploaded_by`);--> statement-breakpoint
-CREATE INDEX `project_knowledge_file_created_idx` ON `project_knowledge_file` (`created_at`);--> statement-breakpoint
-CREATE INDEX `project_knowledge_file_r2_key_idx` ON `project_knowledge_file` (`r2_key`);--> statement-breakpoint
+CREATE UNIQUE INDEX `upload_r2_key_unique` ON `upload` (`r2_key`);--> statement-breakpoint
+CREATE INDEX `upload_user_idx` ON `upload` (`user_id`);--> statement-breakpoint
+CREATE INDEX `upload_status_idx` ON `upload` (`status`);--> statement-breakpoint
+CREATE INDEX `upload_created_idx` ON `upload` (`created_at`);--> statement-breakpoint
+CREATE INDEX `upload_r2_key_idx` ON `upload` (`r2_key`);--> statement-breakpoint
+CREATE INDEX `upload_mime_type_idx` ON `upload` (`mime_type`);--> statement-breakpoint
 CREATE TABLE `user_chat_usage` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

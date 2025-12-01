@@ -64,6 +64,19 @@ type UseMultiParticipantChatOptions = {
   regenerateRoundNumber?: number;
   /** Enable web search before participant streaming */
   enableWebSearch?: boolean;
+  /** Pending attachment IDs to associate with the user message */
+  pendingAttachmentIds?: string[] | null;
+  /**
+   * Pending file parts to include in AI SDK message
+   * These are passed to sendMessage so AI SDK creates user message with file parts
+   * Required for file attachments to appear in UI without full page refresh
+   */
+  pendingFileParts?: Array<{
+    type: 'file';
+    url: string;
+    filename: string;
+    mediaType: string;
+  }> | null;
   /** Callback when pre-search starts */
   onPreSearchStart?: (data: { userQuery: string; totalQueries: number }) => void;
   /** Callback for each pre-search query */
@@ -204,6 +217,8 @@ export function useMultiParticipantChat(
     mode,
     regenerateRoundNumber: regenerateRoundNumberParam,
     enableWebSearch = false,
+    pendingAttachmentIds = null,
+    pendingFileParts = null,
     onPreSearchStart,
     onPreSearchQuery,
     onPreSearchResult,
@@ -228,6 +243,8 @@ export function useMultiParticipantChat(
     onPreSearchError,
     threadId,
     enableWebSearch,
+    pendingAttachmentIds, // ✅ ATTACHMENTS: Pass attachment IDs to streaming request
+    pendingFileParts, // ✅ ATTACHMENTS: Pass file parts for AI SDK message (display in UI)
     mode, // ✅ FIX: Add mode to refs to prevent transport recreation
     hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
     onResumedStreamComplete, // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded
@@ -444,6 +461,11 @@ export function useMultiParticipantChat(
         participantIndexToUse = currentIndexRef.current;
       }
 
+      // ✅ ATTACHMENTS: Only send attachment IDs with first participant (when user message is created)
+      const attachmentIdsForRequest = participantIndexToUse === 0
+        ? (callbackRefs.pendingAttachmentIds.current || undefined)
+        : undefined;
+
       const body = {
         id,
         message: messages[messages.length - 1],
@@ -459,6 +481,8 @@ export function useMultiParticipantChat(
         // Now all subsequent rounds will also trigger pre-search when enabled
         // Backend uses this to create PENDING pre-search records before participant streaming
         enableWebSearch: callbackRefs.enableWebSearch.current,
+        // ✅ ATTACHMENTS: Include attachment IDs for message association (first participant only)
+        ...(attachmentIdsForRequest && attachmentIdsForRequest.length > 0 && { attachmentIds: attachmentIdsForRequest }),
       };
 
       return { body };
@@ -1386,9 +1410,16 @@ export function useMultiParticipantChat(
       // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
       participantIndexQueue.current.push(0);
 
+      // ✅ ATTACHMENTS: Get file parts from ref for AI SDK message creation
+      // This ensures AI SDK includes file parts in the user message it creates
+      // Without this, file attachments in 2nd+ rounds don't show until refresh
+      const fileParts = callbackRefs.pendingFileParts.current || [];
+
       // Send message without custom ID - let backend generate unique IDs
       aiSendMessage({
         text: trimmed,
+        // ✅ AI SDK v5: Include files so user message has file parts
+        ...(fileParts.length > 0 && { files: fileParts }),
         metadata: {
           role: UIMessageRoles.USER,
           roundNumber: newRoundNumber,

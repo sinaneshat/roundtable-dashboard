@@ -29,6 +29,7 @@ import {
   getRequiredTierForModel,
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
+import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
@@ -264,6 +265,70 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await incrementThreadUsage(user.id);
     await invalidateThreadCache(db, user.id);
 
+    // ✅ Associate attachments with the first user message and add file parts
+    let messageWithFileParts = firstMessage;
+    if (body.attachmentIds && body.attachmentIds.length > 0 && firstMessage) {
+      // Get upload details for constructing file parts
+      const uploads = await db.query.upload.findMany({
+        where: inArray(tables.upload.id, body.attachmentIds),
+        columns: {
+          id: true,
+          filename: true,
+          mimeType: true,
+        },
+      });
+
+      // Create map for ordered lookup
+      const uploadMap = new Map(uploads.map(u => [u.id, u]));
+
+      // Insert message-upload associations
+      const messageUploadValues = body.attachmentIds.map((uploadId, index) => ({
+        id: ulid(),
+        messageId: firstMessage.id,
+        uploadId,
+        displayOrder: index,
+        createdAt: now,
+      }));
+      await db.insert(tables.messageUpload).values(messageUploadValues);
+
+      // ✅ FIX: Construct file parts and add to message for immediate UI display
+      // Without this, the returned message only has text parts and attachments
+      // don't show until full page refresh loads thread via getThreadBySlugHandler
+      // ✅ SECURITY: Use signed URLs for secure, time-limited download access
+      const baseUrl = new URL(c.req.url).origin;
+      const fileParts = await Promise.all(
+        body.attachmentIds.map(async (uploadId) => {
+          const upload = uploadMap.get(uploadId);
+          if (!upload)
+            return null;
+
+          // Generate signed download URL with 1 hour expiration
+          const signedPath = await generateSignedDownloadPath(c, {
+            uploadId,
+            userId: user.id,
+            threadId,
+            expirationMs: 60 * 60 * 1000, // 1 hour
+          });
+
+          return {
+            type: 'file' as const,
+            url: `${baseUrl}${signedPath}`,
+            filename: upload.filename,
+            mediaType: upload.mimeType,
+          };
+        }),
+      ).then(parts => parts.filter((p): p is NonNullable<typeof p> => p !== null));
+
+      // Combine existing text parts with file parts
+      // Cast to flexible type to allow file parts alongside text parts
+      const existingParts = (firstMessage.parts || []) as Array<{ type: string; text?: string; url?: string; filename?: string; mediaType?: string }>;
+      const combinedParts = [...fileParts, ...existingParts] as typeof firstMessage.parts;
+      messageWithFileParts = {
+        ...firstMessage,
+        parts: combinedParts, // Files first, then text (matches UI layout)
+      };
+    }
+
     // ✅ DATABASE-FIRST PATTERN: Create PENDING pre-search record if web search enabled
     // This ensures the record exists BEFORE any frontend streaming requests
     // Frontend should NEVER create database records - that's backend's responsibility
@@ -347,7 +412,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     return Responses.ok(c, {
       thread,
       participants,
-      messages: [firstMessage],
+      messages: [messageWithFileParts],
       changelog: [],
       user: {
         id: user.id,
@@ -969,7 +1034,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     // but they're rendered separately using the pre_search table via PreSearchCard.
     // Including them here causes ordering issues and duplicate rendering logic.
     // Filter criteria: Exclude messages where id starts with 'pre-search-'
-    const messages = await db
+    const rawMessages = await db
       .select()
       .from(tables.chatMessage)
       .where(
@@ -983,6 +1048,87 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
       );
+
+    // ✅ ATTACHMENT SUPPORT: Load message attachments for user messages
+    const userMessageIds = rawMessages
+      .filter(m => m.role === 'user')
+      .map(m => m.id);
+
+    // Define type for attachment results
+    type MessageAttachment = {
+      messageId: string;
+      displayOrder: number;
+      uploadId: string;
+      filename: string;
+      mimeType: string;
+      fileSize: number;
+    };
+
+    // Get all attachments for user messages in one query
+    const messageAttachmentsRaw = userMessageIds.length > 0
+      ? await db
+          .select()
+          .from(tables.messageUpload)
+          .innerJoin(tables.upload, eq(tables.messageUpload.uploadId, tables.upload.id))
+          .where(inArray(tables.messageUpload.messageId, userMessageIds))
+          .orderBy(asc(tables.messageUpload.displayOrder))
+      : [];
+
+    // Transform to flat structure
+    const messageAttachments: MessageAttachment[] = messageAttachmentsRaw.map(row => ({
+      messageId: row.message_upload.messageId,
+      displayOrder: row.message_upload.displayOrder,
+      uploadId: row.upload.id,
+      filename: row.upload.filename,
+      mimeType: row.upload.mimeType,
+      fileSize: row.upload.fileSize,
+    }));
+
+    // Group attachments by message ID
+    const attachmentsByMessage = new Map<string, MessageAttachment[]>();
+    for (const att of messageAttachments) {
+      const existing = attachmentsByMessage.get(att.messageId) || [];
+      existing.push(att);
+      attachmentsByMessage.set(att.messageId, existing);
+    }
+
+    // ✅ Transform messages to include file parts for user messages with attachments
+    // ✅ SECURITY: Use signed URLs for secure, time-limited download access
+    const baseUrl = new URL(c.req.url).origin;
+    const messages = await Promise.all(
+      rawMessages.map(async (msg) => {
+        const attachments = attachmentsByMessage.get(msg.id);
+        if (!attachments || attachments.length === 0 || msg.role !== 'user') {
+          return msg;
+        }
+
+        // Add file parts for each attachment with signed URLs
+        const existingParts = (msg.parts || []) as Array<{ type: string; text?: string; url?: string; filename?: string; mediaType?: string }>;
+        const fileParts = await Promise.all(
+          attachments.map(async (att) => {
+            const signedPath = await generateSignedDownloadPath(c, {
+              uploadId: att.uploadId,
+              userId: thread.userId,
+              threadId: thread.id,
+              expirationMs: 60 * 60 * 1000, // 1 hour
+            });
+
+            return {
+              type: 'file' as const,
+              url: `${baseUrl}${signedPath}`,
+              filename: att.filename,
+              mediaType: att.mimeType,
+            };
+          }),
+        );
+
+        return {
+          ...msg,
+          parts: [...existingParts, ...fileParts],
+        };
+      }),
+    );
+
     return Responses.ok(c, {
       thread,
       participants,

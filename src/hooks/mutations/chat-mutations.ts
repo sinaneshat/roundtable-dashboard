@@ -3,12 +3,13 @@
  *
  * TanStack Mutation hooks for all chat operations
  * Following patterns from checkout.ts and subscription-management.ts
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: All cache validation schemas imported from @/stores/chat/actions/types
  */
 
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { z } from 'zod';
 
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
@@ -24,198 +25,16 @@ import {
   updateParticipantService,
   updateThreadService,
 } from '@/services/api';
-import { validateThreadDetailCache, validateThreadDetailResponseCache, validateThreadsListPages } from '@/stores/chat/actions/types';
-
-// ============================================================================
-// Validation Schemas - Type-safe cache updates
-// ============================================================================
-
-/**
- * Schema for usage stats data structure
- * Validates optimistic cache updates for thread/message counts
- */
-const UsageStatsDataSchema = z.object({
-  messages: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  threads: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  subscription: z.unknown(),
-  period: z.unknown(),
-});
-
-/**
- * Schema for API response wrapper
- * Validates the standard API response structure
- */
-const ApiResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.unknown(),
-});
-
-/**
- * Schema for thread data in cache
- * Validates thread object structure for optimistic updates
- */
-const ThreadDataSchema = z.object({
-  id: z.string(),
-  title: z.string().optional(),
-  mode: z.string().optional(),
-  status: z.string().optional(),
-  isFavorite: z.boolean().optional(),
-  isPublic: z.boolean().optional(),
-  metadata: z.unknown().optional(),
-});
-
-/**
- * Schema for thread detail response data
- * Validates thread detail payload structure
- */
-const ThreadDetailDataSchema = z.object({
-  thread: z.unknown(),
-  participants: z.array(z.unknown()).optional(),
-  messages: z.array(z.unknown()).optional(),
-  changelog: z.array(z.unknown()).optional(),
-  user: z.unknown().optional(),
-});
-
-/**
- * Schema for paginated response pages
- * Validates infinite query page structure
- */
-const PaginatedPageSchema = z.object({
-  success: z.boolean(),
-  data: z
-    .object({
-      items: z.array(ThreadDataSchema).optional(),
-    })
-    .optional(),
-});
-
-/**
- * Schema for infinite query data
- * Validates the complete infinite query structure
- */
-const InfiniteQueryDataSchema = z.object({
-  pages: z.array(PaginatedPageSchema),
-  pageParams: z.array(z.unknown()).optional(),
-});
-
-// ============================================================================
-// Type-safe cache update helpers
-// ============================================================================
-
-/**
- * Safely parse and validate unknown cache data
- * Returns null if data doesn't match expected schema
- *
- * ✅ RUNTIME ZOD VALIDATION: Ensures cache data integrity
- * - Validates API response structure
- * - Validates usage stats data shape
- * - Returns null on validation failure (safe fallback)
- *
- * ✅ DEFENSIVE HANDLING: Silently handles uninitialized queries
- */
-function parseUsageStatsData(data: unknown) {
-  // ✅ Handle uninitialized queries silently
-  if (data === undefined || data === null) {
-    return null;
-  }
-
-  const response = ApiResponseSchema.safeParse(data);
-  if (!response.success || !response.data.success) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Invalid API response structure for usage stats:', response.error);
-    }
-    return null;
-  }
-
-  const usageData = UsageStatsDataSchema.safeParse(response.data.data);
-  if (!usageData.success) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Invalid usage stats data structure:', usageData.error);
-    }
-    return null;
-  }
-
-  return usageData.data;
-}
-
-/**
- * Safely parse thread detail data from cache
- * Returns null if data doesn't match expected schema
- *
- * ✅ RUNTIME ZOD VALIDATION: Ensures thread detail cache integrity
- * - Validates API response wrapper
- * - Validates thread detail payload
- * - Returns null on validation failure (safe fallback)
- *
- * ✅ DEFENSIVE HANDLING: Silently handles uninitialized queries
- */
-function parseThreadDetailData(data: unknown) {
-  // ✅ Handle uninitialized queries silently
-  if (data === undefined || data === null) {
-    return null;
-  }
-
-  const response = ApiResponseSchema.safeParse(data);
-  if (!response.success || !response.data.success) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Invalid API response structure for thread detail:', response.error);
-    }
-    return null;
-  }
-
-  const threadData = ThreadDetailDataSchema.safeParse(response.data.data);
-  if (!threadData.success) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Invalid thread detail data structure:', threadData.error);
-    }
-    return null;
-  }
-
-  return threadData.data;
-}
-
-/**
- * Safely parse infinite query data from cache
- * Returns null if data doesn't match expected schema
- *
- * ✅ RUNTIME ZOD VALIDATION: Ensures infinite query cache integrity
- * - Validates infinite query structure (pages + pageParams)
- * - Validates each page's response structure
- * - Returns null on validation failure (safe fallback)
- *
- * ✅ DEFENSIVE HANDLING: Distinguishes between uninitialized and malformed data
- * - Silently handles undefined data (uninitialized queries are expected)
- * - Only logs errors for malformed data (actual data corruption)
- */
-function parseInfiniteQueryData(data: unknown) {
-  // ✅ CRITICAL FIX: Handle uninitialized queries silently
-  // setQueriesData iterates over ALL matching queries, including uninitialized ones
-  // This is expected behavior - don't pollute console with errors for undefined data
-  if (data === undefined || data === null) {
-    return null;
-  }
-
-  const queryData = InfiniteQueryDataSchema.safeParse(data);
-  if (!queryData.success) {
-    // Only log errors for actual data corruption (non-undefined invalid data)
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Invalid infinite query data structure (malformed data, not uninitialized):', queryData.error);
-    }
-    return null;
-  }
-
-  return queryData.data;
-}
+import {
+  // Cache validation schemas (single source of truth)
+  ThreadCacheDataSchema,
+  validateInfiniteQueryCache,
+  validateThreadDetailCache,
+  validateThreadDetailPayloadCache,
+  validateThreadDetailResponseCache,
+  validateThreadsListPages,
+  validateUsageStatsCache,
+} from '@/stores/chat/actions/types';
 
 // ============================================================================
 // Thread Mutations
@@ -244,7 +63,7 @@ export function useCreateThreadMutation() {
       queryClient.setQueryData(
         queryKeys.usage.stats(),
         (oldData: unknown) => {
-          const usageData = parseUsageStatsData(oldData);
+          const usageData = validateUsageStatsCache(oldData);
           if (!usageData)
             return oldData;
 
@@ -319,12 +138,12 @@ export function useUpdateThreadMutation() {
       queryClient.setQueryData(
         queryKeys.threads.detail(variables.param.id),
         (old: unknown) => {
-          const parsedData = parseThreadDetailData(old);
+          const parsedData = validateThreadDetailPayloadCache(old);
           if (!parsedData)
             return old;
 
           // Validate update payload before merging
-          const updatePayload = ThreadDataSchema.partial().safeParse(variables.json);
+          const updatePayload = ThreadCacheDataSchema.partial().safeParse(variables.json);
           if (!updatePayload.success)
             return old;
 
@@ -356,12 +175,12 @@ export function useUpdateThreadMutation() {
           },
         },
         (old: unknown) => {
-          const parsedQuery = parseInfiniteQueryData(old);
+          const parsedQuery = validateInfiniteQueryCache(old);
           if (!parsedQuery)
             return old;
 
           // Validate update payload
-          const updatePayload = ThreadDataSchema.partial().safeParse(variables.json);
+          const updatePayload = ThreadCacheDataSchema.partial().safeParse(variables.json);
           if (!updatePayload.success)
             return old;
 
@@ -377,7 +196,7 @@ export function useUpdateThreadMutation() {
                   ...page.data,
                   items: page.data.items.map((thread) => {
                     // Validate thread data before updating
-                    const threadData = ThreadDataSchema.safeParse(thread);
+                    const threadData = ThreadCacheDataSchema.safeParse(thread);
                     if (!threadData.success)
                       return thread;
 
@@ -399,12 +218,12 @@ export function useUpdateThreadMutation() {
           queryClient.setQueryData(
             queryKeys.threads.bySlug(slug),
             (old: unknown) => {
-              const parsedData = parseThreadDetailData(old);
+              const parsedData = validateThreadDetailPayloadCache(old);
               if (!parsedData)
                 return old;
 
               // Validate update payload
-              const updatePayload = ThreadDataSchema.partial().safeParse(variables.json);
+              const updatePayload = ThreadCacheDataSchema.partial().safeParse(variables.json);
               if (!updatePayload.success)
                 return old;
 
@@ -489,7 +308,7 @@ export function useDeleteThreadMutation() {
           },
         },
         (old: unknown) => {
-          const parsedQuery = parseInfiniteQueryData(old);
+          const parsedQuery = validateInfiniteQueryCache(old);
           if (!parsedQuery)
             return old;
 
@@ -504,7 +323,7 @@ export function useDeleteThreadMutation() {
                 data: {
                   ...page.data,
                   items: page.data.items.filter((thread) => {
-                    const threadData = ThreadDataSchema.safeParse(thread);
+                    const threadData = ThreadCacheDataSchema.safeParse(thread);
                     return threadData.success && threadData.data.id !== variables.param.id;
                   }),
                 },
@@ -518,7 +337,7 @@ export function useDeleteThreadMutation() {
       queryClient.setQueryData(
         queryKeys.usage.stats(),
         (oldData: unknown) => {
-          const usageData = parseUsageStatsData(oldData);
+          const usageData = validateUsageStatsCache(oldData);
           if (!usageData)
             return oldData;
 
@@ -629,7 +448,7 @@ export function useToggleFavoriteMutation() {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
           (old: unknown) => {
-            const parsedData = parseThreadDetailData(old);
+            const parsedData = validateThreadDetailPayloadCache(old);
             if (!parsedData)
               return old;
 
@@ -733,7 +552,7 @@ export function useTogglePublicMutation() {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
           (old: unknown) => {
-            const parsedData = parseThreadDetailData(old);
+            const parsedData = validateThreadDetailPayloadCache(old);
             if (!parsedData)
               return old;
 

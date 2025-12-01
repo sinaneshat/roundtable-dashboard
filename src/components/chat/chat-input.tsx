@@ -3,9 +3,14 @@ import type { ChatStatus } from 'ai';
 import { ArrowUp, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+import {
+  ChatInputAttachments,
+  ChatInputDropzoneOverlay,
+  useChatInputDragDrop,
+} from '@/components/chat/chat-input-attachments';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
 import { Button } from '@/components/ui/button';
@@ -15,9 +20,12 @@ import {
   useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
+import type { PendingAttachment } from '@/hooks/utils/use-chat-attachments';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
+
+const EMPTY_ATTACHMENTS: PendingAttachment[] = [];
 
 type ChatInputProps = {
   value: string;
@@ -38,6 +46,15 @@ type ChatInputProps = {
   maxHeight?: number;
   // Quota alert extension
   quotaCheckType?: 'threads' | 'messages';
+  // File attachment props
+  attachments?: PendingAttachment[];
+  onAddAttachments?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
+  enableAttachments?: boolean;
+  /** Callback to register the attachment click handler (opens file picker) */
+  onRegisterAttachmentClick?: (clickHandler: () => void) => void;
+  /** Whether files are currently uploading - disables submit until complete */
+  isUploading?: boolean;
 };
 
 // ✅ RENDER OPTIMIZATION: Memoize ChatInput to prevent unnecessary re-renders
@@ -62,9 +79,17 @@ export const ChatInput = memo(({
   maxHeight = 240,
   // Quota alert extension
   quotaCheckType,
+  // File attachment props
+  attachments = EMPTY_ATTACHMENTS,
+  onAddAttachments,
+  onRemoveAttachment,
+  enableAttachments = true,
+  onRegisterAttachmentClick,
+  isUploading = false,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== 'ready';
 
   // Check if quota is exceeded (from quota alert extension)
@@ -103,11 +128,42 @@ export const ChatInput = memo(({
   // User reported: "during the loading 3 dots matrix text ensure the chatbox is allowed
   // to be filled in but it's not allowing for submissions until the round is done fully"
   //
-  // isInputDisabled: Controls textarea - only disabled when explicitly disabled or quota exceeded
-  // isSubmitDisabled: Controls submit button - disabled when streaming, disabled, or quota exceeded
-  const isInputDisabled = disabled || isQuotaExceeded;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded;
-  const hasValidInput = value.trim().length > 0 && participants.length > 0;
+  // isInputDisabled: Controls textarea
+  //   - Disabled when explicitly disabled, quota exceeded, or during thread creation (status='submitted')
+  //   - During AI streaming (status='streaming'), user CAN still type to prepare next message
+  // isSubmitDisabled: Controls submit button - disabled when streaming, disabled, quota exceeded, or uploading
+  const isSubmitting = status === 'submitted';
+  const isInputDisabled = disabled || isQuotaExceeded || isSubmitting;
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading;
+  const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0;
+
+  // File attachment handlers
+  const handleFilesSelected = useCallback((files: File[]) => {
+    if (onAddAttachments && files.length > 0) {
+      onAddAttachments(files);
+    }
+  }, [onAddAttachments]);
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    handleFilesSelected(files);
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  }, [handleFilesSelected]);
+
+  const handleAttachmentClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // Register the attachment click handler with parent component
+  useEffect(() => {
+    if (onRegisterAttachmentClick && enableAttachments) {
+      onRegisterAttachmentClick(handleAttachmentClick);
+    }
+  }, [onRegisterAttachmentClick, handleAttachmentClick, enableAttachments]);
+
+  // Drag and drop support
+  const { isDragging, dragHandlers } = useChatInputDragDrop(handleFilesSelected);
 
   // Auto-resizing textarea
   useAutoResizeTextarea(textareaRef, {
@@ -210,6 +266,18 @@ export const ChatInput = memo(({
 
   return (
     <div className="w-full">
+      {/* Hidden file input for attachment selection */}
+      {enableAttachments && onAddAttachments && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileInputChange}
+          className="hidden"
+          accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
+        />
+      )}
+
       <div
         className={cn(
           'relative flex flex-col overflow-hidden',
@@ -217,12 +285,16 @@ export const ChatInput = memo(({
           'border border-border',
           'bg-card',
           'shadow-lg',
-          'transition-opacity duration-200',
+          'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && 'cursor-not-allowed',
           isStreaming && 'ring-2 ring-primary/20', // Visual indicator during streaming
           className,
         )}
+        {...(enableAttachments ? dragHandlers : {})}
       >
+        {/* Dropzone overlay - covers entire chat input during drag */}
+        {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
+
         <div className="flex flex-col overflow-hidden h-full">
           {/* Quota Alert Extension - appears at top when quota exceeded */}
           {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
@@ -232,6 +304,15 @@ export const ChatInput = memo(({
             <VoiceVisualization
               isActive={isListening}
               audioLevels={audioLevels}
+            />
+          )}
+
+          {/* File Attachments Preview - appears above textarea */}
+          {/* Always show attachments if they exist; only enable removal when enableAttachments=true */}
+          {attachments.length > 0 && (
+            <ChatInputAttachments
+              attachments={attachments}
+              onRemove={enableAttachments ? onRemoveAttachment : undefined}
             />
           )}
 

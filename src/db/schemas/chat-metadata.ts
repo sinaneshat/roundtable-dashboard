@@ -22,6 +22,7 @@ import { z } from 'zod';
 
 import {
   ChatModeSchema,
+  CitationSourceTypeSchema,
   ErrorTypeSchema,
   FinishReasonSchema,
   MessageRoles,
@@ -48,6 +49,48 @@ export const UsageSchema = z.object({
 });
 
 export type Usage = z.infer<typeof UsageSchema>;
+
+/**
+ * Citation Schema - RAG source references in AI responses
+ *
+ * When AI references information from project context (memories, other threads,
+ * files, search results, or analyses), it includes inline citations that map
+ * to specific source records.
+ *
+ * Citation Format: AI uses [source_id] markers in text (e.g., [mem_abc123])
+ * Frontend: Converts to display numbers [1], [2] and renders hover cards
+ */
+export const DbCitationSchema = z.object({
+  // Citation identifier - matches the [source_id] marker in AI response text
+  id: z.string().min(1),
+
+  // Source type from CITATION_SOURCE_TYPES enum
+  sourceType: CitationSourceTypeSchema,
+
+  // ID of the source record (projectMemory.id, chatThread.id, etc.)
+  sourceId: z.string().min(1),
+
+  // Display number for frontend rendering [1], [2], etc.
+  displayNumber: z.number().int().positive(),
+
+  // Contextual info for hover card (resolved from source)
+  title: z.string().optional(),
+  excerpt: z.string().optional(),
+  url: z.string().url().optional(),
+
+  // Thread-specific metadata
+  threadId: z.string().optional(),
+  threadTitle: z.string().optional(),
+  roundNumber: z.number().int().nonnegative().optional(),
+
+  // Attachment-specific metadata (for file citations)
+  downloadUrl: z.string().url().optional(),
+  filename: z.string().optional(),
+  mimeType: z.string().optional(),
+  fileSize: z.number().int().nonnegative().optional(),
+});
+
+export type DbCitation = z.infer<typeof DbCitationSchema>;
 
 // ============================================================================
 // MESSAGE METADATA - Discriminated Union by Role
@@ -115,6 +158,21 @@ export const DbAssistantMessageMetadataSchema = z.object({
   statusCode: z.number().int().optional(),
   responseBody: z.string().optional(),
   aborted: z.boolean().optional(),
+
+  // RAG citation references (when AI cites project context)
+  citations: z.array(DbCitationSchema).optional(),
+
+  // Available sources - files/context that were available to AI (shown even without inline citations)
+  // This enables "Sources" UI to display what files the AI had access to
+  availableSources: z.array(z.object({
+    id: z.string(), // Citation ID (e.g., att_abc12345)
+    sourceType: CitationSourceTypeSchema,
+    title: z.string(), // Filename or source title
+    downloadUrl: z.string().url().optional(),
+    filename: z.string().optional(),
+    mimeType: z.string().optional(),
+    fileSize: z.number().int().nonnegative().optional(),
+  })).optional(),
 
   // Timestamp
   createdAt: z.string().datetime().optional(),

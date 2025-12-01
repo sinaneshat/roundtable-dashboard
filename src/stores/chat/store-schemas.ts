@@ -105,6 +105,7 @@ import type {
   SetNextParticipantToTrigger,
   SetOnComplete,
   SetParticipants,
+  SetPendingAttachmentIds,
   SetPendingFeedback,
   SetPendingMessage,
   SetPreSearches,
@@ -338,9 +339,23 @@ export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSch
 // DATA SLICE SCHEMAS
 // ============================================================================
 
+/**
+ * File part for AI SDK message creation
+ * Used to pass file attachment info to hook for display in UI
+ */
+export const PendingFilePartSchema = z.object({
+  type: z.literal('file'),
+  url: z.string(),
+  filename: z.string(),
+  mediaType: z.string(),
+});
+
 export const DataStateSchema = z.object({
   regeneratingRoundNumber: z.number().nullable(),
   pendingMessage: z.string().nullable(),
+  pendingAttachmentIds: z.array(z.string()).nullable(),
+  /** File parts for AI SDK message creation - set before clearAttachments() */
+  pendingFileParts: z.array(PendingFilePartSchema).nullable(),
   expectedParticipantIds: z.array(z.string()).nullable(),
   streamingRoundNumber: z.number().nullable(),
   currentRoundNumber: z.number().nullable(),
@@ -349,6 +364,7 @@ export const DataStateSchema = z.object({
 export const DataActionsSchema = z.object({
   setRegeneratingRoundNumber: z.custom<SetRegeneratingRoundNumber>(),
   setPendingMessage: z.custom<SetPendingMessage>(),
+  setPendingAttachmentIds: z.custom<SetPendingAttachmentIds>(),
   setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
   setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),
   setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
@@ -482,6 +498,37 @@ export const AnimationActionsSchema = z.object({
 export const AnimationSliceSchema = z.intersection(AnimationStateSchema, AnimationActionsSchema);
 
 // ============================================================================
+// ATTACHMENTS SLICE SCHEMAS
+// ============================================================================
+
+/**
+ * Pending attachment schema for chat input file attachments
+ * Combines file with optional upload item and preview
+ */
+export const PendingAttachmentSchema = z.object({
+  id: z.string(),
+  file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
+  uploadItem: z.custom<import('@/hooks/utils/use-file-upload').UploadItem>().optional(),
+  preview: z.custom<import('@/hooks/utils/use-file-preview').FilePreview>().optional(),
+});
+
+export const AttachmentsStateSchema = z.object({
+  pendingAttachments: z.array(PendingAttachmentSchema),
+});
+
+export const AttachmentsActionsSchema = z.object({
+  addAttachments: z.custom<import('./store-action-types').AddAttachments>(),
+  removeAttachment: z.custom<import('./store-action-types').RemoveAttachment>(),
+  clearAttachments: z.custom<import('./store-action-types').ClearAttachments>(),
+  updateAttachmentUpload: z.custom<import('./store-action-types').UpdateAttachmentUpload>(),
+  updateAttachmentPreview: z.custom<import('./store-action-types').UpdateAttachmentPreview>(),
+  getAttachments: z.custom<import('./store-action-types').GetAttachments>(),
+  hasAttachments: z.custom<import('./store-action-types').HasAttachments>(),
+});
+
+export const AttachmentsSliceSchema = z.intersection(AttachmentsStateSchema, AttachmentsActionsSchema);
+
+// ============================================================================
 // OPERATIONS SLICE SCHEMAS
 // ============================================================================
 
@@ -515,28 +562,31 @@ export const ChatStoreSchema = z.intersection(
                 z.intersection(
                   z.intersection(
                     z.intersection(
-                      z.intersection(FormSliceSchema, FeedbackSliceSchema),
-                      UISliceSchema,
+                      z.intersection(
+                        z.intersection(FormSliceSchema, FeedbackSliceSchema),
+                        UISliceSchema,
+                      ),
+                      AnalysisSliceSchema,
                     ),
-                    AnalysisSliceSchema,
+                    PreSearchSliceSchema,
                   ),
-                  PreSearchSliceSchema,
+                  ThreadSliceSchema,
                 ),
-                ThreadSliceSchema,
+                FlagsSliceSchema,
               ),
-              FlagsSliceSchema,
+              DataSliceSchema,
             ),
-            DataSliceSchema,
+            TrackingSliceSchema,
           ),
-          TrackingSliceSchema,
+          CallbacksSliceSchema,
         ),
-        CallbacksSliceSchema,
+        ScreenSliceSchema,
       ),
-      ScreenSliceSchema,
+      StreamResumptionSliceSchema,
     ),
-    StreamResumptionSliceSchema,
+    z.intersection(AnimationSliceSchema, AttachmentsSliceSchema),
   ),
-  z.intersection(AnimationSliceSchema, OperationsSliceSchema),
+  OperationsSliceSchema,
 );
 
 // ============================================================================
@@ -608,3 +658,8 @@ export type StreamResumptionSlice = z.infer<typeof StreamResumptionSliceSchema>;
 export type AnimationState = z.infer<typeof AnimationStateSchema>;
 export type AnimationActions = z.infer<typeof AnimationActionsSchema>;
 export type AnimationSlice = z.infer<typeof AnimationSliceSchema>;
+
+export type PendingAttachment = z.infer<typeof PendingAttachmentSchema>;
+export type AttachmentsState = z.infer<typeof AttachmentsStateSchema>;
+export type AttachmentsActions = z.infer<typeof AttachmentsActionsSchema>;
+export type AttachmentsSlice = z.infer<typeof AttachmentsSliceSchema>;

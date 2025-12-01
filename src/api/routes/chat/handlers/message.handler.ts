@@ -25,7 +25,7 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     const db = await getDbAsync();
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // Direct database query for thread messages
+    // Direct database query for thread messages with uploads
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [
@@ -33,9 +33,38 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
       ],
+      with: {
+        messageUploads: {
+          with: {
+            upload: true,
+          },
+          orderBy: [asc(tables.messageUpload.displayOrder)],
+        },
+      },
     });
 
-    return Responses.collection(c, messages);
+    // Transform messages to include upload attachments as file parts
+    const messagesWithAttachments = messages.map((message) => {
+      const attachmentParts = message.messageUploads?.map(mu => ({
+        type: 'file' as const,
+        url: `/api/v1/uploads/${mu.upload.id}/download`,
+        filename: mu.upload.filename,
+        mediaType: mu.upload.mimeType,
+      })) || [];
+
+      // Add attachment parts after text parts
+      const existingParts = message.parts || [];
+      const combinedParts = [...existingParts, ...attachmentParts];
+
+      // Return message without the messageUploads relation (transformed to parts)
+      const { messageUploads: _, ...messageWithoutUploads } = message;
+      return {
+        ...messageWithoutUploads,
+        parts: combinedParts,
+      };
+    });
+
+    return Responses.collection(c, messagesWithAttachments);
   },
 );
 export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRoute, ApiEnv> = createHandler(

@@ -672,3 +672,81 @@ ${JSON.stringify(MODERATOR_ANALYSIS_JSON_STRUCTURE, null, 2)}`;
 export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null): string {
   return buildParticipantSystemPrompt(roleName, mode);
 }
+
+// ============================================================================
+// Attachment Citation Prompts
+// ============================================================================
+
+/**
+ * Attachment info for citation prompt formatting
+ */
+export type AttachmentCitationInfo = {
+  filename: string;
+  citationId: string;
+  mimeType: string;
+  fileSize: number;
+  roundNumber: number | null;
+  textContent: string | null;
+};
+
+/**
+ * Build formatted prompt for thread attachments with citation instructions
+ * ✅ SINGLE SOURCE: Used by streaming-orchestration.service.ts for RAG context
+ *
+ * The prompt is designed to:
+ * 1. Make filenames prominent so AI understands what each file is
+ * 2. Instruct AI to cite inline using [citation_id] format
+ * 3. Keep citations inline with text (not on separate lines)
+ *
+ * @param attachments - Attachment metadata for citation
+ * @returns Formatted prompt section with citation instructions
+ */
+export function buildAttachmentCitationPrompt(attachments: AttachmentCitationInfo[]): string {
+  if (attachments.length === 0) {
+    return '';
+  }
+
+  const sections: string[] = [];
+
+  for (const att of attachments) {
+    const roundLabel = att.roundNumber !== null ? ` (uploaded in message ${att.roundNumber + 1})` : '';
+
+    if (att.textContent) {
+      // Include full content for text files
+      sections.push(
+        `**${att.filename}** [${att.citationId}]${roundLabel}\n`
+        + `Type: ${att.mimeType}\n`
+        + `\`\`\`\n${att.textContent}\n\`\`\``,
+      );
+    } else {
+      // Metadata only for non-text files (images, PDFs passed as multi-modal)
+      const sizeKB = (att.fileSize / 1024).toFixed(1);
+      sections.push(
+        `**${att.filename}** [${att.citationId}]${roundLabel}\n`
+        + `Type: ${att.mimeType}, Size: ${sizeKB}KB\n`
+        + `_Visual content available - you can see and analyze this file directly._`,
+      );
+    }
+  }
+
+  // Build file reference table for quick lookup
+  const fileTable = attachments.map(att => `- **${att.filename}** → cite as [${att.citationId}]`).join('\n');
+  const exampleCitationId = attachments[0]?.citationId ?? 'att_example';
+
+  return `\n\n## 📎 UPLOADED FILES - CITATION REQUIRED\n\n`
+    + `### File Reference Table\n${fileTable}\n\n`
+    + `### ⚠️ MANDATORY CITATION RULES\n`
+    + `You MUST cite sources when referencing uploaded files. This is REQUIRED.\n\n`
+    + `**How to cite:** Place the citation marker in brackets immediately after the information.\n`
+    + `**Format:** [citation_id] - use the exact ID from the reference table above.\n\n`
+    + `**Examples:**\n`
+    + `- "The invoice total is €180.00 [${exampleCitationId}]"\n`
+    + `- "According to the document [${exampleCitationId}], the company address is..."\n`
+    + `- "The image shows a leaderboard [${exampleCitationId}] with five ranked entries."\n\n`
+    + `**Rules:**\n`
+    + `1. ALWAYS cite when describing content from a file\n`
+    + `2. Place citation INLINE immediately after the referenced information\n`
+    + `3. Use the EXACT citation ID from the reference table\n`
+    + `4. You may cite multiple times if referencing multiple pieces from the same file\n\n`
+    + `### File Contents\n\n${sections.join('\n\n')}`;
+}

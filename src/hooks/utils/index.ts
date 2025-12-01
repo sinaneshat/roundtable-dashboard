@@ -11,7 +11,36 @@ export { useAutoResizeTextarea } from './use-auto-resize-textarea';
 export type { UseAutoScrollOptions, UseAutoScrollWithTriggerReturn } from './use-auto-scroll';
 export { useAutoScroll, useAutoScrollWithTrigger } from './use-auto-scroll';
 export { useBoolean } from './use-boolean';
+export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';
+export { PendingAttachmentSchema, useChatAttachments } from './use-chat-attachments';
 export { useDebouncedValue } from './use-debounced-value';
+// File Upload Utilities
+export type { FilePreview, UseFilePreviewOptions, UseFilePreviewReturn } from './use-file-preview';
+export { FilePreviewSchema, getFileIconName, getFileTypeLabel, supportsInlinePreview, useFilePreview, UseFilePreviewOptionsSchema } from './use-file-preview';
+export type {
+  UploadItem,
+  UploadProgress,
+  UseFileUploadOptions,
+  UseFileUploadReturn,
+  UseSingleFileUploadOptions,
+  UseSingleFileUploadReturn,
+} from './use-file-upload';
+// Note: UploadStatus type should be imported from @/api/core/enums
+export {
+  UploadItemSchema,
+  UploadProgressSchema,
+  useFileUpload,
+  UseFileUploadOptionsSchema,
+  useSingleFileUpload,
+  UseSingleFileUploadOptionsSchema,
+} from './use-file-upload';
+export type { FileValidationError, FileValidationResult, UseFileValidationOptions, UseFileValidationReturn } from './use-file-validation';
+export {
+  FileValidationErrorSchema,
+  FileValidationResultSchema,
+  useFileValidation,
+  UseFileValidationOptionsSchema,
+} from './use-file-validation';
 export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './use-flow-loading';
 export { useFlowLoading } from './use-flow-loading';
 export { useFuzzySearch } from './use-fuzzy-search';

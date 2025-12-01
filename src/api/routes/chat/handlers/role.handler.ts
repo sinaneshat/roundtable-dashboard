@@ -72,8 +72,8 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
   async (c) => {
     const { user } = c.auth();
     await enforceCustomRoleQuota(user.id);
-    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
-    const body = CreateCustomRoleRequestSchema.parse(c.validated.body);
+    // ✅ TYPE-SAFE: createHandler validates body via validateBody config
+    const body = c.validated.body;
     const db = await getDbAsync();
     const customRoleId = ulid();
     const now = new Date();
@@ -122,8 +122,8 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
-    const body = UpdateCustomRoleRequestSchema.parse(c.validated.body);
+    // ✅ TYPE-SAFE: createHandler validates body via validateBody config
+    const body = c.validated.body;
     const db = await getDbAsync();
     const [updatedCustomRole] = await db
       .update(tables.chatCustomRole)

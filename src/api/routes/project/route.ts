@@ -1,19 +1,30 @@
-import { createRoute, z } from '@hono/zod-openapi';
+import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { StandardApiResponses } from '@/api/core/response-schemas';
 import { IdParamSchema } from '@/api/core/schemas';
 
 import {
+  AddAttachmentToProjectRequestSchema,
+  AddProjectAttachmentResponseSchema,
+  CreateProjectMemoryRequestSchema,
   CreateProjectRequestSchema,
   DeleteResponseSchema,
+  GetProjectAttachmentResponseSchema,
+  GetProjectMemoryResponseSchema,
   GetProjectResponseSchema,
-  ListKnowledgeFilesQuerySchema,
-  ListKnowledgeFilesResponseSchema,
+  ListProjectAttachmentsQuerySchema,
+  ListProjectAttachmentsResponseSchema,
+  ListProjectMemoriesQuerySchema,
+  ListProjectMemoriesResponseSchema,
   ListProjectsQuerySchema,
   ListProjectsResponseSchema,
+  ProjectAttachmentParamSchema,
+  ProjectContextResponseSchema,
+  ProjectMemoryParamSchema,
+  UpdateProjectAttachmentRequestSchema,
+  UpdateProjectMemoryRequestSchema,
   UpdateProjectRequestSchema,
-  UploadFileResponseSchema,
 } from './schema';
 
 // ============================================================================
@@ -48,7 +59,7 @@ export const getProjectRoute = createRoute({
   path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Get project by ID',
-  description: 'Get a single project with file and thread counts',
+  description: 'Get a single project with attachment and thread counts',
   request: {
     params: IdParamSchema,
   },
@@ -102,7 +113,7 @@ export const updateProjectRoute = createRoute({
   path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Update project',
-  description: 'Update project name, description, or settings',
+  description: 'Update project name, description, color, or settings',
   request: {
     params: IdParamSchema,
     body: {
@@ -134,7 +145,7 @@ export const deleteProjectRoute = createRoute({
   path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Delete project',
-  description: 'Delete project and all associated files (CASCADE)',
+  description: 'Delete project and all associated attachments (CASCADE)',
   request: {
     params: IdParamSchema,
   },
@@ -154,27 +165,27 @@ export const deleteProjectRoute = createRoute({
 });
 
 // ============================================================================
-// KNOWLEDGE FILE ROUTES
+// PROJECT ATTACHMENT ROUTES (Reference-based, S3/R2 Best Practice)
 // ============================================================================
 
-export const listKnowledgeFilesRoute = createRoute({
+export const listProjectAttachmentsRoute = createRoute({
   method: 'get',
-  path: '/projects/:id/knowledge',
-  tags: ['Project Knowledge'],
-  summary: 'List project files',
-  description: 'Get all knowledge files for a project with pagination',
+  path: '/projects/:id/attachments',
+  tags: ['Project Attachments'],
+  summary: 'List project attachments',
+  description: 'Get all attachments for a project with pagination and filtering',
   request: {
     params: IdParamSchema,
-    query: ListKnowledgeFilesQuerySchema,
+    query: ListProjectAttachmentsQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
       content: {
         'application/json': {
-          schema: ListKnowledgeFilesResponseSchema,
+          schema: ListProjectAttachmentsResponseSchema,
         },
       },
-      description: 'Files retrieved successfully',
+      description: 'Attachments retrieved successfully',
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -182,36 +193,18 @@ export const listKnowledgeFilesRoute = createRoute({
   },
 });
 
-export const uploadKnowledgeFileRoute = createRoute({
+export const addAttachmentToProjectRoute = createRoute({
   method: 'post',
-  path: '/projects/:id/knowledge',
-  tags: ['Project Knowledge'],
-  summary: 'Upload file',
-  description: 'Upload a knowledge file to project (multipart/form-data)',
+  path: '/projects/:id/attachments',
+  tags: ['Project Attachments'],
+  summary: 'Add attachment to project',
+  description: 'Add an existing attachment (from POST /uploads) to a project for RAG indexing. S3/R2 Best Practice: Reference existing uploads instead of direct file upload.',
   request: {
     params: IdParamSchema,
     body: {
       content: {
-        'multipart/form-data': {
-          schema: {
-            type: 'object',
-            properties: {
-              file: {
-                type: 'string',
-                format: 'binary',
-              },
-              description: {
-                type: 'string',
-              },
-              context: {
-                type: 'string',
-              },
-              tags: {
-                type: 'string',
-              },
-            },
-            required: ['file'],
-          },
+        'application/json': {
+          schema: AddAttachmentToProjectRequestSchema,
         },
       },
     },
@@ -220,10 +213,67 @@ export const uploadKnowledgeFileRoute = createRoute({
     [HttpStatusCodes.CREATED]: {
       content: {
         'application/json': {
-          schema: UploadFileResponseSchema,
+          schema: AddProjectAttachmentResponseSchema,
         },
       },
-      description: 'File uploaded successfully',
+      description: 'Attachment added to project successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.CONFLICT,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const getProjectAttachmentRoute = createRoute({
+  method: 'get',
+  path: '/projects/:id/attachments/:attachmentId',
+  tags: ['Project Attachments'],
+  summary: 'Get project attachment',
+  description: 'Get a single attachment from a project with details',
+  request: {
+    params: ProjectAttachmentParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: GetProjectAttachmentResponseSchema,
+        },
+      },
+      description: 'Attachment retrieved successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const updateProjectAttachmentRoute = createRoute({
+  method: 'patch',
+  path: '/projects/:id/attachments/:attachmentId',
+  tags: ['Project Attachments'],
+  summary: 'Update project attachment metadata',
+  description: 'Update project-specific metadata (context, description, tags) for an attachment',
+  request: {
+    params: ProjectAttachmentParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateProjectAttachmentRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: GetProjectAttachmentResponseSchema,
+        },
+      },
+      description: 'Attachment metadata updated successfully',
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -232,20 +282,14 @@ export const uploadKnowledgeFileRoute = createRoute({
   },
 });
 
-export const deleteKnowledgeFileRoute = createRoute({
+export const removeAttachmentFromProjectRoute = createRoute({
   method: 'delete',
-  path: '/projects/:id/knowledge/:fileId',
-  tags: ['Project Knowledge'],
-  summary: 'Delete file',
-  description: 'Delete a knowledge file from project',
+  path: '/projects/:id/attachments/:attachmentId',
+  tags: ['Project Attachments'],
+  summary: 'Remove attachment from project',
+  description: 'Remove an attachment reference from a project. The underlying file remains in the uploads system.',
   request: {
-    params: IdParamSchema.extend({
-      fileId: z.string().openapi({
-        param: { name: 'fileId', in: 'path' },
-        description: 'Knowledge file identifier',
-        example: 'file_abc123',
-      }),
-    }),
+    params: ProjectAttachmentParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -254,7 +298,176 @@ export const deleteKnowledgeFileRoute = createRoute({
           schema: DeleteResponseSchema,
         },
       },
-      description: 'File deleted successfully',
+      description: 'Attachment removed from project successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+// ============================================================================
+// PROJECT MEMORY ROUTES
+// ============================================================================
+
+export const listProjectMemoriesRoute = createRoute({
+  method: 'get',
+  path: '/projects/:id/memories',
+  tags: ['Project Memories'],
+  summary: 'List project memories',
+  description: 'Get all memories for a project with pagination and filtering',
+  request: {
+    params: IdParamSchema,
+    query: ListProjectMemoriesQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: ListProjectMemoriesResponseSchema,
+        },
+      },
+      description: 'Memories retrieved successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const createProjectMemoryRoute = createRoute({
+  method: 'post',
+  path: '/projects/:id/memories',
+  tags: ['Project Memories'],
+  summary: 'Create project memory',
+  description: 'Create a new memory entry for a project',
+  request: {
+    params: IdParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateProjectMemoryRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.CREATED]: {
+      content: {
+        'application/json': {
+          schema: GetProjectMemoryResponseSchema,
+        },
+      },
+      description: 'Memory created successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const getProjectMemoryRoute = createRoute({
+  method: 'get',
+  path: '/projects/:id/memories/:memoryId',
+  tags: ['Project Memories'],
+  summary: 'Get project memory',
+  description: 'Get a single memory entry from a project',
+  request: {
+    params: ProjectMemoryParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: GetProjectMemoryResponseSchema,
+        },
+      },
+      description: 'Memory retrieved successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const updateProjectMemoryRoute = createRoute({
+  method: 'patch',
+  path: '/projects/:id/memories/:memoryId',
+  tags: ['Project Memories'],
+  summary: 'Update project memory',
+  description: 'Update a memory entry (content, importance, active status)',
+  request: {
+    params: ProjectMemoryParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateProjectMemoryRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: GetProjectMemoryResponseSchema,
+        },
+      },
+      description: 'Memory updated successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const deleteProjectMemoryRoute = createRoute({
+  method: 'delete',
+  path: '/projects/:id/memories/:memoryId',
+  tags: ['Project Memories'],
+  summary: 'Delete project memory',
+  description: 'Delete a memory entry from a project',
+  request: {
+    params: ProjectMemoryParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: DeleteResponseSchema,
+        },
+      },
+      description: 'Memory deleted successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+// ============================================================================
+// PROJECT CONTEXT ROUTE
+// ============================================================================
+
+export const getProjectContextRoute = createRoute({
+  method: 'get',
+  path: '/projects/:id/context',
+  tags: ['Project Context'],
+  summary: 'Get aggregated project context',
+  description: 'Get aggregated context from memories, cross-chat history, searches, and analyses for RAG',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: ProjectContextResponseSchema,
+        },
+      },
+      description: 'Project context retrieved successfully',
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,

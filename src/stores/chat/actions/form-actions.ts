@@ -27,11 +27,22 @@ import { getRoundNumber } from '@/lib/utils/metadata';
 import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
+/**
+ * Attachment info for building optimistic file parts
+ * Passed from useChatAttachments hook to form actions
+ */
+export type AttachmentInfo = {
+  uploadId: string;
+  filename: string;
+  mimeType: string;
+  previewUrl?: string;
+};
+
 export type UseChatFormActionsReturn = {
-  /** Submit form to create new thread */
-  handleCreateThread: () => Promise<void>;
-  /** Submit form to update existing thread and send message */
-  handleUpdateThreadAndSend: (threadId: string) => Promise<void>;
+  /** Submit form to create new thread (with optional attachment IDs and metadata) */
+  handleCreateThread: (attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => Promise<void>;
+  /** Submit form to update existing thread and send message (with optional attachment IDs and metadata) */
+  handleUpdateThreadAndSend: (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => Promise<void>;
   /** Reset form to initial state */
   handleResetForm: () => void;
   /** Change mode and mark as having pending changes */
@@ -71,6 +82,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     thread: s.thread,
     participants: s.participants,
     messages: s.messages, // ✅ IMMEDIATE UI FEEDBACK: For calculating next round
+    pendingAttachments: s.pendingAttachments, // ✅ For optimistic message file parts
   })));
 
   // Batch actions selectors (functions are stable, but batching reduces subscriptions)
@@ -95,6 +107,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setStreamingRoundNumber: s.setStreamingRoundNumber,
     setMessages: s.setMessages,
     setHasEarlyOptimisticMessage: s.setHasEarlyOptimisticMessage,
+    // ✅ ATTACHMENT CLEARING: Clear attachments after thread/message is created
+    clearAttachments: s.clearAttachments,
   })));
 
   // Mutations
@@ -111,8 +125,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   /**
    * Create a new thread with current form state
    * Used by ChatOverviewScreen
+   * @param attachmentIds - Optional upload IDs to attach to the first message
+   * @param _attachmentInfos - Optional attachment metadata (unused - server provides file parts in response)
    */
-  const handleCreateThread = useCallback(async () => {
+  const handleCreateThread = useCallback(async (attachmentIds?: string[], _attachmentInfos?: AttachmentInfo[]) => {
     const prompt = formState.inputValue.trim();
 
     if (!prompt || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
@@ -127,7 +143,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         mode: formState.selectedMode,
         participants: formState.selectedParticipants,
         enableWebSearch: formState.enableWebSearch,
-      });
+      }, attachmentIds);
 
       const response = await createThreadMutation.mutateAsync({
         json: createThreadRequest,
@@ -188,6 +204,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // and the msg box of what user just said shows on the round"
       actions.setInputValue('');
 
+      // ✅ FIX: Clear attachments AFTER thread is created and message is in store
+      // This keeps attachment previews visible until the user message shows in the thread
+      actions.clearAttachments();
+
       // ✅ TIMING FIX: Add placeholder pre-search BEFORE prepareForNewMessage
       // This ensures the pre-search exists in the SAME render cycle as the pending message state,
       // preventing timing issues where UI renders without pre-search data
@@ -214,7 +234,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ BUG FIX: Use modelId instead of participant record id
       // Provider compares against modelIds, not participant record IDs
       const participantModelIds = participants.map(p => p.modelId);
-      actions.prepareForNewMessage(prompt, participantModelIds);
+      actions.prepareForNewMessage(prompt, participantModelIds, attachmentIds);
 
       // ✅ IMMEDIATE UI FEEDBACK: Set streamingRoundNumber IMMEDIATELY for round 0
       // This enables ChatMessageList to show pending participant cards with shimmer animation
@@ -244,8 +264,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   /**
    * Update existing thread and send message
    * Used by ChatThreadScreen
+   * @param threadId - The thread ID to update
+   * @param attachmentIds - Optional upload IDs to attach to the message
+   * @param attachmentInfos - Optional attachment metadata for building optimistic file parts
    */
-  const handleUpdateThreadAndSend = useCallback(async (threadId: string) => {
+  const handleUpdateThreadAndSend = useCallback(async (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {
     const trimmed = formState.inputValue.trim();
 
     if (!trimmed || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
@@ -324,10 +347,25 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }
 
       // Add optimistic user message IMMEDIATELY for instant UI feedback
+      // ✅ FIX: Include file parts so attachments show in optimistic message
+      // Use attachmentInfos passed from useChatAttachments hook (single source of truth)
+      const fileParts = attachmentInfos && attachmentInfos.length > 0
+        ? attachmentInfos.map(att => ({
+            type: 'file' as const,
+            // Use preview URL for optimistic display, backend will provide final URL
+            url: att.previewUrl || '',
+            filename: att.filename,
+            mediaType: att.mimeType,
+          }))
+        : [];
+
       const optimisticUserMessage: UIMessage = {
         id: `optimistic-user-${Date.now()}`,
         role: MessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: trimmed }],
+        parts: [
+          ...fileParts, // Files first (matches UI layout)
+          { type: MessagePartTypes.TEXT, text: trimmed },
+        ],
         metadata: {
           role: MessageRoles.USER,
           roundNumber: nextRoundNumber,
@@ -450,15 +488,19 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setExpectedParticipantIds(threadState.participants.map(p => p.modelId));
       }
 
-      // Prepare for new message (sets flags and pending message)
+      // Prepare for new message (sets flags, pending message, and attachment IDs)
       // On THREAD screen, this also adds optimistic user message to UI
-      actions.prepareForNewMessage(trimmed, []);
+      actions.prepareForNewMessage(trimmed, [], attachmentIds);
 
       // ✅ FIX: Clear input AFTER prepareForNewMessage so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through
       // and the msg box of what user just said shows on the round"
       // Also moved inside try block so input isn't cleared on error
       actions.setInputValue('');
+
+      // ✅ FIX: Clear attachments AFTER optimistic message is added to store
+      // This keeps attachment previews visible until the user message shows in the thread
+      actions.clearAttachments();
     } catch (error) {
       // ✅ CRITICAL FIX: Clean up state on error to prevent UI freeze
       // If we get here, we've already set:

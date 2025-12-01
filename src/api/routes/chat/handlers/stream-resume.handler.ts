@@ -21,6 +21,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import type { resumeStreamRoute, resumeThreadStreamRoute } from '../route';
+import { StreamIdParamSchema, ThreadIdParamSchema } from '../schema';
 
 // ============================================================================
 // Stream Resume Handler
@@ -39,15 +40,11 @@ export const resumeStreamHandler: RouteHandler<typeof resumeStreamRoute, ApiEnv>
   {
     auth: 'session',
     operationName: 'resumeStream',
+    validateParams: StreamIdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { streamId } = c.req.param();
-
-    // Type guard: Verify streamId exists
-    if (!streamId) {
-      throw createError.badRequest('Stream ID is required', { errorType: 'validation' });
-    }
+    const { streamId } = c.validated.params;
 
     // Parse stream ID to extract thread, round, and participant
     // Format: {threadId}_r{roundNumber}_p{participantIndex}
@@ -134,15 +131,11 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
   {
     auth: 'session',
     operationName: 'resumeThreadStream',
+    validateParams: ThreadIdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { threadId } = c.req.param();
-
-    // Type guard: Verify threadId exists
-    if (!threadId) {
-      throw createError.badRequest('Thread ID is required', { errorType: 'validation' });
-    }
+    const { threadId } = c.validated.params;
 
     // Verify thread ownership
     const db = await getDbAsync();

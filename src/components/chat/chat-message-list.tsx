@@ -1,6 +1,5 @@
 'use client';
 import type { UIMessage } from 'ai';
-import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
@@ -10,6 +9,8 @@ import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema'
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
+import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
+import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
@@ -889,9 +890,36 @@ export const ChatMessageList = memo(
                     <div className="space-y-4">
                       {group.messages.map(({ message, index }) => {
                         const messageKey = keyForMessage(message, index);
+
+                        // Extract file attachments and text parts separately
+                        // Use any cast after type check since UIMessagePart union doesn't expose file properties directly
+                        const fileAttachments: MessageAttachment[] = message.parts
+                          .filter(part => part.type === 'file' && 'url' in part)
+                          .map((part) => {
+                            const filePart = part as unknown as { url: string; filename?: string; mediaType?: string };
+                            return {
+                              url: filePart.url,
+                              filename: filePart.filename,
+                              mediaType: filePart.mediaType,
+                            };
+                          });
+
+                        const textParts = message.parts.filter(
+                          part => part.type === MessagePartTypes.TEXT,
+                        );
+
                         return (
                           <div key={messageKey} className="text-foreground text-sm leading-relaxed">
-                            {message.parts.map((part) => {
+                            {/* Attachments displayed above text in compact grid */}
+                            {fileAttachments.length > 0 && (
+                              <MessageAttachmentPreview
+                                attachments={fileAttachments}
+                                messageId={message.id}
+                              />
+                            )}
+
+                            {/* Text content */}
+                            {textParts.map((part) => {
                               if (part.type === MessagePartTypes.TEXT) {
                                 return (
                                   <Streamdown
@@ -901,45 +929,6 @@ export const ChatMessageList = memo(
                                   >
                                     {part.text}
                                   </Streamdown>
-                                );
-                              }
-                              if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
-                                return (
-                                  <div key={`${message.id}-image-${part.url}`} className="my-2 relative max-w-full max-h-[400px]">
-                                    <Image
-                                      src={part.url}
-                                      alt={part.filename || 'Attachment'}
-                                      className="rounded-lg border border-border object-contain"
-                                      width={800}
-                                      height={400}
-                                      style={{ maxWidth: '100%', height: 'auto' }}
-                                      unoptimized
-                                    />
-                                    {part.filename && (
-                                      <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>
-                                    )}
-                                  </div>
-                                );
-                              }
-                              if (part.type === 'file') {
-                                return (
-                                  <div key={`${message.id}-file-${part.filename || part.url}`} className="my-2 p-3 border border-border rounded-lg">
-                                    <div className="flex items-center gap-2">
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium">{part.filename || 'File'}</p>
-                                        {part.mediaType && (
-                                          <p className="text-xs text-muted-foreground">{part.mediaType}</p>
-                                        )}
-                                      </div>
-                                      <a
-                                        href={part.url}
-                                        download={part.filename}
-                                        className="text-xs text-primary hover:underline"
-                                      >
-                                        {t('actions.download')}
-                                      </a>
-                                    </div>
-                                  </div>
                                 );
                               }
                               return null;

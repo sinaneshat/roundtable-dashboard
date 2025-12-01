@@ -15,7 +15,9 @@ import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 
+import type { CitationSourceType } from '@/api/core/enums';
 import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
+import type { CitationSourceMap } from '@/api/services/citation-context-builder';
 import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
@@ -28,6 +30,7 @@ import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
 import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { hasCitations, parseCitations, toDbCitations } from '@/lib/utils/citation-parser';
 import { hasError } from '@/lib/utils/metadata';
 import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
 import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
@@ -65,6 +68,18 @@ export type SaveMessageParams = {
   participants: Array<{ id: string }>;
   threadMode: string;
   db: Awaited<ReturnType<typeof getDbAsync>>;
+  /** Citation source map for resolving [source_id] markers in AI response */
+  citationSourceMap?: CitationSourceMap;
+  /** Available sources (files/context available to AI, for "Sources" UI even without inline citations) */
+  availableSources?: Array<{
+    id: string;
+    sourceType: CitationSourceType;
+    title: string;
+    downloadUrl?: string;
+    filename?: string;
+    mimeType?: string;
+    fileSize?: number;
+  }>;
 };
 
 // ============================================================================
@@ -251,6 +266,8 @@ export async function saveStreamedMessage(
     participants,
     threadMode,
     db,
+    citationSourceMap,
+    availableSources,
   } = params;
 
   try {
@@ -357,6 +374,34 @@ export async function saveStreamedMessage(
             totalTokens: 0,
           };
 
+    // ✅ CITATION RESOLUTION: Parse and resolve citations from AI response text
+    // Citations appear as [source_id] markers (e.g., [att_abc12345], [mem_xyz789])
+    // Convert to DbCitation objects with full source metadata for UI rendering
+    let resolvedCitations;
+    if (text && citationSourceMap && hasCitations(text)) {
+      const parsedResult = parseCitations(text);
+      if (parsedResult.citations.length > 0) {
+        // Resolve parsed citations to full DbCitation objects using source map
+        resolvedCitations = toDbCitations(parsedResult.citations, (sourceId) => {
+          const source = citationSourceMap.get(sourceId);
+          if (!source)
+            return undefined;
+          return {
+            title: source.title,
+            excerpt: source.content.slice(0, 300),
+            url: source.metadata.url,
+            threadId: source.metadata.threadId,
+            threadTitle: source.metadata.threadTitle,
+            roundNumber: source.metadata.roundNumber,
+            downloadUrl: source.metadata.downloadUrl,
+            filename: source.metadata.filename,
+            mimeType: source.metadata.mimeType,
+            fileSize: source.metadata.fileSize,
+          };
+        });
+      }
+    }
+
     // ✅ TYPE-SAFE METADATA: Use builder to ensure all required fields
     // Compile-time guarantee that metadata matches ParticipantMessageMetadataSchema
     const messageMetadata = createParticipantMetadata({
@@ -374,6 +419,10 @@ export async function saveStreamedMessage(
       isPartialResponse: errorMetadata.isPartialResponse,
       providerMessage: errorMetadata.providerMessage,
       openRouterError: errorMetadata.openRouterError ? { message: errorMetadata.openRouterError } : undefined,
+      // ✅ CITATIONS: Include resolved citations if AI referenced sources
+      citations: resolvedCitations,
+      // ✅ AVAILABLE SOURCES: Include files/context available to AI for "Sources" UI
+      availableSources,
     });
 
     // Save message to database

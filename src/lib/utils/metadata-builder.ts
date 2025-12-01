@@ -10,7 +10,8 @@
  * Location: /src/lib/utils/metadata-builder.ts
  */
 
-import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+import type { CitationSourceType } from '@/api/core/enums';
+import type { DbAssistantMessageMetadata, DbCitation } from '@/db/schemas/chat-metadata';
 import type { RoundNumber } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
@@ -60,6 +61,20 @@ export type ParticipantMetadataParams = {
   responseBody?: string;
   aborted?: boolean;
   createdAt?: string;
+
+  // RAG citations (resolved source references from AI response)
+  citations?: DbCitation[];
+
+  // Available sources (files/context available to AI, shown even without inline citations)
+  availableSources?: Array<{
+    id: string;
+    sourceType: CitationSourceType;
+    title: string;
+    downloadUrl?: string;
+    filename?: string;
+    mimeType?: string;
+    fileSize?: number;
+  }>;
 };
 
 // ============================================================================
@@ -125,6 +140,12 @@ export function createParticipantMetadata(
     ...(params.responseBody && { responseBody: params.responseBody }),
     ...(params.aborted !== undefined && { aborted: params.aborted }),
     ...(params.createdAt && { createdAt: params.createdAt }),
+
+    // RAG citations (only present if AI referenced sources)
+    ...(params.citations && params.citations.length > 0 && { citations: params.citations }),
+
+    // Available sources (files/context available to AI for "Sources" UI)
+    ...(params.availableSources && params.availableSources.length > 0 && { availableSources: params.availableSources }),
   };
 }
 

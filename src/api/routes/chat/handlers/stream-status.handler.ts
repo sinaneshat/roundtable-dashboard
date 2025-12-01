@@ -20,6 +20,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import type { getStreamStatusRoute } from '../route';
+import { StreamIdParamSchema } from '../schema';
 
 // ============================================================================
 // Stream Status Handler
@@ -38,15 +39,11 @@ export const getStreamStatusHandler: RouteHandler<typeof getStreamStatusRoute, A
   {
     auth: 'session',
     operationName: 'getStreamStatus',
+    validateParams: StreamIdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { streamId } = c.req.param();
-
-    // Type guard: Verify streamId exists
-    if (!streamId) {
-      throw createError.badRequest('Stream ID is required', { errorType: 'validation' });
-    }
+    const { streamId } = c.validated.params;
 
     // Parse stream ID to extract thread, round, and participant
     // Format: {threadId}_r{roundNumber}_p{participantIndex}

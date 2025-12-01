@@ -25,6 +25,7 @@ import type {
 
 import { user } from './auth';
 import { chatProject } from './project';
+import { messageUpload } from './upload';
 
 /**
  * Chat Threads
@@ -248,6 +249,16 @@ export const chatMessage = sqliteTable('chat_message', {
       result: unknown;
       isError?: boolean;
     }
+    // ✅ MULTI-MODAL: File attachments (images, PDFs) for AI model consumption
+    // Reference: AI SDK v5 FilePart - https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
+    | {
+      type: 'file';
+      url: string;
+      mediaType: string;
+      filename?: string;
+    }
+    // ✅ AI SDK v5 STREAMING: Step start marker for streaming lifecycle
+    | { type: 'step-start' }
   >>(),
 
   // ✅ ROUND TRACKING: Event-based round number for reliable analysis placement
@@ -572,7 +583,7 @@ export const chatParticipantRelations = relations(chatParticipant, ({ one, many 
   messages: many(chatMessage),
 }));
 
-export const chatMessageRelations = relations(chatMessage, ({ one }) => ({
+export const chatMessageRelations = relations(chatMessage, ({ one, many }) => ({
   thread: one(chatThread, {
     fields: [chatMessage.threadId],
     references: [chatThread.id],
@@ -581,6 +592,8 @@ export const chatMessageRelations = relations(chatMessage, ({ one }) => ({
     fields: [chatMessage.participantId],
     references: [chatParticipant.id],
   }),
+  // ✅ ATTACHMENTS: Link to uploaded files via junction table
+  messageUploads: many(messageUpload),
   // ✅ REMOVED: parentMessage relation (parentMessageId moved to metadata)
   // Parent message relationship is now tracked via metadata.parentMessageId
 }));

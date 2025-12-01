@@ -135,64 +135,60 @@ import {
   updateParticipantRoute,
   updateThreadRoute,
 } from './routes/chat/route';
-// MCP (Model Context Protocol) routes
+// MCP (Model Context Protocol) routes - Consolidated JSON-RPC + REST endpoints
 import {
-  addParticipantToolHandler,
-  createThreadToolHandler,
-  generateAnalysisToolHandler,
-  generateResponsesToolHandler,
-  getRoundAnalysisToolHandler,
-  getThreadToolHandler,
-  listModelsToolHandler,
+  callToolHandler,
   listResourcesHandler,
-  listRoundsToolHandler,
   listToolsHandler,
-  regenerateRoundToolHandler,
-  removeParticipantToolHandler,
-  roundFeedbackToolHandler,
-  sendMessageToolHandler,
-  updateParticipantToolHandler,
+  mcpJsonRpcHandler,
+  openAIFunctionsHandler,
 } from './routes/mcp/handler';
 import {
-  addParticipantToolRoute,
-  createThreadToolRoute,
-  generateAnalysisToolRoute,
-  generateResponsesToolRoute,
-  getRoundAnalysisToolRoute,
-  getThreadToolRoute,
-  listModelsToolRoute,
+  callToolRoute,
   listResourcesRoute,
-  listRoundsToolRoute,
   listToolsRoute,
-  regenerateRoundToolRoute,
-  removeParticipantToolRoute,
-  roundFeedbackToolRoute,
-  sendMessageToolRoute,
-  updateParticipantToolRoute,
+  mcpJsonRpcRoute,
+  openAIFunctionsRoute,
 } from './routes/mcp/route';
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
 import { listModelsRoute } from './routes/models/route';
 // Project routes
 import {
+  addAttachmentToProjectHandler,
   createProjectHandler,
-  deleteKnowledgeFileHandler,
+  createProjectMemoryHandler,
   deleteProjectHandler,
+  deleteProjectMemoryHandler,
+  getProjectAttachmentHandler,
+  getProjectContextHandler,
   getProjectHandler,
-  listKnowledgeFilesHandler,
+  getProjectMemoryHandler,
+  listProjectAttachmentsHandler,
+  listProjectMemoriesHandler,
   listProjectsHandler,
+  removeAttachmentFromProjectHandler,
+  updateProjectAttachmentHandler,
   updateProjectHandler,
-  uploadKnowledgeFileHandler,
+  updateProjectMemoryHandler,
 } from './routes/project/handler';
 import {
+  addAttachmentToProjectRoute,
+  createProjectMemoryRoute,
   createProjectRoute,
-  deleteKnowledgeFileRoute,
+  deleteProjectMemoryRoute,
   deleteProjectRoute,
+  getProjectAttachmentRoute,
+  getProjectContextRoute,
+  getProjectMemoryRoute,
   getProjectRoute,
-  listKnowledgeFilesRoute,
+  listProjectAttachmentsRoute,
+  listProjectMemoriesRoute,
   listProjectsRoute,
+  removeAttachmentFromProjectRoute,
+  updateProjectAttachmentRoute,
+  updateProjectMemoryRoute,
   updateProjectRoute,
-  uploadKnowledgeFileRoute,
 } from './routes/project/route';
 // ============================================================================
 // Route and Handler Imports (organized to match registration order below)
@@ -208,6 +204,31 @@ import {
   detailedHealthRoute,
   healthRoute,
 } from './routes/system/route';
+// Upload routes (R2 file uploads)
+import {
+  abortMultipartUploadHandler,
+  completeMultipartUploadHandler,
+  createMultipartUploadHandler,
+  deleteUploadHandler,
+  downloadUploadHandler,
+  getUploadHandler,
+  listUploadsHandler,
+  updateUploadHandler,
+  uploadFileHandler,
+  uploadPartHandler,
+} from './routes/uploads/handler';
+import {
+  abortMultipartUploadRoute,
+  completeMultipartUploadRoute,
+  createMultipartUploadRoute,
+  deleteUploadRoute,
+  downloadUploadRoute,
+  getUploadRoute,
+  listUploadsRoute,
+  updateUploadRoute,
+  uploadFileRoute,
+  uploadPartRoute,
+} from './routes/uploads/route';
 // Usage tracking routes
 import {
   getUserUsageStatsHandler,
@@ -273,10 +294,23 @@ app.use('*', async (c, next) => {
   return timeout(15000)(c, next);
 });
 
-// Body limit
-app.use('*', bodyLimit({
-  maxSize: 5 * 1024 * 1024,
-  onError: c => c.text('Payload Too Large', 413),
+// Body limit - default 5MB for most routes
+// Upload routes get their own higher limit below
+app.use('*', async (c, next) => {
+  // Skip body limit for upload routes - they have their own higher limits
+  if (c.req.path.startsWith('/uploads')) {
+    return next();
+  }
+  return bodyLimit({
+    maxSize: 5 * 1024 * 1024,
+    onError: c => c.text('Payload Too Large', 413),
+  })(c, next);
+});
+
+// Higher body limit for file upload routes (100MB for single uploads)
+app.use('/uploads', bodyLimit({
+  maxSize: 100 * 1024 * 1024,
+  onError: c => c.text('Payload Too Large - max 100MB for uploads', 413),
 }));
 
 // CORS configuration - Use environment variables for dynamic origin configuration
@@ -431,6 +465,14 @@ app.use('/projects/:id', protectMutations);
 app.use('/projects/:id/knowledge', csrfProtection, requireSession);
 app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
 
+// Upload routes (protected - file attachments for chat)
+app.use('/uploads', csrfProtection, requireSession);
+app.use('/uploads/:id', protectMutations);
+app.use('/uploads/multipart', csrfProtection, requireSession);
+app.use('/uploads/multipart/:id', protectMutations);
+app.use('/uploads/multipart/:id/parts', csrfProtection, requireSession);
+app.use('/uploads/multipart/:id/complete', csrfProtection, requireSession);
+
 // Register all routes directly on the app
 const appRoutes = app
   // ============================================================================
@@ -525,10 +567,20 @@ const appRoutes = app
   .openapi(getProjectRoute, getProjectHandler) // Get project details
   .openapi(updateProjectRoute, updateProjectHandler) // Update project name/description/settings
   .openapi(deleteProjectRoute, deleteProjectHandler) // Delete project (CASCADE)
-  // Knowledge Base
-  .openapi(listKnowledgeFilesRoute, listKnowledgeFilesHandler) // List project knowledge files
-  .openapi(uploadKnowledgeFileRoute, uploadKnowledgeFileHandler) // Upload file to project
-  .openapi(deleteKnowledgeFileRoute, deleteKnowledgeFileHandler) // Delete knowledge file
+  // Project Attachments (reference-based, S3/R2 best practice)
+  .openapi(listProjectAttachmentsRoute, listProjectAttachmentsHandler) // List project attachments
+  .openapi(addAttachmentToProjectRoute, addAttachmentToProjectHandler) // Add existing attachment to project
+  .openapi(getProjectAttachmentRoute, getProjectAttachmentHandler) // Get single attachment
+  .openapi(updateProjectAttachmentRoute, updateProjectAttachmentHandler) // Update attachment metadata
+  .openapi(removeAttachmentFromProjectRoute, removeAttachmentFromProjectHandler) // Remove attachment reference
+  // Project Memories
+  .openapi(listProjectMemoriesRoute, listProjectMemoriesHandler) // List project memories
+  .openapi(createProjectMemoryRoute, createProjectMemoryHandler) // Create memory
+  .openapi(getProjectMemoryRoute, getProjectMemoryHandler) // Get single memory
+  .openapi(updateProjectMemoryRoute, updateProjectMemoryHandler) // Update memory
+  .openapi(deleteProjectMemoryRoute, deleteProjectMemoryHandler) // Delete memory
+  // Project Context (RAG aggregation)
+  .openapi(getProjectContextRoute, getProjectContextHandler) // Get aggregated project context
 
   // ============================================================================
   // Usage Routes - Single source of truth for usage and quota (protected)
@@ -541,29 +593,32 @@ const appRoutes = app
   .openapi(listModelsRoute, listModelsHandler) // List all available OpenRouter models
 
   // ============================================================================
-  // MCP Routes - Model Context Protocol server implementation (API key auth)
+  // MCP Routes - Model Context Protocol server (JSON-RPC 2.0 + REST convenience)
+  // Following official MCP spec: https://modelcontextprotocol.io/specification
   // ============================================================================
-  // MCP Discovery
-  .openapi(listToolsRoute, listToolsHandler) // List available MCP tools
-  .openapi(listResourcesRoute, listResourcesHandler) // List accessible MCP resources
-  // MCP Tool Execution - Thread Management
-  .openapi(createThreadToolRoute, createThreadToolHandler) // Tool: Create chat thread
-  .openapi(getThreadToolRoute, getThreadToolHandler) // Tool: Get thread details
-  // MCP Tool Execution - Message & Response Management
-  .openapi(sendMessageToolRoute, sendMessageToolHandler) // Tool: Send message to thread
-  .openapi(generateResponsesToolRoute, generateResponsesToolHandler) // Tool: Generate AI responses (server-side)
-  // MCP Tool Execution - Round Management
-  .openapi(generateAnalysisToolRoute, generateAnalysisToolHandler) // Tool: Generate round analysis
-  .openapi(regenerateRoundToolRoute, regenerateRoundToolHandler) // Tool: Regenerate round
-  .openapi(getRoundAnalysisToolRoute, getRoundAnalysisToolHandler) // Tool: Get round analysis
-  .openapi(listRoundsToolRoute, listRoundsToolHandler) // Tool: List all rounds
-  .openapi(roundFeedbackToolRoute, roundFeedbackToolHandler) // Tool: Submit round feedback
-  // MCP Tool Execution - Participant Management
-  .openapi(addParticipantToolRoute, addParticipantToolHandler) // Tool: Add participant to thread
-  .openapi(removeParticipantToolRoute, removeParticipantToolHandler) // Tool: Remove participant
-  .openapi(updateParticipantToolRoute, updateParticipantToolHandler) // Tool: Update participant
-  // MCP Tool Execution - Model Discovery
-  .openapi(listModelsToolRoute, listModelsToolHandler) // Tool: List models
+  // JSON-RPC endpoint - Main MCP protocol transport
+  .openapi(mcpJsonRpcRoute, mcpJsonRpcHandler) // POST /mcp - JSON-RPC 2.0 (tools/list, tools/call, etc.)
+  // REST convenience endpoints - For HTTP integrations like n8n
+  .openapi(listToolsRoute, listToolsHandler) // GET /mcp/tools - List tools (REST)
+  .openapi(listResourcesRoute, listResourcesHandler) // GET /mcp/resources - List resources (REST)
+  .openapi(callToolRoute, callToolHandler) // POST /mcp/tools/call - Execute tool (REST)
+  .openapi(openAIFunctionsRoute, openAIFunctionsHandler) // GET /mcp/openai/functions - OpenAI format
+
+  // ============================================================================
+  // Upload Routes - R2 file uploads
+  // ============================================================================
+  // Single-request uploads (for files < 100MB)
+  .openapi(uploadFileRoute, uploadFileHandler) // POST /uploads - Upload file
+  .openapi(listUploadsRoute, listUploadsHandler) // GET /uploads - List uploads
+  .openapi(getUploadRoute, getUploadHandler) // GET /uploads/:id - Get upload
+  .openapi(downloadUploadRoute, downloadUploadHandler) // GET /uploads/:id/download - Download
+  .openapi(updateUploadRoute, updateUploadHandler) // PATCH /uploads/:id - Update metadata
+  .openapi(deleteUploadRoute, deleteUploadHandler) // DELETE /uploads/:id - Delete upload
+  // Multipart uploads (for large files > 100MB)
+  .openapi(createMultipartUploadRoute, createMultipartUploadHandler) // POST /uploads/multipart - Initiate
+  .openapi(uploadPartRoute, uploadPartHandler) // PUT /uploads/multipart/:id/parts - Upload part
+  .openapi(completeMultipartUploadRoute, completeMultipartUploadHandler) // POST /uploads/multipart/:id/complete
+  .openapi(abortMultipartUploadRoute, abortMultipartUploadHandler) // DELETE /uploads/multipart/:id - Abort
 ;
 
 // ============================================================================
@@ -594,6 +649,8 @@ appRoutes.doc('/doc', c => ({
     { name: 'api-keys', description: 'API key management and authentication' },
     { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
     { name: 'chat', description: 'Multi-model AI chat threads and messages' },
+    { name: 'Uploads', description: 'File uploads for chat attachments (R2 storage)' },
+    { name: 'Multipart', description: 'Multipart uploads for large files' },
     { name: 'projects', description: 'Project-based knowledge base management with AutoRAG' },
     { name: 'knowledge-base', description: 'Knowledge file upload and management' },
     { name: 'usage', description: 'Usage tracking and quota management' },

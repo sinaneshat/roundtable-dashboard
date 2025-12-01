@@ -7,6 +7,7 @@ import { getDbAsync } from '@/db';
 import { STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 
 import type { clearCacheRoute, detailedHealthRoute, healthRoute } from './route';
+import type { HealthCheckContext } from './schema';
 
 /**
  * Basic health check handler
@@ -62,10 +63,6 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 /**
  * Check database connectivity
  */
-type HealthCheckContext = {
-  env: ApiEnv['Bindings'];
-};
-
 async function checkDatabase(_c: HealthCheckContext) {
   const startTime = Date.now();
 

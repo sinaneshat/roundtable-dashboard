@@ -112,6 +112,27 @@ export const MessagePartSchema = z.discriminatedUnion('type', [
       example: false,
     }),
   }),
+  // ✅ AI SDK v5 FILE PART: For multi-modal messages (images, PDFs, etc.)
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
+  z.object({
+    type: z.literal('file'),
+    url: z.string().openapi({
+      description: 'URL to the file (can be data URL or HTTP URL)',
+      example: 'https://example.com/image.png',
+    }),
+    mediaType: z.string().openapi({
+      description: 'MIME type of the file',
+      example: 'image/png',
+    }),
+    filename: z.string().optional().openapi({
+      description: 'Original filename for display',
+      example: 'screenshot.png',
+    }),
+  }),
+  // ✅ AI SDK v5 STEP-START PART: Marks beginning of a step in streaming
+  z.object({
+    type: z.literal('step-start'),
+  }),
 ]).openapi('MessagePart');
 
 /**

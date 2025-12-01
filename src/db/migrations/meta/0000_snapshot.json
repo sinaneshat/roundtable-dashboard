@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fc66a0a6-64a7-4080-85d8-1f08a9454a05",
+  "id": "d48cb9ec-0254-4ae2-9a5d-633f12ec4ef5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1936,6 +1936,14 @@
             "custom_role_id"
           ],
           "isUnique": false
+        },
+        "chat_participant_thread_model_unique": {
+          "name": "chat_participant_thread_model_unique",
+          "columns": [
+            "thread_id",
+            "model_id"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -2566,6 +2574,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'blue'"
+        },
         "custom_instructions": {
           "name": "custom_instructions",
           "type": "text",
@@ -2660,8 +2676,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "project_knowledge_file": {
-      "name": "project_knowledge_file",
+    "project_attachment": {
+      "name": "project_attachment",
       "columns": {
         "id": {
           "name": "id",
@@ -2672,6 +2688,538 @@
         },
         "project_id": {
           "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "index_status": {
+          "name": "index_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "rag_metadata": {
+          "name": "rag_metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "added_by": {
+          "name": "added_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "project_attachment_project_idx": {
+          "name": "project_attachment_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_upload_idx": {
+          "name": "project_attachment_upload_idx",
+          "columns": [
+            "upload_id"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_status_idx": {
+          "name": "project_attachment_status_idx",
+          "columns": [
+            "index_status"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_added_by_idx": {
+          "name": "project_attachment_added_by_idx",
+          "columns": [
+            "added_by"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_created_idx": {
+          "name": "project_attachment_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "project_attachment_unique_idx": {
+          "name": "project_attachment_unique_idx",
+          "columns": [
+            "project_id",
+            "upload_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "project_attachment_project_id_chat_project_id_fk": {
+          "name": "project_attachment_project_id_chat_project_id_fk",
+          "tableFrom": "project_attachment",
+          "tableTo": "chat_project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "project_attachment_upload_id_upload_id_fk": {
+          "name": "project_attachment_upload_id_upload_id_fk",
+          "tableFrom": "project_attachment",
+          "tableTo": "upload",
+          "columnsFrom": [
+            "upload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "project_attachment_added_by_user_id_fk": {
+          "name": "project_attachment_added_by_user_id_fk",
+          "tableFrom": "project_attachment",
+          "tableTo": "user",
+          "columnsFrom": [
+            "added_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "project_memory": {
+      "name": "project_memory",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'chat'"
+        },
+        "source_thread_id": {
+          "name": "source_thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_round_number": {
+          "name": "source_round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "importance": {
+          "name": "importance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 5
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "project_memory_project_idx": {
+          "name": "project_memory_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
+        "project_memory_source_idx": {
+          "name": "project_memory_source_idx",
+          "columns": [
+            "source"
+          ],
+          "isUnique": false
+        },
+        "project_memory_thread_idx": {
+          "name": "project_memory_thread_idx",
+          "columns": [
+            "source_thread_id"
+          ],
+          "isUnique": false
+        },
+        "project_memory_active_idx": {
+          "name": "project_memory_active_idx",
+          "columns": [
+            "is_active"
+          ],
+          "isUnique": false
+        },
+        "project_memory_importance_idx": {
+          "name": "project_memory_importance_idx",
+          "columns": [
+            "importance"
+          ],
+          "isUnique": false
+        },
+        "project_memory_created_idx": {
+          "name": "project_memory_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "project_memory_project_active_importance_idx": {
+          "name": "project_memory_project_active_importance_idx",
+          "columns": [
+            "project_id",
+            "is_active",
+            "importance"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "project_memory_project_id_chat_project_id_fk": {
+          "name": "project_memory_project_id_chat_project_id_fk",
+          "tableFrom": "project_memory",
+          "tableTo": "chat_project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "project_memory_source_thread_id_chat_thread_id_fk": {
+          "name": "project_memory_source_thread_id_chat_thread_id_fk",
+          "tableFrom": "project_memory",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "source_thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "project_memory_created_by_user_id_fk": {
+          "name": "project_memory_created_by_user_id_fk",
+          "tableFrom": "project_memory",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "message_upload": {
+      "name": "message_upload",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "message_upload_message_idx": {
+          "name": "message_upload_message_idx",
+          "columns": [
+            "message_id"
+          ],
+          "isUnique": false
+        },
+        "message_upload_upload_idx": {
+          "name": "message_upload_upload_idx",
+          "columns": [
+            "upload_id"
+          ],
+          "isUnique": false
+        },
+        "message_upload_created_idx": {
+          "name": "message_upload_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "message_upload_unique_idx": {
+          "name": "message_upload_unique_idx",
+          "columns": [
+            "message_id",
+            "upload_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "message_upload_upload_id_upload_id_fk": {
+          "name": "message_upload_upload_id_upload_id_fk",
+          "tableFrom": "message_upload",
+          "tableTo": "upload",
+          "columnsFrom": [
+            "upload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "thread_upload": {
+      "name": "thread_upload",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "context": {
+          "name": "context",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "thread_upload_thread_idx": {
+          "name": "thread_upload_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "thread_upload_upload_idx": {
+          "name": "thread_upload_upload_idx",
+          "columns": [
+            "upload_id"
+          ],
+          "isUnique": false
+        },
+        "thread_upload_created_idx": {
+          "name": "thread_upload_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "thread_upload_unique_idx": {
+          "name": "thread_upload_unique_idx",
+          "columns": [
+            "thread_id",
+            "upload_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "thread_upload_upload_id_upload_id_fk": {
+          "name": "thread_upload_upload_id_upload_id_fk",
+          "tableFrom": "thread_upload",
+          "tableTo": "upload",
+          "columnsFrom": [
+            "upload_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "upload": {
+      "name": "upload",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -2691,13 +3239,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "uploaded_by": {
-          "name": "uploaded_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "file_size": {
           "name": "file_size",
           "type": "integer",
@@ -2705,8 +3246,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "file_type": {
-          "name": "file_type",
+        "mime_type": {
+          "name": "mime_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -2734,72 +3275,67 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
         }
       },
       "indexes": {
-        "project_knowledge_file_r2_key_unique": {
-          "name": "project_knowledge_file_r2_key_unique",
+        "upload_r2_key_unique": {
+          "name": "upload_r2_key_unique",
           "columns": [
             "r2_key"
           ],
           "isUnique": true
         },
-        "project_knowledge_file_project_idx": {
-          "name": "project_knowledge_file_project_idx",
+        "upload_user_idx": {
+          "name": "upload_user_idx",
           "columns": [
-            "project_id"
+            "user_id"
           ],
           "isUnique": false
         },
-        "project_knowledge_file_status_idx": {
-          "name": "project_knowledge_file_status_idx",
+        "upload_status_idx": {
+          "name": "upload_status_idx",
           "columns": [
             "status"
           ],
           "isUnique": false
         },
-        "project_knowledge_file_uploaded_by_idx": {
-          "name": "project_knowledge_file_uploaded_by_idx",
-          "columns": [
-            "uploaded_by"
-          ],
-          "isUnique": false
-        },
-        "project_knowledge_file_created_idx": {
-          "name": "project_knowledge_file_created_idx",
+        "upload_created_idx": {
+          "name": "upload_created_idx",
           "columns": [
             "created_at"
           ],
           "isUnique": false
         },
-        "project_knowledge_file_r2_key_idx": {
-          "name": "project_knowledge_file_r2_key_idx",
+        "upload_r2_key_idx": {
+          "name": "upload_r2_key_idx",
           "columns": [
             "r2_key"
+          ],
+          "isUnique": false
+        },
+        "upload_mime_type_idx": {
+          "name": "upload_mime_type_idx",
+          "columns": [
+            "mime_type"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "project_knowledge_file_project_id_chat_project_id_fk": {
-          "name": "project_knowledge_file_project_id_chat_project_id_fk",
-          "tableFrom": "project_knowledge_file",
-          "tableTo": "chat_project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_knowledge_file_uploaded_by_user_id_fk": {
-          "name": "project_knowledge_file_uploaded_by_user_id_fk",
-          "tableFrom": "project_knowledge_file",
+        "upload_user_id_user_id_fk": {
+          "name": "upload_user_id_user_id_fk",
+          "tableFrom": "upload",
           "tableTo": "user",
           "columnsFrom": [
-            "uploaded_by"
+            "user_id"
           ],
           "columnsTo": [
             "id"

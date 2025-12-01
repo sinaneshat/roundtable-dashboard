@@ -1,8 +1,8 @@
 'use client';
 
-import { Globe, Mic, MoreHorizontal, Sparkles, StopCircle } from 'lucide-react';
+import { Globe, Mic, MoreHorizontal, Paperclip, Sparkles, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
 import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -34,6 +34,11 @@ type ChatInputToolbarMenuProps = {
   enableWebSearch: boolean;
   onWebSearchToggle?: (enabled: boolean) => void;
 
+  // File attachments
+  onAttachmentClick?: () => void;
+  attachmentCount?: number;
+  enableAttachments?: boolean;
+
   // Speech recognition (mobile only)
   isListening?: boolean;
   onToggleSpeech?: () => void;
@@ -51,6 +56,9 @@ export const ChatInputToolbarMenu = memo(({
   onOpenModeModal,
   enableWebSearch,
   onWebSearchToggle,
+  onAttachmentClick,
+  attachmentCount = 0,
+  enableAttachments = true,
   isListening = false,
   onToggleSpeech,
   isSpeechSupported = false,
@@ -63,6 +71,11 @@ export const ChatInputToolbarMenu = memo(({
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
 
+  // Handle file input click
+  const handleAttachClick = useCallback(() => {
+    onAttachmentClick?.();
+  }, [onAttachmentClick]);
+
   // Prevent hydration mismatch by only showing responsive behavior after mount
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
@@ -73,6 +86,7 @@ export const ChatInputToolbarMenu = memo(({
   if (mounted && isDesktop) {
     return (
       <div className="flex items-center gap-2">
+        {/* Models button */}
         <Button
           type="button"
           variant="outline"
@@ -89,6 +103,7 @@ export const ChatInputToolbarMenu = memo(({
             maxVisible={3}
           />
         </Button>
+        {/* Mode button */}
         <Button
           type="button"
           variant="outline"
@@ -100,6 +115,25 @@ export const ChatInputToolbarMenu = memo(({
           {ModeIcon && <ModeIcon className="size-4" />}
           <span>{currentMode?.label || t('chat.modes.mode')}</span>
         </Button>
+        {/* Attach button */}
+        {enableAttachments && onAttachmentClick && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={handleAttachClick}
+            className={cn(
+              'flex items-center justify-center rounded-full transition-colors',
+              'h-9 w-9 p-0',
+              'disabled:opacity-50 disabled:cursor-not-allowed',
+              attachmentCount > 0
+                ? 'bg-primary/10 border border-primary/50 text-primary hover:bg-primary/20 hover:border-primary/60'
+                : 'bg-muted/40 border border-border/50 hover:bg-muted/60',
+            )}
+          >
+            <Paperclip className="size-4" />
+          </button>
+        )}
+        {/* Web search toggle */}
         <button
           type="button"
           disabled={disabled}
@@ -222,6 +256,39 @@ export const ChatInputToolbarMenu = memo(({
               <div className="size-2 rounded-full bg-blue-400" />
             )}
           </button>
+
+          {/* Attach Files - Mobile drawer option */}
+          {enableAttachments && onAttachmentClick && (
+            <button
+              type="button"
+              onClick={handleAttachClick}
+              className={cn(
+                'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                attachmentCount > 0
+                  ? 'bg-amber-500/20 hover:bg-amber-500/25 active:bg-amber-500/30'
+                  : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+              )}
+            >
+              <div className={cn(
+                'flex items-center justify-center size-10 rounded-full transition-colors',
+                attachmentCount > 0 ? 'bg-amber-500/20' : 'bg-amber-500/10',
+              )}
+              >
+                <Paperclip className={cn(
+                  'size-5 transition-colors',
+                  attachmentCount > 0 ? 'text-amber-300' : 'text-amber-400',
+                )}
+                />
+              </div>
+              <span className={cn(
+                'text-sm font-medium flex-1 text-left transition-colors',
+                attachmentCount > 0 ? 'text-amber-100' : 'text-foreground',
+              )}
+              >
+                {t('chat.input.attachFiles')}
+              </span>
+            </button>
+          )}
 
           {/* Voice Input - Mobile only */}
           {onToggleSpeech && (

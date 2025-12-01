@@ -3,6 +3,8 @@
  *
  * TanStack Query hooks for project operations
  * Following patterns from subscriptions.ts and chat/threads.ts
+ *
+ * Updated to use new attachment-based pattern (S3/R2 best practice)
  */
 
 'use client';
@@ -10,16 +12,20 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import type {
-  ListKnowledgeFilesQuery,
-  ProjectFileStatus,
+  ListProjectAttachmentsQuery,
+  ListProjectMemoriesQuery,
+  ProjectIndexStatus,
+  ProjectMemorySource,
 } from '@/api/routes/project/schema';
 import { LIMITS } from '@/constants/limits';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
+  getProjectContextService,
   getProjectService,
-  listKnowledgeFilesService,
+  listProjectAttachmentsService,
+  listProjectMemoriesService,
   listProjectsService,
 } from '@/services/api';
 
@@ -64,8 +70,8 @@ export function useProjectsQuery(search?: string) {
 }
 
 /**
- * Hook to fetch a specific project by ID with file and thread counts
- * Returns project details including fileCount and threadCount
+ * Hook to fetch a specific project by ID with attachment and thread counts
+ * Returns project details including attachmentCount and threadCount
  * Protected endpoint - requires authentication
  *
  * @param projectId - Project ID
@@ -86,33 +92,34 @@ export function useProjectQuery(projectId: string, enabled?: boolean) {
 }
 
 /**
- * Hook to fetch knowledge files for a project
+ * Hook to fetch attachments for a project
+ * S3/R2 Best Practice: Attachments are references to centralized uploads
  * Protected endpoint - requires authentication
  *
  * @param projectId - Project ID
- * @param status - Optional filter by file status
+ * @param indexStatus - Optional filter by RAG indexing status
  * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
  */
-export function useKnowledgeFilesQuery(
+export function useProjectAttachmentsQuery(
   projectId: string,
-  status?: ProjectFileStatus,
+  indexStatus?: ProjectIndexStatus,
   enabled?: boolean,
 ) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useInfiniteQuery({
-    queryKey: [...queryKeys.projects.knowledgeFiles(projectId), status],
+    queryKey: [...queryKeys.projects.attachments(projectId), indexStatus],
     queryFn: async ({ pageParam }) => {
       const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
 
-      const query: ListKnowledgeFilesQuery = {
+      const query: ListProjectAttachmentsQuery = {
         limit,
         ...(pageParam && { cursor: pageParam }),
-        ...(status && { status }),
+        ...(indexStatus && { indexStatus }),
       };
 
-      return listKnowledgeFilesService({
+      return listProjectAttachmentsService({
         param: { id: projectId },
         query,
       });
@@ -121,6 +128,75 @@ export function useKnowledgeFilesQuery(
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch memories for a project
+ * Protected endpoint - requires authentication
+ *
+ * @param projectId - Project ID
+ * @param source - Optional filter by memory source
+ * @param isActive - Optional filter by active status
+ * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
+ */
+export function useProjectMemoriesQuery(
+  projectId: string,
+  source?: ProjectMemorySource,
+  isActive?: 'true' | 'false',
+  enabled?: boolean,
+) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.projects.memories(projectId), source, isActive],
+    queryFn: async ({ pageParam }) => {
+      const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
+
+      const query: ListProjectMemoriesQuery = {
+        limit,
+        ...(pageParam && { cursor: pageParam }),
+        ...(source && { source }),
+        ...(isActive && { isActive }),
+      };
+
+      return listProjectMemoriesService({
+        param: { id: projectId },
+        query,
+      });
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch aggregated project context (for RAG)
+ * Includes memories, cross-chat history, search results, and analyses
+ * Protected endpoint - requires authentication
+ *
+ * @param projectId - Project ID
+ * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
+ */
+export function useProjectContextQuery(
+  projectId: string,
+  enabled?: boolean,
+) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.projects.context(projectId),
+    queryFn: () => getProjectContextService({ param: { id: projectId } }),
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     retry: false,
     throwOnError: false,
   });

@@ -110,6 +110,9 @@ export const FLAGS_DEFAULTS = {
 export const DATA_DEFAULTS = {
   regeneratingRoundNumber: null as number | null,
   pendingMessage: null as string | null,
+  pendingAttachmentIds: null as string[] | null,
+  /** File parts for AI SDK message creation - set before clearAttachments() */
+  pendingFileParts: null as Array<{ type: 'file'; url: string; filename: string; mediaType: string }> | null,
   expectedParticipantIds: null as string[] | null,
   streamingRoundNumber: null as number | null,
   currentRoundNumber: null as number | null,
@@ -167,6 +170,14 @@ export const ANIMATION_DEFAULTS = {
 };
 
 // ============================================================================
+// ATTACHMENTS SLICE DEFAULTS
+// ============================================================================
+
+export const ATTACHMENTS_DEFAULTS = {
+  pendingAttachments: [] as import('./store-schemas').PendingAttachment[],
+};
+
+// ============================================================================
 // TYPE-SAFE STATE RESET GROUPS
 // ============================================================================
 // These groups ensure that when resetting related state, ALL fields are included.
@@ -200,6 +211,8 @@ export const ANALYSIS_STATE_RESET = {
  */
 export const PENDING_MESSAGE_STATE_RESET = {
   pendingMessage: null as string | null,
+  pendingAttachmentIds: null as string[] | null,
+  pendingFileParts: null as Array<{ type: 'file'; url: string; filename: string; mediaType: string }> | null,
   expectedParticipantIds: null as string[] | null,
   hasSentPendingMessage: false,
 } as const;
@@ -264,6 +277,8 @@ export const COMPLETE_RESET_STATE = {
   // Data state
   regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
   pendingMessage: DATA_DEFAULTS.pendingMessage,
+  pendingAttachmentIds: DATA_DEFAULTS.pendingAttachmentIds,
+  pendingFileParts: DATA_DEFAULTS.pendingFileParts,
   expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
   streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
@@ -285,6 +300,8 @@ export const COMPLETE_RESET_STATE = {
   // Animation state
   pendingAnimations: new Set<number>(),
   animationResolvers: new Map<number, AnimationResolver>(),
+  // Attachments state
+  pendingAttachments: ATTACHMENTS_DEFAULTS.pendingAttachments,
 } as const;
 
 /**
@@ -306,6 +323,8 @@ export const THREAD_RESET_STATE = {
   // Data state
   regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
   pendingMessage: DATA_DEFAULTS.pendingMessage,
+  pendingAttachmentIds: DATA_DEFAULTS.pendingAttachmentIds,
+  pendingFileParts: DATA_DEFAULTS.pendingFileParts,
   expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
   streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
@@ -330,6 +349,9 @@ export const THREAD_RESET_STATE = {
   // Animation state
   pendingAnimations: new Set<number>(),
   animationResolvers: new Map<number, AnimationResolver>(),
+  // ✅ FIX: Removed pendingAttachments from reset state
+  // Attachments should ONLY be cleared via clearAttachments() after the message is created
+  // This prevents attachments from being cleared prematurely during navigation
 } as const;
 
 /**
@@ -374,3 +396,4 @@ export type CompleteResetState = typeof COMPLETE_RESET_STATE;
 export type ThreadResetState = typeof THREAD_RESET_STATE;
 export type ThreadNavigationResetState = typeof THREAD_NAVIGATION_RESET_STATE;
 export type AnimationDefaults = typeof ANIMATION_DEFAULTS;
+export type AttachmentsDefaults = typeof ATTACHMENTS_DEFAULTS;

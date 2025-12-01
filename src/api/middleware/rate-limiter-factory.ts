@@ -32,6 +32,20 @@ export const RATE_LIMIT_PRESETS = {
     message: 'Too many upload requests. Please try again later.',
   },
 
+  // File download operations (stricter for abuse prevention)
+  download: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 30, // 30 downloads per minute per user
+    message: 'Too many download requests. Please slow down.',
+  },
+
+  // Public file download (stricter limits for unauthenticated/public access)
+  publicDownload: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 10, // 10 downloads per minute per IP for public files
+    message: 'Too many download requests. Please try again later.',
+  },
+
   // Read operations
   read: {
     windowMs: 60 * 1000, // 1 minute

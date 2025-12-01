@@ -43,6 +43,7 @@ import {
   useThreadTimeline,
   useVisualViewportPosition,
 } from '@/hooks/utils';
+import type { UseChatAttachmentsReturn } from '@/hooks/utils/use-chat-attachments';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -65,6 +66,8 @@ export type ChatViewProps = {
   mode: 'overview' | 'thread';
   /** Callback when form is submitted (for overview: creates thread, for thread: sends message) */
   onSubmit: (e: React.FormEvent) => Promise<void>;
+  /** Chat attachments state from parent screen - ensures single source of truth */
+  chatAttachments: UseChatAttachmentsReturn;
 };
 
 export function ChatView({
@@ -72,6 +75,7 @@ export function ChatView({
   slug,
   mode,
   onSubmit,
+  chatAttachments,
 }: ChatViewProps) {
   const queryClient = useQueryClient();
   const t = useTranslations('chat');
@@ -79,6 +83,15 @@ export function ChatView({
   // Modal state
   const isModeModalOpen = useBoolean(false);
   const isModelModalOpen = useBoolean(false);
+
+  // Attachment click handler (registered by ChatInput, used by toolbar)
+  const attachmentClickRef = useRef<(() => void) | null>(null);
+  const handleRegisterAttachmentClick = useCallback((clickHandler: () => void) => {
+    attachmentClickRef.current = clickHandler;
+  }, []);
+  const handleAttachmentClick = useCallback(() => {
+    attachmentClickRef.current?.();
+  }, []);
 
   // ============================================================================
   // STORE STATE
@@ -542,6 +555,12 @@ export function ChatView({
                 participants={selectedParticipants}
                 quotaCheckType={mode === 'overview' ? 'threads' : 'messages'}
                 onRemoveParticipant={isInputBlocked ? undefined : handleRemoveParticipant}
+                attachments={chatAttachments.attachments}
+                onAddAttachments={chatAttachments.addFiles}
+                onRemoveAttachment={chatAttachments.removeAttachment}
+                enableAttachments={!isInputBlocked}
+                onRegisterAttachmentClick={handleRegisterAttachmentClick}
+                isUploading={chatAttachments.isUploading}
                 toolbar={(
                   <ChatInputToolbarMenu
                     selectedParticipants={selectedParticipants}
@@ -551,6 +570,9 @@ export function ChatView({
                     onOpenModeModal={isModeModalOpen.onTrue}
                     enableWebSearch={enableWebSearch}
                     onWebSearchToggle={handleWebSearchToggle}
+                    onAttachmentClick={handleAttachmentClick}
+                    attachmentCount={chatAttachments.attachments.length}
+                    enableAttachments={!isInputBlocked}
                     disabled={isInputBlocked}
                   />
                 )}

@@ -15,5 +15,8 @@ export * from './tables/chat';
 // Project tables (ChatGPT Projects-style knowledge bases)
 export * from './tables/project';
 
+// Upload tables (Centralized file storage with junction tables)
+export * from './tables/upload';
+
 // Usage tracking tables (Chat quotas and limits)
 export * from './tables/usage';

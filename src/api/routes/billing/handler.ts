@@ -28,6 +28,16 @@ import type {
   switchSubscriptionRoute,
   syncAfterCheckoutRoute,
 } from './route';
+/**
+ * Process Webhook Event (Theo's Simplified Pattern)
+ *
+ * Philosophy:
+ * - Don't trust webhook payloads (can be stale or incomplete)
+ * - Extract customerId only
+ * - Call single sync function that fetches fresh data from Stripe API
+ * - No event-specific logic needed
+ */
+import type { WebhookProcessorContext } from './schema';
 import {
   CancelSubscriptionRequestSchema,
   CheckoutRequestSchema,
@@ -1020,17 +1030,6 @@ function extractCustomerId(event: Stripe.Event): string | null {
     ErrorContextBuilders.stripe('webhook_processing'),
   );
 }
-
-/**
- * Process Webhook Event (Theo's Simplified Pattern)
- *
- * Philosophy:
- * - Don't trust webhook payloads (can be stale or incomplete)
- * - Extract customerId only
- * - Call single sync function that fetches fresh data from Stripe API
- * - No event-specific logic needed
- */
-type WebhookProcessorContext = Record<string, never>;
 
 async function processWebhookEvent(
   event: Stripe.Event,

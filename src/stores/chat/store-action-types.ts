@@ -46,6 +46,8 @@ import type {
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
+import type { FilePreview } from '@/hooks/utils/use-file-preview';
+import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
@@ -203,6 +205,7 @@ export type SetHasPendingConfigChanges = (value: boolean) => void;
 
 export type SetRegeneratingRoundNumber = (value: number | null) => void;
 export type SetPendingMessage = (value: string | null) => void;
+export type SetPendingAttachmentIds = (value: string[] | null) => void;
 export type SetExpectedParticipantIds = (value: string[] | null) => void;
 export type SetStreamingRoundNumber = (value: number | null) => void;
 export type SetCurrentRoundNumber = (value: number | null) => void;
@@ -377,6 +380,56 @@ export type WaitForAnimation = (participantIndex: number) => Promise<void>;
 export type ClearAnimations = () => void;
 
 // ============================================================================
+// ATTACHMENTS ACTIONS (File upload management)
+// ============================================================================
+
+/**
+ * Pending attachment item for chat input
+ * Combines upload item with preview for UI display
+ */
+export type PendingAttachment = {
+  id: string;
+  file: File;
+  uploadItem?: UploadItem;
+  preview?: FilePreview;
+};
+
+/**
+ * Add files to pending attachments
+ */
+export type AddAttachments = (files: File[]) => void;
+
+/**
+ * Remove a pending attachment by ID
+ */
+export type RemoveAttachment = (id: string) => void;
+
+/**
+ * Clear all pending attachments
+ */
+export type ClearAttachments = () => void;
+
+/**
+ * Update an attachment's upload item (after upload starts/completes)
+ */
+export type UpdateAttachmentUpload = (id: string, uploadItem: UploadItem) => void;
+
+/**
+ * Update an attachment's preview
+ */
+export type UpdateAttachmentPreview = (id: string, preview: FilePreview) => void;
+
+/**
+ * Get all pending attachments
+ */
+export type GetAttachments = () => PendingAttachment[];
+
+/**
+ * Check if there are any pending attachments
+ */
+export type HasAttachments = () => boolean;
+
+// ============================================================================
 // OPERATIONS ACTIONS (Composite multi-slice operations)
 // ============================================================================
 
@@ -425,9 +478,9 @@ export type UpdateParticipants = (participants: ChatParticipant[]) => void;
 
 /**
  * Prepare for new message submission
- * Sets waitingForChangelog, pendingMessage, and expectedParticipantIds
+ * Sets waitingForChangelog, pendingMessage, expectedParticipantIds, and pendingAttachmentIds
  */
-export type PrepareForNewMessage = (message: string, participantIds: string[]) => void;
+export type PrepareForNewMessage = (message: string, participantIds: string[], attachmentIds?: string[]) => void;
 
 /**
  * Mark streaming/analysis as complete
@@ -567,6 +620,7 @@ export type FlagsActionsType = {
 export type DataActionsType = {
   setRegeneratingRoundNumber: SetRegeneratingRoundNumber;
   setPendingMessage: SetPendingMessage;
+  setPendingAttachmentIds: SetPendingAttachmentIds;
   setExpectedParticipantIds: SetExpectedParticipantIds;
   setStreamingRoundNumber: SetStreamingRoundNumber;
   setCurrentRoundNumber: SetCurrentRoundNumber;
@@ -613,6 +667,16 @@ export type OperationsActionsType = {
   reset: Reset;
 };
 
+export type AttachmentsActionsType = {
+  addAttachments: AddAttachments;
+  removeAttachment: RemoveAttachment;
+  clearAttachments: ClearAttachments;
+  updateAttachmentUpload: UpdateAttachmentUpload;
+  updateAttachmentPreview: UpdateAttachmentPreview;
+  getAttachments: GetAttachments;
+  hasAttachments: HasAttachments;
+};
+
 // ============================================================================
 // COMPLETE ACTIONS AGGREGATION
 // ============================================================================
@@ -630,4 +694,5 @@ export type AllChatStoreActions
     & CallbacksActionsType
     & ScreenActionsType
     & AnimationActionsType
-    & OperationsActionsType;
+    & OperationsActionsType
+    & AttachmentsActionsType;

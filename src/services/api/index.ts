@@ -188,34 +188,62 @@ export {
 } from './products';
 
 // ============================================================================
-// Message Variants Service Exports
+// Projects Service Exports (Updated for S3/R2 Best Practice)
 // ============================================================================
 
 export {
+  // Project attachment operations (reference-based)
+  type AddAttachmentToProjectRequest,
+  type AddAttachmentToProjectResponse,
+  addAttachmentToProjectService,
+  // Project memory operations
+  type CreateProjectMemoryRequest,
+  type CreateProjectMemoryResponse,
+  createProjectMemoryService,
+  // Project operations
   type CreateProjectRequest,
   type CreateProjectResponse,
   createProjectService,
-  type DeleteKnowledgeFileRequest,
-  type DeleteKnowledgeFileResponse,
-  deleteKnowledgeFileService,
+  type DeleteProjectMemoryRequest,
+  type DeleteProjectMemoryResponse,
+  deleteProjectMemoryService,
   type DeleteProjectRequest,
   type DeleteProjectResponse,
   deleteProjectService,
+  type GetProjectAttachmentRequest,
+  type GetProjectAttachmentResponse,
+  getProjectAttachmentService,
+  // Project context (RAG aggregation)
+  type GetProjectContextRequest,
+  type GetProjectContextResponse,
+  getProjectContextService,
+  type GetProjectMemoryRequest,
+  type GetProjectMemoryResponse,
+  getProjectMemoryService,
   type GetProjectRequest,
   type GetProjectResponse,
   getProjectService,
-  type ListKnowledgeFilesRequest,
-  type ListKnowledgeFilesResponse,
-  listKnowledgeFilesService,
+  type ListProjectAttachmentsRequest,
+  type ListProjectAttachmentsResponse,
+  listProjectAttachmentsService,
+  type ListProjectMemoriesRequest,
+  type ListProjectMemoriesResponse,
+  listProjectMemoriesService,
   type ListProjectsRequest,
   type ListProjectsResponse,
   listProjectsService,
+  type RemoveAttachmentFromProjectRequest,
+  type RemoveAttachmentFromProjectResponse,
+  removeAttachmentFromProjectService,
+  type UpdateProjectAttachmentRequest,
+  type UpdateProjectAttachmentResponse,
+  updateProjectAttachmentService,
+  type UpdateProjectMemoryRequest,
+  type UpdateProjectMemoryResponse,
+  updateProjectMemoryService,
   type UpdateProjectRequest,
   type UpdateProjectResponse,
   updateProjectService,
-  type UploadKnowledgeFileRequest,
-  type UploadKnowledgeFileResponse,
-  uploadKnowledgeFileService,
 } from './projects';
 
 // ============================================================================
@@ -246,6 +274,43 @@ export {
 
 // ============================================================================
 // Usage Service Exports
+// ============================================================================
+
+export {
+  // Multipart upload services
+  type AbortMultipartUploadRequest,
+  type AbortMultipartUploadResponse,
+  abortMultipartUploadService,
+  type CompleteMultipartUploadRequest,
+  type CompleteMultipartUploadResponse,
+  completeMultipartUploadService,
+  type CreateMultipartUploadRequest,
+  type CreateMultipartUploadResponse,
+  createMultipartUploadService,
+  // Single-request upload services
+  type DeleteAttachmentRequest,
+  type DeleteAttachmentResponse,
+  deleteAttachmentService,
+  type GetAttachmentRequest,
+  type GetAttachmentResponse,
+  getAttachmentService,
+  type ListAttachmentsRequest,
+  type ListAttachmentsResponse,
+  listAttachmentsService,
+  type UpdateAttachmentRequest,
+  type UpdateAttachmentResponse,
+  updateAttachmentService,
+  type UploadAttachmentRequest,
+  type UploadAttachmentResponse,
+  uploadAttachmentService,
+  type UploadPartRequest,
+  type UploadPartRequestWithBody,
+  type UploadPartResponse,
+  uploadPartService,
+} from './uploads';
+
+// ============================================================================
+// Uploads (File Attachments) Service Exports
 // ============================================================================
 
 export {

@@ -192,7 +192,7 @@ export const UIMessageRoles = {
 // MESSAGE PART TYPE
 // ============================================================================
 
-export const MESSAGE_PART_TYPES = ['text', 'reasoning', 'tool-call', 'tool-result'] as const;
+export const MESSAGE_PART_TYPES = ['text', 'reasoning', 'tool-call', 'tool-result', 'file', 'step-start'] as const;
 
 export const MessagePartTypeSchema = z.enum(MESSAGE_PART_TYPES).openapi({
   description: 'Types of message content parts',
@@ -206,6 +206,8 @@ export const MessagePartTypes = {
   REASONING: 'reasoning' as const,
   TOOL_CALL: 'tool-call' as const,
   TOOL_RESULT: 'tool-result' as const,
+  FILE: 'file' as const,
+  STEP_START: 'step-start' as const,
 } as const;
 
 // ============================================================================
@@ -1159,3 +1161,558 @@ export const SortDirections = {
   ASC: 'asc' as const,
   DESC: 'desc' as const,
 } as const;
+
+// ============================================================================
+// CHAT ATTACHMENT STATUS (File Upload Processing)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for attachment statuses
+export const CHAT_ATTACHMENT_STATUSES = [
+  'uploading',
+  'uploaded',
+  'processing',
+  'ready',
+  'failed',
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_CHAT_ATTACHMENT_STATUS: ChatAttachmentStatus = 'uploaded';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const ChatAttachmentStatusSchema = z.enum(CHAT_ATTACHMENT_STATUSES).openapi({
+  description: 'File attachment upload/processing lifecycle status',
+  example: 'ready',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type ChatAttachmentStatus = z.infer<typeof ChatAttachmentStatusSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const ChatAttachmentStatuses = {
+  UPLOADING: 'uploading' as const,
+  UPLOADED: 'uploaded' as const,
+  PROCESSING: 'processing' as const,
+  READY: 'ready' as const,
+  FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
+// UPLOAD STATUS (Frontend Upload Lifecycle)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for upload lifecycle states
+export const UPLOAD_STATUSES = [
+  'pending',
+  'validating',
+  'uploading',
+  'processing',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_UPLOAD_STATUS: UploadStatus = 'pending';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const UploadStatusSchema = z.enum(UPLOAD_STATUSES).openapi({
+  description: 'Frontend upload operation lifecycle status',
+  example: 'uploading',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type UploadStatus = z.infer<typeof UploadStatusSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const UploadStatuses = {
+  PENDING: 'pending' as const,
+  VALIDATING: 'validating' as const,
+  UPLOADING: 'uploading' as const,
+  PROCESSING: 'processing' as const,
+  COMPLETED: 'completed' as const,
+  FAILED: 'failed' as const,
+  CANCELLED: 'cancelled' as const,
+} as const;
+
+// ============================================================================
+// FILE PREVIEW TYPE (Client-Side Preview Categories)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for preview types
+export const FILE_PREVIEW_TYPES = [
+  'image',
+  'pdf',
+  'text',
+  'code',
+  'document',
+  'unknown',
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_FILE_PREVIEW_TYPE: FilePreviewType = 'unknown';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const FilePreviewTypeSchema = z.enum(FILE_PREVIEW_TYPES).openapi({
+  description: 'File type category for preview generation',
+  example: 'image',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type FilePreviewType = z.infer<typeof FilePreviewTypeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const FilePreviewTypes = {
+  IMAGE: 'image' as const,
+  PDF: 'pdf' as const,
+  TEXT: 'text' as const,
+  CODE: 'code' as const,
+  DOCUMENT: 'document' as const,
+  UNKNOWN: 'unknown' as const,
+} as const;
+
+// ============================================================================
+// FILE VALIDATION ERROR CODE
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for validation error codes
+export const FILE_VALIDATION_ERROR_CODES = [
+  'file_too_large',
+  'invalid_type',
+  'empty_file',
+  'filename_too_long',
+] as const;
+
+// 3️⃣ ZOD SCHEMA - Runtime validation
+export const FileValidationErrorCodeSchema = z.enum(FILE_VALIDATION_ERROR_CODES).openapi({
+  description: 'File validation failure reason code',
+  example: 'file_too_large',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type FileValidationErrorCode = z.infer<typeof FileValidationErrorCodeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const FileValidationErrorCodes = {
+  FILE_TOO_LARGE: 'file_too_large' as const,
+  INVALID_TYPE: 'invalid_type' as const,
+  EMPTY_FILE: 'empty_file' as const,
+  FILENAME_TOO_LONG: 'filename_too_long' as const,
+} as const;
+
+// ============================================================================
+// FILE CATEGORY (High-Level File Type Classification)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for file categories
+export const FILE_CATEGORIES = ['image', 'document', 'text', 'code', 'other'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_FILE_CATEGORY: FileCategory = 'other';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation
+export const FileCategorySchema = z.enum(FILE_CATEGORIES).openapi({
+  description: 'High-level file type classification',
+  example: 'image',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type FileCategory = z.infer<typeof FileCategorySchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const FileCategories = {
+  IMAGE: 'image' as const,
+  DOCUMENT: 'document' as const,
+  TEXT: 'text' as const,
+  CODE: 'code' as const,
+  OTHER: 'other' as const,
+} as const;
+
+// ============================================================================
+// UPLOAD STRATEGY (Single vs Multipart)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for upload strategies
+export const UPLOAD_STRATEGIES = ['single', 'multipart'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_UPLOAD_STRATEGY: UploadStrategy = 'single';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation
+export const UploadStrategySchema = z.enum(UPLOAD_STRATEGIES).openapi({
+  description: 'Upload method based on file size',
+  example: 'single',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type UploadStrategy = z.infer<typeof UploadStrategySchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code
+export const UploadStrategies = {
+  SINGLE: 'single' as const,
+  MULTIPART: 'multipart' as const,
+} as const;
+
+// ============================================================================
+// UPLOAD SIZE CONSTANTS (R2/S3 Limits)
+// ============================================================================
+
+/** Max file size for single-request uploads (100MB) */
+export const MAX_SINGLE_UPLOAD_SIZE = 100 * 1024 * 1024;
+
+/** Minimum part size for multipart uploads (5MB - R2/S3 requirement) */
+export const MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024;
+
+/** Recommended part size for multipart uploads (10MB - balance of speed/reliability) */
+export const RECOMMENDED_PART_SIZE = 10 * 1024 * 1024;
+
+/** Maximum total file size (5GB) */
+export const MAX_TOTAL_FILE_SIZE = 5 * 1024 * 1024 * 1024;
+
+/** Maximum filename length */
+export const MAX_FILENAME_LENGTH = 255;
+
+/** Maximum number of parts for multipart upload (R2/S3 limit) */
+export const MAX_MULTIPART_PARTS = 10000;
+
+// ============================================================================
+// ALLOWED MIME TYPES (File Upload Restrictions)
+// ============================================================================
+
+/** Image MIME types */
+export const IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+] as const;
+
+/** Document MIME types */
+export const DOCUMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+] as const;
+
+/** Text MIME types */
+export const TEXT_MIME_TYPES = [
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'text/html',
+  'application/json',
+] as const;
+
+/** Code MIME types */
+export const CODE_MIME_TYPES = [
+  'text/javascript',
+  'application/javascript',
+  'text/typescript',
+  'text/x-python',
+  'text/x-java-source',
+  'text/x-c',
+  'text/x-c++',
+] as const;
+
+/** All allowed MIME types combined */
+export const ALLOWED_MIME_TYPES = [
+  ...IMAGE_MIME_TYPES,
+  ...DOCUMENT_MIME_TYPES,
+  ...TEXT_MIME_TYPES,
+  ...CODE_MIME_TYPES,
+] as const;
+
+/** MIME type categories for validation and categorization */
+export const MIME_TYPE_CATEGORIES = {
+  image: IMAGE_MIME_TYPES,
+  document: DOCUMENT_MIME_TYPES,
+  text: TEXT_MIME_TYPES,
+  code: CODE_MIME_TYPES,
+} as const;
+
+// Zod schema for allowed MIME types
+export const AllowedMimeTypeSchema = z.enum(ALLOWED_MIME_TYPES).openapi({
+  description: 'Allowed file MIME type for uploads',
+  example: 'application/pdf',
+});
+
+export type AllowedMimeType = z.infer<typeof AllowedMimeTypeSchema>;
+
+// ============================================================================
+// PROJECT INDEX STATUS (AutoRAG indexing for project attachments)
+// ============================================================================
+
+export const PROJECT_INDEX_STATUSES = [
+  'pending',
+  'indexing',
+  'indexed',
+  'failed',
+] as const;
+
+export const DEFAULT_PROJECT_INDEX_STATUS: ProjectIndexStatus = 'pending';
+
+export const ProjectIndexStatusSchema = z.enum(PROJECT_INDEX_STATUSES).openapi({
+  description: 'AutoRAG indexing status for project attachments',
+  example: 'indexed',
+});
+
+export type ProjectIndexStatus = z.infer<typeof ProjectIndexStatusSchema>;
+
+export const ProjectIndexStatuses = {
+  PENDING: 'pending' as const,
+  INDEXING: 'indexing' as const,
+  INDEXED: 'indexed' as const,
+  FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
+// PROJECT MEMORY SOURCE (origin of memory entries)
+// ============================================================================
+
+export const PROJECT_MEMORY_SOURCES = [
+  'chat',
+  'explicit',
+  'analysis',
+  'search',
+] as const;
+
+export const DEFAULT_PROJECT_MEMORY_SOURCE: ProjectMemorySource = 'chat';
+
+export const ProjectMemorySourceSchema = z.enum(PROJECT_MEMORY_SOURCES).openapi({
+  description: 'Source of the project memory entry',
+  example: 'chat',
+});
+
+export type ProjectMemorySource = z.infer<typeof ProjectMemorySourceSchema>;
+
+export const ProjectMemorySources = {
+  CHAT: 'chat' as const,
+  EXPLICIT: 'explicit' as const,
+  ANALYSIS: 'analysis' as const,
+  SEARCH: 'search' as const,
+} as const;
+
+// ============================================================================
+// PROJECT COLOR (visual identification)
+// ============================================================================
+
+export const PROJECT_COLORS = [
+  'gray',
+  'red',
+  'orange',
+  'amber',
+  'yellow',
+  'lime',
+  'green',
+  'emerald',
+  'teal',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'purple',
+  'fuchsia',
+  'pink',
+  'rose',
+] as const;
+
+export const DEFAULT_PROJECT_COLOR: ProjectColor = 'blue';
+
+export const ProjectColorSchema = z.enum(PROJECT_COLORS).openapi({
+  description: 'Project color for visual identification',
+  example: 'blue',
+});
+
+export type ProjectColor = z.infer<typeof ProjectColorSchema>;
+
+export const ProjectColors = {
+  GRAY: 'gray' as const,
+  RED: 'red' as const,
+  ORANGE: 'orange' as const,
+  AMBER: 'amber' as const,
+  YELLOW: 'yellow' as const,
+  LIME: 'lime' as const,
+  GREEN: 'green' as const,
+  EMERALD: 'emerald' as const,
+  TEAL: 'teal' as const,
+  CYAN: 'cyan' as const,
+  SKY: 'sky' as const,
+  BLUE: 'blue' as const,
+  INDIGO: 'indigo' as const,
+  VIOLET: 'violet' as const,
+  PURPLE: 'purple' as const,
+  FUCHSIA: 'fuchsia' as const,
+  PINK: 'pink' as const,
+  ROSE: 'rose' as const,
+} as const;
+
+// ============================================================================
+// CITATION SOURCE TYPE (RAG context citation sources)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for citation sources
+export const CITATION_SOURCE_TYPES = [
+  'memory', // projectMemory - persistent project context
+  'thread', // chatThread - cross-thread context from same project
+  'attachment', // projectAttachment - files indexed via AutoRAG
+  'search', // chatPreSearch - web search results
+  'analysis', // chatModeratorAnalysis - moderator analysis insights
+] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_CITATION_SOURCE_TYPE: CitationSourceType = 'memory';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const CitationSourceTypeSchema = z.enum(CITATION_SOURCE_TYPES).openapi({
+  description: 'Type of source being cited in AI response',
+  example: 'memory',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type CitationSourceType = z.infer<typeof CitationSourceTypeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const CitationSourceTypes = {
+  MEMORY: 'memory' as const,
+  THREAD: 'thread' as const,
+  ATTACHMENT: 'attachment' as const,
+  SEARCH: 'search' as const,
+  ANALYSIS: 'analysis' as const,
+} as const;
+
+// 6️⃣ LABELS - Human-readable labels for each source type
+export const CitationSourceLabels: Record<CitationSourceType, string> = {
+  [CitationSourceTypes.MEMORY]: 'Memory',
+  [CitationSourceTypes.THREAD]: 'Thread',
+  [CitationSourceTypes.ATTACHMENT]: 'File',
+  [CitationSourceTypes.SEARCH]: 'Search',
+  [CitationSourceTypes.ANALYSIS]: 'Analysis',
+} as const;
+
+// 7️⃣ PREFIXES - Short prefixes for citation ID generation (e.g., mem_abc123)
+export const CITATION_PREFIXES = ['mem', 'thd', 'att', 'sch', 'ana'] as const;
+export type CitationPrefix = typeof CITATION_PREFIXES[number];
+
+export const CitationSourcePrefixes: Record<CitationSourceType, CitationPrefix> = {
+  [CitationSourceTypes.MEMORY]: 'mem',
+  [CitationSourceTypes.THREAD]: 'thd',
+  [CitationSourceTypes.ATTACHMENT]: 'att',
+  [CitationSourceTypes.SEARCH]: 'sch',
+  [CitationSourceTypes.ANALYSIS]: 'ana',
+};
+
+// 7️⃣b INVERSE PREFIXES - Map from prefix to source type (for parsing)
+export const CitationPrefixToSourceType: Record<CitationPrefix, CitationSourceType> = {
+  mem: CitationSourceTypes.MEMORY,
+  thd: CitationSourceTypes.THREAD,
+  att: CitationSourceTypes.ATTACHMENT,
+  sch: CitationSourceTypes.SEARCH,
+  ana: CitationSourceTypes.ANALYSIS,
+};
+
+// 8️⃣ SECTION HEADERS - Headers for formatting sources in AI prompt
+export const CitationSourceSectionHeaders: Record<CitationSourceType, string> = {
+  [CitationSourceTypes.MEMORY]: 'Project Memories',
+  [CitationSourceTypes.THREAD]: 'Related Conversations',
+  [CitationSourceTypes.ATTACHMENT]: 'Project Files',
+  [CitationSourceTypes.SEARCH]: 'Previous Research',
+  [CitationSourceTypes.ANALYSIS]: 'Key Insights from Analyses',
+} as const;
+
+// 9️⃣ CONTENT LIMITS - Max characters to show per source type in context
+export const CitationSourceContentLimits: Record<CitationSourceType, number> = {
+  [CitationSourceTypes.MEMORY]: 300,
+  [CitationSourceTypes.THREAD]: 400,
+  [CitationSourceTypes.ATTACHMENT]: 300,
+  [CitationSourceTypes.SEARCH]: 300,
+  [CitationSourceTypes.ANALYSIS]: 400,
+} as const;
+
+// ============================================================================
+// TEXT EXTRACTABLE MIME TYPES (RAG Content Extraction)
+// ============================================================================
+
+/**
+ * MIME types that support text extraction for RAG context
+ * ✅ SINGLE SOURCE OF TRUTH for content extraction logic
+ * Used by streaming-orchestration.service.ts for attachment content extraction
+ */
+export const TEXT_EXTRACTABLE_MIME_TYPES = [
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'text/html',
+  'text/css',
+  'text/javascript',
+  'application/json',
+  'application/xml',
+  'application/javascript',
+  'text/x-python',
+  'text/x-java',
+  'text/x-c',
+  'text/x-c++',
+  'text/x-typescript',
+] as const;
+
+export type TextExtractableMimeType = typeof TEXT_EXTRACTABLE_MIME_TYPES[number];
+
+/** Maximum text content to extract from a single file (100KB) */
+export const MAX_TEXT_CONTENT_SIZE = 100 * 1024;
+
+// ============================================================================
+// FILE TYPE LABELS (Human-Readable File Type Display)
+// ============================================================================
+
+/**
+ * Human-readable labels for file MIME types
+ * SINGLE SOURCE OF TRUTH for file type display strings
+ * Used by use-file-preview.ts for consistent labeling
+ */
+export const FILE_TYPE_LABELS = {
+  // Images
+  'image/png': 'PNG Image',
+  'image/jpeg': 'JPEG Image',
+  'image/gif': 'GIF Image',
+  'image/webp': 'WebP Image',
+  'image/svg+xml': 'SVG Image',
+  // Documents
+  'application/pdf': 'PDF Document',
+  'application/msword': 'Word Document',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word Document',
+  'application/vnd.ms-excel': 'Excel Spreadsheet',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel Spreadsheet',
+  'application/vnd.ms-powerpoint': 'PowerPoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint',
+  // Text
+  'text/plain': 'Text File',
+  'text/markdown': 'Markdown',
+  'text/csv': 'CSV File',
+  'text/html': 'HTML File',
+  'application/json': 'JSON File',
+  // Code
+  'text/javascript': 'JavaScript',
+  'application/javascript': 'JavaScript',
+  'text/typescript': 'TypeScript',
+  'text/x-python': 'Python',
+  'text/x-java-source': 'Java',
+  'text/x-c': 'C',
+  'text/x-c++': 'C++',
+} as const satisfies Partial<Record<AllowedMimeType | 'text/typescript' | 'text/x-java-source' | 'text/x-c++', string>>;
+
+/**
+ * Type for file type labels - keys are MIME types with known labels
+ */
+export type FileTypeLabelMimeType = keyof typeof FILE_TYPE_LABELS;
+
+/**
+ * Get human-readable label for a MIME type
+ * Returns 'File' for unknown types
+ */
+export function getFileTypeLabelFromMime(mimeType: string): string {
+  return FILE_TYPE_LABELS[mimeType as FileTypeLabelMimeType] ?? 'File';
+}

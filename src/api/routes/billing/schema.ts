@@ -343,3 +343,15 @@ export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequest
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
 export type SyncAfterCheckoutPayload = z.infer<typeof SyncAfterCheckoutPayloadSchema>;
 export type WebhookHeaders = z.infer<typeof WebhookHeadersSchema>;
+
+// ============================================================================
+// INTERNAL HANDLER TYPES - Single Source of Truth
+// ============================================================================
+
+/**
+ * Webhook processor context type
+ *
+ * SINGLE SOURCE OF TRUTH for webhook processor context
+ * Empty placeholder type - webhook processing doesn't need additional context
+ */
+export type WebhookProcessorContext = Record<string, never>;
