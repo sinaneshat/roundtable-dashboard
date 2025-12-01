@@ -72,7 +72,8 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
   async (c) => {
     const { user } = c.auth();
     await enforceCustomRoleQuota(user.id);
-    const body = c.validated.body;
+    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
+    const body = CreateCustomRoleRequestSchema.parse(c.validated.body);
     const db = await getDbAsync();
     const customRoleId = ulid();
     const now = new Date();
@@ -81,9 +82,9 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
       .values({
         id: customRoleId,
         userId: user.id,
-        name: body.name as string,
-        description: body.description as string | null,
-        systemPrompt: body.systemPrompt as string,
+        name: body.name,
+        description: body.description ?? null,
+        systemPrompt: body.systemPrompt,
         metadata: body.metadata ?? null,
         createdAt: now,
         updatedAt: now,
@@ -121,14 +122,15 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    const body = c.validated.body;
+    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
+    const body = UpdateCustomRoleRequestSchema.parse(c.validated.body);
     const db = await getDbAsync();
     const [updatedCustomRole] = await db
       .update(tables.chatCustomRole)
       .set({
-        name: body.name as string | undefined,
-        description: body.description as string | null | undefined,
-        systemPrompt: body.systemPrompt as string | undefined,
+        name: body.name,
+        description: body.description ?? null,
+        systemPrompt: body.systemPrompt,
         metadata: body.metadata ?? undefined,
         updatedAt: new Date(),
       })

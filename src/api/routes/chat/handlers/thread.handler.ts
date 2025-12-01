@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { AnalysisStatuses, ChangelogTypes, DEFAULT_CHAT_MODE, MessageRoles, ThreadStatusSchema } from '@/api/core/enums';
+import { AnalysisStatuses, ChangelogTypes, MessageRoles, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
@@ -157,7 +157,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         userId: user.id,
         title: tempTitle,
         slug: tempSlug,
-        mode: (body.mode || DEFAULT_CHAT_MODE) as ChatMode,
+        mode: body.mode,
         status: ThreadStatusSchema.enum.active,
         isFavorite: false,
         isPublic: false,
@@ -324,7 +324,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
             userId: user.id,
             sessionId: session?.id,
             threadId,
-            threadMode: (body.mode || DEFAULT_CHAT_MODE) as string,
+            threadMode: body.mode,
             userTier,
           },
           {
@@ -553,6 +553,19 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         ? latestMessages[0].roundNumber
         : 0;
 
+      // ✅ ROOT CAUSE FIX: Only create changelog entries if conversation has started
+      // Check if at least one AI has responded (assistant message exists)
+      // Changes before any AI responds are "initial setup", not meaningful changes to track
+      const hasAssistantMessages = await db.query.chatMessage.findFirst({
+        where: and(
+          eq(tables.chatMessage.threadId, id),
+          eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
+        ),
+      });
+
+      // Skip changelog creation if conversation hasn't started yet
+      const shouldCreateChangelog = !!hasAssistantMessages;
+
       // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
       // User makes changes AFTER round N completes, so changelog belongs to round N+1
       // This ensures changelog appears between round N and round N+1 messages
@@ -574,99 +587,124 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         return parts[parts.length - 1] || modelId;
       };
 
-      // Detect added participants
-      for (const newP of body.participants.filter(p => p.isEnabled !== false)) {
-        if (!oldParticipantsMap.has(newP.modelId)) {
-          const modelName = extractModelName(newP.modelId);
-          const displayName = newP.role || modelName;
-          changelogEntries.push({
-            id: ulid(),
-            threadId: id,
-            roundNumber: nextRoundNumber,
-            changeType: ChangelogTypes.ADDED,
-            changeSummary: `Added ${displayName}`,
-            changeData: {
-              type: 'participant' as const,
-              modelId: newP.modelId,
-              role: newP.role || null,
-            },
-            createdAt: now,
-          });
+      // ✅ Only create changelog if conversation has actually started
+      if (shouldCreateChangelog) {
+        // Detect added participants
+        for (const newP of body.participants.filter(p => p.isEnabled !== false)) {
+          if (!oldParticipantsMap.has(newP.modelId)) {
+            const modelName = extractModelName(newP.modelId);
+            const displayName = newP.role || modelName;
+            changelogEntries.push({
+              id: ulid(),
+              threadId: id,
+              roundNumber: nextRoundNumber,
+              changeType: ChangelogTypes.ADDED,
+              changeSummary: `Added ${displayName}`,
+              changeData: {
+                type: 'participant' as const,
+                modelId: newP.modelId,
+                role: newP.role || null,
+              },
+              createdAt: now,
+            });
+          }
         }
-      }
 
-      // Detect removed participants
-      for (const current of currentParticipants.filter(p => p.isEnabled)) {
-        if (!newParticipantsMap.has(current.modelId)) {
-          const modelName = extractModelName(current.modelId);
-          const displayName = current.role || modelName;
-          changelogEntries.push({
-            id: ulid(),
-            threadId: id,
-            roundNumber: nextRoundNumber,
-            changeType: ChangelogTypes.REMOVED,
-            changeSummary: `Removed ${displayName}`,
-            changeData: {
-              type: 'participant' as const,
-              participantId: current.id,
-              modelId: current.modelId,
-              role: current.role,
-            },
-            createdAt: now,
-          });
+        // Detect removed participants
+        for (const current of currentParticipants.filter(p => p.isEnabled)) {
+          if (!newParticipantsMap.has(current.modelId)) {
+            const modelName = extractModelName(current.modelId);
+            const displayName = current.role || modelName;
+            changelogEntries.push({
+              id: ulid(),
+              threadId: id,
+              roundNumber: nextRoundNumber,
+              changeType: ChangelogTypes.REMOVED,
+              changeSummary: `Removed ${displayName}`,
+              changeData: {
+                type: 'participant' as const,
+                participantId: current.id,
+                modelId: current.modelId,
+                role: current.role,
+              },
+              createdAt: now,
+            });
+          }
         }
-      }
 
-      // Insert changelog entries if any
-      if (changelogEntries.length > 0) {
-        await db.insert(tables.chatThreadChangelog).values(changelogEntries);
+        // Insert changelog entries if any
+        if (changelogEntries.length > 0) {
+          await db.insert(tables.chatThreadChangelog).values(changelogEntries);
+        }
       }
     }
 
     // ✅ CREATE CHANGELOG ENTRY for mode change
+    // Only log if conversation has started (at least one AI response exists)
     if (body.mode !== undefined && body.mode !== thread.mode) {
-      // Need to get latest roundNumber from messages
-      const latestMessagesForMode = await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, id),
-        orderBy: [desc(tables.chatMessage.createdAt)],
-        limit: 1,
+      // Check if conversation has started
+      const hasAssistantForMode = await db.query.chatMessage.findFirst({
+        where: and(
+          eq(tables.chatMessage.threadId, id),
+          eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
+        ),
       });
 
-      // roundNumber is a column, not in metadata
-      // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
-      const currentRoundNumber = latestMessagesForMode.length > 0 && latestMessagesForMode[0]
-        ? latestMessagesForMode[0].roundNumber
-        : 0;
+      if (hasAssistantForMode) {
+        // Need to get latest roundNumber from messages
+        const latestMessagesForMode = await db.query.chatMessage.findMany({
+          where: eq(tables.chatMessage.threadId, id),
+          orderBy: [desc(tables.chatMessage.createdAt)],
+          limit: 1,
+        });
 
-      // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
-      // Mode change applies to the next round, not the current one
-      const nextRoundNumber = currentRoundNumber + 1;
+        // roundNumber is a column, not in metadata
+        // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
+        const currentRoundNumber = latestMessagesForMode.length > 0 && latestMessagesForMode[0]
+          ? latestMessagesForMode[0].roundNumber
+          : 0;
 
-      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-      await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
+        // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
+        // Mode change applies to the next round, not the current one
+        const nextRoundNumber = currentRoundNumber + 1;
+
+        // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+        await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
+      }
     }
 
     // ✅ CREATE CHANGELOG ENTRY for web search toggle
+    // Only log if conversation has started (at least one AI response exists)
     if (body.enableWebSearch !== undefined && body.enableWebSearch !== thread.enableWebSearch) {
-      // Need to get latest roundNumber from messages
-      const latestMessagesForWebSearch = await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, id),
-        orderBy: [desc(tables.chatMessage.createdAt)],
-        limit: 1,
+      // Check if conversation has started
+      const hasAssistantForWebSearch = await db.query.chatMessage.findFirst({
+        where: and(
+          eq(tables.chatMessage.threadId, id),
+          eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
+        ),
       });
 
-      // roundNumber is a column, not in metadata
-      // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
-      const currentRoundNumber = latestMessagesForWebSearch.length > 0 && latestMessagesForWebSearch[0]
-        ? latestMessagesForWebSearch[0].roundNumber
-        : 0;
+      if (hasAssistantForWebSearch) {
+        // Need to get latest roundNumber from messages
+        const latestMessagesForWebSearch = await db.query.chatMessage.findMany({
+          where: eq(tables.chatMessage.threadId, id),
+          orderBy: [desc(tables.chatMessage.createdAt)],
+          limit: 1,
+        });
 
-      // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
-      // Web search toggle applies to the next round, not the current one
-      const nextRoundNumber = currentRoundNumber + 1;
+        // roundNumber is a column, not in metadata
+        // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
+        const currentRoundNumber = latestMessagesForWebSearch.length > 0 && latestMessagesForWebSearch[0]
+          ? latestMessagesForWebSearch[0].roundNumber
+          : 0;
 
-      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-      await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
+        // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
+        // Web search toggle applies to the next round, not the current one
+        const nextRoundNumber = currentRoundNumber + 1;
+
+        // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+        await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
+      }
     }
 
     // ✅ TYPE-SAFE: Use properly typed update data derived from validated body
@@ -851,7 +889,9 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       where: eq(tables.chatThreadChangelog.threadId, thread.id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
-    // Filter changelog to only include complete rounds
+    // ✅ PUBLIC PAGE FIX: Only show changelogs for complete rounds
+    // Root cause fix: Changelogs are now only created after conversation has started
+    // (at least one assistant message exists), so no need to filter by roundNumber > 1
     const changelog = allChangelog.filter(cl => completeRounds.has(cl.roundNumber));
 
     // Fetch all analyses - filter to only include complete rounds

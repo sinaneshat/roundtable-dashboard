@@ -22,6 +22,7 @@ import type {
   deleteParticipantRoute,
   updateParticipantRoute,
 } from '../route';
+import type { AddParticipantRequest, UpdateParticipantRequest } from '../schema';
 import {
   AddParticipantRequestSchema,
   UpdateParticipantRequestSchema,
@@ -37,7 +38,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
   async (c, batch) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    const body = c.validated.body;
+    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
+    const body: AddParticipantRequest = AddParticipantRequestSchema.parse(c.validated.body);
     const db = batch.db;
     await verifyThreadOwnership(id, user.id, db);
     const userTier = await getUserTier(user.id);
@@ -46,7 +48,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     await validateTierLimits(id, userTier, db);
 
     // Validate model access (tier permissions)
-    await validateModelAccess(body.modelId as string, userTier);
+    await validateModelAccess(body.modelId, userTier);
     const participantId = ulid();
     const now = new Date();
     const [participant] = await db
@@ -54,9 +56,9 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       .values({
         id: participantId,
         threadId: id,
-        modelId: body.modelId as string,
-        role: body.role as string | null,
-        priority: (body.priority as number | undefined) ?? 0,
+        modelId: body.modelId,
+        role: body.role ?? null,
+        priority: body.priority ?? 0,
         isEnabled: true,
         settings: body.settings ?? null,
         createdAt: now,
@@ -80,8 +82,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       id,
       nextRoundNumber,
       participantId,
-      body.modelId as string,
-      body.role as string | null,
+      body.modelId,
+      body.role ?? null,
     );
 
     return Responses.ok(c, {
@@ -99,14 +101,15 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    const body = c.validated.body;
+    // ✅ TYPE-SAFE: Parse with schema for proper type inference (no cast needed)
+    const body: UpdateParticipantRequest = UpdateParticipantRequestSchema.parse(c.validated.body);
     const db = await getDbAsync();
     const participant = await verifyParticipantOwnership(id, user.id, db);
     const [updatedParticipant] = await db
       .update(tables.chatParticipant)
       .set({
-        role: body.role as string | null | undefined,
-        priority: body.priority as number | undefined,
+        role: body.role ?? null,
+        priority: body.priority,
         isEnabled: body.isEnabled,
         settings: body.settings ?? undefined,
         updatedAt: new Date(),
@@ -133,7 +136,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
         id,
         participant.modelId,
         participant.role,
-        body.role as string | null,
+        body.role ?? null,
       );
     }
     return Responses.ok(c, {

@@ -33,14 +33,10 @@ import {
 } from '@/db/schemas/chat-metadata';
 import { userSelectSchema } from '@/db/validation/auth';
 import {
-  chatCustomRoleInsertSchema,
   chatCustomRoleSelectSchema,
-  chatCustomRoleUpdateSchema,
   chatMessageSelectSchema,
   chatModeratorAnalysisSelectSchema,
-  chatParticipantInsertSchema,
   chatParticipantSelectSchema,
-  chatParticipantUpdateSchema,
   chatPreSearchSelectSchema,
   chatRoundFeedbackSelectSchema,
   chatRoundFeedbackUpdateSchema,
@@ -347,28 +343,46 @@ export type ThreadSlugStatus = z.infer<typeof ThreadSlugStatusPayloadSchema>;
 export const DeleteThreadResponseSchema = createApiResponseSchema(z.object({
   deleted: z.boolean().openapi({ example: true }),
 })).openapi('DeleteThreadResponse');
-export const AddParticipantRequestSchema = chatParticipantInsertSchema
-  .pick({
-    modelId: true,
-    role: true,
-    priority: true,
-    settings: true,
-  })
-  .extend({
-    role: z.string().min(1).max(100).nullish().openapi({
-      description: 'Optional assigned role',
-      example: 'The Ideator',
-    }),
-  })
-  .openapi('AddParticipantRequest');
-export const UpdateParticipantRequestSchema = chatParticipantUpdateSchema
-  .pick({
-    role: true,
-    priority: true,
-    isEnabled: true,
-    settings: true,
-  })
-  .openapi('UpdateParticipantRequest');
+/**
+ * AddParticipantRequest schema
+ * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
+ * (drizzle-zod .pick() loses type information with OpenAPI extensions)
+ */
+export const AddParticipantRequestSchema = z.object({
+  modelId: CoreSchemas.id().openapi({
+    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
+    example: 'anthropic/claude-3.5-sonnet',
+  }),
+  role: z.string().min(1).max(100).nullish().openapi({
+    description: 'Optional assigned role',
+    example: 'The Ideator',
+  }),
+  priority: z.number().int().min(0).optional().openapi({
+    description: 'Display priority (0-indexed)',
+  }),
+  settings: DbParticipantSettingsSchema.nullable().optional().openapi({
+    description: 'Optional participant settings',
+  }),
+}).openapi('AddParticipantRequest');
+
+/**
+ * UpdateParticipantRequest schema
+ * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
+ */
+export const UpdateParticipantRequestSchema = z.object({
+  role: z.string().min(1).max(100).nullish().openapi({
+    description: 'Optional role name',
+  }),
+  priority: z.number().int().min(0).optional().openapi({
+    description: 'Display priority',
+  }),
+  isEnabled: z.boolean().optional().openapi({
+    description: 'Whether participant is enabled',
+  }),
+  settings: DbParticipantSettingsSchema.nullable().optional().openapi({
+    description: 'Optional participant settings',
+  }),
+}).openapi('UpdateParticipantRequest');
 const ParticipantDetailPayloadSchema = z.object({
   participant: ChatParticipantSchema,
 }).openapi('ParticipantDetailPayload');
@@ -736,22 +750,45 @@ const MessagesListPayloadSchema = z.object({
 }).openapi('MessagesListPayload');
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
 export type MessagesListResponse = z.infer<typeof MessagesListResponseSchema>;
-export const CreateCustomRoleRequestSchema = chatCustomRoleInsertSchema
-  .pick({
-    name: true,
-    description: true,
-    systemPrompt: true,
-    metadata: true,
-  })
-  .openapi('CreateCustomRoleRequest');
-export const UpdateCustomRoleRequestSchema = chatCustomRoleUpdateSchema
-  .pick({
-    name: true,
-    description: true,
-    systemPrompt: true,
-    metadata: true,
-  })
-  .openapi('UpdateCustomRoleRequest');
+/**
+ * CreateCustomRoleRequest schema
+ * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
+ * (drizzle-zod .pick() loses type information with OpenAPI extensions)
+ */
+export const CreateCustomRoleRequestSchema = z.object({
+  name: z.string().min(1).max(100).openapi({
+    description: 'Custom role name',
+    example: 'The Innovator',
+  }),
+  description: z.string().max(500).nullable().optional().openapi({
+    description: 'Optional description',
+  }),
+  systemPrompt: z.string().min(1).max(4000).openapi({
+    description: 'System prompt for the role',
+  }),
+  metadata: DbCustomRoleMetadataSchema.nullable().optional().openapi({
+    description: 'Optional metadata',
+  }),
+}).openapi('CreateCustomRoleRequest');
+
+/**
+ * UpdateCustomRoleRequest schema
+ * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
+ */
+export const UpdateCustomRoleRequestSchema = z.object({
+  name: z.string().min(1).max(100).optional().openapi({
+    description: 'Custom role name',
+  }),
+  description: z.string().max(500).nullable().optional().openapi({
+    description: 'Optional description',
+  }),
+  systemPrompt: z.string().min(1).max(4000).optional().openapi({
+    description: 'System prompt for the role',
+  }),
+  metadata: DbCustomRoleMetadataSchema.nullable().optional().openapi({
+    description: 'Optional metadata',
+  }),
+}).openapi('UpdateCustomRoleRequest');
 const CustomRoleDetailPayloadSchema = z.object({
   customRole: ChatCustomRoleSchema,
 }).openapi('CustomRoleDetailPayload');

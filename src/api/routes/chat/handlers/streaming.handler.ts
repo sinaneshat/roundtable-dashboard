@@ -273,14 +273,29 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       );
 
       if (result.hasChanges) {
-        // ✅ Execute all operations atomically (INSERT new, UPDATE existing, RE-ENABLE, DISABLE removed)
-        await executeBatch(db, [
+        // ✅ ROOT CAUSE FIX: Only create changelog if conversation has started
+        // Check if at least one AI has responded (assistant message exists)
+        // Changes before any AI responds are "initial setup", not meaningful changes to track
+        const hasAssistantMessages = await db.query.chatMessage.findFirst({
+          where: and(
+            eq(tables.chatMessage.threadId, threadId),
+            eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
+          ),
+        });
+
+        // Execute participant operations (always needed)
+        // But only include changelog ops if conversation has started
+        const opsToExecute = [
           ...result.insertOps,
           ...result.updateOps,
           ...result.reenableOps,
           ...result.disableOps,
-          ...result.changelogOps,
-        ]);
+          ...(hasAssistantMessages ? result.changelogOps : []), // Only log if conversation started
+        ];
+
+        if (opsToExecute.length > 0) {
+          await executeBatch(db, opsToExecute);
+        }
       }
     }
 

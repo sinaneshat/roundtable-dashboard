@@ -1200,7 +1200,13 @@ export function LiveChatDemo() {
         ? 2
         : null;
 
-  const isStreaming = currentStreamingIndex !== null;
+  // ✅ FIX: Keep virtualization protection active during entire animation
+  // The demo uses ThreadTimeline which has window-based virtualization.
+  // When isStreaming becomes false, virtualization protection is removed and
+  // items may disappear because the window virtualizer doesn't track ScrollArea's
+  // internal scroll. Keep isStreaming=true until animation fully completes.
+  const isAnimating = stage !== DemoStages.IDLE && stage !== DemoStages.COMPLETE;
+  const isStreaming = currentStreamingIndex !== null || isAnimating;
 
   // ✅ LOADING STATE: Show matrix loading indicator during loading stage
   const showLoader = stage === DemoStages.LOADING_INDICATOR
