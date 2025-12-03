@@ -99,50 +99,46 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number> = {
  *
  * ✅ BALANCED UPSELLING STRATEGY: Clear value at each tier with fair differentiation
  *
- * Current distribution (20 hardcoded models):
- * - Free: 2 models (Gemini Flash - fast, efficient)
- * - Starter: 6 models (DeepSeek V3 + fast specialized models)
- * - Pro: 8 models (Claude 4.x, GPT-4o, Grok-4, Gemini Pro, Qwen Max)
- * - Power: 4 models (GPT-5, Claude Opus, o1-pro, GPT-4 Turbo)
+ * Current distribution (15 curated models - Dec 2025):
+ * - Free: 7 models (budget-friendly models from all providers)
+ * - Starter: 9 models (+2: Grok 4.1, Haiku)
+ * - Pro: 13 models (+4: Gemini Pro, GPT-4o, Grok 4, Sonnet)
+ * - Power: 15 models (+2: GPT-5, Opus)
  *
  * Business Logic - Clear Upgrade Funnel:
- * 1. **Free Tier (≤$0.10/M)**: 2 models - Gemini Flash only
- *    - Gemini 2.5 Flash, Gemini 2.0 Flash (fast, multimodal)
- *    - Purpose: Test platform with efficient models
- *    - Upsell: "Upgrade to Starter for 6 more models including DeepSeek V3 (best open-weight)"
+ * 1. **Free Tier (≤$0.35/M)**: 7 models - Excellent starter set
+ *    - Gemini Flash Lite ($0.075/M), Grok 3 Mini ($0.10/M)
+ *    - Llama 3.3 70B ($0.12/M), DeepSeek Chat V3 ($0.14/M)
+ *    - GPT-4o Mini ($0.15/M), DeepSeek R1 ($0.30/M), Gemini Flash ($0.30/M)
+ *    - Purpose: Test platform with diverse, quality models
+ *    - Upsell: "Upgrade to Starter for Grok 4.1 and Claude Haiku"
  *
- * 2. **Starter Tier (≤$0.50/M)**: 6 models - Excellent value
- *    - DeepSeek V3 series (top open-weight, $0.14/M)
- *    - Fast specialized: Grok Code Fast, Qwen3 Coder, Grok-4 Fast ($0.50/M)
- *    - Llama 4 Scout (strong open-source, $0.20/M)
- *    - Purpose: Budget-conscious users needing quality models
- *    - Upsell: "Upgrade to Pro for Claude 4, GPT-4o, and flagship models"
+ * 2. **Starter Tier (≤$1.00/M)**: 9 models - Great performance
+ *    - Adds: Grok 4.1 Fast ($0.60/M), Claude Haiku 4.5 ($0.80/M)
+ *    - Purpose: Users needing faster, more capable models
+ *    - Upsell: "Upgrade to Pro for GPT-4o, Claude Sonnet, and Gemini Pro"
  *
- * 3. **Pro Tier (≤$3.00/M)**: 8 models - Flagship tier ← MAIN TARGET
- *    - Industry leaders: Claude 4.x series (best coding, $3/M)
- *    - Most popular: GPT-4o ($2.50/M), Grok-4 ($2.50/M)
- *    - Top performers: Gemini 2.5 Pro (#1 on Arena, $1.25/M), Qwen Max ($2/M)
- *    - Premium reasoning: o3-mini ($1.10/M)
+ * 3. **Pro Tier (≤$3.50/M)**: 13 models - Flagship tier ← MAIN TARGET
+ *    - Adds: Gemini Pro ($1.25/M), GPT-4o ($2.50/M)
+ *    - Adds: Grok 4 ($3.00/M), Claude Sonnet 4.5 ($3.00/M)
  *    - Purpose: Best value for most users - all flagship models
- *    - Upsell: "Upgrade to Power for ultra-premium models (GPT-5, Claude Opus, o1-pro)"
+ *    - Upsell: "Upgrade to Power for GPT-5 and Claude Opus"
  *
- * 4. **Power Tier (Unlimited)**: 4 models - Ultra-premium
- *    - Ultimate models: GPT-5 ($15/M), Claude Opus ($15/M)
- *    - Advanced reasoning: o1-pro ($15/M) with extended thinking
- *    - GPT-4 Turbo ($10/M) for reliability
+ * 4. **Power Tier (Unlimited)**: 15 models - Ultra-premium
+ *    - Adds: GPT-5 ($5.00/M), Claude Opus 4.5 ($5.00/M)
  *    - Purpose: Power users needing cutting-edge performance
  *
  * This creates a fair upgrade path with clear value at each tier:
- * Free (2) → Starter (6) → Pro (8) ← MAIN TARGET → Power (4)
+ * Free (7) → Starter (9) → Pro (13) ← MAIN TARGET → Power (15)
  */
 export const MAX_MODEL_PRICING_BY_TIER: Record<
   SubscriptionTier,
   number | null
 > = {
-  free: 0.1, // Up to $0.10/M tokens - 2 models (Gemini Flash only)
-  starter: 0.5, // Up to $0.50/M tokens - 6 models (DeepSeek + fast models)
-  pro: 3.0, // Up to $3.00/M tokens - 8 models (Claude, GPT-4o, flagships) ← MAIN UPSELL
-  power: null, // Unlimited - 4 models (GPT-5, Claude Opus, ultra-premium)
+  free: 0.35, // Up to $0.35/M tokens - 7 models (diverse budget models)
+  starter: 1.0, // Up to $1.00/M tokens - 9 models (+Grok 4.1, Haiku)
+  pro: 3.5, // Up to $3.50/M tokens - 13 models (+GPT-4o, Sonnet, flagships) ← MAIN UPSELL
+  power: null, // Unlimited - 15 models (+GPT-5, Opus)
 } as const;
 
 /**

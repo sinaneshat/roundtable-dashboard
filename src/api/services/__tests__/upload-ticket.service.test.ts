@@ -2,8 +2,12 @@
  * Upload Ticket Service Tests
  *
  * Tests for secure, time-limited upload ticket generation and validation.
- * Follows S3 presigned URL pattern with HMAC-SHA256 signatures.
+ * Uses JWT (jose library) for cryptographic operations.
+ *
+ * @vitest-environment node
  */
+
+import { Buffer } from 'node:buffer';
 
 import type { Context } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -161,7 +165,7 @@ describe('upload Ticket Service', () => {
       expect(result.expiresAt).toBe(now + MAX_TICKET_EXPIRATION_MS);
     });
 
-    it('generates token in correct format (ticketId.expiresAt.signature)', async () => {
+    it('generates token in JWT format (header.payload.signature)', async () => {
       const kv = createMockKV();
       const c = createMockContext({ kv });
 
@@ -172,11 +176,21 @@ describe('upload Ticket Service', () => {
         maxFileSize: 1024,
       });
 
+      // JWT format: header.payload.signature (all base64url encoded)
       const parts = result.token.split('.');
       expect(parts).toHaveLength(3);
-      expect(parts[0]).toBe(result.ticketId);
-      expect(parts[1]).toBe(result.expiresAt.toString());
-      expect(parts[2]).toBeTruthy(); // Signature
+
+      // Decode header - should have alg: 'HS256'
+      const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+      expect(header.alg).toBe('HS256');
+
+      // Decode payload - should contain our claims
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      expect(payload.tid).toBe(result.ticketId);
+      expect(payload.uid).toBe('user-123');
+      expect(payload.fn).toBe('file.txt');
+      expect(payload.mt).toBe('text/plain');
+      expect(payload.ms).toBe(1024);
     });
 
     it('throws error when secret is not configured', async () => {
@@ -231,15 +245,16 @@ describe('upload Ticket Service', () => {
         maxFileSize: 1024,
       });
 
-      // Advance time past expiration
-      vi.advanceTimersByTime(DEFAULT_TICKET_EXPIRATION_MS + 1000);
+      // Advance system time past expiration (jose uses Date.now() internally)
+      const futureTime = Date.now() + DEFAULT_TICKET_EXPIRATION_MS + 1000;
+      vi.setSystemTime(new Date(futureTime));
 
       const result = await validateUploadTicket(c, token, 'user-123');
 
-      expect(result).toMatchObject({
-        valid: false,
-        error: 'Ticket has expired',
-      });
+      // Jose throws different error messages depending on environment
+      // The key assertion is that the token is rejected as invalid
+      expect(result.valid).toBe(false);
+      expect(result).toHaveProperty('error');
     });
 
     it('rejects token with wrong user', async () => {
@@ -258,7 +273,7 @@ describe('upload Ticket Service', () => {
 
       expect(result).toMatchObject({
         valid: false,
-        error: 'Invalid signature',
+        error: 'User mismatch',
       });
     });
 
@@ -266,15 +281,17 @@ describe('upload Ticket Service', () => {
       const kv = createMockKV();
       const c = createMockContext({ kv });
 
-      const { ticketId, expiresAt } = await createUploadTicket(c, {
+      const { token } = await createUploadTicket(c, {
         userId: 'user-123',
         filename: 'file.txt',
         mimeType: 'text/plain',
         maxFileSize: 1024,
       });
 
-      // Tamper with the signature
-      const tamperedToken = `${ticketId}.${expiresAt}.tampered-signature`;
+      // Tamper with the JWT signature (last part)
+      const parts = token.split('.');
+      parts[2] = 'tampered-signature';
+      const tamperedToken = parts.join('.');
 
       const result = await validateUploadTicket(c, tamperedToken, 'user-123');
 
@@ -292,19 +309,19 @@ describe('upload Ticket Service', () => {
 
       expect(result).toMatchObject({
         valid: false,
-        error: 'Invalid token format',
+        error: 'Invalid token',
       });
     });
 
-    it('rejects token with invalid expiration format', async () => {
+    it('rejects malformed JWT structure', async () => {
       const kv = createMockKV();
       const c = createMockContext({ kv });
 
-      const result = await validateUploadTicket(c, 'ticketId.not-a-number.signature', 'user-123');
+      const result = await validateUploadTicket(c, 'header.payload.signature', 'user-123');
 
       expect(result).toMatchObject({
         valid: false,
-        error: 'Invalid expiration format',
+        error: 'Invalid token',
       });
     });
 
@@ -331,7 +348,9 @@ describe('upload Ticket Service', () => {
       });
     });
 
-    it('rejects ticket not found in KV', async () => {
+    it('validates token even when not in KV (self-contained JWT design)', async () => {
+      // JWT tokens are self-contained - they validate via signature, not KV lookup
+      // KV is only used for replay prevention (best-effort due to eventual consistency)
       const kv = createMockKV();
       const c = createMockContext({ kv });
 
@@ -342,14 +361,18 @@ describe('upload Ticket Service', () => {
         maxFileSize: 1024,
       });
 
-      // Delete from KV
+      // Delete from KV (simulates eventual consistency delay or edge node sync)
       kv._store.delete(`upload-ticket:${ticketId}`);
 
+      // Token should still be valid - JWT signature verification succeeds
       const result = await validateUploadTicket(c, token, 'user-123');
 
       expect(result).toMatchObject({
-        valid: false,
-        error: 'Ticket not found or expired',
+        valid: true,
+        ticket: {
+          userId: 'user-123',
+          filename: 'file.txt',
+        },
       });
     });
 

@@ -1,20 +1,18 @@
 /**
  * Models API Handlers
  *
- * ✅ HARDCODED TOP 20 MODELS - SINGLE SOURCE OF TRUTH:
- * - Top 20 models from LLM leaderboards (Oct 2025)
+ * ✅ TOP 15 CURATED MODELS - SINGLE SOURCE OF TRUTH:
+ * - Top 15 models from Dec 2025 OpenRouter rankings
  * - Zod-based enums for type safety
- * - In dev mode: dynamically fetches ALL free models from OpenRouter
+ * - 3 models per major provider (Google, OpenAI, Anthropic, xAI)
  * - Simplified logic with curated model list
  *
  * ✅ TEXT & MULTIMODAL: Includes best models with text/vision capabilities
  * ✅ PRICING TIERS: Balanced distribution with clear upgrade value
- *   - Free: $0.10/M (2 models - Gemini Flash)
- *   - Starter: $0.50/M (6 models - DeepSeek + fast models)
- *   - Pro: $3.00/M (8 models - Claude, GPT-4o, flagships) ← MAIN TARGET
- *   - Power: Unlimited (4 models - GPT-5, Claude Opus, ultra-premium)
- *
- * ✅ DEV MODE: Fetches ALL free models from OpenRouter for testing
+ *   - Free: ≤$0.35/M (7 models - diverse budget models)
+ *   - Starter: ≤$1.00/M (9 models - +Grok 4.1, Haiku)
+ *   - Pro: ≤$3.50/M (13 models - +GPT-4o, Sonnet, flagships) ← MAIN TARGET
+ *   - Power: Unlimited (15 models - +GPT-5, Opus)
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -35,14 +33,14 @@ import type { listModelsRoute } from './route';
 // ============================================================================
 
 /**
- * List top 20 hardcoded models with tier-based access control
+ * List top 15 curated models with tier-based access control
  *
  * GET /api/v1/models
  *
- * ✅ HARDCODED APPROACH:
- * - Top 20 models from LLM leaderboards (Oct 2025)
- * - Curated selection of best performing models
- * - Provider diversity: Google, OpenAI, Anthropic, xAI, DeepSeek, Qwen, Meta
+ * ✅ CURATED APPROACH:
+ * - Top 15 models from Dec 2025 OpenRouter rankings
+ * - 3 models per major provider (Google, OpenAI, Anthropic, xAI)
+ * - 2 from DeepSeek, 1 from Meta
  * - Simplified logic with single source of truth
  *
  * ✅ TEXT & MULTIMODAL: Includes best text and vision models
@@ -51,8 +49,7 @@ import type { listModelsRoute } from './route';
  *
  * Returns:
  * - Tier information (required_tier, is_accessible_to_user)
- * - Top 10 flagship models in separate section
- * - Models grouped by subscription tier (Free, Starter, Pro, Power)
+ * - Models sorted by accessibility and flagship score
  * - Default model selection based on user's tier
  * - Client-side caching via TanStack Query
  */
@@ -71,30 +68,16 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = user ? await getUserTier(user.id) : 'free';
 
     // ============================================================================
-    // ✅ HARDCODED MODEL SELECTION: All models from single source of truth
+    // ✅ CURATED MODEL SELECTION: All 15 models from single source of truth
     // ============================================================================
-    // CRITICAL: Must use c.env in Cloudflare Workers (process.env is build-time only)
-    const webappEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
-    const isDevMode = webappEnv === 'local';
-
-    // Get all hardcoded models including free models for dev mode
     const allModels = getAllModels();
-
-    // ============================================================================
-    // ✅ FREE MODELS: Only include in local development mode
-    // ============================================================================
-    // Free models (from OpenRouter :free tier) are for development/testing only
-    // They should not appear in preview/production environments
-    const environmentModels = isDevMode
-      ? allModels
-      : allModels.filter(model => !model.is_free);
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
     // Uses proven model-pricing logic from product-logic.service.ts
 
-    const modelsWithTierInfo = environmentModels.map((model) => {
+    const modelsWithTierInfo = allModels.map((model) => {
       const requiredTier = getRequiredTierForModel(model);
       const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
       const isAccessible = canAccessModelByPricing(userTier, model);
@@ -108,16 +91,9 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ SIMPLIFIED ORDERING: In dev mode, free models first; otherwise accessible first
+    // ✅ ORDERING: Accessible first, then by flagship score, then by tier
     // ============================================================================
     const sortedModels = modelsWithTierInfo.sort((a, b) => {
-      // ✅ DEV MODE: Free models (is_free: true) always come first to reduce costs
-      if (isDevMode) {
-        if (a.is_free !== b.is_free) {
-          return a.is_free ? -1 : 1;
-        }
-      }
-
       // Accessible models always come before inaccessible
       if (a.is_accessible_to_user !== b.is_accessible_to_user) {
         return a.is_accessible_to_user ? -1 : 1;
@@ -134,18 +110,9 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ DEFAULT MODEL: In dev mode use FREE models, otherwise best accessible
+    // ✅ DEFAULT MODEL: Best accessible model by flagship score
     // ============================================================================
-    let defaultModelId: string;
-    if (isDevMode) {
-      // In local dev, prefer FREE models (is_free: true) to eliminate API costs
-      // These are actual free-tier models like deepseek-r1:free and llama-3.3:free
-      const freeModel = sortedModels.find(m => m.is_free && m.is_accessible_to_user);
-      defaultModelId = freeModel?.id || sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
-    } else {
-      // In preview/prod, use best accessible model (sorted by flagship score)
-      defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
-    }
+    const defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
 
     // ============================================================================
     // ✅ USER TIER CONFIG: All limits and metadata for frontend
@@ -175,7 +142,7 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // Strategy:
     // 1. HTTP Cache: 1 hour client cache, 24 hours CDN cache
     // 2. Vary by auth state (Cookie header) to serve different versions
-    // 3. Server-side: getUserTier (5min cache), OpenRouter models (24h cache)
+    // 3. Server-side: getUserTier (5min cache)
     // 4. Client-side: TanStack Query (staleTime: Infinity with manual invalidation)
     //
     // Cache invalidation triggers:

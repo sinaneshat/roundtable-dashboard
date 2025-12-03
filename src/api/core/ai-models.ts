@@ -7,7 +7,6 @@
  * ✅ PATTERN: Import from here, never hardcode model IDs
  * ✅ SINGLE SOURCE: All model assignments consolidated
  * ✅ TYPE-SAFE: Uses ModelIdEnum from models-config.service.ts
- * ✅ DEV MODE: Uses FREE models for all operations to reduce costs
  *
  * Reference: /docs/backend-patterns.md
  */
@@ -19,19 +18,18 @@ import { ModelIdEnum } from '@/api/services/models-config.service';
 // ============================================================================
 
 /**
- * Check if we should use dev (free) models
- * Only checks NEXT_PUBLIC_WEBAPP_ENV to avoid NODE_ENV issues in preview/prod
+ * Check if we should use dev (cheap) models
  */
 function isDevMode(): boolean {
   return process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
 }
 
 // ============================================================================
-// FREE MODELS FOR DEV MODE
+// CHEAP MODELS FOR DEV/SYSTEM OPERATIONS
 // ============================================================================
 
-/** Free general model - Meta Llama (good for titles, search) */
-const FREE_GENERAL_MODEL = ModelIdEnum.enum['meta-llama/llama-3.3-70b-instruct:free'];
+/** Cheapest model - Gemini 2.0 Flash ($0.10/1M) */
+const CHEAP_FAST_MODEL = ModelIdEnum.enum['google/gemini-2.0-flash-001'];
 
 // ============================================================================
 // ANALYSIS MODELS
@@ -39,12 +37,9 @@ const FREE_GENERAL_MODEL = ModelIdEnum.enum['meta-llama/llama-3.3-70b-instruct:f
 
 /**
  * Model for round analysis and moderator analysis
- * ✅ ALWAYS SONNET 3.5: Works reliably with mode:'json' for complex schemas
- * ✅ WHY NOT DEV FALLBACK: Analysis quality is critical, free models unreliable
- * ✅ WHY NOT OPUS: Grammar compilation size limits
- * ✅ WHY NOT GPT-4o: Strict mode rejects optional fields in schema
+ * ✅ ALWAYS CLAUDE SONNET 4: Works reliably with mode:'json' for complex schemas
  */
-export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
+export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-sonnet-4'];
 
 // ============================================================================
 // TITLE GENERATION MODELS
@@ -52,11 +47,11 @@ export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet']
 
 /**
  * Model for conversation title generation
- * ✅ DEV: Uses free Llama (fast, good quality)
- * ✅ PROD: Uses Gemini Flash (fast, cost-efficient)
+ * ✅ DEV: Uses Gemini 2.0 Flash (cheapest)
+ * ✅ PROD: Uses Gemini 2.5 Flash (fast, cost-efficient)
  */
 export const TITLE_GENERATION_MODEL_ID = isDevMode()
-  ? FREE_GENERAL_MODEL
+  ? CHEAP_FAST_MODEL
   : ModelIdEnum.enum['google/gemini-2.5-flash'];
 
 // ============================================================================
@@ -65,12 +60,12 @@ export const TITLE_GENERATION_MODEL_ID = isDevMode()
 
 /**
  * Model for web search query generation
- * ✅ DEV: Uses free Llama (good JSON extraction)
- * ✅ PROD: Uses Claude Sonnet (excellent structured output)
+ * ✅ DEV: Uses Gemini 2.0 Flash (ultra-fast)
+ * ✅ PROD: Uses Claude Sonnet 4 (excellent structured output)
  */
 export const WEB_SEARCH_MODEL_ID = isDevMode()
-  ? FREE_GENERAL_MODEL
-  : ModelIdEnum.enum['anthropic/claude-sonnet-4.5'];
+  ? CHEAP_FAST_MODEL
+  : ModelIdEnum.enum['anthropic/claude-sonnet-4'];
 
 // ============================================================================
 // EXPORTS

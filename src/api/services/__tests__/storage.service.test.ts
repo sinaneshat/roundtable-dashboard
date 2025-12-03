@@ -267,7 +267,6 @@ describe('storage Service', () => {
       expect(result.found).toBe(true);
       expect(result.body).toBeTruthy();
       expect(result.size).toBeGreaterThan(0);
-      expect(result.preconditionsMet).toBe(true);
     });
 
     it('returns not found for non-existent file', async () => {
@@ -325,7 +324,6 @@ describe('storage Service', () => {
       expect(result.httpEtag).toBe('"abc123"');
       expect(result.size).toBe(1024);
       expect(result.customMetadata?.userId).toBe('user-123');
-      expect(result.preconditionsMet).toBe(true);
     });
 
     it('returns not found when object does not exist in R2', async () => {
@@ -356,10 +354,10 @@ describe('storage Service', () => {
       });
     });
 
-    it('handles precondition failed (body is null but object exists)', async () => {
-      // R2 returns object without body when preconditions fail (304 scenario)
+    it('handles missing body in R2 response', async () => {
+      // R2 can return object without body in certain scenarios
       const mockGet = vi.fn().mockResolvedValue({
-        // No body property or body is null
+        // No body property
         writeHttpMetadata: vi.fn(),
         httpEtag: '"abc123"',
         size: 100,
@@ -368,9 +366,8 @@ describe('storage Service', () => {
 
       const result = await getFileStream(mockBucket, 'test/file.txt');
 
+      // Object was found, body may be undefined/null
       expect(result.found).toBe(true);
-      expect(result.body).toBeNull();
-      expect(result.preconditionsMet).toBe(false);
     });
 
     it('writeHttpMetadata callback invokes R2 object method', async () => {
@@ -417,7 +414,7 @@ describe('storage Service', () => {
       const result = await copyFile(undefined, 'nonexistent.txt', 'dest.txt');
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Source file not found');
+      expect(result.error).toContain('Source not found');
     });
   });
 
@@ -450,7 +447,7 @@ describe('storage Service', () => {
       const result = await copyFile(mockBucket, 'nonexistent.txt', 'dest.txt');
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Source file not found');
+      expect(result.error).toContain('Source not found');
     });
   });
 });

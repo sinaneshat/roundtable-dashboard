@@ -132,20 +132,22 @@ vi.mock('next/navigation', () => ({
 process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
 process.env.NEXT_PUBLIC_WEBAPP_ENV = 'local';
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(), // deprecated
-    removeListener: vi.fn(), // deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+// Mock window.matchMedia (only in browser/jsdom environment)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation(query => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(), // deprecated
+      removeListener: vi.fn(), // deprecated
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 // Mock IntersectionObserver - properly typed implementation
 class MockIntersectionObserver implements IntersectionObserver {
@@ -180,8 +182,10 @@ class MockResizeObserver implements ResizeObserver {
 
 globalThis.ResizeObserver = MockResizeObserver;
 
-// Mock Element.scrollIntoView for cmdk component
-Element.prototype.scrollIntoView = vi.fn();
+// Mock Element.scrollIntoView for cmdk component (only in browser/jsdom environment)
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollIntoView = vi.fn();
+}
 
 // Mock ReadableStream for streaming tests - defined first as it's used by TransformStream
 if (typeof globalThis.ReadableStream === 'undefined') {
