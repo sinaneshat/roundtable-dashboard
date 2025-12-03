@@ -29,31 +29,38 @@ export const ModelIdEnum = z.enum([
   // PAID MODELS - For preview/prod (ordered by price, cheapest first)
   // ========================================================================
 
-  // --- FREE TIER (≤$0.35/M) - 8 models ---
+  // --- FREE TIER (≤$0.35/M) - 10 models ---
   'google/gemini-2.0-flash-001', // $0.10/M - 1M context, ultra-fast
   'openai/gpt-4o-mini', // $0.15/M - 128K context, budget
   'x-ai/grok-4-fast', // $0.20/M - 2M context, multimodal
+  'x-ai/grok-4.1-fast', // $0.20/M - 2M context, agentic tool calling
   'x-ai/grok-code-fast-1', // $0.20/M - 256K context, agentic coding
   'deepseek/deepseek-chat-v3-0324', // $0.20/M - 164K context, fast chat
   'deepseek/deepseek-r1-0528', // $0.20/M - 164K context, latest R1
+  'deepseek/deepseek-v3.2', // $0.27/M - 164K context, latest V3
   'deepseek/deepseek-r1', // $0.30/M - 164K context, reasoning
   'google/gemini-2.5-flash', // $0.30/M - 1M context, reasoning
 
-  // --- STARTER TIER (≤$1.00/M) - adds 2 ---
+  // --- STARTER TIER (≤$1.50/M) - adds 4 ---
+  'mistralai/mistral-large-2512', // $0.50/M - 262K context, MoE
   'anthropic/claude-3.5-haiku', // $0.80/M - 200K context, fast
+  'anthropic/claude-haiku-4.5', // $1/M - 200K context, latest Haiku
   'openai/o3-mini', // $1.10/M - 200K context, STEM reasoning
 
-  // --- PRO TIER (≤$3.50/M) - adds 7 ---
+  // --- PRO TIER (≤$5.00/M) - adds 10 ---
   'google/gemini-2.5-pro', // $1.25/M - 1M context, flagship
   'openai/o3', // $2/M - 200K context, reasoning
   'openai/gpt-4.1', // $2/M - 1M context, flagship
+  'google/gemini-3-pro-preview', // $2/M - 1M context, Gemini 3 flagship
   'openai/gpt-4o', // $2.50/M - 128K context, multimodal
   'x-ai/grok-3', // $3/M - 131K context, flagship
   'x-ai/grok-4', // $3/M - 256K context, latest reasoning
   'anthropic/claude-3.7-sonnet', // $3/M - 200K context, coding
   'anthropic/claude-sonnet-4', // $3/M - 1M context, flagship
+  'anthropic/claude-sonnet-4.5', // $3/M - 1M context, latest Sonnet
 
-  // --- POWER TIER (unlimited) - adds 3 ---
+  // --- POWER TIER (unlimited) - adds 4 ---
+  'anthropic/claude-opus-4.5', // $5/M - 200K context, latest Opus
   'anthropic/claude-3.5-sonnet', // $6/M - 200K context, premium
   'openai/o1', // $15/M - 200K context, PhD-level reasoning
   'anthropic/claude-opus-4', // $15/M - 200K context, world's best coding
@@ -232,6 +239,26 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     supports_reasoning_stream: true,
   },
   {
+    id: 'x-ai/grok-4.1-fast',
+    name: 'Grok 4.1 Fast',
+    description: 'xAI latest. 2M context, agentic tool calling.',
+    context_length: 2000000,
+    created: 1733097600,
+    pricing: { prompt: '0.00000020', completion: '0.00000050' },
+    top_provider: { context_length: 2000000, max_completion_tokens: 30000, is_moderated: false },
+    per_request_limits: null,
+    architecture: { modality: 'text+image->text', tokenizer: 'Grok', instruct_type: 'grok' },
+    provider: 'x-ai',
+    category: 'general',
+    capabilities: { vision: true, reasoning: true, streaming: true, tools: true },
+    pricing_display: { input: '$0.20/1M', output: '$0.50/1M' },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
+  },
+  {
     id: 'x-ai/grok-code-fast-1',
     name: 'Grok Code Fast',
     description: 'xAI agentic coding model. Visible reasoning traces.',
@@ -292,6 +319,26 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     supports_reasoning_stream: true,
   },
   {
+    id: 'deepseek/deepseek-v3.2',
+    name: 'DeepSeek V3.2',
+    description: 'Latest V3 with Sparse Attention. Long-context optimized.',
+    context_length: 163840,
+    created: 1733097600,
+    pricing: { prompt: '0.00000027', completion: '0.00000040' },
+    top_provider: { context_length: 163840, max_completion_tokens: 8192, is_moderated: false },
+    per_request_limits: null,
+    architecture: { modality: 'text->text', tokenizer: 'DeepSeek', instruct_type: 'deepseek' },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: { vision: false, reasoning: true, streaming: true, tools: true },
+    pricing_display: { input: '$0.27/1M', output: '$0.40/1M' },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
+  },
+  {
     id: 'deepseek/deepseek-r1',
     name: 'DeepSeek R1',
     description: 'Reasoning model. Performance on par with OpenAI o1.',
@@ -333,8 +380,28 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // ========================================================================
-  // STARTER TIER (≤$1.50/M) - adds 2 models
+  // STARTER TIER (≤$1.50/M) - adds 4 models
   // ========================================================================
+  {
+    id: 'mistralai/mistral-large-2512',
+    name: 'Mistral Large 3 2512',
+    description: '675B MoE, 41B active. Apache 2.0 licensed.',
+    context_length: 262144,
+    created: 1733097600,
+    pricing: { prompt: '0.00000050', completion: '0.00000150' },
+    top_provider: { context_length: 262144, max_completion_tokens: 16384, is_moderated: false },
+    per_request_limits: null,
+    architecture: { modality: 'text+image->text', tokenizer: 'Mistral', instruct_type: 'mistral' },
+    provider: 'mistralai',
+    category: 'general',
+    capabilities: { vision: true, reasoning: false, streaming: true, tools: true },
+    pricing_display: { input: '$0.50/1M', output: '$1.50/1M' },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+    supports_temperature: true,
+    supports_reasoning_stream: false,
+  },
   {
     id: 'anthropic/claude-3.5-haiku',
     name: 'Claude 3.5 Haiku',
@@ -354,6 +421,26 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_reasoning_model: false,
     supports_temperature: true,
     supports_reasoning_stream: false,
+  },
+  {
+    id: 'anthropic/claude-haiku-4.5',
+    name: 'Claude Haiku 4.5',
+    description: 'Latest Haiku. 73% SWE-bench. Extended thinking.',
+    context_length: 200000,
+    created: 1733097600,
+    pricing: { prompt: '0.00000100', completion: '0.00000500' },
+    top_provider: { context_length: 200000, max_completion_tokens: 64000, is_moderated: false },
+    per_request_limits: null,
+    architecture: { modality: 'text+image->text', tokenizer: 'Claude', instruct_type: 'claude' },
+    provider: 'anthropic',
+    category: 'general',
+    capabilities: { vision: true, reasoning: true, streaming: true, tools: true },
+    pricing_display: { input: '$1/1M', output: '$5/1M' },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
   },
   {
     id: 'openai/o3-mini',
@@ -377,7 +464,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // ========================================================================
-  // PRO TIER (≤$3.50/M) - adds 7 models, ordered by price
+  // PRO TIER (≤$5.00/M) - adds 10 models, ordered by price
   // ========================================================================
   {
     id: 'google/gemini-2.5-pro',

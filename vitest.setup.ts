@@ -241,8 +241,20 @@ if (typeof globalThis.ReadableStream === 'undefined') {
       return [new MockReadableStream<R>(), new MockReadableStream<R>()];
     }
 
-    async* [Symbol.asyncIterator](): AsyncIterableIterator<R> {
-      // Empty async generator - yields nothing
+    values(_options?: ReadableStreamIteratorOptions): ReadableStreamAsyncIterator<R> {
+      const iterator: ReadableStreamAsyncIterator<R> = {
+        next: async () => ({ done: true, value: undefined }) as IteratorResult<R>,
+        return: async () => ({ done: true, value: undefined }) as IteratorResult<R>,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+        [Symbol.asyncDispose]: async () => {},
+      };
+      return iterator;
+    }
+
+    [Symbol.asyncIterator](_options?: ReadableStreamIteratorOptions): ReadableStreamAsyncIterator<R> {
+      return this.values(_options);
     }
   }
 
