@@ -22,7 +22,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { isLocalDevMode } from '@/api/services/model-validation.service';
 import { getAllModels } from '@/api/services/models-config.service';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
@@ -74,17 +73,28 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ============================================================================
     // ✅ HARDCODED MODEL SELECTION: All models from single source of truth
     // ============================================================================
-    const isDevMode = isLocalDevMode();
+    // CRITICAL: Must use c.env in Cloudflare Workers (process.env is build-time only)
+    const webappEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
+    const isDevMode = webappEnv === 'local';
 
     // Get all hardcoded models including free models for dev mode
     const allModels = getAllModels();
+
+    // ============================================================================
+    // ✅ FREE MODELS: Only include in local development mode
+    // ============================================================================
+    // Free models (from OpenRouter :free tier) are for development/testing only
+    // They should not appear in preview/production environments
+    const environmentModels = isDevMode
+      ? allModels
+      : allModels.filter(model => !model.is_free);
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
     // Uses proven model-pricing logic from product-logic.service.ts
 
-    const modelsWithTierInfo = allModels.map((model) => {
+    const modelsWithTierInfo = environmentModels.map((model) => {
       const requiredTier = getRequiredTierForModel(model);
       const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
       const isAccessible = canAccessModelByPricing(userTier, model);

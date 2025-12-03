@@ -29,6 +29,12 @@ import {
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
+import {
+  deleteMultipartMetadata,
+  storeMultipartMetadata,
+  validateMultipartOwnership,
+  validateR2UploadId,
+} from '@/api/services/multipart-upload.service';
 import { generateSignedDownloadUrl } from '@/api/services/signed-url.service';
 import {
   deleteFile,
@@ -64,10 +70,6 @@ import type {
   uploadPartRoute,
   uploadWithTicketRoute,
 } from './route';
-// ============================================================================
-// MULTIPART UPLOAD HANDLERS
-// ============================================================================
-import type { MultipartUploadMetadata } from './schema';
 import {
   CompleteMultipartUploadRequestSchema,
   CreateMultipartUploadRequestSchema,
@@ -534,51 +536,43 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
     const requestHeaders = c.req.raw.headers;
     const ifNoneMatch = requestHeaders.get('if-none-match');
 
-    // Helper to build streaming response following official R2 pattern
+    /**
+     * Build streaming response following official Cloudflare R2 pattern:
+     * ```ts
+     * const headers = new Headers();
+     * object.writeHttpMetadata(headers);
+     * headers.set("etag", object.httpEtag);
+     * return new Response(object.body, { headers });
+     * ```
+     * @see https://developers.cloudflare.com/r2/api/workers/workers-api-usage/
+     */
     const buildStreamingResponse = (
       result: Awaited<ReturnType<typeof getFileStream>>,
       uploadRecord: { filename: string; mimeType: string | null },
       cacheControl: string,
     ) => {
-      // Check conditional request (If-None-Match)
+      // Conditional request: 304 Not Modified
       if (ifNoneMatch && result.httpEtag && ifNoneMatch === result.httpEtag) {
         return new Response(null, { status: 304 });
       }
 
-      // Preconditions failed (e.g., If-Match didn't match)
-      if (!result.preconditionsMet) {
-        return new Response(null, { status: 412 });
-      }
-
-      // Build response headers using official R2 pattern
+      // Build headers following official R2 pattern
       const headers = new Headers();
       result.writeHttpMetadata(headers);
+      headers.set('etag', result.httpEtag);
+      headers.set('content-length', result.size.toString());
 
-      // Add ETag for caching (official R2 pattern)
-      if (result.httpEtag) {
-        headers.set('etag', result.httpEtag);
-      }
-
-      // Add Content-Length for proper download progress
-      if (result.size > 0) {
-        headers.set('content-length', result.size.toString());
-      }
-
-      // Fallback Content-Type if R2 didn't provide one
+      // Fallback Content-Type if R2 didn't set one
       if (!headers.has('content-type')) {
         headers.set('content-type', uploadRecord.mimeType || 'application/octet-stream');
       }
 
-      // Additional security and caching headers
+      // Security and caching headers
       headers.set('content-disposition', `inline; filename="${encodeURIComponent(uploadRecord.filename)}"`);
       headers.set('cache-control', cacheControl);
       headers.set('x-content-type-options', 'nosniff');
 
-      // Stream body directly (no buffering)
-      return new Response(result.body, {
-        status: result.body ? 200 : 204,
-        headers,
-      });
+      return new Response(result.body, { headers });
     };
 
     // SECURITY CHECK 1: Signed URL validation (preferred method)
@@ -732,14 +726,17 @@ export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv>
   },
 );
 
-/**
- * In-memory storage for multipart upload metadata
- * In production, use KV or D1 for persistence
- */
-const multipartUploads = new Map<string, MultipartUploadMetadata>();
+// ============================================================================
+// MULTIPART UPLOAD HANDLERS
+// ============================================================================
 
 /**
  * Create multipart upload
+ *
+ * Initiates a multipart upload for large files (> 100MB).
+ * Uses KV to persist metadata between part uploads for production reliability.
+ *
+ * @see https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/
  */
 export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUploadRoute, ApiEnv> = createHandler(
   {
@@ -787,8 +784,8 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
       },
     });
 
-    // Store upload metadata for tracking
-    multipartUploads.set(uploadId, {
+    // Store metadata in KV for persistence across worker restarts
+    await storeMultipartMetadata(c.env.KV, {
       userId: user.id,
       uploadId,
       r2Key,
@@ -796,6 +793,7 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
       filename: body.filename,
       mimeType: body.mimeType,
       fileSize: body.fileSize,
+      createdAt: Date.now(),
     });
 
     // Create DB record with 'uploading' status
@@ -824,6 +822,11 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
 
 /**
  * Upload part
+ *
+ * Uploads a single part of a multipart upload.
+ * Each part (except the last) must be at least 5MB.
+ *
+ * @see https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/
  */
 export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = createHandler(
   {
@@ -845,9 +848,9 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
       });
     }
 
-    // Get upload metadata
-    const uploadMeta = multipartUploads.get(uploadId);
-    if (!uploadMeta || uploadMeta.userId !== user.id) {
+    // Get upload metadata from KV (validates ownership)
+    const uploadMeta = await validateMultipartOwnership(c.env.KV, uploadId, user.id);
+    if (!uploadMeta) {
       throw createError.notFound('Multipart upload not found or expired', {
         errorType: 'resource',
         resource: 'multipartUpload',
@@ -855,7 +858,8 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
       });
     }
 
-    if (uploadMeta.r2UploadId !== r2UploadId) {
+    // Validate R2 upload ID matches
+    if (!validateR2UploadId(uploadMeta, r2UploadId)) {
       throw createError.badRequest('Upload ID mismatch', {
         errorType: 'validation',
         field: 'uploadId',
@@ -877,7 +881,6 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
     }
 
     // Resume multipart upload and upload part
-    // Note: Multipart uploads require R2 (checked in createMultipartUpload)
     const multipartUpload = c.env.UPLOADS_R2_BUCKET!.resumeMultipartUpload(
       uploadMeta.r2Key,
       r2UploadId,
@@ -894,6 +897,11 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
 
 /**
  * Complete multipart upload
+ *
+ * Finalizes a multipart upload by combining all uploaded parts.
+ * The parts array must include partNumber and etag for each uploaded part.
+ *
+ * @see https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/
  */
 export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipartUploadRoute, ApiEnv> = createHandler(
   {
@@ -908,9 +916,9 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
     const { parts } = c.validated.body;
     const db = await getDbAsync();
 
-    // Get upload metadata
-    const uploadMeta = multipartUploads.get(uploadId);
-    if (!uploadMeta || uploadMeta.userId !== user.id) {
+    // Get upload metadata from KV (validates ownership)
+    const uploadMeta = await validateMultipartOwnership(c.env.KV, uploadId, user.id);
+    if (!uploadMeta) {
       throw createError.notFound('Multipart upload not found or expired', {
         errorType: 'resource',
         resource: 'multipartUpload',
@@ -956,7 +964,6 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       .returning();
 
     // Schedule automatic cleanup for orphaned uploads (15 minutes)
-    // This is non-blocking and best-effort
     if (isCleanupSchedulerAvailable(c.env)) {
       const scheduleCleanupTask = async () => {
         try {
@@ -978,8 +985,11 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       }
     }
 
-    // Clean up metadata
-    multipartUploads.delete(uploadId);
+    // Clean up KV metadata (non-blocking)
+    const cleanupMetadata = deleteMultipartMetadata(c.env.KV, uploadId);
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(cleanupMetadata);
+    }
 
     return Responses.ok(c, {
       ...updated,
@@ -990,6 +1000,10 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
 
 /**
  * Abort multipart upload
+ *
+ * Cancels an in-progress multipart upload and cleans up any uploaded parts.
+ *
+ * @see https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/
  */
 export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUploadRoute, ApiEnv> = createHandler(
   {
@@ -1004,9 +1018,9 @@ export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUplo
     const { uploadId: r2UploadId } = c.validated.query;
     const db = await getDbAsync();
 
-    // Get upload metadata
-    const uploadMeta = multipartUploads.get(uploadId);
-    if (!uploadMeta || uploadMeta.userId !== user.id) {
+    // Get upload metadata from KV (validates ownership)
+    const uploadMeta = await validateMultipartOwnership(c.env.KV, uploadId, user.id);
+    if (!uploadMeta) {
       throw createError.notFound('Multipart upload not found or expired', {
         errorType: 'resource',
         resource: 'multipartUpload',
@@ -1014,7 +1028,8 @@ export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUplo
       });
     }
 
-    if (uploadMeta.r2UploadId !== r2UploadId) {
+    // Validate R2 upload ID matches
+    if (!validateR2UploadId(uploadMeta, r2UploadId)) {
       throw createError.badRequest('Upload ID mismatch', {
         errorType: 'validation',
         field: 'uploadId',
@@ -1038,8 +1053,11 @@ export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUplo
       .delete(tables.upload)
       .where(eq(tables.upload.id, uploadId));
 
-    // Clean up metadata
-    multipartUploads.delete(uploadId);
+    // Clean up KV metadata (non-blocking)
+    const cleanupMetadata = deleteMultipartMetadata(c.env.KV, uploadId);
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(cleanupMetadata);
+    }
 
     return Responses.ok(c, {
       uploadId: r2UploadId,

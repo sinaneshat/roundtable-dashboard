@@ -20,12 +20,10 @@ import { ModelIdEnum } from '@/api/services/models-config.service';
 
 /**
  * Check if we should use dev (free) models
- * Auto-detects based on environment (local/development)
+ * Only checks NEXT_PUBLIC_WEBAPP_ENV to avoid NODE_ENV issues in preview/prod
  */
 function isDevMode(): boolean {
-  const webappEnv = process.env.NEXT_PUBLIC_WEBAPP_ENV;
-  const nodeEnv = process.env.NODE_ENV;
-  return webappEnv === 'local' || nodeEnv === 'development';
+  return process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
 }
 
 // ============================================================================

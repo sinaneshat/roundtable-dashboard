@@ -212,28 +212,6 @@ export const AbortMultipartUploadResponseSchema = createApiResponseSchema(
 );
 
 // ============================================================================
-// INTERNAL HANDLER SCHEMAS - Single Source of Truth
-// ============================================================================
-
-/**
- * Multipart Upload Metadata schema
- *
- * SINGLE SOURCE OF TRUTH for tracking in-progress multipart uploads
- * Used internally by handlers for state management
- */
-export const MultipartUploadMetadataSchema = z.object({
-  userId: z.string(),
-  uploadId: z.string(),
-  r2Key: z.string(),
-  r2UploadId: z.string(),
-  filename: z.string(),
-  mimeType: z.string(),
-  fileSize: z.number().int().positive(),
-});
-
-export type MultipartUploadMetadata = z.infer<typeof MultipartUploadMetadataSchema>;
-
-// ============================================================================
 // UPLOAD TICKET SCHEMAS (Presigned URL Pattern)
 // ============================================================================
 
