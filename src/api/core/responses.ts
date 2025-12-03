@@ -737,6 +737,87 @@ export function detailedHealth(
 }
 
 // ============================================================================
+// SPECIALIZED RESPONSE BUILDERS
+// ============================================================================
+
+/**
+ * Raw JSON response without ApiResponse wrapper
+ * Use for streaming APIs that require raw data (e.g., AI SDK useObject hook)
+ *
+ * ⚠️ CAUTION: Only use when external libraries require raw JSON format.
+ * Prefer wrapped responses (Responses.ok, Responses.accepted) for standard APIs.
+ *
+ * @example
+ * // For AI SDK useObject compatibility
+ * return Responses.raw(c, analysisData);
+ */
+export function raw<T>(
+  c: Context,
+  data: T,
+  status: number = HttpStatusCodes.OK,
+): Response {
+  return c.json(data, status as 200);
+}
+
+/**
+ * JSON-RPC 2.0 response for MCP protocol endpoints
+ * Follows JSON-RPC 2.0 specification: https://www.jsonrpc.org/specification
+ *
+ * @example
+ * // Success response
+ * return Responses.jsonRpc(c, requestId, { tools: [...] });
+ *
+ * // Error response
+ * return Responses.jsonRpc(c, requestId, undefined, { code: -32600, message: 'Invalid Request' });
+ */
+export function jsonRpc<T>(
+  c: Context,
+  id: string | number | null,
+  result?: T,
+  error?: { code: number; message: string; data?: unknown },
+): Response {
+  const response = {
+    jsonrpc: '2.0' as const,
+    id,
+    ...(error ? { error } : { result }),
+  };
+
+  return c.json(response, HttpStatusCodes.OK);
+}
+
+/**
+ * Polling status response for async operations
+ * Returns 202 Accepted with polling metadata
+ *
+ * @example
+ * return Responses.polling(c, {
+ *   status: 'streaming',
+ *   resourceId: analysisId,
+ *   message: 'Analysis in progress',
+ *   retryAfterMs: 2000,
+ * });
+ */
+export function polling(
+  c: Context,
+  data: {
+    status: 'pending' | 'streaming' | 'processing';
+    resourceId?: string;
+    message: string;
+    retryAfterMs: number;
+  },
+): Response {
+  const response: ApiResponse<typeof data> = {
+    success: true,
+    data,
+    meta: {
+      ...extractResponseMetadata(c),
+    },
+  };
+
+  return c.json(response, HttpStatusCodes.ACCEPTED);
+}
+
+// ============================================================================
 // RESPONSE HELPERS OBJECT
 // ============================================================================
 
@@ -769,6 +850,11 @@ export const Responses = {
   badRequest,
   internalServerError,
   serviceUnavailable,
+
+  // Specialized responses
+  raw,
+  jsonRpc,
+  polling,
 
   // Utilities
   customResponse,

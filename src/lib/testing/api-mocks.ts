@@ -340,18 +340,21 @@ export function createMockAnalysesListResponse(
               agreementHeatmap: [
                 {
                   claim: 'Market timing is critical',
-                  perspectives: { 'GPT-4': 'agree' },
+                  // ✅ FIX: Changed from record to array for Anthropic compatibility
+                  perspectives: [{ modelName: 'GPT-4', status: 'agree' as const }],
                 },
               ],
-              argumentStrengthProfile: {
-                Analyst: {
+              // ✅ FIX: Changed from record to array for Anthropic compatibility
+              argumentStrengthProfile: [
+                {
+                  modelName: 'Analyst',
                   logic: 85,
                   riskAwareness: 75,
                   creativity: 70,
                   evidence: 80,
                   consensus: 75,
                 },
-              },
+              ],
             },
             evidenceAndReasoning: {
               reasoningThreads: [
@@ -547,7 +550,8 @@ export function createMockAnalysis(overrides?: Partial<import('@/api/routes/chat
           contestedClaimsList: [],
         },
         agreementHeatmap: [],
-        argumentStrengthProfile: {},
+        // ✅ FIX: Changed from record to array for Anthropic compatibility
+        argumentStrengthProfile: [],
       },
       evidenceAndReasoning: {
         reasoningThreads: [],

@@ -21,6 +21,7 @@ import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-sc
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
+import type { DemoSectionOpenStates } from './moderator/moderator-analysis-panel';
 import { RoundAnalysisCard } from './moderator/round-analysis-card';
 import { PreSearchCard } from './pre-search-card';
 import { RoundFeedback } from './round-feedback';
@@ -68,6 +69,7 @@ type ThreadTimelineProps = {
   // Demo mode controlled accordion states (optional - for LiveChatDemo only)
   demoPreSearchOpen?: boolean;
   demoAnalysisOpen?: boolean;
+  demoAnalysisSectionStates?: DemoSectionOpenStates;
 };
 
 export function ThreadTimeline({
@@ -91,6 +93,7 @@ export function ThreadTimeline({
   preSearches = EMPTY_PRE_SEARCHES,
   demoPreSearchOpen,
   demoAnalysisOpen,
+  demoAnalysisSectionStates,
 }: ThreadTimelineProps) {
   // ✅ STREAMING SAFETY: Calculate which rounds are currently streaming
   // Prevents virtualization from removing DOM elements during active streaming
@@ -303,6 +306,7 @@ export function ThreadTimeline({
                   onActionClick={isReadOnly ? undefined : onActionClick}
                   demoOpen={demoAnalysisOpen}
                   demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
+                  demoSectionStates={demoAnalysisSectionStates}
                 />
               </div>
             )}

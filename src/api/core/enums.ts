@@ -4,6 +4,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import type { FilePart as AiSdkFilePart } from 'ai';
 
 // ============================================================================
 // GENERIC OPERATION STATUS
@@ -568,6 +569,66 @@ export const WebSearchDepths = {
   BASIC: 'basic' as const,
   ADVANCED: 'advanced' as const,
 } as const;
+
+// ============================================================================
+// QUERY ANALYSIS COMPLEXITY (User Question Complexity Analysis)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const QUERY_ANALYSIS_COMPLEXITIES = ['simple', 'moderate', 'complex'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const QueryAnalysisComplexitySchema = z.enum(QUERY_ANALYSIS_COMPLEXITIES).openapi({
+  description: 'User query complexity level for determining search strategy',
+  example: 'moderate',
+});
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type QueryAnalysisComplexity = z.infer<typeof QueryAnalysisComplexitySchema>;
+
+// 4️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const QueryAnalysisComplexities = {
+  SIMPLE: 'simple' as const,
+  MODERATE: 'moderate' as const,
+  COMPLEX: 'complex' as const,
+} as const;
+
+// 5️⃣ QUERY ANALYSIS RESULT SCHEMA - Full analysis result with search parameters
+export const MAX_QUERY_COUNTS = [1, 2, 3] as const;
+
+export const MaxQueryCountSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+]).openapi({
+  description: 'Maximum number of search queries to generate',
+  example: 2,
+});
+
+export type MaxQueryCount = z.infer<typeof MaxQueryCountSchema>;
+
+export const QueryAnalysisResultSchema = z.object({
+  /** Detected complexity level */
+  complexity: QueryAnalysisComplexitySchema,
+  /** Max queries to generate (1-3) */
+  maxQueries: MaxQueryCountSchema,
+  /** Default search depth for queries */
+  defaultSearchDepth: WebSearchDepthSchema,
+  /** Default sources per query */
+  defaultSourceCount: z.number().int().min(1).max(5).openapi({
+    description: 'Default number of sources to fetch per query',
+    example: 3,
+  }),
+  /** Reasoning for complexity determination */
+  reasoning: z.string().openapi({
+    description: 'Explanation of why this complexity level was chosen',
+    example: 'Long detailed query - multiple search angles recommended',
+  }),
+}).openapi({
+  description: 'Result of user query complexity analysis',
+});
+
+export type QueryAnalysisResult = z.infer<typeof QueryAnalysisResultSchema>;
 
 // ============================================================================
 // WEB SEARCH CONSTANTS
@@ -1444,6 +1505,15 @@ export const MIME_TYPE_CATEGORIES = {
   code: CODE_MIME_TYPES,
 } as const;
 
+/**
+ * Type-safe MIME type arrays as readonly string[] for .includes() checks
+ * These avoid the TypeScript strict literal type issue with as const arrays
+ */
+export const IMAGE_MIMES: readonly string[] = IMAGE_MIME_TYPES;
+export const DOCUMENT_MIMES: readonly string[] = DOCUMENT_MIME_TYPES;
+export const TEXT_MIMES: readonly string[] = TEXT_MIME_TYPES;
+export const CODE_MIMES: readonly string[] = CODE_MIME_TYPES;
+
 // Zod schema for allowed MIME types
 export const AllowedMimeTypeSchema = z.enum(ALLOWED_MIME_TYPES).openapi({
   description: 'Allowed file MIME type for uploads',
@@ -1569,9 +1639,10 @@ export const ProjectColors = {
 export const CITATION_SOURCE_TYPES = [
   'memory', // projectMemory - persistent project context
   'thread', // chatThread - cross-thread context from same project
-  'attachment', // projectAttachment - files indexed via AutoRAG
+  'attachment', // projectAttachment - files via direct upload/link
   'search', // chatPreSearch - web search results
   'analysis', // chatModeratorAnalysis - moderator analysis insights
+  'rag', // autorag - files indexed via Cloudflare AI Search
 ] as const;
 
 // 2️⃣ DEFAULT VALUE
@@ -1593,6 +1664,7 @@ export const CitationSourceTypes = {
   ATTACHMENT: 'attachment' as const,
   SEARCH: 'search' as const,
   ANALYSIS: 'analysis' as const,
+  RAG: 'rag' as const,
 } as const;
 
 // 6️⃣ LABELS - Human-readable labels for each source type
@@ -1602,10 +1674,11 @@ export const CitationSourceLabels: Record<CitationSourceType, string> = {
   [CitationSourceTypes.ATTACHMENT]: 'File',
   [CitationSourceTypes.SEARCH]: 'Search',
   [CitationSourceTypes.ANALYSIS]: 'Analysis',
+  [CitationSourceTypes.RAG]: 'Indexed File',
 } as const;
 
 // 7️⃣ PREFIXES - Short prefixes for citation ID generation (e.g., mem_abc123)
-export const CITATION_PREFIXES = ['mem', 'thd', 'att', 'sch', 'ana'] as const;
+export const CITATION_PREFIXES = ['mem', 'thd', 'att', 'sch', 'ana', 'rag'] as const;
 export type CitationPrefix = typeof CITATION_PREFIXES[number];
 
 export const CitationSourcePrefixes: Record<CitationSourceType, CitationPrefix> = {
@@ -1614,6 +1687,7 @@ export const CitationSourcePrefixes: Record<CitationSourceType, CitationPrefix> 
   [CitationSourceTypes.ATTACHMENT]: 'att',
   [CitationSourceTypes.SEARCH]: 'sch',
   [CitationSourceTypes.ANALYSIS]: 'ana',
+  [CitationSourceTypes.RAG]: 'rag',
 };
 
 // 7️⃣b INVERSE PREFIXES - Map from prefix to source type (for parsing)
@@ -1623,24 +1697,17 @@ export const CitationPrefixToSourceType: Record<CitationPrefix, CitationSourceTy
   att: CitationSourceTypes.ATTACHMENT,
   sch: CitationSourceTypes.SEARCH,
   ana: CitationSourceTypes.ANALYSIS,
+  rag: CitationSourceTypes.RAG,
 };
 
-// 8️⃣ SECTION HEADERS - Headers for formatting sources in AI prompt
-export const CitationSourceSectionHeaders: Record<CitationSourceType, string> = {
-  [CitationSourceTypes.MEMORY]: 'Project Memories',
-  [CitationSourceTypes.THREAD]: 'Related Conversations',
-  [CitationSourceTypes.ATTACHMENT]: 'Project Files',
-  [CitationSourceTypes.SEARCH]: 'Previous Research',
-  [CitationSourceTypes.ANALYSIS]: 'Key Insights from Analyses',
-} as const;
-
-// 9️⃣ CONTENT LIMITS - Max characters to show per source type in context
+// 8️⃣ CONTENT LIMITS - Max characters to show per source type in context
 export const CitationSourceContentLimits: Record<CitationSourceType, number> = {
   [CitationSourceTypes.MEMORY]: 300,
   [CitationSourceTypes.THREAD]: 400,
   [CitationSourceTypes.ATTACHMENT]: 300,
   [CitationSourceTypes.SEARCH]: 300,
   [CitationSourceTypes.ANALYSIS]: 400,
+  [CitationSourceTypes.RAG]: 500, // RAG results may need more context
 } as const;
 
 // ============================================================================
@@ -1725,4 +1792,100 @@ export type FileTypeLabelMimeType = keyof typeof FILE_TYPE_LABELS;
  */
 export function getFileTypeLabelFromMime(mimeType: string): string {
   return FILE_TYPE_LABELS[mimeType as FileTypeLabelMimeType] ?? 'File';
+}
+
+// ============================================================================
+// VISION-REQUIRED MIME TYPES (For Model Capability Filtering)
+// ============================================================================
+
+/**
+ * MIME types that require vision capability to process
+ * ✅ SINGLE SOURCE OF TRUTH for vision capability filtering
+ * Used by streaming handlers to filter out visual content for text-only models
+ * OpenRouter returns 404 "No endpoints found that support image input" for these
+ */
+export const VISION_REQUIRED_MIME_TYPES = [
+  // All image types require vision
+  ...IMAGE_MIME_TYPES,
+  // PDFs require vision on OpenRouter - they get parsed into visual format
+  'application/pdf',
+] as const;
+
+export type VisionRequiredMimeType = typeof VISION_REQUIRED_MIME_TYPES[number];
+
+/** Set for O(1) lookup performance */
+const VISION_REQUIRED_SET = new Set<string>(VISION_REQUIRED_MIME_TYPES);
+
+/**
+ * Check if a MIME type requires vision capability
+ * @param mimeType - MIME type to check
+ * @returns true if the MIME type requires vision capability
+ */
+export function isVisionRequiredMimeType(mimeType: string): boolean {
+  return VISION_REQUIRED_SET.has(mimeType);
+}
+
+// ============================================================================
+// FILE PART TYPE EXTENSIONS (AI SDK v5 Compatible)
+// ============================================================================
+
+/**
+ * Extended file part that includes legacy 'mimeType' and 'url' properties
+ * ✅ EXTENDS: AI SDK FilePart with backward-compatible properties
+ * Used by streaming orchestration for multi-format file part handling
+ *
+ * AI SDK FilePart has: type, data, filename?, mediaType, providerOptions?
+ * Extended adds: mimeType? (legacy), url? (data URL string)
+ */
+export type ExtendedAiSdkFilePart = AiSdkFilePart & {
+  /** Legacy MIME type field (for backward compatibility) */
+  mimeType?: string;
+  /** Data URL string (added by injectFileDataIntoModelMessages) */
+  url?: string;
+};
+
+/**
+ * Type guard: Check if value is a file part with type='file'
+ * ✅ TYPE-SAFE: Narrows to ExtendedAiSdkFilePart when type is 'file'
+ */
+export function isFilePartType(part: { type: string }): part is { type: 'file' } & Partial<ExtendedAiSdkFilePart> {
+  return part.type === 'file';
+}
+
+/**
+ * Extract MIME type from a file part object (AI SDK v5 compatible)
+ * AI SDK v5 uses 'mediaType', legacy code may use 'mimeType'
+ * Also extracts from data URL as fallback (format: data:image/png;base64,...)
+ *
+ * ✅ TYPE-SAFE: Uses Partial<ExtendedAiSdkFilePart> for flexible input
+ * No type casting required at call site
+ *
+ * @param part - File part object (AI SDK or extended format)
+ * @returns Extracted MIME type or undefined if not found
+ */
+export function extractMimeTypeFromPart(part: Partial<ExtendedAiSdkFilePart>): string | undefined {
+  // Check mimeType first (legacy format)
+  if (part.mimeType) {
+    return part.mimeType;
+  }
+  // Check mediaType (AI SDK v5 format from convertToModelMessages)
+  if (part.mediaType) {
+    return part.mediaType;
+  }
+  // Extract from data URL in 'url' field (AI SDK v5 FilePart format)
+  if (typeof part.url === 'string' && part.url.startsWith('data:')) {
+    const match = part.url.match(/^data:([^;,]+)/);
+    if (match) {
+      return match[1];
+    }
+  }
+  // Extract from data URL in 'data' field (AI SDK uses DataContent | URL)
+  const dataValue = part.data;
+  if (typeof dataValue === 'string' && dataValue.startsWith('data:')) {
+    const match = dataValue.match(/^data:([^;,]+)/);
+    if (match) {
+      return match[1];
+    }
+  }
+  return undefined;
 }

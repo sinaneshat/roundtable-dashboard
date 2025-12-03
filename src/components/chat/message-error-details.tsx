@@ -42,16 +42,24 @@ export function MessageErrorDetails({
       return t('generationCancelled');
     if (errorType === 'empty_response')
       return t('emptyResponse');
-    if (errorType === 'rate_limit')
+    if (errorType === 'rate_limit' || errorType === 'provider_rate_limit')
       return t('rateLimitReached');
     if (errorType === 'context_length')
       return t('contextTooLong');
     if (errorType === 'api_error')
       return t('apiError');
-    if (errorType === 'network')
+    if (errorType === 'network' || errorType === 'provider_network')
       return t('networkError');
     if (errorType === 'timeout')
       return t('requestTimeout');
+    if (errorType === 'validation')
+      return t('validationError');
+    if (errorType === 'model_not_found')
+      return t('modelNotFound');
+    if (errorType === 'model_content_filter')
+      return t('contentFiltered');
+    if (errorType === 'authentication')
+      return t('authenticationError');
     return t('generationFailed');
   };
   return (
@@ -131,11 +139,31 @@ export function MessageErrorDetails({
               {errorType === 'context_length' && (
                 <p>{t('shortenMessage')}</p>
               )}
-              {errorType === 'network' && (
+              {(errorType === 'network' || errorType === 'provider_network') && (
                 <p>{t('checkConnection')}</p>
               )}
               {errorType === 'timeout' && (
                 <p>{t('requestTookTooLong')}</p>
+              )}
+              {errorType === 'validation' && (
+                <div>
+                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
+                    <li>{t('validationHint')}</li>
+                    <li>{t('tryDifferentModel')}</li>
+                  </ul>
+                </div>
+              )}
+              {errorType === 'model_not_found' && (
+                <p>{t('modelNotFoundHint')}</p>
+              )}
+              {(errorType === 'model_content_filter' || errorType === 'content_filter') && (
+                <div>
+                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
+                    <li>{t('contentFilterHint')}</li>
+                  </ul>
+                </div>
               )}
               {errorType === 'empty_response' && (
                 <div>

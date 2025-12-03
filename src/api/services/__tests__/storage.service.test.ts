@@ -11,9 +11,11 @@ import { Buffer } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  copyFile,
   deleteFile,
   fileExists,
   getFile,
+  getFileStream,
   isLocalDevelopment,
   putFile,
 } from '../storage.service';
@@ -249,6 +251,206 @@ describe('storage Service', () => {
       const exists = await fileExists(mockBucket, 'test/nonexistent.txt');
 
       expect(exists).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // getFileStream Tests - Official Cloudflare R2 Streaming Pattern
+  // ==========================================================================
+
+  describe('getFileStream - local development', () => {
+    it('returns streaming result with body for existing file', async () => {
+      mockFsPromises.readFile.mockResolvedValueOnce(Buffer.from('file content'));
+
+      const result = await getFileStream(undefined, 'test/file.txt');
+
+      expect(result.found).toBe(true);
+      expect(result.body).toBeTruthy();
+      expect(result.size).toBeGreaterThan(0);
+      expect(result.preconditionsMet).toBe(true);
+    });
+
+    it('returns not found for non-existent file', async () => {
+      mockFsPromises.readFile.mockRejectedValueOnce(new Error('ENOENT'));
+
+      const result = await getFileStream(undefined, 'test/nonexistent.txt');
+
+      expect(result.found).toBe(false);
+      expect(result.body).toBeNull();
+    });
+
+    it('provides writeHttpMetadata callback that sets content-type', async () => {
+      mockFsPromises.readFile
+        .mockResolvedValueOnce(Buffer.from('content'))
+        .mockResolvedValueOnce(JSON.stringify({ contentType: 'text/plain' }));
+
+      const result = await getFileStream(undefined, 'test/file.txt');
+      const headers = new Headers();
+      result.writeHttpMetadata(headers);
+
+      expect(headers.get('content-type')).toBe('text/plain');
+    });
+
+    it('generates ETag from file size', async () => {
+      const content = Buffer.from('test content');
+      mockFsPromises.readFile.mockResolvedValueOnce(content);
+
+      const result = await getFileStream(undefined, 'test/file.txt');
+
+      expect(result.httpEtag).toBeTruthy();
+      expect(result.httpEtag).toMatch(/^"[0-9a-f]+"$/);
+    });
+  });
+
+  describe('getFileStream - R2 production', () => {
+    it('returns streaming result following official R2 pattern', async () => {
+      const mockBody = new ReadableStream();
+      const mockWriteHttpMetadata = vi.fn((headers: Headers) => {
+        headers.set('content-type', 'application/pdf');
+      });
+
+      const mockGet = vi.fn().mockResolvedValue({
+        body: mockBody,
+        writeHttpMetadata: mockWriteHttpMetadata,
+        httpEtag: '"abc123"',
+        size: 1024,
+        customMetadata: { userId: 'user-123' },
+      });
+      const mockBucket = { get: mockGet } as unknown as R2Bucket;
+
+      const result = await getFileStream(mockBucket, 'test/file.pdf');
+
+      expect(result.found).toBe(true);
+      expect(result.body).toBe(mockBody);
+      expect(result.httpEtag).toBe('"abc123"');
+      expect(result.size).toBe(1024);
+      expect(result.customMetadata?.userId).toBe('user-123');
+      expect(result.preconditionsMet).toBe(true);
+    });
+
+    it('returns not found when object does not exist in R2', async () => {
+      const mockGet = vi.fn().mockResolvedValue(null);
+      const mockBucket = { get: mockGet } as unknown as R2Bucket;
+
+      const result = await getFileStream(mockBucket, 'test/nonexistent.txt');
+
+      expect(result.found).toBe(false);
+      expect(result.body).toBeNull();
+    });
+
+    it('passes conditional request options (onlyIf)', async () => {
+      const mockGet = vi.fn().mockResolvedValue({
+        body: new ReadableStream(),
+        writeHttpMetadata: vi.fn(),
+        httpEtag: '"abc123"',
+        size: 100,
+      });
+      const mockBucket = { get: mockGet } as unknown as R2Bucket;
+
+      const requestHeaders = new Headers({ 'if-none-match': '"abc123"' });
+      await getFileStream(mockBucket, 'test/file.txt', { onlyIf: requestHeaders });
+
+      expect(mockGet).toHaveBeenCalledWith('test/file.txt', {
+        onlyIf: requestHeaders,
+        range: undefined,
+      });
+    });
+
+    it('handles precondition failed (body is null but object exists)', async () => {
+      // R2 returns object without body when preconditions fail (304 scenario)
+      const mockGet = vi.fn().mockResolvedValue({
+        // No body property or body is null
+        writeHttpMetadata: vi.fn(),
+        httpEtag: '"abc123"',
+        size: 100,
+      });
+      const mockBucket = { get: mockGet } as unknown as R2Bucket;
+
+      const result = await getFileStream(mockBucket, 'test/file.txt');
+
+      expect(result.found).toBe(true);
+      expect(result.body).toBeNull();
+      expect(result.preconditionsMet).toBe(false);
+    });
+
+    it('writeHttpMetadata callback invokes R2 object method', async () => {
+      const mockWriteHttpMetadata = vi.fn();
+      const mockGet = vi.fn().mockResolvedValue({
+        body: new ReadableStream(),
+        writeHttpMetadata: mockWriteHttpMetadata,
+        httpEtag: '"test"',
+        size: 50,
+      });
+      const mockBucket = { get: mockGet } as unknown as R2Bucket;
+
+      const result = await getFileStream(mockBucket, 'test/file.txt');
+      const headers = new Headers();
+      result.writeHttpMetadata(headers);
+
+      expect(mockWriteHttpMetadata).toHaveBeenCalledWith(headers);
+    });
+  });
+
+  // ==========================================================================
+  // copyFile Tests
+  // ==========================================================================
+
+  describe('copyFile - local development', () => {
+    it('copies file successfully', async () => {
+      // getFile internally calls readFile twice: once for file content, once for metadata
+      mockFsPromises.readFile
+        .mockResolvedValueOnce(Buffer.from('file content')) // File content
+        .mockRejectedValueOnce(new Error('ENOENT')); // No metadata file (expected)
+
+      const result = await copyFile(undefined, 'source/file.txt', 'dest/file.txt');
+
+      expect(result.success).toBe(true);
+      expect(result.key).toBe('dest/file.txt');
+      // Should read source and write to destination
+      expect(mockFsPromises.readFile).toHaveBeenCalled();
+      expect(mockFsPromises.writeFile).toHaveBeenCalled();
+    });
+
+    it('returns error when source file not found', async () => {
+      mockFsPromises.readFile.mockRejectedValueOnce(new Error('ENOENT'));
+
+      const result = await copyFile(undefined, 'nonexistent.txt', 'dest.txt');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Source file not found');
+    });
+  });
+
+  describe('copyFile - R2 production', () => {
+    it('copies file in R2 by read and write', async () => {
+      const mockArrayBuffer = new ArrayBuffer(10);
+      const mockGet = vi.fn().mockResolvedValue({
+        arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+        httpMetadata: { contentType: 'text/plain' },
+      });
+      const mockPut = vi.fn().mockResolvedValue({});
+      const mockBucket = { get: mockGet, put: mockPut } as unknown as R2Bucket;
+
+      const result = await copyFile(mockBucket, 'source/file.txt', 'dest/file.txt');
+
+      expect(result.success).toBe(true);
+      expect(result.key).toBe('dest/file.txt');
+      expect(mockGet).toHaveBeenCalledWith('source/file.txt');
+      expect(mockPut).toHaveBeenCalledWith(
+        'dest/file.txt',
+        mockArrayBuffer,
+        expect.any(Object),
+      );
+    });
+
+    it('returns error when source not found in R2', async () => {
+      const mockGet = vi.fn().mockResolvedValue(null);
+      const mockBucket = { get: mockGet } as unknown as R2Bucket;
+
+      const result = await copyFile(mockBucket, 'nonexistent.txt', 'dest.txt');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Source file not found');
     });
   });
 });

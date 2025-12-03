@@ -178,8 +178,16 @@ export function memoizeParticipantComparison<T extends (...args: unknown[]) => b
           if (Array.isArray(arg)) {
             return arg
               .map((item: unknown) => {
-                if (typeof item === 'object' && item !== null && 'id' in item && 'modelId' in item) {
-                  return `${(item as { id: string; modelId: string }).id}:${(item as { id: string; modelId: string }).modelId}`;
+                // ✅ TYPE-SAFE: Narrow type with proper type guard
+                if (
+                  typeof item === 'object'
+                  && item !== null
+                  && 'id' in item
+                  && 'modelId' in item
+                  && typeof item.id === 'string'
+                  && typeof item.modelId === 'string'
+                ) {
+                  return `${item.id}:${item.modelId}`;
                 }
                 return JSON.stringify(item);
               })

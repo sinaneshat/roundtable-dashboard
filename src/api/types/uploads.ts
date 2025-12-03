@@ -1,0 +1,365 @@
+/**
+ * Upload & Attachment Types
+ *
+ * Consolidated type definitions for file uploads, storage, and attachments.
+ * SINGLE SOURCE OF TRUTH for upload-related types across all services.
+ *
+ * Services using these types:
+ * - storage.service.ts
+ * - attachment-content.service.ts
+ * - signed-url.service.ts
+ * - upload-cleanup.service.ts
+ *
+ * @see /docs/type-inference-patterns.md for type safety patterns
+ */
+
+import { z } from '@hono/zod-openapi';
+
+import type { TypedLogger } from '@/api/types/logger';
+import type { getDbAsync } from '@/db';
+
+// ============================================================================
+// STORAGE TYPES
+// ============================================================================
+
+/**
+ * Storage operation result schema
+ */
+export const StorageResultSchema = z.object({
+  success: z.boolean(),
+  key: z.string().optional(),
+  error: z.string().optional(),
+});
+
+/** Storage operation result */
+export type StorageResult = z.infer<typeof StorageResultSchema>;
+
+/**
+ * Storage object metadata schema
+ */
+export const StorageMetadataSchema = z.object({
+  contentType: z.string().optional(),
+  customMetadata: z.record(z.string(), z.string()).optional(),
+});
+
+/** Storage object metadata */
+export type StorageMetadata = z.infer<typeof StorageMetadataSchema>;
+
+/**
+ * Stored object info schema
+ */
+export const StoredObjectSchema = z.object({
+  key: z.string(),
+  size: z.number(),
+  etag: z.string().optional(),
+  lastModified: z.date().optional(),
+  httpMetadata: z.object({
+    contentType: z.string().optional(),
+  }).optional(),
+  customMetadata: z.record(z.string(), z.string()).optional(),
+});
+
+/** Stored object info */
+export type StoredObject = z.infer<typeof StoredObjectSchema>;
+
+// ============================================================================
+// FILE PART TYPES (AI Model Consumption)
+// ============================================================================
+
+/**
+ * File part ready for AI model consumption
+ *
+ * The flow:
+ * 1. File parts are added to UIMessage with url/mediaType (for UI compatibility)
+ * 2. convertToModelMessages() converts to LanguageModelV2 format
+ * 3. Our parts include `data` which the OpenRouter provider directly uses
+ */
+export const ModelFilePartSchema = z.object({
+  type: z.literal('file'),
+  /** File data as Uint8Array - OpenRouter provider expects this format */
+  data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
+    message: 'data must be Uint8Array',
+  }),
+  /** MIME type of the file (AI SDK v5 LanguageModelV2 format) */
+  mimeType: z.string(),
+  /** Original filename for reference */
+  filename: z.string().optional(),
+  /** Data URL for UIMessage compatibility */
+  url: z.string(),
+  /** MIME type for UIMessage compatibility (same as mimeType) */
+  mediaType: z.string(),
+});
+
+/** File part ready for AI model consumption */
+export type ModelFilePart = z.infer<typeof ModelFilePartSchema>;
+
+/**
+ * Minimal file part with binary data (used in streaming orchestration)
+ * Subset of ModelFilePart for internal use
+ */
+export const ModelFilePartWithDataSchema = z.object({
+  type: z.literal('file'),
+  data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
+    message: 'data must be Uint8Array',
+  }),
+  mimeType: z.string(),
+  filename: z.string().optional(),
+});
+
+/** Minimal file part with binary data */
+export type ModelFilePartWithData = z.infer<typeof ModelFilePartWithDataSchema>;
+
+// ============================================================================
+// ATTACHMENT LOADING TYPES
+// ============================================================================
+
+/**
+ * Parameters for loading attachment content
+ */
+export type LoadAttachmentContentParams = {
+  /** Upload IDs to load */
+  attachmentIds: string[];
+  /** R2 bucket for file retrieval */
+  r2Bucket: R2Bucket | undefined;
+  /** Database instance */
+  db: Awaited<ReturnType<typeof getDbAsync>>;
+  /** Optional logger */
+  logger?: TypedLogger;
+};
+
+/**
+ * Error that occurred during attachment loading
+ */
+export const AttachmentLoadErrorSchema = z.object({
+  uploadId: z.string(),
+  error: z.string(),
+});
+
+export type AttachmentLoadError = z.infer<typeof AttachmentLoadErrorSchema>;
+
+/**
+ * Statistics for attachment load operation
+ */
+export const AttachmentLoadStatsSchema = z.object({
+  total: z.number(),
+  loaded: z.number(),
+  failed: z.number(),
+  skipped: z.number(),
+});
+
+export type AttachmentLoadStats = z.infer<typeof AttachmentLoadStatsSchema>;
+
+/**
+ * Result of loading attachment content
+ */
+export type LoadAttachmentContentResult = {
+  /** File parts ready for AI model consumption */
+  fileParts: ModelFilePart[];
+  /** Any errors that occurred during loading */
+  errors: AttachmentLoadError[];
+  /** Statistics about the load operation */
+  stats: AttachmentLoadStats;
+};
+
+/**
+ * Parameters for loading attachment content for multiple messages
+ */
+export type LoadMessageAttachmentsParams = {
+  /** Message IDs to load attachments for */
+  messageIds: string[];
+  /** R2 bucket for file retrieval */
+  r2Bucket: R2Bucket | undefined;
+  /** Database instance */
+  db: Awaited<ReturnType<typeof getDbAsync>>;
+  /** Optional logger */
+  logger?: TypedLogger;
+};
+
+/**
+ * Error that occurred during message attachment loading
+ */
+export const MessageAttachmentLoadErrorSchema = z.object({
+  messageId: z.string(),
+  uploadId: z.string(),
+  error: z.string(),
+});
+
+export type MessageAttachmentLoadError = z.infer<typeof MessageAttachmentLoadErrorSchema>;
+
+/**
+ * Statistics for message attachment load operation
+ */
+export const MessageAttachmentLoadStatsSchema = z.object({
+  messagesWithAttachments: z.number(),
+  totalUploads: z.number(),
+  loaded: z.number(),
+  failed: z.number(),
+  skipped: z.number(),
+});
+
+export type MessageAttachmentLoadStats = z.infer<typeof MessageAttachmentLoadStatsSchema>;
+
+/**
+ * Result of loading message attachments
+ */
+export type LoadMessageAttachmentsResult = {
+  /** Map of message ID → file parts (base64 data URLs) */
+  filePartsByMessageId: Map<string, ModelFilePart[]>;
+  /** Any errors that occurred during loading */
+  errors: MessageAttachmentLoadError[];
+  /** Statistics about the load operation */
+  stats: MessageAttachmentLoadStats;
+};
+
+// ============================================================================
+// SIGNED URL TYPES
+// ============================================================================
+
+/**
+ * Options for generating signed URLs
+ */
+export const SignedUrlOptionsSchema = z.object({
+  /** Upload ID to sign */
+  uploadId: z.string(),
+  /** User ID who is being granted access */
+  userId: z.string(),
+  /** Optional thread ID for thread-scoped access */
+  threadId: z.string().optional(),
+  /** Expiration time in milliseconds (default: 1 hour) */
+  expirationMs: z.number().optional(),
+  /** Whether this is for a public thread */
+  isPublic: z.boolean().optional(),
+});
+
+export type SignedUrlOptions = z.infer<typeof SignedUrlOptionsSchema>;
+
+/**
+ * Signed URL query parameters
+ */
+export const SignedUrlParamsSchema = z.object({
+  /** Upload ID */
+  id: z.string(),
+  /** Expiration timestamp (Unix ms) */
+  exp: z.number(),
+  /** User ID or 'public' */
+  uid: z.string(),
+  /** Optional thread ID */
+  tid: z.string().optional(),
+  /** Cryptographic signature */
+  sig: z.string(),
+});
+
+export type SignedUrlParams = z.infer<typeof SignedUrlParamsSchema>;
+
+/**
+ * Valid signature result
+ */
+export const ValidSignatureResultSchema = z.object({
+  valid: z.literal(true),
+  uploadId: z.string(),
+  userId: z.string(),
+  threadId: z.string().optional(),
+  isPublic: z.boolean(),
+});
+
+/**
+ * Invalid signature result
+ */
+export const InvalidSignatureResultSchema = z.object({
+  valid: z.literal(false),
+  error: z.string(),
+});
+
+/**
+ * Signature validation result (discriminated union)
+ */
+export const ValidateSignatureResultSchema = z.discriminatedUnion('valid', [
+  ValidSignatureResultSchema,
+  InvalidSignatureResultSchema,
+]);
+
+export type ValidateSignatureResult = z.infer<typeof ValidateSignatureResultSchema>;
+
+// ============================================================================
+// UPLOAD CLEANUP TYPES
+// ============================================================================
+
+/**
+ * Upload cleanup state schema
+ */
+export const UploadCleanupStateSchema = z.object({
+  uploadId: z.string(),
+  userId: z.string(),
+  r2Key: z.string(),
+  scheduledAt: z.number(),
+  createdAt: z.number(),
+});
+
+export type UploadCleanupState = z.infer<typeof UploadCleanupStateSchema>;
+
+/**
+ * Schedule cleanup result
+ */
+export const ScheduleCleanupResultSchema = z.object({
+  scheduled: z.boolean(),
+  alarmTime: z.number(),
+});
+
+export type ScheduleCleanupResult = z.infer<typeof ScheduleCleanupResultSchema>;
+
+/**
+ * Cancel cleanup result
+ */
+export const CancelCleanupResultSchema = z.object({
+  cancelled: z.boolean(),
+});
+
+export type CancelCleanupResult = z.infer<typeof CancelCleanupResultSchema>;
+
+/**
+ * Get cleanup state result
+ */
+export const GetCleanupStateResultSchema = z.object({
+  state: UploadCleanupStateSchema.nullable(),
+});
+
+export type GetCleanupStateResult = z.infer<typeof GetCleanupStateResultSchema>;
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+/**
+ * Type guard: Check if value is a ModelFilePart
+ */
+export function isModelFilePart(value: unknown): value is ModelFilePart {
+  return ModelFilePartSchema.safeParse(value).success;
+}
+
+/**
+ * Type guard: Check if value is a ModelFilePartWithData
+ */
+export function isModelFilePartWithData(
+  value: unknown,
+): value is ModelFilePartWithData {
+  return ModelFilePartWithDataSchema.safeParse(value).success;
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Maximum file size to convert to base64 (10MB) */
+export const MAX_BASE64_FILE_SIZE = 10 * 1024 * 1024;
+
+/** Default URL expiration time (1 hour) */
+export const DEFAULT_URL_EXPIRATION_MS = 60 * 60 * 1000;
+
+/** Maximum allowed expiration (24 hours) */
+export const MAX_URL_EXPIRATION_MS = 24 * 60 * 60 * 1000;
+
+/** Minimum allowed expiration (5 minutes) */
+export const MIN_URL_EXPIRATION_MS = 5 * 60 * 1000;
+
+/** Cleanup delay before orphaned uploads are deleted (15 minutes) */
+export const UPLOAD_CLEANUP_DELAY_MS = 15 * 60 * 1000;

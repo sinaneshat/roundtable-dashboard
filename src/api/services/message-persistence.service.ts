@@ -8,16 +8,21 @@
  * - Saving AI assistant messages after streaming completes
  * - Extracting reasoning from multiple sources (deltas, finishResult, providerMetadata)
  * - Creating pending analysis records for completed rounds
+ *
+ * @see /src/api/types/citations.ts for citation type definitions
  */
 
 import { and, asc, eq } from 'drizzle-orm';
 import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import type { z } from 'zod';
 
-import type { CitationSourceType } from '@/api/core/enums';
-import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
-import type { CitationSourceMap } from '@/api/services/citation-context-builder';
+import {
+  AnalysisStatuses,
+  ChatModeSchema,
+  MessagePartTypes,
+  MessageRoles,
+} from '@/api/core/enums';
 import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
@@ -25,12 +30,17 @@ import {
   getUserUsageStats,
   incrementMessageUsage,
 } from '@/api/services/usage-tracking.service';
+import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
-import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
+import type { MessagePartSchema, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
-import { hasCitations, parseCitations, toDbCitations } from '@/lib/utils/citation-parser';
+import {
+  hasCitations,
+  parseCitations,
+  toDbCitations,
+} from '@/lib/utils/citation-parser';
 import { hasError } from '@/lib/utils/metadata';
 import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
 import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
@@ -42,6 +52,10 @@ type MessagePart = z.infer<typeof MessagePartSchema>;
 // Type Definitions
 // ============================================================================
 
+/**
+ * Parameters for saving AI message to database
+ * ✅ TYPE-SAFE: Uses StreamingFinishResult schema instead of inline type
+ */
 export type SaveMessageParams = {
   messageId: string;
   threadId: string;
@@ -52,18 +66,8 @@ export type SaveMessageParams = {
   roundNumber: number;
   text: string;
   reasoningDeltas: string[];
-  finishResult: {
-    text: string;
-    usage?: {
-      inputTokens?: number;
-      outputTokens?: number;
-    };
-    finishReason: string;
-    providerMetadata?: unknown;
-    response?: unknown;
-    reasoning?: string | unknown[]; // Can be string or ReasoningPart[]
-    [key: string]: unknown; // Allow additional fields from AI SDK
-  };
+  /** ✅ SCHEMA-BASED: Uses StreamingFinishResult from @/lib/schemas/message-messages */
+  finishResult: StreamingFinishResult;
   userId: string;
   participants: Array<{ id: string }>;
   threadMode: string;
@@ -71,15 +75,7 @@ export type SaveMessageParams = {
   /** Citation source map for resolving [source_id] markers in AI response */
   citationSourceMap?: CitationSourceMap;
   /** Available sources (files/context available to AI, for "Sources" UI even without inline citations) */
-  availableSources?: Array<{
-    id: string;
-    sourceType: CitationSourceType;
-    title: string;
-    downloadUrl?: string;
-    filename?: string;
-    mimeType?: string;
-    fileSize?: number;
-  }>;
+  availableSources?: AvailableSource[];
 };
 
 // ============================================================================
@@ -111,19 +107,29 @@ function extractReasoning(
   }
 
   // Priority 2: Extract reasoning from finishResult directly (string format)
-  if (typeof finishResult.reasoning === 'string' && finishResult.reasoning.trim()) {
+  if (
+    typeof finishResult.reasoning === 'string'
+    && finishResult.reasoning.trim()
+  ) {
     return finishResult.reasoning.trim();
   }
 
   // Priority 3: Extract reasoning from finishResult as array (Claude extended thinking, AI SDK v5)
   // Claude models return: { type: 'thinking' | 'redacted', text: string }[]
   // Other models may return: { text: string }[]
-  if (Array.isArray(finishResult.reasoning) && finishResult.reasoning.length > 0) {
+  if (
+    Array.isArray(finishResult.reasoning)
+    && finishResult.reasoning.length > 0
+  ) {
     const reasoningTexts: string[] = [];
     for (const part of finishResult.reasoning) {
       if (part && typeof part === 'object') {
         // Handle ReasoningPart with text property
-        if ('text' in part && typeof part.text === 'string' && part.text.trim()) {
+        if (
+          'text' in part
+          && typeof part.text === 'string'
+          && part.text.trim()
+        ) {
           // Skip redacted reasoning parts (Claude can redact sensitive thinking)
           if ('type' in part && part.type === 'redacted') {
             continue;
@@ -139,9 +145,12 @@ function extractReasoning(
 
   // Priority 4: Extract from reasoningText (Claude 4 models via AI SDK)
   // Claude 4 with interleaved thinking returns reasoningText as a separate property
-  const finishResultWithReasoningText = finishResult as typeof finishResult & { reasoningText?: string };
-  if (typeof finishResultWithReasoningText.reasoningText === 'string' && finishResultWithReasoningText.reasoningText.trim()) {
-    return finishResultWithReasoningText.reasoningText.trim();
+  // ✅ TYPE-SAFE: reasoningText is now part of StreamingFinishResult schema
+  if (
+    typeof finishResult.reasoningText === 'string'
+    && finishResult.reasoningText.trim()
+  ) {
+    return finishResult.reasoningText.trim();
   }
 
   // Priority 5: Extract from providerMetadata
@@ -280,12 +289,22 @@ export async function saveStreamedMessage(
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#onFinish
     // Type-safe extraction of totalUsage from finishResult
     const getTotalUsage = () => {
-      if (!('totalUsage' in finishResult) || !finishResult.totalUsage || typeof finishResult.totalUsage !== 'object') {
+      if (
+        !('totalUsage' in finishResult)
+        || !finishResult.totalUsage
+        || typeof finishResult.totalUsage !== 'object'
+      ) {
         return undefined;
       }
       const tu = finishResult.totalUsage;
-      const inputTokens = 'inputTokens' in tu && typeof tu.inputTokens === 'number' ? tu.inputTokens : undefined;
-      const outputTokens = 'outputTokens' in tu && typeof tu.outputTokens === 'number' ? tu.outputTokens : undefined;
+      const inputTokens
+        = 'inputTokens' in tu && typeof tu.inputTokens === 'number'
+          ? tu.inputTokens
+          : undefined;
+      const outputTokens
+        = 'outputTokens' in tu && typeof tu.outputTokens === 'number'
+          ? tu.outputTokens
+          : undefined;
       return { inputTokens, outputTokens };
     };
     const usageData = finishResult.usage || getTotalUsage();
@@ -309,17 +328,18 @@ export async function saveStreamedMessage(
     const parts: MessagePart[] = [];
 
     if (text) {
-      parts.push({ type: 'text', text });
+      parts.push({ type: MessagePartTypes.TEXT, text });
     }
 
     if (reasoningText) {
-      parts.push({ type: 'reasoning', text: reasoningText });
+      parts.push({ type: MessagePartTypes.REASONING, text: reasoningText });
     }
 
     // Add tool calls if present (from AI SDK v5 finishResult)
-    const toolCalls = finishResult.toolCalls && Array.isArray(finishResult.toolCalls)
-      ? finishResult.toolCalls
-      : [];
+    const toolCalls
+      = finishResult.toolCalls && Array.isArray(finishResult.toolCalls)
+        ? finishResult.toolCalls
+        : [];
 
     for (const toolCall of toolCalls) {
       parts.push({
@@ -331,13 +351,14 @@ export async function saveStreamedMessage(
     }
 
     // Collect tool results for separate tool message (AI SDK v5 pattern)
-    const toolResults = finishResult.toolResults && Array.isArray(finishResult.toolResults)
-      ? finishResult.toolResults
-      : [];
+    const toolResults
+      = finishResult.toolResults && Array.isArray(finishResult.toolResults)
+        ? finishResult.toolResults
+        : [];
 
     // Ensure at least one part exists (empty text for error messages)
     if (parts.length === 0) {
-      parts.push({ type: 'text', text: '' });
+      parts.push({ type: MessagePartTypes.TEXT, text: '' });
     }
 
     // ✅ CRITICAL FIX: Check for existing message with same ID before insert
@@ -360,7 +381,8 @@ export async function saveStreamedMessage(
       ? {
           promptTokens: usageData.inputTokens ?? 0,
           completionTokens: usageData.outputTokens ?? 0,
-          totalTokens: (usageData.inputTokens ?? 0) + (usageData.outputTokens ?? 0),
+          totalTokens:
+            (usageData.inputTokens ?? 0) + (usageData.outputTokens ?? 0),
         }
       : text.trim().length > 0
         ? {
@@ -382,23 +404,26 @@ export async function saveStreamedMessage(
       const parsedResult = parseCitations(text);
       if (parsedResult.citations.length > 0) {
         // Resolve parsed citations to full DbCitation objects using source map
-        resolvedCitations = toDbCitations(parsedResult.citations, (sourceId) => {
-          const source = citationSourceMap.get(sourceId);
-          if (!source)
-            return undefined;
-          return {
-            title: source.title,
-            excerpt: source.content.slice(0, 300),
-            url: source.metadata.url,
-            threadId: source.metadata.threadId,
-            threadTitle: source.metadata.threadTitle,
-            roundNumber: source.metadata.roundNumber,
-            downloadUrl: source.metadata.downloadUrl,
-            filename: source.metadata.filename,
-            mimeType: source.metadata.mimeType,
-            fileSize: source.metadata.fileSize,
-          };
-        });
+        resolvedCitations = toDbCitations(
+          parsedResult.citations,
+          (sourceId) => {
+            const source = citationSourceMap.get(sourceId);
+            if (!source)
+              return undefined;
+            return {
+              title: source.title,
+              excerpt: source.content.slice(0, 300),
+              url: source.metadata.url,
+              threadId: source.metadata.threadId,
+              threadTitle: source.metadata.threadTitle,
+              roundNumber: source.metadata.roundNumber,
+              downloadUrl: source.metadata.downloadUrl,
+              filename: source.metadata.filename,
+              mimeType: source.metadata.mimeType,
+              fileSize: source.metadata.fileSize,
+            };
+          },
+        );
       }
     }
 
@@ -410,15 +435,33 @@ export async function saveStreamedMessage(
       participantIndex,
       participantRole,
       model: modelId,
-      finishReason: finishResult.finishReason as 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'failed' | 'other' | 'unknown',
+      finishReason: finishResult.finishReason as
+      | 'stop'
+      | 'length'
+      | 'content-filter'
+      | 'tool-calls'
+      | 'failed'
+      | 'other'
+      | 'unknown',
       usage: usageMetadata,
       hasError: errorMetadata.hasError,
-      errorType: errorMetadata.errorCategory as 'rate_limit' | 'context_length' | 'api_error' | 'network' | 'timeout' | 'model_unavailable' | 'empty_response' | 'unknown' | undefined,
+      errorType: errorMetadata.errorCategory as
+      | 'rate_limit'
+      | 'context_length'
+      | 'api_error'
+      | 'network'
+      | 'timeout'
+      | 'model_unavailable'
+      | 'empty_response'
+      | 'unknown'
+      | undefined,
       errorMessage: errorMetadata.errorMessage,
       isTransient: errorMetadata.isTransientError,
       isPartialResponse: errorMetadata.isPartialResponse,
       providerMessage: errorMetadata.providerMessage,
-      openRouterError: errorMetadata.openRouterError ? { message: errorMetadata.openRouterError } : undefined,
+      openRouterError: errorMetadata.openRouterError
+        ? { message: errorMetadata.openRouterError }
+        : undefined,
       // ✅ CITATIONS: Include resolved citations if AI referenced sources
       citations: resolvedCitations,
       // ✅ AVAILABLE SOURCES: Include files/context available to AI for "Sources" UI
@@ -426,7 +469,8 @@ export async function saveStreamedMessage(
     });
 
     // Save message to database
-    await db.insert(tables.chatMessage)
+    await db
+      .insert(tables.chatMessage)
       .values({
         id: messageId,
         threadId,
@@ -459,17 +503,16 @@ export async function saveStreamedMessage(
       if (!existingToolMessage) {
         // ✅ CRITICAL: Tool messages don't use discriminated metadata
         // They store minimal info since they're just tool results
-        await db.insert(tables.chatMessage)
-          .values({
-            id: toolMessageId,
-            threadId,
-            participantId,
-            role: MessageRoles.TOOL,
-            parts: toolParts,
-            roundNumber,
-            metadata: null, // Tool messages have no metadata (just parts with tool-result type)
-            createdAt: new Date(),
-          });
+        await db.insert(tables.chatMessage).values({
+          id: toolMessageId,
+          threadId,
+          participantId,
+          role: MessageRoles.TOOL,
+          parts: toolParts,
+          roundNumber,
+          metadata: null, // Tool messages have no metadata (just parts with tool-result type)
+          createdAt: new Date(),
+        });
       }
     }
 
@@ -529,7 +572,8 @@ type CreatePendingAnalysisParams = {
 async function createPendingAnalysis(
   params: CreatePendingAnalysisParams,
 ): Promise<void> {
-  const { threadId, roundNumber, threadMode, userId, participants, db } = params;
+  const { threadId, roundNumber, threadMode, userId, participants, db }
+    = params;
 
   try {
     // Check analysis quota first (silent return if quota exceeded)
@@ -600,8 +644,8 @@ async function createPendingAnalysis(
     }
 
     // Check for messages with errors using type-safe metadata extraction
-    const messagesWithErrors = assistantMessages.filter(
-      msg => hasError(msg.metadata),
+    const messagesWithErrors = assistantMessages.filter(msg =>
+      hasError(msg.metadata),
     );
 
     if (messagesWithErrors.length > 0) {
@@ -620,15 +664,13 @@ async function createPendingAnalysis(
 
     // ✅ TYPE GUARD: Validate and extract text parts from message
     const textParts = userMessage?.parts?.filter(isTextPart) ?? [];
-    const userQuestion = textParts.length > 0
-      ? extractTextFromParts(textParts)
-      : 'No user question found';
+    const userQuestion
+      = textParts.length > 0
+        ? extractTextFromParts(textParts)
+        : 'No user question found';
 
-    // ✅ TYPE GUARD: Validate thread mode with Zod
-    const validatedMode = safeParse(
-      z.enum(['analyzing', 'brainstorming', 'debating', 'solving']),
-      threadMode,
-    );
+    // ✅ TYPE GUARD: Validate thread mode with Zod - using canonical ChatModeSchema
+    const validatedMode = safeParse(ChatModeSchema, threadMode);
 
     if (!validatedMode) {
       // Invalid mode - skip analysis creation

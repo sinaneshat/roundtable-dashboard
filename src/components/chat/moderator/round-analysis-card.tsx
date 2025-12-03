@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 import { cn } from '@/lib/ui/cn';
 
+import type { DemoSectionOpenStates } from './moderator-analysis-panel';
 import { ModeratorAnalysisPanel } from './moderator-analysis-panel';
 import { ModeratorAnalysisStream } from './moderator-analysis-stream';
 
@@ -28,6 +29,7 @@ type RoundAnalysisCardProps = {
   onActionClick?: (action: Recommendation) => void;
   demoOpen?: boolean; // Demo mode controlled accordion state
   demoShowContent?: boolean; // Demo mode controlled content visibility
+  demoSectionStates?: DemoSectionOpenStates; // Demo mode controlled inner section states
 };
 
 /**
@@ -52,6 +54,7 @@ export function RoundAnalysisCard({
   onActionClick,
   demoOpen,
   demoShowContent,
+  demoSectionStates,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
 
@@ -173,19 +176,19 @@ export function RoundAnalysisCard({
                       <ModeratorAnalysisPanel
                         analysis={analysis}
                         onActionClick={onActionClick}
+                        demoSectionStates={demoSectionStates}
                       />
                     )
-                  : analysis.status === AnalysisStatuses.FAILED
-                    ? (
-                        <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                          <span className="size-1.5 rounded-full bg-destructive/80" />
-                          {/* ✅ FIX: Always show user-friendly message for FAILED analyses
-                              Technical errorMessage (e.g., "Stream timeout after 25s") is not helpful
-                              for end-users - it's stored for debugging purposes only */}
-                          <span>{t('errorAnalyzing')}</span>
-                        </div>
-                      )
-                    : null}
+                  : (analysis.status === AnalysisStatuses.FAILED || (analysis.status === AnalysisStatuses.COMPLETE && !analysis.analysisData))
+                      ? (
+                          <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                            <span className="size-1.5 rounded-full bg-destructive/80" />
+                            {/* ✅ FIX: Show error for FAILED or inconsistent COMPLETE-without-data states
+                              The latter can happen if streaming completed but validation failed */}
+                            <span>{t('errorAnalyzing')}</span>
+                          </div>
+                        )
+                      : null}
             </>
           )}
         </ChainOfThoughtContent>

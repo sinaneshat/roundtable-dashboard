@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, ConfidenceWeightings, MessagePartTypes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
+import type { DemoSectionOpenStates } from '@/components/chat/moderator/moderator-analysis-panel';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -984,6 +985,44 @@ export function LiveChatDemo() {
   // ✅ FIX: Analysis is only truly complete after streaming finishes
   const isAnalysisComplete = stage === DemoStages.COMPLETE;
 
+  // Determine which inner analysis sections should be open based on current streaming content
+  // Open the section that is currently being animated, and keep previous sections open
+  const getAnalysisSectionStates = (): DemoSectionOpenStates | undefined => {
+    if (!analysisShowContent)
+      return undefined;
+
+    // Key Insights is open when summary or recommendations have content
+    const keyInsightsActive = streamingText.analysisSummary.length > 0
+      || streamingText.analysisRecommendation0Title.length > 0;
+
+    // Contributor Perspectives is open when stances have content
+    const contributorActive = streamingText.analysisContributor0Stance.length > 0;
+
+    // Consensus Analysis is open when claims have content
+    const consensusActive = streamingText.analysisConsensusClaim0.length > 0;
+
+    // Evidence & Reasoning is open when reasoning threads have content
+    const evidenceActive = streamingText.analysisReasoningClaim0.length > 0;
+
+    // Alternatives is open when alternatives have content
+    const alternativesActive = streamingText.analysisAlternative0.length > 0;
+
+    // Round Summary is open when round summary has content
+    const roundSummaryActive = streamingText.analysisRoundSummaryThemes.length > 0;
+
+    return {
+      keyInsights: keyInsightsActive,
+      contributorPerspectives: contributorActive,
+      consensusAnalysis: consensusActive,
+      evidenceReasoning: evidenceActive,
+      alternatives: alternativesActive,
+      roundSummary: roundSummaryActive,
+      aboutFramework: false, // Keep closed during demo
+    };
+  };
+
+  const analysisSectionStates = getAnalysisSectionStates();
+
   // Build analysis data incrementally - only include items that have content
   // This prevents height jumping by not rendering empty containers
   const buildAnalysisData = () => {
@@ -1248,6 +1287,7 @@ export function LiveChatDemo() {
               // Controlled accordion states for demo
               demoPreSearchOpen={preSearchIsOpen}
               demoAnalysisOpen={analysisIsOpen}
+              demoAnalysisSectionStates={analysisSectionStates}
             />
           )}
 

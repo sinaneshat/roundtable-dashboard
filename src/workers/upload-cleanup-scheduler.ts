@@ -1,0 +1,324 @@
+/**
+ * Upload Cleanup Scheduler - Durable Object
+ *
+ * Schedules automatic cleanup of orphaned uploads using DO Alarms.
+ * When a file is uploaded, an alarm is set for 15 minutes later.
+ * When the alarm fires, it checks if the upload is attached to any
+ * message/thread/project. If orphaned, it gets deleted.
+ *
+ * Architecture:
+ * - One DO instance per upload (keyed by uploadId)
+ * - Uses SQLite storage for persistence across restarts
+ * - Alarms survive worker restarts and failovers
+ */
+
+import { DurableObject } from 'cloudflare:workers';
+
+// Cleanup delay in milliseconds (15 minutes)
+const CLEANUP_DELAY_MS = 15 * 60 * 1000;
+
+// Grace period buffer for race condition protection (30 seconds)
+// Ensures attachment transactions have time to commit before orphan check
+const GRACE_PERIOD_MS = 30 * 1000;
+
+// Maximum retries for D1 queries
+const MAX_D1_RETRIES = 2;
+
+type UploadCleanupState = {
+  uploadId: string;
+  userId: string;
+  r2Key: string;
+  scheduledAt: number;
+  createdAt: number;
+};
+
+/**
+ * UploadCleanupScheduler Durable Object
+ *
+ * Each instance manages the cleanup schedule for a single upload.
+ * Uses DO Alarms for guaranteed execution after the delay period.
+ */
+export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
+  private sql: SqlStorage;
+
+  constructor(ctx: DurableObjectState, env: CloudflareEnv) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+
+    // Initialize SQLite table on first access
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS cleanup_state (
+        upload_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        r2_key TEXT NOT NULL,
+        scheduled_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `);
+  }
+
+  /**
+   * Schedule cleanup for an upload
+   * Called when a file is uploaded to R2
+   */
+  async scheduleCleanup(uploadId: string, userId: string, r2Key: string): Promise<{ scheduled: boolean; alarmTime: number }> {
+    const now = Date.now();
+    const alarmTime = now + CLEANUP_DELAY_MS;
+
+    // Store the upload state
+    this.sql.exec(
+      `INSERT OR REPLACE INTO cleanup_state (upload_id, user_id, r2_key, scheduled_at, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      uploadId,
+      userId,
+      r2Key,
+      alarmTime,
+      now,
+    );
+
+    // Set the alarm for cleanup check
+    await this.ctx.storage.setAlarm(alarmTime);
+
+    return { scheduled: true, alarmTime };
+  }
+
+  /**
+   * Cancel scheduled cleanup (upload was attached to something)
+   * Called when upload is associated with a message/thread/project
+   */
+  async cancelCleanup(uploadId: string): Promise<{ cancelled: boolean }> {
+    // Remove from state
+    this.sql.exec('DELETE FROM cleanup_state WHERE upload_id = ?', uploadId);
+
+    // Check if there are any remaining uploads to clean
+    const remaining = this.sql.exec('SELECT COUNT(*) as count FROM cleanup_state').one();
+    if (remaining && (remaining.count as number) === 0) {
+      // No more uploads to track, delete the alarm
+      await this.ctx.storage.deleteAlarm();
+    }
+
+    return { cancelled: true };
+  }
+
+  /**
+   * Get current cleanup state
+   */
+  async getState(uploadId: string): Promise<UploadCleanupState | null> {
+    const row = this.sql.exec(
+      'SELECT upload_id, user_id, r2_key, scheduled_at, created_at FROM cleanup_state WHERE upload_id = ?',
+      uploadId,
+    ).one();
+
+    if (!row)
+      return null;
+
+    return {
+      uploadId: row.upload_id as string,
+      userId: row.user_id as string,
+      r2Key: row.r2_key as string,
+      scheduledAt: row.scheduled_at as number,
+      createdAt: row.created_at as number,
+    };
+  }
+
+  /**
+   * Alarm handler - triggered when cleanup delay expires
+   * Uses waitUntil to ensure cleanup completes even if DO hibernates
+   */
+  async alarm(): Promise<void> {
+    // Use waitUntil to ensure cleanup work completes
+    this.ctx.waitUntil(this.processCleanups());
+  }
+
+  /**
+   * Process all due cleanups
+   * Separated from alarm() for waitUntil support
+   */
+  private async processCleanups(): Promise<void> {
+    const now = Date.now();
+
+    // Get all uploads that are due for cleanup (with grace period buffer)
+    // The grace period prevents race conditions where attachment is being committed
+    const dueUploads = this.sql.exec(
+      'SELECT upload_id, user_id, r2_key, scheduled_at FROM cleanup_state WHERE scheduled_at <= ?',
+      now,
+    ).toArray();
+
+    for (const row of dueUploads) {
+      const uploadId = row.upload_id as string;
+      const r2Key = row.r2_key as string;
+      const scheduledAt = row.scheduled_at as number;
+
+      // Additional grace period check - if scheduled time + grace period hasn't passed,
+      // reschedule for later to allow any in-flight attachment operations to complete
+      if (now < scheduledAt + GRACE_PERIOD_MS) {
+        const newAlarmTime = scheduledAt + GRACE_PERIOD_MS;
+        this.sql.exec(
+          'UPDATE cleanup_state SET scheduled_at = ? WHERE upload_id = ?',
+          newAlarmTime,
+          uploadId,
+        );
+        console.error(`[UploadCleanup] [INFO] Rescheduled ${uploadId} with grace period to ${new Date(newAlarmTime).toISOString()}`);
+        continue;
+      }
+
+      try {
+        // Check if upload is orphaned with retry logic
+        const isOrphaned = await this.checkIfOrphanedWithRetry(uploadId);
+
+        if (isOrphaned === null) {
+          // D1 query failed after retries - reschedule instead of deleting
+          const retryTime = now + CLEANUP_DELAY_MS;
+          this.sql.exec(
+            'UPDATE cleanup_state SET scheduled_at = ? WHERE upload_id = ?',
+            retryTime,
+            uploadId,
+          );
+          console.error(`[UploadCleanup] D1 query failed for ${uploadId}, rescheduled for retry`);
+          continue;
+        }
+
+        if (isOrphaned) {
+          // Delete from R2
+          await this.deleteFromR2(r2Key);
+
+          // Delete from database
+          await this.deleteFromDatabase(uploadId);
+
+          console.error(`[UploadCleanup] [INFO] Deleted orphaned upload: ${uploadId}`);
+        } else {
+          console.error(`[UploadCleanup] [INFO] Upload ${uploadId} is attached, skipping cleanup`);
+        }
+
+        // Remove from cleanup state only on successful check
+        this.sql.exec('DELETE FROM cleanup_state WHERE upload_id = ?', uploadId);
+      } catch (error) {
+        console.error(`[UploadCleanup] Error processing upload ${uploadId}:`, error);
+        // Don't remove from state - will be retried on next alarm
+      }
+    }
+
+    // Check if there are more uploads scheduled for later
+    const nextAlarm = this.sql.exec(
+      'SELECT MIN(scheduled_at) as next_time FROM cleanup_state',
+    ).one();
+
+    if (nextAlarm && nextAlarm.next_time) {
+      // Schedule next alarm
+      await this.ctx.storage.setAlarm(nextAlarm.next_time as number);
+    }
+  }
+
+  /**
+   * Check if upload is orphaned with retry logic
+   * Returns null if all retries fail (caller should reschedule)
+   */
+  private async checkIfOrphanedWithRetry(uploadId: string): Promise<boolean | null> {
+    for (let attempt = 0; attempt <= MAX_D1_RETRIES; attempt++) {
+      try {
+        const result = await this.checkIfOrphaned(uploadId);
+        return result;
+      } catch (error) {
+        console.error(`[UploadCleanup] D1 query attempt ${attempt + 1}/${MAX_D1_RETRIES + 1} failed for ${uploadId}:`, error);
+        if (attempt < MAX_D1_RETRIES) {
+          // Exponential backoff: 100ms, 200ms, 400ms...
+          await new Promise(resolve => setTimeout(resolve, 100 * 2 ** attempt));
+        }
+      }
+    }
+    // All retries failed - return null to signal caller should reschedule
+    return null;
+  }
+
+  /**
+   * Check if upload is orphaned (not attached to any message/thread/project)
+   * Throws on D1 errors - use checkIfOrphanedWithRetry for safe calls
+   */
+  private async checkIfOrphaned(uploadId: string): Promise<boolean> {
+    // Query D1 directly using the env binding
+    const db = this.env.DB;
+
+    // Check all junction tables for references
+    const result = await db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM message_upload WHERE upload_id = ?) as message_count,
+        (SELECT COUNT(*) FROM thread_upload WHERE upload_id = ?) as thread_count,
+        (SELECT COUNT(*) FROM project_attachment WHERE upload_id = ?) as project_count
+    `).bind(uploadId, uploadId, uploadId).first<{
+      message_count: number;
+      thread_count: number;
+      project_count: number;
+    }>();
+
+    if (!result) {
+      // Query returned no result - this shouldn't happen with COUNT(*), treat as error
+      throw new Error('D1 query returned no result');
+    }
+
+    const totalReferences = result.message_count + result.thread_count + result.project_count;
+    return totalReferences === 0;
+  }
+
+  /**
+   * Delete file from R2 storage
+   */
+  private async deleteFromR2(r2Key: string): Promise<void> {
+    try {
+      await this.env.UPLOADS_R2_BUCKET.delete(r2Key);
+    } catch (error) {
+      console.error(`[UploadCleanup] Failed to delete R2 object ${r2Key}:`, error);
+      // Don't throw - R2 deletion is best-effort
+    }
+  }
+
+  /**
+   * Delete upload record from database
+   */
+  private async deleteFromDatabase(uploadId: string): Promise<void> {
+    const db = this.env.DB;
+
+    await db.prepare('DELETE FROM upload WHERE id = ?').bind(uploadId).run();
+  }
+
+  /**
+   * HTTP fetch handler for the Durable Object
+   * Allows external calls to schedule/cancel cleanup
+   */
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    try {
+      if (request.method === 'POST' && path === '/schedule') {
+        const body = await request.json() as {
+          uploadId: string;
+          userId: string;
+          r2Key: string;
+        };
+
+        const result = await this.scheduleCleanup(body.uploadId, body.userId, body.r2Key);
+        return Response.json(result);
+      }
+
+      if (request.method === 'POST' && path === '/cancel') {
+        const body = await request.json() as { uploadId: string };
+        const result = await this.cancelCleanup(body.uploadId);
+        return Response.json(result);
+      }
+
+      if (request.method === 'GET' && path.startsWith('/state/')) {
+        const uploadId = path.replace('/state/', '');
+        const state = await this.getState(uploadId);
+        return Response.json({ state });
+      }
+
+      return new Response('Not Found', { status: 404 });
+    } catch (error) {
+      console.error('[UploadCleanupScheduler] Error:', error);
+      return new Response(
+        JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+  }
+}

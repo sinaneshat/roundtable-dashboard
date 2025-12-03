@@ -111,7 +111,13 @@ async function readTextContent(file: File, maxLength: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const content = reader.result as string;
+      // FileReader.result is string when readAsText() was called
+      // Runtime check ensures type safety without forced cast
+      const content = reader.result;
+      if (typeof content !== 'string') {
+        reject(new Error('FileReader did not return a string'));
+        return;
+      }
       resolve(content.slice(0, maxLength));
     };
     reader.onerror = () => reject(new Error('Failed to read file'));

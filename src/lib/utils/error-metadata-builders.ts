@@ -22,8 +22,8 @@
  * - product-logic.service.ts:745-776 (isTransientError)
  */
 
+import { FinishReasonSchema } from '@/api/core/enums';
 import { ErrorCategorySchema } from '@/lib/schemas/error-schemas';
-import { FinishReasonSchema } from '@/lib/schemas/message-metadata';
 import { isObject } from '@/lib/utils/type-guards';
 
 // ============================================================================
@@ -164,26 +164,32 @@ export function buildOpenRouterErrorMetadata(
   // Check providerMetadata for OpenRouter-specific errors
   if (isObject(context.providerMetadata)) {
     if (context.providerMetadata.error) {
-      openRouterError = typeof context.providerMetadata.error === 'string'
-        ? context.providerMetadata.error
-        : JSON.stringify(context.providerMetadata.error);
+      openRouterError
+        = typeof context.providerMetadata.error === 'string'
+          ? context.providerMetadata.error
+          : JSON.stringify(context.providerMetadata.error);
     }
     if (!openRouterError && context.providerMetadata.errorMessage) {
       openRouterError = String(context.providerMetadata.errorMessage);
     }
     // Check for moderation/content filter errors
-    if (context.providerMetadata.moderation || context.providerMetadata.contentFilter) {
+    if (
+      context.providerMetadata.moderation
+      || context.providerMetadata.contentFilter
+    ) {
       errorCategory = ErrorCategorySchema.enum.content_filter;
-      openRouterError = openRouterError || 'Content was filtered by safety systems';
+      openRouterError
+        = openRouterError || 'Content was filtered by safety systems';
     }
   }
 
   // Check response object for errors
   if (!openRouterError && isObject(context.response)) {
     if (context.response.error) {
-      openRouterError = typeof context.response.error === 'string'
-        ? context.response.error
-        : JSON.stringify(context.response.error);
+      openRouterError
+        = typeof context.response.error === 'string'
+          ? context.response.error
+          : JSON.stringify(context.response.error);
     }
   }
 
@@ -210,7 +216,10 @@ function categorizeError(
 ): string {
   const errorLower = errorMessage.toLowerCase();
 
-  if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
+  if (
+    errorLower.includes('not found')
+    || errorLower.includes('does not exist')
+  ) {
     return ErrorCategorySchema.enum.model_not_found;
   }
 
@@ -276,7 +285,8 @@ export function buildErrorMetadataFields(
   context: OpenRouterErrorContext,
 ): ErrorMetadataFields {
   // Extract OpenRouter error details
-  const [openRouterError, initialCategory] = buildOpenRouterErrorMetadata(context);
+  const [openRouterError, initialCategory]
+    = buildOpenRouterErrorMetadata(context);
 
   // Determine if response is empty
   const outputTokens = context.usage?.outputTokens || 0;
@@ -309,7 +319,8 @@ export function buildErrorMetadataFields(
   }
 
   // Detect partial response: error occurred but some content was generated
-  const isPartialResponse = hasError && ((context.text?.length || 0) > 0 || outputTokens > 0);
+  const isPartialResponse
+    = hasError && ((context.text?.length || 0) > 0 || outputTokens > 0);
 
   // Determine if error is transient (worth retrying)
   const isTransient = hasError
@@ -381,7 +392,11 @@ export function isTransientError(
     ErrorCategorySchema.enum.rate_limit,
   ];
 
-  if (transientCategories.includes(errorCategory as (typeof transientCategories)[number])) {
+  if (
+    transientCategories.includes(
+      errorCategory as (typeof transientCategories)[number],
+    )
+  ) {
     return true;
   }
 
@@ -399,7 +414,9 @@ export function isTransientError(
     ErrorCategorySchema.enum.content_filter,
   ];
 
-  return !permanentCategories.includes(errorCategory as (typeof permanentCategories)[number]);
+  return !permanentCategories.includes(
+    errorCategory as (typeof permanentCategories)[number],
+  );
 }
 
 /**

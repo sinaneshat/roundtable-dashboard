@@ -558,11 +558,12 @@ describe('chat Form Actions with Attachments', () => {
       const attachmentIds = ['upload-abc'];
       await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds);
 
-      // prepareForNewMessage should be called with attachment IDs
+      // prepareForNewMessage should be called with attachment IDs and file parts
       expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Follow-up message',
         [],
         attachmentIds,
+        [], // fileParts empty when attachmentInfos not provided
       );
     });
 
@@ -682,6 +683,7 @@ describe('chat Form Actions with Attachments', () => {
         'Follow-up message',
         [],
         attachmentIds,
+        [], // fileParts empty when attachmentInfos not provided
       );
     });
 
@@ -800,6 +802,7 @@ describe('chat Form Actions with Attachments', () => {
         'Follow-up message',
         [],
         undefined, // No attachments
+        [], // fileParts empty when no attachments
       );
     });
 
@@ -988,6 +991,306 @@ describe('chat Form Actions with Attachments', () => {
 
       // Form should be valid with input and participants
       expect(result.current.isFormValid).toBe(true);
+    });
+  });
+
+  /**
+   * 🚨 CRITICAL TEST: uploadId Preservation Through Store
+   *
+   * This test verifies that the uploadId is preserved when file parts are passed
+   * through the store. This is critical for participants 1+ (after the first participant)
+   * because they need uploadId to fetch file content from the backend when the
+   * previewUrl is empty or invalid (e.g., PDFs).
+   *
+   * Bug Report: "Invalid file URL: Ava_Bagherzadeh_resume_de.pdf" error
+   * Root Cause: TypeScript types in the store were stripping uploadId
+   *
+   * Fix: All file parts now use ExtendedFilePart from message-schemas.ts (single source of truth)
+   */
+  describe('uploadId preservation through store (critical for multi-participant)', () => {
+    it('preserves uploadId in fileParts when passed to prepareForNewMessage', async () => {
+      const mockPrepareForNewMessage = vi.fn();
+
+      vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
+        const mockState = {
+          inputValue: 'Analyze this PDF document',
+          selectedMode: 'analyzing',
+          selectedParticipants: [
+            {
+              id: 'db-participant-1',
+              modelId: 'anthropic/claude-sonnet-4.5',
+              role: null,
+              priority: 0,
+              settings: null,
+            },
+            {
+              id: 'db-participant-2',
+              modelId: 'openai/gpt-4o',
+              role: null,
+              priority: 1,
+              settings: null,
+            },
+          ],
+          enableWebSearch: false,
+          thread: {
+            id: 'thread-123',
+            userId: 'user-1',
+            title: 'PDF Analysis',
+            slug: 'pdf-analysis-123',
+            mode: 'analyzing',
+            enableWebSearch: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          participants: [
+            {
+              id: 'db-participant-1',
+              threadId: 'thread-123',
+              modelId: 'anthropic/claude-sonnet-4.5',
+              role: null,
+              priority: 0,
+              isEnabled: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            {
+              id: 'db-participant-2',
+              threadId: 'thread-123',
+              modelId: 'openai/gpt-4o',
+              role: null,
+              priority: 1,
+              isEnabled: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+          messages: [],
+          pendingAttachments: [
+            {
+              id: 'pending-1',
+              file: new File([''], 'resume.pdf', { type: 'application/pdf' }),
+              status: 'uploaded',
+              uploadId: 'upload-pdf-123',
+              previewUrl: '', // PDFs have empty previewUrls - this is the problem case!
+              filename: 'resume.pdf',
+              mimeType: 'application/pdf',
+            },
+          ],
+          setInputValue: vi.fn(),
+          resetForm: vi.fn(),
+          setSelectedMode: vi.fn(),
+          setSelectedParticipants: vi.fn(),
+          setEnableWebSearch: vi.fn(),
+          setShowInitialUI: vi.fn(),
+          setIsCreatingThread: vi.fn(),
+          setWaitingToStartStreaming: vi.fn(),
+          setCreatedThreadId: vi.fn(),
+          setHasPendingConfigChanges: vi.fn(),
+          prepareForNewMessage: mockPrepareForNewMessage,
+          setExpectedParticipantIds: vi.fn(),
+          initializeThread: vi.fn(),
+          updateParticipants: vi.fn(),
+          addPreSearch: vi.fn(),
+          addAnalysis: vi.fn(),
+          setStreamingRoundNumber: vi.fn(),
+          setMessages: vi.fn(),
+          setHasEarlyOptimisticMessage: vi.fn(),
+          clearAttachments: vi.fn(),
+        };
+
+        return selector(mockState);
+      });
+
+      mockUpdateThreadMutation.mockResolvedValue({
+        data: {
+          participants: [
+            {
+              id: 'db-participant-1',
+              threadId: 'thread-123',
+              modelId: 'anthropic/claude-sonnet-4.5',
+              role: null,
+              priority: 0,
+              isEnabled: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            {
+              id: 'db-participant-2',
+              threadId: 'thread-123',
+              modelId: 'openai/gpt-4o',
+              role: null,
+              priority: 1,
+              isEnabled: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      });
+
+      const { result } = renderHook(() => useChatFormActions());
+
+      // Simulate the exact data that form-actions.ts creates from pendingAttachments
+      const attachmentIds = ['upload-pdf-123'];
+      const attachmentInfos = [
+        {
+          uploadId: 'upload-pdf-123',
+          previewUrl: '', // Empty for PDFs!
+          filename: 'resume.pdf',
+          mimeType: 'application/pdf',
+        },
+      ];
+
+      await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds, attachmentInfos);
+
+      // 🚨 CRITICAL ASSERTION: uploadId MUST be preserved in fileParts
+      // Without this, participant 1+ (GPT-4o in this case) will fail with:
+      // "Invalid file URL: resume.pdf" because it can't load the file content
+      expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
+        'Analyze this PDF document',
+        [],
+        attachmentIds,
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'file',
+            url: '', // Empty for PDFs
+            filename: 'resume.pdf',
+            mediaType: 'application/pdf',
+            uploadId: 'upload-pdf-123', // 🚨 THIS MUST BE PRESENT!
+          }),
+        ]),
+      );
+    });
+
+    it('preserves uploadId for multiple attachments with mixed previewUrl availability', async () => {
+      const mockPrepareForNewMessage = vi.fn();
+
+      vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
+        const mockState = {
+          inputValue: 'Compare these files',
+          selectedMode: 'analyzing',
+          selectedParticipants: [
+            {
+              id: 'db-participant-1',
+              modelId: 'anthropic/claude-sonnet-4.5',
+              role: null,
+              priority: 0,
+              settings: null,
+            },
+          ],
+          enableWebSearch: false,
+          thread: {
+            id: 'thread-456',
+            userId: 'user-1',
+            title: 'File Comparison',
+            slug: 'file-comparison-456',
+            mode: 'analyzing',
+            enableWebSearch: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          participants: [
+            {
+              id: 'db-participant-1',
+              threadId: 'thread-456',
+              modelId: 'anthropic/claude-sonnet-4.5',
+              role: null,
+              priority: 0,
+              isEnabled: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+          messages: [],
+          pendingAttachments: [],
+          setInputValue: vi.fn(),
+          resetForm: vi.fn(),
+          setSelectedMode: vi.fn(),
+          setSelectedParticipants: vi.fn(),
+          setEnableWebSearch: vi.fn(),
+          setShowInitialUI: vi.fn(),
+          setIsCreatingThread: vi.fn(),
+          setWaitingToStartStreaming: vi.fn(),
+          setCreatedThreadId: vi.fn(),
+          setHasPendingConfigChanges: vi.fn(),
+          prepareForNewMessage: mockPrepareForNewMessage,
+          setExpectedParticipantIds: vi.fn(),
+          initializeThread: vi.fn(),
+          updateParticipants: vi.fn(),
+          addPreSearch: vi.fn(),
+          addAnalysis: vi.fn(),
+          setStreamingRoundNumber: vi.fn(),
+          setMessages: vi.fn(),
+          setHasEarlyOptimisticMessage: vi.fn(),
+          clearAttachments: vi.fn(),
+        };
+
+        return selector(mockState);
+      });
+
+      mockUpdateThreadMutation.mockResolvedValue({
+        data: {
+          participants: [
+            {
+              id: 'db-participant-1',
+              threadId: 'thread-456',
+              modelId: 'anthropic/claude-sonnet-4.5',
+              role: null,
+              priority: 0,
+              isEnabled: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        },
+      });
+
+      const { result } = renderHook(() => useChatFormActions());
+
+      const attachmentIds = ['upload-img-1', 'upload-pdf-1', 'upload-img-2'];
+      const attachmentInfos = [
+        {
+          uploadId: 'upload-img-1',
+          previewUrl: 'blob:http://localhost/image1', // Images have previewUrl
+          filename: 'chart.png',
+          mimeType: 'image/png',
+        },
+        {
+          uploadId: 'upload-pdf-1',
+          previewUrl: '', // PDFs don't have previewUrl
+          filename: 'report.pdf',
+          mimeType: 'application/pdf',
+        },
+        {
+          uploadId: 'upload-img-2',
+          previewUrl: 'blob:http://localhost/image2',
+          filename: 'diagram.jpg',
+          mimeType: 'image/jpeg',
+        },
+      ];
+
+      await result.current.handleUpdateThreadAndSend('thread-456', attachmentIds, attachmentInfos);
+
+      // ALL file parts must have uploadId preserved, regardless of previewUrl availability
+      expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
+        'Compare these files',
+        [],
+        attachmentIds,
+        expect.arrayContaining([
+          expect.objectContaining({
+            uploadId: 'upload-img-1',
+            filename: 'chart.png',
+          }),
+          expect.objectContaining({
+            uploadId: 'upload-pdf-1', // Critical: PDF must have uploadId!
+            filename: 'report.pdf',
+          }),
+          expect.objectContaining({
+            uploadId: 'upload-img-2',
+            filename: 'diagram.jpg',
+          }),
+        ]),
+      );
     });
   });
 

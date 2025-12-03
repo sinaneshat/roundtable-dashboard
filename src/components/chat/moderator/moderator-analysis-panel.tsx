@@ -24,14 +24,28 @@ import { KeyInsightsSection } from './key-insights-section';
 import { RoundOutcomeHeader } from './round-outcome-header';
 import { RoundSummarySection } from './round-summary-section';
 
+/** Section open states for demo mode control */
+export type DemoSectionOpenStates = {
+  keyInsights?: boolean;
+  contributorPerspectives?: boolean;
+  consensusAnalysis?: boolean;
+  evidenceReasoning?: boolean;
+  alternatives?: boolean;
+  roundSummary?: boolean;
+  aboutFramework?: boolean;
+};
+
 type ModeratorAnalysisPanelProps = {
   analysis: StoredModeratorAnalysis;
   onActionClick?: (action: Recommendation) => void;
+  /** Demo mode controlled section open states */
+  demoSectionStates?: DemoSectionOpenStates;
 };
 
 export function ModeratorAnalysisPanel({
   analysis,
   onActionClick,
+  demoSectionStates,
 }: ModeratorAnalysisPanelProps) {
   const t = useTranslations('moderator');
 
@@ -86,6 +100,7 @@ export function ModeratorAnalysisPanel({
             title={t('keyInsights.title')}
             subtitle={recommendationCount > 0 ? t('keyInsights.insightsIdentified', { count: recommendationCount }) : undefined}
             defaultOpen
+            demoOpen={demoSectionStates?.keyInsights}
           >
             <KeyInsightsSection
               summary={data.summary}
@@ -101,6 +116,7 @@ export function ModeratorAnalysisPanel({
             icon={<Users className="size-4" />}
             title={t('contributorPerspectives.title')}
             subtitle={data.roundConfidence ? t('contributorPerspectives.subtitle', { convergence: data.roundConfidence }) : undefined}
+            demoOpen={demoSectionStates?.contributorPerspectives}
           >
             <ContributorPerspectivesSection perspectives={data.contributorPerspectives} />
           </CollapsibleSection>
@@ -112,6 +128,7 @@ export function ModeratorAnalysisPanel({
             icon={<TrendingUp className="size-4" />}
             title={t('consensusAnalysis.title')}
             subtitle={claimsInfo ? t('consensusAnalysis.subtitle', { alignment: claimsInfo.majorAlignment, total: claimsInfo.totalClaims }) : undefined}
+            demoOpen={demoSectionStates?.consensusAnalysis}
           >
             <ConsensusAnalysisSection analysis={data.consensusAnalysis} />
           </CollapsibleSection>
@@ -123,6 +140,7 @@ export function ModeratorAnalysisPanel({
             icon={<FileText className="size-4" />}
             title={t('evidenceReasoning.title')}
             subtitle={evidenceCount > 0 ? t('evidenceReasoning.subtitle', { count: evidenceCount }) : undefined}
+            demoOpen={demoSectionStates?.evidenceReasoning}
           >
             <EvidenceReasoningSection evidenceAndReasoning={data.evidenceAndReasoning} />
           </CollapsibleSection>
@@ -134,6 +152,7 @@ export function ModeratorAnalysisPanel({
             icon={<GitBranch className="size-4" />}
             title={t('alternatives.title')}
             subtitle={t('alternatives.subtitle', { count: alternativeCount })}
+            demoOpen={demoSectionStates?.alternatives}
           >
             <AlternativesSection alternatives={data.alternatives} />
           </CollapsibleSection>
@@ -145,6 +164,7 @@ export function ModeratorAnalysisPanel({
             icon={<FileText className="size-4" />}
             title={t('roundSummary.title')}
             subtitle={t('roundSummary.closingSynthesis')}
+            demoOpen={demoSectionStates?.roundSummary}
           >
             <RoundSummarySection roundSummary={data.roundSummary} onActionClick={onActionClick} />
           </CollapsibleSection>
@@ -154,6 +174,7 @@ export function ModeratorAnalysisPanel({
         <CollapsibleSection
           icon={<Info className="size-4" />}
           title={t('aboutFramework.title')}
+          demoOpen={demoSectionStates?.aboutFramework}
         >
           <AboutFrameworkSection contributors={data.contributorPerspectives} />
         </CollapsibleSection>

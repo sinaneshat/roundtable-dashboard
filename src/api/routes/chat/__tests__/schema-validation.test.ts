@@ -374,15 +374,17 @@ describe('schema-validation - AI output_format compatibility', () => {
             contestedClaimsList: [],
           },
           agreementHeatmap: [],
-          argumentStrengthProfile: {
-            'Gemini 2.5 Flash Lite': {
+          // ✅ Updated to array-based format for Anthropic compatibility
+          argumentStrengthProfile: [
+            {
+              modelName: 'Gemini 2.5 Flash Lite',
               logic: 0,
               evidence: 0,
               riskAwareness: 0,
               consensus: 0,
               creativity: 0,
             },
-          },
+          ],
         },
         evidenceAndReasoning: {
           reasoningThreads: [],

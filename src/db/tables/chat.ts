@@ -360,11 +360,17 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
           status: 'contested';
         }>;
       };
+      // ✅ FIX: Changed from Record to array for Anthropic compatibility
       agreementHeatmap: Array<{
         claim: string;
-        perspectives: Record<string, AgreementStatus>;
+        perspectives: Array<{
+          modelName: string;
+          status: AgreementStatus;
+        }>;
       }>;
-      argumentStrengthProfile: Record<string, {
+      // ✅ FIX: Changed from Record to array for Anthropic compatibility
+      argumentStrengthProfile: Array<{
+        modelName: string;
         logic: number;
         evidence: number;
         riskAwareness: number;

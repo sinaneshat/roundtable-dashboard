@@ -44,7 +44,10 @@ export const ParticipantIndexSchema = z.number().int().nonnegative();
 /**
  * Participant index with sentinel schema - allows -1 for calculations
  */
-export const ParticipantIndexWithSentinelSchema = z.number().int().min(NO_PARTICIPANT_SENTINEL);
+export const ParticipantIndexWithSentinelSchema = z
+  .number()
+  .int()
+  .min(NO_PARTICIPANT_SENTINEL);
 
 /**
  * Type inference for participant index
@@ -54,7 +57,9 @@ export type ParticipantIndex = z.infer<typeof ParticipantIndexSchema>;
 /**
  * Type inference for participant index with sentinel
  */
-export type ParticipantIndexWithSentinel = z.infer<typeof ParticipantIndexWithSentinelSchema>;
+export type ParticipantIndexWithSentinel = z.infer<
+  typeof ParticipantIndexWithSentinelSchema
+>;
 
 /**
  * Participant ID schema - validates participant ID in message metadata
@@ -72,37 +77,10 @@ export const ParticipantRoleSchema = z.string().nullable();
 export const ModelIdSchema = z.string().min(1, 'Model ID required');
 
 // ============================================================================
-// MESSAGE METADATA - Re-export from Single Source of Truth
+// MESSAGE METADATA
 // ============================================================================
-
-/**
- * Message metadata schemas are now defined in /src/db/schemas/chat-metadata.ts
- * Re-exporting here for backward compatibility
- */
-export type {
-  DbAssistantMessageMetadata as AssistantMessageMetadata,
-  DbMessageMetadata as MessageMetadata,
-  DbUserMessageMetadata as UserMessageMetadata,
-} from '@/db/schemas/chat-metadata';
-export {
-  DbAssistantMessageMetadataSchema as AssistantMessageMetadataSchema,
-  DbMessageMetadataSchema as MessageMetadataSchema,
-  DbUserMessageMetadataSchema as UserMessageMetadataSchema,
-} from '@/db/schemas/chat-metadata';
-
-// ============================================================================
-// METADATA CREATION UTILITIES - Re-export from metadata-builder.ts
-// ============================================================================
-
-/**
- * Type guards are now defined in /src/db/schemas/chat-metadata.ts
- * Re-exporting here for backward compatibility
- */
-export {
-  isAssistantMessageMetadata,
-  isParticipantMessageMetadata,
-  isUserMessageMetadata,
-} from '@/db/schemas/chat-metadata';
+// ✅ SINGLE SOURCE OF TRUTH: /src/db/schemas/chat-metadata.ts
+// Import directly from there - no re-exports needed
 
 // ============================================================================
 // METADATA EXTRACTION UTILITIES
@@ -131,7 +109,11 @@ export function extractParticipantIndex(
   }
 
   // ✅ TYPE-SAFE: Check for field existence before access
-  if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number' && metadata.participantIndex >= 0) {
+  if (
+    'participantIndex' in metadata
+    && typeof metadata.participantIndex === 'number'
+    && metadata.participantIndex >= 0
+  ) {
     return metadata.participantIndex;
   }
 
@@ -152,7 +134,9 @@ export function extractParticipantIndex(
  * const displayIndex = getDisplayParticipantIndex(1); // Returns 2
  * ```
  */
-export function getDisplayParticipantIndex(participantIndex: ParticipantIndex): number {
+export function getDisplayParticipantIndex(
+  participantIndex: ParticipantIndex,
+): number {
   return participantIndex + 1;
 }
 
@@ -169,7 +153,9 @@ export function getDisplayParticipantIndex(participantIndex: ParticipantIndex): 
  * const formatted = formatParticipantIndex(1); // Returns "Participant #2"
  * ```
  */
-export function formatParticipantIndex(participantIndex: ParticipantIndex): string {
+export function formatParticipantIndex(
+  participantIndex: ParticipantIndex,
+): string {
   return `Participant #${getDisplayParticipantIndex(participantIndex)}`;
 }
 
@@ -194,7 +180,11 @@ export function extractParticipantId(metadata: unknown): string | null {
   }
 
   // ✅ TYPE-SAFE: Check for field existence before access
-  if ('participantId' in metadata && typeof metadata.participantId === 'string' && metadata.participantId.length > 0) {
+  if (
+    'participantId' in metadata
+    && typeof metadata.participantId === 'string'
+    && metadata.participantId.length > 0
+  ) {
     return metadata.participantId;
   }
 
@@ -219,7 +209,10 @@ export function extractParticipantRole(metadata: unknown): string | null {
   }
 
   // ✅ TYPE-SAFE: Check for field existence before access
-  if ('participantRole' in metadata && typeof metadata.participantRole === 'string') {
+  if (
+    'participantRole' in metadata
+    && typeof metadata.participantRole === 'string'
+  ) {
     return metadata.participantRole;
   }
 
@@ -244,7 +237,11 @@ export function extractModel(metadata: unknown): string | null {
   }
 
   // ✅ TYPE-SAFE: Check for field existence before access
-  if ('model' in metadata && typeof metadata.model === 'string' && metadata.model.length > 0) {
+  if (
+    'model' in metadata
+    && typeof metadata.model === 'string'
+    && metadata.model.length > 0
+  ) {
     return metadata.model;
   }
 
@@ -280,10 +277,9 @@ export { createParticipantMetadata } from '@/lib/utils/metadata-builder';
  * const participants = z.array(ChatParticipantSchema).parse(data);
  * ```
  */
-export const ChatParticipantSchema = chatParticipantSelectSchema
-  .extend({
-    settings: ParticipantSettingsSchema,
-  });
+export const ChatParticipantSchema = chatParticipantSelectSchema.extend({
+  settings: ParticipantSettingsSchema,
+});
 
 /**
  * Inferred TypeScript type for ChatParticipant with settings
@@ -306,13 +302,17 @@ export type ChatParticipantWithSettings = z.infer<typeof ChatParticipantSchema>;
  * const ParticipantsArraySchema = z.array(ChatParticipantSchema).min(1);
  * ```
  */
-export const ParticipantsArraySchema = z.array(ChatParticipantSchema).min(0, 'Participants must be an array');
+export const ParticipantsArraySchema = z
+  .array(ChatParticipantSchema)
+  .min(0, 'Participants must be an array');
 
 /**
  * Non-empty participants array (requires at least 1)
  * Use for operations that must have participants
  */
-export const NonEmptyParticipantsArraySchema = z.array(ChatParticipantSchema).min(1, 'At least one participant required');
+export const NonEmptyParticipantsArraySchema = z
+  .array(ChatParticipantSchema)
+  .min(1, 'At least one participant required');
 
 // ============================================================================
 // HELPER TYPE GUARDS
@@ -332,7 +332,9 @@ export const NonEmptyParticipantsArraySchema = z.array(ChatParticipantSchema).mi
  * }
  * ```
  */
-export function isChatParticipant(data: unknown): data is ChatParticipantWithSettings {
+export function isChatParticipant(
+  data: unknown,
+): data is ChatParticipantWithSettings {
   const result = ChatParticipantSchema.safeParse(data);
   return result.success;
 }
@@ -343,7 +345,9 @@ export function isChatParticipant(data: unknown): data is ChatParticipantWithSet
  * @param data - Data to validate
  * @returns True if data is array of ChatParticipants
  */
-export function isChatParticipantArray(data: unknown): data is ChatParticipantWithSettings[] {
+export function isChatParticipantArray(
+  data: unknown,
+): data is ChatParticipantWithSettings[] {
   const result = ParticipantsArraySchema.safeParse(data);
   return result.success;
 }
@@ -405,14 +409,18 @@ export type ModelReference = z.infer<typeof ModelReferenceSchema>;
 /**
  * ✅ TYPE GUARD: Check if value is ParticipantContext
  */
-export function isParticipantContext(data: unknown): data is ParticipantContext {
+export function isParticipantContext(
+  data: unknown,
+): data is ParticipantContext {
   return ParticipantContextSchema.safeParse(data).success;
 }
 
 /**
  * ✅ TYPE GUARD: Check if value is MinimalParticipant
  */
-export function isMinimalParticipant(data: unknown): data is MinimalParticipant {
+export function isMinimalParticipant(
+  data: unknown,
+): data is MinimalParticipant {
   return MinimalParticipantSchema.safeParse(data).success;
 }
 
@@ -465,11 +473,13 @@ const BaseParticipantConfigSchema = z.object({
  */
 export const ParticipantConfigSchema = BaseParticipantConfigSchema.extend({
   customRoleId: z.string().optional(),
-  settings: z.object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional(),
-    systemPrompt: z.string().optional(),
-  }).optional(),
+  settings: z
+    .object({
+      temperature: z.number().min(0).max(2).optional(),
+      maxTokens: z.number().int().positive().optional(),
+      systemPrompt: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
@@ -506,7 +516,9 @@ export const ParticipantConfigInputSchema = BaseParticipantConfigSchema.extend({
   isEnabled: z.boolean().optional(),
 });
 
-export type ParticipantConfigInput = z.infer<typeof ParticipantConfigInputSchema>;
+export type ParticipantConfigInput = z.infer<
+  typeof ParticipantConfigInputSchema
+>;
 
 /**
  * ✅ ParticipantUpdatePayload schema - Mutation variant
@@ -535,12 +547,15 @@ export type ParticipantConfigInput = z.infer<typeof ParticipantConfigInputSchema
  * });
  * ```
  */
-export const ParticipantUpdatePayloadSchema = BaseParticipantConfigSchema.extend({
-  customRoleId: z.string().nullable(),
-  isEnabled: z.boolean(),
-});
+export const ParticipantUpdatePayloadSchema
+  = BaseParticipantConfigSchema.extend({
+    customRoleId: z.string().nullable(),
+    isEnabled: z.boolean(),
+  });
 
-export type ParticipantUpdatePayload = z.infer<typeof ParticipantUpdatePayloadSchema>;
+export type ParticipantUpdatePayload = z.infer<
+  typeof ParticipantUpdatePayloadSchema
+>;
 
 // ============================================================================
 // TYPE GUARDS - Participant Config Variants
@@ -578,7 +593,9 @@ export function isParticipantConfig(data: unknown): data is ParticipantConfig {
  * }
  * ```
  */
-export function isParticipantConfigInput(data: unknown): data is ParticipantConfigInput {
+export function isParticipantConfigInput(
+  data: unknown,
+): data is ParticipantConfigInput {
   return ParticipantConfigInputSchema.safeParse(data).success;
 }
 
@@ -596,7 +613,9 @@ export function isParticipantConfigInput(data: unknown): data is ParticipantConf
  * }
  * ```
  */
-export function isParticipantUpdatePayload(data: unknown): data is ParticipantUpdatePayload {
+export function isParticipantUpdatePayload(
+  data: unknown,
+): data is ParticipantUpdatePayload {
   return ParticipantUpdatePayloadSchema.safeParse(data).success;
 }
 
@@ -606,7 +625,9 @@ export function isParticipantUpdatePayload(data: unknown): data is ParticipantUp
  * @param data - Data to validate
  * @returns True if data is array of ParticipantConfig
  */
-export function isParticipantConfigArray(data: unknown): data is ParticipantConfig[] {
+export function isParticipantConfigArray(
+  data: unknown,
+): data is ParticipantConfig[] {
   const result = z.array(ParticipantConfigSchema).safeParse(data);
   return result.success;
 }

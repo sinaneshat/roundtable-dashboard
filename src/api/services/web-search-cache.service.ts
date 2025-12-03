@@ -21,6 +21,8 @@
 import type { WebSearchResult } from '@/api/routes/chat/schema';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
+import type { CachedSearchResult } from '@/api/types/web-search-cache';
+import { parseCachedSearchResult } from '@/api/types/web-search-cache';
 
 // ============================================================================
 // Cache TTLs (in seconds)
@@ -114,22 +116,7 @@ export function generateImageCacheKey(imageUrl: string): string {
 // ============================================================================
 // Cache Operations - Search Results
 // ============================================================================
-
-/**
- * Cache entry metadata interface
- * Tracks when cache entries were created and when they expire
- */
-type CacheMetadata = {
-  cachedAt: string;
-  expiresAt: string;
-};
-
-/**
- * Cached search result with metadata
- */
-type CachedSearchResult = {
-  _cache: CacheMetadata;
-} & WebSearchResult;
+// ✅ TYPE-SAFE: CacheMetadata and CachedSearchResult imported from @/api/types/web-search-cache
 
 /**
  * Get cached search result from KV
@@ -159,11 +146,22 @@ export async function getCachedSearch(
       return null;
     }
 
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const result = parseCachedSearchResult(cached);
+    if (!result) {
+      // Invalid cache data format - treat as cache miss
+      logger?.warn('Invalid cache data format, treating as cache miss', {
+        logType: 'edge_case',
+        query: query.substring(0, 50),
+      });
+      await trackCacheMiss(env, logger);
+      return null;
+    }
+
     // Cache hit - track for analytics
     await trackCacheHit(env, logger);
 
     // Return without internal cache metadata
-    const result = cached as CachedSearchResult;
     const { _cache, ...searchResult } = result;
 
     if (logger) {

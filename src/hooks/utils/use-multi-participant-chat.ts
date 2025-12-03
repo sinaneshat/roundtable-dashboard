@@ -11,6 +11,8 @@ import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, UIMessage
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { errorCategoryToUIType, ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
+import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
@@ -70,13 +72,9 @@ type UseMultiParticipantChatOptions = {
    * Pending file parts to include in AI SDK message
    * These are passed to sendMessage so AI SDK creates user message with file parts
    * Required for file attachments to appear in UI without full page refresh
+   * Uses ExtendedFilePart to support uploadId fallback for PDFs with empty previewUrls
    */
-  pendingFileParts?: Array<{
-    type: 'file';
-    url: string;
-    filename?: string;
-    mediaType: string;
-  }> | null;
+  pendingFileParts?: ExtendedFilePart[] | null;
   /** Callback when pre-search starts */
   onPreSearchStart?: (data: { userQuery: string; totalQueries: number }) => void;
   /** Callback for each pre-search query */
@@ -89,6 +87,8 @@ type UseMultiParticipantChatOptions = {
   onPreSearchError?: (data: { error: string }) => void;
   /** Animation tracking: clear all pending animations */
   clearAnimations?: () => void;
+  /** Animation tracking: complete animation for a specific participant */
+  completeAnimation?: (participantIndex: number) => void;
   /**
    * ✅ RACE CONDITION FIX: Flag indicating a form submission is in progress
    * When true, prevents resumed stream detection from setting isStreaming=true
@@ -225,6 +225,7 @@ export function useMultiParticipantChat(
     onPreSearchComplete,
     onPreSearchError,
     clearAnimations,
+    completeAnimation,
     hasEarlyOptimisticMessage = false,
     onResumedStreamComplete,
   } = options;
@@ -396,12 +397,22 @@ export function useMultiParticipantChat(
       return;
     }
 
+    // ✅ CRITICAL FIX: Extract file parts from existing user message for participant 1+
+    // Without this, participant 1+ sends only text - model never sees uploaded files
+    // Uses shared extractValidFileParts utility for consistent file part handling
+    // Backend can use uploadId fallback to load content from R2 for parts with empty URLs
+    const fileParts = extractValidFileParts(lastUserMessage.parts);
+
     // ✅ CRITICAL FIX: Push participant index to queue BEFORE calling aiSendMessage
     participantIndexQueue.current.push(nextIndex);
 
     if (aiSendMessageRef.current) {
       aiSendMessageRef.current({
         text: userText,
+        // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to participant 1+
+        // Bug: Without files, backend receives message without file parts, causing
+        // "Invalid file URL: filename" errors when AI provider uses filename as fallback URL
+        ...(fileParts.length > 0 && { files: fileParts }),
         metadata: {
           role: UIMessageRoles.USER,
           roundNumber: currentRoundRef.current,
@@ -466,9 +477,28 @@ export function useMultiParticipantChat(
         ? (callbackRefs.pendingAttachmentIds.current || undefined)
         : undefined;
 
+      // ✅ SANITIZATION: Filter message parts for backend transmission
+      // Uses shared isValidFilePartForTransmission type guard for consistent handling
+      // - Keeps all non-file parts (text, etc.)
+      // - Keeps file parts with valid URL or uploadId (backend uses uploadId fallback)
+      // - Filters out file parts with neither (invalid blob/empty URLs without uploadId)
+      const lastMessage = messages[messages.length - 1];
+      const sanitizedMessage = lastMessage && lastMessage.parts
+        ? {
+            ...lastMessage,
+            parts: lastMessage.parts.filter((part) => {
+              // Keep non-file parts (text, etc.)
+              if (part.type !== 'file')
+                return true;
+              // For file parts, use shared validation logic
+              return isValidFilePartForTransmission(part);
+            }),
+          }
+        : lastMessage;
+
       const body = {
         id,
-        message: messages[messages.length - 1],
+        message: sanitizedMessage,
         participantIndex: participantIndexToUse,
         participants: participantsRef.current,
         ...(regenerateRoundNumberRef.current && { regenerateRound: regenerateRoundNumberRef.current }),
@@ -584,19 +614,53 @@ export function useMultiParticipantChat(
       let errorMetadata: z.infer<typeof ErrorMetadataSchema> | undefined;
 
       try {
-        if (typeof errorMessage === 'string' && (errorMessage.startsWith('{') || errorMessage.includes('errorCategory'))) {
+        if (typeof errorMessage === 'string' && (errorMessage.startsWith('{') || errorMessage.includes('errorCategory') || errorMessage.includes('errorMessage'))) {
           const parsed = JSON.parse(errorMessage);
           const validated = ErrorMetadataSchema.safeParse(parsed);
           if (validated.success) {
             errorMetadata = validated.data;
-            if (errorMetadata.rawErrorMessage) {
-              errorMessage = errorMetadata.rawErrorMessage;
-            }
+          } else {
+            // ✅ FIX: Even if schema validation fails, try to extract key fields
+            // This handles cases where backend sends extra fields or slightly different types
+            errorMetadata = {
+              errorCategory: parsed.errorCategory,
+              errorMessage: parsed.errorMessage,
+              rawErrorMessage: parsed.rawErrorMessage,
+              openRouterError: parsed.openRouterError,
+              openRouterCode: parsed.openRouterCode,
+              statusCode: parsed.statusCode,
+              modelId: parsed.modelId,
+              participantId: parsed.participantId,
+              isTransient: parsed.isTransient,
+              responseBody: parsed.responseBody,
+              traceId: parsed.traceId,
+            };
           }
+          // Extract the most descriptive error message available
+          errorMessage = errorMetadata.rawErrorMessage
+            || errorMetadata.errorMessage
+            || (typeof errorMetadata.openRouterError === 'string' ? errorMetadata.openRouterError : null)
+            || errorMessage;
         }
       } catch {
         // Invalid JSON - use original error message
       }
+
+      // ✅ ERROR LOGGING: Log full error details for debugging
+      console.error('[Chat Streaming Error]', {
+        errorMessage,
+        errorCategory: errorMetadata?.errorCategory,
+        statusCode: errorMetadata?.statusCode,
+        modelId: errorMetadata?.modelId || participant?.modelId,
+        participantId: errorMetadata?.participantId || participant?.id,
+        participantIndex: currentIndex,
+        traceId: errorMetadata?.traceId,
+        isTransient: errorMetadata?.isTransient,
+        // Include response body for provider errors (truncated)
+        responseBody: errorMetadata?.responseBody?.substring(0, 300),
+        // Full metadata in dev mode
+        ...(process.env.NODE_ENV === 'development' && { fullMetadata: errorMetadata }),
+      });
 
       // Create error message UI only if not already responded
       if (participant) {
@@ -621,6 +685,15 @@ export function useMultiParticipantChat(
 
           setMessages(prev => [...prev, errorUIMessage]);
         }
+      }
+
+      // ✅ FIX: Complete animation for errored participant before moving to next
+      // Without this, the animation timeout would trigger because:
+      // 1. Original message is created with empty parts and hasError: false
+      // 2. Error message is a NEW message that doesn't complete the original's animation
+      // 3. Animation for currentIndex never completes, causing 5s timeout
+      if (completeAnimation) {
+        completeAnimation(currentIndex);
       }
 
       // Trigger next participant immediately (no delay needed)
@@ -766,7 +839,15 @@ export function useMultiParticipantChat(
 
         // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
         const backendRoundNumber = getRoundNumber(data.message.metadata);
-        const finalRoundNumber = backendRoundNumber ?? currentRoundRef.current;
+
+        // ✅ CRITICAL FIX: Extract round from message ID as secondary fallback
+        // Bug: AI SDK sometimes doesn't preserve backend metadata, causing getRoundNumber to return null
+        // When this happens, we were falling back to currentRoundRef which could be wrong
+        // The message ID is generated by the backend with the correct round number,
+        // so extracting from ID is more reliable than trusting frontend state
+        const idMatch = data.message?.id?.match(/_r(\d+)_p(\d+)/);
+        const roundFromId = idMatch ? Number.parseInt(idMatch[1]!) : null;
+        const finalRoundNumber = backendRoundNumber ?? roundFromId ?? currentRoundRef.current;
 
         // 🐛 DEBUG: Log message ID received from AI SDK
         const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
@@ -1168,6 +1249,12 @@ export function useMultiParticipantChat(
       return;
     }
 
+    // ✅ CRITICAL FIX: Extract file parts from existing user message
+    // Round 0 user message already has file parts from thread creation
+    // Without this, AI SDK sends only text - model never sees uploaded files
+    // Uses shared extractValidFileParts utility for consistent file part handling
+    const fileParts = extractValidFileParts(lastUserMessage.parts);
+
     // Get round number from the last user message
     // startRound is called to trigger participants for an EXISTING user message
     // The user message already has the correct roundNumber in its metadata
@@ -1202,6 +1289,9 @@ export function useMultiParticipantChat(
     // Use isParticipantTrigger:true to indicate this is triggering the first participant
     aiSendMessage({
       text: userText,
+      // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to the model
+      // Without this, Round 0 attachments are never seen by the participant
+      ...(fileParts.length > 0 && { files: fileParts }),
       metadata: {
         role: UIMessageRoles.USER,
         roundNumber,
@@ -1480,6 +1570,11 @@ export function useMultiParticipantChat(
     // Save the user's prompt text before we delete everything
     const userPromptText = textPart.text;
 
+    // ✅ CRITICAL FIX: Extract file parts from the original message for retry
+    // Without this, retrying a round with attachments loses the attachments
+    // Uses shared extractValidFileParts utility for consistent file part handling
+    const originalFileParts = extractValidFileParts(lastUserMessage.parts);
+
     const roundNumber = getCurrentRoundNumber(messages);
 
     // STEP 1: Set regenerate flag to preserve round numbering
@@ -1519,6 +1614,14 @@ export function useMultiParticipantChat(
     resetErrorTracking();
     clearAnimations?.(); // Clear any pending animations before retry
     isTriggeringRef.current = false;
+
+    // ✅ CRITICAL FIX: Set pendingFileParts ref so sendMessage includes attachments
+    // Without this, file attachments are lost when retrying a round
+    // sendMessage reads from callbackRefs.pendingFileParts.current
+    // originalFileParts is ExtendedFilePart[] from extractValidFileParts
+    if (originalFileParts.length > 0) {
+      callbackRefs.pendingFileParts.current = originalFileParts;
+    }
 
     // STEP 5: Send message to start regeneration (as if user just sent the message)
     // This will create a new round with fresh messages (user + assistant)

@@ -101,6 +101,20 @@ export const DeleteUploadResponseSchema = createApiResponseSchema(
   }),
 );
 
+/**
+ * Download URL response
+ * Returns a signed URL for downloading the file
+ */
+export const GetDownloadUrlPayloadSchema = z.object({
+  url: z.string().openapi({
+    description: 'Signed URL for downloading the file',
+  }),
+});
+
+export const GetDownloadUrlResponseSchema = createApiResponseSchema(
+  GetDownloadUrlPayloadSchema,
+);
+
 // ============================================================================
 // MULTIPART UPLOAD SCHEMAS (for large files)
 // ============================================================================
@@ -220,12 +234,73 @@ export const MultipartUploadMetadataSchema = z.object({
 export type MultipartUploadMetadata = z.infer<typeof MultipartUploadMetadataSchema>;
 
 // ============================================================================
+// UPLOAD TICKET SCHEMAS (Presigned URL Pattern)
+// ============================================================================
+
+/**
+ * Request upload ticket - first step of secure upload flow
+ *
+ * Client provides file metadata, server returns a time-limited ticket token.
+ * This follows the S3 presigned URL pattern but uses HMAC-signed tickets.
+ */
+export const RequestUploadTicketSchema = z.object({
+  filename: z.string().min(1).max(255).openapi({
+    description: 'Original filename',
+    example: 'document.pdf',
+  }),
+  mimeType: z.string().min(1).openapi({
+    description: 'MIME type of the file',
+    example: 'application/pdf',
+  }),
+  fileSize: z.number().int().positive().openapi({
+    description: 'File size in bytes',
+    example: 1024000,
+  }),
+}).openapi('RequestUploadTicketRequest');
+
+/**
+ * Upload ticket response - contains the signed token
+ */
+export const UploadTicketPayloadSchema = z.object({
+  ticketId: z.string().openapi({
+    description: 'Unique ticket identifier',
+  }),
+  token: z.string().openapi({
+    description: 'Signed upload token - include this in the upload request',
+  }),
+  expiresAt: z.number().openapi({
+    description: 'Token expiration timestamp (Unix ms)',
+  }),
+  uploadUrl: z.string().openapi({
+    description: 'URL to upload the file to',
+  }),
+}).openapi('UploadTicketPayload');
+
+export const UploadTicketResponseSchema = createApiResponseSchema(
+  UploadTicketPayloadSchema,
+);
+
+/**
+ * Upload with ticket - query params for ticket-based upload
+ */
+export const UploadWithTicketQuerySchema = z.object({
+  token: z.string().min(1).openapi({
+    param: { name: 'token', in: 'query' },
+    description: 'Upload ticket token from requestUploadTicket',
+  }),
+}).openapi('UploadWithTicketQuery');
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
 export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type ListUploadsQuery = z.infer<typeof ListUploadsQuerySchema>;
+export type GetDownloadUrlPayload = z.infer<typeof GetDownloadUrlPayloadSchema>;
 export type CreateMultipartUploadRequest = z.infer<typeof CreateMultipartUploadRequestSchema>;
 export type UploadPartParams = z.infer<typeof UploadPartParamsSchema>;
 export type CompleteMultipartUploadRequest = z.infer<typeof CompleteMultipartUploadRequestSchema>;
+export type RequestUploadTicket = z.infer<typeof RequestUploadTicketSchema>;
+export type UploadTicketPayload = z.infer<typeof UploadTicketPayloadSchema>;
+export type UploadWithTicketQuery = z.infer<typeof UploadWithTicketQuerySchema>;
 export type { ChatAttachmentStatus } from '@/api/core/enums';

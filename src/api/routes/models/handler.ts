@@ -4,7 +4,7 @@
  * ✅ HARDCODED TOP 20 MODELS - SINGLE SOURCE OF TRUTH:
  * - Top 20 models from LLM leaderboards (Oct 2025)
  * - Zod-based enums for type safety
- * - NO dynamic OpenRouter API calls
+ * - In dev mode: dynamically fetches ALL free models from OpenRouter
  * - Simplified logic with curated model list
  *
  * ✅ TEXT & MULTIMODAL: Includes best models with text/vision capabilities
@@ -14,13 +14,15 @@
  *   - Pro: $3.00/M (8 models - Claude, GPT-4o, flagships) ← MAIN TARGET
  *   - Power: Unlimited (4 models - GPT-5, Claude Opus, ultra-premium)
  *
+ * ✅ DEV MODE: Fetches ALL free models from OpenRouter for testing
+ *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { filterModelsForEnvironment, isLocalDevMode } from '@/api/services/model-validation.service';
+import { isLocalDevMode } from '@/api/services/model-validation.service';
 import { getAllModels } from '@/api/services/models-config.service';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
@@ -70,40 +72,19 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = user ? await getUserTier(user.id) : 'free';
 
     // ============================================================================
-    // ✅ HARDCODED MODEL SELECTION: Top 20 from single source of truth
+    // ✅ HARDCODED MODEL SELECTION: All models from single source of truth
     // ============================================================================
+    const isDevMode = isLocalDevMode();
 
-    // Get all 20 hardcoded models from the single source of truth
-    // These are the top-performing models as of October 2025:
-    // 1. Gemini 2.5 Pro (#1 on Chatbot Arena)
-    // 2. GPT-5 (OpenAI flagship)
-    // 3. Claude 4.5 Sonnet (best coding)
-    // 4. Grok 4 (xAI)
-    // 5. DeepSeek V3 (best open-weight)
-    // ... and 15 more top models
-    //
-    // Benefits:
-    // - Simplified, maintainable code
-    // - No dynamic API calls or complex filtering
-    // - Curated list of proven, high-quality models
-    // - Single source of truth with Zod validation
-    //
-    // Balanced Pricing Tiers:
-    // - Free: $0.10/M (2 models) - Gemini Flash only
-    // - Starter: $0.50/M (6 models) - DeepSeek + fast models (excellent value)
-    // - Pro: $3.00/M (8 models) - Claude, GPT-4o, flagships ← MAIN UPSELL
-    // - Power: Unlimited (4 models) - GPT-5, Claude Opus, ultra-premium
-    // ✅ FILTER MODELS BY ENVIRONMENT
-    // Free/dev models only available in local, filtered out in preview/prod
+    // Get all hardcoded models including free models for dev mode
     const allModels = getAllModels();
-    const enhancedModels = filterModelsForEnvironment(allModels);
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
     // Uses proven model-pricing logic from product-logic.service.ts
 
-    const modelsWithTierInfo = enhancedModels.map((model) => {
+    const modelsWithTierInfo = allModels.map((model) => {
       const requiredTier = getRequiredTierForModel(model);
       const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
       const isAccessible = canAccessModelByPricing(userTier, model);
@@ -117,10 +98,16 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ SIMPLIFIED ORDERING: Accessible models first, then by tier
+    // ✅ SIMPLIFIED ORDERING: In dev mode, free models first; otherwise accessible first
     // ============================================================================
-    // Sort models: accessible first (by flagship score), then inaccessible (by required tier)
     const sortedModels = modelsWithTierInfo.sort((a, b) => {
+      // ✅ DEV MODE: Free models (is_free: true) always come first to reduce costs
+      if (isDevMode) {
+        if (a.is_free !== b.is_free) {
+          return a.is_free ? -1 : 1;
+        }
+      }
+
       // Accessible models always come before inaccessible
       if (a.is_accessible_to_user !== b.is_accessible_to_user) {
         return a.is_accessible_to_user ? -1 : 1;
@@ -137,16 +124,14 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ DEFAULT MODEL: Select best accessible model
+    // ✅ DEFAULT MODEL: In dev mode use FREE models, otherwise best accessible
     // ============================================================================
-    // In local dev, prefer Gemini Flash Lite (cheap) to reduce costs
-    const devDefaultModel = 'google/gemini-2.5-flash-lite';
-
     let defaultModelId: string;
-    if (isLocalDevMode()) {
-      // In local, prefer Gemini Flash Lite if accessible, otherwise fall back to first accessible
-      const devModel = sortedModels.find(m => m.id === devDefaultModel && m.is_accessible_to_user);
-      defaultModelId = devModel?.id || sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
+    if (isDevMode) {
+      // In local dev, prefer FREE models (is_free: true) to eliminate API costs
+      // These are actual free-tier models like deepseek-r1:free and llama-3.3:free
+      const freeModel = sortedModels.find(m => m.is_free && m.is_accessible_to_user);
+      defaultModelId = freeModel?.id || sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
     } else {
       // In preview/prod, use best accessible model (sorted by flagship score)
       defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;

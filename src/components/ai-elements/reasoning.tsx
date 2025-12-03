@@ -13,10 +13,9 @@ import { cn } from '@/lib/ui/cn';
  * A collapsible component that displays AI reasoning content with real-time streaming support.
  *
  * Features:
- * - Starts collapsed by default (for completed messages)
- * - Auto-expands and locks during streaming (prevents accidental closure)
- * - Auto-collapses when streaming ends
- * - Manual toggle available when not streaming
+ * - Stays collapsed during streaming with shimmer "Thinking..." animation
+ * - User controls expand/collapse manually (no auto-expand/collapse)
+ * - Shows "Thought for X seconds" when streaming completes
  * - Real-time reasoning token streaming from AI SDK v5
  * - Smooth animations powered by Radix UI
  * - Visual streaming indicator with pulsing animation
@@ -62,10 +61,9 @@ function useReasoning() {
 type ReasoningProps = ComponentProps<typeof Collapsible> & {
   /**
    * Whether the reasoning is currently being streamed
-   * Component starts collapsed by default (for completed messages).
-   * Auto-expands and stays locked during stream.
-   * Auto-collapses when streaming completes.
-   * User can manually toggle when not streaming.
+   * Component stays collapsed during streaming with shimmer animation.
+   * User can manually toggle to see reasoning content at any time.
+   * Shows "Thought for X seconds" when streaming completes.
    */
   isStreaming?: boolean;
   /**
@@ -102,10 +100,10 @@ export function Reasoning({
       startTimeRef.current = Date.now();
     }
 
-    // Set thinking state and open accordion
+    // Set thinking state (but do NOT auto-expand - keep collapsed during streaming)
+    // This ensures the shimmer animation plays while content streams
     setIsThinking(true);
     setIsComplete(false);
-    setIsOpen(true);
 
     // Clear existing timeout
     if (contentGrowthTimeoutRef.current) {
@@ -125,8 +123,7 @@ export function Reasoning({
         setDuration(durationInSeconds);
       }
 
-      // Auto-collapse when thinking ends
-      setIsOpen(false);
+      // Do NOT auto-collapse - user controls open/close state manually
       contentGrowthTimeoutRef.current = null;
     }, 800); // 800ms of no growth = thinking is done
   }, []);

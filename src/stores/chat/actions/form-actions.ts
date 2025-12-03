@@ -19,6 +19,7 @@ import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
@@ -330,15 +331,16 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }
 
       // Add optimistic user message IMMEDIATELY for instant UI feedback
-      // ✅ FIX: Include file parts so attachments show in optimistic message
-      // Use attachmentInfos passed from useChatAttachments hook (single source of truth)
-      const fileParts = attachmentInfos && attachmentInfos.length > 0
+      // ✅ Uses ExtendedFilePart from message-schemas.ts (single source of truth)
+      // - Use attachmentInfos passed from useChatAttachments hook
+      // - Include uploadId so preview component can fetch signed URL for invalid blob/empty URLs
+      const fileParts: ExtendedFilePart[] = attachmentInfos && attachmentInfos.length > 0
         ? attachmentInfos.map(att => ({
             type: 'file' as const,
-            // Use preview URL for optimistic display, backend will provide final URL
             url: att.previewUrl || '',
             filename: att.filename,
             mediaType: att.mimeType,
+            uploadId: att.uploadId,
           }))
         : [];
 
@@ -471,9 +473,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setExpectedParticipantIds(threadState.participants.map(p => p.modelId));
       }
 
-      // Prepare for new message (sets flags, pending message, and attachment IDs)
+      // Prepare for new message (sets flags, pending message, attachment IDs, and pendingFileParts)
       // On THREAD screen, this also adds optimistic user message to UI
-      actions.prepareForNewMessage(trimmed, [], attachmentIds);
+      // ✅ FIX: Pass fileParts so pendingFileParts is set for AI SDK message creation
+      actions.prepareForNewMessage(trimmed, [], attachmentIds, fileParts);
 
       // ✅ FIX: Clear input AFTER prepareForNewMessage so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through

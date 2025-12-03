@@ -25,33 +25,18 @@
  * @module api/services/resumable-stream-kv
  */
 
-import type { ParticipantStreamStatus, StreamStatus } from '@/api/core/enums';
 import { ParticipantStreamStatuses, StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
+import type { StreamState, ThreadActiveStream } from '@/api/types/streaming';
+import { parseStreamState, parseThreadActiveStream } from '@/api/types/streaming';
 
 // ============================================================================
 // Stream Lifecycle Tracking
 // ============================================================================
 
-/**
- * Stream state stored in KV
- * ✅ ENUM PATTERN: Uses StreamStatus from core enums
- * ✅ EXTENDED: Added heartbeat tracking for dead stream detection (Phase 1.3)
- */
-export type StreamState = {
-  threadId: string;
-  roundNumber: number;
-  participantIndex: number;
-  status: StreamStatus;
-  messageId: string | null;
-  createdAt: string;
-  completedAt: string | null;
-  errorMessage: string | null;
-  // ✅ HEARTBEAT: Track stream liveness (Phase 1.3)
-  lastHeartbeatAt: string | null;
-  chunkCount: number;
-};
+// ✅ SINGLE SOURCE OF TRUTH: Types imported from @/api/types/streaming
+// StreamState and ThreadActiveStream are defined with Zod schemas there
 
 /**
  * TTL for stream state tracking (1 hour)
@@ -72,27 +57,6 @@ function getStreamStateKey(threadId: string, roundNumber: number, participantInd
 function getThreadActiveStreamKey(threadId: string): string {
   return `stream:thread:${threadId}:active`;
 }
-
-/**
- * Active stream info stored at thread level
- * ✅ RESUMABLE STREAMS: Following AI SDK documentation pattern
- *
- * ✅ FIX: Now tracks round-level state to support multi-participant resumption
- * - Tracks which round is active and total participants expected
- * - Individual participant completion tracked via participantStatuses
- * - Active stream only cleared when ALL participants in round complete
- * ✅ ENUM PATTERN: Uses ParticipantStreamStatus from core enums
- */
-export type ThreadActiveStream = {
-  streamId: string;
-  roundNumber: number;
-  participantIndex: number;
-  createdAt: string;
-  // ✅ NEW: Track round-level completion for proper resumption
-  totalParticipants: number;
-  // ✅ ENUM PATTERN: Uses ParticipantStreamStatus instead of inline union type
-  participantStatuses: Record<number, ParticipantStreamStatus>;
-};
 
 /**
  * Set thread-level active stream
@@ -198,10 +162,10 @@ export async function getThreadActiveStream(
   }
 
   try {
-    const activeStream = await env.KV.get(
-      getThreadActiveStreamKey(threadId),
-      'json',
-    ) as ThreadActiveStream | null;
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const activeStream = parseThreadActiveStream(
+      await env.KV.get(getThreadActiveStreamKey(threadId), 'json'),
+    );
 
     if (activeStream && logger) {
       logger.info('Retrieved thread active stream', {
@@ -637,10 +601,10 @@ export async function getStreamState(
   }
 
   try {
-    const state = await env.KV.get(
-      getStreamStateKey(threadId, roundNumber, participantIndex),
-      'json',
-    ) as StreamState | null;
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const state = parseStreamState(
+      await env.KV.get(getStreamStateKey(threadId, roundNumber, participantIndex), 'json'),
+    );
 
     if (state && logger) {
       logger.info('Retrieved stream state', {

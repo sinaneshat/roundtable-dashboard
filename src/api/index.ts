@@ -204,18 +204,20 @@ import {
   detailedHealthRoute,
   healthRoute,
 } from './routes/system/route';
-// Upload routes (R2 file uploads)
+// Upload routes (R2 file uploads - secure ticket-based pattern)
 import {
   abortMultipartUploadHandler,
   completeMultipartUploadHandler,
   createMultipartUploadHandler,
   deleteUploadHandler,
   downloadUploadHandler,
+  getDownloadUrlHandler,
   getUploadHandler,
   listUploadsHandler,
+  requestUploadTicketHandler,
   updateUploadHandler,
-  uploadFileHandler,
   uploadPartHandler,
+  uploadWithTicketHandler,
 } from './routes/uploads/handler';
 import {
   abortMultipartUploadRoute,
@@ -223,11 +225,13 @@ import {
   createMultipartUploadRoute,
   deleteUploadRoute,
   downloadUploadRoute,
+  getDownloadUrlRoute,
   getUploadRoute,
   listUploadsRoute,
+  requestUploadTicketRoute,
   updateUploadRoute,
-  uploadFileRoute,
   uploadPartRoute,
+  uploadWithTicketRoute,
 } from './routes/uploads/route';
 // Usage tracking routes
 import {
@@ -605,16 +609,19 @@ const appRoutes = app
   .openapi(openAIFunctionsRoute, openAIFunctionsHandler) // GET /mcp/openai/functions - OpenAI format
 
   // ============================================================================
-  // Upload Routes - R2 file uploads
+  // Upload Routes - R2 file uploads (secure ticket-based pattern)
   // ============================================================================
-  // Single-request uploads (for files < 100MB)
-  .openapi(uploadFileRoute, uploadFileHandler) // POST /uploads - Upload file
+  // Upload management endpoints
   .openapi(listUploadsRoute, listUploadsHandler) // GET /uploads - List uploads
   .openapi(getUploadRoute, getUploadHandler) // GET /uploads/:id - Get upload
+  .openapi(getDownloadUrlRoute, getDownloadUrlHandler) // GET /uploads/:id/download-url - Get signed URL
   .openapi(downloadUploadRoute, downloadUploadHandler) // GET /uploads/:id/download - Download
   .openapi(updateUploadRoute, updateUploadHandler) // PATCH /uploads/:id - Update metadata
   .openapi(deleteUploadRoute, deleteUploadHandler) // DELETE /uploads/:id - Delete upload
-  // Multipart uploads (for large files > 100MB)
+  // Secure ticket-based uploads (S3 presigned URL pattern)
+  .openapi(requestUploadTicketRoute, requestUploadTicketHandler) // POST /uploads/ticket - Request upload ticket
+  .openapi(uploadWithTicketRoute, uploadWithTicketHandler) // POST /uploads/ticket/upload - Upload with ticket
+  // Multipart uploads (for large files > 100MB) - secure, requires auth
   .openapi(createMultipartUploadRoute, createMultipartUploadHandler) // POST /uploads/multipart - Initiate
   .openapi(uploadPartRoute, uploadPartHandler) // PUT /uploads/multipart/:id/parts - Upload part
   .openapi(completeMultipartUploadRoute, completeMultipartUploadHandler) // POST /uploads/multipart/:id/complete

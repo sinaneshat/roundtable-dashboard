@@ -124,16 +124,14 @@ export const ChatInput = memo(({
     return false;
   }, [quotaCheckType, statsData]);
 
-  // ✅ FIX: Split disabled states for typing vs submission
-  // User reported: "during the loading 3 dots matrix text ensure the chatbox is allowed
-  // to be filled in but it's not allowing for submissions until the round is done fully"
+  // ✅ FIX: Split disabled states - textarea/mic always enabled during streaming
+  // User can always type to prepare next message, even while AI is responding
   //
-  // isInputDisabled: Controls textarea
-  //   - Disabled when explicitly disabled, quota exceeded, or during thread creation (status='submitted')
-  //   - During AI streaming (status='streaming'), user CAN still type to prepare next message
-  // isSubmitDisabled: Controls submit button - disabled when streaming, disabled, quota exceeded, or uploading
-  const isSubmitting = status === 'submitted';
-  const isInputDisabled = disabled || isQuotaExceeded || isSubmitting;
+  // isInputDisabled: Controls textarea - only disabled for explicit disable or quota exceeded
+  // isMicDisabled: Controls microphone - same as input, always available for voice input
+  // isSubmitDisabled: Controls submit button - disabled during streaming, submitting, quota exceeded, or uploading
+  const isInputDisabled = disabled || isQuotaExceeded;
+  const isMicDisabled = disabled || isQuotaExceeded;
   const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0;
 
@@ -365,14 +363,14 @@ export const ChatInput = memo(({
 
                 {/* Right side: Speech + Submit buttons */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  {/* Speech recognition button */}
+                  {/* Speech recognition button - always enabled during streaming */}
                   {enableSpeech && isSpeechSupported && (
                     <Button
                       type="button"
                       size="icon"
                       variant={isListening ? 'default' : 'ghost'}
                       onClick={toggleSpeech}
-                      disabled={isInputDisabled && !isListening}
+                      disabled={isMicDisabled && !isListening}
                       className={cn(
                         'size-8 sm:size-9 shrink-0 rounded-full',
                         isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',

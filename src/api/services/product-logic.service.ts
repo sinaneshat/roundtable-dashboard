@@ -24,15 +24,22 @@ import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders'
 // SUBSCRIPTION TIER CONSTANTS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
-/**
- * ✅ SINGLE SOURCE OF TRUTH: Subscription tier enum values
- * Used across database schema, API validation, and business logic
- */
+// 1️⃣ ARRAY CONSTANT - Source of truth for subscription tier values
 export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
-/**
- * ✅ SINGLE SOURCE OF TRUTH: Subscription tier type
- */
-export type SubscriptionTier = typeof SUBSCRIPTION_TIERS[number];
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from array constant
+export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const SubscriptionTiers = {
+  FREE: 'free' as const,
+  STARTER: 'starter' as const,
+  PRO: 'pro' as const,
+  POWER: 'power' as const,
+} as const;
 
 /**
  * Re-export SubscriptionChangeType from core enums for convenience
@@ -128,10 +135,13 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number> = {
  * This creates a fair upgrade path with clear value at each tier:
  * Free (2) → Starter (6) → Pro (8) ← MAIN TARGET → Power (4)
  */
-export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null> = {
-  free: 0.10, // Up to $0.10/M tokens - 2 models (Gemini Flash only)
-  starter: 0.50, // Up to $0.50/M tokens - 6 models (DeepSeek + fast models)
-  pro: 3.00, // Up to $3.00/M tokens - 8 models (Claude, GPT-4o, flagships) ← MAIN UPSELL
+export const MAX_MODEL_PRICING_BY_TIER: Record<
+  SubscriptionTier,
+  number | null
+> = {
+  free: 0.1, // Up to $0.10/M tokens - 2 models (Gemini Flash only)
+  starter: 0.5, // Up to $0.50/M tokens - 6 models (DeepSeek + fast models)
+  pro: 3.0, // Up to $3.00/M tokens - 8 models (Claude, GPT-4o, flagships) ← MAIN UPSELL
   power: null, // Unlimited - 4 models (GPT-5, Claude Opus, ultra-premium)
 } as const;
 
@@ -155,12 +165,15 @@ export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number> = {
  * - Single participant conversations do not trigger analysis (no financial sense)
  * - Each analysis generation counts as a message equivalent in terms of cost
  */
-export const TIER_QUOTAS: Record<SubscriptionTier, {
-  threadsPerMonth: number;
-  messagesPerMonth: number;
-  customRolesPerMonth: number;
-  analysisPerMonth: number;
-}> = {
+export const TIER_QUOTAS: Record<
+  SubscriptionTier,
+  {
+    threadsPerMonth: number;
+    messagesPerMonth: number;
+    customRolesPerMonth: number;
+    analysisPerMonth: number;
+  }
+> = {
   free: {
     threadsPerMonth: 5,
     messagesPerMonth: 100,
@@ -238,7 +251,8 @@ export function getSafeMaxOutputTokens(
   // Calculate available space in model's context window
   // Leave 20% buffer for safety (token estimation can be off)
   const safetyBuffer = Math.floor(modelContextLength * 0.2);
-  const availableTokens = modelContextLength - estimatedInputTokens - safetyBuffer;
+  const availableTokens
+    = modelContextLength - estimatedInputTokens - safetyBuffer;
 
   // Use the minimum of:
   // 1. Tier's max output tokens (subscription limit)
@@ -250,7 +264,9 @@ export function getSafeMaxOutputTokens(
 /**
  * Get the maximum model pricing threshold for a given tier
  */
-export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {
+export function getMaxModelPricingForTier(
+  tier: SubscriptionTier,
+): number | null {
   return MAX_MODEL_PRICING_BY_TIER[tier];
 }
 
@@ -327,7 +343,9 @@ export function getTierFromProductId(productId: string): SubscriptionTier {
 /**
  * Parse a price string or number into a number
  */
-export function parsePrice(priceStr: string | number | null | undefined): number {
+export function parsePrice(
+  priceStr: string | number | null | undefined,
+): number {
   if (priceStr === null || priceStr === undefined) {
     return 0;
   }
@@ -344,7 +362,10 @@ export function parsePrice(priceStr: string | number | null | undefined): number
  * Calculate cost per million tokens
  */
 export function costPerMillion(pricePerToken: string | number): number {
-  const perToken = typeof pricePerToken === 'number' ? pricePerToken : Number.parseFloat(pricePerToken);
+  const perToken
+    = typeof pricePerToken === 'number'
+      ? pricePerToken
+      : Number.parseFloat(pricePerToken);
   return perToken * 1_000_000;
 }
 
@@ -368,7 +389,9 @@ export function isModelFree(model: BaseModelResponse): boolean {
 /**
  * Get model cost category based on pricing
  */
-export function getModelCostCategory(model: BaseModelResponse): 'free' | 'low' | 'medium' | 'high' {
+export function getModelCostCategory(
+  model: BaseModelResponse,
+): 'free' | 'low' | 'medium' | 'high' {
   if (isModelFree(model))
     return 'free';
 
@@ -418,7 +441,9 @@ export function getTierUpgradeMessage(tier: SubscriptionTier): string {
  * Determines minimum subscription tier needed to access a model.
  * Based on input pricing per million tokens.
  */
-export function getRequiredTierForModel(model: BaseModelResponse): SubscriptionTier {
+export function getRequiredTierForModel(
+  model: BaseModelResponse,
+): SubscriptionTier {
   // Get input pricing per million tokens
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
@@ -570,7 +595,7 @@ export function getFlagshipScore(model: BaseModelResponse): number {
     } else if (ageInDays < 365) {
       score += 15; // Last year = recent
     } else {
-    // Intentionally empty
+      // Intentionally empty
       score += 5; // Older = less likely flagship
     }
   } else {
@@ -625,7 +650,9 @@ export function isFlagshipModel(model: BaseModelResponse): boolean {
  * @param models All available models
  * @returns Top 10 flagship models (max 2 per provider) sorted by flagship score
  */
-export function getFlagshipModels(models: BaseModelResponse[]): BaseModelResponse[] {
+export function getFlagshipModels(
+  models: BaseModelResponse[],
+): BaseModelResponse[] {
   // Score all models and filter flagships
   const flagshipCandidates = models
     .map(model => ({ model, score: getFlagshipScore(model) }))
@@ -682,7 +709,10 @@ export const DEFAULT_AI_PARAMS = {
  * Mode-specific AI parameters for maximum stability and consistency
  * Import ChatModeId type to properly type this configuration
  */
-export const MODE_SPECIFIC_AI_PARAMS: Record<string, { temperature: number; topP: number; maxTokens: number }> = {
+export const MODE_SPECIFIC_AI_PARAMS: Record<
+  string,
+  { temperature: number; topP: number; maxTokens: number }
+> = {
   analyzing: {
     temperature: 0.3,
     topP: 0.7,
@@ -708,7 +738,11 @@ export const MODE_SPECIFIC_AI_PARAMS: Record<string, { temperature: number; topP
 /**
  * Get AI parameters for a specific mode
  */
-export function getAIParamsForMode(mode: string): { temperature: number; topP: number; maxTokens: number } {
+export function getAIParamsForMode(mode: string): {
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+} {
   return MODE_SPECIFIC_AI_PARAMS[mode] || DEFAULT_AI_PARAMS;
 }
 

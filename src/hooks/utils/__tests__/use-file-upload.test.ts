@@ -240,14 +240,8 @@ describe('useFileUpload', () => {
         expect(result.current.state.completed).toBe(1);
       });
 
-      // Hono RPC format: { form: { file: File } }
-      expect(mockUpload).toHaveBeenCalledWith(
-        expect.objectContaining({
-          form: expect.objectContaining({
-            file: expect.any(File),
-          }),
-        }),
-      );
+      // Secure upload takes File directly (not { form: { file } })
+      expect(mockUpload).toHaveBeenCalledWith(expect.any(File));
     });
 
     // TODO: Fix timing issues with progress tracking

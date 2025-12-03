@@ -8,7 +8,6 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { UIMessage } from 'ai';
 import { convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import { and, asc, desc, eq, like } from 'drizzle-orm';
 import { ulid } from 'ulid';
@@ -35,6 +34,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
+import { isObject } from '@/lib/utils/type-guards';
 
 import { chatMessagesToUIMessages } from '../chat/handlers/helpers';
 import type {
@@ -55,14 +55,12 @@ import type {
   GetProjectInput,
   GetRoundAnalysisInput,
   GetThreadInput,
-  JsonRpcRequest,
   ListKnowledgeFilesInput,
   ListModelsInput,
   ListProjectsInput,
   ListProjectThreadsInput,
   ListRoundsInput,
   ListThreadsInput,
-  MCPContent,
   MCPResource,
   RegenerateRoundInput,
   RemoveParticipantInput,
@@ -73,14 +71,37 @@ import type {
   UpdateProjectInput,
 } from './schema';
 import {
+  AddParticipantInputSchema,
+  CreateProjectInputSchema,
+  CreateThreadInputSchema,
+  DeleteKnowledgeFileInputSchema,
+  DeleteProjectInputSchema,
+  DeleteThreadInputSchema,
+  GenerateAnalysisInputSchema,
+  GenerateResponsesInputSchema,
+  GetProjectInputSchema,
+  GetRoundAnalysisInputSchema,
+  GetThreadInputSchema,
   getToolByName,
   JsonRpcErrorCodes,
   JsonRpcRequestSchema,
+  ListKnowledgeFilesInputSchema,
+  ListModelsInputSchema,
+  ListProjectsInputSchema,
+  ListProjectThreadsInputSchema,
+  ListRoundsInputSchema,
+  ListThreadsInputSchema,
   MCP_PROTOCOL_VERSION,
   MCP_SERVER_INFO,
   MCP_TOOLS,
+  RegenerateRoundInputSchema,
+  RemoveParticipantInputSchema,
+  RoundFeedbackInputSchema,
+  SendMessageInputSchema,
   ToolCallParamsSchema,
   toOpenAIFunctions,
+  UpdateParticipantInputSchema,
+  UpdateProjectInputSchema,
 } from './schema';
 
 // ============================================================================
@@ -89,15 +110,17 @@ import {
 
 function mcpResult(data: unknown, _toolName?: string): ToolCallResult {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  // ✅ TYPE-SAFE: Use isObject type guard for Record<string, unknown> narrowing
+  const structuredContent = isObject(data) ? data : undefined;
   return {
-    content: [{ type: 'text', text }] as MCPContent[],
-    structuredContent: typeof data === 'object' ? data as Record<string, unknown> : undefined,
+    content: [{ type: 'text', text }],
+    structuredContent,
   };
 }
 
 function mcpError(message: string): ToolCallResult {
   return {
-    content: [{ type: 'text', text: message }] as MCPContent[],
+    content: [{ type: 'text', text: message }],
     isError: true,
   };
 }
@@ -114,16 +137,13 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const request = c.validated.body as JsonRpcRequest;
+    // c.validated.body is already typed by validateBody: JsonRpcRequestSchema
+    const request = c.validated.body;
     const requestId = request.id ?? null;
 
-    // Helper to create JSON-RPC response
+    // Helper to create JSON-RPC response using established response builder
     const jsonRpcResponse = (result?: unknown, error?: { code: number; message: string }) => {
-      return c.json({
-        jsonrpc: '2.0' as const,
-        id: requestId,
-        ...(error ? { error } : { result }),
-      });
+      return Responses.jsonRpc(c, requestId, result, error);
     };
 
     try {
@@ -320,100 +340,193 @@ async function executeToolInternal(
 
   const db = await getDbAsync();
 
+  // ✅ TYPE-SAFE: Use Zod validation for tool inputs instead of force casts
   try {
     switch (toolName) {
       // ----------------------------------------------------------------------
       // Thread Management
       // ----------------------------------------------------------------------
-      case 'create_thread':
-        return await toolCreateThread(args as CreateThreadInput, user, db);
+      case 'create_thread': {
+        const parsed = CreateThreadInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolCreateThread(parsed.data, user, db);
+      }
 
-      case 'get_thread':
-        return await toolGetThread(args as GetThreadInput, user, db);
+      case 'get_thread': {
+        const parsed = GetThreadInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolGetThread(parsed.data, user, db);
+      }
 
-      case 'list_threads':
-        return await toolListThreads(args as ListThreadsInput, user, db);
+      case 'list_threads': {
+        const parsed = ListThreadsInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolListThreads(parsed.data, user, db);
+      }
 
-      case 'delete_thread':
-        return await toolDeleteThread(args as { threadId: string }, user, db);
+      case 'delete_thread': {
+        const parsed = DeleteThreadInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolDeleteThread(parsed.data, user, db);
+      }
 
       // ----------------------------------------------------------------------
       // Project Management
       // ----------------------------------------------------------------------
-      case 'create_project':
-        return await toolCreateProject(args as CreateProjectInput, user, db, env);
+      case 'create_project': {
+        const parsed = CreateProjectInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolCreateProject(parsed.data, user, db, env);
+      }
 
-      case 'get_project':
-        return await toolGetProject(args as GetProjectInput, user, db);
+      case 'get_project': {
+        const parsed = GetProjectInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolGetProject(parsed.data, user, db);
+      }
 
-      case 'list_projects':
-        return await toolListProjects(args as ListProjectsInput, user, db);
+      case 'list_projects': {
+        const parsed = ListProjectsInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolListProjects(parsed.data, user, db);
+      }
 
-      case 'update_project':
-        return await toolUpdateProject(args as UpdateProjectInput, user, db);
+      case 'update_project': {
+        const parsed = UpdateProjectInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolUpdateProject(parsed.data, user, db);
+      }
 
-      case 'delete_project':
-        return await toolDeleteProject(args as DeleteProjectInput, user, db, env);
+      case 'delete_project': {
+        const parsed = DeleteProjectInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolDeleteProject(parsed.data, user, db, env);
+      }
 
-      case 'list_project_threads':
-        return await toolListProjectThreads(args as ListProjectThreadsInput, user, db);
+      case 'list_project_threads': {
+        const parsed = ListProjectThreadsInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolListProjectThreads(parsed.data, user, db);
+      }
 
       // ----------------------------------------------------------------------
       // Knowledge Files
       // ----------------------------------------------------------------------
-      case 'list_knowledge_files':
-        return await toolListKnowledgeFiles(args as ListKnowledgeFilesInput, user, db);
+      case 'list_knowledge_files': {
+        const parsed = ListKnowledgeFilesInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolListKnowledgeFiles(parsed.data, user, db);
+      }
 
-      case 'delete_knowledge_file':
-        return await toolDeleteKnowledgeFile(args as DeleteKnowledgeFileInput, user, db, env);
+      case 'delete_knowledge_file': {
+        const parsed = DeleteKnowledgeFileInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolDeleteKnowledgeFile(parsed.data, user, db, env);
+      }
 
       // ----------------------------------------------------------------------
       // Messages & Responses
       // ----------------------------------------------------------------------
-      case 'send_message':
-        return await toolSendMessage(args as SendMessageInput, user, db);
+      case 'send_message': {
+        const parsed = SendMessageInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolSendMessage(parsed.data, user, db);
+      }
 
-      case 'generate_responses':
-        return await toolGenerateResponses(args as GenerateResponsesInput, user, db, env);
+      case 'generate_responses': {
+        const parsed = GenerateResponsesInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolGenerateResponses(parsed.data, user, db, env);
+      }
 
       // ----------------------------------------------------------------------
       // Rounds
       // ----------------------------------------------------------------------
-      case 'list_rounds':
-        return await toolListRounds(args as ListRoundsInput, user, db);
+      case 'list_rounds': {
+        const parsed = ListRoundsInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolListRounds(parsed.data, user, db);
+      }
 
-      case 'regenerate_round':
-        return await toolRegenerateRound(args as RegenerateRoundInput, user, db, env);
+      case 'regenerate_round': {
+        const parsed = RegenerateRoundInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolRegenerateRound(parsed.data, user, db, env);
+      }
 
-      case 'round_feedback':
-        return await toolRoundFeedback(args as RoundFeedbackInput, user, db);
+      case 'round_feedback': {
+        const parsed = RoundFeedbackInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolRoundFeedback(parsed.data, user, db);
+      }
 
       // ----------------------------------------------------------------------
       // Analysis
       // ----------------------------------------------------------------------
-      case 'generate_analysis':
-        return await toolGenerateAnalysis(args as GenerateAnalysisInput, user, db);
+      case 'generate_analysis': {
+        const parsed = GenerateAnalysisInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolGenerateAnalysis(parsed.data, user, db);
+      }
 
-      case 'get_round_analysis':
-        return await toolGetRoundAnalysis(args as GetRoundAnalysisInput, user, db);
+      case 'get_round_analysis': {
+        const parsed = GetRoundAnalysisInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolGetRoundAnalysis(parsed.data, user, db);
+      }
 
       // ----------------------------------------------------------------------
       // Participants
       // ----------------------------------------------------------------------
-      case 'add_participant':
-        return await toolAddParticipant(args as AddParticipantInput, user, db);
+      case 'add_participant': {
+        const parsed = AddParticipantInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolAddParticipant(parsed.data, user, db);
+      }
 
-      case 'update_participant':
-        return await toolUpdateParticipant(args as UpdateParticipantInput, user, db);
+      case 'update_participant': {
+        const parsed = UpdateParticipantInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolUpdateParticipant(parsed.data, user, db);
+      }
 
-      case 'remove_participant':
-        return await toolRemoveParticipant(args as RemoveParticipantInput, user, db);
+      case 'remove_participant': {
+        const parsed = RemoveParticipantInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolRemoveParticipant(parsed.data, user, db);
+      }
 
       // ----------------------------------------------------------------------
       // Models
       // ----------------------------------------------------------------------
-      case 'list_models':
-        return await toolListModels(args as ListModelsInput, user);
+      case 'list_models': {
+        const parsed = ListModelsInputSchema.safeParse(args);
+        if (!parsed.success)
+          return mcpError(`Invalid input: ${parsed.error.message}`);
+        return await toolListModels(parsed.data, user);
+      }
 
       default:
         return mcpError(`Tool not implemented: ${toolName}`);
@@ -654,10 +767,11 @@ async function toolGenerateResponses(
   }
 
   // Calculate round number
+  // Message parameter accepts unknown type - no cast needed
   const roundResult = await calculateRoundNumber({
     threadId: input.threadId,
     participantIndex: DEFAULT_PARTICIPANT_INDEX,
-    message: { role: 'user', parts: [{ type: 'text', text: input.messageContent }] } as UIMessage,
+    message: { role: 'user', parts: [{ type: 'text' as const, text: input.messageContent }] },
     regenerateRound: undefined,
     db,
   });

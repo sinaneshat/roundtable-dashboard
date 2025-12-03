@@ -19,7 +19,14 @@
 
 import type { UIMessage } from 'ai';
 
-import { MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import type { ErrorType, FinishReason } from '@/api/core/enums';
+import {
+  ErrorTypeSchema,
+  FinishReasonSchema,
+  MessagePartTypes,
+  MessageRoles,
+  UIMessageRoles,
+} from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
 import type {
   DbAssistantMessageMetadata,
@@ -30,18 +37,16 @@ import type {
 import {
   DbAssistantMessageMetadataSchema,
   DbPreSearchMessageMetadataSchema,
-} from '@/db/schemas/chat-metadata';
-import type { ErrorMetadata, UIMessageErrorType } from '@/lib/schemas/error-schemas';
-import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
-import type {
-  ErrorType,
-  FinishReason,
-} from '@/lib/schemas/message-metadata';
-import {
-  ErrorTypeSchema,
-  FinishReasonSchema,
   UsageSchema,
-} from '@/lib/schemas/message-metadata';
+} from '@/db/schemas/chat-metadata';
+import type {
+  ErrorMetadata,
+  UIMessageErrorType,
+} from '@/lib/schemas/error-schemas';
+import {
+  ErrorMetadataSchema,
+  UIMessageErrorTypeSchema,
+} from '@/lib/schemas/error-schemas';
 import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
 
 import {
@@ -71,8 +76,14 @@ export type { UIMessageErrorType };
  * AI SDK UIMessage only supports 'user', 'assistant', and 'system' roles.
  * Tool messages are handled separately.
  */
-function isUIMessageRole(role: string): role is 'user' | 'assistant' | 'system' {
-  return role === MessageRoles.USER || role === MessageRoles.ASSISTANT || role === UIMessageRoles.SYSTEM;
+function isUIMessageRole(
+  role: string,
+): role is 'user' | 'assistant' | 'system' {
+  return (
+    role === MessageRoles.USER
+    || role === MessageRoles.ASSISTANT
+    || role === UIMessageRoles.SYSTEM
+  );
 }
 
 /**
@@ -86,7 +97,9 @@ export function isPreSearchMessage(
 ): message is UIMessage & { metadata: DbPreSearchMessageMetadata } {
   if (!message.metadata)
     return false;
-  const validation = DbPreSearchMessageMetadataSchema.safeParse(message.metadata);
+  const validation = DbPreSearchMessageMetadataSchema.safeParse(
+    message.metadata,
+  );
   return validation.success;
 }
 
@@ -101,8 +114,12 @@ export function isParticipantMessage(
 ): message is UIMessage & { metadata: DbAssistantMessageMetadata } {
   if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
     return false;
-  const validation = DbAssistantMessageMetadataSchema.safeParse(message.metadata);
-  return validation.success && validation.data && 'participantId' in validation.data;
+  const validation = DbAssistantMessageMetadataSchema.safeParse(
+    message.metadata,
+  );
+  return (
+    validation.success && validation.data && 'participantId' in validation.data
+  );
 }
 
 // ============================================================================
@@ -116,7 +133,9 @@ export function isParticipantMessage(
  * Handles date serialization and metadata enrichment.
  */
 export function chatMessageToUIMessage(
-  message: ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }),
+  message:
+    | ChatMessage
+    | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }),
 ): UIMessage {
   if (!isUIMessageRole(message.role)) {
     throw new Error(
@@ -124,15 +143,17 @@ export function chatMessageToUIMessage(
     );
   }
 
-  const createdAt = message.createdAt instanceof Date
-    ? message.createdAt.toISOString()
-    : message.createdAt;
+  const createdAt
+    = message.createdAt instanceof Date
+      ? message.createdAt.toISOString()
+      : message.createdAt;
 
   // ✅ TYPE-SAFE: Check for pre-search metadata without force casting
-  const isPreSearchMsg = message.metadata !== null
-    && typeof message.metadata === 'object'
-    && 'isPreSearch' in message.metadata
-    && message.metadata.isPreSearch === true;
+  const isPreSearchMsg
+    = message.metadata !== null
+      && typeof message.metadata === 'object'
+      && 'isPreSearch' in message.metadata
+      && message.metadata.isPreSearch === true;
 
   // ✅ CRITICAL FIX: Always preserve roundNumber from database column
   // Even when metadata exists, ensure roundNumber from column takes precedence
@@ -168,7 +189,10 @@ export function chatMessageToUIMessage(
  * @returns Array of UIMessages with complete metadata
  */
 export function chatMessagesToUIMessages(
-  messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[],
+  messages: (
+    | ChatMessage
+    | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date })
+  )[],
   participants?: ParticipantContext[],
 ): UIMessage[] {
   // Filter out tool messages and convert
@@ -186,7 +210,10 @@ export function chatMessagesToUIMessages(
   const messagesWithRoundNumber = uiMessages.map((message) => {
     const explicitRound = getRoundNumber(message.metadata);
     // ✅ 0-BASED FIX: Accept round 0 as valid (was: explicitRound > 0)
-    const hasRoundNumber = explicitRound !== null && explicitRound !== undefined && explicitRound >= 0;
+    const hasRoundNumber
+      = explicitRound !== null
+        && explicitRound !== undefined
+        && explicitRound >= 0;
 
     if (hasRoundNumber && explicitRound !== null) {
       if (message.role === MessageRoles.USER && explicitRound > currentRound) {
@@ -199,14 +226,24 @@ export function chatMessagesToUIMessages(
 
         if (!isPreSearchMsg) {
           const participantId = getParticipantId(message.metadata);
-          const participant = participantId ? participantMap.get(participantId) : null;
+          const participant = participantId
+            ? participantMap.get(participantId)
+            : null;
 
           if (participant && !hasParticipantEnrichment(message.metadata)) {
             const baseMetadata = getAssistantMetadata(message.metadata);
             return {
               ...message,
               metadata: enrichMessageWithParticipant(
-                baseMetadata ? { ...baseMetadata, role: message.role } as DbMessageMetadata : { role: message.role, roundNumber: explicitRound } as DbMessageMetadata,
+                baseMetadata
+                  ? ({
+                      ...baseMetadata,
+                      role: message.role,
+                    } as DbMessageMetadata)
+                  : ({
+                      role: message.role,
+                      roundNumber: explicitRound,
+                    } as DbMessageMetadata),
                 {
                   id: participant.id,
                   modelId: participant.modelId,
@@ -266,19 +303,18 @@ export function chatMessagesToUIMessages(
 
       if (!isPreSearchMsg) {
         const participantId = getParticipantId(message.metadata);
-        const participant = participantId ? participantMap.get(participantId) : null;
+        const participant = participantId
+          ? participantMap.get(participantId)
+          : null;
 
         if (participant) {
           const existingMetadata = getAssistantMetadata(message.metadata);
-          enrichedMetadata = buildAssistantMetadata(
-            existingMetadata || {},
-            {
-              roundNumber: currentRound ?? 0,
-              participantId: participant.id,
-              model: participant.modelId,
-              participantRole: participant.role,
-            },
-          );
+          enrichedMetadata = buildAssistantMetadata(existingMetadata || {}, {
+            roundNumber: currentRound ?? 0,
+            participantId: participant.id,
+            model: participant.modelId,
+            participantRole: participant.role,
+          });
         } else {
           enrichedMetadata = null;
         }
@@ -343,7 +379,10 @@ export function filterByRound(
   messages: UIMessage[],
   roundNumber: number,
 ): UIMessage[] {
-  return filterMessages(messages, m => getRoundNumber(m.metadata) === roundNumber);
+  return filterMessages(
+    messages,
+    m => getRoundNumber(m.metadata) === roundNumber,
+  );
 }
 
 /**
@@ -377,7 +416,10 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
 
     if (message.role === MessageRoles.USER) {
       const textParts = message.parts?.filter(
-        part => part.type === MessagePartTypes.TEXT && 'text' in part && part.text.trim().length > 0,
+        part =>
+          part.type === MessagePartTypes.TEXT
+          && 'text' in part
+          && part.text.trim().length > 0,
       );
       return textParts && textParts.length > 0;
     }
@@ -410,7 +452,12 @@ export function getParticipantMessagesForRound(
     }
 
     // ✅ TYPE-SAFE: Check role field without force casting, using enum constants
-    if (m.metadata && typeof m.metadata === 'object' && 'role' in m.metadata && m.metadata.role === UIMessageRoles.SYSTEM) {
+    if (
+      m.metadata
+      && typeof m.metadata === 'object'
+      && 'role' in m.metadata
+      && m.metadata.role === UIMessageRoles.SYSTEM
+    ) {
       return false;
     }
 
@@ -453,7 +500,10 @@ export function getParticipantMessagesWithIds(
   messages: UIMessage[],
   roundNumber: number,
 ): { messages: UIMessage[]; ids: string[] } {
-  const filteredMessages = getParticipantMessagesForRound(messages, roundNumber);
+  const filteredMessages = getParticipantMessagesForRound(
+    messages,
+    roundNumber,
+  );
   const ids = getParticipantMessageIds(filteredMessages);
   return { messages: filteredMessages, ids };
 }
@@ -519,7 +569,9 @@ export function createErrorUIMessage(
     ? ErrorMetadataSchema.safeParse(errorMetadata)
     : { success: false, data: undefined };
 
-  const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
+  const metadata = validatedMetadata.success
+    ? validatedMetadata.data
+    : errorMetadata;
 
   const errorMeta = buildAssistantMetadata(
     {},
@@ -536,7 +588,10 @@ export function createErrorUIMessage(
         errorCategory: metadata?.errorCategory || errorType,
         statusCode: metadata?.statusCode,
         rawErrorMessage: metadata?.rawErrorMessage,
-        providerMessage: metadata?.providerMessage || metadata?.rawErrorMessage || errorMessage,
+        providerMessage:
+          metadata?.providerMessage
+          || metadata?.rawErrorMessage
+          || errorMessage,
         openRouterError: metadata?.openRouterError,
         openRouterCode: metadata?.openRouterCode,
       },
@@ -579,13 +634,20 @@ export function mergeParticipantMetadata(
 
   // ✅ RACE CONDITION FIX: Check for REASONING parts (DeepSeek R1, Claude thinking, etc.)
   // AI SDK v5 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
-  const textParts = message.parts?.filter(
-    p => p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING,
-  ) || [];
+  const textParts
+    = message.parts?.filter(
+      p =>
+        p.type === MessagePartTypes.TEXT
+        || p.type === MessagePartTypes.REASONING,
+    ) || [];
   const hasTextContent = textParts.some(
-    part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
+    part =>
+      'text' in part
+      && typeof part.text === 'string'
+      && part.text.trim().length > 0,
   );
-  const hasToolCalls = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
+  const hasToolCalls
+    = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
 
   // ✅ CRITICAL FIX: Multiple signals for content presence
   // Signal 1: Has text or reasoning content in parts
@@ -593,7 +655,8 @@ export function mergeParticipantMetadata(
   // Signal 3: Output tokens > 0 (backend reported content generation)
   // Signal 4: Caller said content was generated (skipPartsCheck)
   const hasOutputTokens = (validatedMetadata?.usage?.completionTokens ?? 0) > 0;
-  const hasAnyContent = skipPartsCheck || hasTextContent || hasToolCalls || hasOutputTokens;
+  const hasAnyContent
+    = skipPartsCheck || hasTextContent || hasToolCalls || hasOutputTokens;
 
   // ✅ CRITICAL FIX: Multiple signals for successful completion
   // Signal 1: finishReason='stop' indicates successful completion
@@ -606,12 +669,19 @@ export function mergeParticipantMetadata(
   // Error if: Backend explicitly marked error
   // No error if: Backend marked success, OR caller confirmed content, OR successful finish, OR has content
   // Default: ERROR when no content (stream completed but produced nothing)
-  const hasNoErrorSignal = backendMarkedSuccess || skipPartsCheck || hasSuccessfulFinish || hasAnyContent;
+  const hasNoErrorSignal
+    = backendMarkedSuccess
+      || skipPartsCheck
+      || hasSuccessfulFinish
+      || hasAnyContent;
   const hasError = hasBackendErrorFlag || !hasNoErrorSignal;
 
   // Generate error message if needed
   let errorMessage: string | undefined;
-  if (validatedMetadata?.errorMessage && typeof validatedMetadata.errorMessage === 'string') {
+  if (
+    validatedMetadata?.errorMessage
+    && typeof validatedMetadata.errorMessage === 'string'
+  ) {
     errorMessage = validatedMetadata.errorMessage;
   }
   if (!hasAnyContent && !errorMessage && hasError) {
@@ -621,22 +691,35 @@ export function mergeParticipantMetadata(
   // Parse usage data
   const usageResult = UsageSchema.partial().safeParse(validatedMetadata?.usage);
   const usage = {
-    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
-    completionTokens: usageResult.success ? (usageResult.data.completionTokens ?? 0) : 0,
+    promptTokens: usageResult.success
+      ? (usageResult.data.promptTokens ?? 0)
+      : 0,
+    completionTokens: usageResult.success
+      ? (usageResult.data.completionTokens ?? 0)
+      : 0,
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
   // Parse finish reason
-  const finishReasonRaw = validatedMetadata?.finishReason ? String(validatedMetadata.finishReason) : 'unknown';
+  const finishReasonRaw = validatedMetadata?.finishReason
+    ? String(validatedMetadata.finishReason)
+    : 'unknown';
   const finishReasonResult = FinishReasonSchema.safeParse(finishReasonRaw);
-  const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : 'unknown';
+  const safeFinishReason: FinishReason = finishReasonResult.success
+    ? finishReasonResult.data
+    : 'unknown';
 
   // Parse error type
-  const errorTypeRaw = typeof validatedMetadata?.errorType === 'string'
-    ? validatedMetadata.errorType
-    : !hasAnyContent && hasError ? 'empty_response' : 'unknown';
+  const errorTypeRaw
+    = typeof validatedMetadata?.errorType === 'string'
+      ? validatedMetadata.errorType
+      : !hasAnyContent && hasError
+          ? 'empty_response'
+          : 'unknown';
   const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
-  const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : 'unknown';
+  const safeErrorType: ErrorType = errorTypeResult.success
+    ? errorTypeResult.data
+    : 'unknown';
 
   return buildAssistantMetadata(
     {
@@ -644,7 +727,10 @@ export function mergeParticipantMetadata(
       usage,
       isTransient: validatedMetadata?.isTransient === true,
       isPartialResponse: validatedMetadata?.isPartialResponse === true,
-      ...(validatedMetadata?.createdAt && typeof validatedMetadata.createdAt === 'string' && { createdAt: validatedMetadata.createdAt }),
+      ...(validatedMetadata?.createdAt
+        && typeof validatedMetadata.createdAt === 'string' && {
+        createdAt: validatedMetadata.createdAt,
+      }),
     },
     {
       participantId: participant.id,
@@ -682,7 +768,9 @@ export type MessageOrderValidation = {
  * - User message appears before assistant messages
  * - No round skipping
  */
-export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidation {
+export function validateMessageOrder(
+  messages: UIMessage[],
+): MessageOrderValidation {
   const errors: string[] = [];
 
   let lastRound = 0;

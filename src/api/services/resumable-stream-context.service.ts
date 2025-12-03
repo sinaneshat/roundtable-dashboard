@@ -26,8 +26,13 @@ import type { ExecutionContext } from 'hono';
 
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
+import type {
+  ResumableStreamContext,
+  ResumableStreamContextOptions,
+  StreamBufferMetadata,
+  StreamChunk,
+} from '@/api/types/streaming';
 
-import type { StreamBufferMetadata, StreamChunk } from './stream-buffer.service';
 import {
   appendStreamChunk,
   completeStreamBuffer,
@@ -37,89 +42,6 @@ import {
   getStreamMetadata,
   initializeStreamBuffer,
 } from './stream-buffer.service';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Options for creating a resumable stream context
- */
-export type ResumableStreamContextOptions = {
-  /**
-   * Function to extend worker lifetime for background processing
-   * In Cloudflare Workers: `ctx.waitUntil`
-   * In Next.js: `after` from 'next/server'
-   */
-  waitUntil: (promise: Promise<unknown>) => void;
-  /**
-   * Cloudflare KV environment bindings
-   */
-  env: ApiEnv['Bindings'];
-  /**
-   * Optional execution context for accessing waitUntil
-   */
-  executionCtx?: ExecutionContext;
-};
-
-/**
- * Stream context returned by createResumableStreamContext
- */
-export type ResumableStreamContext = {
-  /**
-   * Create a new resumable stream and start buffering
-   * @param streamId - Unique stream identifier
-   * @param threadId - Thread ID
-   * @param roundNumber - Round number
-   * @param participantIndex - Participant index
-   * @param getStream - Function that returns the SSE stream to buffer
-   */
-  createNewResumableStream: (
-    streamId: string,
-    threadId: string,
-    roundNumber: number,
-    participantIndex: number,
-    getStream: () => ReadableStream<string>,
-  ) => Promise<void>;
-
-  /**
-   * Resume an existing stream from KV buffer
-   * @param streamId - Stream ID to resume
-   * @returns ReadableStream that polls KV for chunks
-   */
-  resumeExistingStream: (streamId: string) => Promise<ReadableStream<Uint8Array> | null>;
-
-  /**
-   * Check if a stream is active
-   * @param streamId - Stream ID to check
-   */
-  isStreamActive: (streamId: string) => Promise<boolean>;
-
-  /**
-   * Get stream metadata
-   * @param streamId - Stream ID
-   */
-  getMetadata: (streamId: string) => Promise<StreamBufferMetadata | null>;
-
-  /**
-   * Get all buffered chunks
-   * @param streamId - Stream ID
-   */
-  getChunks: (streamId: string) => Promise<StreamChunk[] | null>;
-
-  /**
-   * Mark stream as complete
-   * @param streamId - Stream ID
-   */
-  complete: (streamId: string) => Promise<void>;
-
-  /**
-   * Mark stream as failed
-   * @param streamId - Stream ID
-   * @param error - Error message
-   */
-  fail: (streamId: string, error: string) => Promise<void>;
-};
 
 // ============================================================================
 // Implementation
@@ -280,6 +202,7 @@ export function generateParticipantStreamId(
 
 /**
  * Parse participant stream ID
+ * ✅ TYPE-SAFE: Uses explicit undefined checks instead of force casts
  */
 export function parseParticipantStreamId(streamId: string): {
   threadId: string;
@@ -287,14 +210,18 @@ export function parseParticipantStreamId(streamId: string): {
   participantIndex: number;
 } | null {
   const match = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
-  if (!match || match.length < 4) {
+  const threadId = match?.[1];
+  const roundStr = match?.[2];
+  const participantStr = match?.[3];
+
+  if (!threadId || !roundStr || !participantStr) {
     return null;
   }
 
   return {
-    threadId: match[1] as string,
-    roundNumber: Number.parseInt(match[2] as string, 10),
-    participantIndex: Number.parseInt(match[3] as string, 10),
+    threadId,
+    roundNumber: Number.parseInt(roundStr, 10),
+    participantIndex: Number.parseInt(participantStr, 10),
   };
 }
 

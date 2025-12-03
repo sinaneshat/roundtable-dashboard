@@ -69,12 +69,13 @@ export function ConsensusAnalysisSection({
     { key: 'creativity', field: 'creativity' as const },
   ];
 
-  // Build radar data dynamically from argumentStrengthProfile
-  const fullRadarData = argumentStrengthProfile && Object.keys(argumentStrengthProfile).length > 0
+  // ✅ FIX: Updated to handle array-based argumentStrengthProfile (Anthropic compatibility)
+  // Build radar data dynamically from argumentStrengthProfile array
+  const fullRadarData = argumentStrengthProfile && argumentStrengthProfile.length > 0
     ? metricConfig.map(({ key, field }) => {
         const dataPoint: RadarDataPoint = { metric: t(`consensusAnalysis.profile${key.charAt(0).toUpperCase() + key.slice(1)}`) };
-        Object.entries(argumentStrengthProfile).forEach(([role, profile]) => {
-          dataPoint[role] = profile[field];
+        argumentStrengthProfile.forEach((profile) => {
+          dataPoint[profile.modelName] = profile[field];
         });
         return dataPoint;
       })
@@ -89,33 +90,37 @@ export function ConsensusAnalysisSection({
     'var(--chart-5)',
   ];
 
+  // ✅ FIX: Updated to handle array-based argumentStrengthProfile (Anthropic compatibility)
   // Build chart config using Object.fromEntries for type-safe construction
-  const chartConfig = argumentStrengthProfile
+  const chartConfig = argumentStrengthProfile && argumentStrengthProfile.length > 0
     ? Object.fromEntries(
-      Object.keys(argumentStrengthProfile).map((role, index) => [
-        role,
-        { label: role, color: chartColors[index % chartColors.length] },
+      argumentStrengthProfile.map((profile, index) => [
+        profile.modelName,
+        { label: profile.modelName, color: chartColors[index % chartColors.length] },
       ]),
     ) satisfies ChartConfig
     : ({} satisfies ChartConfig);
 
+  // ✅ FIX: Updated to handle array-based schemas (Anthropic compatibility)
   // Collect ALL unique contributors from ALL heatmap entries AND argumentStrengthProfile
   const contributors = (() => {
     const uniqueContributors = new Set<string>();
 
-    // Add contributors from ALL heatmap entries
+    // Add contributors from ALL heatmap entries (now array-based perspectives)
     if (agreementHeatmap && agreementHeatmap.length > 0) {
       agreementHeatmap.forEach((entry) => {
-        Object.keys(entry.perspectives || {}).forEach((contributor) => {
-          uniqueContributors.add(contributor);
-        });
+        if (entry.perspectives && Array.isArray(entry.perspectives)) {
+          entry.perspectives.forEach((perspective) => {
+            uniqueContributors.add(perspective.modelName);
+          });
+        }
       });
     }
 
-    // Also add from argumentStrengthProfile to ensure consistency
-    if (argumentStrengthProfile) {
-      Object.keys(argumentStrengthProfile).forEach((contributor) => {
-        uniqueContributors.add(contributor);
+    // Also add from argumentStrengthProfile (now array-based)
+    if (argumentStrengthProfile && Array.isArray(argumentStrengthProfile)) {
+      argumentStrengthProfile.forEach((profile) => {
+        uniqueContributors.add(profile.modelName);
       });
     }
 
@@ -125,7 +130,8 @@ export function ConsensusAnalysisSection({
   // Only render if we have alignment data
   const hasAlignmentData = alignmentSummary && alignmentSummary.totalClaims > 0;
   const hasAgreementData = agreementHeatmap && agreementHeatmap.length > 0;
-  const hasStrengthData = argumentStrengthProfile && Object.keys(argumentStrengthProfile).length > 0;
+  // ✅ FIX: Updated to handle array-based argumentStrengthProfile
+  const hasStrengthData = argumentStrengthProfile && argumentStrengthProfile.length > 0;
 
   // Don't render if no data
   if (!hasAlignmentData && !hasAgreementData && !hasStrengthData) {
@@ -214,7 +220,9 @@ export function ConsensusAnalysisSection({
                   >
                     <td className="py-2.5 px-3 text-foreground/80">{row.claim}</td>
                     {contributors.map((contributor) => {
-                      const status = row.perspectives[contributor] ?? AgreementStatuses.AGREE;
+                      // ✅ FIX: Updated to handle array-based perspectives (Anthropic compatibility)
+                      const perspective = row.perspectives?.find(p => p.modelName === contributor);
+                      const status = perspective?.status ?? AgreementStatuses.AGREE;
                       return (
                         <td key={`${row.claim}-${contributor}`} className="py-2.5 px-3">
                           <div className="flex justify-center items-center">
@@ -249,10 +257,10 @@ export function ConsensusAnalysisSection({
                 tickLine={false}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
-              {Object.keys(argumentStrengthProfile).map((role, index) => (
+              {argumentStrengthProfile.map((profile, index) => (
                 <Radar
-                  key={role}
-                  dataKey={role}
+                  key={profile.modelName}
+                  dataKey={profile.modelName}
                   fill={chartColors[index % chartColors.length]}
                   fillOpacity={0.2}
                   stroke={chartColors[index % chartColors.length]}

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
+  "main": "custom-worker.ts",
   "name": "roundtable-dashboard",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
   "compatibility_date": "2025-03-25",
@@ -66,6 +66,10 @@
   "ai": {
     "binding": "AI"
   },
+  // AI Search (AutoRAG) - requires creating instances via Cloudflare dashboard or API:
+  // wrangler ai-search create roundtable-rag-local --source r2://roundtable-dashboard-r2-uploads-local
+  // Each environment needs its own AI Search instance connected to its R2 bucket
+  // See: https://developers.cloudflare.com/ai-search/get-started/
   "durable_objects": {
     "bindings": [
       {
@@ -75,6 +79,10 @@
       {
         "name": "NEXT_CACHE_DO_PURGE",
         "class_name": "BucketCachePurge"
+      },
+      {
+        "name": "UPLOAD_CLEANUP_SCHEDULER",
+        "class_name": "UploadCleanupScheduler"
       }
     ]
   },
@@ -82,6 +90,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["DOQueueHandler", "BucketCachePurge"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["UploadCleanupScheduler"]
     }
   ],
   "vars": {
@@ -167,6 +179,10 @@
           {
             "name": "NEXT_CACHE_DO_PURGE",
             "class_name": "BucketCachePurge"
+          },
+          {
+            "name": "UPLOAD_CLEANUP_SCHEDULER",
+            "class_name": "UploadCleanupScheduler"
           }
         ]
       },
@@ -253,6 +269,10 @@
           {
             "name": "NEXT_CACHE_DO_PURGE",
             "class_name": "BucketCachePurge"
+          },
+          {
+            "name": "UPLOAD_CLEANUP_SCHEDULER",
+            "class_name": "UploadCleanupScheduler"
           }
         ]
       },

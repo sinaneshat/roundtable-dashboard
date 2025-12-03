@@ -30,7 +30,8 @@ import {
 } from '@/api/routes/chat/schema';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
-import { FilePartSchema } from '@/lib/schemas/message-schemas';
+// ✅ Use ExtendedFilePartSchema to include uploadId for backend fallback loading
+import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 
 import type {
@@ -354,7 +355,8 @@ export const DataStateSchema = z.object({
   pendingMessage: z.string().nullable(),
   pendingAttachmentIds: z.array(z.string()).nullable(),
   /** File parts for AI SDK message creation - set before clearAttachments() */
-  pendingFileParts: z.array(FilePartSchema).nullable(),
+  // ✅ Use ExtendedFilePartSchema to include uploadId for backend fallback loading
+  pendingFileParts: z.array(ExtendedFilePartSchema).nullable(),
   expectedParticipantIds: z.array(z.string()).nullable(),
   streamingRoundNumber: z.number().nullable(),
   currentRoundNumber: z.number().nullable(),

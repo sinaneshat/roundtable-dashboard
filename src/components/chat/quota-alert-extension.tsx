@@ -11,6 +11,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
+import type { UsageStatsPayload } from '@/api/routes/usage/schema';
+import { UsageStatsPayloadSchema } from '@/api/routes/usage/schema';
 import { Button } from '@/components/ui/button';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
@@ -42,11 +44,12 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
       return { isBlocked: false, blockerType: null, limit: 0 };
     }
 
-    const data = statsData.data as {
-      threads: { remaining: number; limit: number };
-      messages: { remaining: number; limit: number };
-      analysis?: { remaining: number; limit: number };
-    };
+    // ✅ TYPE-SAFE: Use Zod validation instead of force cast
+    const parseResult = UsageStatsPayloadSchema.safeParse(statsData.data);
+    if (!parseResult.success) {
+      return { isBlocked: false, blockerType: null, limit: 0 };
+    }
+    const data: UsageStatsPayload = parseResult.data;
 
     // Check if the primary quota type is exceeded
     if (checkType === 'threads' && data.threads.remaining === 0) {

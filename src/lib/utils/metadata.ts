@@ -149,6 +149,48 @@ export function extractMessageMetadata(
 // ============================================================================
 
 /**
+ * Extract createdAt from a message or its metadata
+ * Returns ISO string or null if not available
+ *
+ * **REPLACES**: `(m as { createdAt?: Date | string }).createdAt`
+ *
+ * ✅ TYPE-SAFE: No force casting, handles both UIMessage and extended types
+ * Handles Date objects, ISO strings, and metadata.createdAt field
+ *
+ * @param message - Message object (UIMessage, ChatMessage, or extended type)
+ * @returns ISO date string or null
+ */
+export function getCreatedAt(message: unknown): string | null {
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+
+  const msg = message as Record<string, unknown>;
+
+  // 1. Check direct createdAt property (ChatMessage or extended UIMessage)
+  if ('createdAt' in msg && msg.createdAt !== undefined) {
+    if (msg.createdAt instanceof Date) {
+      return msg.createdAt.toISOString();
+    }
+    if (typeof msg.createdAt === 'string') {
+      return msg.createdAt;
+    }
+  }
+
+  // 2. Check metadata.createdAt (our custom metadata field)
+  if ('metadata' in msg && msg.metadata && typeof msg.metadata === 'object') {
+    const metadata = msg.metadata as Record<string, unknown>;
+    if ('createdAt' in metadata && metadata.createdAt !== undefined) {
+      if (typeof metadata.createdAt === 'string') {
+        return metadata.createdAt;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Extract roundNumber from metadata (all message types have this)
  * Returns null if metadata is invalid or roundNumber is missing
  *

@@ -9,54 +9,19 @@
  * - Time-limited expiration prevents indefinite access
  * - User/thread binding prevents unauthorized access
  * - Rate limiting protection via separate preset
+ *
+ * @see /src/api/types/uploads.ts for type definitions
  */
 
 import type { Context } from 'hono';
 
 import type { ApiEnv } from '@/api/types';
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** Default URL expiration time (1 hour) */
-const DEFAULT_EXPIRATION_MS = 60 * 60 * 1000;
-
-/** Maximum allowed expiration (24 hours) */
-const MAX_EXPIRATION_MS = 24 * 60 * 60 * 1000;
-
-/** Minimum allowed expiration (5 minutes) */
-const MIN_EXPIRATION_MS = 5 * 60 * 1000;
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export type SignedUrlOptions = {
-  /** Upload ID to sign */
-  uploadId: string;
-  /** User ID who is being granted access */
-  userId: string;
-  /** Optional thread ID for thread-scoped access */
-  threadId?: string;
-  /** Expiration time in milliseconds (default: 1 hour) */
-  expirationMs?: number;
-  /** Whether this is for a public thread (allows broader access with stricter rate limits) */
-  isPublic?: boolean;
-};
-
-export type SignedUrlParams = {
-  /** Upload ID */
-  id: string;
-  /** Expiration timestamp (Unix ms) */
-  exp: number;
-  /** User ID or 'public' */
-  uid: string;
-  /** Optional thread ID */
-  tid?: string;
-  /** Cryptographic signature */
-  sig: string;
-};
+import type { SignedUrlOptions, ValidateSignatureResult } from '@/api/types/uploads';
+import {
+  DEFAULT_URL_EXPIRATION_MS,
+  MAX_URL_EXPIRATION_MS,
+  MIN_URL_EXPIRATION_MS,
+} from '@/api/types/uploads';
 
 // ============================================================================
 // SIGNATURE GENERATION
@@ -135,12 +100,12 @@ export async function generateSignedDownloadUrl(
     uploadId,
     userId,
     threadId,
-    expirationMs = DEFAULT_EXPIRATION_MS,
+    expirationMs = DEFAULT_URL_EXPIRATION_MS,
     isPublic = false,
   } = options;
 
   // Validate expiration
-  const clampedExpiration = Math.min(Math.max(expirationMs, MIN_EXPIRATION_MS), MAX_EXPIRATION_MS);
+  const clampedExpiration = Math.min(Math.max(expirationMs, MIN_URL_EXPIRATION_MS), MAX_URL_EXPIRATION_MS);
   const expiration = Date.now() + clampedExpiration;
 
   // Use userId or 'public' marker for public threads
@@ -185,10 +150,6 @@ export async function generateSignedDownloadPath(
 // ============================================================================
 // SIGNATURE VALIDATION
 // ============================================================================
-
-export type ValidateSignatureResult
-  = | { valid: true; uploadId: string; userId: string; threadId?: string; isPublic: boolean }
-    | { valid: false; error: string };
 
 /**
  * Validate a signed download URL

@@ -15,7 +15,12 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { MESSAGE_PART_TYPES, MESSAGE_STATUSES, MessagePartTypes, MessageStatusSchema } from '@/api/core/enums';
+import {
+  MESSAGE_PART_TYPES,
+  MESSAGE_STATUSES,
+  MessagePartTypes,
+  MessageStatusSchema,
+} from '@/api/core/enums';
 
 // ============================================================================
 // FILE PART SCHEMA (extracted for reuse)
@@ -53,6 +58,180 @@ export const FilePartSchema = z.object({
  * ✅ ZOD INFERENCE: Type automatically derived from schema
  */
 export type FilePart = z.infer<typeof FilePartSchema>;
+
+/**
+ * Extended file part schema for internal use (includes uploadId)
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Extends FilePartSchema with internal tracking fields
+ * Used when file parts need to reference the original upload for:
+ * - Fallback file loading (extract uploadId from URL)
+ * - Message-upload junction table lookups
+ * - Citation source mapping
+ */
+export const ExtendedFilePartSchema = FilePartSchema.extend({
+  uploadId: z.string().optional().openapi({
+    description: 'Internal upload ID for file tracking',
+    example: '01HXYZ123ABC',
+  }),
+});
+
+export type ExtendedFilePart = z.infer<typeof ExtendedFilePartSchema>;
+
+// ============================================================================
+// FILE PART TYPE GUARDS
+// ============================================================================
+
+/**
+ * Type guard: Check if a message part is a file part
+ * ✅ TYPE-SAFE: Uses Zod schema validation, no forced casts
+ */
+export function isFilePart(part: unknown): part is FilePart {
+  return FilePartSchema.safeParse(part).success;
+}
+
+/**
+ * Type guard: Check if a file part has uploadId
+ * ✅ TYPE-SAFE: Uses Zod schema validation for ExtendedFilePart
+ */
+export function hasUploadId(
+  part: FilePart,
+): part is ExtendedFilePart & { uploadId: string } {
+  const result = ExtendedFilePartSchema.safeParse(part);
+  if (!result.success)
+    return false;
+  return (
+    typeof result.data.uploadId === 'string' && result.data.uploadId.length > 0
+  );
+}
+
+/**
+ * Extract uploadId from file part URL if present
+ * Pattern: /api/v1/uploads/{uploadId}/download
+ * ✅ TYPE-SAFE: Returns string or null, no unsafe casts
+ */
+export function extractUploadIdFromUrl(url: string): string | null {
+  const match = url.match(/\/uploads\/([A-Z0-9]+)\//i);
+  return match?.[1] ?? null;
+}
+
+/**
+ * Get uploadId from file part (direct property or extracted from URL)
+ * ✅ TYPE-SAFE: Combines both extraction methods
+ */
+export function getUploadIdFromFilePart(part: FilePart): string | null {
+  // First try direct uploadId property
+  if (hasUploadId(part)) {
+    return part.uploadId;
+  }
+  // Fallback: extract from URL
+  return extractUploadIdFromUrl(part.url);
+}
+
+/**
+ * Safely extract filename from a part object
+ * ✅ TYPE-SAFE: No force casting, handles unknown part types
+ *
+ * @param part - Part object that may have a filename property
+ * @returns filename string or undefined
+ */
+export function getFilenameFromPart(part: unknown): string | undefined {
+  if (!part || typeof part !== 'object')
+    return undefined;
+  if ('filename' in part && typeof (part as { filename?: unknown }).filename === 'string') {
+    return (part as { filename: string }).filename;
+  }
+  return undefined;
+}
+
+/**
+ * Safely extract mimeType from a part object
+ * ✅ TYPE-SAFE: Checks both mimeType and mediaType (AI SDK v5 uses mediaType)
+ *
+ * @param part - Part object that may have a mimeType or mediaType property
+ * @returns mimeType string or default
+ */
+export function getMimeTypeFromPart(part: unknown, defaultType = 'application/octet-stream'): string {
+  if (!part || typeof part !== 'object')
+    return defaultType;
+  // Check mimeType first (legacy), then mediaType (AI SDK v5)
+  if ('mimeType' in part && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
+    return (part as { mimeType: string }).mimeType;
+  }
+  if ('mediaType' in part && typeof (part as { mediaType?: unknown }).mediaType === 'string') {
+    return (part as { mediaType: string }).mediaType;
+  }
+  return defaultType;
+}
+
+/**
+ * Safely extract URL from a part object
+ * ✅ TYPE-SAFE: No force casting
+ *
+ * @param part - Part object that may have a url property
+ * @returns url string or undefined
+ */
+export function getUrlFromPart(part: unknown): string | undefined {
+  if (!part || typeof part !== 'object')
+    return undefined;
+  if ('url' in part && typeof (part as { url?: unknown }).url === 'string') {
+    return (part as { url: string }).url;
+  }
+  return undefined;
+}
+
+/**
+ * Zod schema for valid file part for transmission
+ * ✅ SINGLE SOURCE OF TRUTH: Schema-based validation for transmission readiness
+ */
+const ValidFilePartForTransmissionSchema = z
+  .object({
+    type: z.literal('file'),
+    url: z.string().optional(),
+    mediaType: z.string().optional(),
+    filename: z.string().optional(),
+    uploadId: z.string().optional(),
+  })
+  .refine(
+    data =>
+      (data.url && data.url.length > 0)
+      || (data.uploadId && data.uploadId.length > 0),
+    { message: 'File part must have either URL or uploadId' },
+  );
+
+/**
+ * Type guard: Check if part is a valid file part for AI SDK transmission
+ *
+ * A file part is valid for transmission if it has:
+ * - type === 'file' AND
+ * - Either a non-empty URL (HTTP/data URL) OR uploadId for backend fallback
+ *
+ * ✅ TYPE-SAFE: Uses Zod schema validation, no forced casts
+ * ✅ SINGLE SOURCE OF TRUTH: Used by all file part extraction logic
+ * - use-multi-participant-chat.ts (triggerNextParticipantWithRefs, startRound, retry)
+ * - prepareSendMessagesRequest sanitization filter
+ */
+export function isValidFilePartForTransmission(
+  part: unknown,
+): part is ExtendedFilePart {
+  return ValidFilePartForTransmissionSchema.safeParse(part).success;
+}
+
+/**
+ * Extract valid file parts from message parts array
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Reusable utility for extracting file parts
+ * Used in multi-participant streaming, retry, and message reconstruction
+ *
+ * @param parts - Array of message parts (can be any shape)
+ * @returns Array of valid ExtendedFilePart objects
+ */
+export function extractValidFileParts(
+  parts: unknown[] | undefined,
+): ExtendedFilePart[] {
+  if (!Array.isArray(parts))
+    return [];
+  return parts.filter(isValidFilePartForTransmission);
+}
 
 // ============================================================================
 // MESSAGE PART SCHEMAS
@@ -100,63 +279,65 @@ export type FilePart = z.infer<typeof FilePartSchema>;
  *   isError: false
  * }
  */
-export const MessagePartSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('text'),
-    text: z.string().openapi({
-      description: 'Regular text content',
-      example: 'This is a response to your question',
+export const MessagePartSchema = z
+  .discriminatedUnion('type', [
+    z.object({
+      type: z.literal('text'),
+      text: z.string().openapi({
+        description: 'Regular text content',
+        example: 'This is a response to your question',
+      }),
     }),
-  }),
-  z.object({
-    type: z.literal('reasoning'),
-    text: z.string().openapi({
-      description: 'Model internal reasoning content',
-      example: 'Let me analyze this step by step...',
+    z.object({
+      type: z.literal('reasoning'),
+      text: z.string().openapi({
+        description: 'Model internal reasoning content',
+        example: 'Let me analyze this step by step...',
+      }),
     }),
-  }),
-  z.object({
-    type: z.literal('tool-call'),
-    toolCallId: z.string().openapi({
-      description: 'Unique identifier for this tool call',
-      example: 'call_abc123',
+    z.object({
+      type: z.literal('tool-call'),
+      toolCallId: z.string().openapi({
+        description: 'Unique identifier for this tool call',
+        example: 'call_abc123',
+      }),
+      toolName: z.string().openapi({
+        description: 'Name of the tool being called',
+        example: 'search_web',
+      }),
+      args: z.unknown().openapi({
+        description: 'Arguments passed to the tool',
+        example: { query: 'AI SDK documentation' },
+      }),
     }),
-    toolName: z.string().openapi({
-      description: 'Name of the tool being called',
-      example: 'search_web',
+    z.object({
+      type: z.literal('tool-result'),
+      toolCallId: z.string().openapi({
+        description: 'Unique identifier matching the original tool call',
+        example: 'call_abc123',
+      }),
+      toolName: z.string().openapi({
+        description: 'Name of the tool that was executed',
+        example: 'search_web',
+      }),
+      result: z.unknown().openapi({
+        description: 'Result returned from tool execution',
+        example: { results: [] },
+      }),
+      isError: z.boolean().optional().openapi({
+        description: 'Whether the tool execution resulted in an error',
+        example: false,
+      }),
     }),
-    args: z.unknown().openapi({
-      description: 'Arguments passed to the tool',
-      example: { query: 'AI SDK documentation' },
+    // ✅ AI SDK v5 FILE PART: Reuse extracted FilePartSchema
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
+    FilePartSchema,
+    // ✅ AI SDK v5 STEP-START PART: Marks beginning of a step in streaming
+    z.object({
+      type: z.literal('step-start'),
     }),
-  }),
-  z.object({
-    type: z.literal('tool-result'),
-    toolCallId: z.string().openapi({
-      description: 'Unique identifier matching the original tool call',
-      example: 'call_abc123',
-    }),
-    toolName: z.string().openapi({
-      description: 'Name of the tool that was executed',
-      example: 'search_web',
-    }),
-    result: z.unknown().openapi({
-      description: 'Result returned from tool execution',
-      example: { results: [] },
-    }),
-    isError: z.boolean().optional().openapi({
-      description: 'Whether the tool execution resulted in an error',
-      example: false,
-    }),
-  }),
-  // ✅ AI SDK v5 FILE PART: Reuse extracted FilePartSchema
-  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
-  FilePartSchema,
-  // ✅ AI SDK v5 STEP-START PART: Marks beginning of a step in streaming
-  z.object({
-    type: z.literal('step-start'),
-  }),
-]).openapi('MessagePart');
+  ])
+  .openapi('MessagePart');
 
 /**
  * Message part TypeScript type
@@ -228,7 +409,10 @@ export function isMessagePart(value: unknown): value is MessagePart {
  * }
  */
 export function isMessageStatus(value: unknown): value is MessageStatus {
-  return typeof value === 'string' && MESSAGE_STATUSES.includes(value as MessageStatus);
+  return (
+    typeof value === 'string'
+    && MESSAGE_STATUSES.includes(value as MessageStatus)
+  );
 }
 
 /**
@@ -251,7 +435,10 @@ export function isMessageStatus(value: unknown): value is MessageStatus {
  */
 export function extractTextFromParts(parts: MessagePart[]): string {
   return parts
-    .filter((part): part is Extract<MessagePart, { type: 'text' }> => part.type === MessagePartTypes.TEXT)
+    .filter(
+      (part): part is Extract<MessagePart, { type: 'text' }> =>
+        part.type === MessagePartTypes.TEXT,
+    )
     .map(part => part.text)
     .join(' ');
 }
@@ -309,7 +496,10 @@ export function extractTextFromMessage(
  */
 export function extractReasoningFromParts(parts: MessagePart[]): string {
   return parts
-    .filter((part): part is Extract<MessagePart, { type: 'reasoning' }> => part.type === MessagePartTypes.REASONING)
+    .filter(
+      (part): part is Extract<MessagePart, { type: 'reasoning' }> =>
+        part.type === MessagePartTypes.REASONING,
+    )
     .map(part => part.text)
     .join(' ');
 }
@@ -335,8 +525,11 @@ export function extractReasoningFromParts(parts: MessagePart[]): string {
  */
 export function extractAllTextFromParts(parts: MessagePart[]): string {
   return parts
-    .filter((part): part is Extract<MessagePart, { type: 'text' | 'reasoning' }> =>
-      part.type === MessagePartTypes.TEXT || part.type === MessagePartTypes.REASONING)
+    .filter(
+      (part): part is Extract<MessagePart, { type: 'text' | 'reasoning' }> =>
+        part.type === MessagePartTypes.TEXT
+        || part.type === MessagePartTypes.REASONING,
+    )
     .map(part => part.text)
     .join(' ');
 }
@@ -372,7 +565,9 @@ export function filterPartsByType<T extends MessagePart['type']>(
   parts: MessagePart[],
   type: T,
 ): Extract<MessagePart, { type: T }>[] {
-  return parts.filter((part): part is Extract<MessagePart, { type: T }> => part.type === type);
+  return parts.filter(
+    (part): part is Extract<MessagePart, { type: T }> => part.type === type,
+  );
 }
 
 /**
@@ -482,7 +677,9 @@ export function createReasoningPart(text: string): MessagePart {
  *   const toolName = part.toolName;
  * }
  */
-export function isToolCallPart(part: MessagePart): part is Extract<MessagePart, { type: 'tool-call' }> {
+export function isToolCallPart(
+  part: MessagePart,
+): part is Extract<MessagePart, { type: 'tool-call' }> {
   return part.type === 'tool-call';
 }
 
@@ -497,7 +694,9 @@ export function isToolCallPart(part: MessagePart): part is Extract<MessagePart, 
  *   const result = part.result;
  * }
  */
-export function isToolResultPart(part: MessagePart): part is Extract<MessagePart, { type: 'tool-result' }> {
+export function isToolResultPart(
+  part: MessagePart,
+): part is Extract<MessagePart, { type: 'tool-result' }> {
   return part.type === 'tool-result';
 }
 
@@ -513,7 +712,9 @@ export function isToolResultPart(part: MessagePart): part is Extract<MessagePart
  *   const toolName = call.toolName;
  * });
  */
-export function extractToolCalls(parts: MessagePart[]): Extract<MessagePart, { type: 'tool-call' }>[] {
+export function extractToolCalls(
+  parts: MessagePart[],
+): Extract<MessagePart, { type: 'tool-call' }>[] {
   return parts.filter(isToolCallPart);
 }
 
@@ -527,7 +728,9 @@ export function extractToolCalls(parts: MessagePart[]): Extract<MessagePart, { t
  * const toolResults = extractToolResults(message.parts);
  * const errors = toolResults.filter(r => r.isError);
  */
-export function extractToolResults(parts: MessagePart[]): Extract<MessagePart, { type: 'tool-result' }>[] {
+export function extractToolResults(
+  parts: MessagePart[],
+): Extract<MessagePart, { type: 'tool-result' }>[] {
   return parts.filter(isToolResultPart);
 }
 
@@ -633,7 +836,9 @@ export function findToolResult(
   parts: MessagePart[],
   toolCallId: string,
 ): Extract<MessagePart, { type: 'tool-result' }> | undefined {
-  return extractToolResults(parts).find(part => part.toolCallId === toolCallId);
+  return extractToolResults(parts).find(
+    part => part.toolCallId === toolCallId,
+  );
 }
 
 // ============================================================================
@@ -670,15 +875,124 @@ export function findToolResult(
  * @see extractTextFromMessage - For extracting text from complete UIMessage objects
  */
 // Type for text/reasoning parts only (subset of MessagePart)
-type TextOrReasoningPart = Extract<z.infer<typeof MessagePartSchema>, { type: 'text' } | { type: 'reasoning' }>;
+type TextOrReasoningPart = Extract<
+  z.infer<typeof MessagePartSchema>,
+  { type: 'text' } | { type: 'reasoning' }
+>;
 
-export function convertUIMessagesToText(
-  parts: TextOrReasoningPart[],
-): string {
+export function convertUIMessagesToText(parts: TextOrReasoningPart[]): string {
   return parts
-    .filter((part): part is { type: 'text'; text: string } => part.type === MessagePartTypes.TEXT)
+    .filter(
+      (part): part is { type: 'text'; text: string } =>
+        part.type === MessagePartTypes.TEXT,
+    )
     .map(part => part.text)
     .join(' ');
+}
+
+// ============================================================================
+// AI SDK STREAMING RESULT SCHEMAS
+// ============================================================================
+
+/**
+ * ✅ SCHEMA: Token usage from AI SDK streaming
+ *
+ * Replaces inline `usage?: { inputTokens?: number; outputTokens?: number }`
+ * Used by: streaming.handler.ts, message-persistence.service.ts
+ *
+ * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/language-model-usage
+ */
+export const StreamingUsageSchema = z.object({
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
+  totalTokens: z.number().int().nonnegative().optional(),
+});
+
+export type StreamingUsage = z.infer<typeof StreamingUsageSchema>;
+
+/**
+ * ✅ SCHEMA: AI SDK reasoning part structure
+ *
+ * Claude models with extended thinking return reasoning as array of parts.
+ * The AI SDK uses 'reasoning' type, while Claude-specific types include 'thinking' and 'redacted'.
+ *
+ * @see https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#reasoning
+ */
+export const ReasoningPartSchema = z.object({
+  // AI SDK uses 'reasoning' type; Claude models also use 'thinking' and 'redacted'
+  type: z.enum(['reasoning', 'thinking', 'redacted', 'text']).optional(),
+  text: z.string(),
+});
+
+export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
+
+/**
+ * ✅ SCHEMA: AI SDK tool call structure
+ *
+ * Matches the AI SDK ToolCallPart structure for streaming results.
+ * args is optional because DynamicToolCall may not have it.
+ * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
+ */
+export const StreamingToolCallSchema = z.object({
+  type: z.literal('tool-call').optional(),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  args: z.unknown().optional(),
+});
+
+export type StreamingToolCall = z.infer<typeof StreamingToolCallSchema>;
+
+/**
+ * ✅ SCHEMA: AI SDK streamText onFinish result
+ *
+ * Provides type-safe structure for the finish result from AI SDK streaming.
+ * Replaces inline types with `[key: string]: unknown` index signatures.
+ *
+ * Note: `providerMetadata` and `response` remain unknown because they
+ * vary by provider - use type guards (isObject) for runtime access.
+ *
+ * @see streaming.handler.ts onFinish callback
+ * @see message-persistence.service.ts extractReasoning
+ */
+export const StreamingFinishResultSchema = z.object({
+  text: z.string(),
+  usage: StreamingUsageSchema.optional(),
+  finishReason: z.string(),
+  // Provider-specific data - use type guards for access
+  providerMetadata: z.unknown().optional(),
+  response: z.unknown().optional(),
+  // Reasoning can be string or array of parts
+  reasoning: z.union([
+    z.string(),
+    z.array(ReasoningPartSchema),
+  ]).optional(),
+  // Claude 4 models with interleaved thinking
+  reasoningText: z.string().optional(),
+  // Tool calls from AI SDK
+  toolCalls: z.array(StreamingToolCallSchema).optional(),
+  toolResults: z.unknown().optional(),
+});
+
+export type StreamingFinishResult = z.infer<typeof StreamingFinishResultSchema>;
+
+/**
+ * ✅ TYPE GUARD: Check if value is a ReasoningPart
+ *
+ * @param value - Value to check
+ * @returns True if value matches ReasoningPart structure
+ */
+export function isReasoningPart(value: unknown): value is ReasoningPart {
+  return ReasoningPartSchema.safeParse(value).success;
+}
+
+/**
+ * ✅ TYPE GUARD: Check if reasoning is an array of parts
+ *
+ * @param reasoning - Reasoning value to check
+ * @returns True if reasoning is array of ReasoningPart
+ */
+export function isReasoningPartArray(reasoning: unknown): reasoning is ReasoningPart[] {
+  return Array.isArray(reasoning) && reasoning.every(isReasoningPart);
 }
 
 // ============================================================================

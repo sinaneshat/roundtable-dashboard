@@ -37,6 +37,7 @@ import { AnalysisStatuses, MessagePartTypes, MessageRoles, ScreenModes } from '@
 import { useCreatePreSearchMutation } from '@/hooks/mutations';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -168,6 +169,28 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // This prevents orphaned flags like streamingRoundNumber, isCreatingAnalysis
           // from remaining set and blocking navigation/loading indicators
           currentState.completeStreaming();
+
+          // ✅ ATTACHMENT FIX: Fetch fresh messages to get signed URLs for attachments
+          // Optimistic messages have blob URLs which become invalid after page refresh.
+          // Backend stores proper signed URLs - fetching fresh replaces blob URLs with valid ones.
+          // This ensures attachments display correctly after streaming completes.
+          try {
+            const response = await fetch(`/api/v1/chat/threads/${threadId}/messages`, {
+              credentials: 'include',
+            });
+
+            if (response.ok) {
+              const result = await response.json() as { data?: UIMessage[] };
+              if (result.data && Array.isArray(result.data)) {
+                // Update store with fresh messages (contains proper signed URLs)
+                // The sync effect will handle updating the AI SDK hook
+                currentState.setMessages(result.data);
+              }
+            }
+          } catch {
+            // Non-blocking - if refresh fails, UI still works with fallback icons
+            // The isValidDisplayUrl check in message-attachment-preview.tsx shows icons instead of broken images
+          }
         } catch (error) {
           // ✅ CRITICAL FIX: Log errors instead of silent failure
           // This helps diagnose why analysis creation might fail
@@ -202,6 +225,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // Animation tracking: clear all pending animations on round reset
   const clearAnimations = useStore(store, s => s.clearAnimations);
+  // Animation tracking: complete animation for specific participant (used in error handler)
+  const completeAnimation = useStore(store, s => s.completeAnimation);
 
   const chat = useMultiParticipantChat({
     threadId: effectiveThreadId,
@@ -219,6 +244,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     onComplete: handleComplete,
     // Animation tracking: clear all pending animations on round reset
     clearAnimations,
+    // ✅ FIX: Complete animation for errored participants to prevent timeout
+    completeAnimation,
     // ✅ RACE CONDITION FIX: Prevents resumed stream detection from setting isStreaming=true
     // during form submission, which would create a deadlock state
     hasEarlyOptimisticMessage,
@@ -354,7 +381,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const msgRound = getRoundNumber(msg.metadata);
           return msgRound === currentRound;
         });
-        const userQuery = pendingMsg || (userMessageForRound?.parts?.[0] as { text?: string })?.text || '';
+        // ✅ TYPE-SAFE: Use extractTextFromMessage utility instead of force cast
+        const userQuery = pendingMsg || (userMessageForRound ? extractTextFromMessage(userMessageForRound) : '') || '';
 
         if (!userQuery) {
           return; // No query to search with
@@ -860,23 +888,22 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       const mergedMessages = [...filteredMessages];
 
       for (const optimisticMsg of optimisticMessagesFromStore) {
-        const metadata = optimisticMsg.metadata as { roundNumber?: number; isOptimistic?: boolean } | undefined;
-        const optimisticRound = metadata?.roundNumber;
+        // ✅ TYPE-SAFE: Use getRoundNumber utility instead of force cast
+        const optimisticRound = getRoundNumber(optimisticMsg.metadata);
 
         // Check if there's a real user message for this round from AI SDK
         const hasRealMessage = filteredMessages.some((m) => {
           if (m.role !== MessageRoles.USER)
             return false;
-          const msgMetadata = m.metadata as { roundNumber?: number } | undefined;
-          return msgMetadata?.roundNumber === optimisticRound;
+          return getRoundNumber(m.metadata) === optimisticRound;
         });
 
         // If no real message exists for this round, preserve the optimistic message
-        if (!hasRealMessage && optimisticRound !== undefined) {
+        if (!hasRealMessage && optimisticRound !== null) {
           // Find the correct position to insert (after previous round's messages)
           const insertIndex = mergedMessages.findIndex((m) => {
-            const msgMetadata = m.metadata as { roundNumber?: number } | undefined;
-            return msgMetadata?.roundNumber !== undefined && msgMetadata.roundNumber > optimisticRound;
+            const msgRound = getRoundNumber(m.metadata);
+            return msgRound !== null && msgRound > optimisticRound;
           });
 
           if (insertIndex === -1) {
@@ -1525,4 +1552,28 @@ export function useChatStore<T>(selector: (store: ChatStore) => T): T {
   }
 
   return useStore(context, selector);
+}
+
+/**
+ * Get the store API for imperative access (getState)
+ *
+ * ✅ REACT BEST PRACTICE: Use this for reading current state inside callbacks/effects
+ * without causing re-renders or infinite loops from dependency arrays.
+ *
+ * @example
+ * const storeApi = useChatStoreApi();
+ * useEffect(() => {
+ *   // Read current state imperatively - no dependency needed
+ *   const { messages, participants } = storeApi.getState();
+ * }, [storeApi]); // storeApi is stable
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- Store API hook export
+export function useChatStoreApi(): ChatStoreApi {
+  const context = use(ChatStoreContext);
+
+  if (!context) {
+    throw new Error('useChatStoreApi must be used within ChatStoreProvider');
+  }
+
+  return context;
 }

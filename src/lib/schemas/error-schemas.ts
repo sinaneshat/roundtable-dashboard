@@ -13,6 +13,22 @@
 import { z } from 'zod';
 
 // ============================================================================
+// ANALYSIS STATUS ENUM - RE-EXPORT FROM SINGLE SOURCE OF TRUTH
+// ============================================================================
+
+/**
+ * ✅ Analysis status enum - Moderator analysis states
+ * Single source of truth: @/api/core/enums
+ * Uses 'complete' (not 'completed') for consistency with backend
+ */
+export {
+  ANALYSIS_STATUSES,
+  type AnalysisStatus,
+  AnalysisStatuses,
+  AnalysisStatusSchema,
+} from '@/api/core/enums';
+
+// ============================================================================
 // ERROR CATEGORIES
 // ============================================================================
 
@@ -24,6 +40,10 @@ import { z } from 'zod';
  * - Backend: Error categorization in helpers.ts
  * - Frontend: Error display and handling
  * - Streaming: Error extraction and metadata
+ *
+ * NOTE: Backend uses AIProviderErrorCategory which includes provider-specific
+ * categories like 'provider_rate_limit', 'provider_network', 'model_content_filter'
+ * These map to our categories via errorCategoryToUIType()
  */
 export const ErrorCategorySchema = z.enum([
   'model_not_found',
@@ -36,6 +56,10 @@ export const ErrorCategorySchema = z.enum([
   'silent_failure',
   'empty_response',
   'unknown',
+  // Backend-specific categories (from AIProviderErrorCategory)
+  'provider_rate_limit',
+  'provider_network',
+  'model_content_filter',
 ]);
 
 export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
@@ -79,40 +103,52 @@ export type UIMessageErrorType = z.infer<typeof UIMessageErrorTypeSchema>;
  * Used by:
  * - Backend: Streaming error handling
  * - Frontend: Error display details
+ *
+ * NOTE: Schema is lenient to accept various backend error formats.
+ * Backend's structureAIProviderError returns additional fields that we passthrough.
  */
-export const ErrorMetadataSchema = z.object({
-  errorCategory: ErrorCategorySchema.optional(),
-  statusCode: z.number().int().min(100).max(599).optional(),
-  rawErrorMessage: z.string().optional(),
-  openRouterError: z.string().optional(),
-  openRouterCode: z.string().optional(),
-  providerMessage: z.string().optional(),
-  isTransient: z.boolean().optional(),
-  shouldRetry: z.boolean().optional(),
-  retryAfter: z.number().optional(),
-  modelId: z.string().optional(),
-  participantId: z.string().optional(),
-  roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
-});
+export const ErrorMetadataSchema = z
+  .object({
+    // Core error identification
+    errorName: z.string().optional(),
+    errorType: z.string().optional(),
+    errorCategory: ErrorCategorySchema.optional(),
+    errorMessage: z.string().optional(),
+
+    // HTTP details
+    statusCode: z.number().int().min(100).max(599).optional(),
+
+    // Raw error messages (for debugging)
+    rawErrorMessage: z.string().optional(),
+    providerMessage: z.string().optional(),
+
+    // OpenRouter-specific fields
+    openRouterError: z
+      .union([z.string(), z.record(z.string(), z.unknown())])
+      .optional(),
+    openRouterCode: z.union([z.string(), z.number()]).optional(),
+    openRouterType: z.string().optional(),
+    openRouterMetadata: z.record(z.string(), z.unknown()).optional(),
+
+    // Response details (for debugging)
+    responseBody: z.string().optional(),
+    requestId: z.string().optional(),
+    traceId: z.string().optional(),
+
+    // Retry behavior
+    isTransient: z.boolean().optional(),
+    shouldRetry: z.boolean().optional(),
+    retryAfter: z.number().optional(),
+
+    // Participant context
+    modelId: z.string().optional(),
+    participantId: z.string().optional(),
+    participantRole: z.string().nullable().optional(),
+    roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+  })
+  .passthrough(); // ✅ Allow additional fields from backend
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
-
-// ============================================================================
-// ANALYSIS STATUS ENUM
-// ============================================================================
-
-/**
- * ✅ Analysis status enum - Moderator analysis states
- * Replaces hardcoded status strings in analysis handlers
- */
-export const AnalysisStatusSchema = z.enum([
-  'pending',
-  'streaming',
-  'completed',
-  'failed',
-]);
-
-export type AnalysisStatus = z.infer<typeof AnalysisStatusSchema>;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -128,16 +164,24 @@ export function isErrorCategory(value: unknown): value is ErrorCategory {
 /**
  * ✅ TYPE GUARD: Check if a value is a valid UIMessageErrorType
  */
-export function isUIMessageErrorType(value: unknown): value is UIMessageErrorType {
+export function isUIMessageErrorType(
+  value: unknown,
+): value is UIMessageErrorType {
   return UIMessageErrorTypeSchema.safeParse(value).success;
 }
 
 /**
  * ✅ MAPPER: Map error category to UI message error type
  * Provides consistent mapping between backend categories and frontend display types
+ *
+ * Handles both frontend-style categories (rate_limit, network) and
+ * backend-style categories (provider_rate_limit, provider_network)
  */
-export function errorCategoryToUIType(category: ErrorCategory): UIMessageErrorType {
+export function errorCategoryToUIType(
+  category: ErrorCategory,
+): UIMessageErrorType {
   const mapping: Record<ErrorCategory, UIMessageErrorType> = {
+    // Frontend-style categories
     model_not_found: 'model_not_found',
     content_filter: 'model_content_filter',
     rate_limit: 'provider_rate_limit',
@@ -148,6 +192,10 @@ export function errorCategoryToUIType(category: ErrorCategory): UIMessageErrorTy
     silent_failure: 'silent_failure',
     empty_response: 'empty_response',
     unknown: 'unknown',
+    // Backend-style categories (from AIProviderErrorCategory)
+    provider_rate_limit: 'provider_rate_limit',
+    provider_network: 'provider_network',
+    model_content_filter: 'model_content_filter',
   };
 
   return mapping[category] || 'unknown';
@@ -163,7 +211,9 @@ export function createErrorMetadata(data: unknown): ErrorMetadata {
 /**
  * ✅ FACTORY: Create partial error metadata (for updates)
  */
-export function createPartialErrorMetadata(data: Partial<ErrorMetadata>): Partial<ErrorMetadata> {
+export function createPartialErrorMetadata(
+  data: Partial<ErrorMetadata>,
+): Partial<ErrorMetadata> {
   return ErrorMetadataSchema.partial().parse(data);
 }
 
@@ -179,10 +229,17 @@ export function createPartialErrorMetadata(data: Partial<ErrorMetadata>): Partia
 export function categorizeErrorMessage(errorMessage: string): ErrorCategory {
   const errorLower = errorMessage.toLowerCase();
 
-  if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
+  if (
+    errorLower.includes('not found')
+    || errorLower.includes('does not exist')
+  ) {
     return ErrorCategorySchema.enum.model_not_found;
   }
-  if (errorLower.includes('filter') || errorLower.includes('safety') || errorLower.includes('moderation')) {
+  if (
+    errorLower.includes('filter')
+    || errorLower.includes('safety')
+    || errorLower.includes('moderation')
+  ) {
     return ErrorCategorySchema.enum.content_filter;
   }
   if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
@@ -191,7 +248,10 @@ export function categorizeErrorMessage(errorMessage: string): ErrorCategory {
   if (errorLower.includes('timeout') || errorLower.includes('connection')) {
     return ErrorCategorySchema.enum.network;
   }
-  if (errorLower.includes('unauthorized') || errorLower.includes('authentication')) {
+  if (
+    errorLower.includes('unauthorized')
+    || errorLower.includes('authentication')
+  ) {
     return ErrorCategorySchema.enum.authentication;
   }
   if (errorLower.includes('validation') || errorLower.includes('invalid')) {
@@ -206,6 +266,7 @@ export function categorizeErrorMessage(errorMessage: string): ErrorCategory {
  */
 export function getErrorCategoryMessage(category: ErrorCategory): string {
   const messages: Record<ErrorCategory, string> = {
+    // Frontend-style categories
     model_not_found: 'The requested model could not be found',
     content_filter: 'Content was filtered by safety systems',
     rate_limit: 'Rate limit exceeded, please try again later',
@@ -216,6 +277,10 @@ export function getErrorCategoryMessage(category: ErrorCategory): string {
     silent_failure: 'The operation failed silently',
     empty_response: 'No response was generated',
     unknown: 'An unknown error occurred',
+    // Backend-style categories (from AIProviderErrorCategory)
+    provider_rate_limit: 'Rate limit exceeded, please try again later',
+    provider_network: 'Network error occurred, please check your connection',
+    model_content_filter: 'Content was filtered by safety systems',
   };
 
   return messages[category] || messages.unknown;

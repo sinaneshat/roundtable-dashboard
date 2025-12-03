@@ -4,24 +4,32 @@
  * All chat store default/initial values consolidated in one location.
  * Eliminates duplication and ensures consistency across reset functions.
  *
- * ✅ PATTERN: Define defaults → Export typed constants → Use in slices & resets
- * ✅ TYPE-SAFE: Full TypeScript inference with const assertions
+ * ✅ PATTERN: Define defaults → Use `satisfies` for type safety → Export
+ * ✅ TYPE-SAFE: Types derived from store-schemas.ts via `satisfies`
  * ✅ SINGLE SOURCE: All reset functions reference these values
  * ✅ MAINTAINABLE: Add new state? Update here once, all resets inherit
  *
- * Reference pattern: /src/api/core/enums.ts
+ * Reference pattern: /src/api/core/enums.ts, /src/stores/chat/store-schemas.ts
  */
 
-import type { UIMessage } from 'ai';
-
-import type { FeedbackType, ScreenMode } from '@/api/core/enums';
 import { ChatModes, ScreenModes } from '@/api/core/enums';
-import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
-import type { ChatModeId } from '@/lib/config/chat-modes';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
-import type { AnimationResolver } from './store-action-types';
-import type { StreamResumptionState } from './store-schemas';
+import type {
+  AnalysisState,
+  AnimationState,
+  AttachmentsState,
+  CallbacksState,
+  DataState,
+  FeedbackState,
+  FlagsState,
+  FormState,
+  PreSearchState,
+  ScreenState,
+  StreamResumptionSliceState,
+  ThreadState,
+  TrackingState,
+  UIState,
+} from './store-schemas';
 
 // ============================================================================
 // FORM SLICE DEFAULTS
@@ -29,21 +37,21 @@ import type { StreamResumptionState } from './store-schemas';
 
 export const FORM_DEFAULTS = {
   inputValue: '',
-  selectedMode: ChatModes.ANALYZING as ChatModeId | null, // ✅ FIX: Default to 'analyzing' mode
-  selectedParticipants: [] as ParticipantConfig[],
+  selectedMode: ChatModes.ANALYZING, // Default to 'analyzing' mode
+  selectedParticipants: [],
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
-  modelOrder: [] as string[], // Visual order of models for drag-and-drop
-} as const;
+  modelOrder: [], // Visual order of models for drag-and-drop
+} satisfies FormState;
 
 // ============================================================================
 // FEEDBACK SLICE DEFAULTS
 // ============================================================================
 
 export const FEEDBACK_DEFAULTS = {
-  feedbackByRound: new Map<number, FeedbackType | null>(),
-  pendingFeedback: null as { roundNumber: number; type: FeedbackType } | null,
+  feedbackByRound: new Map(),
+  pendingFeedback: null,
   hasLoadedFeedback: false,
-} as const;
+} satisfies FeedbackState;
 
 // ============================================================================
 // UI SLICE DEFAULTS
@@ -53,43 +61,43 @@ export const UI_DEFAULTS = {
   showInitialUI: true,
   waitingToStartStreaming: false,
   isCreatingThread: false,
-  createdThreadId: null as string | null,
-} as const;
+  createdThreadId: null,
+} satisfies UIState;
 
 // ============================================================================
 // ANALYSIS SLICE DEFAULTS
 // ============================================================================
 
 export const ANALYSIS_DEFAULTS = {
-  analyses: [] as StoredModeratorAnalysis[],
-} as const;
+  analyses: [],
+} satisfies AnalysisState;
 
 // ============================================================================
 // PRE-SEARCH SLICE DEFAULTS
 // ============================================================================
 
 export const PRESEARCH_DEFAULTS = {
-  preSearches: [] as StoredPreSearch[],
-  preSearchActivityTimes: new Map<number, number>(),
-};
+  preSearches: [],
+  preSearchActivityTimes: new Map(),
+} satisfies PreSearchState;
 
 // ============================================================================
 // THREAD SLICE DEFAULTS
 // ============================================================================
 
 export const THREAD_DEFAULTS = {
-  thread: null as ChatThread | null,
-  participants: [] as ChatParticipant[],
-  messages: [] as UIMessage[],
+  thread: null,
+  participants: [],
+  messages: [],
   isStreaming: false,
   currentParticipantIndex: 0,
-  error: null as Error | null,
+  error: null,
   // AI SDK methods
-  sendMessage: undefined as ((content: string) => Promise<void>) | undefined,
-  startRound: undefined as (() => Promise<void>) | undefined,
-  stop: undefined as (() => void) | undefined,
-  chatSetMessages: undefined as ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined,
-} as const;
+  sendMessage: undefined,
+  startRound: undefined,
+  stop: undefined,
+  chatSetMessages: undefined,
+} satisfies ThreadState;
 
 // ============================================================================
 // FLAGS SLICE DEFAULTS
@@ -101,28 +109,29 @@ export const FLAGS_DEFAULTS = {
   isCreatingAnalysis: false,
   isWaitingForChangelog: false,
   hasPendingConfigChanges: false,
-} as const;
+} satisfies FlagsState;
 
 // ============================================================================
 // DATA SLICE DEFAULTS
 // ============================================================================
 
 export const DATA_DEFAULTS = {
-  regeneratingRoundNumber: null as number | null,
-  pendingMessage: null as string | null,
-  pendingAttachmentIds: null as string[] | null,
+  regeneratingRoundNumber: null,
+  pendingMessage: null,
+  pendingAttachmentIds: null,
   /** File parts for AI SDK message creation - set before clearAttachments() */
-  pendingFileParts: null as Array<{ type: 'file'; url: string; filename: string; mediaType: string }> | null,
-  expectedParticipantIds: null as string[] | null,
-  streamingRoundNumber: null as number | null,
-  currentRoundNumber: null as number | null,
-} as const;
+  // ✅ Uses ExtendedFilePart schema which includes uploadId for backend fallback loading
+  pendingFileParts: null,
+  expectedParticipantIds: null,
+  streamingRoundNumber: null,
+  currentRoundNumber: null,
+} satisfies DataState;
 
 // ============================================================================
 // TRACKING SLICE DEFAULTS
 // ============================================================================
 
-// 🚨 BUG FIX: Removed `as const` to allow fresh Set instances on each reset
+// 🚨 BUG FIX: Using satisfies instead of as const to allow fresh Set instances on each reset
 // Without this fix, all resets reuse the same Set instances created at module load,
 // causing state pollution across thread navigations
 export const TRACKING_DEFAULTS = {
@@ -131,34 +140,34 @@ export const TRACKING_DEFAULTS = {
   triggeredPreSearchRounds: new Set<number>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Track when early optimistic message added by handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: false,
-} satisfies Pick<import('./store-schemas').ChatStore, 'hasSentPendingMessage' | 'createdAnalysisRounds' | 'triggeredPreSearchRounds' | 'hasEarlyOptimisticMessage'>;
+} satisfies TrackingState;
 
 // ============================================================================
 // CALLBACKS SLICE DEFAULTS
 // ============================================================================
 
 export const CALLBACKS_DEFAULTS = {
-  onComplete: undefined as (() => void) | undefined,
-} as const;
+  onComplete: undefined,
+} satisfies CallbacksState;
 
 // ============================================================================
 // SCREEN SLICE DEFAULTS
 // ============================================================================
 
 export const SCREEN_DEFAULTS = {
-  screenMode: ScreenModes.OVERVIEW as ScreenMode,
+  screenMode: ScreenModes.OVERVIEW,
   isReadOnly: false,
-} as const;
+} satisfies ScreenState;
 
 // ============================================================================
 // STREAM RESUMPTION SLICE DEFAULTS
 // ============================================================================
 
 export const STREAM_RESUMPTION_DEFAULTS = {
-  streamResumptionState: null as StreamResumptionState | null,
+  streamResumptionState: null,
   resumptionAttempts: new Set<string>(),
-  nextParticipantToTrigger: null as number | null,
-};
+  nextParticipantToTrigger: null,
+} satisfies StreamResumptionSliceState;
 
 // ============================================================================
 // ANIMATION SLICE DEFAULTS
@@ -166,16 +175,16 @@ export const STREAM_RESUMPTION_DEFAULTS = {
 
 export const ANIMATION_DEFAULTS = {
   pendingAnimations: new Set<number>(), // Set of participant indices with pending animations
-  animationResolvers: new Map<number, AnimationResolver>(), // Resolve functions for animation completion promises
-};
+  animationResolvers: new Map(), // Resolve functions for animation completion promises
+} satisfies AnimationState;
 
 // ============================================================================
 // ATTACHMENTS SLICE DEFAULTS
 // ============================================================================
 
 export const ATTACHMENTS_DEFAULTS = {
-  pendingAttachments: [] as import('./store-schemas').PendingAttachment[],
-};
+  pendingAttachments: [],
+} satisfies AttachmentsState;
 
 // ============================================================================
 // TYPE-SAFE STATE RESET GROUPS
@@ -190,11 +199,11 @@ export const ATTACHMENTS_DEFAULTS = {
  */
 export const STREAMING_STATE_RESET = {
   isStreaming: false,
-  streamingRoundNumber: null as number | null,
-  currentRoundNumber: null as number | null,
+  streamingRoundNumber: null,
+  currentRoundNumber: null,
   waitingToStartStreaming: false,
   currentParticipantIndex: 0,
-} as const;
+} satisfies Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'>;
 
 /**
  * Analysis creation flags
@@ -203,19 +212,20 @@ export const STREAMING_STATE_RESET = {
 export const ANALYSIS_STATE_RESET = {
   isCreatingAnalysis: false,
   isWaitingForChangelog: false,
-} as const;
+} satisfies Pick<FlagsState, 'isCreatingAnalysis' | 'isWaitingForChangelog'>;
 
 /**
  * Pending message state that must be cleared after message is sent
  * Used when a message is fully processed
  */
 export const PENDING_MESSAGE_STATE_RESET = {
-  pendingMessage: null as string | null,
-  pendingAttachmentIds: null as string[] | null,
-  pendingFileParts: null as Array<{ type: 'file'; url: string; filename: string; mediaType: string }> | null,
-  expectedParticipantIds: null as string[] | null,
+  pendingMessage: null,
+  pendingAttachmentIds: null,
+  // ✅ Uses ExtendedFilePart schema which includes uploadId for backend fallback loading
+  pendingFileParts: null,
+  expectedParticipantIds: null,
   hasSentPendingMessage: false,
-} as const;
+} satisfies Pick<DataState, 'pendingMessage' | 'pendingAttachmentIds' | 'pendingFileParts' | 'expectedParticipantIds'> & Pick<TrackingState, 'hasSentPendingMessage'>;
 
 /**
  * Regeneration-specific flags
@@ -223,8 +233,8 @@ export const PENDING_MESSAGE_STATE_RESET = {
  */
 export const REGENERATION_STATE_RESET = {
   isRegenerating: false,
-  regeneratingRoundNumber: null as number | null,
-} as const;
+  regeneratingRoundNumber: null,
+} satisfies Pick<FlagsState, 'isRegenerating'> & Pick<DataState, 'regeneratingRoundNumber'>;
 
 // ============================================================================
 // AGGREGATED DEFAULT STATES FOR RESET OPERATIONS
@@ -299,10 +309,10 @@ export const COMPLETE_RESET_STATE = {
   nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
   // Animation state
   pendingAnimations: new Set<number>(),
-  animationResolvers: new Map<number, AnimationResolver>(),
+  animationResolvers: new Map(),
   // Attachments state
   pendingAttachments: ATTACHMENTS_DEFAULTS.pendingAttachments,
-} as const;
+};
 
 /**
  * Thread-specific reset state
@@ -348,11 +358,11 @@ export const THREAD_RESET_STATE = {
   nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
   // Animation state
   pendingAnimations: new Set<number>(),
-  animationResolvers: new Map<number, AnimationResolver>(),
+  animationResolvers: new Map(),
   // ✅ FIX: Removed pendingAttachments from reset state
   // Attachments should ONLY be cleared via clearAttachments() after the message is created
   // This prevents attachments from being cleared prematurely during navigation
-} as const;
+};
 
 /**
  * Full thread navigation reset state
@@ -376,11 +386,12 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   // 🚨 CRITICAL: Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
-} as const;
+};
 
-/**
- * Type exports for store slices
- */
+// ============================================================================
+// TYPE EXPORTS - Derived from constants for type safety
+// ============================================================================
+
 export type FormDefaults = typeof FORM_DEFAULTS;
 export type FeedbackDefaults = typeof FEEDBACK_DEFAULTS;
 export type UIDefaults = typeof UI_DEFAULTS;

@@ -2,14 +2,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/core/env';
+import type { StreamBufferMetadata, StreamChunk } from '@/api/types/streaming';
 
 import {
   appendStreamChunk,
-  chunksToSSEStream,
   completeStreamBuffer,
   failStreamBuffer,
   initializeStreamBuffer,
 } from '../stream-buffer.service';
+
+/**
+ * Create a valid StreamBufferMetadata object for testing
+ * ✅ TYPE-SAFE: Uses full schema structure to pass Zod validation
+ */
+function createMockMetadata(overrides: Partial<StreamBufferMetadata> = {}): StreamBufferMetadata {
+  return {
+    streamId: 'stream-123',
+    threadId: 'thread-1',
+    roundNumber: 1,
+    participantIndex: 0,
+    status: StreamStatuses.ACTIVE,
+    chunkCount: 0,
+    createdAt: Date.now(),
+    completedAt: null,
+    errorMessage: null,
+    ...overrides,
+  };
+}
 
 // Mock KV
 function createMockKV() {
@@ -73,13 +92,14 @@ describe('stream Buffer Service', () => {
 
   it('should append chunks to buffer', async () => {
     const streamId = 'stream-123';
-    // Setup initial state
-    const initialChunks = [{ data: 'chunk1', timestamp: 100 }];
+    // Setup initial state with valid schema-compliant data
+    const initialChunks: StreamChunk[] = [{ data: 'chunk1', timestamp: 100 }];
+    const initialMetadata = createMockMetadata({ chunkCount: 1 });
     mockKV.get.mockImplementation(async (key) => {
       if (key.includes('chunks'))
         return initialChunks;
       if (key.includes('meta'))
-        return { chunkCount: 1 };
+        return initialMetadata;
       return null;
     });
 
@@ -102,10 +122,14 @@ describe('stream Buffer Service', () => {
 
   it('should complete stream buffer', async () => {
     const streamId = 'stream-123';
-    // Setup initial state
+    // Setup initial state with valid schema-compliant metadata
+    const initialMetadata = createMockMetadata({
+      status: StreamStatuses.ACTIVE,
+      chunkCount: 5,
+    });
     mockKV.get.mockImplementation(async (key) => {
       if (key.includes('meta'))
-        return { status: StreamStatuses.ACTIVE, chunkCount: 5 };
+        return initialMetadata;
       return null;
     });
 
@@ -121,12 +145,14 @@ describe('stream Buffer Service', () => {
 
   it('should fail stream buffer', async () => {
     const streamId = 'stream-123';
-    // Setup initial state
+    // Setup initial state with valid schema-compliant data
+    const initialMetadata = createMockMetadata({ status: StreamStatuses.ACTIVE });
+    const initialChunks: StreamChunk[] = [];
     mockKV.get.mockImplementation(async (key) => {
       if (key.includes('meta'))
-        return { status: StreamStatuses.ACTIVE };
+        return initialMetadata;
       if (key.includes('chunks'))
-        return [];
+        return initialChunks;
       return null;
     });
 
@@ -156,25 +182,5 @@ describe('stream Buffer Service', () => {
       expect.stringContaining('3:{'),
       expect.any(Object),
     );
-  });
-
-  it('should convert chunks to SSE stream', async () => {
-    const chunks = [
-      { data: 'data: 0:"Hello"\n\n', timestamp: 100 },
-      { data: 'data: 0:" World"\n\n', timestamp: 200 },
-    ];
-
-    const stream = chunksToSSEStream(chunks);
-    const reader = stream.getReader();
-
-    let result = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done)
-        break;
-      result += new TextDecoder().decode(value);
-    }
-
-    expect(result).toBe('data: 0:"Hello"\n\ndata: 0:" World"\n\n');
   });
 });

@@ -1700,7 +1700,7 @@ describe('pre-Search Blocking During Resumption', () => {
 
     // 5 participants (from the real scenario)
     const participants = [
-      createMockParticipant(0, { modelId: 'google/gemini-3-pro-preview' }),
+      createMockParticipant(0, { modelId: 'google/gemini-3-pro-preview-20251117' }),
       createMockParticipant(1, { modelId: 'qwen/qwen3-max' }),
       createMockParticipant(2, { modelId: 'google/gemini-2.5-flash' }),
       createMockParticipant(3, { modelId: 'meta-llama/llama-3.3-70b-instruct:free' }),
@@ -1726,7 +1726,7 @@ describe('pre-Search Blocking During Resumption', () => {
           participantId: '01KB599HCV9PG087GZBW9EJ1HG',
           participantIndex: 0,
           participantRole: 'Computational Consciousness Expert',
-          model: 'google/gemini-3-pro-preview',
+          model: 'google/gemini-3-pro-preview-20251117',
         },
       }),
     ]);

@@ -16,47 +16,19 @@
  * - Format: AI SDK v5 SSE protocol chunks
  *
  * @module api/services/resumable-stream
+ * @see /src/api/types/streaming.ts for type definitions
  */
 
 import type { StreamStatus } from '@/api/core/enums';
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
-
-// ============================================================================
-// Stream TTL Configuration
-// ============================================================================
-
-/**
- * Stream storage TTL - 1 hour
- * Streams that take longer than 1 hour are considered stale
- */
-export const STREAM_TTL_SECONDS = 60 * 60; // 1 hour
-
-/**
- * Stream metadata stored in KV
- */
-export type StreamMetadata = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  participantIndex: number;
-  status: StreamStatus;
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-  errorMessage?: string;
-  chunkCount: number;
-};
-
-/**
- * SSE chunk format (AI SDK v5 protocol)
- */
-export type SSEChunk = {
-  event?: string;
-  data: string;
-  timestamp: string;
-};
+import type { SSEChunk, StreamMetadata } from '@/api/types/streaming';
+import {
+  SSEChunksArraySchema,
+  STREAM_TTL_SECONDS,
+  StreamMetadataSchema,
+} from '@/api/types/streaming';
 
 // ============================================================================
 // KV Key Generation
@@ -182,13 +154,14 @@ export async function appendStreamChunk(
   logger?: TypedLogger,
 ): Promise<void> {
   try {
-    // Get existing chunks
+    // Get existing chunks with Zod validation
     const chunksKey = getStreamChunksKey(streamId);
-    const existingChunks = await env.KV.get(chunksKey, 'json') as SSEChunk[] | null;
+    const rawChunks = await env.KV.get(chunksKey, 'json');
+    const chunksResult = SSEChunksArraySchema.safeParse(rawChunks);
 
-    if (!existingChunks) {
+    if (!chunksResult.success) {
       if (logger) {
-        logger.warn('Stream chunks not found, skipping append', {
+        logger.warn('Stream chunks not found or invalid, skipping append', {
           logType: 'edge_case',
           streamId,
         });
@@ -197,7 +170,7 @@ export async function appendStreamChunk(
     }
 
     // Append new chunk
-    const updatedChunks = [...existingChunks, chunk];
+    const updatedChunks = [...chunksResult.data, chunk];
 
     // Store updated chunks
     await env.KV.put(
@@ -206,17 +179,21 @@ export async function appendStreamChunk(
       { expirationTtl: STREAM_TTL_SECONDS },
     );
 
-    // Update metadata
+    // Update metadata with Zod validation
     const metadataKey = getStreamMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as StreamMetadata | null;
+    const rawMetadata = await env.KV.get(metadataKey, 'json');
+    const metadataResult = StreamMetadataSchema.safeParse(rawMetadata);
 
-    if (metadata) {
-      metadata.updatedAt = new Date().toISOString();
-      metadata.chunkCount = updatedChunks.length;
+    if (metadataResult.success) {
+      const updatedMetadata = {
+        ...metadataResult.data,
+        updatedAt: new Date().toISOString(),
+        chunkCount: updatedChunks.length,
+      };
 
       await env.KV.put(
         metadataKey,
-        JSON.stringify(metadata),
+        JSON.stringify(updatedMetadata),
         { expirationTtl: STREAM_TTL_SECONDS },
       );
     }
@@ -246,7 +223,9 @@ export async function getStreamChunks(
   logger?: TypedLogger,
 ): Promise<SSEChunk[] | null> {
   try {
-    const chunks = await env.KV.get(getStreamChunksKey(streamId), 'json') as SSEChunk[] | null;
+    const rawChunks = await env.KV.get(getStreamChunksKey(streamId), 'json');
+    const chunksResult = SSEChunksArraySchema.safeParse(rawChunks);
+    const chunks = chunksResult.success ? chunksResult.data : null;
 
     if (chunks && logger) {
       logger.info('Retrieved stream chunks', {
@@ -287,7 +266,9 @@ export async function getStreamMetadata(
   logger?: TypedLogger,
 ): Promise<StreamMetadata | null> {
   try {
-    const metadata = await env.KV.get(getStreamMetadataKey(streamId), 'json') as StreamMetadata | null;
+    const rawMetadata = await env.KV.get(getStreamMetadataKey(streamId), 'json');
+    const metadataResult = StreamMetadataSchema.safeParse(rawMetadata);
+    const metadata = metadataResult.success ? metadataResult.data : null;
 
     if (metadata && logger) {
       logger.info('Retrieved stream metadata', {

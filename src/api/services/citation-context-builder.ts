@@ -5,15 +5,20 @@
  *
  * This service handles:
  * - Building citable context from project sources with unique source IDs
- * - Formatting context for AI with citation instructions
- * - Creating source maps for later citation resolution
+ * - Formatting context in clean XML format for AI consumption
+ * - Creating source maps for optional citation resolution
  *
  * Citation Flow:
  * 1. Build citable context from all project sources (memories, threads, files, searches, analyses)
  * 2. Assign unique source IDs to each source (e.g., mem_abc123, thd_xyz456)
- * 3. Format context for AI prompt with source IDs
- * 4. AI generates response with [source_id] markers
- * 5. Parse citations and resolve to full source data using source map
+ * 3. Format context in clean XML for AI prompt (no forced citation markers)
+ * 4. IF AI naturally includes [source_id] markers, parse and resolve them
+ * 5. Store resolved citations in message metadata for UI display
+ *
+ * Note: Following AI SDK v5 patterns - we provide clean context but don't force
+ * citation markers. Models naturally reference information by describing it.
+ *
+ * @see /src/api/types/citations.ts for type definitions
  */
 
 import type { CitationSourceType } from '@/api/core/enums';
@@ -22,9 +27,13 @@ import {
   CitationSourceContentLimits,
   CitationSourceLabels,
   CitationSourcePrefixes,
-  CitationSourceSectionHeaders,
   CitationSourceTypes,
 } from '@/api/core/enums';
+import type {
+  CitableContextResult,
+  CitableSource,
+  CitationSourceMap,
+} from '@/api/types/citations';
 
 import type {
   AggregatedProjectContext,
@@ -35,63 +44,6 @@ import { getAggregatedProjectContext } from './project-context.service';
 // ============================================================================
 // Type Definitions
 // ============================================================================
-
-/**
- * A citable source with unique ID for AI reference
- */
-export type CitableSource = {
-  /** Unique ID for citation (e.g., mem_abc123, thd_xyz456) */
-  id: string;
-  /** Source type from CITATION_SOURCE_TYPES */
-  type: CitationSourceType;
-  /** Original source record ID */
-  sourceId: string;
-  /** Display title for citation */
-  title: string;
-  /** Content excerpt for context */
-  content: string;
-  /** Additional metadata for resolution */
-  metadata: {
-    threadId?: string;
-    threadTitle?: string;
-    roundNumber?: number;
-    url?: string;
-    importance?: number;
-    filename?: string;
-    /** Download URL for file attachments */
-    downloadUrl?: string;
-    /** MIME type for file attachments */
-    mimeType?: string;
-    /** File size in bytes for attachments */
-    fileSize?: number;
-  };
-};
-
-/**
- * Source map for citation resolution
- * Maps source IDs (e.g., mem_abc123) to full source data
- */
-export type CitationSourceMap = Map<string, CitableSource>;
-
-/**
- * Result from building citable context
- */
-export type CitableContextResult = {
-  /** Array of citable sources */
-  sources: CitableSource[];
-  /** Map for quick source lookup by ID */
-  sourceMap: CitationSourceMap;
-  /** Formatted prompt section with citation instructions */
-  formattedPrompt: string;
-  /** Stats about available context */
-  stats: {
-    totalMemories: number;
-    totalThreads: number;
-    totalSearches: number;
-    totalAnalyses: number;
-    totalAttachments: number;
-  };
-};
 
 export type CitableContextParams = ProjectContextParams & {
   /** Include attachment sources (requires AutoRAG integration) */
@@ -112,24 +64,6 @@ function generateSourceId(type: CitationSourceType, sourceId: string): string {
   const shortId = sourceId.slice(0, 8);
   return `${CitationSourcePrefixes[type]}_${shortId}`;
 }
-
-// ============================================================================
-// Citation Instructions
-// ============================================================================
-
-const CITATION_INSTRUCTIONS = `
-## Citation Guidelines
-
-You have access to project context including memories, previous conversations, files, and research from this project. When referencing information from these sources:
-
-1. **Use inline citations** in the format [source_id] immediately after the referenced information
-2. **Only cite when directly referencing** or paraphrasing source material
-3. **Be accurate** - only cite sources that contain the information you're referencing
-4. **Multiple citations** - if combining info from multiple sources, cite each one
-
-Example: "The project requirements specify OAuth 2.0 authentication [mem_abc123], which aligns with the security analysis from the previous discussion [thd_xyz456]."
-
-`;
 
 // ============================================================================
 // Context Building
@@ -296,23 +230,23 @@ function buildAttachmentSources(
 }
 
 /**
- * Format sources list for AI prompt
+ * Format sources list for AI prompt - includes source IDs for citation
  */
 function formatSourcesList(sources: CitableSource[]): string {
   if (sources.length === 0) {
-    return 'No project context available for citations.';
+    return '';
   }
 
   const lines = sources.map((source) => {
     const typeLabel = CitationSourceLabels[source.type];
-    return `- **[${source.id}]** (${typeLabel}): ${source.title}`;
+    return `<source id="${source.id}" type="${typeLabel}" title="${source.title}" />`;
   });
 
-  return `### Available Sources for Citation\n\n${lines.join('\n')}`;
+  return `<available-context>\n${lines.join('\n')}\n</available-context>`;
 }
 
 /**
- * Format full context with source content for AI
+ * Format full context with source content for AI - clean XML format
  * Uses enum constants for section headers and content limits (single source of truth)
  */
 function formatContextWithSources(sources: CitableSource[]): string {
@@ -342,14 +276,16 @@ function formatContextWithSources(sources: CitableSource[]): string {
     }
 
     const contentLimit = CitationSourceContentLimits[sourceType];
-    const sectionHeader = CitationSourceSectionHeaders[sourceType];
 
-    const content = typeSources.map((s) => {
+    const content = typeSources.map((s, index) => {
       const truncated = s.content.length > contentLimit;
-      return `**[${s.id}]** ${s.title}\n${s.content.slice(0, contentLimit)}${truncated ? '...' : ''}`;
+      // Include source ID so AI can cite it using [source_id] format
+      return `<item id="${s.id}" index="${index + 1}" title="${s.title}">
+${s.content.slice(0, contentLimit)}${truncated ? '...' : ''}
+</item>`;
     }).join('\n\n');
 
-    sections.push(`### ${sectionHeader}\n\n${content}`);
+    sections.push(`<${sourceType}-context>\n${content}\n</${sourceType}-context>`);
   }
 
   return sections.join('\n\n');
@@ -392,14 +328,27 @@ export async function buildCitableContext(
     allSources.map(source => [source.id, source]),
   );
 
-  // Format the prompt with citations
+  // Format the prompt with XML context AND citation instructions
   const formattedPrompt = allSources.length > 0
     ? [
-        '\n\n## Project Context with Citations\n',
-        CITATION_INSTRUCTIONS,
+        '\n\n<project-context>',
         formatSourcesList(allSources),
-        '\n### Source Content\n',
         formatContextWithSources(allSources),
+        '</project-context>',
+        '',
+        '## Citation Instructions',
+        '',
+        'When referencing information from the project context above, cite the source using its ID in square brackets.',
+        'Format: [source_id] (e.g., [mem_abc123], [thd_xyz456], [att_upload1], [sch_search1], [ana_round0])',
+        '',
+        'Citation guidelines:',
+        '- Cite memories with [mem_...] when referencing stored knowledge',
+        '- Cite threads with [thd_...] when referencing previous conversations',
+        '- Cite attachments with [att_...] when referencing uploaded files',
+        '- Cite searches with [sch_...] when referencing web search results',
+        '- Cite analyses with [ana_...] when referencing moderator analyses',
+        '- Place citations inline where the information is used',
+        '- You may cite multiple sources for the same point',
       ].join('\n')
     : '';
 
@@ -434,7 +383,7 @@ export function resolveSourceId(
  * Matches patterns like: [mem_abc12345], [thd_xyz456], etc.
  */
 export function extractCitationMarkers(text: string): string[] {
-  const citationPattern = /\[(mem|thd|att|sch|ana)_[a-zA-Z0-9]+\]/g;
+  const citationPattern = /\[(mem|thd|att|sch|ana|rag)_[a-zA-Z0-9]+\]/g;
   const matches = text.match(citationPattern) || [];
 
   // Remove brackets and deduplicate

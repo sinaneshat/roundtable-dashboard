@@ -21,7 +21,14 @@ import type { TextPart, UIMessage } from 'ai';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { FlowState, ScreenMode } from '@/api/core/enums';
-import { AnalysisStatuses, FlowStates, MessagePartTypes, MessageRoles, ScreenModes } from '@/api/core/enums';
+import {
+  AnalysisStatuses,
+  DEFAULT_CHAT_MODE,
+  FlowStates,
+  MessagePartTypes,
+  MessageRoles,
+  ScreenModes,
+} from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -48,7 +55,9 @@ export type FlowContext = {
   allParticipantsResponded: boolean; // All participants responded for current round
 
   // Analysis state
-  analysisStatus: typeof AnalysisStatuses[keyof typeof AnalysisStatuses] | null;
+  analysisStatus:
+    | (typeof AnalysisStatuses)[keyof typeof AnalysisStatuses]
+    | null;
   analysisExists: boolean;
 
   // SDK state
@@ -214,7 +223,11 @@ function getNextAction(
   // Handles both:
   // 1. Direct jump to navigating (prevState !== FlowStates.NAVIGATING)
   // 2. After cache invalidation (prevState === FlowStates.NAVIGATING, currentState === FlowStates.NAVIGATING)
-  if (currentState === FlowStates.NAVIGATING && !context.hasNavigated && context.threadSlug) {
+  if (
+    currentState === FlowStates.NAVIGATING
+    && !context.hasNavigated
+    && context.threadSlug
+  ) {
     // Skip if we just returned INVALIDATE_CACHE (will be handled in next effect run)
     if (prevState === FlowStates.STREAMING_ANALYSIS) {
       return null;
@@ -298,18 +311,26 @@ export function useFlowStateMachine(
 
   const context = useMemo((): FlowContext => {
     const threadId = thread?.id || createdThreadId;
-    const currentRound = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
+    const currentRound
+      = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
 
     // ✅ FIX: Check if analysis exists for CURRENT round, not ANY round
-    const currentRoundAnalysis = analyses.find(a => a.roundNumber === currentRound);
+    const currentRoundAnalysis = analyses.find(
+      a => a.roundNumber === currentRound,
+    );
 
     // ✅ FIX: Count participant messages for CURRENT round only
     // ✅ TYPE-SAFE: Use extraction utility instead of manual metadata access
     // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
     const participantMessagesInRound = messages.filter((m) => {
-      return m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === currentRound;
+      return (
+        m.role === MessageRoles.ASSISTANT
+        && getRoundNumber(m.metadata) === currentRound
+      );
     });
-    const allParticipantsResponded = participantMessagesInRound.length >= participants.length && participants.length > 0;
+    const allParticipantsResponded
+      = participantMessagesInRound.length >= participants.length
+        && participants.length > 0;
 
     return {
       threadId,
@@ -373,11 +394,13 @@ export function useFlowStateMachine(
             }
 
             // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
-            const userMessage = messages.findLast((m: UIMessage) => m.role === MessageRoles.USER);
+            const userMessage = messages.findLast(
+              (m: UIMessage) => m.role === MessageRoles.USER,
+            );
             // ✅ TYPE-SAFE: Use AI SDK TextPart type for text content extraction
             // ✅ ENUM PATTERN: Use MessagePartTypes constant instead of hardcoded string
-            const userQuestion = userMessage?.parts
-              ?.find((p): p is TextPart => {
+            const userQuestion
+              = userMessage?.parts?.find((p): p is TextPart => {
                 return (
                   typeof p === 'object'
                   && p !== null
@@ -386,8 +409,7 @@ export function useFlowStateMachine(
                   && 'text' in p
                   && typeof p.text === 'string'
                 );
-              })
-              ?.text || '';
+              })?.text || '';
 
             markAnalysisCreated(currentRound);
             createPendingAnalysis({
@@ -396,7 +418,7 @@ export function useFlowStateMachine(
               participants,
               userQuestion,
               threadId,
-              mode: thread?.mode || 'analyzing',
+              mode: thread?.mode || DEFAULT_CHAT_MODE,
             });
             completeStreaming();
           }
@@ -424,7 +446,11 @@ export function useFlowStateMachine(
           // - All data (messages, analyses, etc.) is in Zustand store
           //
           // Mark as navigated to prevent repeated actions, but don't router.push
-          if (mode === ScreenModes.OVERVIEW && context.threadSlug && !context.hasNavigated) {
+          if (
+            mode === ScreenModes.OVERVIEW
+            && context.threadSlug
+            && !context.hasNavigated
+          ) {
             startTransition(() => {
               setHasNavigated(true);
             });

@@ -479,9 +479,12 @@ export function ChatView({
         : 'Analysis failed. Please try again.';
       updateAnalysisError(roundNumber, errorMessage);
     } else {
-      updateAnalysisStatus(roundNumber, AnalysisStatuses.COMPLETE);
+      // ✅ CRITICAL FIX: No data and no error is an inconsistent state
+      // This should be treated as a failure, not a success
+      // This can happen if streaming completed but validation failed silently
+      updateAnalysisError(roundNumber, 'Analysis completed without data. Please try again.');
     }
-  }, [updateAnalysisData, updateAnalysisStatus, updateAnalysisError]);
+  }, [updateAnalysisData, updateAnalysisError]);
 
   // ============================================================================
   // RENDER

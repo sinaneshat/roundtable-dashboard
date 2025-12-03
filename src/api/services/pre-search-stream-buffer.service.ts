@@ -8,40 +8,22 @@
  * which uses plain text JSON streaming.
  */
 
+import { z } from 'zod';
+
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
+import type { PreSearchStreamChunk, PreSearchStreamMetadata } from '@/api/types/streaming';
+import {
+  PreSearchStreamChunkSchema,
+  PreSearchStreamMetadataSchema,
+  STREAM_BUFFER_TTL_SECONDS,
+} from '@/api/types/streaming';
 
 // KV key patterns for pre-search streams
 const PRESEARCH_STREAM_PREFIX = 'presearch_stream';
 const PRESEARCH_CHUNKS_PREFIX = 'presearch_chunks';
 const PRESEARCH_ACTIVE_PREFIX = 'presearch_active';
-
-// TTL for stream buffers (1 hour)
-const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export type PreSearchStreamChunk = {
-  index: number;
-  event: string;
-  data: string;
-  timestamp: number;
-};
-
-export type PreSearchStreamMetadata = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  preSearchId: string;
-  status: typeof StreamStatuses.ACTIVE | typeof StreamStatuses.COMPLETED | typeof StreamStatuses.FAILED;
-  chunkCount: number;
-  createdAt: number;
-  completedAt?: number;
-  errorMessage?: string;
-};
 
 // ============================================================================
 // Key Generation
@@ -140,13 +122,14 @@ export async function appendPreSearchStreamChunk(
     const chunksKey = getChunksKey(streamId);
     const metadataKey = getMetadataKey(streamId);
 
-    const [chunksJson, metadataJson] = await Promise.all([
-      env.KV.get(chunksKey),
-      env.KV.get(metadataKey),
+    const [rawChunks, rawMetadata] = await Promise.all([
+      env.KV.get(chunksKey, 'json'),
+      env.KV.get(metadataKey, 'json'),
     ]);
 
-    const chunks: PreSearchStreamChunk[] = chunksJson ? JSON.parse(chunksJson) : [];
-    const metadata: PreSearchStreamMetadata | null = metadataJson ? JSON.parse(metadataJson) : null;
+    const chunksResult = z.array(PreSearchStreamChunkSchema).safeParse(rawChunks);
+    const chunks = chunksResult.success ? chunksResult.data : [];
+    const metadataResult = PreSearchStreamMetadataSchema.safeParse(rawMetadata);
 
     const newChunk: PreSearchStreamChunk = {
       index: chunks.length,
@@ -161,8 +144,8 @@ export async function appendPreSearchStreamChunk(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    if (metadata) {
-      metadata.chunkCount = chunks.length;
+    if (metadataResult.success) {
+      const metadata = { ...metadataResult.data, chunkCount: chunks.length };
       await env.KV.put(metadataKey, JSON.stringify(metadata), {
         expirationTtl: STREAM_BUFFER_TTL_SECONDS,
       });
@@ -190,15 +173,18 @@ export async function completePreSearchStreamBuffer(
 
   try {
     const metadataKey = getMetadataKey(streamId);
-    const metadataJson = await env.KV.get(metadataKey);
+    const raw = await env.KV.get(metadataKey, 'json');
+    const result = PreSearchStreamMetadataSchema.safeParse(raw);
 
-    if (!metadataJson) {
+    if (!result.success) {
       return;
     }
 
-    const metadata: PreSearchStreamMetadata = JSON.parse(metadataJson);
-    metadata.status = StreamStatuses.COMPLETED;
-    metadata.completedAt = Date.now();
+    const metadata = {
+      ...result.data,
+      status: StreamStatuses.COMPLETED,
+      completedAt: Date.now(),
+    };
 
     await env.KV.put(metadataKey, JSON.stringify(metadata), {
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
@@ -229,16 +215,19 @@ export async function failPreSearchStreamBuffer(
 
   try {
     const metadataKey = getMetadataKey(streamId);
-    const metadataJson = await env.KV.get(metadataKey);
+    const raw = await env.KV.get(metadataKey, 'json');
+    const result = PreSearchStreamMetadataSchema.safeParse(raw);
 
-    if (!metadataJson) {
+    if (!result.success) {
       return;
     }
 
-    const metadata: PreSearchStreamMetadata = JSON.parse(metadataJson);
-    metadata.status = StreamStatuses.FAILED;
-    metadata.completedAt = Date.now();
-    metadata.errorMessage = errorMessage;
+    const metadata = {
+      ...result.data,
+      status: StreamStatuses.FAILED,
+      completedAt: Date.now(),
+      errorMessage,
+    };
 
     await env.KV.put(metadataKey, JSON.stringify(metadata), {
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
@@ -315,8 +304,9 @@ export async function getPreSearchStreamMetadata(
   }
 
   try {
-    const metadataJson = await env.KV.get(getMetadataKey(streamId));
-    return metadataJson ? JSON.parse(metadataJson) : null;
+    const raw = await env.KV.get(getMetadataKey(streamId), 'json');
+    const result = PreSearchStreamMetadataSchema.safeParse(raw);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }
@@ -334,8 +324,9 @@ export async function getPreSearchStreamChunks(
   }
 
   try {
-    const chunksJson = await env.KV.get(getChunksKey(streamId));
-    return chunksJson ? JSON.parse(chunksJson) : null;
+    const raw = await env.KV.get(getChunksKey(streamId), 'json');
+    const result = z.array(PreSearchStreamChunkSchema).safeParse(raw);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

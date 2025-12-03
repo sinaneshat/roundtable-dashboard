@@ -272,6 +272,64 @@ export function isCompleteAnalysis(
 }
 
 // ============================================================================
+// ANALYSIS DATA NORMALIZATION
+// ============================================================================
+
+/**
+ * Normalize analysis data to ensure consistent format
+ *
+ * **CRITICAL FIX**: AI models sometimes return object formats instead of arrays:
+ * - perspectives: { "Claude 4.5 Opus": "agree" } instead of [{ modelName: "Claude 4.5 Opus", status: "agree" }]
+ * - argumentStrengthProfile: { "Claude 4.5 Opus": { logic: 85 } } instead of [{ modelName: "Claude 4.5 Opus", logic: 85 }]
+ *
+ * This function normalizes these formats to ensure consistent array structures
+ * that match the expected schema.
+ *
+ * @param data - Raw analysis data from AI model (may have inconsistent formats)
+ * @returns Normalized data with consistent array formats
+ */
+export function normalizeAnalysisData<T>(data: T): T {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  // Deep clone to avoid mutation
+  const normalized = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+
+  // Normalize consensusAnalysis if present
+  if (normalized.consensusAnalysis && typeof normalized.consensusAnalysis === 'object') {
+    const consensus = normalized.consensusAnalysis as Record<string, unknown>;
+
+    // Normalize agreementHeatmap perspectives
+    if (Array.isArray(consensus.agreementHeatmap)) {
+      consensus.agreementHeatmap = (consensus.agreementHeatmap as Array<Record<string, unknown>>).map((entry) => {
+        if (entry.perspectives && !Array.isArray(entry.perspectives)) {
+          // Convert { "modelName": "status" } to [{ modelName, status }]
+          const perspectivesObj = entry.perspectives as Record<string, string>;
+          entry.perspectives = Object.entries(perspectivesObj).map(([modelName, status]) => ({
+            modelName,
+            status,
+          }));
+        }
+        return entry;
+      });
+    }
+
+    // Normalize argumentStrengthProfile
+    if (consensus.argumentStrengthProfile && !Array.isArray(consensus.argumentStrengthProfile)) {
+      // Convert { "modelName": { scores } } to [{ modelName, ...scores }]
+      const profileObj = consensus.argumentStrengthProfile as Record<string, Record<string, unknown>>;
+      consensus.argumentStrengthProfile = Object.entries(profileObj).map(([modelName, scores]) => ({
+        modelName,
+        ...scores,
+      }));
+    }
+  }
+
+  return normalized as T;
+}
+
+// ============================================================================
 // STATUS PRIORITY - Imported from Single Source of Truth
 // ============================================================================
 

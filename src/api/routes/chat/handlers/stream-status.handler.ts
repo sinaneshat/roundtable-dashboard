@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
-import { createHandler } from '@/api/core';
+import { createHandler, Responses } from '@/api/core';
 import { OperationStatuses } from '@/api/core/enums';
 import { getStreamState } from '@/api/services/resumable-stream-kv.service';
 import type { ApiEnv } from '@/api/types';
@@ -101,12 +101,6 @@ export const getStreamStatusHandler: RouteHandler<typeof getStreamStatusRoute, A
     }
 
     // Stream is completed or failed - return state
-    return c.json(
-      {
-        ok: true,
-        data: streamState,
-      },
-      HttpStatusCodes.OK,
-    );
+    return Responses.ok(c, streamState);
   },
 );

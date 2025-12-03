@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { AnalysisStatuses, ChangelogTypes, MessageRoles, ThreadStatusSchema } from '@/api/core/enums';
+import { AnalysisStatuses, ChangelogTypes, MessagePartTypes, MessageRoles, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
@@ -51,6 +51,7 @@ import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
 import type {
   ChatCustomRole,
 } from '@/db/validation';
+import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils/participant';
 
 import type {
@@ -256,7 +257,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         id: ulid(),
         threadId,
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: body.firstMessage }],
+        parts: [{ type: MessagePartTypes.TEXT, text: body.firstMessage }],
         roundNumber: 0, // ✅ 0-BASED: First round is 0
         metadata: {
           role: MessageRoles.USER,
@@ -295,6 +296,48 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       }));
       await db.insert(tables.messageUpload).values(messageUploadValues);
 
+      // ✅ CRITICAL FIX (Round 0): Update DB message parts to include file parts
+      // Previously, the message was stored with only text parts, and we relied on
+      // loadMessageAttachments to add file parts during streaming. But this was unreliable.
+      // By storing file parts in the DB (with signed HTTP URLs), streaming can directly
+      // use them without needing the junction table lookup.
+      // Note: These URLs will be converted to base64 by prepareValidatedMessages.
+      const baseUrlForDb = new URL(c.req.url).origin;
+      const filePartsForDb: ExtendedFilePart[] = await Promise.all(
+        body.attachmentIds.map(async (uploadId): Promise<ExtendedFilePart | null> => {
+          const upload = uploadMap.get(uploadId);
+          if (!upload)
+            return null;
+          const signedPath = await generateSignedDownloadPath(c, {
+            uploadId,
+            userId: user.id,
+            threadId,
+            expirationMs: 7 * 24 * 60 * 60 * 1000, // 7 days for DB storage
+          });
+          return {
+            type: MessagePartTypes.FILE,
+            url: `${baseUrlForDb}${signedPath}`,
+            filename: upload.filename,
+            mediaType: upload.mimeType,
+            uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ to load content from R2
+          };
+        }),
+      ).then(parts => parts.filter((p): p is ExtendedFilePart => p !== null));
+
+      // Update message parts in DB to include file parts
+      if (filePartsForDb.length > 0) {
+        const existingTextParts = (firstMessage.parts || []).filter(
+          (p): p is { type: 'text'; text: string } => p.type === MessagePartTypes.TEXT && 'text' in p,
+        );
+        const combinedPartsForDb = [
+          ...filePartsForDb,
+          ...existingTextParts,
+        ] as typeof firstMessage.parts;
+        await db.update(tables.chatMessage)
+          .set({ parts: combinedPartsForDb })
+          .where(eq(tables.chatMessage.id, firstMessage.id));
+      }
+
       // Cancel scheduled cleanup for attached uploads (non-blocking)
       if (isCleanupSchedulerAvailable(c.env)) {
         const cancelCleanupTasks = body.attachmentIds.map(uploadId =>
@@ -312,32 +355,32 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       // don't show until full page refresh loads thread via getThreadBySlugHandler
       // ✅ SECURITY: Use signed URLs for secure, time-limited download access
       const baseUrl = new URL(c.req.url).origin;
-      const fileParts = await Promise.all(
-        body.attachmentIds.map(async (uploadId) => {
-          const upload = uploadMap.get(uploadId);
-          if (!upload)
-            return null;
+      const filePartPromises = body.attachmentIds.map(async (uploadId): Promise<ExtendedFilePart | null> => {
+        const upload = uploadMap.get(uploadId);
+        if (!upload)
+          return null;
 
-          // Generate signed download URL with 1 hour expiration
-          const signedPath = await generateSignedDownloadPath(c, {
-            uploadId,
-            userId: user.id,
-            threadId,
-            expirationMs: 60 * 60 * 1000, // 1 hour
-          });
+        // Generate signed download URL with 1 hour expiration
+        const signedPath = await generateSignedDownloadPath(c, {
+          uploadId,
+          userId: user.id,
+          threadId,
+          expirationMs: 60 * 60 * 1000, // 1 hour
+        });
 
-          return {
-            type: 'file' as const,
-            url: `${baseUrl}${signedPath}`,
-            filename: upload.filename,
-            mediaType: upload.mimeType,
-          };
-        }),
-      ).then(parts => parts.filter((p): p is NonNullable<typeof p> => p !== null));
+        return {
+          type: MessagePartTypes.FILE,
+          url: `${baseUrl}${signedPath}`,
+          filename: upload.filename,
+          mediaType: upload.mimeType,
+          uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ file loading
+        };
+      });
+      const filePartsWithNulls = await Promise.all(filePartPromises);
+      const fileParts: ExtendedFilePart[] = filePartsWithNulls.filter((p): p is ExtendedFilePart => p !== null);
 
       // Combine existing text parts with file parts
-      // Cast to flexible type to allow file parts alongside text parts
-      const existingParts = (firstMessage.parts || []) as Array<{ type: string; text?: string; url?: string; filename?: string; mediaType?: string }>;
+      const existingParts = firstMessage.parts || [];
       const combinedParts = [...fileParts, ...existingParts] as typeof firstMessage.parts;
       messageWithFileParts = {
         ...firstMessage,
@@ -544,6 +587,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         where: eq(tables.chatParticipant.threadId, id),
       });
       const currentMap = new Map(currentParticipants.map(p => [p.id, p]));
+      // ✅ FIX: Also map by modelId to handle re-enabling disabled participants
+      // This prevents UNIQUE constraint violations when participant sent without id
+      // but modelId already exists in thread (even if disabled)
+      const currentByModelId = new Map(currentParticipants.map(p => [p.modelId, p]));
       const newMap = new Map(body.participants.filter(p => p.id).map(p => [p.id!, p]));
       // Follow established pattern from createThreadHandler (lines 196-229)
       // Construct values inline with TypeScript type inference
@@ -551,19 +598,41 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       const participantsToUpdate = [];
       for (const newP of body.participants) {
         if (!newP.id) {
-          const participantId = ulid();
-          participantsToInsert.push({
-            id: participantId,
-            threadId: id,
-            modelId: newP.modelId,
-            role: newP.role,
-            customRoleId: newP.customRoleId,
-            priority: newP.priority,
-            isEnabled: newP.isEnabled ?? true,
-            settings: null,
-            createdAt: now,
-            updatedAt: now,
-          });
+          // ✅ FIX: Check if participant with same modelId already exists
+          // If exists (even disabled), update/re-enable instead of inserting
+          // This prevents UNIQUE constraint violation on (thread_id, model_id)
+          const existingByModel = currentByModelId.get(newP.modelId);
+          if (existingByModel) {
+            // Re-enable and update existing participant
+            participantsToUpdate.push({
+              id: existingByModel.id,
+              updates: {
+                modelId: newP.modelId,
+                role: newP.role,
+                customRoleId: newP.customRoleId,
+                priority: newP.priority,
+                isEnabled: newP.isEnabled ?? true,
+                updatedAt: now,
+              },
+            });
+            // Mark as handled so it won't be disabled later
+            newMap.set(existingByModel.id, { ...newP, id: existingByModel.id });
+          } else {
+            // Truly new participant - insert
+            const participantId = ulid();
+            participantsToInsert.push({
+              id: participantId,
+              threadId: id,
+              modelId: newP.modelId,
+              role: newP.role,
+              customRoleId: newP.customRoleId,
+              priority: newP.priority,
+              isEnabled: newP.isEnabled ?? true,
+              settings: null,
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
         } else {
           const current = currentMap.get(newP.id);
           if (!current)
@@ -1119,9 +1188,12 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         }
 
         // Add file parts for each attachment with signed URLs
-        const existingParts = (msg.parts || []) as Array<{ type: string; text?: string; url?: string; filename?: string; mediaType?: string }>;
-        const fileParts = await Promise.all(
-          attachments.map(async (att) => {
+        // ✅ FIX: Filter out existing file parts to prevent duplication
+        // streaming.handler.ts may have already saved file parts, but they need fresh signed URLs
+        const existingParts = msg.parts || [];
+        const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
+        const fileParts: ExtendedFilePart[] = await Promise.all(
+          attachments.map(async (att): Promise<ExtendedFilePart> => {
             const signedPath = await generateSignedDownloadPath(c, {
               uploadId: att.uploadId,
               userId: thread.userId,
@@ -1130,17 +1202,20 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
             });
 
             return {
-              type: 'file' as const,
+              type: MessagePartTypes.FILE,
               url: `${baseUrl}${signedPath}`,
               filename: att.filename,
               mediaType: att.mimeType,
+              uploadId: att.uploadId, // ✅ ExtendedFilePart: uploadId for participant 1+ file loading
             };
           }),
         );
 
         return {
           ...msg,
-          parts: [...existingParts, ...fileParts],
+          // ✅ FIX: Replace file parts instead of appending to prevent duplication
+          // Fresh signed URLs replace any expired ones from initial save
+          parts: [...fileParts, ...nonFileParts],
         };
       }),
     );

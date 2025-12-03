@@ -18,12 +18,12 @@
  * @see /src/lib/schemas/message-metadata.ts - Finish reason schemas
  */
 
+import { FinishReasonSchema } from '@/api/core/enums';
 import type { ErrorCategory } from '@/lib/schemas/error-schemas';
 import {
   categorizeErrorMessage,
   ErrorCategorySchema,
 } from '@/lib/schemas/error-schemas';
-import { FinishReasonSchema } from '@/lib/schemas/message-metadata';
 import { isObject } from '@/lib/utils/type-guards';
 
 // ============================================================================
@@ -226,9 +226,10 @@ export function extractProviderError(
   if (isObject(providerMetadata)) {
     // Extract error field (string or object)
     if (providerMetadata.error) {
-      rawError = typeof providerMetadata.error === 'string'
-        ? providerMetadata.error
-        : JSON.stringify(providerMetadata.error);
+      rawError
+        = typeof providerMetadata.error === 'string'
+          ? providerMetadata.error
+          : JSON.stringify(providerMetadata.error);
     }
 
     // Check errorMessage field as fallback
@@ -246,9 +247,10 @@ export function extractProviderError(
   // ✅ TYPE-SAFE: Check response with type guard
   if (!rawError && isObject(response)) {
     if (response.error) {
-      rawError = typeof response.error === 'string'
-        ? response.error
-        : JSON.stringify(response.error);
+      rawError
+        = typeof response.error === 'string'
+          ? response.error
+          : JSON.stringify(response.error);
     }
   }
 
@@ -308,7 +310,8 @@ export function buildEmptyResponseError(
   if (finishReason === FinishReasonSchema.enum.stop) {
     // stop = Model completed intentionally with no output (likely content filter)
     providerMessage = `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`;
-    errorMessage = 'Returned empty response - possible content filtering or safety block';
+    errorMessage
+      = 'Returned empty response - possible content filtering or safety block';
     errorCategory = ErrorCategorySchema.enum.content_filter;
     isTransientError = false; // Content filters are not transient
   } else if (finishReason === FinishReasonSchema.enum.length) {
@@ -387,14 +390,8 @@ export function buildEmptyResponseError(
 export function extractErrorMetadata(
   params: ExtractErrorMetadataParams,
 ): ErrorMetadata {
-  const {
-    providerMetadata,
-    response,
-    finishReason,
-    usage,
-    text,
-    reasoning,
-  } = params;
+  const { providerMetadata, response, finishReason, usage, text, reasoning }
+    = params;
 
   // Extract provider-specific errors
   const { rawError, category: providerCategory } = extractProviderError(

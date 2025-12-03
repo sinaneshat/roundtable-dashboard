@@ -32,7 +32,7 @@ import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStats, UsageStatus } from '../routes/usage/schema';
 import type { SubscriptionTier } from './product-logic.service';
-import { TIER_QUOTAS } from './product-logic.service';
+import { subscriptionTierSchema, TIER_QUOTAS } from './product-logic.service';
 
 /**
  * Get tier quotas from code (SINGLE SOURCE OF TRUTH)
@@ -743,12 +743,10 @@ export async function syncUserQuotaFromSubscription(
     throw createError.notFound(`Price not found: ${priceId}`, context);
   }
 
-  // ✅ TYPE GUARD: Validate tier from price metadata
+  // ✅ TYPE-SAFE: Use Zod schema validation instead of force cast
   const tierValue = price.metadata?.tier;
-  const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
-  const tier = typeof tierValue === 'string' && validTiers.includes(tierValue as SubscriptionTier)
-    ? (tierValue as SubscriptionTier)
-    : undefined;
+  const parsedTier = subscriptionTierSchema.safeParse(tierValue);
+  const tier = parsedTier.success ? parsedTier.data : undefined;
 
   const isAnnual = price.interval === 'year';
 

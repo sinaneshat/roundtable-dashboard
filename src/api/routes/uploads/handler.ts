@@ -29,11 +29,23 @@ import {
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
-import { deleteFile, getFile, isLocalDevelopment, putFile } from '@/api/services/storage.service';
+import { generateSignedDownloadUrl } from '@/api/services/signed-url.service';
+import {
+  deleteFile,
+  getFileStream,
+  isLocalDevelopment,
+  putFile,
+} from '@/api/services/storage.service';
 import {
   isCleanupSchedulerAvailable,
   scheduleUploadCleanup,
 } from '@/api/services/upload-cleanup.service';
+import {
+  createUploadTicket,
+  deleteTicket,
+  markTicketUsed,
+  validateUploadTicket,
+} from '@/api/services/upload-ticket.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -44,11 +56,13 @@ import type {
   createMultipartUploadRoute,
   deleteUploadRoute,
   downloadUploadRoute,
+  getDownloadUrlRoute,
   getUploadRoute,
   listUploadsRoute,
+  requestUploadTicketRoute,
   updateUploadRoute,
-  uploadFileRoute,
   uploadPartRoute,
+  uploadWithTicketRoute,
 } from './route';
 // ============================================================================
 // MULTIPART UPLOAD HANDLERS
@@ -58,8 +72,10 @@ import {
   CompleteMultipartUploadRequestSchema,
   CreateMultipartUploadRequestSchema,
   ListUploadsQuerySchema,
+  RequestUploadTicketSchema,
   UpdateUploadRequestSchema,
   UploadPartParamsSchema,
+  UploadWithTicketQuerySchema,
 } from './schema';
 
 // ============================================================================
@@ -84,144 +100,8 @@ function isAllowedMimeType(mimeType: string): boolean {
 }
 
 // ============================================================================
-// SINGLE-REQUEST UPLOAD HANDLERS
+// UPLOAD LIST/GET HANDLERS
 // ============================================================================
-
-/**
- * Upload file (single request)
- */
-export const uploadFileHandler: RouteHandler<typeof uploadFileRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    operationName: 'uploadFile',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const db = await getDbAsync();
-
-    // Parse multipart form data
-    // Try parseBody with 'all' option to handle File objects correctly
-    // This is critical for Hono in OpenNext/Cloudflare Workers environment
-    const body = await c.req.parseBody({ all: true });
-
-    // Handle the file - parseBody may return File or array of Files
-    let file: File | undefined;
-    if (body.file instanceof File) {
-      file = body.file;
-    } else if (Array.isArray(body.file) && body.file[0] instanceof File) {
-      file = body.file[0];
-    }
-
-    if (!file) {
-      throw createError.badRequest(
-        'No file provided. Expected field "file" in multipart form data.',
-        {
-          errorType: 'validation',
-          field: 'file',
-        },
-      );
-    }
-
-    // Validate file size
-    if (file.size > MAX_SINGLE_UPLOAD_SIZE) {
-      throw createError.badRequest(
-        `File too large (max ${MAX_SINGLE_UPLOAD_SIZE / 1024 / 1024}MB). Use multipart upload for larger files.`,
-        {
-          errorType: 'validation',
-          field: 'file',
-        },
-      );
-    }
-
-    // Validate MIME type
-    if (!isAllowedMimeType(file.type)) {
-      throw createError.badRequest(
-        `File type not allowed: ${file.type}`,
-        {
-          errorType: 'validation',
-          field: 'file',
-        },
-      );
-    }
-
-    // Generate IDs and storage key
-    const uploadId = ulid();
-    const r2Key = generateR2Key(user.id, uploadId, file.name);
-
-    // Upload to storage (R2 in production, local filesystem in dev)
-    const fileBuffer = await file.arrayBuffer();
-    const uploadResult = await putFile(
-      c.env.UPLOADS_R2_BUCKET,
-      r2Key,
-      fileBuffer,
-      {
-        contentType: file.type,
-        customMetadata: {
-          userId: user.id,
-          uploadId,
-          filename: file.name,
-          uploadedAt: new Date().toISOString(),
-        },
-      },
-    );
-
-    if (!uploadResult.success) {
-      throw createError.internal(
-        `Failed to upload file: ${uploadResult.error}`,
-        { errorType: 'external_service' },
-      );
-    }
-
-    // Create DB record in upload table (no direct thread/message FKs)
-    const [uploadRecord] = await db
-      .insert(tables.upload)
-      .values({
-        id: uploadId,
-        userId: user.id,
-        filename: file.name,
-        r2Key,
-        fileSize: file.size,
-        mimeType: file.type,
-        status: 'ready',
-        metadata: {
-          description: (body.description as string) || undefined,
-        },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    // Schedule automatic cleanup for orphaned uploads (15 minutes)
-    // This is non-blocking and best-effort
-    if (isCleanupSchedulerAvailable(c.env)) {
-      const scheduleCleanupTask = async () => {
-        try {
-          await scheduleUploadCleanup(
-            c.env.UPLOAD_CLEANUP_SCHEDULER,
-            uploadId,
-            user.id,
-            r2Key,
-          );
-        } catch (error) {
-          console.error(`[Upload] Failed to schedule cleanup for ${uploadId}:`, error);
-          // Don't throw - cleanup scheduling failure shouldn't break upload
-        }
-      };
-
-      if (c.executionCtx) {
-        c.executionCtx.waitUntil(scheduleCleanupTask());
-      } else {
-        scheduleCleanupTask().catch(() => {});
-      }
-    }
-
-    c.status(201);
-    return Responses.ok(c, {
-      ...uploadRecord,
-      r2Key: undefined, // Don't expose R2 key
-    });
-  },
-);
 
 /**
  * List user uploads
@@ -304,6 +184,263 @@ export const getUploadHandler: RouteHandler<typeof getUploadRoute, ApiEnv> = cre
 );
 
 /**
+ * Get download URL for an upload
+ * Returns a signed URL that can be used to download/preview the file
+ */
+export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    operationName: 'getDownloadUrl',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify ownership
+    const uploadRecord = await db.query.upload.findFirst({
+      where: and(
+        eq(tables.upload.id, id),
+        eq(tables.upload.userId, user.id),
+      ),
+    });
+
+    if (!uploadRecord) {
+      throw createError.notFound(`Upload not found: ${id}`, {
+        errorType: 'resource',
+        resource: 'upload',
+        resourceId: id,
+      });
+    }
+
+    // Generate signed download URL (1 hour expiration)
+    const signedUrl = await generateSignedDownloadUrl(c, {
+      uploadId: id,
+      userId: user.id,
+      expirationMs: 60 * 60 * 1000, // 1 hour
+    });
+
+    return Responses.ok(c, {
+      url: signedUrl,
+    });
+  },
+);
+
+// ============================================================================
+// SECURE UPLOAD TICKET HANDLERS (S3 Presigned URL Pattern)
+// ============================================================================
+
+/**
+ * Request upload ticket (Step 1 of secure upload)
+ *
+ * Returns a time-limited, signed token that must be included in the actual upload.
+ * This follows the S3 presigned URL pattern for secure uploads.
+ */
+export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicketRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: RequestUploadTicketSchema,
+    operationName: 'requestUploadTicket',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const body = c.validated.body;
+
+    // Validate MIME type
+    if (!isAllowedMimeType(body.mimeType)) {
+      throw createError.badRequest(
+        `File type not allowed: ${body.mimeType}`,
+        {
+          errorType: 'validation',
+          field: 'mimeType',
+        },
+      );
+    }
+
+    // Validate file size
+    if (body.fileSize > MAX_SINGLE_UPLOAD_SIZE) {
+      throw createError.badRequest(
+        `File too large (max ${MAX_SINGLE_UPLOAD_SIZE / 1024 / 1024}MB). Use multipart upload for larger files.`,
+        {
+          errorType: 'validation',
+          field: 'fileSize',
+        },
+      );
+    }
+
+    // Create upload ticket
+    const { ticketId, token, expiresAt } = await createUploadTicket(c, {
+      userId: user.id,
+      filename: body.filename,
+      mimeType: body.mimeType,
+      maxFileSize: body.fileSize,
+    });
+
+    // Build upload URL
+    const baseUrl = new URL(c.req.url).origin;
+    const uploadUrl = `${baseUrl}/api/v1/uploads/ticket/upload?token=${encodeURIComponent(token)}`;
+
+    return Responses.ok(c, {
+      ticketId,
+      token,
+      expiresAt,
+      uploadUrl,
+    });
+  },
+);
+
+/**
+ * Upload file with ticket (Step 2 of secure upload)
+ *
+ * Validates ticket token before accepting file upload.
+ * Token can only be used once (one-time use prevents replay attacks).
+ */
+export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateQuery: UploadWithTicketQuerySchema,
+    operationName: 'uploadWithTicket',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { token } = c.validated.query;
+    const db = await getDbAsync();
+
+    // Validate ticket
+    const validation = await validateUploadTicket(c, token, user.id);
+    if (!validation.valid) {
+      throw createError.unauthorized(validation.error, {
+        errorType: 'authorization',
+      });
+    }
+
+    const { ticket } = validation;
+
+    // Parse multipart form data
+    const body = await c.req.parseBody({ all: true });
+
+    // Extract file from parsed body
+    let file: File | undefined;
+    if (body.file instanceof File) {
+      file = body.file;
+    } else if (Array.isArray(body.file) && body.file[0] instanceof File) {
+      file = body.file[0];
+    }
+
+    if (!file) {
+      await deleteTicket(c, ticket.ticketId);
+      throw createError.badRequest(
+        'No file provided. Expected field "file" in multipart form data.',
+        {
+          errorType: 'validation',
+          field: 'file',
+        },
+      );
+    }
+
+    // Validate file matches ticket constraints
+    if (file.size > ticket.maxFileSize) {
+      await deleteTicket(c, ticket.ticketId);
+      throw createError.badRequest(
+        `File size ${file.size} exceeds ticket limit ${ticket.maxFileSize}`,
+        {
+          errorType: 'validation',
+          field: 'file',
+        },
+      );
+    }
+
+    if (file.type !== ticket.mimeType) {
+      await deleteTicket(c, ticket.ticketId);
+      throw createError.badRequest(
+        `File type ${file.type} doesn't match ticket type ${ticket.mimeType}`,
+        {
+          errorType: 'validation',
+          field: 'file',
+        },
+      );
+    }
+
+    // Mark ticket as used immediately to prevent race conditions
+    await markTicketUsed(c, ticket.ticketId);
+
+    // Generate IDs and storage key
+    const uploadId = ulid();
+    const r2Key = generateR2Key(user.id, uploadId, file.name);
+
+    // Upload to storage
+    const fileBuffer = await file.arrayBuffer();
+    const uploadResult = await putFile(
+      c.env.UPLOADS_R2_BUCKET,
+      r2Key,
+      fileBuffer,
+      {
+        contentType: file.type,
+        customMetadata: {
+          userId: user.id,
+          uploadId,
+          filename: file.name,
+          ticketId: ticket.ticketId,
+          uploadedAt: new Date().toISOString(),
+        },
+      },
+    );
+
+    if (!uploadResult.success) {
+      throw createError.internal(
+        `Failed to upload file: ${uploadResult.error}`,
+        { errorType: 'external_service' },
+      );
+    }
+
+    // Create DB record (ticketId stored in R2 customMetadata for audit purposes)
+    const [uploadRecord] = await db
+      .insert(tables.upload)
+      .values({
+        id: uploadId,
+        userId: user.id,
+        filename: file.name,
+        r2Key,
+        fileSize: file.size,
+        mimeType: file.type,
+        status: 'ready',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    // Schedule cleanup for orphaned uploads
+    if (isCleanupSchedulerAvailable(c.env)) {
+      const scheduleCleanupTask = async () => {
+        try {
+          await scheduleUploadCleanup(
+            c.env.UPLOAD_CLEANUP_SCHEDULER,
+            uploadId,
+            user.id,
+            r2Key,
+          );
+        } catch (error) {
+          console.error(`[Upload] Failed to schedule cleanup for ${uploadId}:`, error);
+        }
+      };
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(scheduleCleanupTask());
+      } else {
+        scheduleCleanupTask().catch(() => {});
+      }
+    }
+
+    c.status(201);
+    return Responses.ok(c, {
+      ...uploadRecord,
+      r2Key: undefined,
+    });
+  },
+);
+
+/**
  * Update upload metadata
  *
  * Note: Thread/message associations are handled via junction tables.
@@ -366,11 +503,19 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
 
 /**
  * Download file
- * Serves file content from R2/local storage
+ * Serves file content from R2/local storage with streaming
+ *
+ * Follows official Cloudflare R2 patterns:
+ * - Streams body directly instead of buffering entire file
+ * - Uses writeHttpMetadata() for proper Content-Type headers
+ * - Includes ETag for caching and conditional requests
+ * - Supports If-None-Match conditional requests (304 Not Modified)
  *
  * Security model:
  * 1. If signed URL params present: Validate signature (supports shared access)
  * 2. If no signature: Require session auth + ownership check (backward compat)
+ *
+ * @see https://developers.cloudflare.com/r2/api/workers/workers-api-usage
  */
 export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, ApiEnv> = createHandler(
   {
@@ -384,6 +529,57 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
 
     const { id } = c.validated.params;
     const db = await getDbAsync();
+
+    // Extract conditional request headers for ETag validation
+    const requestHeaders = c.req.raw.headers;
+    const ifNoneMatch = requestHeaders.get('if-none-match');
+
+    // Helper to build streaming response following official R2 pattern
+    const buildStreamingResponse = (
+      result: Awaited<ReturnType<typeof getFileStream>>,
+      uploadRecord: { filename: string; mimeType: string | null },
+      cacheControl: string,
+    ) => {
+      // Check conditional request (If-None-Match)
+      if (ifNoneMatch && result.httpEtag && ifNoneMatch === result.httpEtag) {
+        return new Response(null, { status: 304 });
+      }
+
+      // Preconditions failed (e.g., If-Match didn't match)
+      if (!result.preconditionsMet) {
+        return new Response(null, { status: 412 });
+      }
+
+      // Build response headers using official R2 pattern
+      const headers = new Headers();
+      result.writeHttpMetadata(headers);
+
+      // Add ETag for caching (official R2 pattern)
+      if (result.httpEtag) {
+        headers.set('etag', result.httpEtag);
+      }
+
+      // Add Content-Length for proper download progress
+      if (result.size > 0) {
+        headers.set('content-length', result.size.toString());
+      }
+
+      // Fallback Content-Type if R2 didn't provide one
+      if (!headers.has('content-type')) {
+        headers.set('content-type', uploadRecord.mimeType || 'application/octet-stream');
+      }
+
+      // Additional security and caching headers
+      headers.set('content-disposition', `inline; filename="${encodeURIComponent(uploadRecord.filename)}"`);
+      headers.set('cache-control', cacheControl);
+      headers.set('x-content-type-options', 'nosniff');
+
+      // Stream body directly (no buffering)
+      return new Response(result.body, {
+        status: result.body ? 200 : 204,
+        headers,
+      });
+    };
 
     // SECURITY CHECK 1: Signed URL validation (preferred method)
     if (signedUrlService.hasSignatureParams(c)) {
@@ -412,9 +608,12 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         });
       }
 
-      const { data, metadata } = await getFile(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key);
+      // Use streaming with conditional request support (official R2 pattern)
+      const result = await getFileStream(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key, {
+        onlyIf: requestHeaders,
+      });
 
-      if (!data) {
+      if (!result.found) {
         throw createError.notFound('File not found in storage', {
           errorType: 'resource',
           resource: 'file',
@@ -427,14 +626,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         ? 'private, no-store, max-age=0'
         : 'private, max-age=3600';
 
-      return new Response(data, {
-        headers: {
-          'Content-Type': metadata?.contentType || uploadRecord.mimeType || 'application/octet-stream',
-          'Content-Disposition': `inline; filename="${encodeURIComponent(uploadRecord.filename)}"`,
-          'Cache-Control': cacheControl,
-          'X-Content-Type-Options': 'nosniff',
-        },
-      });
+      return buildStreamingResponse(result, uploadRecord, cacheControl);
     }
 
     // SECURITY CHECK 2: Session auth + ownership (backward compatibility)
@@ -463,9 +655,12 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       });
     }
 
-    const { data, metadata } = await getFile(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key);
+    // Use streaming with conditional request support (official R2 pattern)
+    const result = await getFileStream(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key, {
+      onlyIf: requestHeaders,
+    });
 
-    if (!data) {
+    if (!result.found) {
       throw createError.notFound('File not found in storage', {
         errorType: 'resource',
         resource: 'file',
@@ -473,14 +668,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       });
     }
 
-    return new Response(data, {
-      headers: {
-        'Content-Type': metadata?.contentType || uploadRecord.mimeType || 'application/octet-stream',
-        'Content-Disposition': `inline; filename="${encodeURIComponent(uploadRecord.filename)}"`,
-        'Cache-Control': 'private, max-age=3600',
-        'X-Content-Type-Options': 'nosniff',
-      },
-    });
+    return buildStreamingResponse(result, uploadRecord, 'private, max-age=3600');
   },
 );
 

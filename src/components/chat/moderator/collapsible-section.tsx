@@ -15,6 +15,8 @@ type CollapsibleSectionProps = {
   children: ReactNode;
   defaultOpen?: boolean;
   className?: string;
+  /** Controlled open state - when provided, overrides internal state */
+  demoOpen?: boolean;
 };
 
 /**
@@ -36,13 +38,17 @@ export function CollapsibleSection({
   children,
   defaultOpen = false,
   className,
+  demoOpen,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
+  // Demo mode: use controlled state when provided
+  const effectiveOpen = demoOpen !== undefined ? demoOpen : isOpen;
+
   return (
     <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
+      open={effectiveOpen}
+      onOpenChange={demoOpen === undefined ? setIsOpen : undefined}
       className={cn('w-full rounded-lg', className)}
     >
       <CollapsibleTrigger
@@ -88,7 +94,7 @@ export function CollapsibleSection({
             <ChevronDown
               className={cn(
                 'size-4 text-muted-foreground transition-transform duration-200 flex-shrink-0',
-                isOpen && 'rotate-180',
+                effectiveOpen && 'rotate-180',
               )}
             />
           </div>

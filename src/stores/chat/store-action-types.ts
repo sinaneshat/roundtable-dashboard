@@ -49,6 +49,7 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import type { ParticipantConfig, StreamResumptionState } from './store-schemas';
@@ -68,6 +69,11 @@ export type UpdateParticipant = (participantId: string, updates: Partial<Partici
 export type ReorderParticipants = (fromIndex: number, toIndex: number) => void;
 export type ResetForm = () => void;
 
+/**
+ * Result from store's applyRecommendedAction
+ * ✅ NOTE: This is the STORE RETURN type (without `updates` - store already applied them)
+ * The pure function in recommended-action-application.ts returns a fuller type including `updates`
+ */
 export type ApplyRecommendedActionResult = {
   success: boolean;
   error?: string;
@@ -478,9 +484,10 @@ export type UpdateParticipants = (participants: ChatParticipant[]) => void;
 
 /**
  * Prepare for new message submission
- * Sets waitingForChangelog, pendingMessage, expectedParticipantIds, and pendingAttachmentIds
+ * Sets waitingForChangelog, pendingMessage, expectedParticipantIds, pendingAttachmentIds, and pendingFileParts
+ * @param fileParts - Pre-built file parts from attachmentInfos (ExtendedFilePart includes uploadId for backend fallback)
  */
-export type PrepareForNewMessage = (message: string, participantIds: string[], attachmentIds?: string[]) => void;
+export type PrepareForNewMessage = (message: string, participantIds: string[], attachmentIds?: string[], fileParts?: ExtendedFilePart[]) => void;
 
 /**
  * Mark streaming/analysis as complete

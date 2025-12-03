@@ -7,8 +7,15 @@
  * Usage:
  * - Call scheduleCleanup() after a file is uploaded to R2
  * - Call cancelCleanup() when an upload is attached to a message/thread/project
+ *
+ * @see /src/api/types/uploads.ts for type definitions
  */
 
+import type {
+  CancelCleanupResult,
+  GetCleanupStateResult,
+  ScheduleCleanupResult,
+} from '@/api/types/uploads';
 import type { UploadCleanupScheduler } from '@/workers/upload-cleanup-scheduler';
 
 /**
@@ -23,7 +30,7 @@ export async function scheduleUploadCleanup(
   uploadId: string,
   userId: string,
   r2Key: string,
-): Promise<{ scheduled: boolean; alarmTime: number }> {
+): Promise<ScheduleCleanupResult> {
   // Get or create DO instance for this upload
   // Using uploadId as the name ensures each upload gets its own instance
   const stub = cleanupScheduler.get(
@@ -55,7 +62,7 @@ export async function scheduleUploadCleanup(
 export async function cancelUploadCleanup(
   cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
   uploadId: string,
-): Promise<{ cancelled: boolean }> {
+): Promise<CancelCleanupResult> {
   const stub = cleanupScheduler.get(
     cleanupScheduler.idFromName(uploadId),
   );
@@ -84,15 +91,7 @@ export async function cancelUploadCleanup(
 export async function getUploadCleanupState(
   cleanupScheduler: DurableObjectNamespace<UploadCleanupScheduler>,
   uploadId: string,
-): Promise<{
-  state: {
-    uploadId: string;
-    userId: string;
-    r2Key: string;
-    scheduledAt: number;
-    createdAt: number;
-  } | null;
-}> {
+): Promise<GetCleanupStateResult> {
   const stub = cleanupScheduler.get(
     cleanupScheduler.idFromName(uploadId),
   );

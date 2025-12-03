@@ -57,6 +57,9 @@ export const ProjectAttachmentRagMetadataSchema = z.object({
   tags: z.array(z.string()).optional(),
   indexedAt: z.string().optional(),
   errorMessage: z.string().optional(),
+  // R2 key in project folder for AI Search indexing
+  // Format: projects/{projectId}/{filename}
+  projectR2Key: z.string().optional(),
 }).strict();
 
 export type ProjectAttachmentRagMetadata = z.infer<typeof ProjectAttachmentRagMetadataSchema>;

@@ -7,7 +7,7 @@ import { flushSync } from 'react-dom';
 
 import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
-import { PreSearchListResponseSchema } from '@/api/routes/chat/schema';
+import { PreSearchListResponseSchema, PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { LoaderFive } from '@/components/ui/loader';
@@ -336,13 +336,16 @@ function PreSearchStreamComponent({
         const contentType = response.headers.get('Content-Type') || '';
         if (contentType.includes('application/json')) {
           // Pre-search is already complete - parse JSON and set data directly
-          const json = await response.json() as { success?: boolean; data?: StoredPreSearch };
-          if (json?.success && json?.data?.searchData) {
+          // ✅ TYPE-SAFE: Use Zod validation instead of force cast
+          const rawJson = await response.json();
+          const parseResult = PreSearchResponseSchema.safeParse(rawJson);
+          const searchData = parseResult.success ? parseResult.data.data?.searchData : undefined;
+          if (searchData) {
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
             flushSync(() => {
-              setPartialSearchData(json.data!.searchData!);
+              setPartialSearchData(searchData);
             });
-            onStreamCompleteRef.current?.(json.data.searchData);
+            onStreamCompleteRef.current?.(searchData);
           }
           return;
         }

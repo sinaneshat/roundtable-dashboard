@@ -19,6 +19,7 @@ import { z } from 'zod';
 import type { UploadStatus } from '@/api/core/enums';
 import {
   RECOMMENDED_PART_SIZE,
+  UploadStatuses,
   UploadStatusSchema,
   UploadStrategySchema,
 } from '@/api/core/enums';
@@ -246,24 +247,22 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
   /**
    * Perform single-request upload
-   * Uses Hono RPC format: { form: { file: File } }
+   * Uses secure ticket-based upload (S3 presigned URL pattern)
    */
   const performSingleUpload = useCallback(
     async (item: UploadItem): Promise<void> => {
       updateItem(item.id, {
-        status: 'uploading',
+        status: UploadStatuses.UPLOADING,
         progress: { loaded: 0, total: item.file.size, percent: 0 },
       });
 
       try {
-        // Pass file directly - Hono RPC client handles FormData serialization
-        const result = await uploadSingle.mutateAsync({
-          form: { file: item.file },
-        });
+        // Pass file directly - secure upload service handles ticket + upload
+        const result = await uploadSingle.mutateAsync(item.file);
 
         if (result.success && result.data) {
           updateItem(item.id, {
-            status: 'completed',
+            status: UploadStatuses.COMPLETED,
             uploadId: result.data.id,
             progress: { loaded: item.file.size, total: item.file.size, percent: 100 },
             completedAt: new Date(),
@@ -271,14 +270,14 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
           const updatedItem = itemsRef.current.find(i => i.id === item.id);
           if (updatedItem) {
-            onComplete?.({ ...updatedItem, status: 'completed', uploadId: result.data.id });
+            onComplete?.({ ...updatedItem, status: UploadStatuses.COMPLETED, uploadId: result.data.id });
           }
         } else {
           throw new Error('Upload failed');
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-        updateItem(item.id, { status: 'failed', error: errorMessage });
+        updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
         throw error;
       }
@@ -296,7 +295,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       const totalParts = Math.ceil(file.size / partSize);
 
       updateItem(item.id, {
-        status: 'uploading',
+        status: UploadStatuses.UPLOADING,
         progress: {
           loaded: 0,
           total: file.size,
@@ -331,7 +330,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         for (let partNumber = 1; partNumber <= totalParts; partNumber++) {
           // Check if cancelled
           const currentItem = itemsRef.current.find(i => i.id === item.id);
-          if (currentItem?.status === 'cancelled') {
+          if (currentItem?.status === UploadStatuses.CANCELLED) {
             throw new Error('Upload cancelled');
           }
 
@@ -380,7 +379,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         }
 
         updateItem(item.id, {
-          status: 'completed',
+          status: UploadStatuses.COMPLETED,
           progress: {
             loaded: file.size,
             total: file.size,
@@ -393,7 +392,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
         const updatedItem = itemsRef.current.find(i => i.id === item.id);
         if (updatedItem) {
-          onComplete?.({ ...updatedItem, status: 'completed' });
+          onComplete?.({ ...updatedItem, status: UploadStatuses.COMPLETED });
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Multipart upload failed';
@@ -411,7 +410,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           }
         }
 
-        updateItem(item.id, { status: 'failed', error: errorMessage });
+        updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
         throw error;
       }
@@ -427,7 +426,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     async (id: string): Promise<void> => {
       // ✅ FIX: Use ref instead of closure to get current items
       const item = itemsRef.current.find(i => i.id === id);
-      if (!item || item.status !== 'pending')
+      if (!item || item.status !== UploadStatuses.PENDING)
         return;
 
       // Check concurrent limit
@@ -448,7 +447,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         // Check if all uploads complete
         setItems((currentItems) => {
           const allDone = currentItems.every(i =>
-            i.status === 'completed' || i.status === 'failed' || i.status === 'cancelled',
+            i.status === UploadStatuses.COMPLETED || i.status === UploadStatuses.FAILED || i.status === UploadStatuses.CANCELLED,
           );
           if (allDone && currentItems.length > 0) {
             onAllComplete?.(currentItems);
@@ -464,7 +463,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
    * Start all pending uploads
    */
   const startAllUploads = useCallback(async (): Promise<void> => {
-    const pendingItems = itemsRef.current.filter(i => i.status === 'pending');
+    const pendingItems = itemsRef.current.filter(i => i.status === UploadStatuses.PENDING);
 
     // Start uploads up to max concurrent
     const uploadsToStart = pendingItems.slice(0, maxConcurrent);
@@ -487,7 +486,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       if (!item)
         return;
 
-      updateItem(id, { status: 'cancelled' });
+      updateItem(id, { status: UploadStatuses.CANCELLED });
       activeUploadsRef.current.delete(id);
 
       // Abort multipart upload if in progress
@@ -522,7 +521,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const removeItem = useCallback(
     (id: string) => {
       const item = itemsRef.current.find(i => i.id === id);
-      if (item?.status === 'uploading') {
+      if (item?.status === UploadStatuses.UPLOADING) {
         cancelUpload(id);
       }
 
@@ -543,7 +542,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const clearAll = useCallback(() => {
     // Cancel all active uploads
     itemsRef.current.forEach((item) => {
-      if (item.status === 'uploading') {
+      if (item.status === UploadStatuses.UPLOADING) {
         cancelUpload(item.id);
       }
     });
@@ -560,7 +559,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const retryUpload = useCallback(
     async (id: string): Promise<void> => {
       const item = itemsRef.current.find(i => i.id === id);
-      if (!item || item.status !== 'failed')
+      if (!item || item.status !== UploadStatuses.FAILED)
         return;
 
       const retryCount = retryCountRef.current.get(id) ?? 0;
@@ -570,7 +569,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
       retryCountRef.current.set(id, retryCount + 1);
       updateItem(id, {
-        status: 'pending',
+        status: UploadStatuses.PENDING,
         error: undefined,
         progress: createInitialProgress(),
       });
@@ -596,7 +595,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           newItems.push({
             id,
             file,
-            status: 'failed',
+            status: UploadStatuses.FAILED,
             progress: createInitialProgress(),
             validation: validationResult,
             strategy: 'single',
@@ -610,7 +609,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         newItems.push({
           id,
           file,
-          status: 'pending',
+          status: UploadStatuses.PENDING,
           progress: { loaded: 0, total: file.size, percent: 0 },
           validation: validationResult,
           strategy: validationResult.uploadStrategy,
@@ -636,7 +635,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         // This ensures React state update is committed before we start uploads
         queueMicrotask(() => {
           newItems
-            .filter(i => i.status === 'pending')
+            .filter(i => i.status === UploadStatuses.PENDING)
             .forEach(item => startUpload(item.id));
         });
       }
@@ -647,17 +646,17 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   // Calculate state
   const state = {
     total: items.length,
-    pending: items.filter(i => i.status === 'pending').length,
-    uploading: items.filter(i => i.status === 'uploading').length,
-    completed: items.filter(i => i.status === 'completed').length,
-    failed: items.filter(i => i.status === 'failed').length,
+    pending: items.filter(i => i.status === UploadStatuses.PENDING).length,
+    uploading: items.filter(i => i.status === UploadStatuses.UPLOADING).length,
+    completed: items.filter(i => i.status === UploadStatuses.COMPLETED).length,
+    failed: items.filter(i => i.status === UploadStatuses.FAILED).length,
     overallProgress:
       items.length > 0
         ? Math.round(
             items.reduce((sum, item) => sum + item.progress.percent, 0) / items.length,
           )
         : 0,
-    isUploading: items.some(i => i.status === 'uploading'),
+    isUploading: items.some(i => i.status === UploadStatuses.UPLOADING),
   };
 
   return {
@@ -727,7 +726,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
   const { threadId: _threadId, onComplete, onError } = options;
 
   const [progress, setProgress] = useState<UploadProgress>(() => createInitialProgress());
-  const [status, setStatus] = useState<UploadStatus>('pending');
+  const [status, setStatus] = useState<UploadStatus>(UploadStatuses.PENDING);
   const [error, setError] = useState<string>();
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -736,14 +735,14 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
 
   const reset = useCallback(() => {
     setProgress(createInitialProgress());
-    setStatus('pending');
+    setStatus(UploadStatuses.PENDING);
     setError(undefined);
     abortControllerRef.current = null;
   }, []);
 
   const cancel = useCallback(() => {
     abortControllerRef.current?.abort();
-    setStatus('cancelled');
+    setStatus(UploadStatuses.CANCELLED);
   }, []);
 
   const upload = useCallback(
@@ -752,7 +751,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
       const validationResult = validation.validateFile(file);
       if (!validationResult.valid) {
         setError(validationResult.error?.message);
-        setStatus('failed');
+        setStatus(UploadStatuses.FAILED);
         onError?.(new Error(validationResult.error?.message ?? 'Validation failed'));
         return null;
       }
@@ -760,24 +759,22 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
       // Only support single upload in this simplified hook
       if (validationResult.uploadStrategy === 'multipart') {
         setError('File too large. Use useFileUpload for large files.');
-        setStatus('failed');
+        setStatus(UploadStatuses.FAILED);
         onError?.(new Error('File too large for single upload'));
         return null;
       }
 
-      setStatus('uploading');
+      setStatus(UploadStatuses.UPLOADING);
       setProgress({ loaded: 0, total: file.size, percent: 0 });
       abortControllerRef.current = new AbortController();
 
       try {
-        // Use Hono RPC format: { form: { file: File } }
-        const result = await uploadMutation.mutateAsync({
-          form: { file },
-        });
+        // Use secure ticket-based upload
+        const result = await uploadMutation.mutateAsync(file);
 
         if (result.success && result.data) {
           setProgress({ loaded: file.size, total: file.size, percent: 100 });
-          setStatus('completed');
+          setStatus(UploadStatuses.COMPLETED);
           onComplete?.(result.data.id);
           return result.data.id;
         }
@@ -786,7 +783,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Upload failed';
         setError(errorMessage);
-        setStatus('failed');
+        setStatus(UploadStatuses.FAILED);
         onError?.(err instanceof Error ? err : new Error(errorMessage));
         return null;
       }

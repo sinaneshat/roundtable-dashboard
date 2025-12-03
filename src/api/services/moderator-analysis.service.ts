@@ -13,8 +13,10 @@ import { createError, normalizeError } from '@/api/common/error-handling';
 import { CHAT_MODES } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import { getAllModels } from '@/api/services/models-config.service';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing } from '@/api/services/product-logic.service';
+import {
+  canAccessModelByPricing,
+  subscriptionTierSchema,
+} from '@/api/services/product-logic.service';
 import type { TypedLogger } from '@/api/types/logger';
 // ============================================================================
 // ZOD SCHEMAS (Single Source of Truth)
@@ -72,7 +74,7 @@ export const ModeratorPromptConfigSchema = z.object({
   /** Changelog entries before this round (participant/mode/role changes) */
   changelogEntries: z.array(ChangelogEntrySchema).optional(),
   /** User's subscription tier for filtering model suggestions */
-  userTier: z.enum(['free', 'starter', 'pro', 'power']).optional(),
+  userTier: subscriptionTierSchema.optional(),
 });
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
@@ -186,11 +188,16 @@ export function buildModeratorSystemPrompt(
     const allModels = getAllModels();
 
     // Filter models by user's subscription tier access
+    // ✅ TYPE-SAFE: userTier is already validated as SubscriptionTier by Zod schema
     const availableModels = validated.userTier
-      ? allModels.filter(model => canAccessModelByPricing(validated.userTier as SubscriptionTier, model))
+      ? allModels.filter(model =>
+          canAccessModelByPricing(validated.userTier!, model),
+        )
       : allModels; // If no tier provided, show all models
 
-    const modelList = availableModels.map(m => `- ${m.id} (${m.name})`).join('\n');
+    const modelList = availableModels
+      .map(m => `- ${m.id} (${m.name})`)
+      .join('\n');
     const rolesList = DEFAULT_ROLES.map(r => `- ${r}`).join('\n');
 
     sections.push(
@@ -412,7 +419,10 @@ export function buildModeratorSystemPrompt(
     if (!config.userQuestion || config.userQuestion.length === 0) {
       issues.push('userQuestion is empty');
     }
-    if (!config.participantResponses || config.participantResponses.length === 0) {
+    if (
+      !config.participantResponses
+      || config.participantResponses.length === 0
+    ) {
       issues.push('participantResponses is empty');
     }
     if (!config.mode) {
@@ -422,11 +432,12 @@ export function buildModeratorSystemPrompt(
       issues.push('roundNumber is invalid');
     }
 
-    const errorDetail = issues.length > 0
-      ? `Validation failed: ${issues.join(', ')}`
-      : error instanceof Error
-        ? error.message
-        : 'Unknown validation error';
+    const errorDetail
+      = issues.length > 0
+        ? `Validation failed: ${issues.join(', ')}`
+        : error instanceof Error
+          ? error.message
+          : 'Unknown validation error';
 
     throw createError.badRequest(
       `Invalid moderator prompt configuration: ${errorDetail}`,
@@ -461,7 +472,9 @@ export function buildModeratorSystemPrompt(
  * @param config - Moderator configuration with participant responses (pre-search already filtered)
  * @returns Formatted user prompt containing all response data for analysis
  */
-export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string {
+export function buildModeratorUserPrompt(
+  config: ModeratorPromptConfig,
+): string {
   const {
     roundNumber,
     mode,
@@ -516,13 +529,12 @@ export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string 
   }
 
   // 2. PARTICIPANT RESPONSES
-  sections.push(
-    '## Participant Responses',
-    '',
-  );
+  sections.push('## Participant Responses', '');
 
   participantResponses.forEach((participant) => {
-    const roleDisplay = participant.participantRole ? ` - ${participant.participantRole}` : '';
+    const roleDisplay = participant.participantRole
+      ? ` - ${participant.participantRole}`
+      : '';
 
     sections.push(
       `### Participant ${participant.participantIndex + 1}${roleDisplay}`,

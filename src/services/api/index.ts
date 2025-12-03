@@ -287,7 +287,7 @@ export {
   type CreateMultipartUploadRequest,
   type CreateMultipartUploadResponse,
   createMultipartUploadService,
-  // Single-request upload services
+  // Upload management services
   type DeleteAttachmentRequest,
   type DeleteAttachmentResponse,
   deleteAttachmentService,
@@ -297,16 +297,22 @@ export {
   type ListAttachmentsRequest,
   type ListAttachmentsResponse,
   listAttachmentsService,
+  // Secure ticket-based upload services (S3 presigned URL pattern)
+  type RequestUploadTicketRequest,
+  type RequestUploadTicketResponse,
+  requestUploadTicketService,
+  secureUploadService,
   type UpdateAttachmentRequest,
   type UpdateAttachmentResponse,
   updateAttachmentService,
-  type UploadAttachmentRequest,
-  type UploadAttachmentResponse,
-  uploadAttachmentService,
   type UploadPartRequest,
   type UploadPartRequestWithBody,
   type UploadPartResponse,
   uploadPartService,
+  type UploadWithTicketRequest,
+  type UploadWithTicketResponse,
+  uploadWithTicketService,
+  type UploadWithTicketServiceInput,
 } from './uploads';
 
 // ============================================================================

@@ -75,11 +75,11 @@ export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 /**
  * Known model capabilities
  *
- * ✅ MAINTAINED: Update when adding new models
+ * ✅ ALL MODELS with vision/non-vision capabilities
  * ✅ PREVENTS ERRORS: Blocks unsupported operations at runtime
  */
 const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
-  // Claude Models (Excellent JSON mode support)
+  // ========== ANTHROPIC CLAUDE (6) - All support vision ==========
   'anthropic/claude-opus-4.5': {
     structuredOutput: true,
     streaming: true,
@@ -113,8 +113,7 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     streaming: true,
     functionCalling: true,
     vision: true,
-    jsonModeQuality: JsonModeQualities.GOOD,
-    knownIssues: ['Occasional JSON mode issues through OpenRouter'],
+    jsonModeQuality: JsonModeQualities.EXCELLENT,
   },
   'anthropic/claude-3.7-sonnet': {
     structuredOutput: true,
@@ -124,7 +123,7 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     jsonModeQuality: JsonModeQualities.EXCELLENT,
   },
 
-  // GPT Models (Good JSON mode support)
+  // ========== OPENAI GPT (5) ==========
   'openai/chatgpt-4o-latest': {
     structuredOutput: true,
     streaming: true,
@@ -153,9 +152,23 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     vision: false,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
+  'openai/o3-mini': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.EXCELLENT,
+  },
 
-  // Gemini Models (Good JSON mode support)
-  'google/gemini-3-pro-preview': {
+  // ========== GOOGLE GEMINI (7) ==========
+  'google/gemini-3-pro-preview-20251117': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.EXCELLENT,
+  },
+  'google/gemini-2.5-pro': {
     structuredOutput: true,
     streaming: true,
     functionCalling: true,
@@ -163,6 +176,13 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     jsonModeQuality: JsonModeQualities.EXCELLENT,
   },
   'google/gemini-2.5-flash': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'google/gemini-2.5-flash-lite': {
     structuredOutput: true,
     streaming: true,
     functionCalling: true,
@@ -183,15 +203,15 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     vision: false,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
-
-  // xAI Grok Models (Good JSON mode support)
-  'x-ai/grok-code-fast-1': {
+  'google/gemini-2.0-flash-exp': {
     structuredOutput: true,
     streaming: true,
     functionCalling: true,
-    vision: false,
+    vision: true,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
+
+  // ========== XAI GROK (4) ==========
   'x-ai/grok-4': {
     structuredOutput: true,
     streaming: true,
@@ -213,41 +233,114 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     vision: true,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
+  'x-ai/grok-code-fast-1': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
 
-  // DeepSeek Models (Fair to Poor JSON mode support)
+  // ========== DEEPSEEK (6) - Text only ==========
   'deepseek/deepseek-chat-v3.1': {
     structuredOutput: true,
     streaming: true,
-    functionCalling: false,
+    functionCalling: true,
     vision: false,
-    jsonModeQuality: JsonModeQualities.FAIR,
-    knownIssues: [
-      'Inconsistent JSON schema compliance',
-      'May fail with complex nested schemas',
-      'Not recommended for critical structured output',
-    ],
+    jsonModeQuality: JsonModeQualities.GOOD,
   },
   'deepseek/deepseek-chat': {
     structuredOutput: true,
     streaming: true,
-    functionCalling: false,
+    functionCalling: true,
     vision: false,
-    jsonModeQuality: JsonModeQualities.POOR,
-    knownIssues: [
-      'Frequent schema validation failures',
-      'Not recommended for structured output',
-    ],
+    jsonModeQuality: JsonModeQualities.GOOD,
   },
-
-  // Other Models
+  'deepseek/deepseek-r1': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'deepseek/deepseek-r1-0528': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'deepseek/deepseek-chat-v3-0324': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  // ========== META LLAMA (3) ==========
   'meta-llama/llama-3.3-70b-instruct': {
     structuredOutput: true,
     streaming: true,
-    functionCalling: false,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'meta-llama/llama-4-maverick-17b-128e-instruct': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'meta-llama/llama-4-scout-17b-16e-instruct': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+
+  // ========== MISTRAL (2) ==========
+  'mistralai/mistral-large': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'mistralai/mistral-small-3.1-24b-instruct-2503': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+
+  // ========== NVIDIA (1) ==========
+  'nvidia/nemotron-nano-9b-v2': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
     vision: false,
     jsonModeQuality: JsonModeQualities.FAIR,
   },
-  'mistralai/mistral-large': {
+
+  // ========== QWEN (3) - Text only ==========
+  'qwen/qwen3-32b': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'qwen/qwen3-max': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: false,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'qwen/qwen3-coder-plus': {
     structuredOutput: true,
     streaming: true,
     functionCalling: true,
@@ -267,7 +360,14 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
  * @returns Model capabilities or default safe capabilities
  */
 export function getModelCapabilities(modelId: string): ModelCapabilities {
-  const capabilities = MODEL_CAPABILITIES[modelId];
+  // Try exact match first
+  let capabilities = MODEL_CAPABILITIES[modelId];
+
+  // If not found and has :free suffix, try base model (free variants have same capabilities)
+  if (!capabilities && modelId.endsWith(':free')) {
+    const baseModelId = modelId.replace(/:free$/, '');
+    capabilities = MODEL_CAPABILITIES[baseModelId];
+  }
 
   if (!capabilities) {
     // Default to safe capabilities for unknown models

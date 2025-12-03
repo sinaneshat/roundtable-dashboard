@@ -15,6 +15,8 @@ import { IdParamSchema } from '@/api/core/schemas';
 import {
   getAggregatedProjectContext,
 } from '@/api/services/project-context.service';
+import { generateProjectFileR2Key } from '@/api/services/rag-indexing.service';
+import { copyFile, deleteFile } from '@/api/services/storage.service';
 import {
   cancelUploadCleanup,
   isCleanupSchedulerAvailable,
@@ -498,7 +500,22 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
       });
     }
 
-    // Create project attachment reference
+    // Copy file to project folder for AI Search indexing
+    // AI Search uses folder-based multitenancy: projects/{projectId}/
+    // Files must be in this folder for the folder filter to find them
+    const projectR2Key = generateProjectFileR2Key(projectId, existingUpload.filename);
+    const copyResult = await copyFile(
+      c.env.UPLOADS_R2_BUCKET,
+      existingUpload.r2Key,
+      projectR2Key,
+    );
+
+    if (!copyResult.success) {
+      console.error(`[Project] Failed to copy file to project folder: ${copyResult.error}`);
+      // Continue anyway - file may still be accessible, just not via AI Search
+    }
+
+    // Create project attachment reference with project-specific R2 key
     const projectAttachmentId = ulid();
     const [projectAttachment] = await db
       .insert(tables.projectAttachment)
@@ -507,11 +524,14 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
         projectId,
         uploadId: body.uploadId,
         addedBy: user.id,
+        // Set as pending - AI Search auto-indexes R2 every 6 hours
         indexStatus: 'pending',
         ragMetadata: {
           context: body.context,
           description: body.description,
           tags: body.tags,
+          // Store project-specific R2 key for AI Search
+          projectR2Key: copyResult.success ? projectR2Key : undefined,
         },
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -750,7 +770,24 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
       });
     }
 
-    // Remove reference (not the underlying file)
+    // Clean up copied file from project folder (if it exists)
+    // This removes the file from AI Search's scope
+    const ragMetadata = projectAttachment.ragMetadata as { projectR2Key?: string } | null;
+    if (ragMetadata?.projectR2Key) {
+      const deleteTask = deleteFile(c.env.UPLOADS_R2_BUCKET, ragMetadata.projectR2Key)
+        .then((result) => {
+          if (!result.success) {
+            console.error(`[Project] Failed to delete project file copy: ${result.error}`);
+          }
+        })
+        .catch(() => {}); // Non-blocking, best-effort cleanup
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(deleteTask);
+      }
+    }
+
+    // Remove reference (not the underlying original file)
     await db
       .delete(tables.projectAttachment)
       .where(eq(tables.projectAttachment.id, attachmentId));

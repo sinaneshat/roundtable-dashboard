@@ -20,75 +20,22 @@ import {
   CreateMultipartUploadRequestSchema,
   CreateMultipartUploadResponseSchema,
   DeleteUploadResponseSchema,
+  GetDownloadUrlResponseSchema,
   GetUploadResponseSchema,
   ListUploadsQuerySchema,
   ListUploadsResponseSchema,
+  RequestUploadTicketSchema,
   UpdateUploadRequestSchema,
   UploadFileResponseSchema,
   UploadPartParamsSchema,
   UploadPartResponseSchema,
+  UploadTicketResponseSchema,
+  UploadWithTicketQuerySchema,
 } from './schema';
 
 // ============================================================================
-// SINGLE-REQUEST UPLOAD ROUTES
+// UPLOAD LIST/GET ROUTES
 // ============================================================================
-
-/**
- * Upload file (single request)
- * For files under 100MB - simpler API
- */
-export const uploadFileRoute = createRoute({
-  method: 'post',
-  path: '/uploads',
-  tags: ['Uploads'],
-  summary: 'Upload file',
-  description: `
-Upload a file (multipart/form-data).
-
-**Supported file types:**
-- Images: PNG, JPEG, GIF, WebP
-- Documents: PDF, Word, Excel, PowerPoint
-- Text: Plain text, Markdown, CSV, JSON
-- Code: JavaScript, TypeScript, Python, etc.
-
-**Size limit:** 100MB per file (use multipart upload for larger files)
-  `,
-  request: {
-    body: {
-      content: {
-        'multipart/form-data': {
-          schema: {
-            type: 'object',
-            properties: {
-              file: {
-                type: 'string',
-                format: 'binary',
-              },
-              description: {
-                type: 'string',
-                description: 'Optional description for AI context',
-              },
-            },
-            required: ['file'],
-          },
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.CREATED]: {
-      content: {
-        'application/json': {
-          schema: UploadFileResponseSchema,
-        },
-      },
-      description: 'File uploaded successfully',
-    },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.UNAUTHORIZED,
-    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
-  },
-});
 
 /**
  * List user uploads
@@ -136,6 +83,34 @@ export const getUploadRoute = createRoute({
         },
       },
       description: 'Upload retrieved successfully',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+/**
+ * Get download URL for an upload
+ * Returns a signed URL that can be used to download/preview the file
+ */
+export const getDownloadUrlRoute = createRoute({
+  method: 'get',
+  path: '/uploads/:id/download-url',
+  tags: ['Uploads'],
+  summary: 'Get download URL',
+  description: 'Get a signed URL for downloading the file. The URL is time-limited and secure.',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: GetDownloadUrlResponseSchema,
+        },
+      },
+      description: 'Signed download URL retrieved successfully',
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -199,6 +174,125 @@ export const deleteUploadRoute = createRoute({
       },
       description: 'Upload deleted successfully',
     },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+// ============================================================================
+// SECURE UPLOAD TICKET ROUTES (Presigned URL Pattern)
+// ============================================================================
+
+/**
+ * Request upload ticket (Step 1 of secure upload)
+ *
+ * Returns a time-limited, signed token that must be included in the actual upload.
+ * This follows the S3 presigned URL pattern for secure uploads:
+ * 1. Client requests ticket with file metadata
+ * 2. Server returns signed token (valid for 5 minutes)
+ * 3. Client uploads file with token to /uploads/ticket endpoint
+ * 4. Server validates token before accepting file
+ */
+export const requestUploadTicketRoute = createRoute({
+  method: 'post',
+  path: '/uploads/ticket',
+  tags: ['Uploads'],
+  summary: 'Request upload ticket',
+  description: `
+Request a secure upload ticket (similar to S3 presigned URLs).
+
+**Security features:**
+- Token expires in 5 minutes
+- Token is cryptographically signed
+- One-time use only
+- User-bound (only requesting user can use it)
+
+**Flow:**
+1. Call this endpoint with file metadata
+2. Receive signed token and upload URL
+3. Upload file to the provided URL with token
+`,
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: RequestUploadTicketSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: UploadTicketResponseSchema,
+        },
+      },
+      description: 'Upload ticket created successfully',
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+/**
+ * Upload file with ticket (Step 2 of secure upload)
+ *
+ * Accepts file upload with valid ticket token.
+ * Token is validated before file is accepted.
+ */
+export const uploadWithTicketRoute = createRoute({
+  method: 'post',
+  path: '/uploads/ticket/upload',
+  tags: ['Uploads'],
+  summary: 'Upload file with ticket',
+  description: `
+Upload a file using a valid upload ticket.
+
+**Required:**
+- Valid ticket token in query parameter
+- File in multipart/form-data body
+
+**Security:**
+- Token is validated before file is accepted
+- Token can only be used once
+- Token must not be expired
+- User must match token owner
+`,
+  request: {
+    query: UploadWithTicketQuerySchema,
+    body: {
+      content: {
+        'multipart/form-data': {
+          schema: {
+            type: 'object',
+            properties: {
+              file: {
+                type: 'string',
+                format: 'binary',
+                description: 'File to upload',
+              },
+            },
+            required: ['file'],
+          },
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    [HttpStatusCodes.CREATED]: {
+      content: {
+        'application/json': {
+          schema: UploadFileResponseSchema,
+        },
+      },
+      description: 'File uploaded successfully',
+    },
+    ...StandardApiResponses.BAD_REQUEST,
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
@@ -404,12 +498,14 @@ export const downloadUploadRoute = createRoute({
 // ROUTE TYPE EXPORTS
 // ============================================================================
 
-export type UploadFileRoute = typeof uploadFileRoute;
 export type ListUploadsRoute = typeof listUploadsRoute;
 export type GetUploadRoute = typeof getUploadRoute;
+export type GetDownloadUrlRoute = typeof getDownloadUrlRoute;
 export type UpdateUploadRoute = typeof updateUploadRoute;
 export type DeleteUploadRoute = typeof deleteUploadRoute;
 export type DownloadUploadRoute = typeof downloadUploadRoute;
+export type RequestUploadTicketRoute = typeof requestUploadTicketRoute;
+export type UploadWithTicketRoute = typeof uploadWithTicketRoute;
 export type CreateMultipartUploadRoute = typeof createMultipartUploadRoute;
 export type UploadPartRoute = typeof uploadPartRoute;
 export type CompleteMultipartUploadRoute = typeof completeMultipartUploadRoute;

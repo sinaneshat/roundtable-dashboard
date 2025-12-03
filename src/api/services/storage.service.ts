@@ -6,40 +6,15 @@
  * - In local Next.js dev mode (using local filesystem or memory)
  *
  * This abstraction ensures uploads work in all environments.
+ *
+ * @see /src/api/types/uploads.ts for type definitions
  */
 
 import { Buffer } from 'node:buffer';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-/**
- * Storage operation result
- */
-export type StorageResult = {
-  success: boolean;
-  key?: string;
-  error?: string;
-};
-
-/**
- * Storage object metadata
- */
-export type StorageMetadata = {
-  contentType?: string;
-  customMetadata?: Record<string, string>;
-};
-
-/**
- * Stored object info
- */
-export type StoredObject = {
-  key: string;
-  size: number;
-  etag?: string;
-  lastModified?: Date;
-  httpMetadata?: { contentType?: string };
-  customMetadata?: Record<string, string>;
-};
+import type { StorageMetadata, StorageResult } from '@/api/types/uploads';
 
 /**
  * Local storage directory for development
@@ -89,19 +64,23 @@ export async function putFile(
     await ensureLocalDir();
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
 
-    // Convert data to Buffer
+    // Convert data to Buffer - type-safe checks without force casts
+    // Note: instanceof checks can fail for cross-realm objects, so we use additional checks
     let buffer: Buffer;
     if (Buffer.isBuffer(data)) {
       buffer = data;
-    } else if (data instanceof ArrayBuffer) {
-      buffer = Buffer.from(data);
-    } else if (data instanceof Uint8Array) {
-      buffer = Buffer.from(data);
+    } else if (data instanceof ArrayBuffer || (data && data.constructor?.name === 'ArrayBuffer')) {
+      // Handle both native ArrayBuffer and cross-realm ArrayBuffer
+      buffer = Buffer.from(data as ArrayBuffer);
+    } else if (data instanceof Uint8Array || ArrayBuffer.isView(data)) {
+      // Handle both Uint8Array and other TypedArrays
+      buffer = Buffer.from(data as Uint8Array);
     } else if (typeof data === 'string') {
       buffer = Buffer.from(data);
     } else {
-      // ReadableStream - collect chunks
-      const reader = (data as ReadableStream).getReader();
+      // TypeScript narrowing: remaining type is ReadableStream
+      const stream: ReadableStream = data;
+      const reader = stream.getReader();
       const chunks: Uint8Array[] = [];
       let done = false;
       while (!done) {
@@ -131,7 +110,159 @@ export async function putFile(
 }
 
 /**
- * Get a file from storage
+ * R2 Object result with streaming body
+ * Following official Cloudflare R2 pattern for efficient streaming
+ */
+export type R2GetResult = {
+  /** Readable stream body (null if preconditions failed) */
+  body: ReadableStream | null;
+  /** Write HTTP metadata to response headers (official R2 pattern) */
+  writeHttpMetadata: (headers: Headers) => void;
+  /** HTTP ETag for caching */
+  httpEtag: string;
+  /** File size in bytes */
+  size: number;
+  /** Custom metadata */
+  customMetadata?: Record<string, string>;
+  /** Whether the object was found */
+  found: boolean;
+  /** Whether preconditions were met (for conditional requests) */
+  preconditionsMet: boolean;
+};
+
+/**
+ * Get options for conditional and range requests
+ * Following official Cloudflare R2 pattern
+ */
+export type GetFileOptions = {
+  /** Request headers for conditional requests (If-Match, If-None-Match, etc.) */
+  onlyIf?: Headers;
+  /** Request headers for range requests */
+  range?: Headers;
+};
+
+/**
+ * Get a file from storage with streaming support
+ * Following official Cloudflare R2 patterns:
+ * - Returns streaming body instead of buffering entire file
+ * - Supports writeHttpMetadata() for proper response headers
+ * - Supports conditional requests (onlyIf)
+ * - Supports range requests
+ *
+ * @see https://developers.cloudflare.com/r2/api/workers/workers-api-usage
+ */
+export async function getFileStream(
+  r2Bucket: R2Bucket | undefined,
+  key: string,
+  options?: GetFileOptions,
+): Promise<R2GetResult> {
+  try {
+    if (r2Bucket) {
+      // Production: Use R2 with official pattern
+      const object = await r2Bucket.get(key, {
+        onlyIf: options?.onlyIf,
+        range: options?.range,
+      });
+
+      if (!object) {
+        return {
+          body: null,
+          writeHttpMetadata: () => {},
+          httpEtag: '',
+          size: 0,
+          found: false,
+          preconditionsMet: true,
+        };
+      }
+
+      // Check if body is present (preconditions may have failed)
+      const hasBody = 'body' in object && object.body !== null;
+
+      return {
+        body: hasBody ? object.body : null,
+        writeHttpMetadata: (headers: Headers) => object.writeHttpMetadata(headers),
+        httpEtag: object.httpEtag,
+        size: object.size,
+        customMetadata: object.customMetadata,
+        found: true,
+        preconditionsMet: hasBody,
+      };
+    }
+
+    // Development: Use local filesystem (simulated streaming)
+    const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
+
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fs.readFile(filePath);
+    } catch {
+      return {
+        body: null,
+        writeHttpMetadata: () => {},
+        httpEtag: '',
+        size: 0,
+        found: false,
+        preconditionsMet: true,
+      };
+    }
+
+    let metadata: StorageMetadata | undefined;
+    try {
+      const metaPath = `${filePath}.meta.json`;
+      const metaData = await fs.readFile(metaPath, 'utf-8');
+      metadata = JSON.parse(metaData);
+    } catch {
+      // No metadata file
+    }
+
+    // Create a ReadableStream from buffer for consistent API
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(fileBuffer));
+        controller.close();
+      },
+    });
+
+    // Generate simple ETag from file size and modification
+    const etag = `"${fileBuffer.length.toString(16)}"`;
+
+    return {
+      body: stream,
+      writeHttpMetadata: (headers: Headers) => {
+        if (metadata?.contentType) {
+          headers.set('content-type', metadata.contentType);
+        }
+      },
+      httpEtag: etag,
+      size: fileBuffer.length,
+      customMetadata: metadata?.customMetadata,
+      found: true,
+      preconditionsMet: true,
+    };
+  } catch {
+    return {
+      body: null,
+      writeHttpMetadata: () => {},
+      httpEtag: '',
+      size: 0,
+      found: false,
+      preconditionsMet: true,
+    };
+  }
+}
+
+/**
+ * Get a file from storage (buffers entire file into memory)
+ *
+ * Use cases:
+ * - Text extraction for AI processing (need full content)
+ * - File copy operations (need full buffer)
+ * - Small file processing
+ *
+ * For HTTP responses/downloads, prefer getFileStream() for:
+ * - Better memory efficiency (streaming)
+ * - Proper ETag/caching headers
+ * - Conditional request support (304 Not Modified)
  */
 export async function getFile(
   r2Bucket: R2Bucket | undefined,
@@ -155,7 +286,7 @@ export async function getFile(
 
     // Development: Use local filesystem
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
-    const data = await fs.readFile(filePath);
+    const fileBuffer = await fs.readFile(filePath);
 
     let metadata: StorageMetadata | undefined;
     try {
@@ -166,7 +297,13 @@ export async function getFile(
       // No metadata file
     }
 
-    return { data: data.buffer as ArrayBuffer, metadata };
+    // Convert Buffer to ArrayBuffer properly without force cast
+    // Buffer.buffer may be shared, so slice to get exact bytes
+    const arrayBuffer = fileBuffer.buffer.slice(
+      fileBuffer.byteOffset,
+      fileBuffer.byteOffset + fileBuffer.byteLength,
+    );
+    return { data: arrayBuffer, metadata };
   } catch {
     return { data: null };
   }
@@ -249,6 +386,46 @@ export async function createMultipartUpload(
   } catch (error) {
     console.error('[Storage] Failed to create multipart upload:', error);
     return null;
+  }
+}
+
+/**
+ * Copy a file to a new location in storage
+ *
+ * Used for:
+ * - Copying uploads to project folders for AI Search indexing
+ * - Creating backups before modifications
+ *
+ * @param r2Bucket - R2 bucket or undefined for local dev
+ * @param sourceKey - Source file key
+ * @param destKey - Destination file key
+ * @returns StorageResult with success status
+ */
+export async function copyFile(
+  r2Bucket: R2Bucket | undefined,
+  sourceKey: string,
+  destKey: string,
+): Promise<StorageResult> {
+  try {
+    // Read the source file
+    const { data, metadata } = await getFile(r2Bucket, sourceKey);
+
+    if (!data) {
+      return { success: false, error: `Source file not found: ${sourceKey}` };
+    }
+
+    // Write to destination
+    const result = await putFile(r2Bucket, destKey, data, metadata);
+
+    if (!result.success) {
+      return { success: false, error: `Failed to write to destination: ${result.error}` };
+    }
+
+    return { success: true, key: destKey };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Storage] Copy failed: ${message}`);
+    return { success: false, error: message };
   }
 }
 

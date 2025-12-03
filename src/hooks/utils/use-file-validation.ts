@@ -15,14 +15,18 @@ import { z } from 'zod';
 import type { FileCategory } from '@/api/core/enums';
 import {
   ALLOWED_MIME_TYPES,
+  CODE_MIMES,
+  DOCUMENT_MIMES,
+  FileCategories,
   FileCategorySchema,
   FileValidationErrorCodeSchema,
+  IMAGE_MIMES,
   MAX_MULTIPART_PARTS,
   MAX_SINGLE_UPLOAD_SIZE,
   MAX_TOTAL_FILE_SIZE,
-  MIME_TYPE_CATEGORIES,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
+  TEXT_MIMES,
   UploadStrategySchema,
 } from '@/api/core/enums';
 
@@ -119,14 +123,18 @@ function checkAllowedMimeType(mimeType: string, allowedTypes: readonly string[])
 
 /**
  * Get file category from MIME type
+ * ✅ TYPE-SAFE: Uses typed readonly string[] exports for .includes() compatibility
  */
 function getFileCategoryFromMime(mimeType: string): FileCategory {
-  for (const [category, types] of Object.entries(MIME_TYPE_CATEGORIES)) {
-    if ((types as readonly string[]).includes(mimeType)) {
-      return category as FileCategory;
-    }
-  }
-  return 'other';
+  if (IMAGE_MIMES.includes(mimeType))
+    return FileCategories.IMAGE;
+  if (DOCUMENT_MIMES.includes(mimeType))
+    return FileCategories.DOCUMENT;
+  if (TEXT_MIMES.includes(mimeType))
+    return FileCategories.TEXT;
+  if (CODE_MIMES.includes(mimeType))
+    return FileCategories.CODE;
+  return FileCategories.OTHER;
 }
 
 /**

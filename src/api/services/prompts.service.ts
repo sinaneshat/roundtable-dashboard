@@ -12,11 +12,12 @@
  *
  * @module api/services/prompts.service
  * @see https://sdk.vercel.ai/docs/ai-sdk-core/prompts
- * @see exercises/05-context-engineering in AI SDK v5 course
+ * @see /src/api/types/citations.ts for citation type definitions
  */
 
-import type { ChatMode } from '@/api/core/enums';
-import { ChatModes } from '@/api/core/enums';
+import type { ChatMode, QueryAnalysisResult } from '@/api/core/enums';
+import { ChatModes, QueryAnalysisComplexities, WebSearchDepths } from '@/api/core/enums';
+import type { AttachmentCitationInfo } from '@/api/types/citations';
 
 // ============================================================================
 // Application-Specific Prompts - Single Source of Truth
@@ -38,21 +39,11 @@ export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5
 // ============================================================================
 
 /**
- * Complexity level for query generation
- * Determines how many queries to generate and search depth
+ * Query complexity types are defined in @/api/core/enums.ts following the 5-part pattern:
+ * - QueryAnalysisComplexity: 'simple' | 'moderate' | 'complex'
+ * - QueryAnalysisResult: Full analysis result with search parameters
+ * @see /src/api/core/enums.ts:574-631
  */
-export type QueryComplexity = 'simple' | 'moderate' | 'complex';
-
-/**
- * Query complexity analysis result
- */
-export type QueryComplexityResult = {
-  complexity: QueryComplexity;
-  maxQueries: 1 | 2 | 3;
-  defaultSearchDepth: 'basic' | 'advanced';
-  defaultSourceCount: number;
-  reasoning: string;
-};
 
 /**
  * Patterns that indicate a simple query (1 query, basic depth)
@@ -110,6 +101,7 @@ const COMPLEX_QUERY_PATTERNS = [
  * Analyze query complexity to determine search strategy
  *
  * ✅ DYNAMIC COMPLEXITY: Returns appropriate query count and depth based on user prompt
+ * ✅ USES: QueryAnalysisResult from @/api/core/enums.ts (Zod-inferred type)
  * - Simple fact lookups: 1 query, basic depth, 2 sources
  * - Comparisons/how-tos: 2 queries, advanced depth, 3 sources each
  * - Complex/multi-faceted: 3 queries max, advanced depth, 3 sources each
@@ -117,16 +109,16 @@ const COMPLEX_QUERY_PATTERNS = [
  * @param userMessage - The user's question/prompt
  * @returns Complexity analysis with recommended search parameters
  */
-export function analyzeQueryComplexity(userMessage: string): QueryComplexityResult {
+export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult {
   const trimmed = userMessage.trim().toLowerCase();
   const wordCount = trimmed.split(/\s+/).length;
 
   // Very short queries are simple by default
   if (wordCount <= 3) {
     return {
-      complexity: 'simple',
+      complexity: QueryAnalysisComplexities.SIMPLE,
       maxQueries: 1,
-      defaultSearchDepth: 'basic',
+      defaultSearchDepth: WebSearchDepths.BASIC,
       defaultSourceCount: 2,
       reasoning: 'Short query - single focused search sufficient',
     };
@@ -136,9 +128,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryComplexityResu
   for (const pattern of SIMPLE_QUERY_PATTERNS) {
     if (pattern.test(trimmed)) {
       return {
-        complexity: 'simple',
+        complexity: QueryAnalysisComplexities.SIMPLE,
         maxQueries: 1,
-        defaultSearchDepth: 'basic',
+        defaultSearchDepth: WebSearchDepths.BASIC,
         defaultSourceCount: 2,
         reasoning: 'Simple fact/definition lookup - one query sufficient',
       };
@@ -149,9 +141,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryComplexityResu
   for (const pattern of COMPLEX_QUERY_PATTERNS) {
     if (pattern.test(trimmed)) {
       return {
-        complexity: 'complex',
+        complexity: QueryAnalysisComplexities.COMPLEX,
         maxQueries: 3,
-        defaultSearchDepth: 'advanced',
+        defaultSearchDepth: WebSearchDepths.ADVANCED,
         defaultSourceCount: 3,
         reasoning: 'Complex multi-faceted query - multiple angles needed',
       };
@@ -162,9 +154,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryComplexityResu
   for (const pattern of MODERATE_QUERY_PATTERNS) {
     if (pattern.test(trimmed)) {
       return {
-        complexity: 'moderate',
+        complexity: QueryAnalysisComplexities.MODERATE,
         maxQueries: 2,
-        defaultSearchDepth: 'advanced',
+        defaultSearchDepth: WebSearchDepths.ADVANCED,
         defaultSourceCount: 3,
         reasoning: 'Comparison/how-to query - two search angles recommended',
       };
@@ -174,9 +166,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryComplexityResu
   // Long queries (>15 words) are likely complex
   if (wordCount > 15) {
     return {
-      complexity: 'complex',
+      complexity: QueryAnalysisComplexities.COMPLEX,
       maxQueries: 3,
-      defaultSearchDepth: 'advanced',
+      defaultSearchDepth: WebSearchDepths.ADVANCED,
       defaultSourceCount: 3,
       reasoning: 'Long detailed query - multiple search angles recommended',
     };
@@ -184,9 +176,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryComplexityResu
 
   // Default to moderate for medium-length queries
   return {
-    complexity: 'moderate',
+    complexity: QueryAnalysisComplexities.MODERATE,
     maxQueries: 2,
-    defaultSearchDepth: 'advanced',
+    defaultSearchDepth: WebSearchDepths.ADVANCED,
     defaultSourceCount: 3,
     reasoning: 'Standard query complexity - balanced search approach',
   };
@@ -567,21 +559,23 @@ export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
         status: 'contested',
       }],
     },
+    // ✅ Array-based format for Anthropic compatibility
     agreementHeatmap: [{
       claim: '<EXTRACT: key claim from discussion>',
-      perspectives: {
-        '<PARTICIPANT_ROLE>': '<COMPUTE: agree|disagree|neutral|caution>',
-      },
+      perspectives: [{
+        modelName: '<PARTICIPANT_ROLE>',
+        status: '<COMPUTE: agree|disagree|neutral|caution>',
+      }],
     }],
-    argumentStrengthProfile: {
-      '<PARTICIPANT_ROLE>': {
-        logic: '<COMPUTE: 0-100>',
-        evidence: '<COMPUTE: 0-100>',
-        riskAwareness: '<COMPUTE: 0-100>',
-        consensus: '<COMPUTE: 0-100>',
-        creativity: '<COMPUTE: 0-100>',
-      },
-    },
+    // ✅ Array-based format for Anthropic compatibility
+    argumentStrengthProfile: [{
+      modelName: '<PARTICIPANT_ROLE>',
+      logic: '<COMPUTE: 0-100>',
+      evidence: '<COMPUTE: 0-100>',
+      riskAwareness: '<COMPUTE: 0-100>',
+      consensus: '<COMPUTE: 0-100>',
+      creativity: '<COMPUTE: 0-100>',
+    }],
   },
   evidenceAndReasoning: {
     reasoningThreads: [{
@@ -674,79 +668,44 @@ export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null)
 }
 
 // ============================================================================
-// Attachment Citation Prompts
+// Attachment Context Prompt (Clean XML Format)
 // ============================================================================
 
 /**
- * Attachment info for citation prompt formatting
- */
-export type AttachmentCitationInfo = {
-  filename: string;
-  citationId: string;
-  mimeType: string;
-  fileSize: number;
-  roundNumber: number | null;
-  textContent: string | null;
-};
-
-/**
- * Build formatted prompt for thread attachments with citation instructions
- * ✅ SINGLE SOURCE: Used by streaming-orchestration.service.ts for RAG context
+ * Build formatted prompt for thread attachments
  *
- * The prompt is designed to:
- * 1. Make filenames prominent so AI understands what each file is
- * 2. Instruct AI to cite inline using [citation_id] format
- * 3. Keep citations inline with text (not on separate lines)
+ * Following AI SDK v5 patterns: Uses clean XML-style formatting with citation IDs.
+ * AI can reference files using [att_xxxxx] markers for inline citations.
  *
- * @param attachments - Attachment metadata for citation
- * @returns Formatted prompt section with citation instructions
+ * @param attachments - Attachment metadata with citation IDs
+ * @returns Formatted prompt section with file contents and citation instructions
  */
 export function buildAttachmentCitationPrompt(attachments: AttachmentCitationInfo[]): string {
   if (attachments.length === 0) {
     return '';
   }
 
-  const sections: string[] = [];
-
-  for (const att of attachments) {
-    const roundLabel = att.roundNumber !== null ? ` (uploaded in message ${att.roundNumber + 1})` : '';
+  const fileEntries = attachments.map((att, index) => {
+    const sizeKB = (att.fileSize / 1024).toFixed(1);
 
     if (att.textContent) {
-      // Include full content for text files
-      sections.push(
-        `**${att.filename}** [${att.citationId}]${roundLabel}\n`
-        + `Type: ${att.mimeType}\n`
-        + `\`\`\`\n${att.textContent}\n\`\`\``,
-      );
+      // Text/code files - include content with citation ID
+      return `<file id="${att.citationId}" index="${index + 1}" name="${att.filename}" type="${att.mimeType}" size="${sizeKB}KB">
+${att.textContent}
+</file>`;
     } else {
-      // Metadata only for non-text files (images, PDFs passed as multi-modal)
-      const sizeKB = (att.fileSize / 1024).toFixed(1);
-      sections.push(
-        `**${att.filename}** [${att.citationId}]${roundLabel}\n`
-        + `Type: ${att.mimeType}, Size: ${sizeKB}KB\n`
-        + `_Visual content available - you can see and analyze this file directly._`,
-      );
+      // Binary files (images, PDFs) - metadata only, content passed as multimodal
+      return `<file id="${att.citationId}" index="${index + 1}" name="${att.filename}" type="${att.mimeType}" size="${sizeKB}KB">
+[Visual content - analyze directly from the image/document above]
+</file>`;
     }
-  }
+  });
 
-  // Build file reference table for quick lookup
-  const fileTable = attachments.map(att => `- **${att.filename}** → cite as [${att.citationId}]`).join('\n');
-  const exampleCitationId = attachments[0]?.citationId ?? 'att_example';
+  return `
 
-  return `\n\n## 📎 UPLOADED FILES - CITATION REQUIRED\n\n`
-    + `### File Reference Table\n${fileTable}\n\n`
-    + `### ⚠️ MANDATORY CITATION RULES\n`
-    + `You MUST cite sources when referencing uploaded files. This is REQUIRED.\n\n`
-    + `**How to cite:** Place the citation marker in brackets immediately after the information.\n`
-    + `**Format:** [citation_id] - use the exact ID from the reference table above.\n\n`
-    + `**Examples:**\n`
-    + `- "The invoice total is €180.00 [${exampleCitationId}]"\n`
-    + `- "According to the document [${exampleCitationId}], the company address is..."\n`
-    + `- "The image shows a leaderboard [${exampleCitationId}] with five ranked entries."\n\n`
-    + `**Rules:**\n`
-    + `1. ALWAYS cite when describing content from a file\n`
-    + `2. Place citation INLINE immediately after the referenced information\n`
-    + `3. Use the EXACT citation ID from the reference table\n`
-    + `4. You may cite multiple times if referencing multiple pieces from the same file\n\n`
-    + `### File Contents\n\n${sections.join('\n\n')}`;
+<uploaded-files>
+${fileEntries.join('\n\n')}
+</uploaded-files>
+
+When referencing information from these uploaded files, cite using the file's ID: [att_xxxxx]`;
 }

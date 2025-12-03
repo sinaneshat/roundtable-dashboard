@@ -307,12 +307,13 @@ describe('multi-Round Conversation with Attachments', () => {
       const pdfAttachmentIds = ['upload-pdf-789'];
       await result.current.handleUpdateThreadAndSend('thread-doc-123', pdfAttachmentIds);
 
-      // prepareForNewMessage should receive attachment IDs
+      // prepareForNewMessage should receive attachment IDs and file parts
       const mockPrepare = mockStoreState.prepareForNewMessage as ReturnType<typeof vi.fn>;
       expect(mockPrepare).toHaveBeenCalledWith(
         'Analyze this PDF document',
         [],
         pdfAttachmentIds,
+        [], // fileParts empty when attachmentInfos not provided
       );
     });
 
@@ -458,6 +459,7 @@ describe('multi-Round Conversation with Attachments', () => {
         'Compare these images and documents',
         [],
         multipleAttachmentIds,
+        [], // fileParts empty when attachmentInfos not provided
       );
     });
 

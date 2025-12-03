@@ -32,25 +32,21 @@ describe('model-capabilities.service', () => {
       expect(capabilities.jsonModeQuality).toBe('good');
     });
 
-    it('should return fair JSON quality for DeepSeek V3.1 with known issues', () => {
+    it('should return good JSON quality for DeepSeek models', () => {
       const capabilities = getModelCapabilities('deepseek/deepseek-chat-v3.1');
 
       expect(capabilities.structuredOutput).toBe(true);
-      expect(capabilities.jsonModeQuality).toBe('fair');
-      expect(capabilities.knownIssues).toContain('Inconsistent JSON schema compliance');
+      expect(capabilities.jsonModeQuality).toBe('good');
     });
 
-    it('should return poor JSON quality for DeepSeek Chat', () => {
-      const capabilities = getModelCapabilities('deepseek/deepseek-chat');
+    it('should return good JSON quality for Gemini models', () => {
+      const capabilities = getModelCapabilities('google/gemini-2.5-flash');
 
       expect(capabilities.structuredOutput).toBe(true);
-      expect(capabilities.jsonModeQuality).toBe('poor');
-      expect(capabilities.knownIssues).toContain('Frequent schema validation failures');
+      expect(capabilities.jsonModeQuality).toBe('good');
     });
 
     it('should return safe defaults for unknown models', () => {
-      // Using string literal to test unknown model handling
-      // Type assertion is acceptable here as we're testing error handling paths
       const capabilities = getModelCapabilities('unknown/model-xyz' as never);
 
       expect(capabilities.structuredOutput).toBe(false);
@@ -68,9 +64,9 @@ describe('model-capabilities.service', () => {
       expect(supportsCapability('anthropic/claude-sonnet-4.5', 'vision')).toBe(true);
     });
 
-    it('should return false for unsupported capabilities', () => {
-      expect(supportsCapability('deepseek/deepseek-chat', 'functionCalling')).toBe(false);
+    it('should return false for models without vision support', () => {
       expect(supportsCapability('deepseek/deepseek-chat', 'vision')).toBe(false);
+      expect(supportsCapability('meta-llama/llama-3.3-70b-instruct', 'vision')).toBe(false);
     });
 
     it('should return false for unknown models', () => {
@@ -92,17 +88,14 @@ describe('model-capabilities.service', () => {
       }).not.toThrow();
     });
 
-    it('should NOT throw but log warning for models with fair JSON quality', () => {
-      // Fair quality models are allowed but warned about
+    it('should NOT throw for DeepSeek models (good quality)', () => {
       expect(() => {
         validateStructuredOutputSupport('deepseek/deepseek-chat-v3.1');
       }).not.toThrow();
-    });
 
-    it('should throw for models with poor JSON quality', () => {
       expect(() => {
         validateStructuredOutputSupport('deepseek/deepseek-chat');
-      }).toThrow('has poor JSON mode quality');
+      }).not.toThrow();
     });
 
     it('should throw for models without structured output support', () => {
@@ -141,7 +134,7 @@ describe('model-capabilities.service', () => {
 
     it('should throw when JSON quality is below minimum', () => {
       expect(() => {
-        validateModelForOperation('deepseek/deepseek-chat-v3.1', 'critical-operation', {
+        validateModelForOperation('openai/gpt-4o', 'critical-operation', {
           minJsonQuality: 'excellent',
         });
       }).toThrow('does not meet requirements');
@@ -184,42 +177,55 @@ describe('model-capabilities.service', () => {
       expect(recommended).toContain('google/gemini-2.5-flash');
     });
 
-    it('should NOT include models with fair or poor JSON quality', () => {
+    it('should include all models since they all have good or excellent quality', () => {
       const recommended = getRecommendedStructuredOutputModels();
 
-      expect(recommended).not.toContain('deepseek/deepseek-chat-v3.1'); // fair
-      expect(recommended).not.toContain('deepseek/deepseek-chat'); // poor
+      // DeepSeek models should now be included (good quality)
+      expect(recommended).toContain('deepseek/deepseek-chat-v3.1');
+      expect(recommended).toContain('deepseek/deepseek-chat');
     });
   });
 
   describe('model Quality Matrix', () => {
-    const testCases = [
-      // Excellent models
-      { model: 'anthropic/claude-sonnet-4.5', expectedQuality: 'excellent', expectStructuredOutput: true },
-      { model: 'anthropic/claude-sonnet-4', expectedQuality: 'excellent', expectStructuredOutput: true },
-      { model: 'anthropic/claude-3.5-sonnet', expectedQuality: 'excellent', expectStructuredOutput: true },
-      { model: 'anthropic/claude-3.7-sonnet', expectedQuality: 'excellent', expectStructuredOutput: true },
-
-      // Good models
-      { model: 'openai/chatgpt-4o-latest', expectedQuality: 'good', expectStructuredOutput: true },
-      { model: 'openai/gpt-4o', expectedQuality: 'good', expectStructuredOutput: true },
-      { model: 'google/gemini-2.5-flash', expectedQuality: 'good', expectStructuredOutput: true },
-      { model: 'google/gemini-2.0-pro', expectedQuality: 'good', expectStructuredOutput: true },
-
-      // Fair models
-      { model: 'deepseek/deepseek-chat-v3.1', expectedQuality: 'fair', expectStructuredOutput: true },
-      { model: 'meta-llama/llama-3.3-70b-instruct', expectedQuality: 'fair', expectStructuredOutput: true },
-
-      // Poor models
-      { model: 'deepseek/deepseek-chat', expectedQuality: 'poor', expectStructuredOutput: true },
+    const excellentModels = [
+      'anthropic/claude-sonnet-4.5',
+      'anthropic/claude-sonnet-4',
+      'anthropic/claude-3.5-sonnet',
+      'anthropic/claude-3.7-sonnet',
+      'anthropic/claude-opus-4.5',
+      'anthropic/claude-opus-4',
+      'google/gemini-3-pro-preview-20251117',
     ];
 
-    testCases.forEach(({ model, expectedQuality, expectStructuredOutput }) => {
-      it(`should classify ${model} as ${expectedQuality} with structuredOutput=${expectStructuredOutput}`, () => {
-        const capabilities = getModelCapabilities(model);
+    const goodModels = [
+      'openai/chatgpt-4o-latest',
+      'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'openai/gpt-4.1-mini',
+      'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash-lite',
+      'google/gemini-2.0-pro',
+      'google/gemini-2.0-flash',
+      'deepseek/deepseek-chat-v3.1',
+      'deepseek/deepseek-chat',
+      'meta-llama/llama-3.3-70b-instruct',
+      'x-ai/grok-4',
+      'x-ai/grok-4-fast',
+    ];
 
-        expect(capabilities.jsonModeQuality).toBe(expectedQuality);
-        expect(capabilities.structuredOutput).toBe(expectStructuredOutput);
+    excellentModels.forEach((model) => {
+      it(`should classify ${model} as excellent`, () => {
+        const capabilities = getModelCapabilities(model);
+        expect(capabilities.jsonModeQuality).toBe('excellent');
+        expect(capabilities.structuredOutput).toBe(true);
+      });
+    });
+
+    goodModels.forEach((model) => {
+      it(`should classify ${model} as good`, () => {
+        const capabilities = getModelCapabilities(model);
+        expect(capabilities.jsonModeQuality).toBe('good');
+        expect(capabilities.structuredOutput).toBe(true);
       });
     });
   });
@@ -230,7 +236,8 @@ describe('model-capabilities.service', () => {
       let errorMessage = '';
 
       try {
-        validateModelForOperation('deepseek/deepseek-chat', 'critical-search', {
+        validateModelForOperation('unknown/unknown-model', 'critical-search', {
+          structuredOutput: true,
           minJsonQuality: 'excellent',
         });
       } catch (error) {
@@ -239,7 +246,7 @@ describe('model-capabilities.service', () => {
       }
 
       expect(errorThrown).toBe(true);
-      expect(errorMessage).toContain('deepseek/deepseek-chat');
+      expect(errorMessage).toContain('unknown/unknown-model');
       expect(errorMessage).toContain('critical-search');
       expect(errorMessage).toContain('does not meet requirements');
     });
@@ -266,8 +273,8 @@ describe('model-capabilities.service', () => {
       }).not.toThrow();
     });
 
-    it('should block DeepSeek models for excellent quality requirements', () => {
-      const model = 'deepseek/deepseek-chat-v3.1';
+    it('should block non-excellent models for excellent quality requirements', () => {
+      const model = 'openai/gpt-4o';
 
       expect(() => {
         validateModelForOperation(model, 'critical-operation', {
@@ -276,12 +283,12 @@ describe('model-capabilities.service', () => {
       }).toThrow();
     });
 
-    it('should allow DeepSeek V3.1 for fair quality requirements', () => {
-      const model = 'deepseek/deepseek-chat-v3.1';
+    it('should allow GPT-4o for good quality requirements', () => {
+      const model = 'openai/gpt-4o';
 
       expect(() => {
-        validateModelForOperation(model, 'non-critical-operation', {
-          minJsonQuality: 'fair',
+        validateModelForOperation(model, 'standard-operation', {
+          minJsonQuality: 'good',
         });
       }).not.toThrow();
     });

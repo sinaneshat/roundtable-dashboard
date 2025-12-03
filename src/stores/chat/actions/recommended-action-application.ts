@@ -34,7 +34,14 @@ export type ApplyRecommendedActionOptions = {
   preserveThreadState?: boolean;
 };
 
-export type ApplyRecommendedActionResult = {
+/**
+ * Internal result type for applyRecommendedAction logic
+ * Includes `updates` object for store to apply via set()
+ *
+ * NOTE: This differs from ApplyRecommendedActionResult in store-action-types.ts
+ * which is the PUBLIC return type (without updates - they're applied internally)
+ */
+export type ApplyRecommendedActionInternalResult = {
   success: boolean;
   error?: string;
   modelsAdded?: number;
@@ -63,7 +70,7 @@ export type ApplyRecommendedActionResult = {
 export function applyRecommendedAction(
   action: Recommendation,
   options: ApplyRecommendedActionOptions = {},
-): ApplyRecommendedActionResult {
+): ApplyRecommendedActionInternalResult {
   const { maxModels, tierName, userTier, allModels } = options;
 
   // Track results for validation feedback
@@ -72,7 +79,7 @@ export function applyRecommendedAction(
   let error: string | undefined;
 
   // Build updates object
-  const updates: ApplyRecommendedActionResult['updates'] = {};
+  const updates: ApplyRecommendedActionInternalResult['updates'] = {};
 
   // 1. Set input from suggestion (use suggestedPrompt if available, fallback to title)
   updates.inputValue = action.suggestedPrompt || action.title;
@@ -91,7 +98,9 @@ export function applyRecommendedAction(
     updates.selectedParticipants = [];
 
     // Filter to only valid model IDs (format: provider/model)
-    const validModelIds = action.suggestedModels.filter(modelId => modelId.includes('/'));
+    const validModelIds = action.suggestedModels.filter(modelId =>
+      modelId.includes('/'),
+    );
 
     // Filter by tier access if tier and models data provided
     let accessibleModels = validModelIds;
@@ -107,7 +116,8 @@ export function applyRecommendedAction(
       });
 
       // Track skipped models due to tier restrictions
-      const tierRestrictedCount = validModelIds.length - accessibleModels.length;
+      const tierRestrictedCount
+        = validModelIds.length - accessibleModels.length;
       if (tierRestrictedCount > 0) {
         modelsSkipped += tierRestrictedCount;
       }

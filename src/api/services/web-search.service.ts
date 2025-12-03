@@ -25,21 +25,41 @@
  * @module api/services/web-search
  */
 
-import { generateId, generateObject, generateText, streamObject, streamText } from 'ai';
+import {
+  generateId,
+  generateObject,
+  generateText,
+  streamObject,
+  streamText,
+} from 'ai';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core/ai-models';
-import type { WebSearchComplexity, WebSearchTimeRange, WebSearchTopic } from '@/api/core/enums';
+import type {
+  WebSearchComplexity,
+  WebSearchTimeRange,
+  WebSearchTopic,
+} from '@/api/core/enums';
 import { UIMessageRoles } from '@/api/core/enums';
-import type { WebSearchParameters, WebSearchResult, WebSearchResultItem } from '@/api/routes/chat/schema';
+import type {
+  WebSearchParameters,
+  WebSearchResult,
+  WebSearchResultItem,
+} from '@/api/routes/chat/schema';
 // ============================================================================
 // Zod Schemas
 // ============================================================================
 // Import schema from route definitions for consistency
 import { MultiQueryGenerationSchema } from '@/api/routes/chat/schema';
 import { validateModelForOperation } from '@/api/services/model-capabilities.service';
-import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import { buildWebSearchQueryPrompt, WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT } from '@/api/services/prompts.service';
+import {
+  initializeOpenRouter,
+  openRouterService,
+} from '@/api/services/openrouter.service';
+import {
+  buildWebSearchQueryPrompt,
+  WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
+} from '@/api/services/prompts.service';
 // ============================================================================
 // Cache Integration
 // ============================================================================
@@ -55,13 +75,6 @@ import type { TypedLogger } from '@/api/types/logger';
 // ============================================================================
 // Type Definitions (imported from schema.ts - no manual definitions)
 // ============================================================================
-
-// Re-export types for external use
-export type { WebSearchDepth } from '@/api/core/enums';
-export type { WebSearchResult, WebSearchResultItem };
-export type { GeneratedSearchQuery, MultiQueryGeneration } from '@/api/routes/chat/schema';
-
-// Schema consolidated into GeneratedSearchQuerySchema in route schema file
 
 // ============================================================================
 // HTML → Markdown Conversion (Simple Implementation)
@@ -165,7 +178,8 @@ export function streamSearchQuery(
           console.error('[Web Search] Stream generation error:', {
             modelId,
             errorType: error.constructor?.name || 'Unknown',
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
             userMessage: userMessage.substring(0, 100),
           });
 
@@ -252,19 +266,26 @@ export async function generateSearchQuery(
     });
 
     // ✅ VALIDATE: Ensure result matches schema and constraints
-    if (!result.object || !result.object.queries || result.object.queries.length === 0) {
+    if (
+      !result.object
+      || !result.object.queries
+      || result.object.queries.length === 0
+    ) {
       throw new Error('Generated object does not contain valid queries');
     }
 
     // ✅ VALIDATE: Clamp totalQueries to valid range (1-3)
     // Anthropic doesn't support min/max in schema, so validate after generation
     // Coerce string to number if needed
-    const totalQueriesNum = typeof result.object.totalQueries === 'string'
-      ? Number.parseInt(result.object.totalQueries, 10)
-      : result.object.totalQueries;
+    const totalQueriesNum
+      = typeof result.object.totalQueries === 'string'
+        ? Number.parseInt(result.object.totalQueries, 10)
+        : result.object.totalQueries;
 
     if (totalQueriesNum < 1 || totalQueriesNum > 3) {
-      console.error(`[Web Search] Invalid totalQueries ${totalQueriesNum}, clamping to 1-3`);
+      console.error(
+        `[Web Search] Invalid totalQueries ${totalQueriesNum}, clamping to 1-3`,
+      );
       result.object.totalQueries = Math.max(1, Math.min(3, totalQueriesNum));
     } else {
       result.object.totalQueries = totalQueriesNum;
@@ -272,15 +293,18 @@ export async function generateSearchQuery(
 
     // ✅ VALIDATE: Trim queries array if exceeds limit (max 3 queries)
     if (result.object.queries.length > 3) {
-      console.error(`[Web Search] Too many queries (${result.object.queries.length}), trimming to 3`);
+      console.error(
+        `[Web Search] Too many queries (${result.object.queries.length}), trimming to 3`,
+      );
       result.object.queries = result.object.queries.slice(0, 3);
     }
 
     // ✅ VALIDATE: Clamp sourceCount per query to max 3
     result.object.queries = result.object.queries.map((q) => {
-      const sourceCount = typeof q.sourceCount === 'string'
-        ? Number.parseInt(q.sourceCount, 10)
-        : q.sourceCount;
+      const sourceCount
+        = typeof q.sourceCount === 'string'
+          ? Number.parseInt(q.sourceCount, 10)
+          : q.sourceCount;
       if (sourceCount && sourceCount > 3) {
         return { ...q, sourceCount: 3 };
       }
@@ -298,7 +322,10 @@ export async function generateSearchQuery(
       userMessage: userMessage.substring(0, 100),
     };
 
-    console.error('[Web Search] Non-streaming generation failed:', errorDetails);
+    console.error(
+      '[Web Search] Non-streaming generation failed:',
+      errorDetails,
+    );
 
     // ✅ LOG: Query generation failure
     if (logger) {
@@ -409,21 +436,39 @@ async function extractLightweightMetadata(url: string): Promise<{
     reader.cancel();
 
     // Extract og:image
-    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    const ogImageMatch
+      = html.match(
+        /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
+      )
+      || html.match(
+        /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i,
+      );
     const imageUrl = ogImageMatch?.[1];
 
     // Extract twitter:image as fallback
-    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
+    const twitterImageMatch
+      = html.match(
+        /<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i,
+      )
+      || html.match(
+        /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i,
+      );
 
     // Extract description
-    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i);
+    const descMatch
+      = html.match(
+        /<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i,
+      )
+      || html.match(
+        /<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i,
+      );
 
     // Extract title
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-      || html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
+    const titleMatch
+      = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+        || html.match(
+          /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i,
+        );
 
     // Build favicon URL
     const domain = new URL(url).hostname;
@@ -524,9 +569,12 @@ async function extractPageContent(
 
     // Wait for potential main content to load
     try {
-      await page.waitForSelector('article, main, [role="main"], .content, .post-content', {
-        timeout: 3000,
-      });
+      await page.waitForSelector(
+        'article, main, [role="main"], .content, .post-content',
+        {
+          timeout: 3000,
+        },
+      );
     } catch {
       // Continue even if no main content selector found
     }
@@ -640,14 +688,17 @@ async function extractPageContent(
       const author
         = getMetaContent('author')
           || getMetaContent('article:author')
-          || document.querySelector('.author, .by-author, [rel="author"]')?.textContent
-          || null;
+          || document.querySelector('.author, .by-author, [rel="author"]')
+            ?.textContent
+            || null;
 
       const description
         = getMetaContent('description')
           || getMetaContent('og:description')
-          || document.querySelector('meta[name="description"]')?.getAttribute('content')
-          || null;
+          || document
+            .querySelector('meta[name="description"]')
+            ?.getAttribute('content')
+            || null;
 
       const publishedDate
         = getMetaContent('article:published_time')
@@ -656,13 +707,13 @@ async function extractPageContent(
           || null;
 
       const imageUrl
-        = getMetaContent('og:image')
-          || getMetaContent('twitter:image')
-          || null;
+        = getMetaContent('og:image') || getMetaContent('twitter:image') || null;
 
       // Get favicon with type-safe element checking
       const faviconUrl = (() => {
-        const favicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+        const favicon = document.querySelector(
+          'link[rel="icon"], link[rel="shortcut icon"]',
+        );
         // Type guard: check if element is HTMLLinkElement
         if (favicon instanceof HTMLLinkElement && favicon.href) {
           return favicon.href;
@@ -771,7 +822,9 @@ async function searchDuckDuckGo(
 
   // Domain filtering
   if (params?.includeDomains && params.includeDomains.length > 0) {
-    const domainFilter = params.includeDomains.map(d => `site:${d}`).join(' OR ');
+    const domainFilter = params.includeDomains
+      .map(d => `site:${d}`)
+      .join(' OR ');
     enhancedQuery = `${query} (${domainFilter})`;
   }
 
@@ -837,9 +890,13 @@ async function searchDuckDuckGoFallback(
 
     const response = await fetch(searchUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': country ? `${country.toLowerCase()},en;q=0.9` : 'en-US,en;q=0.5',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': country
+          ? `${country.toLowerCase()},en;q=0.9`
+          : 'en-US,en;q=0.5',
       },
     });
 
@@ -869,7 +926,8 @@ function parseDuckDuckGoResults(
   params?: Partial<WebSearchParameters>,
 ): Array<{ title: string; url: string; snippet: string }> {
   const results: Array<{ title: string; url: string; snippet: string }> = [];
-  const resultDivRegex = /<div class="result results_links results_links_deep web-result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<div class="result/g;
+  const resultDivRegex
+    = /<div class="result results_links results_links_deep web-result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<div class="result/g;
   const resultDivs = Array.from(html.matchAll(resultDivRegex));
 
   for (let i = 0; i < Math.min(resultDivs.length, maxResults * 2); i++) {
@@ -878,12 +936,16 @@ function parseDuckDuckGoResults(
       continue;
 
     // Extract URL
-    const mainLinkMatch = resultHtml.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"/);
+    const mainLinkMatch = resultHtml.match(
+      /<a[^>]*class="result__a"[^>]*href="([^"]+)"/,
+    );
     let url = mainLinkMatch?.[1] || null;
 
     // If not found, try the result__url link
     if (!url) {
-      const urlMatch = resultHtml.match(/<a[^>]*class="result__url"[^>]*href="([^"]+)"/);
+      const urlMatch = resultHtml.match(
+        /<a[^>]*class="result__url"[^>]*href="([^"]+)"/,
+      );
       url = urlMatch?.[1] || null;
     }
 
@@ -912,25 +974,39 @@ function parseDuckDuckGoResults(
       // Apply domain filters (additional client-side filtering)
       if (params?.includeDomains && params.includeDomains.length > 0) {
         const urlDomain = extractDomain(url);
-        const isIncluded = params.includeDomains.some(d => urlDomain.includes(d.replace('www.', '')));
+        const isIncluded = params.includeDomains.some(d =>
+          urlDomain.includes(d.replace('www.', '')),
+        );
         if (!isIncluded)
           continue;
       }
 
       if (params?.excludeDomains && params.excludeDomains.length > 0) {
         const urlDomain = extractDomain(url);
-        const isExcluded = params.excludeDomains.some(d => urlDomain.includes(d.replace('www.', '')));
+        const isExcluded = params.excludeDomains.some(d =>
+          urlDomain.includes(d.replace('www.', '')),
+        );
         if (isExcluded)
           continue;
       }
     }
 
     // Extract title
-    const titleMatch = resultHtml.match(/<a[^>]*class="result__a"[^>]*>([^<]+)<\/a>/);
-    const title = titleMatch?.[1]?.trim().replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') || null;
+    const titleMatch = resultHtml.match(
+      /<a[^>]*class="result__a"[^>]*>([^<]+)<\/a>/,
+    );
+    const title
+      = titleMatch?.[1]
+        ?.trim()
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"') || null;
 
     // Extract snippet - DuckDuckGo uses result__snippet class
-    const snippetMatch = resultHtml.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+    const snippetMatch = resultHtml.match(
+      /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/,
+    );
     let snippet = '';
     if (snippetMatch?.[1]) {
       // Clean up HTML entities and extract text
@@ -987,7 +1063,8 @@ async function generateImageDescriptions(
 
     // Process images in batches of 3 for efficiency
     const batchSize = 3;
-    const results: Array<{ url: string; description?: string; alt?: string }> = [];
+    const results: Array<{ url: string; description?: string; alt?: string }>
+      = [];
 
     for (let i = 0; i < Math.min(images.length, 10); i += batchSize) {
       const batch = images.slice(i, i + batchSize);
@@ -996,7 +1073,11 @@ async function generateImageDescriptions(
         batch.map(async (image) => {
           try {
             // ✅ CACHE: Check cache first for image description
-            const cached = await getCachedImageDescription(image.url, env, logger);
+            const cached = await getCachedImageDescription(
+              image.url,
+              env,
+              logger,
+            );
             if (cached) {
               return {
                 url: image.url,
@@ -1092,10 +1173,13 @@ export function streamAnswerSummary(
   logger?: TypedLogger,
 ) {
   if (results.length === 0) {
-    throw createError.badRequest('No search results available for answer generation', {
-      errorType: 'validation',
-      field: 'results',
-    });
+    throw createError.badRequest(
+      'No search results available for answer generation',
+      {
+        errorType: 'validation',
+        field: 'results',
+      },
+    );
   }
 
   try {
@@ -1111,9 +1195,10 @@ export function streamAnswerSummary(
       })
       .join('\n\n---\n\n');
 
-    const systemPrompt = mode === 'advanced'
-      ? 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.'
-      : 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
+    const systemPrompt
+      = mode === 'advanced'
+        ? 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.'
+        : 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
 
     // ✅ FIX: Use streamText() for progressive streaming
     return streamText({
@@ -1143,7 +1228,9 @@ export function streamAnswerSummary(
 /**
  * Generate AI answer summary from search results (NON-STREAMING VERSION)
  *
- * ⚠️ DEPRECATED: Use streamAnswerSummary() for better UX
+ * Use this for batch API responses (performWebSearch).
+ * For streaming responses with progressive rendering, use streamAnswerSummary().
+ *
  * ✅ TAVILY-ENHANCED: Basic and advanced answer modes
  *
  * @param query - Original search query
@@ -1175,9 +1262,10 @@ async function generateAnswerSummary(
       })
       .join('\n\n---\n\n');
 
-    const systemPrompt = mode === 'advanced'
-      ? 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.'
-      : 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
+    const systemPrompt
+      = mode === 'advanced'
+        ? 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.'
+        : 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
 
     const result = await openRouterService.generateText({
       modelId: AIModels.WEB_SEARCH,
@@ -1363,10 +1451,34 @@ async function withRetry<T>(
  * Stream event types for progressive search results
  */
 export type StreamSearchEvent
-  = | { type: 'metadata'; data: { query: string; maxResults: number; searchDepth: string; requestId: string; startedAt: string } }
-    | { type: 'result'; data: { result: WebSearchResultItem; index: number; total: number; enhanced: boolean; requestId: string } }
-    | { type: 'complete'; data: { totalResults: number; responseTime: number; requestId: string } }
-    | { type: 'error'; data: { error: string; requestId: string; responseTime: number } };
+  = | {
+    type: 'metadata';
+    data: {
+      query: string;
+      maxResults: number;
+      searchDepth: string;
+      requestId: string;
+      startedAt: string;
+    };
+  }
+  | {
+    type: 'result';
+    data: {
+      result: WebSearchResultItem;
+      index: number;
+      total: number;
+      enhanced: boolean;
+      requestId: string;
+    };
+  }
+  | {
+    type: 'complete';
+    data: { totalResults: number; responseTime: number; requestId: string };
+  }
+  | {
+    type: 'error';
+    data: { error: string; requestId: string; responseTime: number };
+  };
 
 export async function* streamSearchResults(
   params: WebSearchParameters,
@@ -1403,12 +1515,13 @@ export async function* streamSearchResults(
     });
 
     const searchResults = await withRetry(
-      () => searchDuckDuckGo(
-        query,
-        maxResults + 2, // Fetch extra for filtering
-        env,
-        params,
-      ),
+      () =>
+        searchDuckDuckGo(
+          query,
+          maxResults + 2, // Fetch extra for filtering
+          env,
+          params,
+        ),
       3, // 3 retries
     );
 
@@ -1443,7 +1556,7 @@ export async function* streamSearchResults(
         url: result.url,
         content: result.snippet,
         excerpt: result.snippet,
-        score: 0.5 + (0.5 * (1 - i / resultsToProcess.length)), // Decay score
+        score: 0.5 + 0.5 * (1 - i / resultsToProcess.length), // Decay score
         publishedDate: null,
         domain,
       };
@@ -1466,9 +1579,10 @@ export async function* streamSearchResults(
         // TypeScript narrows the union type based on boolean check
         let rawContentFormat: 'text' | 'markdown' | undefined;
         if (params.includeRawContent) {
-          rawContentFormat = typeof params.includeRawContent === 'boolean'
-            ? 'text'
-            : params.includeRawContent; // Already narrowed to 'text' | 'markdown'
+          rawContentFormat
+            = typeof params.includeRawContent === 'boolean'
+              ? 'text'
+              : params.includeRawContent; // Already narrowed to 'text' | 'markdown'
         }
 
         const extracted = await extractPageContent(
@@ -1480,8 +1594,12 @@ export async function* streamSearchResults(
 
         // ✅ FIX: Check for metadata even when content is empty (lightweight extraction case)
         const hasContent = !!extracted.content;
-        const hasMetadata = !!(extracted.metadata.imageUrl || extracted.metadata.faviconUrl
-          || extracted.metadata.title || extracted.metadata.description);
+        const hasMetadata = !!(
+          extracted.metadata.imageUrl
+          || extracted.metadata.faviconUrl
+          || extracted.metadata.title
+          || extracted.metadata.description
+        );
 
         if (hasContent || hasMetadata) {
           // Build enhanced result
@@ -1493,7 +1611,9 @@ export async function* streamSearchResults(
               wordCount: extracted.metadata.wordCount,
               description: extracted.metadata.description,
               imageUrl: extracted.metadata.imageUrl,
-              faviconUrl: params.includeFavicon ? extracted.metadata.faviconUrl : undefined,
+              faviconUrl: params.includeFavicon
+                ? extracted.metadata.faviconUrl
+                : undefined,
             },
             publishedDate: extracted.metadata.publishedDate || null,
           };
@@ -1511,7 +1631,11 @@ export async function* streamSearchResults(
           }
 
           // Include images if requested
-          if (params.includeImages && extracted.images && extracted.images.length > 0) {
+          if (
+            params.includeImages
+            && extracted.images
+            && extracted.images.length > 0
+          ) {
             if (params.includeImageDescriptions) {
               enhancedResult.images = await generateImageDescriptions(
                 extracted.images,
@@ -1610,7 +1734,13 @@ export async function performWebSearch(
   const searchDepth = params.searchDepth || 'advanced';
 
   // ✅ CACHE: Try cache first for performance boost
-  const cached = await getCachedSearch(params.query, maxResults, searchDepth, env, logger);
+  const cached = await getCachedSearch(
+    params.query,
+    maxResults,
+    searchDepth,
+    env,
+    logger,
+  );
   if (cached) {
     logger?.info('Cache hit for search query', {
       logType: 'performance',
@@ -1649,12 +1779,13 @@ export async function performWebSearch(
 
     // ✅ P0 FIX: Fetch search results with retry logic for reliability
     const searchResults = await withRetry(
-      () => searchDuckDuckGo(
-        params.query,
-        maxResults + 2, // Fetch extra for filtering
-        env,
-        params,
-      ),
+      () =>
+        searchDuckDuckGo(
+          params.query,
+          maxResults + 2, // Fetch extra for filtering
+          env,
+          params,
+        ),
       3, // 3 retries
     );
 
@@ -1701,25 +1832,35 @@ export async function performWebSearch(
 
         // ✅ FIX: Calculate actual relevance score based on query match
         // Split query into terms for matching
-        const queryTerms = params.query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+        const queryTerms = params.query
+          .toLowerCase()
+          .split(/\s+/)
+          .filter(t => t.length > 2);
         const titleLower = result.title.toLowerCase();
         const snippetLower = result.snippet.toLowerCase();
 
         // Score components (0-1 scale):
         // 1. Search engine ranking (DDG pre-ranks results)
-        const rankScore = Math.max(0, 1 - (index * 0.08)); // First result = 1.0, decreases by 0.08
+        const rankScore = Math.max(0, 1 - index * 0.08); // First result = 1.0, decreases by 0.08
 
         // 2. Title relevance (high weight - most important)
-        const titleMatches = queryTerms.filter(term => titleLower.includes(term)).length;
-        const titleScore = queryTerms.length > 0 ? (titleMatches / queryTerms.length) : 0;
+        const titleMatches = queryTerms.filter(term =>
+          titleLower.includes(term),
+        ).length;
+        const titleScore
+          = queryTerms.length > 0 ? titleMatches / queryTerms.length : 0;
 
         // 3. Content relevance
-        const contentMatches = queryTerms.filter(term => snippetLower.includes(term)).length;
-        const contentScore = queryTerms.length > 0 ? (contentMatches / queryTerms.length) : 0;
+        const contentMatches = queryTerms.filter(term =>
+          snippetLower.includes(term),
+        ).length;
+        const contentScore
+          = queryTerms.length > 0 ? contentMatches / queryTerms.length : 0;
 
         // 4. Combined weighted score
         // Title = 50%, Content = 30%, Rank = 20%
-        const relevanceScore = (titleScore * 0.5) + (contentScore * 0.3) + (rankScore * 0.2);
+        const relevanceScore
+          = titleScore * 0.5 + contentScore * 0.3 + rankScore * 0.2;
 
         // Ensure score is between 0.3 and 1.0 (never below 30% for search results)
         const finalScore = Math.max(0.3, Math.min(1.0, relevanceScore));
@@ -1748,8 +1889,12 @@ export async function performWebSearch(
           // When browser is unavailable, extractLightweightMetadata still provides
           // imageUrl, faviconUrl, title, and description - these should be applied
           const hasContent = !!extracted.content;
-          const hasMetadata = !!(extracted.metadata.imageUrl || extracted.metadata.faviconUrl
-            || extracted.metadata.title || extracted.metadata.description);
+          const hasMetadata = !!(
+            extracted.metadata.imageUrl
+            || extracted.metadata.faviconUrl
+            || extracted.metadata.title
+            || extracted.metadata.description
+          );
 
           if (hasContent) {
             baseResult.fullContent = extracted.content;
@@ -1766,20 +1911,29 @@ export async function performWebSearch(
               wordCount: extracted.metadata.wordCount,
               description: extracted.metadata.description,
               imageUrl: extracted.metadata.imageUrl,
-              faviconUrl: params.includeFavicon ? extracted.metadata.faviconUrl : undefined,
+              faviconUrl: params.includeFavicon
+                ? extracted.metadata.faviconUrl
+                : undefined,
             };
 
             if (extracted.metadata.publishedDate) {
               baseResult.publishedDate = extracted.metadata.publishedDate;
             }
 
-            if (extracted.metadata.title && extracted.metadata.title.length > 0) {
+            if (
+              extracted.metadata.title
+              && extracted.metadata.title.length > 0
+            ) {
               baseResult.title = extracted.metadata.title;
             }
           }
 
           // Include images if requested (only when we have actual images from page scraping)
-          if (params.includeImages && extracted.images && extracted.images.length > 0) {
+          if (
+            params.includeImages
+            && extracted.images
+            && extracted.images.length > 0
+          ) {
             if (params.includeImageDescriptions) {
               // Generate AI descriptions for images
               baseResult.images = await generateImageDescriptions(
@@ -1817,7 +1971,9 @@ export async function performWebSearch(
     );
 
     // Consolidate images from all results (Tavily-style)
-    let consolidatedImages: Array<{ url: string; description?: string }> | undefined;
+    let consolidatedImages:
+      | Array<{ url: string; description?: string }>
+      | undefined;
     if (params.includeImages) {
       const allImages = results.flatMap(r => r.images || []);
       if (allImages.length > 0) {
@@ -1828,13 +1984,14 @@ export async function performWebSearch(
     // Generate answer summary if requested
     let answer: string | null = null;
     if (params.includeAnswer) {
-      const answerMode = typeof params.includeAnswer === 'boolean'
-        ? 'basic'
-        : params.includeAnswer === 'advanced'
-          ? 'advanced'
-          : params.includeAnswer === 'basic'
-            ? 'basic'
-            : 'basic';
+      const answerMode
+        = typeof params.includeAnswer === 'boolean'
+          ? 'basic'
+          : params.includeAnswer === 'advanced'
+            ? 'advanced'
+            : params.includeAnswer === 'basic'
+              ? 'basic'
+              : 'basic';
 
       // Always generate answer since we have at least 'basic' mode
       answer = await generateAnswerSummary(
@@ -1858,7 +2015,14 @@ export async function performWebSearch(
     };
 
     // ✅ CACHE: Store result for future queries
-    await cacheSearchResult(params.query, maxResults, searchDepth, finalResult, env, logger);
+    await cacheSearchResult(
+      params.query,
+      maxResults,
+      searchDepth,
+      finalResult,
+      env,
+      logger,
+    );
 
     return finalResult;
   } catch (error) {

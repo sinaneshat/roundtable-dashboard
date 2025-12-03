@@ -5,6 +5,9 @@ import { useCallback, useMemo } from 'react';
 
 import { ChatModes } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import {
+  SubscriptionTiers,
+} from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -26,9 +29,13 @@ type ChatQuickStartProps = {
   ) => void;
   className?: string;
 };
-export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
+export function ChatQuickStart({
+  onSuggestionClick,
+  className,
+}: ChatQuickStartProps) {
   const { data: usageData } = useUsageStatsQuery();
-  const userTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
+  const userTier: SubscriptionTier
+    = usageData?.data?.subscription?.tier ?? 'free';
   const { data: modelsResponse } = useModelsQuery();
 
   const allModels = useMemo(() => {
@@ -37,7 +44,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   }, [modelsResponse]);
 
   const accessibleModels = useMemo(() => {
-    const accessible = allModels.filter(model => model.is_accessible_to_user === true);
+    const accessible = allModels.filter(
+      model => model.is_accessible_to_user === true,
+    );
     return accessible;
   }, [allModels]);
   const modelsByProvider = useMemo(() => {
@@ -78,7 +87,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   );
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
     // Only show suggestions if we have valid models available
-    const availableModelIds = accessibleModels.map(m => m.id).filter(id => id && id.length > 0);
+    const availableModelIds = accessibleModels
+      .map(m => m.id)
+      .filter(id => id && id.length > 0);
 
     // No suggestions if no valid models
     if (availableModelIds.length === 0) {
@@ -91,7 +102,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       const uniqueProviderModels = selectUniqueProviderModels(idealCount);
 
       // If we have enough, return them
-      if (uniqueProviderModels.length >= Math.min(idealCount, availableModelIds.length)) {
+      if (
+        uniqueProviderModels.length
+        >= Math.min(idealCount, availableModelIds.length)
+      ) {
         return uniqueProviderModels;
       }
 
@@ -145,19 +159,29 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       const suggestions: QuickStartSuggestion[] = [
         {
           title: 'Is privacy a right or a privilege in the digital age?',
-          prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
+          prompt:
+            'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Privacy Advocate', 'Security Realist']),
+          participants: buildParticipants([
+            'Privacy Advocate',
+            'Security Realist',
+          ]),
         },
         {
-          title: 'Should we resurrect extinct species using genetic engineering?',
-          prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
+          title:
+            'Should we resurrect extinct species using genetic engineering?',
+          prompt:
+            'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
           mode: ChatModes.ANALYZING,
-          participants: buildParticipants(['Conservation Biologist', 'Bioethicist']),
+          participants: buildParticipants([
+            'Conservation Biologist',
+            'Bioethicist',
+          ]),
         },
         {
           title: 'Is meritocracy a myth that justifies inequality?',
-          prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
+          prompt:
+            'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
           mode: ChatModes.DEBATING,
           participants: buildParticipants(['Sociologist', 'Economist']),
         },
@@ -191,22 +215,39 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
       return [
         {
-          title: 'Should we colonize Mars if it means abandoning Earth\'s problems?',
-          prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
+          title:
+            'Should we colonize Mars if it means abandoning Earth\'s problems?',
+          prompt:
+            'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Space Futurist', 'Climate Scientist', 'Resource Economist']),
+          participants: buildParticipants([
+            'Space Futurist',
+            'Climate Scientist',
+            'Resource Economist',
+          ]),
         },
         {
           title: 'Can we justify eating meat if lab-grown alternatives exist?',
-          prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
+          prompt:
+            'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
           mode: ChatModes.ANALYZING,
-          participants: buildParticipants(['Animal Ethicist', 'Agronomist', 'Cultural Anthropologist']),
+          participants: buildParticipants([
+            'Animal Ethicist',
+            'Agronomist',
+            'Cultural Anthropologist',
+          ]),
         },
         {
-          title: 'Is nuclear energy our climate salvation or a ticking time bomb?',
-          prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
+          title:
+            'Is nuclear energy our climate salvation or a ticking time bomb?',
+          prompt:
+            'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Energy Policy Expert', 'Nuclear Physicist', 'Environmental Activist']),
+          participants: buildParticipants([
+            'Energy Policy Expert',
+            'Nuclear Physicist',
+            'Environmental Activist',
+          ]),
         },
       ];
     })();
@@ -237,21 +278,40 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       return [
         {
           title: 'Should we edit human embryos to eliminate genetic diseases?',
-          prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
+          prompt:
+            'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Bioethicist', 'Geneticist', 'Disability Rights Advocate', 'Medical Ethicist']),
+          participants: buildParticipants([
+            'Bioethicist',
+            'Geneticist',
+            'Disability Rights Advocate',
+            'Medical Ethicist',
+          ]),
         },
         {
-          title: 'Can artificial general intelligence be aligned with human values?',
-          prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
+          title:
+            'Can artificial general intelligence be aligned with human values?',
+          prompt:
+            'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
           mode: ChatModes.ANALYZING,
-          participants: buildParticipants(['AI Safety Researcher', 'Machine Learning Engineer', 'Ethics Philosopher', 'Systems Architect']),
+          participants: buildParticipants([
+            'AI Safety Researcher',
+            'Machine Learning Engineer',
+            'Ethics Philosopher',
+            'Systems Architect',
+          ]),
         },
         {
           title: 'Is infinite economic growth possible on a finite planet?',
-          prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
+          prompt:
+            'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Ecological Economist', 'Free Market Theorist', 'Systems Thinker', 'Resource Analyst']),
+          participants: buildParticipants([
+            'Ecological Economist',
+            'Free Market Theorist',
+            'Systems Thinker',
+            'Resource Analyst',
+          ]),
         },
       ];
     })();
@@ -281,31 +341,57 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
       return [
         {
-          title: 'Should we terraform planets or preserve them as pristine laboratories?',
-          prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
+          title:
+            'Should we terraform planets or preserve them as pristine laboratories?',
+          prompt:
+            'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Planetary Scientist', 'Exobiologist', 'Space Ethicist', 'Space Policy Expert', 'Astrogeologist', 'Astrobiologist']),
+          participants: buildParticipants([
+            'Planetary Scientist',
+            'Exobiologist',
+            'Space Ethicist',
+            'Space Policy Expert',
+            'Astrogeologist',
+            'Astrobiologist',
+          ]),
         },
         {
           title: 'Is objective morality possible without a higher power?',
-          prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
+          prompt:
+            'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
           mode: ChatModes.ANALYZING,
-          participants: buildParticipants(['Moral Philosopher', 'Evolutionary Psychologist', 'Theologian', 'Neuroscientist', 'Cognitive Scientist', 'Ethics Scholar']),
+          participants: buildParticipants([
+            'Moral Philosopher',
+            'Evolutionary Psychologist',
+            'Theologian',
+            'Neuroscientist',
+            'Cognitive Scientist',
+            'Ethics Scholar',
+          ]),
         },
         {
-          title: 'Should we create conscious AI even if we can\'t guarantee their wellbeing?',
-          prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
+          title:
+            'Should we create conscious AI even if we can\'t guarantee their wellbeing?',
+          prompt:
+            'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['AI Consciousness Researcher', 'Digital Rights Advocate', 'Bioethicist', 'Philosophy of Mind Expert', 'Computational Consciousness Expert', 'AI Ethics Researcher']),
+          participants: buildParticipants([
+            'AI Consciousness Researcher',
+            'Digital Rights Advocate',
+            'Bioethicist',
+            'Philosophy of Mind Expert',
+            'Computational Consciousness Expert',
+            'AI Ethics Researcher',
+          ]),
         },
       ];
     })();
     let tierSuggestions: QuickStartSuggestion[];
-    if (userTier === 'free') {
+    if (userTier === SubscriptionTiers.FREE) {
       tierSuggestions = freeTierSuggestions;
-    } else if (userTier === 'starter') {
+    } else if (userTier === SubscriptionTiers.STARTER) {
       tierSuggestions = starterTierSuggestions;
-    } else if (userTier === 'pro') {
+    } else if (userTier === SubscriptionTiers.PRO) {
       tierSuggestions = proTierSuggestions;
     } else {
       tierSuggestions = powerTierSuggestions;
@@ -352,14 +438,22 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
               key={suggestion.title}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              whileHover={{ scale: 1.01, transition: { duration: 0.2, ease: 'easeOut' } }}
+              whileHover={{
+                scale: 1.01,
+                transition: { duration: 0.2, ease: 'easeOut' },
+              }}
               whileTap={{ scale: 0.99, transition: { duration: 0.1 } }}
               transition={{
                 duration: 0.4,
                 delay: index * 0.1,
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
-              onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
+              onClick={() =>
+                onSuggestionClick(
+                  suggestion.prompt,
+                  suggestion.mode,
+                  suggestion.participants,
+                )}
               className={cn(
                 'group/suggestion w-full text-left px-4 py-3 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
                 // Glass effect with backdrop blur on hover
@@ -378,7 +472,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                 {/* Right: Mode and avatars */}
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
-                    <span className={cn('text-[11px] font-medium whitespace-nowrap', modeConfig.color)}>
+                    <span
+                      className={cn(
+                        'text-[11px] font-medium whitespace-nowrap',
+                        modeConfig.color,
+                      )}
+                    >
                       {modeConfig.label}
                     </span>
                   </div>

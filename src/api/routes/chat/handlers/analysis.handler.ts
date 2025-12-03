@@ -98,12 +98,9 @@ function generateModeratorAnalysis(
     userTier,
   });
 
-  // ✅ AI SDK v5: streamObject with mode:'auto' (Provider-adaptive)
-  // mode:'auto' lets AI SDK choose the best structured output approach per provider
-  // Fixes "compiled grammar too large" error from Anthropic with complex schemas
-  // Anthropic rejects large grammars even in 'json' mode - 'auto' uses appropriate fallback
+  // ✅ AI SDK v5: streamObject streams progressive JSON as it's generated
+  // Using Claude Sonnet 3.5 with mode:'json' - tested working configuration
   const enhancedUserPrompt = buildModeratorAnalysisEnhancedPrompt(userPrompt);
-
   return streamObject({
     model: client.chat(AIModels.ANALYSIS),
     schema: ModeratorAnalysisPayloadSchema,
@@ -335,7 +332,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           roundNumber: existingAnalysis.roundNumber,
           userQuestion: existingAnalysis.userQuestion,
         };
-        return c.json(completeAnalysisData);
+        return Responses.raw(c, completeAnalysisData);
       }
       if (existingAnalysis.status === AnalysisStatuses.STREAMING) {
         // Check if stream has timed out using clean timestamp utilities
@@ -390,18 +387,12 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           // =========================================================================
           // Return 202 to tell frontend to poll for completion
           const ageMs = getTimestampAge(existingAnalysis.createdAt);
-          return c.json(
-            {
-              success: true,
-              data: {
-                status: 'streaming',
-                analysisId: existingAnalysis.id,
-                message: `Analysis is being generated (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
-                retryAfterMs: 2000,
-              },
-            },
-            HttpStatusCodes.ACCEPTED,
-          );
+          return Responses.polling(c, {
+            status: 'streaming',
+            resourceId: existingAnalysis.id,
+            message: `Analysis is being generated (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
+            retryAfterMs: 2000,
+          });
         }
       }
       if (existingAnalysis.status === AnalysisStatuses.FAILED) {
@@ -433,14 +424,16 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           ],
         });
 
+        // ✅ RACE CONDITION FIX: Return 202 Accepted if messages not persisted yet
+        // Frontend triggers analysis based on optimistic state before backend finishes persistence
+        // Return 202 to signal "not ready yet" - frontend's existing polling mechanism will retry
         if (foundMessages.length === 0) {
-          throw createError.badRequest(
-            'No participant messages found for analysis',
-            {
-              errorType: 'validation',
-              field: 'participantMessageIds',
-            },
-          );
+          return Responses.polling(c, {
+            status: 'pending',
+            resourceId: existingAnalysis.id,
+            message: 'Messages are still being processed. Please poll for completion.',
+            retryAfterMs: 1000,
+          });
         }
 
         const validatedMessages = foundMessages.map((msg) => {
@@ -604,14 +597,16 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       // - metadata.participantId: string (links to chatParticipant table)
       // - participant: { ... } (joined from chatParticipant)
       const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
+
+      // ✅ RACE CONDITION FIX: Return 202 Accepted if messages not persisted yet
+      // Frontend triggers analysis based on optimistic state before backend finishes persistence
+      // Return 202 to signal "not ready yet" - frontend's existing polling mechanism will retry
       if (participantOnlyMessages.length === 0) {
-        throw createError.badRequest(
-          `No participant messages found for round ${roundNum}. This round may not have participant responses yet.`,
-          {
-            errorType: 'validation',
-            field: 'roundNumber',
-          },
-        );
+        return Responses.polling(c, {
+          status: 'pending',
+          message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
+          retryAfterMs: 1000,
+        });
       }
 
       // Validate query results with Zod schema (using filtered messages)
@@ -907,17 +902,11 @@ export const resumeAnalysisStreamHandler: RouteHandler<typeof resumeAnalysisStre
 
     // Stream is still active - return 202 to indicate polling should continue
     // Frontend should poll /analyses endpoint for completion
-    return c.json(
-      {
-        success: true,
-        data: {
-          status: 'streaming',
-          streamId: activeStreamId,
-          message: 'Analysis stream is still active. Poll for completion.',
-          retryAfterMs: 2000,
-        },
-      },
-      HttpStatusCodes.ACCEPTED,
-    );
+    return Responses.accepted(c, {
+      status: 'streaming',
+      streamId: activeStreamId,
+      message: 'Analysis stream is still active. Poll for completion.',
+      retryAfterMs: 2000,
+    });
   },
 );

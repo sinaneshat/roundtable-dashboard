@@ -19,15 +19,7 @@ import { createApiClient } from '@/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-// Single-request upload types
-export type UploadAttachmentRequest = InferRequestType<
-  ApiClientType['uploads']['$post']
->;
-
-export type UploadAttachmentResponse = InferResponseType<
-  ApiClientType['uploads']['$post']
->;
-
+// Upload listing types
 export type ListAttachmentsRequest = InferRequestType<
   ApiClientType['uploads']['$get']
 >;
@@ -123,41 +115,8 @@ function extractErrorMessage(data: unknown): string {
 }
 
 // ============================================================================
-// Service Functions - Single-request uploads
+// Service Functions - Upload Listing
 // ============================================================================
-
-/**
- * Upload request type for the service
- * Hono RPC client expects `{ form: { file: File, description?: string } }`
- */
-export type UploadAttachmentServiceInput = {
-  form: {
-    file: File;
-    description?: string;
-  };
-};
-
-/**
- * Upload a file attachment (single request)
- * Protected endpoint - requires authentication
- *
- * For files < 100MB. Uses multipart/form-data via Hono RPC client
- *
- * Following Hono RPC best practices from Context7 docs:
- * - Server uses zValidator('form', schema) or parseBody()
- * - Client passes { form: { file: File } }
- */
-export async function uploadAttachmentService(data: UploadAttachmentServiceInput) {
-  const client = await createApiClient();
-
-  // Hono RPC client properly serializes this to multipart/form-data
-  const response = await client.uploads.$post({
-    form: data.form,
-  });
-
-  const json = await response.json();
-  return json as UploadAttachmentResponse;
-}
 
 /**
  * List attachments with cursor pagination
@@ -208,6 +167,127 @@ export async function deleteAttachmentService(data: DeleteAttachmentRequest) {
     param: data.param ?? { id: '' },
   };
   return parseResponse(client.uploads[':id'].$delete(params));
+}
+
+// ============================================================================
+// Ticket-Based Secure Uploads (S3 Presigned URL Pattern)
+// ============================================================================
+
+// Ticket-based upload types
+export type RequestUploadTicketRequest = InferRequestType<
+  ApiClientType['uploads']['ticket']['$post']
+>;
+
+export type RequestUploadTicketResponse = InferResponseType<
+  ApiClientType['uploads']['ticket']['$post']
+>;
+
+export type UploadWithTicketRequest = InferRequestType<
+  ApiClientType['uploads']['ticket']['upload']['$post']
+>;
+
+export type UploadWithTicketResponse = InferResponseType<
+  ApiClientType['uploads']['ticket']['upload']['$post']
+>;
+
+/**
+ * Request an upload ticket (Step 1 of secure upload)
+ * Protected endpoint - requires authentication
+ *
+ * Returns a time-limited, signed token that must be used to upload the file.
+ * This follows the S3 presigned URL pattern for secure uploads:
+ * 1. Request ticket with file metadata
+ * 2. Receive signed token and upload URL
+ * 3. Upload file to the provided URL with token
+ */
+export async function requestUploadTicketService(
+  data: RequestUploadTicketRequest,
+): Promise<RequestUploadTicketResponse> {
+  const client = await createApiClient();
+
+  const response = await client.uploads.ticket.$post({
+    json: data.json,
+  });
+
+  const json = await response.json();
+  return json as RequestUploadTicketResponse;
+}
+
+/**
+ * Upload request type for ticket-based service
+ * Similar to UploadAttachmentServiceInput but includes the token
+ */
+export type UploadWithTicketServiceInput = {
+  token: string;
+  form: {
+    file: File;
+  };
+};
+
+/**
+ * Upload a file with a valid ticket (Step 2 of secure upload)
+ * Protected endpoint - requires authentication
+ *
+ * The token from requestUploadTicketService must be included.
+ * Token is validated before file is accepted.
+ *
+ * Note: Uses native fetch because Hono RPC client doesn't properly
+ * infer types for multipart/form-data with query parameters.
+ */
+export async function uploadWithTicketService(
+  data: UploadWithTicketServiceInput,
+): Promise<UploadWithTicketResponse> {
+  const url = new URL(`${getApiBaseUrl()}/uploads/ticket/upload`);
+  url.searchParams.set('token', data.token);
+
+  const formData = new FormData();
+  formData.append('file', data.form.file);
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    const errorMessage = extractErrorMessage(errorData);
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+/**
+ * Secure upload service (combines ticket request + upload)
+ * Convenience function that handles the full secure upload flow
+ *
+ * @param file - File to upload
+ * @returns Upload response with file details
+ */
+export async function secureUploadService(
+  file: File,
+): Promise<UploadWithTicketResponse> {
+  // Step 1: Request upload ticket
+  const ticketResponse = await requestUploadTicketService({
+    json: {
+      filename: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      fileSize: file.size,
+    },
+  });
+
+  if (!ticketResponse.success || !ticketResponse.data) {
+    throw new Error('Failed to request upload ticket');
+  }
+
+  // Step 2: Upload file with token
+  const uploadResponse = await uploadWithTicketService({
+    token: ticketResponse.data.token,
+    form: { file },
+  });
+
+  return uploadResponse;
 }
 
 // ============================================================================

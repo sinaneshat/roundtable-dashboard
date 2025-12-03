@@ -16,29 +16,23 @@
 
 import { z } from 'zod';
 
-import type { ErrorType, FinishReason } from '@/api/core/enums';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
 } from '@/api/core/enums';
-import type {
-  DbMessageMetadata as MessageMetadata,
-  Usage,
-} from '@/db/schemas/chat-metadata';
+import type { DbMessageMetadata as MessageMetadata } from '@/db/schemas/chat-metadata';
 import {
   isAssistantMessageMetadata as isAssistantMetadata,
   UsageSchema,
 } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
-// Re-export Shared Schemas (for backward compatibility)
+// SINGLE SOURCE OF TRUTH REFERENCES:
+// - ErrorTypeSchema, FinishReasonSchema → @/api/core/enums
+// - UsageSchema → @/db/schemas/chat-metadata
 // ============================================================================
-// ErrorTypeSchema and FinishReasonSchema are centralized in @/api/core/enums
-// Re-exporting here so existing imports continue to work
-export { ErrorTypeSchema, FinishReasonSchema, UsageSchema };
-export type { ErrorType, FinishReason, Usage };
 
 // ============================================================================
 // Re-export Database Message Metadata Schemas (Single Source of Truth)
@@ -61,12 +55,8 @@ export {
 // Pre-Search Metadata Schema (for web search results)
 // ============================================================================
 
-export type {
-  DbPreSearchData as PreSearchMetadata,
-} from '@/db/schemas/chat-metadata';
-export {
-  DbPreSearchDataSchema as PreSearchMetadataSchema,
-} from '@/db/schemas/chat-metadata';
+export type { DbPreSearchData as PreSearchMetadata } from '@/db/schemas/chat-metadata';
+export { DbPreSearchDataSchema as PreSearchMetadataSchema } from '@/db/schemas/chat-metadata';
 
 /**
  * Pre-search query metadata
@@ -79,7 +69,9 @@ export const PreSearchQueryMetadataSchema = z.object({
   index: z.number().int().nonnegative(),
 });
 
-export type PreSearchQueryMetadata = z.infer<typeof PreSearchQueryMetadataSchema>;
+export type PreSearchQueryMetadata = z.infer<
+  typeof PreSearchQueryMetadataSchema
+>;
 
 /**
  * Individual search result item
@@ -142,11 +134,13 @@ export const PreSearchQueryStateSchema = z.object({
   rationale: z.string(),
   searchDepth: WebSearchDepthSchema,
   status: z.enum(['pending', 'searching', 'complete', 'failed']),
-  result: z.object({
-    answer: z.string().nullable().optional(),
-    results: z.array(PreSearchResultItemSchemaEnhanced).optional(),
-    responseTime: z.number().optional(),
-  }).optional(),
+  result: z
+    .object({
+      answer: z.string().nullable().optional(),
+      results: z.array(PreSearchResultItemSchemaEnhanced).optional(),
+      responseTime: z.number().optional(),
+    })
+    .optional(),
 });
 
 export type PreSearchQueryState = z.infer<typeof PreSearchQueryStateSchema>;
@@ -173,11 +167,15 @@ export const PreSearchResultEventSchema = z.object({
   type: z.literal('pre_search_result'),
   index: z.number().int().nonnegative(),
   result: z.object({
-    results: z.array(z.object({
-      title: z.string(),
-      url: z.string().url(),
-      content: z.string(),
-    })).optional(),
+    results: z
+      .array(
+        z.object({
+          title: z.string(),
+          url: z.string().url(),
+          content: z.string(),
+        }),
+      )
+      .optional(),
     responseTime: z.number().optional(),
   }),
 });
@@ -202,7 +200,9 @@ export const PreSearchStreamEventSchema = z.union([
 export type PreSearchStartEvent = z.infer<typeof PreSearchStartEventSchema>;
 export type PreSearchQueryEvent = z.infer<typeof PreSearchQueryEventSchema>;
 export type PreSearchResultEvent = z.infer<typeof PreSearchResultEventSchema>;
-export type PreSearchCompleteEvent = z.infer<typeof PreSearchCompleteEventSchema>;
+export type PreSearchCompleteEvent = z.infer<
+  typeof PreSearchCompleteEventSchema
+>;
 export type PreSearchErrorEvent = z.infer<typeof PreSearchErrorEventSchema>;
 export type PreSearchStreamEvent = z.infer<typeof PreSearchStreamEventSchema>;
 
@@ -229,9 +229,16 @@ export {
  *
  * Accepts both MessageMetadata and DbMessageMetadata for compatibility
  */
-export function messageHasError(metadata: MessageMetadata | import('@/db/schemas/chat-metadata').DbMessageMetadata): boolean {
+export function messageHasError(
+  metadata:
+    | MessageMetadata
+    | import('@/db/schemas/chat-metadata').DbMessageMetadata,
+): boolean {
   if (isAssistantMetadata(metadata as MessageMetadata)) {
-    return (metadata as Extract<MessageMetadata, { role: 'assistant' }>).hasError === true;
+    return (
+      (metadata as Extract<MessageMetadata, { role: 'assistant' }>).hasError
+      === true
+    );
   }
   return false; // User messages don't have error state
 }
@@ -301,7 +308,9 @@ export const PartialAssistantMetadataSchema = z.object({
   aborted: z.boolean().optional(),
 });
 
-export type PartialAssistantMetadata = z.infer<typeof PartialAssistantMetadataSchema>;
+export type PartialAssistantMetadata = z.infer<
+  typeof PartialAssistantMetadataSchema
+>;
 
 /**
  * Partial metadata discriminated union for message creation
@@ -313,4 +322,6 @@ export const PartialMessageMetadataSchema = z.discriminatedUnion('role', [
   PartialAssistantMetadataSchema,
 ]);
 
-export type PartialMessageMetadata = z.infer<typeof PartialMessageMetadataSchema>;
+export type PartialMessageMetadata = z.infer<
+  typeof PartialMessageMetadataSchema
+>;

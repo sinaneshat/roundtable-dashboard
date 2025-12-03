@@ -10,83 +10,33 @@
  *
  * Reference: AI SDK v5 Multi-Modal Messages
  * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
+ *
+ * @see /src/api/types/uploads.ts for type definitions
  */
 
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
-import { IMAGE_MIME_TYPES } from '@/api/core/enums';
+import { IMAGE_MIME_TYPES, MessagePartTypes } from '@/api/core/enums';
 import { getFile } from '@/api/services/storage.service';
-import type { TypedLogger } from '@/api/types/logger';
-import type { getDbAsync } from '@/db';
+import type {
+  LoadAttachmentContentParams,
+  LoadAttachmentContentResult,
+  LoadMessageAttachmentsParams,
+  LoadMessageAttachmentsResult,
+  ModelFilePart,
+} from '@/api/types/uploads';
+import { MAX_BASE64_FILE_SIZE } from '@/api/types/uploads';
 import * as tables from '@/db/schema';
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/**
- * File content ready for AI model consumption
- * Follows AI SDK v5 FilePart structure
- */
-export type ModelFilePart = {
-  type: 'file';
-  /** Data URL (base64 encoded) or URL that AI provider can access */
-  url: string;
-  /** MIME type of the file */
-  mediaType: string;
-  /** Original filename for reference */
-  filename?: string;
-};
-
-/**
- * Parameters for loading attachment content
- */
-export type LoadAttachmentContentParams = {
-  /** Upload IDs to load */
-  attachmentIds: string[];
-  /** R2 bucket for file retrieval */
-  r2Bucket: R2Bucket | undefined;
-  /** Database instance */
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  /** Optional logger */
-  logger?: TypedLogger;
-};
-
-/**
- * Result of loading attachment content
- */
-export type LoadAttachmentContentResult = {
-  /** File parts ready for AI model consumption */
-  fileParts: ModelFilePart[];
-  /** Any errors that occurred during loading */
-  errors: Array<{ uploadId: string; error: string }>;
-  /** Statistics about the load operation */
-  stats: {
-    total: number;
-    loaded: number;
-    failed: number;
-    skipped: number;
-  };
-};
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 /**
- * Maximum file size to convert to base64 (10MB)
- * Larger files should use URL-based access where supported
- */
-const MAX_BASE64_FILE_SIZE = 10 * 1024 * 1024;
-
-/**
  * MIME types that AI models can process visually
  * Only these types will be converted to base64 data URLs
  */
-const VISUAL_MIME_TYPES = new Set([
-  ...IMAGE_MIME_TYPES,
-  'application/pdf',
-]);
+const VISUAL_MIME_TYPES = new Set([...IMAGE_MIME_TYPES, 'application/pdf']);
 
 // ============================================================================
 // Core Functions
@@ -130,6 +80,29 @@ export async function loadAttachmentContent(
     .from(tables.upload)
     .where(inArray(tables.upload.id, attachmentIds));
 
+  // ✅ ALWAYS log to console for debugging participant 1+ file attachment issues
+  // This helps diagnose "Invalid file URL: filename" errors when uploads aren't found
+  if (uploads.length === 0 && attachmentIds.length > 0) {
+    console.error(
+      '[Attachment] WARNING: No uploads found in DB for given IDs!',
+      {
+        attachmentIds,
+        attachmentIdsCount: attachmentIds.length,
+        foundUploadsCount: uploads.length,
+        hint: 'This may indicate a race condition or incorrect upload IDs extracted from URLs',
+      },
+    );
+  } else if (uploads.length < attachmentIds.length) {
+    console.error(
+      '[Attachment] WARNING: Partial uploads found - some IDs not in DB',
+      {
+        attachmentIds,
+        foundIds: uploads.map(u => u.id),
+        missingCount: attachmentIds.length - uploads.length,
+      },
+    );
+  }
+
   logger?.info('Loading attachment content for AI model', {
     logType: 'operation',
     operationName: 'loadAttachmentContent',
@@ -153,6 +126,15 @@ export async function loadAttachmentContent(
 
       // Skip files that are too large for base64 conversion
       if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+        const errorMsg = `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`;
+        // ✅ ALWAYS log to console for debugging
+        console.error('[Attachment] File too large for base64 conversion:', {
+          uploadId: upload.id,
+          filename: upload.filename,
+          fileSize: upload.fileSize,
+          maxSize: MAX_BASE64_FILE_SIZE,
+          error: errorMsg,
+        });
         logger?.warn('File too large for base64 conversion', {
           logType: 'operation',
           operationName: 'loadAttachmentContent',
@@ -162,7 +144,7 @@ export async function loadAttachmentContent(
         });
         errors.push({
           uploadId: upload.id,
-          error: `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`,
+          error: errorMsg,
         });
         continue;
       }
@@ -171,6 +153,12 @@ export async function loadAttachmentContent(
       const { data } = await getFile(r2Bucket, upload.r2Key);
 
       if (!data) {
+        // ✅ ALWAYS log to console for debugging
+        console.error('[Attachment] File not found in storage:', {
+          uploadId: upload.id,
+          filename: upload.filename,
+          r2Key: upload.r2Key,
+        });
         logger?.warn('File not found in storage', {
           logType: 'operation',
           operationName: 'loadAttachmentContent',
@@ -184,15 +172,23 @@ export async function loadAttachmentContent(
         continue;
       }
 
-      // Convert to base64 data URL
+      // Convert ArrayBuffer to Uint8Array for OpenRouter provider compatibility
+      // The OpenRouter provider's getFileUrl() expects part.data as Uint8Array
+      const uint8Data = new Uint8Array(data);
+
+      // Also create data URL for UIMessage compatibility
       const base64 = arrayBufferToBase64(data);
       const dataUrl = `data:${upload.mimeType};base64,${base64}`;
 
       fileParts.push({
-        type: 'file',
+        type: MessagePartTypes.FILE,
+        // LanguageModelV2 format (what OpenRouter provider expects)
+        data: uint8Data,
+        mimeType: upload.mimeType,
+        filename: upload.filename,
+        // UIMessage format (for streaming-orchestration message building)
         url: dataUrl,
         mediaType: upload.mimeType,
-        filename: upload.filename,
       });
 
       logger?.debug('Loaded attachment content', {
@@ -204,7 +200,15 @@ export async function loadAttachmentContent(
         sizeKB: Math.round(upload.fileSize / 1024),
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage
+        = error instanceof Error ? error.message : 'Unknown error';
+      // ✅ ALWAYS log errors to console for debugging (even if logger is not provided)
+      console.error('[Attachment] Failed to load attachment content:', {
+        uploadId: upload.id,
+        filename: upload.filename,
+        mimeType: upload.mimeType,
+        error: errorMessage,
+      });
       logger?.error('Failed to load attachment content', {
         logType: 'operation',
         operationName: 'loadAttachmentContent',
@@ -235,15 +239,15 @@ export async function loadAttachmentContent(
 }
 
 /**
- * Convert ArrayBuffer to base64 string
+ * Convert Uint8Array to base64 string
  *
+ * ✅ SINGLE SOURCE OF TRUTH: Core implementation for base64 conversion
  * This is a backend-only operation. The frontend never sees base64 data.
  *
- * @param buffer - ArrayBuffer to convert
+ * @param bytes - Uint8Array to convert
  * @returns Base64 encoded string
  */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.byteLength; i++) {
     const byte = bytes[i];
@@ -252,6 +256,19 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     }
   }
   return btoa(binary);
+}
+
+/**
+ * Convert ArrayBuffer to base64 string
+ *
+ * This is a backend-only operation. The frontend never sees base64 data.
+ * ✅ DELEGATES TO: uint8ArrayToBase64 for implementation
+ *
+ * @param buffer - ArrayBuffer to convert
+ * @returns Base64 encoded string
+ */
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  return uint8ArrayToBase64(new Uint8Array(buffer));
 }
 
 /**
@@ -272,4 +289,286 @@ export function isVisualMimeType(mimeType: string): boolean {
  */
 export function isWithinSizeLimit(fileSize: number): boolean {
   return fileSize <= MAX_BASE64_FILE_SIZE;
+}
+
+// ============================================================================
+// Multi-Participant Attachment Support
+// ============================================================================
+
+/**
+ * Load attachment content for multiple messages by looking up the messageUpload junction table
+ *
+ * This function is critical for multi-participant streaming:
+ * - Participant 0 receives attachmentIds and uses loadAttachmentContent()
+ * - Participant 1+ loads messages from DB which have HTTP URLs (not base64)
+ * - This function converts those HTTP URLs to base64 for AI providers that require it
+ *
+ * IMPORTANT: Many AI providers (especially OpenAI via OpenRouter) require base64 data URLs,
+ * not HTTP URLs. This function ensures all participants get file content in the correct format.
+ *
+ * @param params - Parameters for loading message attachments
+ * @returns Map of message ID → file parts with base64 data URLs
+ *
+ * @example
+ * ```typescript
+ * const { filePartsByMessageId } = await loadMessageAttachments({
+ *   messageIds: messages.map(m => m.id),
+ *   r2Bucket: env.UPLOADS_R2_BUCKET,
+ *   db,
+ * });
+ *
+ * // Replace HTTP URLs with base64 in messages
+ * const updatedMessages = messages.map(msg => {
+ *   const fileParts = filePartsByMessageId.get(msg.id);
+ *   if (fileParts) {
+ *     // Replace file parts with base64 versions
+ *   }
+ *   return msg;
+ * });
+ * ```
+ */
+export async function loadMessageAttachments(
+  params: LoadMessageAttachmentsParams,
+): Promise<LoadMessageAttachmentsResult> {
+  const { messageIds, r2Bucket, db, logger } = params;
+
+  const filePartsByMessageId = new Map<string, ModelFilePart[]>();
+  const errors: Array<{ messageId: string; uploadId: string; error: string }>
+    = [];
+  let totalUploads = 0;
+  let loaded = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  if (!messageIds || messageIds.length === 0) {
+    return {
+      filePartsByMessageId,
+      errors: [],
+      stats: {
+        messagesWithAttachments: 0,
+        totalUploads: 0,
+        loaded: 0,
+        failed: 0,
+        skipped: 0,
+      },
+    };
+  }
+
+  // Load all message-upload links for these messages
+  // Join with upload table to get file metadata in one query
+  // Following Drizzle ORM pattern from streaming-orchestration.service.ts:256-266
+  const messageUploadsRaw = await db
+    .select()
+    .from(tables.messageUpload)
+    .innerJoin(
+      tables.upload,
+      eq(tables.messageUpload.uploadId, tables.upload.id),
+    )
+    .where(inArray(tables.messageUpload.messageId, messageIds));
+
+  if (messageUploadsRaw.length === 0) {
+    logger?.debug('No attachments found for messages', {
+      logType: 'operation',
+      operationName: 'loadMessageAttachments',
+      messageCount: messageIds.length,
+    });
+    return {
+      filePartsByMessageId,
+      errors: [],
+      stats: {
+        messagesWithAttachments: 0,
+        totalUploads: 0,
+        loaded: 0,
+        failed: 0,
+        skipped: 0,
+      },
+    };
+  }
+
+  // Group by message ID for efficient processing
+  // Drizzle returns joined results with table names as keys: { message_upload: {...}, upload: {...} }
+  const uploadsByMessageId = new Map<
+    string,
+    Array<{
+      uploadId: string;
+      displayOrder: number;
+      upload: (typeof messageUploadsRaw)[0]['upload'];
+    }>
+  >();
+
+  for (const row of messageUploadsRaw) {
+    const messageUpload = row.message_upload;
+    const existing = uploadsByMessageId.get(messageUpload.messageId) || [];
+    existing.push({
+      uploadId: messageUpload.uploadId,
+      displayOrder: messageUpload.displayOrder,
+      upload: row.upload,
+    });
+    uploadsByMessageId.set(messageUpload.messageId, existing);
+  }
+
+  totalUploads = messageUploadsRaw.length;
+
+  logger?.info('Loading attachment content for messages', {
+    logType: 'operation',
+    operationName: 'loadMessageAttachments',
+    messageCount: messageIds.length,
+    messagesWithAttachments: uploadsByMessageId.size,
+    totalUploads,
+  });
+
+  // Process each message's attachments
+  for (const [messageId, uploads] of uploadsByMessageId) {
+    const messageParts: ModelFilePart[] = [];
+
+    // Sort by display order
+    uploads.sort((a, b) => a.displayOrder - b.displayOrder);
+
+    for (const { uploadId, upload } of uploads) {
+      try {
+        // Skip files that AI models can't process visually
+        if (!VISUAL_MIME_TYPES.has(upload.mimeType)) {
+          logger?.debug('Skipping non-visual file in message', {
+            logType: 'operation',
+            operationName: 'loadMessageAttachments',
+            messageId,
+            uploadId,
+            mimeType: upload.mimeType,
+          });
+          skipped++;
+          continue;
+        }
+
+        // Skip files that are too large for base64 conversion
+        if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
+          const errorMsg = `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`;
+          // ✅ ALWAYS log to console for debugging
+          console.error('[Attachment] File too large for message attachment:', {
+            messageId,
+            uploadId,
+            filename: upload.filename,
+            fileSize: upload.fileSize,
+            maxSize: MAX_BASE64_FILE_SIZE,
+            error: errorMsg,
+          });
+          logger?.warn('File too large for base64 conversion', {
+            logType: 'operation',
+            operationName: 'loadMessageAttachments',
+            messageId,
+            uploadId,
+            fileSize: upload.fileSize,
+            maxSize: MAX_BASE64_FILE_SIZE,
+          });
+          errors.push({
+            messageId,
+            uploadId,
+            error: errorMsg,
+          });
+          failed++;
+          continue;
+        }
+
+        // Fetch file content from storage
+        const { data } = await getFile(r2Bucket, upload.r2Key);
+
+        if (!data) {
+          // ✅ ALWAYS log to console for debugging
+          console.error('[Attachment] File not found in storage for message:', {
+            messageId,
+            uploadId,
+            filename: upload.filename,
+            r2Key: upload.r2Key,
+          });
+          logger?.warn('File not found in storage', {
+            logType: 'operation',
+            operationName: 'loadMessageAttachments',
+            messageId,
+            uploadId,
+            r2Key: upload.r2Key,
+          });
+          errors.push({
+            messageId,
+            uploadId,
+            error: 'File not found in storage',
+          });
+          failed++;
+          continue;
+        }
+
+        // Convert ArrayBuffer to Uint8Array for OpenRouter provider compatibility
+        // The OpenRouter provider's getFileUrl() expects part.data as Uint8Array
+        const uint8Data = new Uint8Array(data);
+
+        // Also create data URL for UIMessage compatibility
+        const base64 = arrayBufferToBase64(data);
+        const dataUrl = `data:${upload.mimeType};base64,${base64}`;
+
+        messageParts.push({
+          type: MessagePartTypes.FILE,
+          // LanguageModelV2 format (what OpenRouter provider expects)
+          data: uint8Data,
+          mimeType: upload.mimeType,
+          filename: upload.filename,
+          // UIMessage format (for streaming-orchestration message building)
+          url: dataUrl,
+          mediaType: upload.mimeType,
+        });
+
+        loaded++;
+
+        logger?.debug('Loaded attachment content for message', {
+          logType: 'operation',
+          operationName: 'loadMessageAttachments',
+          messageId,
+          uploadId,
+          filename: upload.filename,
+          mimeType: upload.mimeType,
+          sizeKB: Math.round(upload.fileSize / 1024),
+        });
+      } catch (error) {
+        const errorMessage
+          = error instanceof Error ? error.message : 'Unknown error';
+        // ✅ ALWAYS log to console for debugging
+        console.error('[Attachment] Failed to load attachment for message:', {
+          messageId,
+          uploadId,
+          filename: upload.filename,
+          error: errorMessage,
+        });
+        logger?.error('Failed to load attachment content for message', {
+          logType: 'operation',
+          operationName: 'loadMessageAttachments',
+          messageId,
+          uploadId,
+          error: errorMessage,
+        });
+        errors.push({
+          messageId,
+          uploadId,
+          error: errorMessage,
+        });
+        failed++;
+      }
+    }
+
+    if (messageParts.length > 0) {
+      filePartsByMessageId.set(messageId, messageParts);
+    }
+  }
+
+  const stats = {
+    messagesWithAttachments: uploadsByMessageId.size,
+    totalUploads,
+    loaded,
+    failed,
+    skipped,
+  };
+
+  logger?.info('Message attachment loading complete', {
+    logType: 'operation',
+    operationName: 'loadMessageAttachments',
+    stats,
+  });
+
+  return { filePartsByMessageId, errors, stats };
 }

@@ -11,7 +11,10 @@
  */
 
 import type { CitationSourceType } from '@/api/core/enums';
-import type { DbAssistantMessageMetadata, DbCitation } from '@/db/schemas/chat-metadata';
+import type {
+  DbAssistantMessageMetadata,
+  DbCitation,
+} from '@/db/schemas/chat-metadata';
 import type { RoundNumber } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
@@ -35,7 +38,14 @@ export type ParticipantMetadataParams = {
   model: string;
 
   // AI SDK core fields (will have defaults if not provided)
-  finishReason?: 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'failed' | 'other' | 'unknown';
+  finishReason?:
+    | 'stop'
+    | 'length'
+    | 'content-filter'
+    | 'tool-calls'
+    | 'failed'
+    | 'other'
+    | 'unknown';
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -44,7 +54,15 @@ export type ParticipantMetadataParams = {
 
   // Error state (defaults to false if not provided)
   hasError?: boolean;
-  errorType?: 'rate_limit' | 'context_length' | 'api_error' | 'network' | 'timeout' | 'model_unavailable' | 'empty_response' | 'unknown';
+  errorType?:
+    | 'rate_limit'
+    | 'context_length'
+    | 'api_error'
+    | 'network'
+    | 'timeout'
+    | 'model_unavailable'
+    | 'empty_response'
+    | 'unknown';
   errorMessage?: string;
   errorCategory?: string;
 
@@ -134,18 +152,26 @@ export function createParticipantMetadata(
     // Optional backend fields (only present if provided)
     ...(params.providerMessage && { providerMessage: params.providerMessage }),
     ...(params.openRouterError && { openRouterError: params.openRouterError }),
-    ...(params.retryAttempts !== undefined && { retryAttempts: params.retryAttempts }),
-    ...(params.isEmptyResponse !== undefined && { isEmptyResponse: params.isEmptyResponse }),
+    ...(params.retryAttempts !== undefined && {
+      retryAttempts: params.retryAttempts,
+    }),
+    ...(params.isEmptyResponse !== undefined && {
+      isEmptyResponse: params.isEmptyResponse,
+    }),
     ...(params.statusCode !== undefined && { statusCode: params.statusCode }),
     ...(params.responseBody && { responseBody: params.responseBody }),
     ...(params.aborted !== undefined && { aborted: params.aborted }),
     ...(params.createdAt && { createdAt: params.createdAt }),
 
     // RAG citations (only present if AI referenced sources)
-    ...(params.citations && params.citations.length > 0 && { citations: params.citations }),
+    ...(params.citations
+      && params.citations.length > 0 && { citations: params.citations }),
 
     // Available sources (files/context available to AI for "Sources" UI)
-    ...(params.availableSources && params.availableSources.length > 0 && { availableSources: params.availableSources }),
+    ...(params.availableSources
+      && params.availableSources.length > 0 && {
+      availableSources: params.availableSources,
+    }),
   };
 }
 
@@ -203,7 +229,14 @@ export function createStreamingMetadata(
 export function completeStreamingMetadata(
   streamMetadata: DbAssistantMessageMetadata,
   finishResult: {
-    finishReason: 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'error' | 'other' | 'unknown';
+    finishReason:
+      | 'stop'
+      | 'length'
+      | 'content-filter'
+      | 'tool-calls'
+      | 'error'
+      | 'other'
+      | 'unknown';
     usage?: {
       promptTokens?: number;
       completionTokens?: number;
@@ -220,22 +253,33 @@ export function completeStreamingMetadata(
   const usageData = finishResult.usage || finishResult.totalUsage;
 
   return updateParticipantMetadata(streamMetadata, {
-    finishReason: finishResult.finishReason as 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'failed' | 'other' | 'unknown',
+    finishReason: finishResult.finishReason as
+    | 'stop'
+    | 'length'
+    | 'content-filter'
+    | 'tool-calls'
+    | 'failed'
+    | 'other'
+    | 'unknown',
     usage: usageData
       ? {
           promptTokens: usageData.promptTokens ?? 0,
           completionTokens: usageData.completionTokens ?? 0,
-          totalTokens: usageData.totalTokens ?? (usageData.promptTokens ?? 0) + (usageData.completionTokens ?? 0),
+          totalTokens:
+            usageData.totalTokens
+            ?? (usageData.promptTokens ?? 0) + (usageData.completionTokens ?? 0),
         }
       : streamMetadata.usage,
   });
 }
 
 /**
- * Create error metadata for failed streams
- * Used in AI SDK onError callback
+ * Create assistant message metadata with error state for failed streams
+ * Used in AI SDK onError callback to update stream metadata
+ *
+ * @note Different from createErrorMetadata in error-schemas.ts which validates generic error metadata
  */
-export function createErrorMetadata(
+export function createStreamErrorMetadata(
   streamMetadata: DbAssistantMessageMetadata,
   error: {
     message: string;
@@ -249,7 +293,16 @@ export function createErrorMetadata(
   return updateParticipantMetadata(streamMetadata, {
     hasError: true,
     errorMessage: error.message,
-    errorType: error.errorType as 'rate_limit' | 'context_length' | 'api_error' | 'network' | 'timeout' | 'model_unavailable' | 'empty_response' | 'unknown' | undefined,
+    errorType: error.errorType as
+    | 'rate_limit'
+    | 'context_length'
+    | 'api_error'
+    | 'network'
+    | 'timeout'
+    | 'model_unavailable'
+    | 'empty_response'
+    | 'unknown'
+    | undefined,
     errorCategory: error.errorCategory,
     isTransient: error.isTransient ?? false,
     isPartialResponse: false,
@@ -274,15 +327,26 @@ export function hasRequiredParticipantFields(
 
   // ✅ TYPE-SAFE: Check all required fields exist without force casting
   return (
-    'roundNumber' in metadata && typeof metadata.roundNumber === 'number'
-    && 'participantId' in metadata && typeof metadata.participantId === 'string'
-    && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number'
-    && 'participantRole' in metadata && (metadata.participantRole === null || typeof metadata.participantRole === 'string')
-    && 'model' in metadata && typeof metadata.model === 'string'
-    && 'finishReason' in metadata && typeof metadata.finishReason === 'string'
-    && 'usage' in metadata && typeof metadata.usage === 'object'
-    && 'hasError' in metadata && typeof metadata.hasError === 'boolean'
-    && 'isTransient' in metadata && typeof metadata.isTransient === 'boolean'
-    && 'isPartialResponse' in metadata && typeof metadata.isPartialResponse === 'boolean'
+    'roundNumber' in metadata
+    && typeof metadata.roundNumber === 'number'
+    && 'participantId' in metadata
+    && typeof metadata.participantId === 'string'
+    && 'participantIndex' in metadata
+    && typeof metadata.participantIndex === 'number'
+    && 'participantRole' in metadata
+    && (metadata.participantRole === null
+      || typeof metadata.participantRole === 'string')
+    && 'model' in metadata
+    && typeof metadata.model === 'string'
+    && 'finishReason' in metadata
+    && typeof metadata.finishReason === 'string'
+    && 'usage' in metadata
+    && typeof metadata.usage === 'object'
+    && 'hasError' in metadata
+    && typeof metadata.hasError === 'boolean'
+    && 'isTransient' in metadata
+    && typeof metadata.isTransient === 'boolean'
+    && 'isPartialResponse' in metadata
+    && typeof metadata.isPartialResponse === 'boolean'
   );
 }

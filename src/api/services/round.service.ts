@@ -26,10 +26,30 @@ import { isTextPart } from '@/lib/utils/type-guards';
 // Type Definitions
 // ============================================================================
 
+/**
+ * Message structure for round number calculation
+ * ✅ TYPE-SAFE: Explicit structure instead of `unknown`
+ *
+ * Uses optional properties since we only need metadata and parts for calculation.
+ * Avoids force casting by using type guards for property access.
+ */
+export type RoundCalculationMessage = {
+  role?: string;
+  metadata?: {
+    isParticipantTrigger?: boolean;
+    roundNumber?: number;
+    [key: string]: unknown;
+  };
+  parts?: Array<{
+    type: string;
+    text?: string;
+  }>;
+};
+
 export type CalculateRoundNumberParams = {
   threadId: string;
   participantIndex: number;
-  message: unknown; // z.unknown() from schema
+  message: RoundCalculationMessage;
   regenerateRound?: number;
   db: Awaited<ReturnType<typeof getDbAsync>>;
 };
@@ -76,13 +96,8 @@ export async function calculateRoundNumber(
   // PARTICIPANT 0: Calculate round number from message content
   // =========================================================================
   if (participantIndex === 0) {
-    // Cast message to UIMessage-like structure for property access
-    const messageWithProps = message as {
-      metadata?: Record<string, unknown>;
-      parts?: Array<{ type: string; text?: string }>;
-    };
-
-    const metadata = messageWithProps.metadata;
+    // ✅ TYPE-SAFE: Direct property access on typed message structure
+    const { metadata, parts } = message;
     const isParticipantTrigger = metadata?.isParticipantTrigger === true;
 
     // CRITICAL FIX: Trust frontend's round number if provided
@@ -101,7 +116,7 @@ export async function calculateRoundNumber(
 
     // Fallback to backend calculation if frontend didn't provide
     // ✅ TYPE GUARD: Extract text parts with runtime validation
-    const textParts = messageWithProps.parts?.filter(isTextPart) ?? [];
+    const textParts = parts?.filter(isTextPart) ?? [];
     const textContent = textParts
       .map(p => p.text)
       .join('')

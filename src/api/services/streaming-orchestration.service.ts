@@ -26,58 +26,42 @@ import {
   TEXT_EXTRACTABLE_MIME_TYPES,
   UIMessageRoles,
 } from '@/api/core/enums';
-import { loadAttachmentContent } from '@/api/services/attachment-content.service';
-import type { CitableSource, CitationSourceMap } from '@/api/services/citation-context-builder';
+import {
+  loadAttachmentContent,
+  loadMessageAttachments,
+  uint8ArrayToBase64,
+} from '@/api/services/attachment-content.service';
 import { buildCitableContext } from '@/api/services/citation-context-builder';
-import type { AttachmentCitationInfo } from '@/api/services/prompts.service';
-import { buildAttachmentCitationPrompt, buildParticipantSystemPrompt } from '@/api/services/prompts.service';
+import {
+  buildAttachmentCitationPrompt,
+  buildParticipantSystemPrompt,
+} from '@/api/services/prompts.service';
 import { buildSearchContext } from '@/api/services/search-context-builder';
 import { getFile } from '@/api/services/storage.service';
+import type {
+  AttachmentCitationInfo,
+  CitableSource,
+  CitationSourceMap,
+  ThreadAttachmentContextResult,
+  ThreadAttachmentWithContent,
+} from '@/api/types/citations';
 import type { TypedLogger } from '@/api/types/logger';
+import { isModelFilePartWithData } from '@/api/types/uploads';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation';
-import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import {
+  extractTextFromMessage,
+  getFilenameFromPart,
+  getMimeTypeFromPart,
+  getUploadIdFromFilePart,
+  getUrlFromPart,
+  isFilePart,
+} from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
+import { getRoundNumber } from '@/lib/utils/metadata';
 
 import { chatMessagesToUIMessages } from '../routes/chat/handlers/helpers';
-
-// ============================================================================
-// Thread Attachment Context Types
-// ============================================================================
-
-/**
- * Attachment with extracted content for RAG
- */
-export type ThreadAttachmentWithContent = {
-  id: string;
-  filename: string;
-  mimeType: string;
-  fileSize: number;
-  r2Key: string;
-  messageId: string | null;
-  roundNumber: number | null;
-  /** Extracted text content (for text/code files) */
-  textContent: string | null;
-  /** Citation ID for referencing in AI responses */
-  citationId: string;
-};
-
-/**
- * Thread attachment context result
- */
-export type ThreadAttachmentContextResult = {
-  attachments: ThreadAttachmentWithContent[];
-  /** Formatted prompt section for system prompt */
-  formattedPrompt: string;
-  /** Citable sources for citation resolution */
-  citableSources: CitableSource[];
-  stats: {
-    total: number;
-    withContent: number;
-    skipped: number;
-  };
-};
 
 // ============================================================================
 // Type Definitions
@@ -86,7 +70,8 @@ export type ThreadAttachmentContextResult = {
 export type LoadParticipantConfigParams = {
   threadId: string;
   participantIndex: number;
-  providedParticipants?: unknown;
+  /** Flag indicating participants were just persisted - triggers DB reload for participant 0 */
+  hasPersistedParticipants?: boolean;
   thread: ChatThread & { participants: ChatParticipant[] };
   db: Awaited<ReturnType<typeof getDbAsync>>;
   logger?: TypedLogger;
@@ -97,43 +82,19 @@ export type LoadParticipantConfigResult = {
   participant: ChatParticipant;
 };
 
-/**
- * Cloudflare AI binding interface
- *
- * TYPE SAFETY NOTE:
- * - Cloudflare AI binding is declared in cloudflare-env.d.ts as `Ai` type
- * - AutoRAG is a Cloudflare AI feature for retrieval-augmented generation
- * - This interface matches the runtime API without importing internal Cloudflare types
- *
- * JUSTIFICATION:
- * - Cloudflare `Ai` type doesn't expose autorag() in public type definitions
- * - Runtime API exists and works correctly in production
- * - Defining interface here avoids dependency on internal Cloudflare types
- * - Safe because:
- *   1. AutoRAG is a documented Cloudflare AI feature
- *   2. Interface only used when env.AI exists (runtime check)
- *   3. Errors caught and handled gracefully in try-catch blocks
- *
- * REFERENCE: Cloudflare Workers AI documentation
- */
-export type CloudflareAiBinding = {
-  autorag: (instanceId: string) => {
-    aiSearch: (params: {
-      query: string;
-      max_num_results: number;
-      rewrite_query: boolean;
-      stream: boolean;
-      filters?: {
-        type: string;
-        filters: Array<{
-          key: string;
-          type: string;
-          value: string;
-        }>;
-      };
-    }) => Promise<{ response?: string }>;
-  };
-};
+// ============================================================================
+// Cloudflare AI Search (AutoRAG) Types
+// ============================================================================
+// ✅ SINGLE SOURCE OF TRUTH: Types are defined globally in cloudflare-env.d.ts
+// - ComparisonFilter: Metadata filtering for AutoRAG queries
+// - CompoundFilter: 'and'/'or' combinations of ComparisonFilter
+// - AutoRagAiSearchRequest/Response: Request/response types for aiSearch
+// - AutoRagSearchResponse: Response type for search
+// Reference: https://developers.cloudflare.com/ai-search/
+//
+// These global types are auto-generated by `pnpm cf-typegen` from Cloudflare's
+// Workers types and should NOT be duplicated here.
+// ============================================================================
 
 export type BuildSystemPromptParams = {
   participant: ChatParticipant;
@@ -141,7 +102,8 @@ export type BuildSystemPromptParams = {
   userQuery: string;
   previousDbMessages: ChatMessage[];
   currentRoundNumber: number;
-  env: { AI?: CloudflareAiBinding; UPLOADS_R2_BUCKET?: R2Bucket };
+  /** ✅ SINGLE SOURCE OF TRUTH: Uses global Ai type from cloudflare-env.d.ts */
+  env: { AI?: Ai; UPLOADS_R2_BUCKET?: R2Bucket };
   db: Awaited<ReturnType<typeof getDbAsync>>;
   logger?: TypedLogger;
   /** Upload IDs for attachments in the current user message */
@@ -174,6 +136,8 @@ export type PrepareValidatedMessagesParams = {
 
 export type PrepareValidatedMessagesResult = {
   modelMessages: CoreMessage[];
+  /** Attachment errors that occurred during loading - can be used to warn user via AI response */
+  attachmentErrors?: Array<{ uploadId: string; error: string }>;
 };
 
 // ============================================================================
@@ -250,13 +214,18 @@ export async function loadThreadAttachmentContext(params: {
     }
 
     const messageIds = threadMessages.map(m => m.id);
-    const roundByMessageId = new Map(threadMessages.map(m => [m.id, m.roundNumber]));
+    const roundByMessageId = new Map(
+      threadMessages.map(m => [m.id, m.roundNumber]),
+    );
 
     // Load all message-upload links for this thread's messages
     const messageUploadsRaw = await db
       .select()
       .from(tables.messageUpload)
-      .innerJoin(tables.upload, eq(tables.messageUpload.uploadId, tables.upload.id))
+      .innerJoin(
+        tables.upload,
+        eq(tables.messageUpload.uploadId, tables.upload.id),
+      )
       .where(
         and(
           inArray(tables.messageUpload.messageId, messageIds),
@@ -362,7 +331,9 @@ export async function loadThreadAttachmentContext(params: {
     // ✅ TIMING FIX: Load current message attachments directly by IDs
     // These are NOT yet linked via messageUpload (that happens AFTER streaming completes)
     // Without this, current round's attachments wouldn't be in citation sources
-    const unprocessedAttachmentIds = currentAttachmentIds.filter(id => !processedUploadIds.has(id));
+    const unprocessedAttachmentIds = currentAttachmentIds.filter(
+      id => !processedUploadIds.has(id),
+    );
 
     if (unprocessedAttachmentIds.length > 0) {
       const currentUploads = await db.query.upload.findMany({
@@ -397,12 +368,16 @@ export async function loadThreadAttachmentContext(params: {
                 withContent++;
               }
             } catch (error) {
-              logger?.warn('Failed to extract content from current attachment', {
-                logType: 'operation',
-                operationName: 'loadThreadAttachmentContext',
-                uploadId: upload.id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              });
+              logger?.warn(
+                'Failed to extract content from current attachment',
+                {
+                  logType: 'operation',
+                  operationName: 'loadThreadAttachmentContext',
+                  uploadId: upload.id,
+                  error:
+                    error instanceof Error ? error.message : 'Unknown error',
+                },
+              );
             }
           } else {
             skipped++;
@@ -487,7 +462,9 @@ export async function loadThreadAttachmentContext(params: {
  * @param attachments - Thread attachments with extracted content
  * @returns Formatted prompt section with citation instructions
  */
-function formatThreadAttachmentPrompt(attachments: ThreadAttachmentWithContent[]): string {
+function formatThreadAttachmentPrompt(
+  attachments: ThreadAttachmentWithContent[],
+): string {
   // Map to centralized AttachmentCitationInfo format
   const citationInfos: AttachmentCitationInfo[] = attachments.map(att => ({
     filename: att.filename,
@@ -512,9 +489,9 @@ function formatThreadAttachmentPrompt(attachments: ThreadAttachmentWithContent[]
  * This prevents redundant database queries for subsequent participants (1, 2, 3...)
  *
  * RELOAD STRATEGY:
- * - Participant 0 with providedParticipants: MUST reload (just persisted changes)
- * - Participants 1+ with providedParticipants: Use initial thread.participants (no persistence)
- * - Any participant without providedParticipants: Use initial thread.participants
+ * - Participant 0 with hasPersistedParticipants: MUST reload (just persisted changes)
+ * - Participants 1+ with hasPersistedParticipants: Use initial thread.participants (no persistence)
+ * - Any participant without hasPersistedParticipants: Use initial thread.participants
  *
  * Reference: streaming.handler.ts lines 195-235
  *
@@ -524,11 +501,18 @@ function formatThreadAttachmentPrompt(attachments: ThreadAttachmentWithContent[]
 export async function loadParticipantConfiguration(
   params: LoadParticipantConfigParams,
 ): Promise<LoadParticipantConfigResult> {
-  const { threadId, participantIndex, providedParticipants, thread, db, logger } = params;
+  const {
+    threadId,
+    participantIndex,
+    hasPersistedParticipants,
+    thread,
+    db,
+    logger,
+  } = params;
 
   let participants: ChatParticipant[];
 
-  if (providedParticipants && participantIndex === 0) {
+  if (hasPersistedParticipants && participantIndex === 0) {
     // PARTICIPANT 0 ONLY: Reload from database after persistence
     logger?.info('Reloading participants after persistence', {
       logType: 'operation',
@@ -564,7 +548,9 @@ export async function loadParticipantConfiguration(
   // Get SINGLE Participant (frontend orchestration)
   const participant = participants[participantIndex];
   if (!participant) {
-    throw createError.badRequest(`Participant at index ${participantIndex} not found`);
+    throw createError.badRequest(
+      `Participant at index ${participantIndex} not found`,
+    );
   }
 
   return { participants, participant };
@@ -592,15 +578,26 @@ export async function loadParticipantConfiguration(
 export async function buildSystemPromptWithContext(
   params: BuildSystemPromptParams,
 ): Promise<BuildSystemPromptResult> {
-  const { participant, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds } = params;
+  const {
+    participant,
+    thread,
+    userQuery,
+    previousDbMessages,
+    currentRoundNumber,
+    env,
+    db,
+    logger,
+    attachmentIds,
+  } = params;
 
   // Initialize citation tracking
   let citationSourceMap: CitationSourceMap = new Map();
   let citableSources: CitableSource[] = [];
 
   // Start with base system prompt (pass mode for mode-specific interaction styles)
-  let systemPrompt = participant.settings?.systemPrompt
-    || buildParticipantSystemPrompt(participant.role, thread.mode);
+  let systemPrompt
+    = participant.settings?.systemPrompt
+      || buildParticipantSystemPrompt(participant.role, thread.mode);
 
   // Add project-based context
   if (thread.projectId && userQuery.trim()) {
@@ -615,41 +612,116 @@ export async function buildSystemPromptWithContext(
           systemPrompt = `${systemPrompt}\n\n## Project Instructions\n\n${project.customInstructions}`;
         }
 
-        // Add AutoRAG context
+        // Add AutoRAG context from Cloudflare AI Search
         if (project.autoragInstanceId && env.AI) {
           try {
             /**
-             * Cloudflare AI AutoRAG retrieval
+             * Cloudflare AI Search (AutoRAG) retrieval
              *
-             * TYPE SAFETY:
-             * - env.AI is typed as CloudflareAiBinding (defined above)
-             * - autorag() and aiSearch() are now fully typed
-             * - No type assertion needed - interface provides compile-time safety
+             * Uses folder-based multitenancy pattern from Cloudflare docs:
+             * - Filter by r2FolderPrefix to scope search to project's files
+             * - "Starts with" filter using gt/lte pattern for prefix matching
+             *
+             * Pattern explanation (per Cloudflare docs):
+             * - gt('prefix//') captures paths starting after the prefix (excludes exact prefix match)
+             * - lte('prefix/z') captures paths up to 'z' which covers all alphanumeric subpaths
+             *
+             * Reference: https://developers.cloudflare.com/ai-search/how-to/multitenancy/
              */
-            const ragResponse = await env.AI.autorag(project.autoragInstanceId).aiSearch({
+            const ragResponse = await env.AI.autorag(
+              project.autoragInstanceId,
+            ).aiSearch({
               query: userQuery,
               max_num_results: 5,
               rewrite_query: true,
               stream: false,
+              // Enable reranking for better relevance (per Cloudflare best practices)
+              reranking: {
+                enabled: true,
+                model: '@cf/baai/bge-reranker-base',
+              },
+              // Score threshold for quality control
+              ranking_options: {
+                score_threshold: 0.3,
+              },
+              // Multitenancy: Filter to project's folder using "starts with" pattern
               filters: {
                 type: 'and',
                 filters: [
-                  { key: 'folder', type: 'gte', value: project.r2FolderPrefix },
-                  { key: 'folder', type: 'lte', value: `${project.r2FolderPrefix}~` },
+                  {
+                    key: 'folder',
+                    type: 'gt',
+                    value: `${project.r2FolderPrefix}//`,
+                  },
+                  {
+                    key: 'folder',
+                    type: 'lte',
+                    value: `${project.r2FolderPrefix}/z`,
+                  },
                 ],
               },
             });
 
-            if (ragResponse.response) {
-              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Files)\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from uploaded project files when relevant to the conversation. Provide natural, coherent responses.`;
+            // Build context from search results with proper citations
+            if (ragResponse.data && ragResponse.data.length > 0) {
+              // Format source files with citations for AI to reference
+              // AND add to citation source map for proper resolution
+              const sourceFiles = ragResponse.data
+                .map((result) => {
+                  const contentText = result.content
+                    .filter(c => c.type === 'text')
+                    .map(c => c.text)
+                    .join('\n');
+                  const score = (result.score * 100).toFixed(1);
+                  const citationId = `${CitationSourcePrefixes[CitationSourceTypes.RAG]}_${result.file_id.slice(0, 8)}`;
+
+                  // Add RAG result to citation sources for proper resolution
+                  const ragSource: CitableSource = {
+                    id: citationId,
+                    type: CitationSourceTypes.RAG,
+                    sourceId: result.file_id,
+                    title: result.filename,
+                    content:
+                      contentText.slice(0, 500)
+                      + (contentText.length > 500 ? '...' : ''),
+                    metadata: {
+                      filename: result.filename,
+                    },
+                  };
+                  citableSources.push(ragSource);
+                  citationSourceMap.set(citationId, ragSource);
+
+                  return `[${citationId}] **${result.filename}** (${score}% match):\n${contentText}`;
+                })
+                .join('\n\n---\n\n');
+
+              // Add both synthesized response and source files
+              const ragContext = ragResponse.response
+                ? `### AI Summary\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
+                : `### Relevant Files\n${sourceFiles}`;
+
+              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\nUse the above knowledge from indexed project files when relevant. Cite sources using [rag_xxxxx] markers when referencing specific files.`;
+
+              logger?.info('AutoRAG retrieved context', {
+                logType: 'operation',
+                operationName: 'buildSystemPromptWithContext',
+                projectId: thread.projectId,
+                resultCount: ragResponse.data.length,
+                hasAiResponse: !!ragResponse.response,
+                citableSourcesAdded: ragResponse.data.length,
+              });
+            } else if (ragResponse.response) {
+              // Fallback: Only synthesized response available (no source files)
+              systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Files)\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from uploaded project files when relevant to the conversation.`;
             }
           } catch (error) {
             logger?.warn('AutoRAG retrieval failed', {
               logType: 'operation',
               operationName: 'buildSystemPromptWithContext',
               projectId: thread.projectId,
-              error,
+              error: error instanceof Error ? error.message : String(error),
             });
+            // Continue without RAG context - don't fail the request
           }
         }
 
@@ -779,6 +851,186 @@ export async function buildSystemPromptWithContext(
 // ============================================================================
 
 /**
+ * File data entry for post-processing model messages
+ * Stores the actual file binary data for injection into CoreMessage file parts
+ */
+type FileDataEntry = {
+  data: Uint8Array;
+  mimeType: string;
+  filename?: string;
+};
+
+// ✅ REMOVED: ModelFilePartWithData type and isModelFilePartWithData function
+// Now imported from '@/api/services/attachment-content.service' (single source of truth)
+
+/**
+ * Collect file data from UIMessage parts for post-processing
+ *
+ * This extracts file data (Uint8Array) from our ModelFilePart objects
+ * so we can inject it into CoreMessage file parts after convertToModelMessages.
+ *
+ * @param messages - UIMessages with potential ModelFilePart objects
+ * @returns Map of filename → file data entries
+ */
+function collectFileDataFromMessages(
+  messages: UIMessage[],
+): Map<string, FileDataEntry> {
+  const fileDataMap = new Map<string, FileDataEntry>();
+
+  for (const msg of messages) {
+    if (!Array.isArray(msg.parts))
+      continue;
+
+    for (const part of msg.parts) {
+      // ✅ TYPE-SAFE: Use type guard instead of `as Record<string, unknown>` casts
+      if (isModelFilePartWithData(part)) {
+        // Key by filename if available, otherwise use mimeType
+        const key
+          = part.filename || `file_${part.mimeType}_${fileDataMap.size}`;
+
+        fileDataMap.set(key, {
+          data: part.data,
+          mimeType: part.mimeType,
+          filename: part.filename,
+        });
+      }
+    }
+  }
+
+  return fileDataMap;
+}
+
+/**
+ * Post-process model messages to inject file data
+ *
+ * The convertToModelMessages function from AI SDK may not correctly handle
+ * data URLs or our custom data property. This function ensures file parts
+ * have the correct data format for the OpenRouter provider.
+ *
+ * The OpenRouter provider's getFileUrl() expects part.data as Uint8Array:
+ * ```
+ * if (part.data instanceof Uint8Array) {
+ *   const base64 = convertUint8ArrayToBase64(part.data);
+ *   return `data:${part.mediaType ?? defaultMediaType};base64,${base64}`;
+ * }
+ * ```
+ *
+ * @param modelMessages - CoreMessage array from convertToModelMessages
+ * @param fileDataMap - Map of filename → file data from collectFileDataFromMessages
+ * @returns Model messages with properly formatted file parts
+ */
+function injectFileDataIntoModelMessages(
+  modelMessages: CoreMessage[],
+  fileDataMap: Map<string, FileDataEntry>,
+): CoreMessage[] {
+  if (fileDataMap.size === 0) {
+    return modelMessages;
+  }
+
+  return modelMessages.map((msg) => {
+    // Only process user messages (they contain file attachments)
+    if (msg.role !== 'user' || !Array.isArray(msg.content)) {
+      return msg;
+    }
+
+    let fileIndex = 0;
+    const newContent = msg.content
+      .map((part) => {
+        if (part.type !== 'file') {
+          return part;
+        }
+
+        // Try to find matching file data
+        // First try by filename if available in the part
+        let fileData: FileDataEntry | undefined;
+
+        // Check if the part has a filename we can match
+        // ✅ TYPE-SAFE: Use utility function instead of force cast
+        const partFilename = getFilenameFromPart(part);
+        if (partFilename && fileDataMap.has(partFilename)) {
+          fileData = fileDataMap.get(partFilename);
+        }
+
+        // If no filename match, try to match by index/mimeType
+        if (!fileData) {
+          // ✅ TYPE-SAFE: Use utility function instead of force cast
+          const mimeType = getMimeTypeFromPart(part);
+          const fallbackKey = `file_${mimeType}_${fileIndex}`;
+          fileData = fileDataMap.get(fallbackKey);
+
+          // If still no match, try iterating through the map
+          if (!fileData) {
+            const entries = Array.from(fileDataMap.values());
+            if (fileIndex < entries.length) {
+              fileData = entries[fileIndex];
+            }
+          }
+        }
+
+        fileIndex++;
+
+        if (fileData) {
+          // Return a properly formatted file part with Uint8Array data
+          // This is what OpenRouter provider's getFileUrl() expects
+          // ✅ FIX: Include BOTH mediaType and mimeType for maximum compatibility
+          // - AI SDK v5 uses 'mediaType' in FilePart type
+          // - Some providers may still check 'mimeType' internally
+          // - filename is needed by OpenRouter provider for the file object
+          // ✅ CRITICAL FIX: Include data URL for provider validation compatibility
+          // Some providers (Gemini via OpenRouter) validate the url field before checking
+          // if data exists. Without url, they fall back to filename and fail validation
+          // with "Invalid file URL: {filename}" error.
+          const base64 = uint8ArrayToBase64(fileData.data);
+          return {
+            type: 'file' as const,
+            data: fileData.data,
+            url: `data:${fileData.mimeType};base64,${base64}`, // For provider validation
+            mediaType: fileData.mimeType,
+            mimeType: fileData.mimeType, // Backward compatibility
+            filename: fileData.filename, // OpenRouter uses this for file.filename
+          };
+        }
+
+        // If no file data found, check if original part has valid URL
+        // ✅ FIX: Filter out file parts with invalid URLs to prevent "Invalid file URL: filename" errors
+        // Some AI providers (OpenRouter/Gemini/GPT-4o) validate URLs before checking data
+        // If URL is empty/invalid and we don't have binary data, the provider may use filename as URL
+        // ✅ TYPE-SAFE: Use utility function instead of force cast
+        const partUrl = getUrlFromPart(part);
+        const hasValidUrl
+          = partUrl
+            && (partUrl.startsWith('data:') // base64 data URL
+              || partUrl.startsWith('http://') // HTTP URL (though these usually fail for AI providers)
+              || partUrl.startsWith('https://')); // HTTPS URL
+
+        if (!hasValidUrl) {
+          // Invalid URL and no binary data - log error and filter out this part
+          // ✅ TYPE-SAFE: Use utility function instead of force cast
+          const logFilename = getFilenameFromPart(part) ?? 'unknown';
+          console.error(
+            '[AI Streaming] Filtering out file part with invalid URL:',
+            {
+              filename: logFilename,
+              url: partUrl || '(empty)',
+              reason:
+                'No valid data URL/HTTP URL and no matching binary data in fileDataMap',
+            },
+          );
+          return null; // Will be filtered out below
+        }
+
+        return part;
+      })
+      .filter((part): part is NonNullable<typeof part> => part !== null);
+
+    return {
+      ...msg,
+      content: newContent,
+    };
+  });
+}
+
+/**
  * Prepare and validate messages for streaming
  *
  * This function:
@@ -786,7 +1038,8 @@ export async function buildSystemPromptWithContext(
  * 2. Validates all messages with AI SDK
  * 3. Filters out empty messages
  * 4. Converts to model messages format
- * 5. Ensures conversation ends with user message
+ * 5. Post-processes to inject file data for OpenRouter compatibility
+ * 6. Ensures conversation ends with user message
  *
  * Reference: streaming.handler.ts lines 247-593
  *
@@ -796,7 +1049,14 @@ export async function buildSystemPromptWithContext(
 export async function prepareValidatedMessages(
   params: PrepareValidatedMessagesParams,
 ): Promise<PrepareValidatedMessagesResult> {
-  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds } = params;
+  const {
+    previousDbMessages,
+    newMessage,
+    logger,
+    r2Bucket,
+    db,
+    attachmentIds,
+  } = params;
 
   // Convert database messages to UIMessage format
   const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
@@ -817,10 +1077,24 @@ export async function prepareValidatedMessages(
       if (fileParts.length > 0) {
         // Inject file parts at the beginning of the message parts
         // This ensures images are seen by the model before the text prompt
-        const existingParts = Array.isArray(newMessage.parts) ? newMessage.parts : [];
+        const existingParts = Array.isArray(newMessage.parts)
+          ? newMessage.parts
+          : [];
+
+        // ✅ BUG FIX: Filter out file parts from existingParts to prevent duplicates
+        // The frontend sends file parts with HTTP localhost URLs (e.g., http://localhost:3000/api/v1/uploads/...)
+        // We've loaded base64 data URLs via loadAttachmentContent - these REPLACE the HTTP URL versions
+        // Without this filter, the message would have BOTH:
+        // 1. Base64 data URLs (correct, accessible by AI providers)
+        // 2. HTTP localhost URLs (incorrect, AI providers cannot access localhost)
+        // AI providers may use the HTTP URLs and fail with DNS errors like "URL_ERROR-ERROR_DNS"
+        const nonFileParts = existingParts.filter(
+          part => part.type !== 'file',
+        );
+
         messageWithAttachments = {
           ...newMessage,
-          parts: [...fileParts, ...existingParts],
+          parts: [...fileParts, ...nonFileParts],
         };
 
         logger?.info('Injected file parts into message for AI model', {
@@ -832,6 +1106,12 @@ export async function prepareValidatedMessages(
       }
 
       if (errors.length > 0) {
+        // ✅ ALWAYS log attachment errors to console for debugging
+        console.error('[Streaming] Some attachments failed to load:', {
+          errorCount: errors.length,
+          errors: errors.slice(0, 5), // Limit to first 5 for console readability
+          attachmentIds,
+        });
         logger?.warn('Some attachments failed to load', {
           logType: 'operation',
           operationName: 'prepareValidatedMessages',
@@ -839,6 +1119,12 @@ export async function prepareValidatedMessages(
         });
       }
     } catch (error) {
+      // ✅ ALWAYS log critical errors to console
+      console.error('[Streaming] Failed to load attachment content:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        attachmentIds,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       // Don't fail the entire request if attachment loading fails
       // The AI can still respond without the images
       logger?.error('Failed to load attachment content', {
@@ -850,8 +1136,521 @@ export async function prepareValidatedMessages(
     }
   }
 
-  // Validate all messages
-  const allMessages = [...previousMessages, messageWithAttachments];
+  // ✅ PARTICIPANT 1+ FIX: Handle newMessage with HTTP URLs when attachmentIds is not provided
+  // BUG FIX: Frontend only sends attachmentIds to participant 0. Participant 1+ receives
+  // newMessage with HTTP localhost URLs (e.g., http://localhost:3000/api/v1/uploads/...)
+  // These URLs are inaccessible to AI providers, causing "Invalid file URL: filename" errors.
+  //
+  // The fix: Extract uploadIds from HTTP URLs in newMessage and load base64 from R2 (or local filesystem in dev).
+  // NOTE: r2Bucket can be undefined in local dev - storage.service.ts handles this via filesystem fallback.
+  if ((!attachmentIds || attachmentIds.length === 0) && db) {
+    const existingParts = Array.isArray(newMessage.parts)
+      ? newMessage.parts
+      : [];
+    const httpUrlFileParts = existingParts.filter((part) => {
+      if (part.type !== 'file' || !('url' in part))
+        return false;
+      const url = part.url as string;
+      // Match HTTP URLs that contain /uploads/ path (our upload URLs)
+      return (
+        url
+        && (url.startsWith('http://') || url.startsWith('https://'))
+        && url.includes('/uploads/')
+      );
+    });
+
+    if (httpUrlFileParts.length > 0) {
+      // Extract uploadIds from HTTP URLs
+      // URL format: http://localhost:3000/api/v1/uploads/UPLOAD_ID/download?...
+      const uploadIdsFromUrls = httpUrlFileParts
+        .map((part) => {
+          const url = ('url' in part ? part.url : '') as string;
+          const match = url.match(/\/uploads\/([A-Z0-9]+)\//i);
+          return match?.[1];
+        })
+        .filter((id): id is string => id !== null && id !== undefined);
+
+      if (uploadIdsFromUrls.length > 0) {
+        logger?.debug(
+          'Participant 1+ detected HTTP URLs in newMessage, extracting uploadIds',
+          {
+            logType: 'operation',
+            operationName: 'prepareValidatedMessages',
+            uploadIdsCount: uploadIdsFromUrls.length,
+            uploadIds: uploadIdsFromUrls,
+          },
+        );
+
+        try {
+          const { fileParts, errors, stats } = await loadAttachmentContent({
+            attachmentIds: uploadIdsFromUrls,
+            r2Bucket,
+            db,
+            logger,
+          });
+
+          if (fileParts.length > 0) {
+            // Replace HTTP URL file parts with base64 versions
+            const nonFileParts = existingParts.filter(
+              part => part.type !== 'file',
+            );
+
+            messageWithAttachments = {
+              ...newMessage,
+              parts: [...fileParts, ...nonFileParts],
+            };
+
+            logger?.info(
+              'Converted HTTP URL file parts to base64 for participant 1+',
+              {
+                logType: 'operation',
+                operationName: 'prepareValidatedMessages',
+                filePartsCount: fileParts.length,
+                stats,
+              },
+            );
+          }
+
+          if (errors.length > 0) {
+            console.error(
+              '[Streaming] Some participant 1+ attachments failed to load:',
+              {
+                errorCount: errors.length,
+                errors: errors.slice(0, 5),
+                uploadIds: uploadIdsFromUrls,
+              },
+            );
+          }
+        } catch (error) {
+          console.error(
+            '[Streaming] Failed to load participant 1+ attachment content:',
+            {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              uploadIds: uploadIdsFromUrls,
+              stack: error instanceof Error ? error.stack : undefined,
+            },
+          );
+        }
+      }
+    }
+
+    // ✅ ADDITIONAL FIX: Handle file parts with uploadId property but empty/invalid URLs
+    // BUG FIX: Frontend sends file parts with uploadId but url may be empty (att.previewUrl || '')
+    // The HTTP URL check above fails for empty URLs, so we need a direct uploadId extraction.
+    // This handles optimistic messages where previewUrl is not available.
+    if (messageWithAttachments === newMessage) {
+      // messageWithAttachments wasn't updated by HTTP URL check, try uploadId fallback
+      // ✅ TYPE-SAFE: Use getUploadIdFromFilePart which handles both direct uploadId and URL extraction
+      const uploadIdsFromParts: string[] = [];
+
+      for (const part of existingParts) {
+        if (!isFilePart(part)) {
+          continue;
+        }
+        const uploadId = getUploadIdFromFilePart(part);
+        if (uploadId) {
+          uploadIdsFromParts.push(uploadId);
+        }
+      }
+
+      if (uploadIdsFromParts.length > 0) {
+        logger?.debug(
+          'Participant 1+ detected uploadId on file parts, loading content directly',
+          {
+            logType: 'operation',
+            operationName: 'prepareValidatedMessages',
+            uploadIdsCount: uploadIdsFromParts.length,
+            uploadIds: uploadIdsFromParts,
+          },
+        );
+
+        try {
+          const { fileParts, errors, stats } = await loadAttachmentContent({
+            attachmentIds: uploadIdsFromParts,
+            r2Bucket,
+            db,
+            logger,
+          });
+
+          if (fileParts.length > 0) {
+            const nonFileParts = existingParts.filter(
+              part => part.type !== 'file',
+            );
+
+            messageWithAttachments = {
+              ...newMessage,
+              parts: [...fileParts, ...nonFileParts],
+            };
+
+            logger?.info(
+              'Converted uploadId file parts to base64 for participant 1+',
+              {
+                logType: 'operation',
+                operationName: 'prepareValidatedMessages',
+                filePartsCount: fileParts.length,
+                stats,
+              },
+            );
+          }
+
+          if (errors.length > 0) {
+            console.error(
+              '[Streaming] Some participant 1+ uploadId attachments failed to load:',
+              {
+                errorCount: errors.length,
+                errors: errors.slice(0, 5),
+                uploadIds: uploadIdsFromParts,
+              },
+            );
+          }
+        } catch (error) {
+          console.error(
+            '[Streaming] Failed to load participant 1+ uploadId attachment content:',
+            {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              uploadIds: uploadIdsFromParts,
+              stack: error instanceof Error ? error.stack : undefined,
+            },
+          );
+        }
+      }
+    }
+  }
+
+  // ✅ MULTI-PARTICIPANT FIX: Load attachment content for ALL previous messages
+  // BUG FIX: Participant 0 gets attachmentIds and loads base64 content. But participant 1+
+  // loads messages from DB which have HTTP signed URLs (not base64).
+  // Many AI providers (especially OpenAI via OpenRouter) require base64 data URLs, not HTTP URLs.
+  // This ensures all participants receive file content in the correct format.
+  //
+  // ✅ CRITICAL FIX (Round 0): Also check user messages that might have attachments in the
+  // messageUpload junction table even if they don't have file parts stored in the message.
+  // This happens during thread creation where user message is stored with only text parts
+  // but attachments are linked via messageUpload table.
+  //
+  // The fix:
+  // 1. Find messages with file parts that have HTTP URLs (not base64 data URLs)
+  // 2. ALSO include all user messages (they might have attachments in junction table)
+  // 3. Load their actual content via messageUpload junction table
+  // 4. Replace/add file parts with base64 data URLs
+  let messagesWithBase64 = previousMessages;
+
+  // NOTE: r2Bucket can be undefined in local dev - storage.service.ts handles this via filesystem fallback
+  if (db) {
+    try {
+      // Find message IDs that MIGHT have attachments:
+      // 1. Messages with file parts containing HTTP URLs (need conversion)
+      // 2. ALL user messages (might have attachments in junction table even without file parts)
+      const messageIdsToCheck = previousMessages
+        .filter((msg) => {
+          // Always check user messages - they might have attachments in junction table
+          // even if the message parts don't include file parts (e.g., round 0 thread creation)
+          if (msg.role === 'user') {
+            return true;
+          }
+
+          // Also check messages with HTTP URL file parts
+          if (!Array.isArray(msg.parts))
+            return false;
+          return msg.parts.some((part) => {
+            if (part.type !== 'file' || !('url' in part))
+              return false;
+            const url = part.url as string;
+            // HTTP URLs need conversion, data URLs are already base64
+            return (
+              url
+              && !url.startsWith('data:')
+              && (url.startsWith('http://') || url.startsWith('https://'))
+            );
+          });
+        })
+        .map(msg => msg.id);
+
+      logger?.debug('Checking messages for attachment conversion', {
+        logType: 'operation',
+        operationName: 'prepareValidatedMessages',
+        messageIdsToCheck,
+        totalPreviousMessages: previousMessages.length,
+        userMessages: previousMessages
+          .filter(m => m.role === 'user')
+          .map(m => ({
+            id: m.id,
+            hasFileParts:
+              Array.isArray(m.parts) && m.parts.some(p => p.type === 'file'),
+            filePartUrls: Array.isArray(m.parts)
+              ? m.parts
+                  .filter(p => p.type === 'file')
+                  .map(p =>
+                    'url' in p ? (p.url as string).substring(0, 50) : 'no-url',
+                  )
+              : [],
+          })),
+      });
+
+      if (messageIdsToCheck.length > 0) {
+        const { filePartsByMessageId, errors, stats }
+          = await loadMessageAttachments({
+            messageIds: messageIdsToCheck,
+            r2Bucket,
+            db,
+            logger,
+          });
+
+        if (filePartsByMessageId.size > 0) {
+          // Replace HTTP URL file parts with base64 data URL versions
+          // OR add file parts for messages that have attachments in junction table but no file parts
+          messagesWithBase64 = previousMessages.map((msg) => {
+            const base64Parts = filePartsByMessageId.get(msg.id);
+            if (!base64Parts || base64Parts.length === 0) {
+              return msg;
+            }
+
+            const currentParts = Array.isArray(msg.parts) ? msg.parts : [];
+
+            // Check if message has ANY file parts
+            const hasFileParts = currentParts.some(
+              part => part.type === 'file',
+            );
+
+            if (!hasFileParts) {
+              // ✅ CRITICAL FIX (Round 0): Message has no file parts but has attachments in junction table
+              // This happens during thread creation where user message is stored with only text parts
+              // Add the base64 file parts at the beginning (before text) for proper multimodal processing
+              return {
+                ...msg,
+                parts: [...base64Parts, ...currentParts],
+              };
+            }
+
+            // ✅ CRITICAL FIX (Participant 1+): Replace ALL file parts with base64 versions
+            // Previous approach tried to match file parts by filename/mediaType, but this could fail
+            // if there were any differences (whitespace, encoding, etc.), leaving invalid URLs.
+            //
+            // New approach: When we have base64 parts from junction table, use ONLY those.
+            // Keep non-file parts (text, reasoning) in their original position, then add base64 file parts.
+            const nonFileParts = currentParts.filter(
+              part => part.type !== 'file',
+            );
+
+            // Check if any existing file part is already a valid data URL (don't replace those)
+            const existingDataUrlParts = currentParts.filter((part) => {
+              if (part.type !== 'file') {
+                return false;
+              }
+              const partUrl = 'url' in part ? part.url : '';
+              return typeof partUrl === 'string' && partUrl.startsWith('data:');
+            });
+
+            // Combine: base64 parts + existing data URL parts + non-file parts
+            // Files go first for proper multimodal processing
+            return {
+              ...msg,
+              parts: [...base64Parts, ...existingDataUrlParts, ...nonFileParts],
+            };
+          });
+
+          logger?.info(
+            'Converted HTTP file URLs to base64 for previous messages',
+            {
+              logType: 'operation',
+              operationName: 'prepareValidatedMessages',
+              messagesConverted: filePartsByMessageId.size,
+              stats,
+            },
+          );
+        }
+
+        if (errors.length > 0) {
+          logger?.warn('Some previous message attachments failed to load', {
+            logType: 'operation',
+            operationName: 'prepareValidatedMessages',
+            errors: errors.slice(0, 5), // Limit to first 5 errors
+          });
+        }
+      } else {
+        // ✅ CRITICAL DEBUG: Log when no messages to check
+        console.error(
+          '[prepareValidatedMessages] No messages to check for attachments:',
+          {
+            messageIdsToCheckLength: messageIdsToCheck.length,
+            previousMessagesCount: previousMessages.length,
+            userMessageCount: previousMessages.filter(m => m.role === 'user')
+              .length,
+            reason:
+              previousMessages.length === 0
+                ? 'No previous messages'
+                : 'No user messages or file-containing messages found',
+          },
+        );
+      }
+    } catch (error) {
+      // Don't fail if previous message attachment loading fails
+      // The AI can still respond without historical attachments
+      logger?.warn('Failed to load previous message attachments', {
+        logType: 'operation',
+        operationName: 'prepareValidatedMessages',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  // ✅ FIX: Deduplicate user messages to prevent blob URL issues
+  // BUG FIX: For participant 1+, the frontend sends user message with blob/empty URLs,
+  // but the DB already has the proper user message (created by participant 0).
+  // Without deduplication, OpenRouter receives both messages - one with invalid URLs.
+  // The fix: Only add newMessage if it doesn't already exist in DB messages.
+  //
+  // Detection: Check if a user message with the same round number already exists.
+  // The DB message has proper signed URLs, so we should use that instead.
+  // ✅ TYPE-SAFE: Use getRoundNumber utility instead of inline type casts
+  const newMessageRoundNumber = getRoundNumber(newMessage?.metadata);
+  const newMessageRole = newMessage?.role;
+
+  const isDuplicateUserMessage
+    = newMessageRoundNumber !== null
+      && newMessageRole === UIMessageRoles.USER
+      && messagesWithBase64.some((dbMsg) => {
+        const dbRound = getRoundNumber(dbMsg.metadata);
+        return (
+          dbMsg.role === UIMessageRoles.USER && dbRound === newMessageRoundNumber
+        );
+      });
+
+  // Only include newMessage if it's not a duplicate
+  const allMessages = isDuplicateUserMessage
+    ? messagesWithBase64 // Use DB messages only (they have proper URLs)
+    : [...messagesWithBase64, messageWithAttachments]; // Include frontend message
+
+  if (isDuplicateUserMessage) {
+    logger?.debug(
+      'Skipping duplicate user message with potentially invalid URLs',
+      {
+        logType: 'operation',
+        operationName: 'prepareValidatedMessages',
+        roundNumber: newMessageRoundNumber,
+        reason: 'DB already has user message with proper signed URLs',
+      },
+    );
+  }
+
+  // ✅ CRITICAL FIX: Collect file data from BOTH sources
+  // 1. messageWithAttachments: Has freshly loaded file data from R2 (Uint8Array)
+  // 2. allMessages: May have file data from previous messages
+  //
+  // BUG FIX: When isDuplicateUserMessage is true, allMessages uses the DB message
+  // which has file parts WITHOUT Uint8Array data. We must ALWAYS collect from
+  // messageWithAttachments (which has the backend-loaded data) and merge.
+  //
+  // The AI SDK's validateUIMessages strips custom properties like `data: Uint8Array`,
+  // so we must collect BEFORE validation and inject AFTER convertToModelMessages.
+  const fileDataFromNewMessage = collectFileDataFromMessages([
+    messageWithAttachments,
+  ]);
+  const fileDataFromHistory = collectFileDataFromMessages(allMessages);
+
+  // Check if file data needs to be loaded via fallback
+  const newMessageFileParts = Array.isArray(messageWithAttachments.parts)
+    ? messageWithAttachments.parts.filter(p => p.type === 'file')
+    : [];
+
+  // Log warning if file parts exist but no file data was collected (indicates loading issue)
+  if (
+    newMessageFileParts.length > 0
+    && fileDataFromNewMessage.size === 0
+    && fileDataFromHistory.size === 0
+  ) {
+    logger?.warn('File parts detected but no file data collected', {
+      logType: 'operation',
+      operationName: 'prepareValidatedMessages',
+      filePartsCount: newMessageFileParts.length,
+      isDuplicateUserMessage,
+      attachmentIdsCount: attachmentIds?.length ?? 0,
+    });
+  }
+
+  // FALLBACK: If file data wasn't loaded properly, try loading directly using uploadId
+  // File parts saved to DB (and from frontend) include uploadId, so we can use that as a fallback
+  // This handles cases where:
+  // 1. loadMessageAttachments junction table query didn't find records
+  // 2. messageWithAttachments has file parts with uploadId but loadAttachmentContent wasn't called
+  // NOTE: r2Bucket can be undefined in local dev - storage.service.ts handles this via filesystem fallback
+  const needsFallback
+    = fileDataFromHistory.size === 0 && fileDataFromNewMessage.size === 0 && db;
+
+  if (needsFallback) {
+    const uploadIdsFromFileParts: string[] = [];
+
+    // Check both allMessages AND messageWithAttachments (in case it's not in allMessages)
+    const messagesToCheck = [...allMessages];
+    if (!allMessages.includes(messageWithAttachments)) {
+      messagesToCheck.push(messageWithAttachments);
+    }
+
+    for (const msg of messagesToCheck) {
+      if (!Array.isArray(msg.parts)) {
+        continue;
+      }
+      for (const part of msg.parts) {
+        // Use type guard for type-safe file part detection
+        if (isFilePart(part)) {
+          const uploadId = getUploadIdFromFilePart(part);
+          if (uploadId) {
+            uploadIdsFromFileParts.push(uploadId);
+          }
+        }
+      }
+    }
+
+    if (uploadIdsFromFileParts.length > 0) {
+      try {
+        const { fileParts: loadedParts } = await loadAttachmentContent({
+          attachmentIds: uploadIdsFromFileParts,
+          r2Bucket,
+          db,
+          logger,
+        });
+
+        // Collect file data from the loaded parts
+        for (const part of loadedParts) {
+          if (
+            'data' in part
+            && part.data instanceof Uint8Array
+            && 'mimeType' in part
+          ) {
+            const filename
+              = 'filename' in part ? (part.filename as string) : undefined;
+            const key
+              = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
+            fileDataFromHistory.set(key, {
+              data: part.data,
+              mimeType: part.mimeType,
+              filename,
+            });
+          }
+        }
+
+        logger?.info('Loaded file data via uploadId fallback', {
+          logType: 'operation',
+          operationName: 'prepareValidatedMessages',
+          uploadIdsCount: uploadIdsFromFileParts.length,
+          loadedCount: fileDataFromHistory.size,
+        });
+      } catch (error) {
+        logger?.warn('Fallback file data loading failed', {
+          logType: 'operation',
+          operationName: 'prepareValidatedMessages',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  }
+
+  // Merge: new message data takes precedence (more recently loaded)
+  const fileDataMap = new Map([
+    ...fileDataFromHistory,
+    ...fileDataFromNewMessage,
+  ]);
+
   let typedMessages: UIMessage[] = [];
 
   try {
@@ -872,6 +1671,19 @@ export async function prepareValidatedMessages(
     throw createError.badRequest('No valid messages to send to AI model');
   }
 
+  // ✅ OPENROUTER FIX: File data was collected BEFORE validateUIMessages above
+  // This ensures the custom `data: Uint8Array` property is captured before
+  // the AI SDK strips it out during validation.
+
+  if (fileDataMap.size > 0) {
+    logger?.debug('Collected file data for post-processing', {
+      logType: 'operation',
+      operationName: 'prepareValidatedMessages',
+      fileCount: fileDataMap.size,
+      filenames: Array.from(fileDataMap.keys()),
+    });
+  }
+
   // Convert to model messages
   let modelMessages;
   try {
@@ -883,17 +1695,41 @@ export async function prepareValidatedMessages(
     );
   }
 
+  // ✅ OPENROUTER FIX: Process file parts in model messages
+  // The OpenRouter provider's getFileUrl() expects part.data as Uint8Array
+  // This ensures file parts have the correct format for all AI providers
+  // ✅ IMPORTANT: ALWAYS call this function (not just when fileDataMap has entries)
+  // When fileDataMap is empty but messages have file parts with invalid URLs,
+  // those file parts need to be filtered out to prevent "Invalid file URL: filename" errors
+  modelMessages = injectFileDataIntoModelMessages(modelMessages, fileDataMap);
+
+  if (fileDataMap.size > 0) {
+    logger?.debug('Injected file data into model messages', {
+      logType: 'operation',
+      operationName: 'prepareValidatedMessages',
+      processedMessageCount: modelMessages.length,
+    });
+  }
+
   // Ensure conversation ends with user message
   const lastModelMessage = modelMessages[modelMessages.length - 1];
   if (!lastModelMessage || lastModelMessage.role !== UIMessageRoles.USER) {
-    const lastUserMessage = nonEmptyMessages.findLast(m => m.role === UIMessageRoles.USER);
+    const lastUserMessage = nonEmptyMessages.findLast(
+      m => m.role === UIMessageRoles.USER,
+    );
     if (!lastUserMessage) {
-      throw createError.badRequest('No valid user message found in conversation history');
+      throw createError.badRequest(
+        'No valid user message found in conversation history',
+      );
     }
 
-    const lastUserText = lastUserMessage.parts?.find(p => p.type === 'text' && 'text' in p);
+    const lastUserText = lastUserMessage.parts?.find(
+      p => p.type === 'text' && 'text' in p,
+    );
     if (!lastUserText || !('text' in lastUserText)) {
-      throw createError.badRequest('Last user message has no valid text content');
+      throw createError.badRequest(
+        'Last user message has no valid text content',
+      );
     }
 
     modelMessages = convertToModelMessages([
@@ -918,11 +1754,12 @@ export async function prepareValidatedMessages(
  * @returns User query text or empty string
  */
 export function extractUserQuery(messages: UIMessage[]): string {
-  const lastUserMessage = messages.findLast(m => m.role === UIMessageRoles.USER);
+  const lastUserMessage = messages.findLast(
+    m => m.role === UIMessageRoles.USER,
+  );
   if (!lastUserMessage)
     return '';
 
-  return extractTextFromParts(
-    lastUserMessage.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>,
-  );
+  // ✅ TYPE-SAFE: Use extractTextFromMessage utility instead of force cast
+  return extractTextFromMessage(lastUserMessage);
 }

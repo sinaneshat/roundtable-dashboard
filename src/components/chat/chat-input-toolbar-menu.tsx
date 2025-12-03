@@ -115,11 +115,11 @@ export const ChatInputToolbarMenu = memo(({
           {ModeIcon && <ModeIcon className="size-4" />}
           <span>{currentMode?.label || t('chat.modes.mode')}</span>
         </Button>
-        {/* Attach button */}
-        {enableAttachments && onAttachmentClick && (
+        {/* Attach button - always visible when handler provided, disabled when blocked */}
+        {onAttachmentClick && (
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || !enableAttachments}
             onClick={handleAttachClick}
             className={cn(
               'flex items-center justify-center rounded-full transition-colors',
@@ -257,13 +257,15 @@ export const ChatInputToolbarMenu = memo(({
             )}
           </button>
 
-          {/* Attach Files - Mobile drawer option */}
-          {enableAttachments && onAttachmentClick && (
+          {/* Attach Files - Mobile drawer option - always visible, disabled when blocked */}
+          {onAttachmentClick && (
             <button
               type="button"
               onClick={handleAttachClick}
+              disabled={!enableAttachments}
               className={cn(
                 'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                !enableAttachments && 'opacity-50 cursor-not-allowed',
                 attachmentCount > 0
                   ? 'bg-amber-500/20 hover:bg-amber-500/25 active:bg-amber-500/30'
                   : 'bg-white/5 hover:bg-white/10 active:bg-white/15',

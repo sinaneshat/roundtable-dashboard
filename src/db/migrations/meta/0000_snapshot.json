@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d48cb9ec-0254-4ae2-9a5d-633f12ec4ef5",
+  "id": "4d15b867-6f22-4df5-8935-e7d1705452fd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -3100,6 +3100,19 @@
         }
       },
       "foreignKeys": {
+        "message_upload_message_id_chat_message_id_fk": {
+          "name": "message_upload_message_id_chat_message_id_fk",
+          "tableFrom": "message_upload",
+          "tableTo": "chat_message",
+          "columnsFrom": [
+            "message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "message_upload_upload_id_upload_id_fk": {
           "name": "message_upload_upload_id_upload_id_fk",
           "tableFrom": "message_upload",
@@ -3190,6 +3203,19 @@
         }
       },
       "foreignKeys": {
+        "thread_upload_thread_id_chat_thread_id_fk": {
+          "name": "thread_upload_thread_id_chat_thread_id_fk",
+          "tableFrom": "thread_upload",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "thread_upload_upload_id_upload_id_fk": {
           "name": "thread_upload_upload_id_upload_id_fk",
           "tableFrom": "thread_upload",

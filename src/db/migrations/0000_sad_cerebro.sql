@@ -430,6 +430,7 @@ CREATE TABLE `message_upload` (
 	`upload_id` text NOT NULL,
 	`display_order` integer DEFAULT 0 NOT NULL,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`message_id`) REFERENCES `chat_message`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`upload_id`) REFERENCES `upload`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
@@ -443,6 +444,7 @@ CREATE TABLE `thread_upload` (
 	`upload_id` text NOT NULL,
 	`context` text,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`upload_id`) REFERENCES `upload`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint

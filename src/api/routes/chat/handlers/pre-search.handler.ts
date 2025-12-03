@@ -26,7 +26,7 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
-import { AnalysisStatuses, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import type { PreSearchTrackingContext } from '@/api/services/posthog-llm-tracking.service';
@@ -59,6 +59,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
+import type { MessagePart } from '@/lib/schemas/message-schemas';
 
 import type { createPreSearchRoute, executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
 import type { GeneratedSearchQuery, MultiQueryGeneration, WebSearchResult } from '../schema';
@@ -283,15 +284,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         }
 
         // FALLBACK: No active stream ID (KV not available in local dev)
-        return c.json({
-          success: true,
-          data: {
-            status: 'streaming',
-            preSearchId: existingSearch.id,
-            message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
-            retryAfterMs: 2000,
-          },
-        }, HttpStatusCodes.ACCEPTED);
+        return Responses.polling(c, {
+          status: 'streaming',
+          resourceId: existingSearch.id,
+          message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
+          retryAfterMs: 2000,
+        });
       }
     }
 
@@ -900,9 +898,9 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               threadId,
               role: 'assistant',
               parts: [{
-                type: 'text',
+                type: MessagePartTypes.TEXT,
                 text: JSON.stringify({ type: 'web_search_results', ...searchData }),
-              }] as Array<{ type: 'text'; text: string }>,
+              }] satisfies MessagePart[],
               roundNumber: roundNum,
               // ✅ TYPE-SAFE: Use DbPreSearchMessageMetadata discriminated union
               metadata: {

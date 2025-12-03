@@ -19,43 +19,18 @@
  * - Frontend resumes via GET endpoint checking KV for active streams
  *
  * @module api/services/stream-buffer
+ * @see /src/api/types/streaming.ts for type definitions
  */
 
-import type { StreamStatus } from '@/api/core/enums';
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
-
-/**
- * Stream buffer TTL - 1 hour
- * Streams exceeding this are considered stale and auto-expire
- */
-const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
-
-/**
- * Stream chunk format for SSE protocol
- * ✅ SINGLE SOURCE OF TRUTH: Reusable type for stream chunks
- */
-export type StreamChunk = {
-  data: string;
-  timestamp: number;
-};
-
-/**
- * Stream buffer metadata
- * ✅ ENUM PATTERN: Uses StreamStatus from core enums
- */
-export type StreamBufferMetadata = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  participantIndex: number;
-  status: StreamStatus;
-  chunkCount: number;
-  createdAt: number;
-  completedAt: number | null;
-  errorMessage: string | null;
-};
+import type { StreamBufferMetadata, StreamChunk } from '@/api/types/streaming';
+import {
+  parseStreamBufferMetadata,
+  parseStreamChunksArray,
+  STREAM_BUFFER_TTL_SECONDS,
+} from '@/api/types/streaming';
 
 /**
  * Generate KV key for stream buffer metadata
@@ -74,7 +49,11 @@ function getChunksKey(streamId: string): string {
 /**
  * Generate KV key for active stream tracking
  */
-function getActiveKey(threadId: string, roundNumber: number, participantIndex: number): string {
+function getActiveKey(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+): string {
   return `stream:active:${threadId}:r${roundNumber}:p${participantIndex}`;
 }
 
@@ -113,18 +92,14 @@ export async function initializeStreamBuffer(
     };
 
     // Store metadata
-    await env.KV.put(
-      getMetadataKey(streamId),
-      JSON.stringify(metadata),
-      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-    );
+    await env.KV.put(getMetadataKey(streamId), JSON.stringify(metadata), {
+      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+    });
 
     // Initialize empty chunks array
-    await env.KV.put(
-      getChunksKey(streamId),
-      JSON.stringify([]),
-      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-    );
+    await env.KV.put(getChunksKey(streamId), JSON.stringify([]), {
+      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+    });
 
     // Track as active stream
     await env.KV.put(
@@ -178,8 +153,8 @@ export async function appendStreamChunk(
 
   while (retryCount < maxRetries) {
     try {
-      // Get existing chunks
-      let existingChunks = await env.KV.get(chunksKey, 'json') as StreamChunk[] | null;
+      // ✅ TYPE-SAFE: Use safe parser instead of force casting
+      let existingChunks = parseStreamChunksArray(await env.KV.get(chunksKey, 'json'));
 
       // ✅ FIX: If chunks don't exist, wait and retry (KV eventual consistency)
       if (!existingChunks) {
@@ -196,11 +171,14 @@ export async function appendStreamChunk(
 
         // ✅ FIX: If still not found after retries, initialize empty array
         // This handles race condition where appendStreamChunk is called before initializeStreamBuffer completes
-        logger?.warn('Stream chunks not found after retries, initializing empty array', {
-          logType: 'edge_case',
-          streamId,
-          retriesAttempted: retryCount,
-        });
+        logger?.warn(
+          'Stream chunks not found after retries, initializing empty array',
+          {
+            logType: 'edge_case',
+            streamId,
+            retriesAttempted: retryCount,
+          },
+        );
         existingChunks = [];
       }
 
@@ -208,23 +186,20 @@ export async function appendStreamChunk(
       const updatedChunks = [...existingChunks, chunk];
 
       // Store updated chunks
-      await env.KV.put(
-        chunksKey,
-        JSON.stringify(updatedChunks),
-        { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-      );
+      await env.KV.put(chunksKey, JSON.stringify(updatedChunks), {
+        expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+      });
 
       // Update metadata chunk count
       const metadataKey = getMetadataKey(streamId);
-      const metadata = await env.KV.get(metadataKey, 'json') as StreamBufferMetadata | null;
+      // ✅ TYPE-SAFE: Use safe parser instead of force casting
+      const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
       if (metadata) {
         metadata.chunkCount = updatedChunks.length;
-        await env.KV.put(
-          metadataKey,
-          JSON.stringify(metadata),
-          { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-        );
+        await env.KV.put(metadataKey, JSON.stringify(metadata), {
+          expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+        });
       }
 
       // Success - exit retry loop
@@ -265,7 +240,8 @@ export async function completeStreamBuffer(
 
   try {
     const metadataKey = getMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as StreamBufferMetadata | null;
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
     if (!metadata) {
       logger?.warn('Stream metadata not found during completion', {
@@ -275,19 +251,21 @@ export async function completeStreamBuffer(
       return;
     }
 
-    metadata.status = StreamStatuses.COMPLETED;
-    metadata.completedAt = Date.now();
+    // ✅ TYPE-SAFE: Create updated metadata object
+    const updatedMetadata: StreamBufferMetadata = {
+      ...metadata,
+      status: StreamStatuses.COMPLETED,
+      completedAt: Date.now(),
+    };
 
-    await env.KV.put(
-      metadataKey,
-      JSON.stringify(metadata),
-      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-    );
+    await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
+      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+    });
 
     logger?.info('Completed stream buffer', {
       logType: 'operation',
       streamId,
-      chunkCount: metadata.chunkCount,
+      chunkCount: updatedMetadata.chunkCount,
     });
   } catch (error) {
     logger?.error('Failed to complete stream buffer', {
@@ -315,7 +293,8 @@ export async function failStreamBuffer(
 
   try {
     const metadataKey = getMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as StreamBufferMetadata | null;
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
     if (!metadata) {
       logger?.warn('Stream metadata not found during failure', {
@@ -325,15 +304,20 @@ export async function failStreamBuffer(
       return;
     }
 
-    metadata.status = StreamStatuses.FAILED;
-    metadata.completedAt = Date.now();
-    metadata.errorMessage = errorMessage;
+    // ✅ TYPE-SAFE: Create updated metadata object with failure info
+    let updatedMetadata: StreamBufferMetadata = {
+      ...metadata,
+      status: StreamStatuses.FAILED,
+      completedAt: Date.now(),
+      errorMessage,
+    };
 
     // ✅ FIX: Append error chunk so frontend receives error event on resume
     // AI SDK v5 error format: 3:{"error":"..."}
     try {
       const chunksKey = getChunksKey(streamId);
-      const existingChunks = await env.KV.get(chunksKey, 'json') as StreamChunk[] | null;
+      // ✅ TYPE-SAFE: Use safe parser instead of force casting
+      const existingChunks = parseStreamChunksArray(await env.KV.get(chunksKey, 'json'));
 
       if (existingChunks) {
         const errorChunk: StreamChunk = {
@@ -343,27 +327,28 @@ export async function failStreamBuffer(
 
         const updatedChunks = [...existingChunks, errorChunk];
 
-        await env.KV.put(
-          chunksKey,
-          JSON.stringify(updatedChunks),
-          { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-        );
+        await env.KV.put(chunksKey, JSON.stringify(updatedChunks), {
+          expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+        });
 
-        metadata.chunkCount = updatedChunks.length;
+        // ✅ TYPE-SAFE: Update metadata with new chunk count
+        updatedMetadata = {
+          ...updatedMetadata,
+          chunkCount: updatedChunks.length,
+        };
       }
     } catch (chunkError) {
       logger?.warn('Failed to append error chunk', {
         logType: 'edge_case',
         streamId,
-        error: chunkError instanceof Error ? chunkError.message : 'Unknown error',
+        error:
+          chunkError instanceof Error ? chunkError.message : 'Unknown error',
       });
     }
 
-    await env.KV.put(
-      metadataKey,
-      JSON.stringify(metadata),
-      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-    );
+    await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
+      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+    });
 
     logger?.info('Marked stream buffer as failed', {
       logType: 'operation',
@@ -428,7 +413,8 @@ export async function getStreamMetadata(
   logger?: TypedLogger,
 ): Promise<StreamBufferMetadata | null> {
   try {
-    const metadata = await env.KV.get(getMetadataKey(streamId), 'json') as StreamBufferMetadata | null;
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const metadata = parseStreamBufferMetadata(await env.KV.get(getMetadataKey(streamId), 'json'));
 
     if (metadata) {
       logger?.info('Retrieved stream metadata', {
@@ -460,7 +446,8 @@ export async function getStreamChunks(
   logger?: TypedLogger,
 ): Promise<StreamChunk[] | null> {
   try {
-    const chunks = await env.KV.get(getChunksKey(streamId), 'json') as StreamChunk[] | null;
+    // ✅ TYPE-SAFE: Use safe parser instead of force casting
+    const chunks = parseStreamChunksArray(await env.KV.get(getChunksKey(streamId), 'json'));
 
     if (chunks) {
       logger?.info('Retrieved stream chunks', {
@@ -544,38 +531,6 @@ export async function deleteStreamBuffer(
   }
 }
 
-/**
- * Convert buffered chunks to SSE format for transmission
- * Returns ReadableStream of SSE-formatted data
- *
- * ✅ IMPORTANT: Chunks are stored as raw SSE data strings (e.g., "0:\"text\"\n\n")
- * from the AI SDK stream. We pass them through as-is without wrapping.
- * The chunks already contain the complete SSE protocol format.
- *
- * ⚠️ DEPRECATED: Use createLiveParticipantResumeStream for live resumption
- * This function only returns static chunks and doesn't poll for new ones.
- */
-export function chunksToSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-
-  return new ReadableStream({
-    start(controller) {
-      try {
-        for (const chunk of chunks) {
-          // ✅ FIX: Pass chunk data through as-is
-          // Chunks are already in SSE format from AI SDK stream
-          // Previously was double-wrapping: `data: ${chunk.data}\n\n`
-          // which produced malformed SSE like `data: 0:"text"\n\n\n\n`
-          controller.enqueue(encoder.encode(chunk.data));
-        }
-        controller.close();
-      } catch {
-        // Controller already closed (client disconnected) - ignore
-      }
-    },
-  });
-}
-
 // ============================================================================
 // Live Stream Resumption
 // ============================================================================
@@ -606,7 +561,9 @@ export function createLiveParticipantResumeStream(
   let isClosed = false;
 
   // Helper to safely close controller (handles already-closed state)
-  const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
+  const safeClose = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ) => {
     if (isClosed) {
       return;
     }
@@ -619,7 +576,10 @@ export function createLiveParticipantResumeStream(
   };
 
   // Helper to safely enqueue data (handles already-closed state)
-  const safeEnqueue = (controller: ReadableStreamDefaultController<Uint8Array>, data: Uint8Array) => {
+  const safeEnqueue = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    data: Uint8Array,
+  ) => {
     if (isClosed) {
       return false;
     }
@@ -650,7 +610,10 @@ export function createLiveParticipantResumeStream(
 
         // Check if already complete
         const metadata = await getStreamMetadata(streamId, env);
-        if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+        if (
+          metadata?.status === StreamStatuses.COMPLETED
+          || metadata?.status === StreamStatuses.FAILED
+        ) {
           safeClose(controller);
         }
       } catch {
@@ -688,7 +651,10 @@ export function createLiveParticipantResumeStream(
         }
 
         // Check if stream is complete
-        if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+        if (
+          metadata?.status === StreamStatuses.COMPLETED
+          || metadata?.status === StreamStatuses.FAILED
+        ) {
           safeClose(controller);
           return;
         }

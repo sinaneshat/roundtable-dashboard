@@ -45,8 +45,9 @@ pnpm db:migrate:local       # Apply migrations locally
 pnpm db:migrate:preview     # Apply migrations to preview
 pnpm db:migrate:prod        # Apply migrations to production
 pnpm db:studio:local        # Open Drizzle Studio
-pnpm db:fresh:quick         # Reset and seed database quickly
-pnpm db:full-reset:local    # Complete database reset
+pnpm db:full-reset:local    # Full reset: wipe all state (D1, R2, KV), migrate, seed
+pnpm local:wipe-state       # Clear all Wrangler state (D1, R2, KV, tmp)
+pnpm local:nuclear-reset    # Nuclear: clear Next.js cache + all Wrangler state + migrate + seed
 
 # Cloudflare Deployment
 pnpm cf-typegen            # Generate CloudflareEnv types

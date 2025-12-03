@@ -86,6 +86,7 @@ import type {
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
+import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { sortByPriority } from '@/lib/utils/participant';
@@ -1361,13 +1362,14 @@ const createOperationsSlice: StateCreator<
 
     if (isSameThread && storeMessages.length > 0) {
       // Same thread - compare completeness
+      // ✅ TYPE-SAFE: Use getRoundNumber utility instead of forced type casting
       const storeMaxRound = storeMessages.reduce((max, m) => {
-        const round = (m.metadata as { roundNumber?: number } | undefined)?.roundNumber ?? 0;
+        const round = getRoundNumber(m.metadata) ?? 0;
         return Math.max(max, round);
       }, 0);
 
       const newMaxRound = newMessages.reduce((max, m) => {
-        const round = (m.metadata as { roundNumber?: number } | undefined)?.roundNumber ?? 0;
+        const round = getRoundNumber(m.metadata) ?? 0;
         return Math.max(max, round);
       }, 0);
 
@@ -1406,7 +1408,8 @@ const createOperationsSlice: StateCreator<
     // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants'),
 
-  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[]) =>
+  // ✅ Uses ExtendedFilePart from message-schemas.ts (single source of truth for file parts with uploadId)
+  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) =>
     set((state) => {
       // ✅ FIX: Calculate next round number for mid-conversation messages
       const nextRoundNumber = calculateNextRoundNumber(state.messages);
@@ -1430,17 +1433,10 @@ const createOperationsSlice: StateCreator<
       const hasExistingOptimisticMessage = state.hasEarlyOptimisticMessage;
 
       // Only create optimistic message for THREAD screen AND if one doesn't already exist
-      // ✅ FIX: Include file parts so attachments show in optimistic message
-      const fileParts = attachmentIds && attachmentIds.length > 0
-        ? state.pendingAttachments
-            .filter(att => att.uploadItem?.uploadId && attachmentIds.includes(att.uploadItem.uploadId))
-            .map(att => ({
-              type: 'file' as const,
-              url: att.preview?.url || '',
-              filename: att.file.name,
-              mediaType: att.file.type,
-            }))
-        : [];
+      // ✅ FIX: Use provided file parts directly instead of building from pendingAttachments
+      // pendingAttachments is never synced from the hook's attachment state,
+      // so we pass file parts directly from handleUpdateThreadAndSend/handleCreateThread
+      const fileParts = providedFileParts || [];
 
       const optimisticUserMessage: UIMessage | null = isOnThreadScreen && !hasExistingOptimisticMessage
         ? {

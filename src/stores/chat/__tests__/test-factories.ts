@@ -715,25 +715,28 @@ export function createMockAnalysisPayload(
           { claim: 'Timeline feasibility', status: 'contested' },
         ],
       },
+      // ✅ Updated to array-based format for Anthropic compatibility
       agreementHeatmap: [
         {
           claim: 'Market timing is critical',
-          perspectives: { 'GPT-4': AgreementStatuses.AGREE },
+          perspectives: [{ modelName: 'GPT-4', status: AgreementStatuses.AGREE }],
         },
         {
           claim: 'Resources are sufficient',
-          perspectives: { 'GPT-4': AgreementStatuses.CAUTION },
+          perspectives: [{ modelName: 'GPT-4', status: AgreementStatuses.CAUTION }],
         },
       ],
-      argumentStrengthProfile: {
-        Analyst: {
+      // ✅ Updated to array-based format for Anthropic compatibility
+      argumentStrengthProfile: [
+        {
+          modelName: 'Analyst',
           logic: 85,
           riskAwareness: 75,
           creativity: 70,
           evidence: 80,
           consensus: 75,
         },
-      },
+      ],
     },
     evidenceAndReasoning: {
       reasoningThreads: [

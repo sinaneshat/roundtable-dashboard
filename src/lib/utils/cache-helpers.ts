@@ -24,7 +24,8 @@ import { validateAnalysesCache } from '@/stores/chat/actions/types';
 export function createEmptyAnalysesCache() {
   return {
     success: true,
-    data: { items: [] as StoredModeratorAnalysis[] },
+    // ✅ TYPE-SAFE: Use satisfies instead of force cast
+    data: { items: [] satisfies StoredModeratorAnalysis[] },
   };
 }
 

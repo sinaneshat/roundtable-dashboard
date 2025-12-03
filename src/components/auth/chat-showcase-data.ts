@@ -511,55 +511,60 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
           { claim: 'Technical complexity vs. user accessibility', status: 'contested' },
         ],
       },
+      // ✅ FIX: Changed from record to array for Anthropic compatibility
       agreementHeatmap: [
         {
           claim: 'Multi-agent systems are transformative',
-          perspectives: {
-            'Strategic Analyst': AgreementStatuses.AGREE,
-            'Creative Director': AgreementStatuses.AGREE,
-            'Technical Expert': AgreementStatuses.AGREE,
-          },
+          perspectives: [
+            { modelName: 'Strategic Analyst', status: AgreementStatuses.AGREE },
+            { modelName: 'Creative Director', status: AgreementStatuses.AGREE },
+            { modelName: 'Technical Expert', status: AgreementStatuses.AGREE },
+          ],
         },
         {
           claim: 'Real-time synthesis is essential',
-          perspectives: {
-            'Strategic Analyst': AgreementStatuses.AGREE,
-            'Creative Director': AgreementStatuses.AGREE,
-            'Technical Expert': AgreementStatuses.CAUTION,
-          },
+          perspectives: [
+            { modelName: 'Strategic Analyst', status: AgreementStatuses.AGREE },
+            { modelName: 'Creative Director', status: AgreementStatuses.AGREE },
+            { modelName: 'Technical Expert', status: AgreementStatuses.CAUTION },
+          ],
         },
         {
           claim: 'Security remains a critical concern',
-          perspectives: {
-            'Strategic Analyst': AgreementStatuses.CAUTION,
-            'Creative Director': AgreementStatuses.DISAGREE,
-            'Technical Expert': AgreementStatuses.AGREE,
-          },
+          perspectives: [
+            { modelName: 'Strategic Analyst', status: AgreementStatuses.CAUTION },
+            { modelName: 'Creative Director', status: AgreementStatuses.DISAGREE },
+            { modelName: 'Technical Expert', status: AgreementStatuses.AGREE },
+          ],
         },
       ],
-      argumentStrengthProfile: {
-        'Strategic Analyst': {
+      // ✅ FIX: Changed from record to array for Anthropic compatibility
+      argumentStrengthProfile: [
+        {
+          modelName: 'Strategic Analyst',
           logic: 95,
           evidence: 92,
           riskAwareness: 88,
           consensus: 90,
           creativity: 85,
         },
-        'Creative Director': {
+        {
+          modelName: 'Creative Director',
           logic: 87,
           evidence: 82,
           riskAwareness: 75,
           consensus: 85,
           creativity: 98,
         },
-        'Technical Expert': {
+        {
+          modelName: 'Technical Expert',
           logic: 92,
           evidence: 90,
           riskAwareness: 95,
           consensus: 88,
           creativity: 78,
         },
-      },
+      ],
     },
 
     // Evidence & Reasoning

@@ -3,6 +3,8 @@
  *
  * TanStack Mutation hooks for file upload operations
  * Following patterns from project-mutations.ts and api-key-mutations.ts
+ *
+ * Uses secure ticket-based upload (S3 presigned URL pattern)
  */
 
 'use client';
@@ -16,32 +18,35 @@ import {
   completeMultipartUploadService,
   createMultipartUploadService,
   deleteAttachmentService,
+  secureUploadService,
   updateAttachmentService,
-  uploadAttachmentService,
   uploadPartService,
 } from '@/services/api';
 
 // ============================================================================
-// Single-Request Upload Mutations
+// Secure Upload Mutation (Ticket-Based)
 // ============================================================================
 
 /**
- * Hook to upload a file (single request)
+ * Hook to upload a file using secure ticket-based flow
  * Protected endpoint - requires authentication
+ *
+ * Uses S3 presigned URL pattern:
+ * 1. Requests upload ticket with signed token
+ * 2. Uploads file with validated token
  *
  * For files < 100MB. After successful upload:
  * - Invalidates upload lists
  *
  * Note: Thread/message associations are created via junction tables after upload
  */
-export function useUploadAttachmentMutation() {
+export function useSecureUploadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: uploadAttachmentService,
+    mutationFn: (file: File) => secureUploadService(file),
     onSuccess: () => {
       // Invalidate upload queries
-      // Note: Thread/message associations are created separately via junction tables
       invalidationPatterns.afterUpload().forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
@@ -50,6 +55,12 @@ export function useUploadAttachmentMutation() {
     throwOnError: false,
   });
 }
+
+/**
+ * @deprecated Use useSecureUploadMutation instead
+ * Legacy hook name for backwards compatibility during migration
+ */
+export const useUploadAttachmentMutation = useSecureUploadMutation;
 
 /**
  * Hook to update attachment metadata or associations

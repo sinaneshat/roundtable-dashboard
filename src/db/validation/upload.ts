@@ -39,6 +39,8 @@ export const UploadMetadataSchema = z.object({
   description: z.string().max(500).optional(),
   // Processing error details
   errorMessage: z.string().optional(),
+  // Upload ticket tracking (for secure upload flow)
+  ticketId: z.string().optional(),
 }).strict();
 
 /**

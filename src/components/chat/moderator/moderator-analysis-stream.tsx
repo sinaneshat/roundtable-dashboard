@@ -25,7 +25,7 @@ import {
 import { LoaderFive } from '@/components/ui/loader';
 import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useBoolean } from '@/hooks/utils';
-import { hasAnalysisData } from '@/lib/utils/analysis-utils';
+import { hasAnalysisData, normalizeAnalysisData } from '@/lib/utils/analysis-utils';
 import { filterArrayWithSchema, safeParse } from '@/lib/utils/type-guards';
 
 // ✅ NEW COMPONENTS: Multi-AI Deliberation Framework
@@ -296,9 +296,10 @@ function ModeratorAnalysisStreamComponent({
     // According to AI SDK v5 docs, when object === undefined, schema validation failed
     // The error parameter contains the TypeValidationError or other streaming errors
     onFinish: ({ object: finalObject, error: streamError }) => {
-      // ✅ AI SDK v5 Pattern: Check if object is undefined (validation failure)
-      // From docs: "object is undefined if the final object does not match the schema"
-      if (finalObject === undefined) {
+      // ✅ CRITICAL FIX: Check for any falsy value (undefined, null, empty object)
+      // AI SDK may return undefined on validation failure, but edge cases may return null
+      // Also check hasAnalysisData to ensure we have actual content, not just an empty object
+      if (!finalObject || !hasAnalysisData(finalObject)) {
         // Classify error type using enum pattern
         let errorType: StreamErrorType = StreamErrorTypes.UNKNOWN;
         const errorMessage = streamError?.message || String(streamError || 'Unknown error');
@@ -365,7 +366,28 @@ function ModeratorAnalysisStreamComponent({
         } else if (streamError instanceof Error) {
           if (streamError.name === 'AbortError' || errorMessage.includes('aborted')) {
             errorType = StreamErrorTypes.ABORT;
-          } else if (streamError.name === 'TypeValidationError' || errorMessage.includes('validation')) {
+          } else if (streamError.name === 'TypeValidationError' || errorMessage.includes('validation') || errorMessage.includes('invalid_type')) {
+            // ✅ CRITICAL FIX: For validation errors, try to normalize and use partial data
+            // AI models sometimes return object formats instead of arrays
+            // Normalize the data and check if it's usable
+            const fallbackData = partialAnalysisRef.current;
+            if (fallbackData && hasAnalysisData(fallbackData)) {
+              // Normalize the data to fix object-to-array format issues
+              const normalizedData = normalizeAnalysisData(fallbackData);
+              // Try to validate normalized data
+              const validated = ModeratorAnalysisPayloadSchema.safeParse(normalizedData);
+              if (validated.success) {
+                emptyResponseRetryCountRef.current = 0;
+                onStreamCompleteRef.current?.(validated.data);
+                return;
+              }
+              // Even if strict validation fails, use normalized data if it has content
+              if (hasAnalysisData(normalizedData)) {
+                emptyResponseRetryCountRef.current = 0;
+                onStreamCompleteRef.current?.(normalizedData as ModeratorAnalysisPayload);
+                return;
+              }
+            }
             errorType = StreamErrorTypes.VALIDATION;
           } else if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
             errorType = StreamErrorTypes.CONFLICT;

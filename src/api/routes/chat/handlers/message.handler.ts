@@ -3,10 +3,13 @@ import { asc, desc, eq } from 'drizzle-orm';
 
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
+import { MessagePartTypes } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
+import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 
 import type {
   getThreadChangelogRoute,
@@ -43,26 +46,43 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
       },
     });
 
-    // Transform messages to include upload attachments as file parts
-    const messagesWithAttachments = messages.map((message) => {
-      const attachmentParts = message.messageUploads?.map(mu => ({
-        type: 'file' as const,
-        url: `/api/v1/uploads/${mu.upload.id}/download`,
-        filename: mu.upload.filename,
-        mediaType: mu.upload.mimeType,
-      })) || [];
+    // Transform messages to include upload attachments as file parts with signed URLs
+    const baseUrl = new URL(c.req.url).origin;
+    const messagesWithAttachments = await Promise.all(
+      messages.map(async (message) => {
+        // Generate signed URLs for each attachment
+        const attachmentParts: ExtendedFilePart[] = await Promise.all(
+          (message.messageUploads || []).map(async (mu): Promise<ExtendedFilePart> => {
+            const signedPath = await generateSignedDownloadPath(c, {
+              uploadId: mu.upload.id,
+              userId: user.id,
+              threadId,
+              expirationMs: 60 * 60 * 1000, // 1 hour
+            });
 
-      // Add attachment parts after text parts
-      const existingParts = message.parts || [];
-      const combinedParts = [...existingParts, ...attachmentParts];
+            return {
+              type: MessagePartTypes.FILE,
+              url: `${baseUrl}${signedPath}`,
+              filename: mu.upload.filename,
+              mediaType: mu.upload.mimeType,
+              uploadId: mu.upload.id, // ✅ ExtendedFilePart: uploadId for participant 1+ file loading
+            };
+          }),
+        );
 
-      // Return message without the messageUploads relation (transformed to parts)
-      const { messageUploads: _, ...messageWithoutUploads } = message;
-      return {
-        ...messageWithoutUploads,
-        parts: combinedParts,
-      };
-    });
+        // Filter out existing file parts to prevent duplication, then add new signed ones
+        const existingParts = message.parts || [];
+        const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
+        const combinedParts = [...nonFileParts, ...attachmentParts];
+
+        // Return message without the messageUploads relation (transformed to parts)
+        const { messageUploads: _, ...messageWithoutUploads } = message;
+        return {
+          ...messageWithoutUploads,
+          parts: combinedParts,
+        };
+      }),
+    );
 
     return Responses.collection(c, messagesWithAttachments);
   },

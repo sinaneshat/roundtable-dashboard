@@ -19,6 +19,7 @@
 
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 
+import { ModeratorAnalysisPayloadSchema, PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
@@ -266,13 +267,9 @@ export async function getProjectSearchContext(
   });
 
   const searches = preSearches.map((search) => {
-    const searchData = search.searchData as {
-      analysis?: string;
-      results?: Array<{
-        query: string;
-        answer: string | null;
-      }>;
-    } | null;
+    // ✅ TYPE-SAFE: Use Zod validation instead of force cast
+    const parseResult = PreSearchDataPayloadSchema.safeParse(search.searchData);
+    const searchData = parseResult.success ? parseResult.data : null;
 
     return {
       threadId: search.threadId,
@@ -338,11 +335,10 @@ export async function getProjectAnalysisContext(
   });
 
   const analyses = moderatorAnalyses.map((analysis) => {
-    const data = analysis.analysisData as {
-      summary?: string;
-      recommendations?: Array<{ title: string; description: string }>;
-      roundSummary?: { keyThemes?: string };
-    } | null;
+    // ✅ TYPE-SAFE: Use Zod validation instead of force cast
+    // Use partial schema since analysisData may not have all required fields
+    const parseResult = ModeratorAnalysisPayloadSchema.partial().safeParse(analysis.analysisData);
+    const data = parseResult.success ? parseResult.data : null;
 
     return {
       threadId: analysis.threadId,

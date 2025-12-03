@@ -6,7 +6,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
 import type { BillingInterval } from '@/api/core/enums';
-import { BillingIntervals, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { BillingIntervals, BillingIntervalSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
 import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
@@ -151,10 +151,14 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
             .sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));
 
           const annualSavingsPercent = calculateAnnualSavings(
-            productPrices.map(p => ({
-              interval: (p.interval || BillingIntervals.MONTH) as BillingInterval,
-              unitAmount: p.unitAmount ?? 0,
-            })),
+            productPrices.map((p) => {
+              // ✅ TYPE-SAFE: Use Zod validation instead of force cast
+              const parsedInterval = BillingIntervalSchema.safeParse(p.interval);
+              return {
+                interval: parsedInterval.success ? parsedInterval.data : BillingIntervals.MONTH,
+                unitAmount: p.unitAmount ?? 0,
+              };
+            }),
           );
 
           return {
@@ -228,10 +232,14 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
       const productPrices = dbPrices.sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));
 
       const annualSavingsPercent = calculateAnnualSavings(
-        productPrices.map(p => ({
-          interval: (p.interval || BillingIntervals.MONTH) as BillingInterval,
-          unitAmount: p.unitAmount ?? 0,
-        })),
+        productPrices.map((p) => {
+          // ✅ TYPE-SAFE: Use Zod validation instead of force cast
+          const parsedInterval = BillingIntervalSchema.safeParse(p.interval);
+          return {
+            interval: parsedInterval.success ? parsedInterval.data : BillingIntervals.MONTH,
+            unitAmount: p.unitAmount ?? 0,
+          };
+        }),
       );
 
       return Responses.ok(c, {

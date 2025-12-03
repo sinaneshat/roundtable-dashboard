@@ -26,7 +26,7 @@
  * ```
  */
 
-import { Download, ExternalLink, FileText, Globe, MessageSquare, Search, Sparkles } from 'lucide-react';
+import { Database, Download, ExternalLink, FileText, Globe, MessageSquare, Search, Sparkles } from 'lucide-react';
 import * as React from 'react';
 
 import type { CitationSourceType } from '@/api/core/enums';
@@ -87,6 +87,11 @@ const SOURCE_TYPE_CONFIG: Record<CitationSourceType, {
     icon: Search,
     label: 'Analysis',
     color: 'text-cyan-500',
+  },
+  [CitationSourceTypes.RAG]: {
+    icon: Database,
+    label: 'Indexed File',
+    color: 'text-indigo-500',
   },
 };
 

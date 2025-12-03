@@ -416,8 +416,16 @@ const UIMessageSchema = z.object({
       type: z.literal('reasoning'),
       text: z.string(),
     }),
+    // ✅ CRITICAL FIX: Support file parts for multi-modal messages
+    // AI SDK v5 sends file attachments as parts with type='file'
+    z.object({
+      type: z.literal('file'),
+      url: z.string(),
+      filename: z.string().optional(),
+      mediaType: z.string().optional(),
+    }),
   ])).openapi({
-    description: 'Message parts array (text, reasoning, etc.)',
+    description: 'Message parts array (text, reasoning, file, etc.)',
     example: [{ type: 'text', text: 'What are the best practices for API design?' }],
   }),
   createdAt: z.string().datetime().optional().openapi({
@@ -883,27 +891,88 @@ export const ContestedClaimSchema = z.object({
 }).openapi('ContestedClaim');
 
 /**
+ * Perspective entry for agreement heatmap - Model's stance on a claim
+ * ✅ FIX: Replaced z.record() with explicit object to avoid Anthropic "additionalProperties" error
+ */
+export const ModelPerspectiveSchema = z.object({
+  modelName: z.string().describe('The AI model name'),
+  status: AgreementStatusSchema,
+}).openapi('ModelPerspective');
+
+/**
+ * Preprocess perspectives to handle AI returning object instead of array
+ * AI sometimes returns: { "Claude 4.5 Opus": "agree", "o3 Mini": "agree" }
+ * Schema expects: [{ modelName: "Claude 4.5 Opus", status: "agree" }, ...]
+ */
+function preprocessPerspectives(val: unknown): unknown {
+  if (Array.isArray(val))
+    return val;
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    // Convert object { modelName: status } to array [{ modelName, status }]
+    return Object.entries(val as Record<string, string>).map(([modelName, status]) => ({
+      modelName,
+      status,
+    }));
+  }
+  return val;
+}
+
+/**
  * Agreement heatmap entry - Shows which models agree/disagree on claims
+ * ✅ FIX: Changed perspectives from z.record() to array for Anthropic compatibility
+ * ✅ DEFENSIVE: Uses preprocess to handle AI returning object format
  */
 export const AgreementHeatmapEntrySchema = z.object({
   claim: z.string(),
-  perspectives: z.record(z.string(), AgreementStatusSchema), // ✅ Uses lenient schema with .catch()
+  perspectives: z.preprocess(
+    preprocessPerspectives,
+    z.array(ModelPerspectiveSchema),
+  ).describe('Array of model perspectives on this claim'),
 }).openapi('AgreementHeatmapEntry');
 
 /**
+ * Model strength entry - Radar chart data for a single model
+ * ✅ FIX: Explicit object instead of z.record() for Anthropic compatibility
+ */
+export const ModelStrengthEntrySchema = z.object({
+  modelName: z.string().describe('The AI model name'),
+  logic: z.coerce.number().describe('Logic score (0-10)'),
+  evidence: z.coerce.number().describe('Evidence score (0-10)'),
+  riskAwareness: z.coerce.number().describe('Risk awareness score (0-10)'),
+  consensus: z.coerce.number().describe('Consensus score (0-10)'),
+  creativity: z.coerce.number().describe('Creativity score (0-10)'),
+}).openapi('ModelStrengthEntry');
+
+/**
+ * Preprocess argument strength profile to handle AI returning object instead of array
+ * AI sometimes returns: { "Claude 4.5 Opus": { logic: 85, ... }, "o3 Mini": { logic: 50, ... } }
+ * Schema expects: [{ modelName: "Claude 4.5 Opus", logic: 85, ... }, ...]
+ */
+function preprocessArgumentStrengthProfile(val: unknown): unknown {
+  if (Array.isArray(val))
+    return val;
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    // Convert object { modelName: { scores } } to array [{ modelName, ...scores }]
+    return Object.entries(val as Record<string, Record<string, unknown>>).map(([modelName, scores]) => ({
+      modelName,
+      ...scores,
+    }));
+  }
+  return val;
+}
+
+/**
  * Argument strength profile - Radar chart data per model
+ * ✅ FIX: Changed from z.record() to array for Anthropic compatibility
+ * ✅ DEFENSIVE: Uses preprocess to handle AI returning object format
  * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
  */
-export const ArgumentStrengthProfileSchema = z.record(
-  z.string(),
-  z.object({
-    logic: z.coerce.number(),
-    evidence: z.coerce.number(),
-    riskAwareness: z.coerce.number(),
-    consensus: z.coerce.number(),
-    creativity: z.coerce.number(),
-  }),
-).openapi('ArgumentStrengthProfile');
+export const ArgumentStrengthProfileSchema = z.preprocess(
+  preprocessArgumentStrengthProfile,
+  z.array(ModelStrengthEntrySchema),
+)
+  .describe('Array of strength profiles per model')
+  .openapi('ArgumentStrengthProfile');
 
 /**
  * Consensus Analysis - Agreement patterns across contributors
@@ -990,7 +1059,9 @@ export const RoundSummarySchema = z.object({
  */
 export const ConsensusEvolutionPhaseSchema = z.object({
   phase: z.enum(DEBATE_PHASES),
-  percentage: z.coerce.number().min(0).max(100),
+  // ✅ FIX: Removed .min(0).max(100) - Anthropic doesn't support these in structured output
+  // AI is guided by description instead
+  percentage: z.coerce.number().describe('Consensus percentage (0-100)'),
   label: z.string().optional(), // Optional human-readable label like "Opening", "Final Vote"
 }).openapi('ConsensusEvolutionPhase');
 
@@ -1009,7 +1080,8 @@ export const ModeratorAnalysisPayloadSchema = z.object({
   userQuestion: z.string(),
 
   // Round Confidence Header - Overall confidence metrics
-  roundConfidence: z.coerce.number().min(0).max(100).optional(), // Overall confidence % (e.g., 78%)
+  // ✅ FIX: Removed .min(0).max(100) - Anthropic doesn't support these in structured output
+  roundConfidence: z.coerce.number().optional().describe('Overall confidence percentage (0-100)'),
   confidenceWeighting: ConfidenceWeightingSchema.optional(), // Weighting method (default: balanced)
 
   // Consensus Evolution - Timeline showing consensus at each debate phase

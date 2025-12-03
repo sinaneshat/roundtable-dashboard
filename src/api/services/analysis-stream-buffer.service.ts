@@ -22,39 +22,17 @@
  * @module api/services/analysis-stream-buffer
  */
 
-import type { StreamStatus } from '@/api/core/enums';
+import { z } from 'zod';
+
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
-
-/**
- * Stream buffer TTL - 1 hour
- * Streams exceeding this are considered stale and auto-expire
- */
-const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
-
-/**
- * Stream chunk format for object streams
- */
-export type AnalysisStreamChunk = {
-  data: string;
-  timestamp: number;
-};
-
-/**
- * Analysis stream buffer metadata
- */
-export type AnalysisStreamBufferMetadata = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  analysisId: string;
-  status: StreamStatus;
-  chunkCount: number;
-  createdAt: number;
-  completedAt: number | null;
-  errorMessage: string | null;
-};
+import type { AnalysisStreamBufferMetadata, AnalysisStreamChunk } from '@/api/types/streaming';
+import {
+  AnalysisStreamBufferMetadataSchema,
+  AnalysisStreamChunkSchema,
+  STREAM_BUFFER_TTL_SECONDS,
+} from '@/api/types/streaming';
 
 /**
  * Generate stream ID for analysis
@@ -176,9 +154,10 @@ export async function appendAnalysisStreamChunk(
     };
 
     const chunksKey = getAnalysisChunksKey(streamId);
-    const existingChunks = await env.KV.get(chunksKey, 'json') as AnalysisStreamChunk[] | null;
+    const rawChunks = await env.KV.get(chunksKey, 'json');
+    const chunksResult = z.array(AnalysisStreamChunkSchema).safeParse(rawChunks);
 
-    if (!existingChunks) {
+    if (!chunksResult.success) {
       logger?.warn('Analysis stream chunks not found during append', {
         logType: 'edge_case',
         streamId,
@@ -186,7 +165,7 @@ export async function appendAnalysisStreamChunk(
       return;
     }
 
-    const updatedChunks = [...existingChunks, chunk];
+    const updatedChunks = [...chunksResult.data, chunk];
 
     await env.KV.put(
       chunksKey,
@@ -196,10 +175,11 @@ export async function appendAnalysisStreamChunk(
 
     // Update metadata chunk count
     const metadataKey = getAnalysisMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as AnalysisStreamBufferMetadata | null;
+    const rawMetadata = await env.KV.get(metadataKey, 'json');
+    const metadataResult = AnalysisStreamBufferMetadataSchema.safeParse(rawMetadata);
 
-    if (metadata) {
-      metadata.chunkCount = updatedChunks.length;
+    if (metadataResult.success) {
+      const metadata = { ...metadataResult.data, chunkCount: updatedChunks.length };
       await env.KV.put(
         metadataKey,
         JSON.stringify(metadata),
@@ -231,9 +211,10 @@ export async function completeAnalysisStreamBuffer(
 
   try {
     const metadataKey = getAnalysisMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as AnalysisStreamBufferMetadata | null;
+    const raw = await env.KV.get(metadataKey, 'json');
+    const result = AnalysisStreamBufferMetadataSchema.safeParse(raw);
 
-    if (!metadata) {
+    if (!result.success) {
       logger?.warn('Analysis stream metadata not found during completion', {
         logType: 'edge_case',
         streamId,
@@ -241,8 +222,11 @@ export async function completeAnalysisStreamBuffer(
       return;
     }
 
-    metadata.status = StreamStatuses.COMPLETED;
-    metadata.completedAt = Date.now();
+    const metadata = {
+      ...result.data,
+      status: StreamStatuses.COMPLETED,
+      completedAt: Date.now(),
+    };
 
     await env.KV.put(
       metadataKey,
@@ -280,9 +264,10 @@ export async function failAnalysisStreamBuffer(
 
   try {
     const metadataKey = getAnalysisMetadataKey(streamId);
-    const metadata = await env.KV.get(metadataKey, 'json') as AnalysisStreamBufferMetadata | null;
+    const raw = await env.KV.get(metadataKey, 'json');
+    const result = AnalysisStreamBufferMetadataSchema.safeParse(raw);
 
-    if (!metadata) {
+    if (!result.success) {
       logger?.warn('Analysis stream metadata not found during failure', {
         logType: 'edge_case',
         streamId,
@@ -290,9 +275,12 @@ export async function failAnalysisStreamBuffer(
       return;
     }
 
-    metadata.status = StreamStatuses.FAILED;
-    metadata.completedAt = Date.now();
-    metadata.errorMessage = errorMessage;
+    const metadata = {
+      ...result.data,
+      status: StreamStatuses.FAILED,
+      completedAt: Date.now(),
+      errorMessage,
+    };
 
     await env.KV.put(
       metadataKey,
@@ -368,16 +356,20 @@ export async function getAnalysisStreamMetadata(
   }
 
   try {
-    const metadata = await env.KV.get(getAnalysisMetadataKey(streamId), 'json') as AnalysisStreamBufferMetadata | null;
+    const raw = await env.KV.get(getAnalysisMetadataKey(streamId), 'json');
+    const result = AnalysisStreamBufferMetadataSchema.safeParse(raw);
 
-    if (metadata) {
-      logger?.info('Retrieved analysis stream metadata', {
-        logType: 'operation',
-        streamId,
-        status: metadata.status,
-        chunkCount: metadata.chunkCount,
-      });
+    if (!result.success) {
+      return null;
     }
+
+    const metadata = result.data;
+    logger?.info('Retrieved analysis stream metadata', {
+      logType: 'operation',
+      streamId,
+      status: metadata.status,
+      chunkCount: metadata.chunkCount,
+    });
 
     return metadata;
   } catch (error) {
@@ -404,15 +396,19 @@ export async function getAnalysisStreamChunks(
   }
 
   try {
-    const chunks = await env.KV.get(getAnalysisChunksKey(streamId), 'json') as AnalysisStreamChunk[] | null;
+    const raw = await env.KV.get(getAnalysisChunksKey(streamId), 'json');
+    const result = z.array(AnalysisStreamChunkSchema).safeParse(raw);
 
-    if (chunks) {
-      logger?.info('Retrieved analysis stream chunks', {
-        logType: 'operation',
-        streamId,
-        chunkCount: chunks.length,
-      });
+    if (!result.success) {
+      return null;
     }
+
+    const chunks = result.data;
+    logger?.info('Retrieved analysis stream chunks', {
+      logType: 'operation',
+      streamId,
+      chunkCount: chunks.length,
+    });
 
     return chunks;
   } catch (error) {

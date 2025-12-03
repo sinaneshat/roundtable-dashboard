@@ -25,10 +25,11 @@ import { startTransition, useCallback, useEffect, useMemo, useState } from 'reac
 import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { getCreatedAt } from '@/lib/utils/metadata';
 
 export type UseFlowControllerOptions = {
   /** Whether controller is enabled (typically true for overview screen) */
@@ -50,7 +51,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
-  // State selectors
+  // ✅ REACT BEST PRACTICE: Use store API for imperative access inside effects
+  // This avoids infinite loops from dependency arrays while accessing current state
+  const storeApi = useChatStoreApi();
+
+  // State selectors - only subscribe to what triggers re-renders
   const streamingState = useChatStore(useShallow(s => ({
     showInitialUI: s.showInitialUI,
     isStreaming: s.isStreaming,
@@ -63,9 +68,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   })));
 
   const analyses = useChatStore(s => s.analyses);
-  const messages = useChatStore(s => s.messages);
-  const participants = useChatStore(s => s.participants);
-  const preSearches = useChatStore(s => s.preSearches);
   const setThread = useChatStore(s => s.setThread);
 
   // ============================================================================
@@ -79,9 +81,20 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
    *
    * The server-side page.tsx will still fetch fresh data, but
    * HydrationBoundary will merge with existing client cache.
+   *
+   * ✅ REACT BEST PRACTICE: Uses storeApi.getState() for imperative access
+   * This reads current state at call time without causing dependency issues
    */
-  const prepopulateQueryCache = useCallback((threadId: string) => {
-    const thread = threadState.currentThread;
+  const prepopulateQueryCache = useCallback((threadId: string, currentSession: typeof session) => {
+    // ✅ REACT BEST PRACTICE: Read current state imperatively via getState()
+    // This avoids infinite loops from adding state to dependency arrays
+    const state = storeApi.getState();
+    const thread = state.thread;
+    const currentParticipants = state.participants;
+    const currentMessages = state.messages;
+    const currentAnalyses = state.analyses;
+    const currentPreSearches = state.preSearches;
+
     if (!thread)
       return;
 
@@ -101,25 +114,22 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
               ? (thread.lastMessageAt instanceof Date ? thread.lastMessageAt.toISOString() : thread.lastMessageAt)
               : null,
           },
-          participants: participants.map(p => ({
+          participants: currentParticipants.map(p => ({
             ...p,
             createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
             updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
           })),
           // Messages from store - add createdAt for server format compatibility
           // UIMessage from AI SDK doesn't have createdAt, but the page expects it
-          messages: messages.map(m => ({
+          // ✅ TYPE-SAFE: Use getCreatedAt utility instead of force casts
+          messages: currentMessages.map(m => ({
             ...m,
             // Use metadata.createdAt if available (our custom field), else default to now
-            createdAt: (m as { createdAt?: Date | string }).createdAt
-              ? ((m as { createdAt?: Date | string }).createdAt instanceof Date
-                  ? ((m as { createdAt?: Date | string }).createdAt as Date).toISOString()
-                  : (m as { createdAt?: Date | string }).createdAt)
-              : new Date().toISOString(),
+            createdAt: getCreatedAt(m) ?? new Date().toISOString(),
           })),
           user: {
-            name: session?.user?.name || 'You',
-            image: session?.user?.image || null,
+            name: currentSession?.user?.name || 'You',
+            image: currentSession?.user?.image || null,
           },
         },
         meta: {
@@ -132,13 +142,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     // 2. Pre-populate analyses
     // Format matches getThreadAnalysesService response
-    if (analyses.length > 0) {
+    if (currentAnalyses.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.analyses(threadId),
         {
           success: true,
           data: {
-            items: analyses.map(a => ({
+            items: currentAnalyses.map(a => ({
               ...a,
               createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : a.createdAt,
               completedAt: a.completedAt
@@ -156,13 +166,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
 
     // 3. Pre-populate pre-searches (if web search enabled)
-    if (preSearches.length > 0) {
+    if (currentPreSearches.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.preSearches(threadId),
         {
           success: true,
           data: {
-            items: preSearches.map(ps => ({
+            items: currentPreSearches.map(ps => ({
               ...ps,
               createdAt: ps.createdAt instanceof Date ? ps.createdAt.toISOString() : ps.createdAt,
               completedAt: ps.completedAt
@@ -210,7 +220,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         },
       },
     );
-  }, [threadState.currentThread, participants, messages, analyses, preSearches, session, queryClient]);
+    // ✅ REACT BEST PRACTICE: Only stable dependencies (storeApi, queryClient)
+    // State is read imperatively via getState() at call time
+  }, [queryClient, storeApi]);
 
   // Navigation tracking
   const [hasNavigated, setHasNavigated] = useState(false);
@@ -413,7 +425,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       if (slug && threadId) {
         // ✅ PREFETCH DATA: Pre-populate TanStack Query cache for future navigation
         // This ensures data is available if user refreshes or navigates away and back
-        prepopulateQueryCache(threadId);
+        prepopulateQueryCache(threadId, session);
 
         // =========================================================================
         // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
@@ -443,7 +455,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         // server-rendered data and all thread features (actions, changelog, etc.)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isActive,
     firstAnalysisCompleted,
@@ -452,6 +463,8 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     hasAiSlug,
     hasUpdatedThread,
     threadState.createdThreadId,
+    threadState.currentThread?.slug,
     prepopulateQueryCache,
+    session,
   ]);
 }

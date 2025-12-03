@@ -24,6 +24,7 @@ import { CHAT_ATTACHMENT_STATUSES } from '@/api/core/enums';
 import type { UploadMetadata } from '@/db/validation/upload';
 
 import { user } from './auth';
+import { chatMessage, chatThread } from './chat';
 
 // Re-export types from centralized sources (single source of truth)
 export type { ChatAttachmentStatus } from '@/api/core/enums';
@@ -82,8 +83,10 @@ export const upload = sqliteTable('upload', {
 export const threadUpload = sqliteTable('thread_upload', {
   id: text('id').primaryKey(),
 
-  // Thread reference (imported dynamically to avoid circular deps)
-  threadId: text('thread_id').notNull(),
+  // Thread reference
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => chatThread.id, { onDelete: 'cascade' }),
 
   // Upload reference
   uploadId: text('upload_id')
@@ -112,8 +115,10 @@ export const threadUpload = sqliteTable('thread_upload', {
 export const messageUpload = sqliteTable('message_upload', {
   id: text('id').primaryKey(),
 
-  // Message reference (imported dynamically to avoid circular deps)
-  messageId: text('message_id').notNull(),
+  // Message reference
+  messageId: text('message_id')
+    .notNull()
+    .references(() => chatMessage.id, { onDelete: 'cascade' }),
 
   // Upload reference
   uploadId: text('upload_id')
@@ -151,6 +156,10 @@ export const uploadRelations = relations(upload, ({ one, many }) => ({
  * Thread Upload Relations
  */
 export const threadUploadRelations = relations(threadUpload, ({ one }) => ({
+  thread: one(chatThread, {
+    fields: [threadUpload.threadId],
+    references: [chatThread.id],
+  }),
   upload: one(upload, {
     fields: [threadUpload.uploadId],
     references: [upload.id],
@@ -161,6 +170,10 @@ export const threadUploadRelations = relations(threadUpload, ({ one }) => ({
  * Message Upload Relations
  */
 export const messageUploadRelations = relations(messageUpload, ({ one }) => ({
+  message: one(chatMessage, {
+    fields: [messageUpload.messageId],
+    references: [chatMessage.id],
+  }),
   upload: one(upload, {
     fields: [messageUpload.uploadId],
     references: [upload.id],
