@@ -103,6 +103,9 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'deepseek': 'deepseek.png',
   'qwen': 'qwen.png',
   'moonshotai': 'kimi.png',
+  'mistralai': 'mistral.png',
+  'mistral': 'mistral.png',
+  'microsoft': 'microsoft.png',
 
   // Model name aliases (for backward compatibility)
   'claude': 'anthropic.png',
@@ -132,6 +135,10 @@ const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
   'xai': 'xAI',
   'x-ai': 'xAI',
   'openrouter': 'OpenRouter',
+  'deepseek': 'DeepSeek',
+  'mistralai': 'Mistral AI',
+  'mistral': 'Mistral',
+  'microsoft': 'Microsoft',
 };
 
 // ============================================================================

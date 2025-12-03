@@ -37,9 +37,10 @@ const CHEAP_FAST_MODEL = ModelIdEnum.enum['google/gemini-2.0-flash-001'];
 
 /**
  * Model for round analysis and moderator analysis
- * ✅ ALWAYS CLAUDE SONNET 4: Works reliably with mode:'json' for complex schemas
+ * ✅ ALWAYS CLAUDE 3.5 SONNET: Tested & works reliably with mode:'json' for complex schemas
+ * ⚠️ DO NOT CHANGE: Claude Sonnet 4 has issues with streamObject mode:'json' - returns empty responses
  */
-export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-sonnet-4'];
+export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
 
 // ============================================================================
 // TITLE GENERATION MODELS
