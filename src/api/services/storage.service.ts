@@ -2,57 +2,61 @@
  * Storage Service
  *
  * Provides a unified interface for file storage that works both:
- * - In Cloudflare Workers (using R2)
- * - In local Next.js dev mode (using local filesystem or memory)
+ * - In Cloudflare Workers (using R2) - REQUIRED for preview/production
+ * - In local Next.js dev mode (using local filesystem)
  *
- * This abstraction ensures uploads work in all environments.
+ * IMPORTANT: In Cloudflare Workers environments (preview/production),
+ * R2 is REQUIRED. The filesystem fallback only works in local Node.js dev.
  *
  * @see /src/api/types/uploads.ts for type definitions
  */
 
-import { Buffer } from 'node:buffer';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-
 import type { StorageMetadata, StorageResult } from '@/api/types/uploads';
 
 /**
- * Local storage directory for development
- * Files are stored in .local-uploads/ which is gitignored
+ * Check if we're running in Cloudflare Workers environment
+ * Workers environment doesn't have Node.js fs module available
+ *
+ * Detection strategy:
+ * 1. Workers have the caches API available globally
+ * 2. Workers don't have a real `fs` module (unenv polyfill throws)
  */
-const LOCAL_UPLOAD_DIR = '.local-uploads';
-
-/**
- * Ensure local upload directory exists
- */
-async function ensureLocalDir(): Promise<void> {
-  try {
-    await fs.mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
-  } catch {
-    // Directory already exists
-  }
+function isWorkersEnvironment(): boolean {
+  // Workers have the caches API as a global, Node.js doesn't
+  // This is the most reliable way to detect Workers runtime
+  return typeof caches !== 'undefined' && typeof (caches as { default?: unknown }).default !== 'undefined';
 }
 
 /**
- * Check if we're in local development mode (no R2 available)
+ * Check if we're in local development mode (Node.js with fs available)
+ * Only returns true if:
+ * 1. R2 is not available AND
+ * 2. We're NOT in a Workers environment (where fs doesn't exist)
  */
 export function isLocalDevelopment(r2Bucket: R2Bucket | undefined): boolean {
-  return !r2Bucket;
+  if (r2Bucket) {
+    return false;
+  }
+  // Only allow local dev fallback if NOT in Workers environment
+  return !isWorkersEnvironment();
 }
 
 /**
  * Put a file to storage
- * Uses R2 in production, local filesystem in development
+ * Uses R2 in production/preview, local filesystem only in local dev
+ *
+ * IMPORTANT: In Cloudflare Workers (preview/prod), R2 binding is REQUIRED.
+ * The fs fallback only works in local Node.js development.
  */
 export async function putFile(
   r2Bucket: R2Bucket | undefined,
   key: string,
-  data: ArrayBuffer | ReadableStream | string | Buffer | Uint8Array,
+  data: ArrayBuffer | ReadableStream | string | Uint8Array,
   metadata?: StorageMetadata,
 ): Promise<StorageResult> {
   try {
+    // Production/Preview: Use R2 (REQUIRED)
     if (r2Bucket) {
-      // Production: Use R2
       await r2Bucket.put(key, data, {
         httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
         customMetadata: metadata?.customMetadata,
@@ -60,26 +64,43 @@ export async function putFile(
       return { success: true, key };
     }
 
-    // Development: Use local filesystem
-    await ensureLocalDir();
+    // Check if we're in Workers environment without R2 - this is a configuration error
+    if (isWorkersEnvironment()) {
+      const errorMsg = 'R2 bucket binding is required in preview/production. Check wrangler.jsonc UPLOADS_R2_BUCKET config and ensure the R2 bucket exists.';
+      console.error(`[Storage] ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+
+    // Local development only: Use filesystem fallback
+    // Dynamic imports to avoid loading Node.js modules in Workers
+    const { Buffer } = await import('node:buffer');
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+
+    const LOCAL_UPLOAD_DIR = '.local-uploads';
+
+    // Ensure directory exists
+    try {
+      await fs.mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
+    } catch {
+      // Directory already exists
+    }
+
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
 
-    // Convert data to Buffer - type-safe checks without force casts
-    // Note: instanceof checks can fail for cross-realm objects, so we use additional checks
-    let buffer: Buffer;
+    // Convert data to Buffer
+    let buffer: Uint8Array;
     if (Buffer.isBuffer(data)) {
       buffer = data;
-    } else if (data instanceof ArrayBuffer || (data && data.constructor?.name === 'ArrayBuffer')) {
-      // Handle both native ArrayBuffer and cross-realm ArrayBuffer
+    } else if (data instanceof ArrayBuffer || (data && (data as object).constructor?.name === 'ArrayBuffer')) {
       buffer = Buffer.from(data as ArrayBuffer);
     } else if (data instanceof Uint8Array || ArrayBuffer.isView(data)) {
-      // Handle both Uint8Array and other TypedArrays
       buffer = Buffer.from(data as Uint8Array);
     } else if (typeof data === 'string') {
       buffer = Buffer.from(data);
     } else {
-      // TypeScript narrowing: remaining type is ReadableStream
-      const stream: ReadableStream = data;
+      // ReadableStream
+      const stream = data as ReadableStream;
       const reader = stream.getReader();
       const chunks: Uint8Array[] = [];
       let done = false;
@@ -156,26 +177,27 @@ export async function getFileStream(
   key: string,
   options?: GetFileOptions,
 ): Promise<R2GetResult> {
+  const notFoundResult: R2GetResult = {
+    body: null,
+    writeHttpMetadata: () => {},
+    httpEtag: '',
+    size: 0,
+    found: false,
+    preconditionsMet: true,
+  };
+
   try {
+    // Production/Preview: Use R2
     if (r2Bucket) {
-      // Production: Use R2 with official pattern
       const object = await r2Bucket.get(key, {
         onlyIf: options?.onlyIf,
         range: options?.range,
       });
 
       if (!object) {
-        return {
-          body: null,
-          writeHttpMetadata: () => {},
-          httpEtag: '',
-          size: 0,
-          found: false,
-          preconditionsMet: true,
-        };
+        return notFoundResult;
       }
 
-      // Check if body is present (preconditions may have failed)
       const hasBody = 'body' in object && object.body !== null;
 
       return {
@@ -189,21 +211,24 @@ export async function getFileStream(
       };
     }
 
-    // Development: Use local filesystem (simulated streaming)
+    // Workers without R2 is a config error
+    if (isWorkersEnvironment()) {
+      console.error('[Storage] R2 bucket required in preview/production');
+      return notFoundResult;
+    }
+
+    // Local development: Use filesystem
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+    const LOCAL_UPLOAD_DIR = '.local-uploads';
+
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
 
-    let fileBuffer: Buffer;
+    let fileBuffer: Uint8Array;
     try {
       fileBuffer = await fs.readFile(filePath);
     } catch {
-      return {
-        body: null,
-        writeHttpMetadata: () => {},
-        httpEtag: '',
-        size: 0,
-        found: false,
-        preconditionsMet: true,
-      };
+      return notFoundResult;
     }
 
     let metadata: StorageMetadata | undefined;
@@ -215,7 +240,6 @@ export async function getFileStream(
       // No metadata file
     }
 
-    // Create a ReadableStream from buffer for consistent API
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(new Uint8Array(fileBuffer));
@@ -223,7 +247,6 @@ export async function getFileStream(
       },
     });
 
-    // Generate simple ETag from file size and modification
     const etag = `"${fileBuffer.length.toString(16)}"`;
 
     return {
@@ -240,14 +263,7 @@ export async function getFileStream(
       preconditionsMet: true,
     };
   } catch {
-    return {
-      body: null,
-      writeHttpMetadata: () => {},
-      httpEtag: '',
-      size: 0,
-      found: false,
-      preconditionsMet: true,
-    };
+    return notFoundResult;
   }
 }
 
@@ -269,8 +285,8 @@ export async function getFile(
   key: string,
 ): Promise<{ data: ArrayBuffer | null; metadata?: StorageMetadata }> {
   try {
+    // Production/Preview: Use R2
     if (r2Bucket) {
-      // Production: Use R2
       const object = await r2Bucket.get(key);
       if (!object) {
         return { data: null };
@@ -284,7 +300,17 @@ export async function getFile(
       };
     }
 
-    // Development: Use local filesystem
+    // Workers without R2 is a config error
+    if (isWorkersEnvironment()) {
+      console.error('[Storage] R2 bucket required in preview/production');
+      return { data: null };
+    }
+
+    // Local development: Use filesystem
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+    const LOCAL_UPLOAD_DIR = '.local-uploads';
+
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
     const fileBuffer = await fs.readFile(filePath);
 
@@ -297,8 +323,7 @@ export async function getFile(
       // No metadata file
     }
 
-    // Convert Buffer to ArrayBuffer properly without force cast
-    // Buffer.buffer may be shared, so slice to get exact bytes
+    // Convert Buffer to ArrayBuffer
     const arrayBuffer = fileBuffer.buffer.slice(
       fileBuffer.byteOffset,
       fileBuffer.byteOffset + fileBuffer.byteLength,
@@ -317,17 +342,27 @@ export async function deleteFile(
   key: string,
 ): Promise<StorageResult> {
   try {
+    // Production/Preview: Use R2
     if (r2Bucket) {
-      // Production: Use R2
       await r2Bucket.delete(key);
       return { success: true, key };
     }
 
-    // Development: Use local filesystem
+    // Workers without R2 is a config error
+    if (isWorkersEnvironment()) {
+      const errorMsg = 'R2 bucket required in preview/production';
+      console.error(`[Storage] ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+
+    // Local development: Use filesystem
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+    const LOCAL_UPLOAD_DIR = '.local-uploads';
+
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
     await fs.unlink(filePath);
 
-    // Also try to delete metadata file
     try {
       await fs.unlink(`${filePath}.meta.json`);
     } catch {
@@ -350,12 +385,23 @@ export async function fileExists(
   key: string,
 ): Promise<boolean> {
   try {
+    // Production/Preview: Use R2
     if (r2Bucket) {
       const object = await r2Bucket.head(key);
       return object !== null;
     }
 
-    // Development: Check local filesystem
+    // Workers without R2 - return false (can't check)
+    if (isWorkersEnvironment()) {
+      console.error('[Storage] R2 bucket required in preview/production');
+      return false;
+    }
+
+    // Local development: Check filesystem
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+    const LOCAL_UPLOAD_DIR = '.local-uploads';
+
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
     await fs.access(filePath);
     return true;
@@ -366,7 +412,7 @@ export async function fileExists(
 
 /**
  * Create a multipart upload
- * Note: Local dev doesn't support true multipart, so we simulate it
+ * Note: Multipart uploads REQUIRE R2 - no local dev simulation
  */
 export async function createMultipartUpload(
   r2Bucket: R2Bucket | undefined,
@@ -374,15 +420,15 @@ export async function createMultipartUpload(
   _metadata?: StorageMetadata,
 ): Promise<{ uploadId: string } | null> {
   try {
+    // Production/Preview: Use R2 (REQUIRED for multipart)
     if (r2Bucket) {
       const upload = await r2Bucket.createMultipartUpload(key);
       return { uploadId: upload.uploadId };
     }
 
-    // Development: Generate a fake upload ID
-    // We'll collect parts in memory/filesystem
-    const uploadId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    return { uploadId };
+    // Multipart uploads require R2
+    console.error('[Storage] R2 bucket required for multipart uploads');
+    return null;
   } catch (error) {
     console.error('[Storage] Failed to create multipart upload:', error);
     return null;
