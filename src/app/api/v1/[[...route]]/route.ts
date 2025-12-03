@@ -1,3 +1,4 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import type { NextRequest } from 'next/server';
 
 import api from '@/api';
@@ -19,24 +20,33 @@ function createApiHandler() {
       duplex: 'half',
     } as RequestInit);
 
-    // Create a mock ExecutionContext for local development
-    // In production (Cloudflare Workers), this is provided automatically
-    // In local dev (Next.js), we need to create a mock to prevent errors
-    const mockExecutionCtx = {
-      waitUntil: (promise: Promise<unknown>) => {
-        // In local dev, just run the promise without blocking the response
-        promise.catch(() => {
-          // Silently handle errors in background tasks
-        });
-      },
-      passThroughOnException: () => {},
-      props: {} as unknown,
-    } as ExecutionContext;
+    // Get Cloudflare context with proper bindings (R2, D1, KV, etc.)
+    // In Cloudflare Workers: returns actual bindings from wrangler.jsonc
+    // In local dev with initOpenNextCloudflareForDev: returns simulated bindings
+    // Falls back to process.env if context unavailable
+    let env: CloudflareEnv;
+    let executionCtx: ExecutionContext;
+
+    try {
+      const cfContext = getCloudflareContext();
+      env = cfContext.env;
+      executionCtx = cfContext.ctx;
+    } catch {
+      // Fallback for environments where Cloudflare context isn't available
+      env = process.env as unknown as CloudflareEnv;
+      executionCtx = {
+        waitUntil: (promise: Promise<unknown>) => {
+          promise.catch(() => {});
+        },
+        passThroughOnException: () => {},
+        props: {} as unknown,
+      } as ExecutionContext;
+    }
 
     // All requests go to the main API (now includes docs)
     // IMPORTANT: Return the Response directly without awaiting to preserve streaming
     // The Response object may contain a ReadableStream that must not be buffered
-    const response = await api.fetch(request, process.env, mockExecutionCtx);
+    const response = await api.fetch(request, env, executionCtx);
 
     // For streaming responses, we need to ensure Next.js doesn't buffer the response
     // AI SDK v5 streaming uses various content types depending on the protocol

@@ -14,17 +14,49 @@
 import type { StorageMetadata, StorageResult } from '@/api/types/uploads';
 
 /**
+ * Cloudflare Workers CacheStorage extension
+ * Workers expose a `default` property on the caches object for the default cache
+ * This is not part of the standard CacheStorage interface but exists in Workers runtime
+ */
+type WorkersCacheStorage = CacheStorage & {
+  readonly default: Cache;
+};
+
+/**
+ * Type guard: Check if caches object has Workers-specific `default` property
+ */
+function hasWorkersDefaultCache(cacheStorage: CacheStorage): cacheStorage is WorkersCacheStorage {
+  return 'default' in cacheStorage && cacheStorage.default !== undefined;
+}
+
+/**
+ * Type guard: Check if value is an ArrayBuffer (including cross-realm ArrayBuffers)
+ * Cross-realm ArrayBuffers (from different JS contexts) fail instanceof checks,
+ * so we also check the constructor name as a fallback.
+ */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  if (value instanceof ArrayBuffer) {
+    return true;
+  }
+  // Cross-realm ArrayBuffer check (e.g., from Workers/Node.js buffer modules)
+  if (value !== null && typeof value === 'object') {
+    const constructor = Object.getPrototypeOf(value)?.constructor;
+    return constructor?.name === 'ArrayBuffer';
+  }
+  return false;
+}
+
+/**
  * Check if we're running in Cloudflare Workers environment
  * Workers environment doesn't have Node.js fs module available
  *
  * Detection strategy:
- * 1. Workers have the caches API available globally
+ * 1. Workers have the caches API available globally with `caches.default`
  * 2. Workers don't have a real `fs` module (unenv polyfill throws)
  */
 function isWorkersEnvironment(): boolean {
-  // Workers have the caches API as a global, Node.js doesn't
-  // This is the most reliable way to detect Workers runtime
-  return typeof caches !== 'undefined' && typeof (caches as { default?: unknown }).default !== 'undefined';
+  // Workers have the caches API as a global with a `default` property, Node.js doesn't
+  return typeof caches !== 'undefined' && hasWorkersDefaultCache(caches);
 }
 
 /**
@@ -88,20 +120,19 @@ export async function putFile(
 
     const filePath = path.join(LOCAL_UPLOAD_DIR, key.replace(/\//g, '_'));
 
-    // Convert data to Buffer
+    // Convert data to Uint8Array for fs.writeFile
     let buffer: Uint8Array;
     if (Buffer.isBuffer(data)) {
       buffer = data;
-    } else if (data instanceof ArrayBuffer || (data && (data as object).constructor?.name === 'ArrayBuffer')) {
-      buffer = Buffer.from(data as ArrayBuffer);
+    } else if (isArrayBuffer(data)) {
+      buffer = Buffer.from(data);
     } else if (data instanceof Uint8Array || ArrayBuffer.isView(data)) {
-      buffer = Buffer.from(data as Uint8Array);
+      buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
     } else if (typeof data === 'string') {
       buffer = Buffer.from(data);
     } else {
-      // ReadableStream
-      const stream = data as ReadableStream;
-      const reader = stream.getReader();
+      // ReadableStream - consume and concatenate chunks
+      const reader = data.getReader();
       const chunks: Uint8Array[] = [];
       let done = false;
       while (!done) {
