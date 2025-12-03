@@ -490,3 +490,188 @@ export async function waitForSearchComplete(
     }, 100);
   });
 }
+
+// ============================================================================
+// Cloudflare R2 Mock Helpers
+// ============================================================================
+
+/**
+ * Mock R2Object returned by get/head operations
+ * ✅ TYPE-SAFE: Implements R2Object interface from cloudflare-env.d.ts
+ */
+export type MockR2Object = {
+  key: string;
+  version: string;
+  size: number;
+  etag: string;
+  httpEtag: string;
+  checksums: R2Checksums;
+  uploaded: Date;
+  httpMetadata?: R2HTTPMetadata;
+  customMetadata?: Record<string, string>;
+  range?: R2Range;
+  storageClass: string;
+  writeHttpMetadata: (headers: Headers) => void;
+};
+
+/**
+ * Mock R2ObjectBody with body and content methods
+ * ✅ TYPE-SAFE: Extends MockR2Object with body methods
+ */
+export type MockR2ObjectBody = MockR2Object & {
+  body: ReadableStream;
+  bodyUsed: boolean;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  bytes: () => Promise<Uint8Array>;
+  text: () => Promise<string>;
+  json: <T>() => Promise<T>;
+  blob: () => Promise<Blob>;
+};
+
+/**
+ * Creates a mock R2Object for testing
+ * ✅ TYPE-SAFE: Returns properly typed R2Object
+ *
+ * @param data - Partial R2Object data
+ * @returns MockR2Object compatible with R2Bucket.head() return type
+ */
+/**
+ * Creates a mock R2Checksums object
+ * ✅ TYPE-SAFE: Implements R2Checksums interface including toJSON method
+ */
+function createMockR2Checksums(data?: Partial<R2Checksums>): R2Checksums {
+  return {
+    md5: data?.md5,
+    sha1: data?.sha1,
+    sha256: data?.sha256,
+    sha384: data?.sha384,
+    sha512: data?.sha512,
+    toJSON: () => ({
+      md5: data?.md5 ? btoa(String.fromCharCode(...new Uint8Array(data.md5))) : undefined,
+      sha1: data?.sha1 ? btoa(String.fromCharCode(...new Uint8Array(data.sha1))) : undefined,
+      sha256: data?.sha256 ? btoa(String.fromCharCode(...new Uint8Array(data.sha256))) : undefined,
+      sha384: data?.sha384 ? btoa(String.fromCharCode(...new Uint8Array(data.sha384))) : undefined,
+      sha512: data?.sha512 ? btoa(String.fromCharCode(...new Uint8Array(data.sha512))) : undefined,
+    }),
+  };
+}
+
+export function createMockR2Object(data?: Partial<MockR2Object>): MockR2Object {
+  return {
+    key: data?.key ?? 'test-key',
+    version: data?.version ?? 'v1',
+    size: data?.size ?? 1024,
+    etag: data?.etag ?? 'abc123',
+    httpEtag: data?.httpEtag ?? '"abc123"',
+    checksums: data?.checksums ?? createMockR2Checksums(),
+    uploaded: data?.uploaded ?? new Date(),
+    httpMetadata: data?.httpMetadata,
+    customMetadata: data?.customMetadata,
+    storageClass: data?.storageClass ?? 'STANDARD',
+    writeHttpMetadata: data?.writeHttpMetadata ?? ((_headers: Headers) => {}),
+  };
+}
+
+/**
+ * Creates a mock R2ObjectBody for testing get operations
+ * ✅ TYPE-SAFE: Returns properly typed R2ObjectBody
+ *
+ * @param data - Partial R2ObjectBody data
+ * @param content - Content to return from arrayBuffer/text/json methods
+ * @returns MockR2ObjectBody compatible with R2Bucket.get() return type
+ */
+export function createMockR2ObjectBody(
+  data?: Partial<MockR2ObjectBody>,
+  content: ArrayBuffer | string = new ArrayBuffer(0),
+): MockR2ObjectBody {
+  const arrayBufferContent = typeof content === 'string'
+    ? new TextEncoder().encode(content).buffer
+    : content;
+
+  return {
+    ...createMockR2Object(data),
+    body: data?.body ?? new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(arrayBufferContent));
+        controller.close();
+      },
+    }),
+    bodyUsed: data?.bodyUsed ?? false,
+    arrayBuffer: data?.arrayBuffer ?? (() => Promise.resolve(arrayBufferContent)),
+    bytes: data?.bytes ?? (() => Promise.resolve(new Uint8Array(arrayBufferContent))),
+    text: data?.text ?? (() => Promise.resolve(
+      typeof content === 'string' ? content : new TextDecoder().decode(arrayBufferContent),
+    )),
+    json: data?.json ?? (<T>() => Promise.resolve(
+      JSON.parse(typeof content === 'string' ? content : new TextDecoder().decode(arrayBufferContent)) as T,
+    )),
+    blob: data?.blob ?? (() => Promise.resolve(new Blob([arrayBufferContent]))),
+  };
+}
+
+/**
+ * Partial R2Bucket implementation for mocking
+ * Only includes methods commonly used in tests
+ */
+export type PartialR2Bucket = {
+  head?: (key: string) => Promise<R2Object | null>;
+  get?: {
+    (key: string, options: R2GetOptions & { onlyIf: R2Conditional | Headers }): Promise<R2ObjectBody | R2Object | null>;
+    (key: string, options?: R2GetOptions): Promise<R2ObjectBody | null>;
+  };
+  put?: {
+    (key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | null | Blob, options?: R2PutOptions & { onlyIf: R2Conditional | Headers }): Promise<R2Object | null>;
+    (key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | null | Blob, options?: R2PutOptions): Promise<R2Object>;
+  };
+  delete?: (keys: string | string[]) => Promise<void>;
+  list?: (options?: R2ListOptions) => Promise<R2Objects>;
+  createMultipartUpload?: (key: string, options?: R2MultipartOptions) => Promise<R2MultipartUpload>;
+  resumeMultipartUpload?: (key: string, uploadId: string) => R2MultipartUpload;
+};
+
+/**
+ * Creates a mock R2Bucket for testing storage operations
+ * ✅ TYPE-SAFE: Returns type-compatible R2Bucket mock
+ * ✅ PATTERN: Use this instead of `{} as unknown as R2Bucket`
+ *
+ * @param methods - Partial implementation of R2Bucket methods
+ * @returns R2Bucket-compatible mock object
+ *
+ * @example
+ * ```ts
+ * const mockBucket = createMockR2Bucket({
+ *   get: vi.fn().mockResolvedValue(createMockR2ObjectBody({}, 'content')),
+ *   put: vi.fn().mockResolvedValue(createMockR2Object()),
+ * });
+ * ```
+ */
+export function createMockR2Bucket(methods?: PartialR2Bucket): R2Bucket {
+  const defaultMethods: PartialR2Bucket = {
+    head: () => Promise.resolve(null),
+    get: () => Promise.resolve(null),
+    put: () => Promise.resolve(createMockR2Object()),
+    delete: () => Promise.resolve(),
+    list: () => Promise.resolve({ objects: [], truncated: false, delimitedPrefixes: [] }),
+    createMultipartUpload: () => Promise.resolve({
+      key: 'test-key',
+      uploadId: 'test-upload-id',
+      uploadPart: () => Promise.resolve({ partNumber: 1, etag: 'part-etag' }),
+      abort: () => Promise.resolve(),
+      complete: () => Promise.resolve(createMockR2Object()),
+    }),
+    resumeMultipartUpload: () => ({
+      key: 'test-key',
+      uploadId: 'test-upload-id',
+      uploadPart: () => Promise.resolve({ partNumber: 1, etag: 'part-etag' }),
+      abort: () => Promise.resolve(),
+      complete: () => Promise.resolve(createMockR2Object()),
+    }),
+  };
+
+  // Merge provided methods with defaults
+  const mergedMethods = { ...defaultMethods, ...methods };
+
+  // Cast to R2Bucket - the partial methods satisfy the abstract class interface
+  // when used in tests (we only call the methods we've mocked)
+  return mergedMethods as unknown as R2Bucket;
+}

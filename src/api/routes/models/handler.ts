@@ -1,18 +1,23 @@
 /**
  * Models API Handlers
  *
- * ✅ TOP 15 CURATED MODELS - SINGLE SOURCE OF TRUTH:
- * - Top 15 models from Dec 2025 OpenRouter rankings
- * - Zod-based enums for type safety
- * - 3 models per major provider (Google, OpenAI, Anthropic, xAI)
- * - Simplified logic with curated model list
+ * ✅ ENVIRONMENT-BASED MODEL SELECTION:
+ * - Local dev: FREE models only (:free suffix) - costless for development
+ * - Preview/prod: PAID models - ordered by price (cheapest first)
  *
- * ✅ TEXT & MULTIMODAL: Includes best models with text/vision capabilities
- * ✅ PRICING TIERS: Balanced distribution with clear upgrade value
- *   - Free: ≤$0.35/M (7 models - diverse budget models)
- *   - Starter: ≤$1.00/M (9 models - +Grok 4.1, Haiku)
- *   - Pro: ≤$3.50/M (13 models - +GPT-4o, Sonnet, flagships) ← MAIN TARGET
- *   - Power: Unlimited (15 models - +GPT-5, Opus)
+ * ✅ PAID MODELS (preview/prod) - 15 models ordered by price:
+ * - Free tier: ≤$0.35/M (8 models - cheap paid models for free users)
+ * - Starter: ≤$1.00/M (9 models - +Claude Haiku)
+ * - Pro: ≤$3.50/M (14 models - +GPT-4o, Sonnet, flagships) ← MAIN TARGET
+ * - Power: Unlimited (15 models - +Claude 3.5 Sonnet)
+ *
+ * ✅ DEV FREE MODELS (local) - 10 costless models:
+ * - Google (2): Gemini 2.0 Flash Exp, Gemma 3 27B
+ * - Meta (2): Llama 4 Maverick, Llama 3.3 70B
+ * - DeepSeek (2): R1 0528, V3
+ * - Mistral (1): Small 3.1
+ * - Qwen (2): Qwen3 235B, Qwen 2.5 72B
+ * - Microsoft (1): Phi-4
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -21,8 +26,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
 import { getAllModels } from '@/api/services/models-config.service';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 
@@ -91,7 +95,7 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ ORDERING: Accessible first, then by flagship score, then by tier
+    // ✅ ORDERING: Accessible first, then by price (cheapest first)
     // ============================================================================
     const sortedModels = modelsWithTierInfo.sort((a, b) => {
       // Accessible models always come before inaccessible
@@ -99,18 +103,14 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
         return a.is_accessible_to_user ? -1 : 1;
       }
 
-      // Within accessible models, sort by flagship score (higher is better)
-      if (a.is_accessible_to_user && b.is_accessible_to_user) {
-        return getFlagshipScore(b) - getFlagshipScore(a);
-      }
-
-      // Within inaccessible models, sort by required tier (lower tier first)
-      const tierOrder: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
-      return tierOrder.indexOf(a.required_tier) - tierOrder.indexOf(b.required_tier);
+      // Within both groups, sort by input price (cheapest first)
+      const priceA = Number.parseFloat(a.pricing.prompt);
+      const priceB = Number.parseFloat(b.pricing.prompt);
+      return priceA - priceB;
     });
 
     // ============================================================================
-    // ✅ DEFAULT MODEL: Best accessible model by flagship score
+    // ✅ DEFAULT MODEL: First accessible model (cheapest)
     // ============================================================================
     const defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
 

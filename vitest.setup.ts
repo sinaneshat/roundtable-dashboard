@@ -1,4 +1,8 @@
 // Learn more: https://vitest.dev/guide/
+
+// Include Cloudflare Workers types for tests (R2Bucket, KVNamespace, D1Database, etc.)
+/// <reference path="./cloudflare-env.d.ts" />
+
 import '@testing-library/jest-dom/vitest';
 
 import { createRequire } from 'node:module';
