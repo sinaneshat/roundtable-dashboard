@@ -24,6 +24,7 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
+import { STRING_LIMITS } from '@/constants/validation';
 import {
   DbChangelogDataSchema,
   DbCustomRoleMetadataSchema,
@@ -47,9 +48,19 @@ import {
 } from '@/db/validation/chat';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
+/**
+ * Message content validation schema with sanitization
+ * - Trims whitespace from both ends
+ * - Normalizes unicode characters (prevents homograph attacks)
+ * - Enforces min/max length from shared constants
+ *
+ * @see STRING_LIMITS.MESSAGE_MAX - Single source of truth for max length
+ */
 export const MessageContentSchema = z.string()
-  .min(1, 'Message is required')
-  .max(5000, 'Message is too long (max 5000 characters)');
+  .trim()
+  .normalize()
+  .min(STRING_LIMITS.MESSAGE_MIN, 'Message is required')
+  .max(STRING_LIMITS.MESSAGE_MAX, `Message is too long (max ${STRING_LIMITS.MESSAGE_MAX} characters)`);
 
 // ============================================================================
 // PARTICIPANT SCHEMAS - Consolidated

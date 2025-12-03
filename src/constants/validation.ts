@@ -67,7 +67,11 @@ export const STRING_LIMITS = {
   // Descriptions and content
   DESCRIPTION_MAX: 1000,
   BIO_MAX: 500,
-  MESSAGE_MAX: 500,
+
+  // Chat message limits - MUST match backend MessageContentSchema
+  // 4k chars matches ChatGPT's per-message input limit
+  MESSAGE_MIN: 1,
+  MESSAGE_MAX: 4000,
 
   // URLs
   URL_MAX: 2048,

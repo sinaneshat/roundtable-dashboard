@@ -13,6 +13,7 @@ import {
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
 import { Button } from '@/components/ui/button';
+import { STRING_LIMITS } from '@/constants/validation';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import {
   useAutoResizeTextarea,
@@ -75,8 +76,8 @@ export const ChatInput = memo(({
   className,
   // Speech recognition props
   enableSpeech = true,
-  minHeight = 80,
-  maxHeight = 240,
+  minHeight = 72, // ~3 lines of text
+  maxHeight = 200, // Scroll after ~8 lines
   // Quota alert extension
   quotaCheckType,
   // File attachment props
@@ -129,11 +130,15 @@ export const ChatInput = memo(({
   //
   // isInputDisabled: Controls textarea - only disabled for explicit disable or quota exceeded
   // isMicDisabled: Controls microphone - same as input, always available for voice input
-  // isSubmitDisabled: Controls submit button - disabled during streaming, submitting, quota exceeded, or uploading
+  // isSubmitDisabled: Controls submit button - disabled during streaming, submitting, quota exceeded, uploading, or over limit
   const isInputDisabled = disabled || isQuotaExceeded;
   const isMicDisabled = disabled || isQuotaExceeded;
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading;
-  const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0;
+
+  // Character limit validation - aligned with backend MessageContentSchema
+  const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
+
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit;
+  const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   // File attachment handlers
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -284,8 +289,9 @@ export const ChatInput = memo(({
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
-          isSubmitDisabled && !isQuotaExceeded && 'cursor-not-allowed',
-          isStreaming && 'ring-2 ring-primary/20', // Visual indicator during streaming
+          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && 'cursor-not-allowed',
+          isStreaming && 'ring-2 ring-primary/20',
+          isOverLimit && 'border-destructive',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -296,6 +302,21 @@ export const ChatInput = memo(({
         <div className="flex flex-col overflow-hidden h-full">
           {/* Quota Alert Extension - appears at top when quota exceeded */}
           {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
+
+          {/* Content limit alert - appears at top when message too long */}
+          {isOverLimit && (
+            <div
+              className={cn(
+                'flex items-center gap-2 px-3 py-2',
+                'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
+                'bg-destructive/10',
+              )}
+            >
+              <p className="text-[10px] leading-tight text-destructive font-medium">
+                Message too long. Please shorten your message to send.
+              </p>
+            </div>
+          )}
 
           {/* Voice Visualization - appears at top when recording */}
           {enableSpeech && isSpeechSupported && (
@@ -328,7 +349,7 @@ export const ChatInput = memo(({
             )}
           >
             {/* Textarea */}
-            <div className="relative flex items-end px-3 sm:px-4 py-3 sm:py-4">
+            <div className="px-3 sm:px-4 py-3 sm:py-4">
               <textarea
                 ref={textareaRef}
                 value={value}
@@ -344,10 +365,16 @@ export const ChatInput = memo(({
                       ? t('chat.input.listeningPlaceholder')
                       : placeholder || t('chat.input.placeholder')
                 }
-                className="flex-1 bg-transparent border-0 text-sm sm:text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"
-                style={{ minHeight: `${minHeight}px` }}
+                className={cn(
+                  'w-full bg-transparent border-0 text-sm sm:text-base leading-relaxed',
+                  'focus:outline-none focus:ring-0',
+                  'placeholder:text-muted-foreground/60',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'resize-none scrollbar-thin',
+                )}
                 aria-disabled={isInputDisabled}
                 aria-label={isStreaming ? t('chat.input.streamingLabel') : t('chat.input.label')}
+                aria-invalid={isOverLimit}
               />
             </div>
 

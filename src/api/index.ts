@@ -470,12 +470,17 @@ app.use('/projects/:id/knowledge', csrfProtection, requireSession);
 app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
 
 // Upload routes (protected - file attachments for chat)
-app.use('/uploads', csrfProtection, requireSession);
+// Apply dedicated upload rate limit (100/hour per user) to prevent abuse
+app.use('/uploads', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
 app.use('/uploads/:id', protectMutations);
-app.use('/uploads/multipart', csrfProtection, requireSession);
+app.use('/uploads/:id/download', RateLimiterFactory.create('download')); // Download has session-optional auth
+app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'), requireSession);
+app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
 app.use('/uploads/multipart/:id', protectMutations);
-app.use('/uploads/multipart/:id/parts', csrfProtection, requireSession);
-app.use('/uploads/multipart/:id/complete', csrfProtection, requireSession);
+app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
 
 // Register all routes directly on the app
 const appRoutes = app
