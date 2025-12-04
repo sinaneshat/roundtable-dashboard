@@ -376,16 +376,22 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           }
 
           // =========================================================================
-          // ✅ FALLBACK: No active stream ID (KV not available in local dev)
+          // ✅ FIX: No active stream ID means stream died or KV unavailable
           // =========================================================================
-          // Return 202 to tell frontend to poll for completion
-          const ageMs = getTimestampAge(existingAnalysis.createdAt);
-          return Responses.polling(c, {
-            status: 'streaming',
-            resourceId: existingAnalysis.id,
-            message: `Analysis is being generated (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
-            retryAfterMs: 2000,
-          });
+          // Instead of returning 202 polling (which causes infinite retry loop),
+          // treat this like a timed-out stream: mark as failed and create new stream.
+          // This handles:
+          // 1. KV not available in local dev
+          // 2. Stream buffer wasn't initialized due to error
+          // 3. KV entry expired or was cleared
+          await db.update(tables.chatModeratorAnalysis)
+            .set({
+              status: AnalysisStatuses.FAILED,
+              errorMessage: `Stream buffer not found (KV unavailable or stream not initialized) - restarting analysis`,
+            })
+            .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+
+          // Continue to create new analysis below (fall through)
         }
       }
       if (existingAnalysis.status === AnalysisStatuses.FAILED) {

@@ -2,7 +2,7 @@
 import { LayoutGrid, MessageSquare, Plus, Search, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 
@@ -10,6 +10,7 @@ import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants/brand';
+import { useCurrentPathname } from '@/hooks/utils';
 import { useNavigationReset } from '@/hooks/utils/use-navigation-reset';
 import { cn } from '@/lib/ui/cn';
 
@@ -25,7 +26,8 @@ import { cn } from '@/lib/ui/cn';
  */
 export function ChatVerticalNav() {
   const router = useRouter();
-  const pathname = usePathname();
+  // Use custom hook that reacts to history.replaceState/pushState URL changes
+  const pathname = useCurrentPathname();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const handleNavigationReset = useNavigationReset();

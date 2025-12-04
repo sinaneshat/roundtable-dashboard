@@ -40,9 +40,11 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
+import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
+import { executePreSearchStreamService, getThreadMessagesService } from '@/services/api';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, createChatStore, readPreSearchStreamData } from '@/stores/chat';
 
@@ -175,17 +177,19 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // Backend stores proper signed URLs - fetching fresh replaces blob URLs with valid ones.
           // This ensures attachments display correctly after streaming completes.
           try {
-            const response = await fetch(`/api/v1/chat/threads/${threadId}/messages`, {
-              credentials: 'include',
+            // ✅ PATTERN: Use queryClient.fetchQuery for proper cache management
+            // This ensures the cache is updated and other components benefit from fresh data
+            const result = await queryClientRef.current.fetchQuery({
+              queryKey: queryKeys.threads.messages(threadId),
+              queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
+              staleTime: 0, // Force fresh fetch after streaming
             });
-
-            if (response.ok) {
-              const result = await response.json() as { data?: UIMessage[] };
-              if (result.data && Array.isArray(result.data)) {
-                // Update store with fresh messages (contains proper signed URLs)
-                // The sync effect will handle updating the AI SDK hook
-                currentState.setMessages(result.data);
-              }
+            if (result.success && result.data?.messages) {
+              // ✅ TYPE-SAFE: Transform ChatMessage[] to UIMessage[] using utility
+              const uiMessages = chatMessagesToUIMessages(result.data.messages, storeParticipants);
+              // Update store with fresh messages (contains proper signed URLs)
+              // The sync effect will handle updating the AI SDK hook
+              currentState.setMessages(uiMessages);
             }
           } catch {
             // Non-blocking - if refresh fails, UI still works with fallback icons
@@ -417,18 +421,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.STREAMING);
               }
 
-              // Execute pre-search API
-              const response = await fetch(
-                `/api/v1/chat/threads/${threadIdForSearch}/rounds/${currentRound}/pre-search`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'text/event-stream',
-                  },
-                  body: JSON.stringify({ userQuery }),
+              // ✅ TYPE-SAFE: Use service instead of direct fetch
+              const response = await executePreSearchStreamService({
+                param: {
+                  threadId: threadIdForSearch,
+                  roundNumber: String(currentRound),
                 },
-              );
+                json: {
+                  userQuery,
+                },
+              });
 
               if (!response.ok && response.status !== 409) {
                 console.error('[startRound] Pre-search execution failed:', response.status);
@@ -1295,19 +1297,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               });
             }
 
-            // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
-            // This replaces the PreSearchStream component's POST request
-            return fetch(
-              `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'text/event-stream',
-                },
-                body: JSON.stringify({ userQuery: pendingMessage }),
+            // ✅ TYPE-SAFE: Use service instead of direct fetch
+            return executePreSearchStreamService({
+              param: {
+                threadId: effectiveThreadId,
+                roundNumber: String(newRoundNumber),
               },
-            );
+              json: {
+                userQuery: pendingMessage,
+              },
+            });
           }).then(async (response) => {
             if (!response.ok && response.status !== 409) {
               // 409 = already executing, which is fine
@@ -1378,18 +1377,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         const isPlaceholder = preSearchForRound.id.startsWith('placeholder-');
 
         queueMicrotask(() => {
-          // ✅ FIX: If placeholder, create DB record first then execute
-          const executePreSearch = () => fetch(
-            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-              },
-              body: JSON.stringify({ userQuery: pendingMessage }),
+          // ✅ TYPE-SAFE: Use service instead of direct fetch
+          const executePreSearch = () => executePreSearchStreamService({
+            param: {
+              threadId: effectiveThreadId,
+              roundNumber: String(newRoundNumber),
             },
-          );
+            json: {
+              userQuery: pendingMessage,
+            },
+          });
 
           const handleResponse = async (response: Response) => {
             // ✅ BUG FIX: Don't update status to COMPLETE on error responses

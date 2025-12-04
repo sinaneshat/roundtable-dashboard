@@ -95,7 +95,17 @@ export async function readPreSearchStreamData(
 }
 
 /**
+ * Type for pre-search stream execution mutation
+ * ✅ PATTERN: Accepts mutation's mutateAsync instead of direct service import
+ */
+export type ExecutePreSearchStreamMutateAsync = (params: {
+  param: { threadId: string; roundNumber: string };
+  json: { userQuery: string };
+}) => Promise<Response>;
+
+/**
  * Options for pre-search execution
+ * ✅ PATTERN: Uses mutation's mutateAsync instead of direct service import
  */
 export type ExecutePreSearchOptions = {
   store: ChatStoreApi;
@@ -108,6 +118,8 @@ export type ExecutePreSearchOptions = {
     Error,
     { param: { threadId: string; roundNumber: string }; json: { userQuery: string } }
   >;
+  /** ✅ PATTERN: Mutation's mutateAsync for SSE stream execution */
+  executePreSearchMutateAsync: ExecutePreSearchStreamMutateAsync;
   onQueryInvalidate: () => void;
 };
 
@@ -130,6 +142,7 @@ export async function executePreSearch(
     userQuery,
     existingPreSearch,
     createPreSearchMutation,
+    executePreSearchMutateAsync,
     onQueryInvalidate,
   } = options;
 
@@ -185,20 +198,29 @@ export async function executePreSearch(
       store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.STREAMING);
     }
 
-    // Execute pre-search API
-    const response = await fetch(
-      `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify({ userQuery }),
+    // ✅ PATTERN: Use mutation instead of direct service import
+    const response = await executePreSearchMutateAsync({
+      param: {
+        threadId,
+        roundNumber: roundNumber.toString(),
       },
-    );
+      json: {
+        userQuery,
+      },
+    });
 
-    if (!response.ok && response.status !== 409) {
+    // ✅ POLLING: 202 means stream active but KV buffer not available
+    // Return 'in_progress' so caller knows to poll for completion
+    if (response.status === 202) {
+      return 'in_progress';
+    }
+
+    // ✅ CONFLICT: 409 means another stream already active
+    if (response.status === 409) {
+      return 'in_progress';
+    }
+
+    if (!response.ok) {
       console.error('[executePreSearch] Pre-search execution failed:', response.status);
       store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.FAILED);
       store.getState().clearPreSearchActivity(roundNumber);

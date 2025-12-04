@@ -98,15 +98,27 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 /**
  * Thread data schema for cache operations
  * Validates thread object structure for optimistic updates
+ *
+ * ✅ FIX: Include all fields needed for sidebar display
+ * Missing date fields caused NaN in groupChatsByPeriod when Zod stripped unknown keys
  */
 export const ThreadCacheDataSchema = z.object({
   id: z.string(),
   title: z.string().optional(),
+  slug: z.string().optional(),
+  previousSlug: z.string().nullable().optional(),
   mode: z.string().optional(),
   status: z.string().optional(),
   isFavorite: z.boolean().optional(),
   isPublic: z.boolean().optional(),
+  isAiGeneratedTitle: z.boolean().optional(),
+  enableWebSearch: z.boolean().optional(),
   metadata: z.unknown().optional(),
+  // ✅ FIX: Date fields required for sidebar grouping (createdAt, updatedAt)
+  // Accept both string (from JSON API) and Date (from optimistic updates)
+  createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  lastMessageAt: z.union([z.string(), z.date()]).nullable().optional(),
 });
 
 export type ThreadCacheData = z.infer<typeof ThreadCacheDataSchema>;

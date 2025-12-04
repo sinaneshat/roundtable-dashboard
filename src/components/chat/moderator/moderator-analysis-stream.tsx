@@ -26,6 +26,7 @@ import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMA
 import { useBoolean } from '@/hooks/utils';
 import { hasAnalysisData, normalizeAnalysisData } from '@/lib/utils/analysis-utils';
 import { filterArrayWithSchema, safeParse } from '@/lib/utils/type-guards';
+import { getAnalysisResumeService } from '@/services/api';
 
 // ✅ NEW COMPONENTS: Multi-AI Deliberation Framework
 import { AlternativesSection } from './alternatives-section';
@@ -57,10 +58,8 @@ async function attemptAnalysisResume(
   roundNumber: number,
 ): Promise<{ success: true; data: ModeratorAnalysisPayload } | { success: false; reason: 'no-buffer' | 'incomplete' | 'streaming' | 'error' }> {
   try {
-    const response = await fetch(
-      `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/analyze/resume`,
-      { credentials: 'include' },
-    );
+    // ✅ TYPE-SAFE: Use service instead of direct fetch
+    const response = await getAnalysisResumeService({ threadId, roundNumber });
 
     // 204 No Content = no buffer available
     if (response.status === 204) {

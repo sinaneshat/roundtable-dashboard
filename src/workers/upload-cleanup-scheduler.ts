@@ -10,9 +10,37 @@
  * - One DO instance per upload (keyed by uploadId)
  * - Uses SQLite storage for persistence across restarts
  * - Alarms survive worker restarts and failovers
+ *
+ * Following established patterns from:
+ * - src/api/services/title-generator.service.ts (service layer usage)
+ * - docs/backend-patterns.md (Drizzle ORM patterns)
+ *
+ * @see src/api/services/upload-orphan-check.service.ts - Business logic
  */
 
 import { DurableObject } from 'cloudflare:workers';
+import { z } from 'zod';
+
+import {
+  checkUploadOrphaned,
+  createDrizzleFromD1,
+  deleteFromR2,
+  deleteUploadRecord,
+} from '@/api/services/upload-orphan-check.service';
+
+// ============================================================================
+// REQUEST SCHEMAS (Zod validation for type-safe request bodies)
+// ============================================================================
+
+const ScheduleCleanupRequestSchema = z.object({
+  uploadId: z.string().min(1),
+  userId: z.string().min(1),
+  r2Key: z.string().min(1),
+});
+
+const CancelCleanupRequestSchema = z.object({
+  uploadId: z.string().min(1),
+});
 
 // Cleanup delay in milliseconds (15 minutes)
 const CLEANUP_DELAY_MS = 15 * 60 * 1000;
@@ -37,13 +65,20 @@ type UploadCleanupState = {
  *
  * Each instance manages the cleanup schedule for a single upload.
  * Uses DO Alarms for guaranteed execution after the delay period.
+ *
+ * Database Access:
+ * - Uses createDrizzleFromD1() from upload-orphan-check.service.ts
+ * - Follows established patterns from title-generator.service.ts
  */
 export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage;
+  private db: ReturnType<typeof createDrizzleFromD1>;
 
   constructor(ctx: DurableObjectState, env: CloudflareEnv) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
+    // Initialize Drizzle ORM instance for D1 access
+    this.db = createDrizzleFromD1(env.DB);
 
     // Initialize SQLite table on first access
     this.sql.exec(`
@@ -180,7 +215,7 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
         if (isOrphaned) {
           // Delete from R2
-          await this.deleteFromR2(r2Key);
+          await this.deleteR2File(r2Key);
 
           // Delete from database
           await this.deleteFromDatabase(uploadId);
@@ -212,12 +247,16 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
   /**
    * Check if upload is orphaned with retry logic
    * Returns null if all retries fail (caller should reschedule)
+   *
+   * Uses checkUploadOrphaned from upload-orphan-check.service.ts
+   * (Drizzle ORM instead of raw D1 queries)
    */
   private async checkIfOrphanedWithRetry(uploadId: string): Promise<boolean | null> {
     for (let attempt = 0; attempt <= MAX_D1_RETRIES; attempt++) {
       try {
-        const result = await this.checkIfOrphaned(uploadId);
-        return result;
+        // Use service function with Drizzle ORM
+        const result = await checkUploadOrphaned(uploadId, this.db);
+        return result.isOrphaned;
       } catch (error) {
         console.error(`[UploadCleanup] D1 query attempt ${attempt + 1}/${MAX_D1_RETRIES + 1} failed for ${uploadId}:`, error);
         if (attempt < MAX_D1_RETRIES) {
@@ -231,53 +270,19 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
   }
 
   /**
-   * Check if upload is orphaned (not attached to any message/thread/project)
-   * Throws on D1 errors - use checkIfOrphanedWithRetry for safe calls
-   */
-  private async checkIfOrphaned(uploadId: string): Promise<boolean> {
-    // Query D1 directly using the env binding
-    const db = this.env.DB;
-
-    // Check all junction tables for references
-    const result = await db.prepare(`
-      SELECT
-        (SELECT COUNT(*) FROM message_upload WHERE upload_id = ?) as message_count,
-        (SELECT COUNT(*) FROM thread_upload WHERE upload_id = ?) as thread_count,
-        (SELECT COUNT(*) FROM project_attachment WHERE upload_id = ?) as project_count
-    `).bind(uploadId, uploadId, uploadId).first<{
-      message_count: number;
-      thread_count: number;
-      project_count: number;
-    }>();
-
-    if (!result) {
-      // Query returned no result - this shouldn't happen with COUNT(*), treat as error
-      throw new Error('D1 query returned no result');
-    }
-
-    const totalReferences = result.message_count + result.thread_count + result.project_count;
-    return totalReferences === 0;
-  }
-
-  /**
    * Delete file from R2 storage
+   * Delegates to service function for consistent error handling
    */
-  private async deleteFromR2(r2Key: string): Promise<void> {
-    try {
-      await this.env.UPLOADS_R2_BUCKET.delete(r2Key);
-    } catch (error) {
-      console.error(`[UploadCleanup] Failed to delete R2 object ${r2Key}:`, error);
-      // Don't throw - R2 deletion is best-effort
-    }
+  private async deleteR2File(r2Key: string): Promise<void> {
+    await deleteFromR2(this.env.UPLOADS_R2_BUCKET, r2Key);
   }
 
   /**
    * Delete upload record from database
+   * Uses Drizzle ORM via service function
    */
   private async deleteFromDatabase(uploadId: string): Promise<void> {
-    const db = this.env.DB;
-
-    await db.prepare('DELETE FROM upload WHERE id = ?').bind(uploadId).run();
+    await deleteUploadRecord(uploadId, this.db);
   }
 
   /**
@@ -290,19 +295,23 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
     try {
       if (request.method === 'POST' && path === '/schedule') {
-        const body = await request.json() as {
-          uploadId: string;
-          userId: string;
-          r2Key: string;
-        };
-
-        const result = await this.scheduleCleanup(body.uploadId, body.userId, body.r2Key);
+        // ✅ TYPE-SAFE: Use Zod schema validation
+        const parseResult = ScheduleCleanupRequestSchema.safeParse(await request.json());
+        if (!parseResult.success) {
+          return new Response('Invalid request body', { status: 400 });
+        }
+        const { uploadId, userId, r2Key } = parseResult.data;
+        const result = await this.scheduleCleanup(uploadId, userId, r2Key);
         return Response.json(result);
       }
 
       if (request.method === 'POST' && path === '/cancel') {
-        const body = await request.json() as { uploadId: string };
-        const result = await this.cancelCleanup(body.uploadId);
+        // ✅ TYPE-SAFE: Use Zod schema validation
+        const parseResult = CancelCleanupRequestSchema.safeParse(await request.json());
+        if (!parseResult.success) {
+          return new Response('Invalid request body', { status: 400 });
+        }
+        const result = await this.cancelCleanup(parseResult.data.uploadId);
         return Response.json(result);
       }
 

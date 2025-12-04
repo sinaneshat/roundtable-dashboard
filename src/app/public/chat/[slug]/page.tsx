@@ -8,6 +8,7 @@ import { PublicChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
+import type { GetPublicThreadResponse } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
@@ -111,8 +112,9 @@ export default async function PublicChatThreadPage({
     });
 
     // Verify the thread exists and is public before rendering
-    const cachedData = queryClient.getQueryData(queryKeys.threads.public(slug));
-    if (!cachedData || typeof cachedData !== 'object' || !('success' in cachedData) || !cachedData.success) {
+    // ✅ TYPE-SAFE: Use inferred service response type from API client
+    const cachedData = queryClient.getQueryData<GetPublicThreadResponse>(queryKeys.threads.public(slug));
+    if (!cachedData?.success) {
       // SEO-friendly 404: Thread doesn't exist
       const params = new URLSearchParams({
         toast: 'failed',
@@ -125,8 +127,7 @@ export default async function PublicChatThreadPage({
     // ✅ BACKWARDS COMPATIBLE SLUGS: 301 redirect from old slug to new AI-generated slug
     // If user accesses via previousSlug (original non-AI slug), permanently redirect to current slug
     // This ensures SEO-friendly URLs and prevents duplicate content issues
-    const threadData = cachedData as { success: boolean; data?: { thread?: { slug: string; isAiGeneratedTitle: boolean } } };
-    const thread = threadData.data?.thread;
+    const thread = cachedData.data?.thread;
     if (thread?.isAiGeneratedTitle && thread.slug !== slug) {
       permanentRedirect(`/public/chat/${thread.slug}`);
     }

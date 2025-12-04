@@ -13,6 +13,7 @@ export { useAutoScroll, useAutoScrollWithTrigger } from './use-auto-scroll';
 export { useBoolean } from './use-boolean';
 export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';
 export { PendingAttachmentSchema, useChatAttachments } from './use-chat-attachments';
+export { useCurrentPathname } from './use-current-pathname';
 export { useDebouncedValue } from './use-debounced-value';
 // Drag and drop utilities
 export type { UseDragDropReturn } from './use-drag-drop';

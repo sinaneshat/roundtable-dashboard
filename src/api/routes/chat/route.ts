@@ -409,6 +409,14 @@ export const executePreSearchRoute = createRoute({
         },
       },
     },
+    [HttpStatusCodes.ACCEPTED]: {
+      description: 'Stream is active but buffer not ready - client should poll. Returns polling metadata including retryAfterMs.',
+      content: {
+        'application/json': {
+          schema: StreamStatusResponseSchema.describe('Polling status with retry delay'),
+        },
+      },
+    },
     [HttpStatusCodes.CONFLICT]: {
       description: 'Pre-search already in progress for this round',
       content: {

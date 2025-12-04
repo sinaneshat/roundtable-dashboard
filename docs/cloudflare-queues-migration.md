@@ -1,86 +1,162 @@
 # Background Task Processing Guide
 
-**Status**: ✅ Using waitUntil() for non-critical tasks
+**Status**: ✅ Using Cloudflare Queues for async title generation
 **Last Updated**: 2025-12-04
 
 ## Overview
 
-AI-based title generation uses Cloudflare's `waitUntil()` pattern for background processing. This document covers architecture decisions, best practices, and when to use different patterns.
+AI-based title generation uses Cloudflare Queues for guaranteed background processing. This ensures reliable title generation with automatic retries and dead-letter queue support.
 
-## waitUntil() Pattern (Current Implementation)
+## Cloudflare Queues Pattern (Current Implementation)
 
-### ✅ Best Practices from Cloudflare Docs
+### ✅ Architecture
 
-**Use waitUntil() for**:
-- **Non-critical operations** (title generation enhances UX but isn't required)
-- **Quick to medium operations** (AI calls ~1-5 seconds)
-- **Best-effort execution** (operations that don't need guaranteed delivery)
-- **Simplicity** (no separate worker deployment needed)
+```
+Thread Created → Queue Producer → Cloudflare Queue → Queue Consumer → Title Updated
+                                     ↓
+                             (retry on failure)
+                                     ↓
+                            Dead Letter Queue
+```
 
-**Benefits**:
-- Non-blocking: Response returns immediately (~100ms instead of 1-5s)
-- Simple: No queue infrastructure needed
-- Cost-effective: No separate worker invocations
-- Works with OpenNext.js: No deployment complexity
+### Benefits
 
-**Implementation**: `src/api/routes/chat/handlers/thread.handler.ts:413-439`
+- **Guaranteed delivery**: Messages persist until processed
+- **Automatic retries**: 3x with exponential backoff (60s, 120s, 240s)
+- **Dead-letter queue**: Failed messages captured for debugging
+- **Non-blocking**: Response returns immediately (~100ms)
+- **Production-ready**: Works reliably in preview/prod Cloudflare Workers
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `src/api/services/title-generation-queue.service.ts` | **Entry point** - Environment-aware dispatcher |
+| `src/workers/title-generation-queue.ts` | Queue consumer (preview/prod) |
+| `src/api/services/title-generator.service.ts` | Title generation logic (reused) |
+| `src/api/types/uploads.ts` | Queue message types (with upload types) |
+| `src/api/routes/chat/handlers/thread.handler.ts` | Calls queue service |
+| `custom-worker.ts` | Exports queue handler |
+| `wrangler.jsonc` | Queue configuration |
+
+### Producer (Thread Creation)
+
+**File**: `src/api/routes/chat/handlers/thread.handler.ts`
+
+Uses the service which handles environment detection:
 
 ```typescript
-// ✅ ASYNC TITLE GENERATION (Non-blocking, Background)
-// Generate AI title using waitUntil() - user gets immediate response
-// Frontend polls via useThreadSlugStatusQuery to detect when title is ready
-const generateTitleAsync = async () => {
-  try {
-    const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-    await updateThreadTitleAndSlug(threadId, aiTitle);
-    const db = await getDbAsync();
-    await invalidateThreadCache(db, user.id);
-  } catch {
-    // Silent failure - thread created with default "New Chat" title
-  }
-};
+await queueTitleGeneration(c, threadId, user.id, body.firstMessage);
+```
 
-if (c.executionCtx) {
-  c.executionCtx.waitUntil(generateTitleAsync());
-} else {
-  generateTitleAsync().catch(() => {});
+### Queue Service (Environment-Aware)
+
+**File**: `src/api/services/title-generation-queue.service.ts`
+
+Automatically selects execution strategy based on environment:
+
+```typescript
+export async function queueTitleGeneration(
+  c: Context<ApiEnv>,
+  threadId: string,
+  userId: string,
+  firstMessage: string,
+): Promise<void> {
+  // Use queue in deployed environments
+  if (isTitleQueueAvailable(c.env)) {
+    await c.env.TITLE_GENERATION_QUEUE.send(buildQueueMessage(...));
+    return;
+  }
+
+  // Fallback to waitUntil for local dev
+  await generateTitleWithWaitUntil(...);
 }
 ```
 
-## Alternative: Cloudflare Queues
+### Consumer (Background Processing)
 
-### ⚠️ When to Consider Queues
+**File**: `src/workers/title-generation-queue.ts`
 
-**Use Cloudflare Queues if you need**:
-- **Guaranteed execution** (critical background jobs)
-- **Automatic retries** (operations must eventually succeed)
-- **Batch processing** (bulk operations benefit from grouping)
-- **Long-running tasks** (>10 seconds)
-- **Separate worker** acceptable (deployment complexity)
+```typescript
+export async function handleTitleGenerationQueue(
+  batch: MessageBatch<TitleGenerationQueueMessage>,
+  env: CloudflareEnv,
+): Promise<void> {
+  for (const msg of batch.messages) {
+    try {
+      // Uses existing service functions - no duplicate logic
+      const title = await generateTitleFromMessage(msg.body.firstMessage, env);
+      await updateThreadTitleAndSlug(msg.body.threadId, title);
+      msg.ack();
+    } catch (error) {
+      // Exponential backoff retry
+      msg.retry({ delaySeconds: Math.min(60 * 2 ** msg.attempts, 300) });
+    }
+  }
+}
+```
 
-### 🚨 OpenNext.js Limitation
+### Queue Configuration
 
-**OpenNext.js does NOT support custom queue consumers** in the same worker bundle.
+**File**: `wrangler.jsonc`
 
-If you need queues:
-- Main app can **produce** messages (queue.send())
-- **Separate worker** required to **consume** messages
-- Requires separate deployment and configuration
-- Adds operational complexity
+```jsonc
+"queues": {
+  "producers": [
+    {
+      "queue": "title-generation-queue-local",
+      "binding": "TITLE_GENERATION_QUEUE"
+    }
+  ],
+  "consumers": [
+    {
+      "queue": "title-generation-queue-local",
+      "max_batch_size": 10,
+      "max_batch_timeout": 5,
+      "max_retries": 3,
+      "retry_delay": 60
+    }
+  ]
+}
+```
 
-### When Queues Are Worth the Complexity
+## Local Development
 
-✅ **Use queues for**:
-- Payment processing webhooks
-- Email campaigns (bulk sending)
-- Report generation (long-running)
-- Data pipelines (guaranteed delivery)
+### How It Works Locally
 
-❌ **Don't use queues for**:
-- Title generation (non-critical, waitUntil() sufficient)
-- Analytics logging (best-effort OK)
-- Cache invalidation (quick operations)
-- Session cleanup (non-critical)
+Cloudflare Queues are only available in deployed Workers environments.
+In local development, the service automatically falls back to `waitUntil()`:
+
+```
+Local (pnpm dev):
+  Thread Created → queueTitleGeneration()
+                → isTitleQueueAvailable() = false
+                → generateTitleWithWaitUntil() ✅
+
+Preview/Prod:
+  Thread Created → queueTitleGeneration()
+                → isTitleQueueAvailable() = true
+                → TITLE_GENERATION_QUEUE.send() ✅
+```
+
+### Checking Availability
+
+```typescript
+// src/api/services/title-generation-queue.service.ts
+export function isTitleQueueAvailable(env: CloudflareEnv): boolean {
+  return env.TITLE_GENERATION_QUEUE !== undefined;
+}
+```
+
+## Alternative: waitUntil() Pattern
+
+### When to Use waitUntil() Instead
+
+**Use waitUntil() for**:
+- **Non-critical operations** that don't need guaranteed delivery
+- **Quick operations** (<1 second)
+- **Best-effort execution** where occasional failures are acceptable
+- **Simpler deployment** without queue infrastructure
 
 ## Monitoring
 
@@ -101,7 +177,7 @@ Look for log entries:
 
 ### Step 1: Define Queue Message Type
 
-**File**: `src/api/types/queue.ts`
+**File**: `src/api/types/uploads.ts` (add to BACKGROUND WORKER TYPES section)
 
 ```typescript
 export type YourQueueMessage = {
@@ -143,11 +219,11 @@ export type YourQueueMessage = {
 
 ### Step 3: Create Queue Consumer
 
-**File**: `src/api/queues/your-queue.consumer.ts`
+**File**: `src/workers/your-queue.ts`
 
 ```typescript
 import type { MessageBatch } from '@cloudflare/workers-types';
-import type { YourQueueMessage } from '@/api/types/queue';
+import type { YourQueueMessage } from '@/api/types/uploads';
 
 export async function handleYourQueue(
   batch: MessageBatch<YourQueueMessage>,
@@ -187,36 +263,25 @@ async function processMessage(
 }
 ```
 
-### Step 4: Register Consumer in API Index
+### Step 4: Register Consumer in Custom Worker
 
-**File**: `src/api/index.ts`
-
-```typescript
-import { handleYourQueue } from './queues/your-queue.consumer';
-
-export default {
-  fetch: appRoutes.fetch,
-  queue: handleYourQueue,
-};
-```
-
-**Note**: For multiple queues, use queue name routing:
+**File**: `custom-worker.ts`
 
 ```typescript
+import { handleYourQueue } from './src/workers/your-queue';
+
 export default {
-  fetch: appRoutes.fetch,
-  queue: async (batch, env) => {
-    switch (batch.queue) {
-      case 'title-generation-queue':
-        return handleTitleGenerationQueue(batch, env);
-      case 'your-queue-name':
-        return handleYourQueue(batch, env);
-      default:
-        console.error(`Unknown queue: ${batch.queue}`);
+  fetch: handler.fetch,
+  queue: async (batch: MessageBatch<unknown>, env: CloudflareEnv) => {
+    if (batch.queue.startsWith('your-queue')) {
+      return handleYourQueue(batch as MessageBatch<YourQueueMessage>, env);
     }
+    console.error(`[QueueRouter] Unknown queue: ${batch.queue}`);
   },
-};
+} satisfies ExportedHandler<CloudflareEnv>;
 ```
+
+**Note**: For multiple queues, use queue name prefix routing (see title-generation example).
 
 ### Step 5: Send Messages to Queue
 
@@ -252,7 +317,7 @@ Regenerates `cloudflare-env.d.ts` with queue bindings.
 ```typescript
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import type { YourQueueMessage } from '@/api/types/queue';
+import type { YourQueueMessage } from '@/api/types/uploads';
 
 type QueueMessage<T> = Message<T>;
 
@@ -460,11 +525,11 @@ pnpm test:coverage
 
 When migrating from `waitUntil()` to Queues:
 
-- [ ] Define queue message type in `src/api/types/queue.ts`
+- [ ] Define queue message type in `src/api/types/uploads.ts` (BACKGROUND WORKER TYPES section)
 - [ ] Add queue configuration to `wrangler.jsonc` (all environments)
-- [ ] Create queue consumer in `src/api/queues/`
+- [ ] Create queue consumer in `src/workers/`
 - [ ] Update producer code to send messages to queue
-- [ ] Register consumer in `src/api/index.ts`
+- [ ] Register consumer in `custom-worker.ts`
 - [ ] Run `pnpm cf-typegen` to generate types
 - [ ] Write comprehensive unit tests
 - [ ] Run `pnpm lint && pnpm check-types && pnpm test`
@@ -617,9 +682,9 @@ interface CloudflareEnv {
 
 - **Cloudflare Queues Docs**: https://developers.cloudflare.com/queues/
 - **Hono + Cloudflare Workers**: https://hono.dev/docs/getting-started/cloudflare-workers
-- **Title Generation Consumer**: `src/api/queues/title-generation.consumer.ts`
-- **Queue Types**: `src/api/types/queue.ts`
-- **Unit Tests**: `src/api/queues/__tests__/title-generation.consumer.test.ts`
+- **Title Generation Consumer**: `src/workers/title-generation-queue.ts`
+- **Queue Types**: `src/api/types/uploads.ts` (BACKGROUND WORKER TYPES section)
+- **Queue Service**: `src/api/services/title-generation-queue.service.ts`
 
 ## Example: Stripe Webhooks (NOT Using Queues)
 

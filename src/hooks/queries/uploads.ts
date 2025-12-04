@@ -21,6 +21,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getAttachmentService,
+  getDownloadUrlService,
   listAttachmentsService,
 } from '@/services/api';
 
@@ -75,6 +76,31 @@ export function useUploadQuery(uploadId: string, enabled?: boolean) {
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!uploadId),
     retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch a signed download URL for an upload
+ * Protected endpoint - requires authentication
+ *
+ * Used by message-attachment-preview when the original URL is invalid (blob/expired)
+ * Returns a time-limited signed URL for downloading/previewing the file
+ *
+ * @param uploadId - Upload ID
+ * @param enabled - Control whether to fetch (based on need for fresh URL)
+ */
+export function useDownloadUrlQuery(uploadId: string, enabled: boolean) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.uploads.downloadUrl(uploadId),
+    queryFn: () => getDownloadUrlService({ param: { id: uploadId } }),
+    staleTime: 0, // Always fetch fresh - signed URLs are time-limited
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes (typical signed URL validity)
+    enabled: enabled && isAuthenticated && !!uploadId,
+    retry: 1, // Only retry once for URL fetch failures
     throwOnError: false,
   });
 }

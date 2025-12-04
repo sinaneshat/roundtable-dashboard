@@ -28,6 +28,15 @@ export type ListAttachmentsResponse = InferResponseType<
   ApiClientType['uploads']['$get']
 >;
 
+// Download URL types
+export type GetDownloadUrlRequest = InferRequestType<
+  ApiClientType['uploads'][':id']['download-url']['$get']
+>;
+
+export type GetDownloadUrlResponse = InferResponseType<
+  ApiClientType['uploads'][':id']['download-url']['$get']
+>;
+
 export type GetAttachmentRequest = InferRequestType<
   ApiClientType['uploads'][':id']['$get']
 >;
@@ -86,35 +95,6 @@ export type AbortMultipartUploadResponse = InferResponseType<
 >;
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Type guard to check if value is an API error response
- */
-function isApiErrorResponse(value: unknown): value is { error: { message: string } } {
-  return (
-    typeof value === 'object'
-    && value !== null
-    && 'error' in value
-    && typeof (value as { error: unknown }).error === 'object'
-    && (value as { error: unknown }).error !== null
-    && 'message' in (value as { error: { message: unknown } }).error
-    && typeof (value as { error: { message: unknown } }).error.message === 'string'
-  );
-}
-
-/**
- * Extract error message from API response using type guard
- */
-function extractErrorMessage(data: unknown): string {
-  if (isApiErrorResponse(data)) {
-    return data.error.message;
-  }
-  return 'Upload part failed';
-}
-
-// ============================================================================
 // Service Functions - Upload Listing
 // ============================================================================
 
@@ -169,6 +149,20 @@ export async function deleteAttachmentService(data: DeleteAttachmentRequest) {
   return parseResponse(client.uploads[':id'].$delete(params));
 }
 
+/**
+ * Get a signed download URL for an attachment
+ * Protected endpoint - requires authentication
+ *
+ * Returns a time-limited, signed URL that can be used to download/preview the file
+ */
+export async function getDownloadUrlService(data: GetDownloadUrlRequest) {
+  const client = await createApiClient();
+  const params: GetDownloadUrlRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.uploads[':id']['download-url'].$get(params));
+}
+
 // ============================================================================
 // Ticket-Based Secure Uploads (S3 Presigned URL Pattern)
 // ============================================================================
@@ -199,18 +193,18 @@ export type UploadWithTicketResponse = InferResponseType<
  * 1. Request ticket with file metadata
  * 2. Receive signed token and upload URL
  * 3. Upload file to the provided URL with token
+ *
+ * ✅ TYPE-SAFE: Uses parseResponse for proper type inference from Hono client
  */
 export async function requestUploadTicketService(
   data: RequestUploadTicketRequest,
 ): Promise<RequestUploadTicketResponse> {
   const client = await createApiClient();
 
-  const response = await client.uploads.ticket.$post({
+  // ✅ TYPE-SAFE: parseResponse infers type from Hono route definition
+  return parseResponse(client.uploads.ticket.$post({
     json: data.json,
-  });
-
-  const json = await response.json();
-  return json as RequestUploadTicketResponse;
+  }));
 }
 
 /**
@@ -250,9 +244,7 @@ export async function uploadWithTicketService(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    const errorMessage = extractErrorMessage(errorData);
-    throw new Error(errorMessage);
+    throw new Error(`Upload failed: ${response.statusText}`);
   }
 
   return response.json();
@@ -373,9 +365,7 @@ export async function uploadPartService(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    const errorMessage = extractErrorMessage(errorData);
-    throw new Error(errorMessage);
+    throw new Error(`Upload part failed: ${response.statusText}`);
   }
 
   return response.json();

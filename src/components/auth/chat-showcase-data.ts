@@ -24,21 +24,21 @@ export const MOCK_USER = {
 
 export const MOCK_PARTICIPANTS = [
   {
-    modelId: 'anthropic/claude-3-5-sonnet-20241022',
+    modelId: 'anthropic/claude-sonnet-4.5',
     provider: 'anthropic',
-    name: 'Claude 3.5 Sonnet',
+    name: 'Claude Sonnet 4.5',
     role: 'Strategic Analyst',
   },
   {
-    modelId: 'openai/gpt-4o',
+    modelId: 'openai/gpt-5.1',
     provider: 'openai',
-    name: 'GPT-4o',
+    name: 'GPT-5.1',
     role: 'Creative Director',
   },
   {
-    modelId: 'google/gemini-2.0-flash-exp',
+    modelId: 'google/gemini-2.5-pro',
     provider: 'google',
-    name: 'Gemini 2.0 Flash',
+    name: 'Gemini 2.5 Pro',
     role: 'Technical Expert',
   },
 ];
@@ -295,7 +295,7 @@ Modern tools understand conversation history and maintain context across extende
       participantId: 'participant-0',
       participantIndex: 0,
       participantRole: 'Strategic Analyst',
-      model: 'anthropic/claude-3-5-sonnet-20241022',
+      model: 'anthropic/claude-sonnet-4.5',
       finishReason: 'stop' as const,
       usage: {
         promptTokens: 850,
@@ -334,7 +334,7 @@ The next frontier is seamless integration of text, images, code, and data visual
       participantId: 'participant-1',
       participantIndex: 1,
       participantRole: 'Creative Director',
-      model: 'openai/gpt-4o',
+      model: 'openai/gpt-5.1',
       finishReason: 'stop' as const,
       usage: {
         promptTokens: 820,
@@ -377,7 +377,7 @@ The most successful tools offer extensive APIs and integrations - connecting wit
       participantId: 'participant-2',
       participantIndex: 2,
       participantRole: 'Technical Expert',
-      model: 'google/gemini-2.0-flash-exp',
+      model: 'google/gemini-2.5-pro',
       finishReason: 'stop' as const,
       usage: {
         promptTokens: 880,
@@ -423,14 +423,14 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
       {
         title: 'Explore cost-benefit analysis of multi-agent systems',
         description: 'Multiple participants highlighted the value but didn\'t address cost implications. Analyze typical ROI timelines and budget considerations.',
-        suggestedModels: ['anthropic/claude-3-5-sonnet-20241022'],
+        suggestedModels: ['anthropic/claude-sonnet-4.5'],
         suggestedRoles: ['Financial Analyst'],
         suggestedMode: 'analyzing',
       },
       {
         title: 'Address ethical considerations and potential risks',
         description: 'Ethical dimensions were not covered in technical or creative analyses. Examine bias, transparency, and responsible AI practices.',
-        suggestedModels: ['anthropic/claude-3-5-sonnet-20241022'],
+        suggestedModels: ['anthropic/claude-sonnet-4.5'],
         suggestedRoles: ['Ethics Advisor'],
         suggestedMode: 'analyzing',
       },
@@ -441,8 +441,8 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
       {
         participantIndex: 0,
         role: 'Strategic Analyst',
-        modelId: 'anthropic/claude-3-5-sonnet-20241022',
-        modelName: 'Claude 3.5 Sonnet',
+        modelId: 'anthropic/claude-sonnet-4.5',
+        modelName: 'Claude Sonnet 4.5',
         scorecard: {
           logic: 95,
           riskAwareness: 88,
@@ -461,8 +461,8 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
       {
         participantIndex: 1,
         role: 'Creative Director',
-        modelId: 'openai/gpt-4o',
-        modelName: 'GPT-4o',
+        modelId: 'openai/gpt-5.1',
+        modelName: 'GPT-5.1',
         scorecard: {
           logic: 87,
           riskAwareness: 75,
@@ -481,8 +481,8 @@ export const MOCK_ANALYSIS: StoredModeratorAnalysis = {
       {
         participantIndex: 2,
         role: 'Technical Expert',
-        modelId: 'google/gemini-2.0-flash-exp',
-        modelName: 'Gemini 2.0 Flash',
+        modelId: 'google/gemini-2.5-pro',
+        modelName: 'Gemini 2.5 Pro',
         scorecard: {
           logic: 92,
           riskAwareness: 95,

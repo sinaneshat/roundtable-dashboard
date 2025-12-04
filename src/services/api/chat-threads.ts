@@ -112,6 +112,15 @@ export type AnalyzeRoundResponse = InferResponseType<
   ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['$post']
 >;
 
+// Analysis resume types - for stream resumption
+export type GetAnalysisResumeRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['resume']['$get']
+>;
+
+export type GetAnalysisResumeResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['resume']['$get']
+>;
+
 // ============================================================================
 // Service Functions
 // ============================================================================
@@ -293,4 +302,34 @@ export async function getThreadAnalysesService(data: GetThreadAnalysesRequest) {
     param: data.param ?? { id: '' },
   };
   return parseResponse(client.chat.threads[':id'].analyses.$get(params));
+}
+
+/**
+ * Get analysis resume buffer for stream resumption
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * ✅ PATTERN: Returns raw Response for custom header handling
+ * Used by ModeratorAnalysisStream to resume buffered analysis streams
+ *
+ * Response codes:
+ * - 200: Buffer available with X-Stream-Status header
+ * - 202: Stream is still active, client should poll
+ * - 204: No buffer available
+ *
+ * @param params - Request parameters
+ * @param params.threadId - Thread ID
+ * @param params.roundNumber - Round number
+ */
+export async function getAnalysisResumeService(params: {
+  threadId: string;
+  roundNumber: number;
+}): Promise<Response> {
+  const client = await createApiClient();
+
+  return client.chat.threads[':threadId'].rounds[':roundNumber'].analyze.resume.$get({
+    param: {
+      threadId: params.threadId,
+      roundNumber: params.roundNumber.toString(),
+    },
+  });
 }

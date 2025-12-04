@@ -772,9 +772,9 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
 
     // Clean up copied file from project folder (if it exists)
     // This removes the file from AI Search's scope
-    const ragMetadata = projectAttachment.ragMetadata as { projectR2Key?: string } | null;
-    if (ragMetadata?.projectR2Key) {
-      const deleteTask = deleteFile(c.env.UPLOADS_R2_BUCKET, ragMetadata.projectR2Key)
+    // ✅ TYPE-SAFE: ragMetadata is already typed via $type<ProjectAttachmentRagMetadata>() in schema
+    if (projectAttachment.ragMetadata?.projectR2Key) {
+      const deleteTask = deleteFile(c.env.UPLOADS_R2_BUCKET, projectAttachment.ragMetadata.projectR2Key)
         .then((result) => {
           if (!result.success) {
             console.error(`[Project] Failed to delete project file copy: ${result.error}`);

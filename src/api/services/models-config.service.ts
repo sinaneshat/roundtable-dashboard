@@ -49,6 +49,7 @@ export const ModelIdEnum = z.enum([
 
   // --- PRO TIER (≤$5.00/M) - adds 10 ---
   'google/gemini-2.5-pro', // $1.25/M - 1M context, flagship
+  'openai/gpt-5.1', // $1.25/M - OpenAI latest flagship, multimodal
   'openai/o3', // $2/M - 200K context, reasoning
   'openai/gpt-4.1', // $2/M - 1M context, flagship
   'google/gemini-3-pro-preview', // $2/M - 1M context, Gemini 3 flagship
@@ -478,6 +479,26 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     supports_reasoning_stream: true,
   },
   {
+    id: 'openai/gpt-5.1',
+    name: 'GPT-5.1',
+    description: 'OpenAI latest flagship. Advanced multimodal reasoning.',
+    context_length: 1048576,
+    created: 1748390400,
+    pricing: { prompt: '0.00000125', completion: '0.00001000' },
+    top_provider: { context_length: 1048576, max_completion_tokens: 65536, is_moderated: true },
+    per_request_limits: null,
+    architecture: { modality: 'text+image+file->text', tokenizer: 'o200k_base', instruct_type: 'chatml' },
+    provider: 'openai',
+    category: 'general',
+    capabilities: { vision: true, reasoning: true, streaming: true, tools: true },
+    pricing_display: { input: '$1.25/1M', output: '$10/1M' },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+    supports_temperature: true,
+    supports_reasoning_stream: true,
+  },
+  {
     id: 'openai/o3',
     name: 'OpenAI o3',
     description: 'Latest reasoning model. Math, science, coding, visual.',
@@ -744,15 +765,48 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
 ] as const;
 
 // ============================================================================
+// USER-FACING MODELS - Curated list for UI selection (Dec 2025)
+// ============================================================================
+
+/**
+ * ✅ USER-FACING MODELS: Best 6 multimodal models for perfect results
+ *
+ * Criteria:
+ * - Multimodal support (vision + text)
+ * - Top-tier quality and reliability
+ * - Diverse price points for accessibility
+ *
+ * @see User request: "best models supporting multimodals now"
+ */
+export const USER_FACING_MODEL_IDS: readonly ModelId[] = [
+  'google/gemini-2.5-flash', // $0.30/M - Fast, affordable multimodal
+  'google/gemini-2.5-pro', // $1.25/M - #1 on LMArena, flagship
+  'openai/gpt-5.1', // $1.25/M - OpenAI latest flagship, multimodal
+  'google/gemini-3-pro-preview', // $2/M - Gemini 3 flagship (preview, may have MCP issues)
+  'anthropic/claude-sonnet-4.5', // $3/M - Agent-optimized, 1M context
+  'anthropic/claude-opus-4.5', // $5/M - 80.9% SWE-bench, best reasoning
+] as const;
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
- * Get all available models
+ * Get all available models (for internal/system use)
  * Same models available in all environments (local, preview, production)
  */
 export function getAllModels(): readonly HardcodedModel[] {
   return HARDCODED_MODELS;
+}
+
+/**
+ * Get user-facing models for UI selection
+ * Returns curated list of 6 best multimodal models
+ */
+export function getUserFacingModels(): readonly HardcodedModel[] {
+  return HARDCODED_MODELS.filter(model =>
+    USER_FACING_MODEL_IDS.includes(model.id),
+  );
 }
 
 export function getModelById(modelId: string): HardcodedModel | undefined {

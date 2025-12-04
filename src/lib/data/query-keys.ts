@@ -135,6 +135,7 @@ export const queryKeys = {
         : QueryKeyFactory.list('uploads'),
     details: () => [...queryKeys.uploads.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('uploads', id),
+    downloadUrl: (id: string) => QueryKeyFactory.action('uploads', 'downloadUrl', id),
   },
 } as const;
 

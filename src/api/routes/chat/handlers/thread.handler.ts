@@ -32,7 +32,10 @@ import {
 import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
-import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
+import {
+  generateTitleFromMessage,
+  updateThreadTitleAndSlug,
+} from '@/api/services/title-generator.service';
 import {
   cancelUploadCleanup,
   isCleanupSchedulerAvailable,
@@ -410,7 +413,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       });
     }
 
+    // =========================================================================
     // ✅ ASYNC TITLE GENERATION (Non-blocking, Background)
+    // =========================================================================
     // Generate AI title using waitUntil() - user gets immediate response
     // Frontend polls via useThreadSlugStatusQuery to detect when title is ready
     //
@@ -427,14 +432,13 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         await invalidateThreadCache(db, user.id);
       } catch {
         // Silent failure - thread created with default "New Chat" title
-        // Frontend will display "New Chat" until user manually renames
       }
     };
 
     if (c.executionCtx) {
       c.executionCtx.waitUntil(generateTitleAsync());
     } else {
-      // Fallback for environments without executionCtx (tests, etc.)
+      // Fallback for environments without executionCtx
       generateTitleAsync().catch(() => {});
     }
 

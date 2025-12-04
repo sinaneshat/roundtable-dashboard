@@ -100,3 +100,20 @@ export async function getThreadPreSearchesService(params: {
 
   return response.json();
 }
+
+/**
+ * Execute pre-search SSE stream
+ *
+ * ✅ PATTERN: Returns raw Response for SSE streaming (like streamChatService)
+ * ✅ RPC-COMPLIANT: Uses Hono RPC client directly - no custom headers needed
+ * ✅ USED BY: PreSearchStream component, executePreSearch utility
+ *
+ * EXCEPTION: Does NOT parse response because SSE streams must return raw Response
+ * object for EventSource/ReadableStream processing.
+ *
+ * @param params - Request parameters inferred from RPC type
+ */
+export async function executePreSearchStreamService(params: PreSearchRequest) {
+  const client = await createApiClient();
+  return await client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(params);
+}

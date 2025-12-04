@@ -96,6 +96,7 @@ import {
   MCP_TOOLS,
   RegenerateRoundInputSchema,
   RemoveParticipantInputSchema,
+  ResourceReadParamsSchema,
   RoundFeedbackInputSchema,
   SendMessageInputSchema,
   ToolCallParamsSchema,
@@ -183,13 +184,15 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
         }
 
         case 'resources/read': {
-          const uri = (request.params as { uri?: string })?.uri;
-          if (!uri) {
+          // ✅ TYPE-SAFE: Use Zod schema validation instead of forced casting
+          const resourceParams = ResourceReadParamsSchema.safeParse(request.params);
+          if (!resourceParams.success) {
             return jsonRpcResponse(undefined, {
               code: JsonRpcErrorCodes.INVALID_PARAMS,
               message: 'uri parameter required',
             });
           }
+          const { uri } = resourceParams.data;
 
           // Parse roundtable://thread/{id}
           const match = uri.match(/^roundtable:\/\/thread\/(.+)$/);

@@ -1,23 +1,13 @@
 /**
  * Models API Handlers
  *
- * ✅ ENVIRONMENT-BASED MODEL SELECTION:
- * - Local dev: FREE models only (:free suffix) - costless for development
- * - Preview/prod: PAID models - ordered by price (cheapest first)
- *
- * ✅ PAID MODELS (preview/prod) - 15 models ordered by price:
- * - Free tier: ≤$0.35/M (8 models - cheap paid models for free users)
- * - Starter: ≤$1.00/M (9 models - +Claude Haiku)
- * - Pro: ≤$3.50/M (14 models - +GPT-4o, Sonnet, flagships) ← MAIN TARGET
- * - Power: Unlimited (15 models - +Claude 3.5 Sonnet)
- *
- * ✅ DEV FREE MODELS (local) - 10 costless models:
- * - Google (2): Gemini 2.0 Flash Exp, Gemma 3 27B
- * - Meta (2): Llama 4 Maverick, Llama 3.3 70B
- * - DeepSeek (2): R1 0528, V3
- * - Mistral (1): Small 3.1
- * - Qwen (2): Qwen3 235B, Qwen 2.5 72B
- * - Microsoft (1): Phi-4
+ * ✅ USER-FACING MODELS: Curated 6 best multimodal models for UI selection
+ * - Gemini 2.5 Flash ($0.30/M) - Fast, affordable multimodal
+ * - Gemini 2.5 Pro ($1.25/M) - #1 on LMArena, flagship
+ * - GPT-5.1 ($1.25/M) - OpenAI latest flagship, multimodal
+ * - Gemini 3 Pro Preview ($2/M) - Gemini 3 flagship (preview)
+ * - Claude Sonnet 4.5 ($3/M) - Agent-optimized, 1M context
+ * - Claude Opus 4.5 ($5/M) - 80.9% SWE-bench, best reasoning
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -25,7 +15,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { getAllModels } from '@/api/services/models-config.service';
+import { getUserFacingModels } from '@/api/services/models-config.service';
 import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
@@ -37,23 +27,22 @@ import type { listModelsRoute } from './route';
 // ============================================================================
 
 /**
- * List top 15 curated models with tier-based access control
+ * List curated 6 best multimodal models with tier-based access control
  *
  * GET /api/v1/models
  *
- * ✅ CURATED APPROACH:
- * - Top 15 models from Dec 2025 OpenRouter rankings
- * - 3 models per major provider (Google, OpenAI, Anthropic, xAI)
- * - 2 from DeepSeek, 1 from Meta
- * - Simplified logic with single source of truth
+ * ✅ USER-FACING APPROACH:
+ * - 6 best multimodal models for perfect results
+ * - Google (3): Gemini 2.5 Flash, Pro, 3 Pro Preview
+ * - OpenAI (1): GPT-5.1
+ * - Anthropic (2): Claude Sonnet 4.5, Opus 4.5
  *
- * ✅ TEXT & MULTIMODAL: Includes best text and vision models
- * ✅ SOLID PRINCIPLES: Clean separation of concerns
+ * ✅ MULTIMODAL FOCUS: All models support vision + text
  * Uses existing subscription tier logic from product-logic.service.ts
  *
  * Returns:
  * - Tier information (required_tier, is_accessible_to_user)
- * - Models sorted by accessibility and flagship score
+ * - Models sorted by accessibility and price
  * - Default model selection based on user's tier
  * - Client-side caching via TanStack Query
  */
@@ -72,9 +61,9 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = user ? await getUserTier(user.id) : 'free';
 
     // ============================================================================
-    // ✅ CURATED MODEL SELECTION: All 15 models from single source of truth
+    // ✅ USER-FACING MODELS: Curated 6 best multimodal models for UI selection
     // ============================================================================
-    const allModels = getAllModels();
+    const allModels = getUserFacingModels();
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection

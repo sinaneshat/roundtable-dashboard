@@ -18,10 +18,9 @@
 
 import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useEffect, useState } from 'react';
 
-import { GetDownloadUrlResponseSchema } from '@/api/routes/uploads/schema';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDownloadUrlQuery } from '@/hooks/queries';
 import { getFileIconName, getFileTypeLabel } from '@/hooks/utils/use-file-preview';
 import { cn } from '@/lib/ui/cn';
 
@@ -94,51 +93,22 @@ function AttachmentThumbnail({
   const iconType = getIconType(mediaType);
   const displayName = filename || 'Attachment';
 
-  // State for resolved URL (fetched from backend if original is invalid)
-  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [fetchError, setFetchError] = useState(false);
+  // Determine if we need to fetch a signed URL
+  const needsFetch = !isValidDisplayUrl(originalUrl) && !isDataUrl(originalUrl) && !!uploadId;
+
+  // ✅ TYPE-SAFE: Use query hook instead of direct service call
+  const { data: downloadUrlResult, isLoading, isError: fetchError } = useDownloadUrlQuery(
+    uploadId || '',
+    needsFetch,
+  );
+
+  // Extract resolved URL from query result
+  const resolvedUrl = downloadUrlResult?.data?.url ?? null;
 
   // Determine the best URL to use
   const effectiveUrl = resolvedUrl || originalUrl;
   const hasValidUrl = isValidDisplayUrl(effectiveUrl) || isDataUrl(effectiveUrl);
   const canShowImage = isImage && hasValidUrl;
-  const needsFetch = !isValidDisplayUrl(originalUrl) && !isDataUrl(originalUrl) && uploadId && !resolvedUrl && !fetchError;
-
-  // ✅ FIX: Fetch signed URL for invalid URLs (blob/empty) when we have an uploadId
-  const fetchSignedUrl = useCallback(async () => {
-    if (!uploadId || isLoading || resolvedUrl || fetchError)
-      return;
-
-    setIsLoading(true);
-    try {
-      // Fetch signed download URL from backend
-      const response = await fetch(`/api/v1/uploads/${uploadId}/download-url`);
-      if (response.ok) {
-        // ✅ TYPE-SAFE: Use Zod validation instead of force cast
-        const rawJson = await response.json();
-        const parseResult = GetDownloadUrlResponseSchema.safeParse(rawJson);
-        if (parseResult.success && parseResult.data.data?.url) {
-          setResolvedUrl(parseResult.data.data.url);
-        } else {
-          setFetchError(true);
-        }
-      } else {
-        setFetchError(true);
-      }
-    } catch {
-      setFetchError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [uploadId, isLoading, resolvedUrl, fetchError]);
-
-  // Auto-fetch signed URL when needed
-  useEffect(() => {
-    if (needsFetch) {
-      fetchSignedUrl();
-    }
-  }, [needsFetch, fetchSignedUrl]);
 
   // For invalid URLs without uploadId, don't make it a download link
   const WrapperComponent = hasValidUrl ? 'a' : 'div';
@@ -157,8 +127,6 @@ function AttachmentThumbnail({
       return 'Loading preview...';
     if (fetchError)
       return 'Preview unavailable';
-    if (!hasValidUrl && uploadId)
-      return 'Click to load preview';
     if (!hasValidUrl)
       return 'Preview unavailable';
     return null;
@@ -180,7 +148,7 @@ function AttachmentThumbnail({
             'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
             !hasValidUrl && !isLoading && 'cursor-default opacity-70',
           )}
-          onClick={needsFetch && !isLoading ? fetchSignedUrl : undefined}
+          // Query auto-fetches when enabled; no manual trigger needed
         >
           {isLoading
             ? (

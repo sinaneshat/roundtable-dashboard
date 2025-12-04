@@ -55,6 +55,7 @@ export {
 // Upload queries (protected)
 // Note: Thread/message associations are via junction tables
 export {
+  useDownloadUrlQuery,
   useUploadQuery,
   useUploadsQuery,
 } from './uploads';

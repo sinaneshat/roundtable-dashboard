@@ -31,12 +31,21 @@ function createApiHandler() {
       const cfContext = getCloudflareContext();
       env = cfContext.env;
       executionCtx = cfContext.ctx;
+
+      // If executionCtx or waitUntil is missing, use fallback
+      if (!executionCtx || !executionCtx.waitUntil) {
+        throw new Error('Incomplete Cloudflare context');
+      }
     } catch {
-      // Fallback for environments where Cloudflare context isn't available
+      // Fallback for environments where Cloudflare context isn't available (local Next.js dev)
       env = process.env as unknown as CloudflareEnv;
+
+      // Create waitUntil that tracks promises for background tasks
+      const pendingPromises: Promise<unknown>[] = [];
+
       executionCtx = {
         waitUntil: (promise: Promise<unknown>) => {
-          promise.catch(() => {});
+          pendingPromises.push(promise);
         },
         passThroughOnException: () => {},
         props: {} as unknown,

@@ -1036,7 +1036,7 @@ const createStreamResumptionSlice: StateCreator<
     return true;
   },
 
-  handleResumedStreamComplete: (roundNumber, participantIndex) => {
+  handleResumedStreamComplete: (_roundNumber, participantIndex) => {
     const state = get();
     const participantCount = state.participants.length;
     const nextIndex = participantIndex + 1;

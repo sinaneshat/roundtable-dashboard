@@ -2,7 +2,6 @@
 import { Loader2, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
@@ -26,6 +25,7 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { StickyHeader } from '@/components/ui/sticky-header';
+import { useCurrentPathname } from '@/hooks/utils';
 
 export type Chat = {
   id: string;
@@ -59,11 +59,12 @@ export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
   const now = Date.now();
   const groups = new Map<string, Chat[]>();
   chats.forEach((chat) => {
-    const chatTime = chat.updatedAt.getTime();
-    const diffMs = now - chatTime;
+    const chatTime = chat.updatedAt?.getTime?.();
+    // ✅ FIX: Handle invalid dates gracefully - default to "today" if date is NaN/invalid
+    const diffMs = (chatTime && !Number.isNaN(chatTime)) ? now - chatTime : 0;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     let label: string;
-    if (diffDays < 1) {
+    if (diffDays < 1 || Number.isNaN(diffDays)) {
       label = 'chat.today';
     } else if (diffDays === 1) {
       label = 'chat.yesterday';
@@ -170,7 +171,9 @@ export function ChatList({
   onNavigate,
   disableAnimations = false,
 }: ChatListProps) {
-  const pathname = usePathname();
+  // Use custom hook that reacts to history.replaceState/pushState URL changes
+  // Unlike usePathname(), this updates when URL changes via History API
+  const pathname = useCurrentPathname();
   const t = useTranslations();
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
   const [hasAnimated, setHasAnimated] = useState(false);

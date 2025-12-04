@@ -639,22 +639,17 @@ export function useAddParticipantMutation() {
           if (!data)
             return old;
 
-          // Create optimistic participant with temporary ID
-          const participantData = variables.json as {
-            modelId: unknown;
-            role?: string | null;
-            customRoleId?: string | null;
-            priority: unknown;
-            isEnabled?: boolean;
-          };
+          // ✅ TYPE-SAFE: variables.json is already typed via Hono's InferRequestType
+          // No forced casting needed - AddParticipantRequest has proper schema types
+          const { json: participantData } = variables;
           const optimisticParticipant = {
             id: `temp-${Date.now()}`, // Temporary ID until server responds
             threadId,
             modelId: participantData.modelId,
-            role: participantData.role,
-            customRoleId: participantData.customRoleId ?? null,
-            priority: participantData.priority,
-            isEnabled: participantData.isEnabled ?? true,
+            role: participantData.role ?? null,
+            customRoleId: null, // Not in AddParticipantRequest schema
+            priority: participantData.priority ?? 0,
+            isEnabled: true, // Default to enabled
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };

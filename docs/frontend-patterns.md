@@ -614,6 +614,55 @@ export class UserService {
 // Type-safe parameter and response handling
 ```
 
+### 🚨 CRITICAL RULE: Components NEVER Import Services Directly
+
+**Frontend components must NEVER import from `@/services/api` directly.**
+
+All data fetching and mutations MUST go through TanStack Query hooks:
+- **Read operations** → `useQuery` hooks in `src/hooks/queries/`
+- **Write operations** → `useMutation` hooks in `src/hooks/mutations/`
+- **SSE Streaming** → Custom hooks that wrap services internally
+
+```typescript
+// ❌ WRONG: Direct service import in component
+import { getDownloadUrlService } from '@/services/api';
+
+function MyComponent() {
+  const fetchUrl = async () => {
+    const result = await getDownloadUrlService({ param: { id } }); // BAD
+  };
+}
+
+// ✅ CORRECT: Use query hook
+import { useDownloadUrlQuery } from '@/hooks/queries';
+
+function MyComponent() {
+  const { data, isLoading, isError } = useDownloadUrlQuery(id, enabled);
+}
+```
+
+**Allowed Exceptions:**
+1. **Server Components** (page.tsx, layout.tsx) for server-side prefetching via `queryClient.prefetchQuery`
+2. **Query/Mutation hooks** in `src/hooks/` (the ONLY place services should be imported)
+
+**Why This Matters:**
+- Ensures consistent error handling and loading states
+- Enables proper cache management via TanStack Query
+- Prevents duplicate requests and stale data issues
+- Simplifies testing by mocking hooks instead of services
+- Maintains single source of truth for data fetching logic
+
+**For SSE Streaming:**
+Create custom hooks that internally use services but expose a clean React API:
+```typescript
+// File: src/hooks/utils/use-presearch-stream.ts
+export function usePreSearchStream(options: PreSearchStreamOptions) {
+  // Service calls happen INSIDE the hook
+  // Component only sees the hook's return values
+  return { data, isStreaming, error, start, abort };
+}
+```
+
 **Request/Response Interceptors:**
 ```typescript
 // File: src/services/api-interceptors.ts

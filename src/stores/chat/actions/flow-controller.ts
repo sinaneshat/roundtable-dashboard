@@ -334,6 +334,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     const slugData = slugStatusQuery.data?.success && slugStatusQuery.data.data ? slugStatusQuery.data.data : null;
 
+    // Track timeout for cleanup
+    let invalidationTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
     if (
       slugData
       && slugData.isAiGeneratedTitle
@@ -401,10 +404,15 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         );
       }
 
-      // Also invalidate to ensure server data is fetched (belt and suspenders)
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.all,
-      });
+      // ✅ FIX: Delayed invalidation to avoid race condition
+      // Don't invalidate immediately - the server might not have the updated title yet.
+      // The optimistic update above provides instant UI feedback.
+      // After 3s delay, invalidate to ensure server data syncs (title gen takes 1-3s)
+      invalidationTimeoutId = setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.threads.all,
+        });
+      }, 3000);
 
       // Replace URL in background without navigation
       // NOTE: We no longer call router.push() after this - the user stays on
@@ -418,6 +426,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         );
       });
     }
+
+    // Cleanup timeout on unmount or dependency change
+    return () => {
+      if (invalidationTimeoutId) {
+        clearTimeout(invalidationTimeoutId);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isActive,

@@ -74,6 +74,7 @@ export {
 export {
   type CreatePreSearchRequest,
   createPreSearchService,
+  executePreSearchStreamService,
   getThreadPreSearchesService,
   type PreSearchRequest,
 } from './chat-pre-search';
@@ -120,6 +121,10 @@ export {
   type DeleteThreadRequest,
   type DeleteThreadResponse,
   deleteThreadService,
+  // Analysis resume service for stream resumption
+  type GetAnalysisResumeRequest,
+  type GetAnalysisResumeResponse,
+  getAnalysisResumeService,
   type GetPublicThreadRequest,
   type GetPublicThreadResponse,
   getPublicThreadService,
@@ -301,6 +306,10 @@ export {
   type GetAttachmentRequest,
   type GetAttachmentResponse,
   getAttachmentService,
+  // Download URL service
+  type GetDownloadUrlRequest,
+  type GetDownloadUrlResponse,
+  getDownloadUrlService,
   type ListAttachmentsRequest,
   type ListAttachmentsResponse,
   listAttachmentsService,

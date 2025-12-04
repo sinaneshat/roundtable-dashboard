@@ -7,13 +7,14 @@ import { flushSync } from 'react-dom';
 
 import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
-import { PreSearchListResponseSchema, PreSearchResponseSchema } from '@/api/routes/chat/schema';
+import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
+import { executePreSearchStreamService, getThreadPreSearchesService } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
 
@@ -231,18 +232,16 @@ function PreSearchStreamComponent({
           throw new Error('userQuery is required but was not provided');
         }
 
-        const response = await fetch(
-          `/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'text/event-stream',
-            },
-            body: JSON.stringify({ userQuery: preSearch.userQuery }),
-            signal: abortController.signal,
+        // ✅ TYPE-SAFE: Use service instead of direct fetch
+        const response = await executePreSearchStreamService({
+          param: {
+            threadId,
+            roundNumber: String(preSearch.roundNumber),
           },
-        );
+          json: {
+            userQuery: preSearch.userQuery,
+          },
+        });
 
         // ✅ RESUMABLE STREAMS: Handle various response codes
         // 200: Normal stream or resumed stream
@@ -550,16 +549,11 @@ function PreSearchStreamComponent({
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/v1/chat/threads/${threadId}/pre-searches`);
-        if (!res.ok)
-          throw new Error('Failed to fetch pre-searches');
+        // ✅ TYPE-SAFE: Use service instead of direct fetch
+        const result = await getThreadPreSearchesService({ param: { id: threadId } });
 
-        // ✅ ZOD VALIDATION: Parse API response with schema instead of force typecast
-        const json: unknown = await res.json();
-        const parseResult = PreSearchListResponseSchema.safeParse(json);
-
-        if (!parseResult.success) {
-          console.error('[PreSearchStream] Invalid API response:', parseResult.error);
+        if (!result.data?.items) {
+          console.error('[PreSearchStream] Invalid API response: missing items');
           // Continue polling on validation error
           if (isMounted) {
             timeoutId = setTimeout(poll, 2000);
@@ -567,7 +561,7 @@ function PreSearchStreamComponent({
           return;
         }
 
-        const preSearchList = parseResult.data.data.items;
+        const preSearchList = result.data.items;
         const current = preSearchList.find(ps => ps.id === preSearch.id);
 
         if (current) {
