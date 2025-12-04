@@ -5,6 +5,7 @@
  * participant management, and form state synchronization.
  */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,16 @@ import { useChatFormActions } from '@/stores/chat/actions/form-actions';
 import { createChatStore } from '@/stores/chat/store';
 
 import { createMockParticipants, createMockThread } from './test-factories';
+
+// Create a QueryClient for tests
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+}
 
 // Mock mutations
 const mockMutateAsync = vi.fn();
@@ -33,9 +44,11 @@ vi.mock('@/lib/toast', () => ({
 
 describe('participant Update Race Conditions', () => {
   let store: ReturnType<typeof createChatStore>;
+  let queryClient: QueryClient;
 
   beforeEach(() => {
     store = createChatStore();
+    queryClient = createTestQueryClient();
     mockMutateAsync.mockReset();
     vi.useFakeTimers();
   });
@@ -46,7 +59,11 @@ describe('participant Update Race Conditions', () => {
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    React.createElement(ChatStoreContext.Provider, { value: store }, children)
+    React.createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      React.createElement(ChatStoreContext.Provider, { value: store }, children),
+    )
   );
 
   it('should rollback optimistic participants on mutation failure', async () => {
@@ -57,6 +74,7 @@ describe('participant Update Race Conditions', () => {
 
     // Set form state to match
     store.getState().setSelectedParticipants(participants);
+    store.getState().setSelectedMode('brainstorming'); // Required for form validation
 
     // 2. User adds a participant (Model 1)
     const newParticipants = createMockParticipants(2); // Model 0, Model 1
@@ -82,11 +100,13 @@ describe('participant Update Race Conditions', () => {
   });
 
   it('should wait for mutation when web search is enabled', async () => {
-    // 1. Setup: Thread with web search ENABLED
-    const thread = createMockThread({ id: 't1', enableWebSearch: true });
+    // 1. Setup: Thread with web search DISABLED, then ENABLE it (creates a change)
+    const thread = createMockThread({ id: 't1', enableWebSearch: false });
     const participants = createMockParticipants(1);
     store.getState().initializeThread(thread, participants, []);
     store.getState().setSelectedParticipants(participants);
+    store.getState().setSelectedMode('brainstorming'); // Required for form validation
+    // Toggle web search from false to true - this creates a change that triggers the mutation
     store.getState().setEnableWebSearch(true);
     store.getState().setInputValue('Hello');
 
@@ -102,12 +122,12 @@ describe('participant Update Race Conditions', () => {
     const { result } = renderHook(() => useChatFormActions(), { wrapper });
     const updatePromise = result.current.handleUpdateThreadAndSend('t1');
 
-    // 4. Verify it waits
+    // 4. Verify it waits for config update mutation (web search enabled)
     // Immediately after call, mutation shouldn't be resolved yet
     expect(mutationResolved).toBe(false);
 
-    // Advance time
-    vi.advanceTimersByTime(150);
+    // Advance time using async version to properly handle promise chains
+    await vi.advanceTimersByTimeAsync(150);
     await updatePromise;
 
     // Now it should be resolved

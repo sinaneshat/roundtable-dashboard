@@ -1,37 +1,38 @@
 "use client"
 
+import type { ComponentProps } from 'react';
+
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 import { useTranslations } from 'next-intl';
-import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
 
 function Dialog({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+}: ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
 function DialogTrigger({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
+}: ComponentProps<typeof DialogPrimitive.Trigger>) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
 function DialogPortal({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+}: ComponentProps<typeof DialogPrimitive.Portal>) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
 }
 
 function DialogClose({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
+}: ComponentProps<typeof DialogPrimitive.Close>) {
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
-type DialogOverlayProps = React.ComponentProps<typeof DialogPrimitive.Overlay> & {
+type DialogOverlayProps = ComponentProps<typeof DialogPrimitive.Overlay> & {
   glass?: boolean;
 };
 
@@ -53,7 +54,7 @@ function DialogOverlay({
   )
 }
 
-type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Content> & {
+type DialogContentProps = ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   glass?: boolean;
 };
@@ -97,7 +98,7 @@ function DialogContent({
   )
 }
 
-type DialogHeaderProps = React.ComponentProps<"div"> & {
+type DialogHeaderProps = ComponentProps<"div"> & {
   glass?: boolean;
 };
 
@@ -115,11 +116,11 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
   )
 }
 
-type DialogFooterProps = React.ComponentProps<"div"> & {
+type DialogFooterProps = ComponentProps<"div"> & {
   glass?: boolean;
 };
 
-type DialogBodyProps = React.ComponentProps<"div"> & {
+type DialogBodyProps = ComponentProps<"div"> & {
   glass?: boolean;
 };
 
@@ -153,7 +154,7 @@ function DialogFooter({ className, glass = false, ...props }: DialogFooterProps)
 function DialogTitle({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+}: ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
@@ -166,7 +167,7 @@ function DialogTitle({
 function DialogDescription({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"

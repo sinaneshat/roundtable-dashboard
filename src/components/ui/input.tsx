@@ -1,4 +1,5 @@
-import * as React from "react"
+import type { ComponentProps, ReactNode } from 'react';
+import { forwardRef } from 'react';
 
 import { cn } from "@/lib/ui/cn"
 
@@ -30,16 +31,16 @@ import { cn } from "@/lib/ui/cn"
  * // With both icons
  * <Input startIcon={<Mail />} endIcon={<Check />} type="email" />
  */
-interface InputProps extends React.ComponentProps<"input"> {
+interface InputProps extends ComponentProps<"input"> {
   /** Icon to display at the start of the input */
-  startIcon?: React.ReactNode
+  startIcon?: ReactNode
   /** Icon to display at the end of the input */
-  endIcon?: React.ReactNode
+  endIcon?: ReactNode
   /** Allow end icon to be clickable (removes pointer-events-none) */
   endIconClickable?: boolean
 }
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
+const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, startIcon, endIcon, endIconClickable = false, ...props }, ref) => {
     // If no icons, render basic input
     if (!startIcon && !endIcon) {

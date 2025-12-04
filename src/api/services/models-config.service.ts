@@ -66,18 +66,13 @@ export const ModelIdEnum = z.enum([
   'anthropic/claude-opus-4', // $15/M - 200K context, world's best coding
 
   // ========================================================================
-  // FREE MODELS - For local dev only (costless, :free suffix)
+  // FREE MODELS - DISABLED
+  // ⚠️ Dec 2025: Free models on OpenRouter are unreliable:
+  // - "No endpoints found" errors even for listed models
+  // - Most don't support tool/function calling
+  // - Require specific privacy settings to work
+  // Use cheap paid models (gemini-2.0-flash, gpt-4o-mini) for dev instead
   // ========================================================================
-  'google/gemini-2.0-flash-exp:free', // 1M context - Google free
-  'google/gemma-3-27b-it:free', // 131K context - Gemma free
-  'meta-llama/llama-4-maverick:free', // 1M context - Llama 4 free
-  'meta-llama/llama-3.3-70b-instruct:free', // 131K context - Llama 3.3 free
-  'deepseek/deepseek-r1-0528:free', // 164K context - DeepSeek R1 free
-  'deepseek/deepseek-chat-v3-0324:free', // 131K context - DeepSeek V3 free
-  'mistralai/mistral-small-3.1-24b-instruct:free', // 128K context - Mistral free
-  'qwen/qwen3-235b-a22b:free', // 131K context - Qwen3 MoE free
-  'qwen/qwen-2.5-72b-instruct:free', // 131K context - Qwen 2.5 free
-  'microsoft/phi-4:free', // 16K context - Phi-4 free
 ]);
 
 export type ModelId = z.infer<typeof ModelIdEnum>;
@@ -92,11 +87,7 @@ export const ModelProviderEnum = z.enum([
   'google',
   'deepseek',
   'openai',
-  // Free model providers (dev only)
-  'meta-llama',
   'mistralai',
-  'qwen',
-  'microsoft',
 ]);
 
 export type ModelProvider = z.infer<typeof ModelProviderEnum>;
@@ -753,287 +744,19 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
 ] as const;
 
 // ============================================================================
-// DEV-ONLY FREE MODELS - Costless models for local development
-// ============================================================================
-
-/**
- * ✅ FREE MODELS: Costless models for local dev only (:free suffix)
- *
- * These models are FREE on OpenRouter (no cost) but have rate limits.
- * Only shown in local dev mode to save costs during development.
- * In preview/prod, free tier users see paid cheap models instead.
- *
- * @see https://openrouter.ai/models?pricing=free
- */
-export const DEV_FREE_MODELS: readonly HardcodedModel[] = [
-  // ========================================================================
-  // GOOGLE FREE (2)
-  // ========================================================================
-  {
-    id: 'google/gemini-2.0-flash-exp:free',
-    name: 'Gemini 2.0 Flash Exp (Free)',
-    description: 'Free Gemini 2.0 Flash. 1M context, multimodal.',
-    context_length: 1048576,
-    created: 1738540800,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 1048576, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text+image+video+audio->text', tokenizer: 'Gemini', instruct_type: 'gemini' },
-    provider: 'google',
-    category: 'general',
-    capabilities: { vision: true, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: true,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-  {
-    id: 'google/gemma-3-27b-it:free',
-    name: 'Gemma 3 27B (Free)',
-    description: 'Free Google Gemma 3. 131K context.',
-    context_length: 131072,
-    created: 1740441600,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 131072, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'Gemma', instruct_type: 'gemma' },
-    provider: 'google',
-    category: 'general',
-    capabilities: { vision: false, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-
-  // ========================================================================
-  // META FREE (2)
-  // ========================================================================
-  {
-    id: 'meta-llama/llama-4-maverick:free',
-    name: 'Llama 4 Maverick (Free)',
-    description: 'Free Llama 4 MoE. 1M context, multimodal.',
-    context_length: 1048576,
-    created: 1743811200,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 1048576, max_completion_tokens: 16384, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text+image->text', tokenizer: 'Llama', instruct_type: 'llama' },
-    provider: 'meta-llama',
-    category: 'general',
-    capabilities: { vision: true, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: true,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-  {
-    id: 'meta-llama/llama-3.3-70b-instruct:free',
-    name: 'Llama 3.3 70B (Free)',
-    description: 'Free Llama 3.3 70B. 131K context, multilingual.',
-    context_length: 131072,
-    created: 1733443200,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 131072, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'Llama', instruct_type: 'llama' },
-    provider: 'meta-llama',
-    category: 'general',
-    capabilities: { vision: false, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-
-  // ========================================================================
-  // DEEPSEEK FREE (2)
-  // ========================================================================
-  {
-    id: 'deepseek/deepseek-r1-0528:free',
-    name: 'DeepSeek R1 0528 (Free)',
-    description: 'Free DeepSeek R1. 164K context, reasoning.',
-    context_length: 163840,
-    created: 1748390400,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 163840, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'DeepSeek', instruct_type: 'deepseek' },
-    provider: 'deepseek',
-    category: 'reasoning',
-    capabilities: { vision: false, reasoning: true, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: true,
-    supports_temperature: true,
-    supports_reasoning_stream: true,
-  },
-  {
-    id: 'deepseek/deepseek-chat-v3-0324:free',
-    name: 'DeepSeek V3 (Free)',
-    description: 'Free DeepSeek V3. 131K context, fast chat.',
-    context_length: 131072,
-    created: 1742860800,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 131072, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'DeepSeek', instruct_type: 'deepseek' },
-    provider: 'deepseek',
-    category: 'general',
-    capabilities: { vision: false, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-
-  // ========================================================================
-  // MISTRAL FREE (1)
-  // ========================================================================
-  {
-    id: 'mistralai/mistral-small-3.1-24b-instruct:free',
-    name: 'Mistral Small 3.1 (Free)',
-    description: 'Free Mistral Small 3.1. 128K context.',
-    context_length: 128000,
-    created: 1740441600,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 128000, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'Mistral', instruct_type: 'mistral' },
-    provider: 'mistralai',
-    category: 'general',
-    capabilities: { vision: false, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-
-  // ========================================================================
-  // QWEN FREE (2)
-  // ========================================================================
-  {
-    id: 'qwen/qwen3-235b-a22b:free',
-    name: 'Qwen3 235B MoE (Free)',
-    description: 'Free Qwen3 235B MoE. 131K context, 22B active.',
-    context_length: 131072,
-    created: 1745971200,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 131072, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'Qwen', instruct_type: 'qwen' },
-    provider: 'qwen',
-    category: 'general',
-    capabilities: { vision: false, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-  {
-    id: 'qwen/qwen-2.5-72b-instruct:free',
-    name: 'Qwen 2.5 72B (Free)',
-    description: 'Free Qwen 2.5 72B. 131K context, multilingual.',
-    context_length: 131072,
-    created: 1726704000,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 131072, max_completion_tokens: 8192, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'Qwen', instruct_type: 'qwen' },
-    provider: 'qwen',
-    category: 'general',
-    capabilities: { vision: false, reasoning: false, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: false,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-
-  // ========================================================================
-  // MICROSOFT FREE (1)
-  // ========================================================================
-  {
-    id: 'microsoft/phi-4:free',
-    name: 'Phi-4 (Free)',
-    description: 'Free Microsoft Phi-4. 16K context, reasoning.',
-    context_length: 16384,
-    created: 1734220800,
-    pricing: { prompt: '0', completion: '0' },
-    top_provider: { context_length: 16384, max_completion_tokens: 4096, is_moderated: false },
-    per_request_limits: null,
-    architecture: { modality: 'text->text', tokenizer: 'Phi', instruct_type: 'phi' },
-    provider: 'microsoft',
-    category: 'general',
-    capabilities: { vision: false, reasoning: true, streaming: true, tools: true },
-    pricing_display: { input: 'Free', output: 'Free' },
-    is_free: true,
-    supports_vision: false,
-    is_reasoning_model: true,
-    supports_temperature: true,
-    supports_reasoning_stream: false,
-  },
-] as const;
-
-// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
- * Check if running in local dev mode
- */
-function isDevMode(): boolean {
-  return process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
-}
-
-/**
- * Get all models based on environment
- *
- * - Local dev: Returns DEV_FREE_MODELS + HARDCODED_MODELS (free first, then paid)
- * - Preview/prod: Returns HARDCODED_MODELS only (paid, ordered by price)
+ * Get all available models
+ * Same models available in all environments (local, preview, production)
  */
 export function getAllModels(): readonly HardcodedModel[] {
-  if (isDevMode()) {
-    // Dev mode: Free models first (costless), then paid models
-    return [...DEV_FREE_MODELS, ...HARDCODED_MODELS];
-  }
   return HARDCODED_MODELS;
-}
-
-/**
- * Get paid models only (for preview/prod)
- */
-export function getPaidModels(): readonly HardcodedModel[] {
-  return HARDCODED_MODELS;
-}
-
-/**
- * Get free models only (for local dev)
- */
-export function getDevFreeModels(): readonly HardcodedModel[] {
-  return DEV_FREE_MODELS;
 }
 
 export function getModelById(modelId: string): HardcodedModel | undefined {
-  // Check paid models first, then dev free models
-  return HARDCODED_MODELS.find(model => model.id === modelId)
-    || DEV_FREE_MODELS.find(model => model.id === modelId);
+  return HARDCODED_MODELS.find(model => model.id === modelId);
 }
 
 export function getModelsByProvider(
@@ -1064,14 +787,11 @@ export function getReasoningModels(): readonly HardcodedModel[] {
   return HARDCODED_MODELS.filter(model => model.is_reasoning_model);
 }
 
-export function getFreeModels(): readonly HardcodedModel[] {
-  return HARDCODED_MODELS.filter(model => model.is_free);
-}
-
 /**
  * Get the cheapest model for system operations (title generation, etc.)
+ * Returns Gemini 2.0 Flash ($0.10/M) - cheapest non-reasoning model
  */
-export function getBestFreeModelForDev(): HardcodedModel {
+export function getCheapestModel(): HardcodedModel {
   const cheapModels = HARDCODED_MODELS
     .filter(m => !m.is_reasoning_model)
     .sort((a, b) => Number.parseFloat(a.pricing.prompt) - Number.parseFloat(b.pricing.prompt));

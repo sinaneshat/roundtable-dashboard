@@ -202,8 +202,6 @@ export function streamSearchQuery(
       userMessage: userMessage.substring(0, 100),
     };
 
-    console.error('[Web Search] Query generation failed:', errorDetails);
-
     if (logger) {
       logger.error('Search query generation failed', {
         error: normalizeError(error),
@@ -282,20 +280,11 @@ export async function generateSearchQuery(
         ? Number.parseInt(result.object.totalQueries, 10)
         : result.object.totalQueries;
 
-    if (totalQueriesNum < 1 || totalQueriesNum > 3) {
-      console.error(
-        `[Web Search] Invalid totalQueries ${totalQueriesNum}, clamping to 1-3`,
-      );
-      result.object.totalQueries = Math.max(1, Math.min(3, totalQueriesNum));
-    } else {
-      result.object.totalQueries = totalQueriesNum;
-    }
+    // Clamp totalQueries to valid range (1-3)
+    result.object.totalQueries = Math.max(1, Math.min(3, totalQueriesNum || 1));
 
     // ✅ VALIDATE: Trim queries array if exceeds limit (max 3 queries)
     if (result.object.queries.length > 3) {
-      console.error(
-        `[Web Search] Too many queries (${result.object.queries.length}), trimming to 3`,
-      );
       result.object.queries = result.object.queries.slice(0, 3);
     }
 
@@ -313,21 +302,14 @@ export async function generateSearchQuery(
 
     return result.object;
   } catch (error) {
-    // ✅ DEBUG: Log the actual error details with full context
+    // ✅ LOG: Query generation failure with full context
     const errorDetails = {
       modelId,
       errorType: error instanceof Error ? error.constructor.name : 'Unknown',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
       userMessage: userMessage.substring(0, 100),
     };
 
-    console.error(
-      '[Web Search] Non-streaming generation failed:',
-      errorDetails,
-    );
-
-    // ✅ LOG: Query generation failure
     if (logger) {
       logger.error('Search query generation failed (non-streaming)', {
         error: normalizeError(error),

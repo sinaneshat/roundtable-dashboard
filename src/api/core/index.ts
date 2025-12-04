@@ -175,6 +175,11 @@ export {
   type CursorPaginatedResponse,
   type ErrorContext,
   ErrorContextSchema,
+  // Health check schemas (ZOD-FIRST)
+  type HealthDependency,
+  HealthDependencySchema,
+  type HealthSummary,
+  HealthSummarySchema,
   type IdParam,
   IdParamSchema,
   type ListQuery,
@@ -187,6 +192,11 @@ export {
   SearchQuerySchema,
   type SortingQuery,
   SortingQuerySchema,
+  // SSE/Streaming metadata schemas (ZOD-FIRST)
+  type SSEStreamMetadata,
+  SSEStreamMetadataSchema,
+  type TextStreamMetadata,
+  TextStreamMetadataSchema,
 } from './schemas';
 
 // ============================================================================

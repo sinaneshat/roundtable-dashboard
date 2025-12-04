@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4d15b867-6f22-4df5-8935-e7d1705452fd",
+  "id": "88312489-dd3c-4729-9391-34285b3ff310",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2261,6 +2261,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "previous_slug": {
+          "name": "previous_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "mode": {
           "name": "mode",
           "type": "text",
@@ -2388,6 +2395,13 @@
           "name": "chat_thread_slug_idx",
           "columns": [
             "slug"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_previous_slug_idx": {
+          "name": "chat_thread_previous_slug_idx",
+          "columns": [
+            "previous_slug"
           ],
           "isUnique": false
         },

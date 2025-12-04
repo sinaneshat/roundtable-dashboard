@@ -1,7 +1,7 @@
 # Background Task Processing Guide
 
 **Status**: ✅ Using waitUntil() for non-critical tasks
-**Last Updated**: 2025-11-16
+**Last Updated**: 2025-12-04
 
 ## Overview
 
@@ -18,26 +18,33 @@ AI-based title generation uses Cloudflare's `waitUntil()` pattern for background
 - **Simplicity** (no separate worker deployment needed)
 
 **Benefits**:
-- Non-blocking: Response returns immediately
+- Non-blocking: Response returns immediately (~100ms instead of 1-5s)
 - Simple: No queue infrastructure needed
 - Cost-effective: No separate worker invocations
 - Works with OpenNext.js: No deployment complexity
 
-**Implementation**: `src/api/routes/chat/handlers/thread.handler.ts:290-303`
+**Implementation**: `src/api/routes/chat/handlers/thread.handler.ts:413-439`
 
 ```typescript
-c.executionCtx.waitUntil(
-  (async () => {
-    try {
-      const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-      await updateThreadTitleAndSlug(threadId, aiTitle);
-      await invalidateThreadCache(db, user.id);
-      console.error(`✅ Title generated: "${aiTitle}"`);
-    } catch (error) {
-      console.error('Failed to generate title:', error);
-    }
-  })(),
-);
+// ✅ ASYNC TITLE GENERATION (Non-blocking, Background)
+// Generate AI title using waitUntil() - user gets immediate response
+// Frontend polls via useThreadSlugStatusQuery to detect when title is ready
+const generateTitleAsync = async () => {
+  try {
+    const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
+    await updateThreadTitleAndSlug(threadId, aiTitle);
+    const db = await getDbAsync();
+    await invalidateThreadCache(db, user.id);
+  } catch {
+    // Silent failure - thread created with default "New Chat" title
+  }
+};
+
+if (c.executionCtx) {
+  c.executionCtx.waitUntil(generateTitleAsync());
+} else {
+  generateTitleAsync().catch(() => {});
+}
 ```
 
 ## Alternative: Cloudflare Queues

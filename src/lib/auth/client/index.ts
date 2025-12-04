@@ -31,7 +31,7 @@ export const {
   deleteUser,
 
   // Password management
-  forgetPassword,
+  requestPasswordReset,
   resetPassword,
 
   // Email verification

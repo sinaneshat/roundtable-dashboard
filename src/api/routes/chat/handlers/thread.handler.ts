@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
@@ -410,30 +410,32 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       });
     }
 
-    // ✅ BLOCKING TITLE GENERATION (Synchronous, Immediate)
-    // Generate AI title before returning response - user gets title immediately
-    // This blocks the request until title generation completes (~1-5 seconds)
+    // ✅ ASYNC TITLE GENERATION (Non-blocking, Background)
+    // Generate AI title using waitUntil() - user gets immediate response
+    // Frontend polls via useThreadSlugStatusQuery to detect when title is ready
     //
     // Benefits:
-    // - User sees real title immediately (no "New Thread" placeholder)
-    // - No need for frontend polling or refresh
-    // - Guaranteed title in response
-    // - Simpler code path (no background processing)
-    try {
-      const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-      const { title, slug } = await updateThreadTitleAndSlug(threadId, aiTitle);
-
-      // Update thread object with AI-generated title for response
-      if (thread) {
-        thread.title = title;
-        thread.slug = slug;
+    // - Instant thread creation (~100ms instead of 1-5s blocking)
+    // - User can start chatting immediately without waiting for title
+    // - Title updates in background, URL updates seamlessly via polling
+    // - No request blocking on AI model latency
+    const generateTitleAsync = async () => {
+      try {
+        const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
+        await updateThreadTitleAndSlug(threadId, aiTitle);
+        const db = await getDbAsync();
+        await invalidateThreadCache(db, user.id);
+      } catch {
+        // Silent failure - thread created with default "New Chat" title
+        // Frontend will display "New Chat" until user manually renames
       }
+    };
 
-      const db = await getDbAsync();
-      await invalidateThreadCache(db, user.id);
-    } catch {
-      // Silent failure - thread is already created
-      // Return with default "New Thread" title
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(generateTitleAsync());
+    } else {
+      // Fallback for environments without executionCtx (tests, etc.)
+      generateTitleAsync().catch(() => {});
     }
 
     // =========================================================================
@@ -944,8 +946,13 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
   async (c) => {
     const { slug } = c.validated.params;
     const db = await getDbAsync();
+    // ✅ BACKWARDS COMPATIBLE SLUGS: Check both current slug AND previousSlug
+    // This ensures public links with the initial (non-AI) slug continue to work
     const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.slug, slug),
+      where: or(
+        eq(tables.chatThread.slug, slug),
+        eq(tables.chatThread.previousSlug, slug),
+      ),
     });
     if (!thread) {
       throw createError.notFound(
@@ -1094,8 +1101,14 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     const { user } = c.auth();
     const { slug } = c.validated.params;
     const db = await getDbAsync();
+    // ✅ BACKWARDS COMPATIBLE SLUGS: Check both current slug AND previousSlug
+    // This ensures links with the initial (non-AI) slug continue to work
+    // after the AI-generated title creates a new slug
     const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.slug, slug),
+      where: or(
+        eq(tables.chatThread.slug, slug),
+        eq(tables.chatThread.previousSlug, slug),
+      ),
     });
     if (!thread) {
       throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', slug));

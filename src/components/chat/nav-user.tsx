@@ -1,8 +1,9 @@
 'use client';
+
 import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import * as React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -50,14 +51,14 @@ export function NavUser() {
   const user = session?.user;
   // ✅ FIX: Prevent hydration mismatch by deferring initials calculation to client
   // Server has no session, client does - causes 'U' (server) vs 'AB' (client) mismatch
-  const [isMounted, setIsMounted] = React.useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  React.useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Standard mounted flag pattern
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect, react-hooks/set-state-in-effect -- Standard mounted flag pattern for hydration
     setIsMounted(true);
   }, []);
 
-  const userInitials = React.useMemo(() => {
+  const userInitials = useMemo(() => {
     if (!isMounted)
       return 'U'; // Prevent hydration mismatch
     return user?.name

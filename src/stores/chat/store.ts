@@ -1166,11 +1166,7 @@ const createAnimationSlice: StateCreator<
 
     const timeoutPromise = new Promise<void>((resolve) => {
       setTimeout(() => {
-        console.error('[waitForAllAnimations] Timeout - forcing animation completion', {
-          pendingIndices,
-          timeoutMs: ANIMATION_TIMEOUT_MS,
-        });
-        // Force-clear all pending animations
+        // Force-clear all pending animations on timeout
         set({
           pendingAnimations: new Set<number>(),
           animationResolvers: new Map<number, () => void>(),

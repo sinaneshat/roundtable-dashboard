@@ -1,6 +1,6 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { permanentRedirect, redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants';
 import { ChatThreadScreen } from '@/containers/screens/chat';
@@ -75,6 +75,13 @@ export default async function ChatThreadPage({
   }
 
   const { thread, participants, messages, user } = threadResult.data;
+
+  // ✅ BACKWARDS COMPATIBLE SLUGS: 301 redirect from old slug to new AI-generated slug
+  // If user accesses via previousSlug (original non-AI slug), permanently redirect to current slug
+  // This ensures SEO-friendly URLs and prevents duplicate content issues
+  if (thread.isAiGeneratedTitle && thread.slug !== slug) {
+    permanentRedirect(`/chat/${thread.slug}`);
+  }
 
   // ✅ OPTIMIZATION: Pre-fetch all critical data in parallel for zero loading states
   await Promise.all([

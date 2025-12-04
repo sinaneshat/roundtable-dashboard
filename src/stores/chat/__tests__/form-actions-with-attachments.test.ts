@@ -63,6 +63,7 @@ describe('chat Form Actions with Attachments', () => {
         thread: null,
         participants: [],
         messages: [],
+        pendingAttachments: [],
 
         // Actions
         setInputValue: vi.fn(),
@@ -84,6 +85,7 @@ describe('chat Form Actions with Attachments', () => {
         setStreamingRoundNumber: vi.fn(),
         setMessages: vi.fn(),
         setHasEarlyOptimisticMessage: vi.fn(),
+        clearAttachments: vi.fn(),
       };
 
       return selector(mockState);
@@ -440,6 +442,7 @@ describe('chat Form Actions with Attachments', () => {
           setStreamingRoundNumber: vi.fn(),
           setMessages: vi.fn(),
           setHasEarlyOptimisticMessage: vi.fn(),
+          clearAttachments: vi.fn(),
         };
 
         return selector(mockState);
@@ -448,6 +451,9 @@ describe('chat Form Actions with Attachments', () => {
 
     it('sends message with single attachment in round 1', async () => {
       const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -527,9 +533,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
-          setMessages: vi.fn(),
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
+          setMessages: mockSetMessages,
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -558,7 +564,14 @@ describe('chat Form Actions with Attachments', () => {
       const attachmentIds = ['upload-abc'];
       await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds);
 
-      // prepareForNewMessage should be called with attachment IDs and file parts
+      // Streaming round number set immediately for UI feedback
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalledWith(1);
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
+      // prepareForNewMessage called with attachment IDs and empty fileParts (no attachmentInfos)
       expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Follow-up message',
         [],
@@ -569,6 +582,9 @@ describe('chat Form Actions with Attachments', () => {
 
     it('sends message with multiple attachments', async () => {
       const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -648,9 +664,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
-          setMessages: vi.fn(),
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
+          setMessages: mockSetMessages,
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -679,6 +695,14 @@ describe('chat Form Actions with Attachments', () => {
       const attachmentIds = ['upload-1', 'upload-2', 'upload-3'];
       await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds);
 
+      // Streaming round number set immediately for UI feedback
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalledWith(1);
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
+      // prepareForNewMessage called with attachment IDs and empty fileParts
       expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Follow-up message',
         [],
@@ -689,6 +713,9 @@ describe('chat Form Actions with Attachments', () => {
 
     it('sends message without attachments when none provided', async () => {
       const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -768,9 +795,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
-          setMessages: vi.fn(),
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
+          setMessages: mockSetMessages,
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -798,6 +825,14 @@ describe('chat Form Actions with Attachments', () => {
 
       await result.current.handleUpdateThreadAndSend('thread-123');
 
+      // Streaming round number set immediately for UI feedback
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalledWith(1);
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
+      // prepareForNewMessage called without attachments
       expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Follow-up message',
         [],
@@ -825,6 +860,8 @@ describe('chat Form Actions with Attachments', () => {
       });
 
       const mockSetMessages = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -904,9 +941,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
           setMessages: mockSetMessages,
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -917,6 +954,9 @@ describe('chat Form Actions with Attachments', () => {
 
       const attachmentIds = ['upload-123'];
       await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds);
+
+      // Streaming round number set immediately
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalledWith(1);
 
       // Optimistic message should be created immediately
       await waitFor(() => {
@@ -934,6 +974,9 @@ describe('chat Form Actions with Attachments', () => {
           ]),
         );
       });
+
+      // Early optimistic message flag set
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
     });
   });
 
@@ -956,6 +999,7 @@ describe('chat Form Actions with Attachments', () => {
           thread: null,
           participants: [],
           messages: [],
+          pendingAttachments: [],
           setInputValue: vi.fn(),
           resetForm: vi.fn(),
           setSelectedMode: vi.fn(),
@@ -975,6 +1019,7 @@ describe('chat Form Actions with Attachments', () => {
           setStreamingRoundNumber: vi.fn(),
           setMessages: vi.fn(),
           setHasEarlyOptimisticMessage: vi.fn(),
+          clearAttachments: vi.fn(),
         };
 
         return selector(mockState);
@@ -1010,6 +1055,9 @@ describe('chat Form Actions with Attachments', () => {
   describe('uploadId preservation through store (critical for multi-participant)', () => {
     it('preserves uploadId in fileParts when passed to prepareForNewMessage', async () => {
       const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -1092,9 +1140,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
-          setMessages: vi.fn(),
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
+          setMessages: mockSetMessages,
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -1143,6 +1191,13 @@ describe('chat Form Actions with Attachments', () => {
 
       await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds, attachmentInfos);
 
+      // Streaming round number set immediately
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalled();
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
       // 🚨 CRITICAL ASSERTION: uploadId MUST be preserved in fileParts
       // Without this, participant 1+ (GPT-4o in this case) will fail with:
       // "Invalid file URL: resume.pdf" because it can't load the file content
@@ -1164,6 +1219,9 @@ describe('chat Form Actions with Attachments', () => {
 
     it('preserves uploadId for multiple attachments with mixed previewUrl availability', async () => {
       const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -1219,9 +1277,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
-          setMessages: vi.fn(),
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
+          setMessages: mockSetMessages,
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -1271,6 +1329,13 @@ describe('chat Form Actions with Attachments', () => {
 
       await result.current.handleUpdateThreadAndSend('thread-456', attachmentIds, attachmentInfos);
 
+      // Streaming round number set immediately
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalled();
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
       // ALL file parts must have uploadId preserved, regardless of previewUrl availability
       expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Compare these files',
@@ -1312,6 +1377,10 @@ describe('chat Form Actions with Attachments', () => {
 
     it('handles update thread error with attachments', async () => {
       mockUpdateThreadMutation.mockRejectedValue(new Error('Update failed'));
+
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
 
       vi.mocked(useChatStore).mockImplementation((selector: (state: unknown) => unknown) => {
         const mockState = {
@@ -1391,9 +1460,9 @@ describe('chat Form Actions with Attachments', () => {
           updateParticipants: vi.fn(),
           addPreSearch: vi.fn(),
           addAnalysis: vi.fn(),
-          setStreamingRoundNumber: vi.fn(),
-          setMessages: vi.fn(),
-          setHasEarlyOptimisticMessage: vi.fn(),
+          setStreamingRoundNumber: mockSetStreamingRoundNumber,
+          setMessages: mockSetMessages,
+          setHasEarlyOptimisticMessage: mockSetHasEarlyOptimisticMessage,
           clearAttachments: vi.fn(),
         };
 
@@ -1406,6 +1475,11 @@ describe('chat Form Actions with Attachments', () => {
 
       // Error should be handled gracefully (toast shown)
       await result.current.handleUpdateThreadAndSend('thread-123', attachmentIds);
+
+      // Streaming round number and optimistic message still set (immediate UI feedback)
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalled();
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
 
       // Mutation should have been attempted (because enableWebSearch changed from false to true)
       expect(mockUpdateThreadMutation).toHaveBeenCalled();

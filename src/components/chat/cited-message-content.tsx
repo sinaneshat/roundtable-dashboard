@@ -13,7 +13,7 @@
  * @module components/chat/cited-message-content
  */
 
-import * as React from 'react';
+import { useMemo } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { DbCitation } from '@/db/schemas/chat-metadata';
@@ -52,8 +52,10 @@ export type CitedMessageContentProps = {
 /**
  * Renders message content with inline citations
  *
- * During streaming, raw citation markers may briefly appear. After streaming
- * completes, citations are rendered as interactive badges.
+ * Citations are ALWAYS parsed and rendered as interactive badges, even during
+ * streaming. During streaming, badges show with basic info (display number,
+ * source type). After streaming completes, resolved metadata (title, excerpt,
+ * download URL) is available for full citation cards.
  *
  * If citations array is not provided, the component will parse the text and
  * render basic citation badges without resolved source data.
@@ -61,17 +63,17 @@ export type CitedMessageContentProps = {
 export function CitedMessageContent({
   text,
   citations,
-  isStreaming = false,
+  isStreaming: _isStreaming = false,
   className,
 }: CitedMessageContentProps) {
-  // Parse citations from text
-  const parsedResult = React.useMemo(
+  // Parse citations from text - always parse, even during streaming
+  const parsedResult = useMemo(
     () => parseCitations(text),
     [text],
   );
 
   // Build citation map from resolved data
-  const citationMap = React.useMemo(() => {
+  const citationMap = useMemo(() => {
     if (!citations) {
       return new Map<string, DbCitation>();
     }
@@ -89,18 +91,10 @@ export function CitedMessageContent({
     );
   }
 
-  // During streaming, show raw text with Streamdown (citations will resolve after)
-  if (isStreaming) {
-    return (
-      <div className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
-        <Streamdown components={streamdownComponents}>
-          {text}
-        </Streamdown>
-      </div>
-    );
-  }
-
-  // Render segments with inline citations
+  // ✅ FIX: Always render citations, even during streaming
+  // During streaming: Show citation badges with basic info (display number, source type)
+  // After streaming: Show full citation cards with resolved metadata
+  // This prevents raw [att_xxx] markers from showing in the UI
   return (
     <div className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
       {parsedResult.segments.map((segment) => {
@@ -124,6 +118,9 @@ export function CitedMessageContent({
         // Use citation sourceId + displayNumber for stable key
         const citationKey = `citation-${citation.sourceId}-${citation.displayNumber}`;
 
+        // ✅ During streaming without resolved metadata, show minimal citation badge
+        // The trigger badge always shows (display number + source type icon)
+        // The card body shows resolved data when available
         return (
           <InlineCitation key={citationKey}>
             <InlineCitationCard>

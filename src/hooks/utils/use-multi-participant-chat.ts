@@ -569,7 +569,6 @@ export function useMultiParticipantChat(
   // We'll sync external messages using setMessages in an effect below
 
   const useChatId = threadId && threadId.trim() !== '' ? threadId : undefined;
-  const useChatResume = !!threadId && threadId.trim() !== '';
 
   const {
     messages,
@@ -584,12 +583,17 @@ export function useMultiParticipantChat(
     // in Chat.makeRequest because internal state initialization fails
     id: useChatId,
     transport,
-    // ✅ RESUMABLE STREAMS: Enable automatic stream resumption after page reload
-    // ONLY when we have a valid threadId (prevents 404s on overview page)
-    // When true, useChat automatically checks for and reconnects to active streams on mount
-    // Backend buffers SSE chunks to Cloudflare KV via consumeSseStream callback
-    // GET endpoint at /api/v1/chat/{threadId}/stream serves buffered chunks
-    resume: useChatResume,
+    // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
+    // When true, AI SDK calls prepareReconnectToStreamRequest on mount to check for active streams
+    // GET endpoint at /api/v1/chat/threads/{threadId}/stream serves buffered chunks
+    //
+    // ⚠️ CLOUDFLARE KV LIMITATION: Unlike Redis with resumable-stream package,
+    // Cloudflare KV doesn't support true pub/sub. Our implementation:
+    // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
+    // 2. GET: Returns buffered chunks + polls for new ones until stream completes
+    //
+    // Only enable when we have a valid threadId (prevents 404s on overview page)
+    resume: !!useChatId,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -1366,6 +1370,37 @@ export function useMultiParticipantChat(
     // Get round number from the last user message
     const roundNumber = getCurrentRoundNumber(messages);
 
+    // =========================================================================
+    // ✅ DUPLICATE MESSAGE FIX: Check if participant already has a complete message
+    // =========================================================================
+    // Before triggering a participant, check if they already have a message.
+    // This prevents duplicate messages when:
+    // 1. User refreshes mid-stream
+    // 2. Participant's message was saved to DB before refresh
+    // 3. On refresh, resumption logic triggers the same participant again
+    // 4. Without this check, a NEW message would be created (duplicate)
+    //
+    // The deterministic message ID format is: {threadId}_r{roundNumber}_p{participantIndex}
+    const participant = enabled[fromIndex];
+    if (participant && threadId) {
+      const expectedMessageId = `${threadId}_r${roundNumber}_p${fromIndex}`;
+      const existingMessage = messages.find(m => m.id === expectedMessageId);
+
+      if (existingMessage) {
+        // Check if the existing message is complete (has content)
+        const hasContent = existingMessage.parts?.some(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
+        ) || false;
+
+        if (hasContent) {
+          // Message already exists with content - skip this participant
+          // The flow controller will detect the next incomplete participant
+          isTriggeringRef.current = false;
+          return;
+        }
+      }
+    }
+
     // CRITICAL: Update refs to start from the specified participant index
     currentIndexRef.current = fromIndex;
     roundParticipantsRef.current = enabled;
@@ -1398,7 +1433,7 @@ export function useMultiParticipantChat(
     // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
     // Same fix as triggerNextParticipantWithRefs - prevents race conditions
     isTriggeringRef.current = false;
-  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
+  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId]);
 
   /**
    * Send a user message and start a new round

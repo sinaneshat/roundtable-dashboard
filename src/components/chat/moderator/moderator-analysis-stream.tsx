@@ -17,12 +17,11 @@ import {
   ConsensusEvolutionPhaseSchema,
   ContributorPerspectiveSchema,
   EvidenceAndReasoningSchema,
-  ModeratorAnalysisListResponseSchema,
   ModeratorAnalysisPayloadSchema,
   RecommendationSchema,
   RoundSummarySchema,
 } from '@/api/routes/chat/schema';
-import { LoaderFive } from '@/components/ui/loader';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useBoolean } from '@/hooks/utils';
 import { hasAnalysisData, normalizeAnalysisData } from '@/lib/utils/analysis-utils';
@@ -214,8 +213,7 @@ function ModeratorAnalysisStreamComponent({
 
   // ✅ Error handling state for UI display
   const streamErrorTypeRef = useRef<StreamErrorType>(StreamErrorTypes.UNKNOWN);
-  const is409Conflict = useBoolean(false);
-  // ✅ AUTO-RETRY UI: Track when polling for streaming completion
+  // ✅ AUTO-RETRY UI: Track when retrying for streaming completion
   const isAutoRetrying = useBoolean(false);
 
   // ✅ FIX: Track if we've already started streaming to prevent infinite loop
@@ -390,16 +388,69 @@ function ModeratorAnalysisStreamComponent({
             }
             errorType = StreamErrorTypes.VALIDATION;
           } else if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
+            // =========================================================================
+            // ✅ 409 CONFLICT: Another stream is actively generating
+            // =========================================================================
+            // Backend returned live stream from buffer OR 202 polling response
+            // Retry submit() to get the live stream - backend will return buffered data
             errorType = StreamErrorTypes.CONFLICT;
-            // ✅ CRITICAL FIX: Don't call onStreamComplete on 409 - polling will handle completion
-            is409Conflict.onTrue();
-            return; // Exit early - polling effect will handle completion
+
+            if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
+              emptyResponseRetryCountRef.current++;
+              isAutoRetrying.onTrue();
+
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+              }
+
+              retryTimeoutRef.current = setTimeout(() => {
+                hasStartedStreamingRef.current = false;
+                const messageIds = analysis.participantMessageIds;
+                if (messageIds?.length && submitRef.current) {
+                  submitRef.current({ participantMessageIds: messageIds });
+                }
+              }, RETRY_INTERVAL_MS);
+              return;
+            }
+
+            // Max retries exceeded - report error
+            streamErrorTypeRef.current = errorType;
+            emptyResponseRetryCountRef.current = 0;
+            isAutoRetrying.onFalse();
+            onStreamCompleteRef.current?.(null, new Error('Analysis generation in progress. Please wait.'));
+            return;
           } else if (errorMessage.includes('202') || errorMessage.includes('Accepted') || errorMessage.includes('Please poll for completion')) {
-            // ✅ FIX: Handle 202 Accepted - stream in progress but buffer not ready
-            // Treat same as 409 - start polling for completion
+            // =========================================================================
+            // ✅ 202 ACCEPTED: Stream not ready yet, retry the object stream
+            // =========================================================================
+            // Instead of polling /analyses, retry submit() to get the actual object stream
+            // Backend will either return live stream, start new stream, or return data
             errorType = StreamErrorTypes.CONFLICT;
-            is409Conflict.onTrue();
-            return; // Exit early - polling effect will handle completion
+
+            if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
+              emptyResponseRetryCountRef.current++;
+              isAutoRetrying.onTrue();
+
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+              }
+
+              retryTimeoutRef.current = setTimeout(() => {
+                hasStartedStreamingRef.current = false;
+                const messageIds = analysis.participantMessageIds;
+                if (messageIds?.length && submitRef.current) {
+                  submitRef.current({ participantMessageIds: messageIds });
+                }
+              }, RETRY_INTERVAL_MS);
+              return;
+            }
+
+            // Max retries exceeded - report error
+            streamErrorTypeRef.current = errorType;
+            emptyResponseRetryCountRef.current = 0;
+            isAutoRetrying.onFalse();
+            onStreamCompleteRef.current?.(null, new Error('Analysis stream not available. Please try again.'));
+            return;
           } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
             errorType = StreamErrorTypes.NETWORK;
           }
@@ -437,96 +488,19 @@ function ModeratorAnalysisStreamComponent({
     }
   }, [partialAnalysis]);
 
-  // ✅ CRITICAL FIX: Polling for 409 Conflict - stream already in progress
-  // When page refreshes during streaming, backend returns 409
-  // ✅ RESUMABLE STREAMS: First try to resume from buffer, then poll DB for completion
-  useEffect(() => {
-    if (!is409Conflict.value)
-      return undefined;
-
-    let isMounted = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
-    isAutoRetrying.onTrue();
-
-    const poll = async () => {
-      try {
-        // ✅ RESUMABLE STREAMS: Try to resume from buffer first
-        // If buffer has complete data, we can use it immediately
-        const resumeResult = await attemptAnalysisResume(threadId, analysis.roundNumber);
-
-        if (resumeResult.success) {
-          onStreamCompleteRef.current?.(resumeResult.data);
-          if (isMounted) {
-            is409Conflict.onFalse(); // Stop polling
-            isAutoRetrying.onFalse(); // Clear auto-retry state
-          }
-          return;
-        }
-
-        // Resume failed - fall back to polling the analyses list
-        const res = await fetch(`/api/v1/chat/threads/${threadId}/analyses`);
-        if (!res.ok)
-          throw new Error('Failed to fetch analyses');
-
-        // ✅ ZOD VALIDATION: Parse API response with schema instead of force typecast
-        const json: unknown = await res.json();
-        const parseResult = ModeratorAnalysisListResponseSchema.safeParse(json);
-
-        if (!parseResult.success) {
-          console.error('[ModeratorAnalysisStream] Invalid API response:', parseResult.error);
-          return; // Continue polling on validation error
-        }
-
-        const analyses = parseResult.data.data.items;
-        const current = analyses.find(a => a.roundNumber === analysis.roundNumber);
-
-        if (current) {
-          if (current.status === AnalysisStatuses.COMPLETE && current.analysisData) {
-            // ✅ TYPE SAFE: Reconstruct full payload by adding back omitted fields
-            // StoredModeratorAnalysis.analysisData omits roundNumber, mode, userQuestion
-            // (stored at top level) - reconstruct for ModeratorAnalysisPayload
-            const fullPayload: ModeratorAnalysisPayload = {
-              ...current.analysisData,
-              roundNumber: current.roundNumber,
-              mode: current.mode,
-              userQuestion: current.userQuestion,
-            };
-            onStreamCompleteRef.current?.(fullPayload);
-            if (isMounted) {
-              is409Conflict.onFalse(); // Stop polling
-              isAutoRetrying.onFalse(); // Clear auto-retry state
-            }
-            return;
-          } else if (current.status === AnalysisStatuses.FAILED) {
-            onStreamCompleteRef.current?.(null, new Error(current.errorMessage ?? 'Analysis failed'));
-            if (isMounted) {
-              is409Conflict.onFalse(); // Stop polling
-              isAutoRetrying.onFalse(); // Clear auto-retry state
-            }
-            return;
-          }
-          // If still STREAMING or PENDING, continue polling
-        }
-      } catch (err) {
-        // Silent failure on polling error, retry next interval
-        console.error('[ModeratorAnalysisStream] Polling failed:', err);
-      }
-
-      if (isMounted) {
-        timeoutId = setTimeout(poll, 2000); // Poll every 2s
-      }
-    };
-
-    poll();
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-      isAutoRetrying.onFalse(); // Clear auto-retry state on cleanup
-    };
-  }, [is409Conflict.value, threadId, analysis.roundNumber, is409Conflict, isAutoRetrying]);
+  // =========================================================================
+  // ✅ UNIFIED STREAM RESUMPTION: Use object stream endpoint, not list polling
+  // =========================================================================
+  // When 409 conflict or 202 accepted is detected (stream in progress/not ready),
+  // we DON'T poll the /analyses list endpoint. Instead, the onFinish callback
+  // in useObject handles retrying the actual POST /analyze endpoint (via submit()).
+  // This follows the same pattern as pre-search streams which retry the object
+  // stream endpoint instead of polling list endpoints.
+  //
+  // Retries are handled by:
+  // 1. onFinish detecting 409/202 errors → retry submit() with delay
+  // 2. This approach uses the actual object stream endpoint (AI SDK pattern)
+  // 3. Backend returns live stream from buffer or starts new stream
 
   // Cleanup on unmount: stop streaming
   useEffect(() => {
@@ -573,7 +547,13 @@ function ModeratorAnalysisStreamComponent({
       queueMicrotask(async () => {
         onStreamStartRef.current?.();
 
-        // ✅ RESUMABLE STREAMS: For STREAMING status, attempt to resume first
+        // =========================================================================
+        // ✅ UNIFIED STREAM RESUMPTION: Try resume, then fall through to submit()
+        // =========================================================================
+        // For STREAMING status, attempt to resume from KV buffer first.
+        // If resume fails for ANY reason (streaming, no-buffer, incomplete, error),
+        // fall through to submit() which calls the actual object stream endpoint.
+        // This follows the pre-search pattern: retry the object stream, not poll lists.
         if (analysis.status === AnalysisStatuses.STREAMING) {
           const resumeResult = await attemptAnalysisResume(threadId, roundNumber);
 
@@ -583,18 +563,12 @@ function ModeratorAnalysisStreamComponent({
             return; // Don't start new stream
           }
 
-          // ✅ FIX: Handle 'streaming' reason explicitly - start polling directly
-          // When backend returns 202 (streaming), don't try to submit (would get 409)
-          // Instead, go directly to the polling mechanism
-          if (resumeResult.reason === 'streaming') {
-            is409Conflict.onTrue(); // Trigger polling
-            return;
-          }
-
-          // Resume failed with 'incomplete', 'no-buffer', or 'error'
-          // Fall through to submit() which will either:
-          // - Start a new stream (if analysis was stale)
-          // - Get 409 and trigger polling (if another stream started)
+          // Resume failed - fall through to submit() regardless of reason.
+          // The POST /analyze endpoint will either:
+          // - Return live stream from buffer (if stream is truly active)
+          // - Return 409/202 which onFinish will handle with retries
+          // - Mark stale analysis as failed and start new stream
+          // - Start fresh stream if no active stream exists
         }
 
         // Normal flow: start new stream (or retry after failed resume)
@@ -704,7 +678,7 @@ function ModeratorAnalysisStreamComponent({
               }}
               className="flex items-center justify-center py-8 text-muted-foreground text-sm"
             >
-              <LoaderFive text={isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')} />
+              <Shimmer>{isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')}</Shimmer>
             </motion.div>
           )
         : (

@@ -43,6 +43,10 @@ export const chatThread = sqliteTable('chat_thread', {
 
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(), // SEO-friendly URL slug (e.g., "product-strategy-abc123")
+  // ✅ BACKWARDS COMPATIBLE SLUGS: Store previous slug when AI-generated title updates it
+  // Both current slug AND previousSlug are valid for accessing the thread
+  // This ensures links with the initial slug continue to work after AI title generation
+  previousSlug: text('previous_slug'), // nullable - only set after first AI title generation
   mode: text('mode', { enum: CHAT_MODES })
     .notNull()
     .default(DEFAULT_CHAT_MODE),
@@ -79,6 +83,7 @@ export const chatThread = sqliteTable('chat_thread', {
   index('chat_thread_status_idx').on(table.status),
   index('chat_thread_updated_idx').on(table.updatedAt),
   index('chat_thread_slug_idx').on(table.slug), // Fast lookups by slug for public sharing
+  index('chat_thread_previous_slug_idx').on(table.previousSlug), // ✅ BACKWARDS COMPATIBLE: Fast lookups by old slug
   index('chat_thread_favorite_idx').on(table.isFavorite),
   index('chat_thread_public_idx').on(table.isPublic),
 ]);

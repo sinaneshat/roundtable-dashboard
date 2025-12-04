@@ -12,7 +12,7 @@
  *
  * CURRENT BUG:
  * - Pending participant cards (lines 841-882 in chat-message-list.tsx) render a custom
- *   placeholder with LoaderFive showing "Waiting for response from {name}"
+ *   placeholder with ShimmerText showing "Waiting for response from {name}"
  * - When streaming starts, this placeholder is hidden and a NEW ModelMessageCard mounts
  * - ModelMessageCard shows "Generating response from {model}"
  * - This causes visible remounting instead of seamless text replacement
@@ -39,10 +39,10 @@ import { createMockParticipant, createMockPreSearch, createMockUserMessage } fro
 // Mock Setup
 // ============================================================================
 
-// Mock LoaderFive to render plain text for easier testing
-vi.mock('@/components/ui/loader', () => ({
-  LoaderFive: ({ text }: { text: string }) => (
-    <div data-testid="loader-five">{text}</div>
+// Mock Shimmer to render plain text for easier testing
+vi.mock('@/components/ai-elements/shimmer', () => ({
+  Shimmer: ({ children }: { children: string }) => (
+    <div data-testid="shimmer-text">{children}</div>
   ),
 }));
 
@@ -230,8 +230,8 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
         />,
       );
 
-      // Find all LoaderFive instances
-      const loaders = screen.getAllByTestId('loader-five');
+      // Find all ShimmerText instances
+      const loaders = screen.getAllByTestId('shimmer-text');
 
       // CRITICAL ASSERTION: Pending participants should show context-aware loading text
       // NOT "Waiting for response from {name}" (old bug pattern)
@@ -270,7 +270,7 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
       );
 
       // Get the initial loader elements
-      const initialLoaders = screen.getAllByTestId('loader-five');
+      const initialLoaders = screen.getAllByTestId('shimmer-text');
       const initialCount = initialLoaders.length;
 
       // Rerender with same props - count should stay the same
@@ -288,7 +288,7 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
         </TestWrapper>,
       );
 
-      const afterRerender = screen.getAllByTestId('loader-five');
+      const afterRerender = screen.getAllByTestId('shimmer-text');
       expect(afterRerender).toHaveLength(initialCount);
     });
 
@@ -323,7 +323,7 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
       );
 
       // Should show shimmer loaders for both participants
-      let loaders = screen.getAllByTestId('loader-five');
+      let loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // All loaders should show context-aware loading text (not old "Waiting" placeholder)
@@ -365,7 +365,7 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
       );
 
       // The streaming participant should still show loader (parts are empty)
-      loaders = screen.getAllByTestId('loader-five');
+      loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // All loaders should STILL show context-aware text - proving same component type is used
@@ -480,7 +480,7 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
       );
 
       // Round 2 pending participants should show shimmer with "Generating"
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // All loaders should show context-aware text (not old "Waiting for response" placeholder)
@@ -521,8 +521,8 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
         />,
       );
 
-      // The LoaderFive should show context-aware loading text
-      const loader = screen.getByTestId('loader-five');
+      // The ShimmerText should show context-aware loading text
+      const loader = screen.getByTestId('shimmer-text');
       expect(loader).toBeInTheDocument();
       const text = loader.textContent ?? '';
       const hasValidPattern = text.includes('Generating response from')
@@ -559,7 +559,7 @@ describe('shimmer-to-Stream Transition (Seamless)', () => {
       expect(screen.queryByText(/Waiting for response/i)).not.toBeInTheDocument();
 
       // All loaders should use context-aware loading text
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       loaders.forEach((loader) => {
         expect(loader.textContent).not.toContain('Waiting for response');
         const text = loader.textContent ?? '';

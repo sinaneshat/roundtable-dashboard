@@ -31,6 +31,8 @@ import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getCreatedAt } from '@/lib/utils/metadata';
 
+import { validateInfiniteQueryCache } from './types';
+
 export type UseFlowControllerOptions = {
   /** Whether controller is enabled (typically true for overview screen) */
   enabled?: boolean;
@@ -342,11 +344,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         setHasUpdatedThread(true);
       });
 
-      // Invalidate thread list to update sidebar with AI-generated title
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.all,
-      });
-
       // Update thread in store
       const currentThread = threadState.currentThread;
       if (currentThread) {
@@ -357,7 +354,57 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
           slug: slugData.slug,
         };
         setThread(updatedThread);
+
+        // ✅ IMMEDIATE SIDEBAR UPDATE: Optimistically update sidebar with AI-generated title
+        // This provides instant feedback without waiting for invalidation refetch
+        queryClient.setQueriesData(
+          {
+            queryKey: queryKeys.threads.all,
+            predicate: (query) => {
+              // Only update infinite queries (thread lists)
+              const key = query.queryKey as string[];
+              return key.length >= 2 && key[1] === 'list';
+            },
+          },
+          (old: unknown) => {
+            const parsedQuery = validateInfiniteQueryCache(old);
+            if (!parsedQuery)
+              return old;
+
+            return {
+              ...parsedQuery,
+              pages: parsedQuery.pages.map((page) => {
+                if (!page.success || !page.data?.items)
+                  return page;
+
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    items: page.data.items.map((thread) => {
+                      if (thread.id !== currentThread.id)
+                        return thread;
+
+                      // Update thread with AI-generated title and slug
+                      return {
+                        ...thread,
+                        title: slugData.title,
+                        slug: slugData.slug,
+                        isAiGeneratedTitle: true,
+                      };
+                    }),
+                  },
+                };
+              }),
+            };
+          },
+        );
       }
+
+      // Also invalidate to ensure server data is fetched (belt and suspenders)
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.threads.all,
+      });
 
       // Replace URL in background without navigation
       // NOTE: We no longer call router.push() after this - the user stays on

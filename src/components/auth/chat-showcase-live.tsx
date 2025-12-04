@@ -17,17 +17,27 @@ import {
   MOCK_USER_MESSAGE,
 } from './chat-showcase-data';
 
-type StreamingStage
-  = | 'idle'
-    | 'user-message'
-    | 'pre-search-start'
-    | 'pre-search-complete'
-    | 'participant-0'
-    | 'participant-1'
-    | 'participant-2'
-    | 'participants-complete'
-    | 'analysis-start'
-    | 'analysis-complete';
+// ============================================================================
+// Streaming Stage Enum (Local UI State Pattern)
+// ============================================================================
+// Following enum pattern from /docs/type-inference-patterns.md
+// This is UI-only state, so simplified pattern (no Zod validation needed)
+
+/** Type-safe enum constants for stage comparisons */
+const StreamingStages = {
+  IDLE: 'idle',
+  USER_MESSAGE: 'user-message',
+  PRE_SEARCH_START: 'pre-search-start',
+  PRE_SEARCH_COMPLETE: 'pre-search-complete',
+  PARTICIPANT_0: 'participant-0',
+  PARTICIPANT_1: 'participant-1',
+  PARTICIPANT_2: 'participant-2',
+  PARTICIPANTS_COMPLETE: 'participants-complete',
+  ANALYSIS_START: 'analysis-start',
+  ANALYSIS_COMPLETE: 'analysis-complete',
+} as const;
+
+type StreamingStage = typeof StreamingStages[keyof typeof StreamingStages];
 
 /**
  * Mock streaming showcase using EXACT chat components
@@ -35,7 +45,7 @@ type StreamingStage
  * Matches ChatThreadScreen structure exactly
  */
 export function ChatShowcaseLive() {
-  const [stage, setStage] = useState<StreamingStage>('idle');
+  const [stage, setStage] = useState<StreamingStage>(StreamingStages.IDLE);
   const [streamingText, setStreamingText] = useState<Record<string, string>>({});
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
@@ -47,7 +57,7 @@ export function ChatShowcaseLive() {
   // Reset manual states when demo restarts using queueMicrotask
   // Pattern follows AI SDK v5 best practice for state updates in effects
   useEffect(() => {
-    if (stage === 'idle') {
+    if (stage === StreamingStages.IDLE) {
       queueMicrotask(() => {
         setPreSearchManualOpen(undefined);
         setAnalysisManualOpen(undefined);
@@ -67,18 +77,18 @@ export function ChatShowcaseLive() {
   useEffect(() => {
     let timeout: NodeJS.Timeout | null = null;
 
-    if (stage === 'idle') {
-      timeout = setTimeout(() => setStage('user-message'), 500);
-    } else if (stage === 'user-message') {
-      timeout = setTimeout(() => setStage('pre-search-start'), 1000);
-    } else if (stage === 'pre-search-start') {
-      timeout = setTimeout(() => setStage('pre-search-complete'), 2500);
-    } else if (stage === 'pre-search-complete') {
-      timeout = setTimeout(() => setStage('participant-0'), 500);
-    } else if (stage === 'participants-complete') {
-      timeout = setTimeout(() => setStage('analysis-start'), 800);
-    } else if (stage === 'analysis-start') {
-      timeout = setTimeout(() => setStage('analysis-complete'), 2000);
+    if (stage === StreamingStages.IDLE) {
+      timeout = setTimeout(() => setStage(StreamingStages.USER_MESSAGE), 500);
+    } else if (stage === StreamingStages.USER_MESSAGE) {
+      timeout = setTimeout(() => setStage(StreamingStages.PRE_SEARCH_START), 1000);
+    } else if (stage === StreamingStages.PRE_SEARCH_START) {
+      timeout = setTimeout(() => setStage(StreamingStages.PRE_SEARCH_COMPLETE), 2500);
+    } else if (stage === StreamingStages.PRE_SEARCH_COMPLETE) {
+      timeout = setTimeout(() => setStage(StreamingStages.PARTICIPANT_0), 500);
+    } else if (stage === StreamingStages.PARTICIPANTS_COMPLETE) {
+      timeout = setTimeout(() => setStage(StreamingStages.ANALYSIS_START), 800);
+    } else if (stage === StreamingStages.ANALYSIS_START) {
+      timeout = setTimeout(() => setStage(StreamingStages.ANALYSIS_COMPLETE), 2000);
     }
 
     if (timeout) {
@@ -94,7 +104,11 @@ export function ChatShowcaseLive() {
 
   // Simulate text streaming for participants with typing effect
   useEffect(() => {
-    const participantStages: StreamingStage[] = ['participant-0', 'participant-1', 'participant-2'];
+    const participantStages: StreamingStage[] = [
+      StreamingStages.PARTICIPANT_0,
+      StreamingStages.PARTICIPANT_1,
+      StreamingStages.PARTICIPANT_2,
+    ];
     const currentIndex = participantStages.indexOf(stage);
 
     if (currentIndex === -1)
@@ -135,7 +149,7 @@ export function ChatShowcaseLive() {
           if (currentIndex < 2) {
             setStage(participantStages[currentIndex + 1]!);
           } else {
-            setStage('participants-complete');
+            setStage(StreamingStages.PARTICIPANTS_COMPLETE);
           }
         }, 800);
         timeoutsRef.current.push(stageTransitionTimeout);
@@ -159,7 +173,7 @@ export function ChatShowcaseLive() {
     const items: TimelineItem[] = [];
 
     // Always show user message after idle
-    if (stage !== 'idle') {
+    if (stage !== StreamingStages.IDLE) {
       const userMessage: UIMessage = {
         id: MOCK_USER_MESSAGE.id,
         role: MessageRoles.USER,
@@ -179,15 +193,19 @@ export function ChatShowcaseLive() {
     }
 
     // Show completed participant messages
-    const participantStages: StreamingStage[] = ['participant-0', 'participant-1', 'participant-2'];
+    const participantStages: StreamingStage[] = [
+      StreamingStages.PARTICIPANT_0,
+      StreamingStages.PARTICIPANT_1,
+      StreamingStages.PARTICIPANT_2,
+    ];
     const currentParticipantIndex = participantStages.indexOf(stage);
 
     const completedCount = currentParticipantIndex >= 0
       ? currentParticipantIndex + 1
       : (
-          stage === 'participants-complete'
-          || stage === 'analysis-start'
-          || stage === 'analysis-complete'
+          stage === StreamingStages.PARTICIPANTS_COMPLETE
+          || stage === StreamingStages.ANALYSIS_START
+          || stage === StreamingStages.ANALYSIS_COMPLETE
         )
           ? 3
           : 0;
@@ -241,7 +259,7 @@ export function ChatShowcaseLive() {
 
     // Show analysis during analysis stages
     // Always use COMPLETE status with full data - no streaming needed
-    if (stage === 'analysis-start' || stage === 'analysis-complete') {
+    if (stage === StreamingStages.ANALYSIS_START || stage === StreamingStages.ANALYSIS_COMPLETE) {
       items.push({
         type: 'analysis',
         data: MOCK_ANALYSIS, // Always has COMPLETE status and full data
@@ -255,11 +273,11 @@ export function ChatShowcaseLive() {
 
   // Determine which participant is currently streaming
   const currentParticipantIndex = useMemo(() => {
-    if (stage === 'participant-0')
+    if (stage === StreamingStages.PARTICIPANT_0)
       return 0;
-    if (stage === 'participant-1')
+    if (stage === StreamingStages.PARTICIPANT_1)
       return 1;
-    if (stage === 'participant-2')
+    if (stage === StreamingStages.PARTICIPANT_2)
       return 2;
     return -1;
   }, [stage]);
@@ -269,9 +287,9 @@ export function ChatShowcaseLive() {
 
   // Show pre-search based on stage
   const preSearchStatus = useMemo(() => {
-    if (stage === 'idle' || stage === 'user-message')
+    if (stage === StreamingStages.IDLE || stage === StreamingStages.USER_MESSAGE)
       return null;
-    if (stage === 'pre-search-start')
+    if (stage === StreamingStages.PRE_SEARCH_START)
       return AnalysisStatuses.STREAMING;
     return AnalysisStatuses.COMPLETE;
   }, [stage]);
@@ -287,7 +305,7 @@ export function ChatShowcaseLive() {
   }, [preSearchStatus]);
 
   // Show loading indicator between stages
-  const showLoader = stage === 'pre-search-complete' && !isStreaming;
+  const showLoader = stage === StreamingStages.PRE_SEARCH_COMPLETE && !isStreaming;
 
   // Simplified render without animation wrappers
   return (
@@ -336,14 +354,14 @@ export function ChatShowcaseLive() {
           // Interactive accordions: expanded during streaming, stay open when complete
           // Pass undefined for full interactivity, or boolean for controlled state
           demoPreSearchOpen={
-            stage === 'analysis-complete'
+            stage === StreamingStages.ANALYSIS_COMPLETE
               ? (preSearchManualOpen ?? true) // Default open when complete, allow toggle
-              : stage !== 'idle' && stage !== 'user-message' // Auto-open during streaming
+              : stage !== StreamingStages.IDLE && stage !== StreamingStages.USER_MESSAGE // Auto-open during streaming
           }
           demoAnalysisOpen={
-            stage === 'analysis-complete'
+            stage === StreamingStages.ANALYSIS_COMPLETE
               ? (analysisManualOpen ?? true) // Default open when complete, allow toggle
-              : stage === 'analysis-start' // Open during analysis streaming
+              : stage === StreamingStages.ANALYSIS_START // Open during analysis streaming
           }
         />
       </div>

@@ -101,49 +101,12 @@ export const StreamingText = memo(function StreamingText({
 });
 
 // ============================================================================
-// SHIMMER TEXT - Full shimmer animation for loading states
+// RE-EXPORT SHIMMER - Single source of truth from ai-elements
 // ============================================================================
 
-type ShimmerTextProps = {
-  /** The text to animate */
-  text: string;
-  /** Custom class name */
-  className?: string;
-  /** Animation duration per cycle (default: 1.5) */
-  duration?: number;
-  /** Delay between characters (default: 0.05) */
-  staggerDelay?: number;
-};
-
-/**
- * ShimmerText - Full character-by-character shimmer animation
- *
- * Creates a wave-like shimmer effect across all characters.
- * Use for loading states like "Thinking...", "Analyzing...", etc.
- * Uses CSS-based animations for better caching reliability in deployed environments.
- *
- * @example
- * ```tsx
- * <ShimmerText text="Thinking..." />
- * ```
- */
-export const ShimmerText = memo(function ShimmerText({
-  text,
-  className,
-}: ShimmerTextProps) {
-  return (
-    <span className={cn('font-medium', className)}>
-      {text.split('').map((char, i) => (
-        <span
-          key={i}
-          className={`animate-shimmer-char shimmer-delay-${i % 16}`}
-        >
-          {char === ' ' ? '\u00A0' : char}
-        </span>
-      ))}
-    </span>
-  );
-});
+// Re-export Shimmer from ai-elements as the single source of truth for shimmer effects
+export { Shimmer } from '@/components/ai-elements/shimmer';
+export type { TextShimmerProps as ShimmerProps } from '@/components/ai-elements/shimmer';
 
 // ============================================================================
 // STREAMING BLOCK - Wrapper for streaming content blocks

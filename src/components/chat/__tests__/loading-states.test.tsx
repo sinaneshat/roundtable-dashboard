@@ -1,14 +1,14 @@
 /**
  * Loading States Unit Tests
  *
- * Tests for LoaderFive component usage across chat components:
+ * Tests for ShimmerText component usage across chat components:
  * - model-message-card.tsx: Participant pending states
  * - pre-search-stream.tsx: Web search pending/streaming states
  * - moderator-analysis-stream.tsx: Analysis pending/streaming states
  *
  * Verifies:
- * 1. LoaderFive shimmer effect is shown when pending with no content
- * 2. LoaderFive is hidden when content is available
+ * 1. ShimmerText shimmer effect is shown when pending with no content
+ * 2. ShimmerText is hidden when content is available
  * 3. Text dynamically reflects what is being loaded
  * 4. Different rounds show appropriate loading text
  */
@@ -30,10 +30,10 @@ import {
 // Mock Setup
 // ============================================================================
 
-// Mock LoaderFive to render plain text for easier testing
-vi.mock('@/components/ui/loader', () => ({
-  LoaderFive: ({ text }: { text: string }) => (
-    <div data-testid="loader-five">{text}</div>
+// Mock Shimmer to render plain text for easier testing
+vi.mock('@/components/ai-elements/shimmer', () => ({
+  Shimmer: ({ children }: { children: string }) => (
+    <div data-testid="shimmer-text">{children}</div>
   ),
 }));
 
@@ -127,7 +127,7 @@ describe('modelMessageCard Loading States', () => {
     ModelMessageCard = importedModule.ModelMessageCard;
   }, 30000); // Increased timeout for dynamic import
 
-  it('shows LoaderFive with model name when pending with no parts', () => {
+  it('shows ShimmerText with model name when pending with no parts', () => {
     const modelName = 'Claude 3.5 Sonnet';
 
     render(
@@ -145,14 +145,14 @@ describe('modelMessageCard Loading States', () => {
       />,
     );
 
-    // Should show LoaderFive with model name in text
-    const loader = screen.getByTestId('loader-five');
+    // Should show ShimmerText with model name in text
+    const loader = screen.getByTestId('shimmer-text');
     expect(loader).toBeInTheDocument();
     expect(loader.textContent).toContain('Generating response from');
     expect(loader.textContent).toContain(modelName);
   });
 
-  it('shows LoaderFive with fallback name when model is undefined', () => {
+  it('shows ShimmerText with fallback name when model is undefined', () => {
     render(
       <ModelMessageCard
         model={undefined}
@@ -164,14 +164,14 @@ describe('modelMessageCard Loading States', () => {
       />,
     );
 
-    // Should show LoaderFive with fallback "AI Assistant"
-    const loader = screen.getByTestId('loader-five');
+    // Should show ShimmerText with fallback "AI Assistant"
+    const loader = screen.getByTestId('shimmer-text');
     expect(loader).toBeInTheDocument();
     expect(loader.textContent).toContain('Generating response from');
     expect(loader.textContent).toContain('AI Assistant');
   });
 
-  it('hides LoaderFive when parts are available', () => {
+  it('hides ShimmerText when parts are available', () => {
     render(
       <ModelMessageCard
         model={{
@@ -187,11 +187,11 @@ describe('modelMessageCard Loading States', () => {
       />,
     );
 
-    // Should NOT show LoaderFive when content is available
-    expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+    // Should NOT show ShimmerText when content is available
+    expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
   });
 
-  it('hides LoaderFive when status is COMPLETE', () => {
+  it('hides ShimmerText when status is COMPLETE', () => {
     render(
       <ModelMessageCard
         model={{
@@ -207,8 +207,8 @@ describe('modelMessageCard Loading States', () => {
       />,
     );
 
-    // Should NOT show LoaderFive when complete
-    expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+    // Should NOT show ShimmerText when complete
+    expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
   });
 
   it('shows different model names for different participants', () => {
@@ -227,7 +227,7 @@ describe('modelMessageCard Loading States', () => {
       />,
     );
 
-    let loader = screen.getByTestId('loader-five');
+    let loader = screen.getByTestId('shimmer-text');
     expect(loader.textContent).toContain('GPT-4');
 
     rerender(
@@ -245,7 +245,7 @@ describe('modelMessageCard Loading States', () => {
       />,
     );
 
-    loader = screen.getByTestId('loader-five');
+    loader = screen.getByTestId('shimmer-text');
     expect(loader.textContent).toContain('Gemini Pro');
   });
 });
@@ -264,7 +264,7 @@ describe('preSearchStream Loading States', () => {
     PreSearchStream = importedModule.PreSearchStream;
   });
 
-  it('shows LoaderFive when PENDING with no data', () => {
+  it('shows ShimmerText when PENDING with no data', () => {
     const preSearch: StoredPreSearch = createMockPreSearch({
       status: AnalysisStatuses.PENDING,
       searchData: null,
@@ -277,13 +277,13 @@ describe('preSearchStream Loading States', () => {
       />,
     );
 
-    // Should show LoaderFive with web search loading text
-    const loader = screen.getByTestId('loader-five');
+    // Should show ShimmerText with web search loading text
+    const loader = screen.getByTestId('shimmer-text');
     expect(loader).toBeInTheDocument();
     expect(loader.textContent).toContain('Searching the web');
   });
 
-  it('shows LoaderFive when STREAMING with no data', () => {
+  it('shows ShimmerText when STREAMING with no data', () => {
     const preSearch: StoredPreSearch = createMockPreSearch({
       status: AnalysisStatuses.STREAMING,
       searchData: null,
@@ -296,13 +296,13 @@ describe('preSearchStream Loading States', () => {
       />,
     );
 
-    // Should show LoaderFive with web search loading text
-    const loader = screen.getByTestId('loader-five');
+    // Should show ShimmerText with web search loading text
+    const loader = screen.getByTestId('shimmer-text');
     expect(loader).toBeInTheDocument();
     expect(loader.textContent).toContain('Searching the web');
   });
 
-  it('hides LoaderFive when search data is available', async () => {
+  it('hides ShimmerText when search data is available', async () => {
     const searchData = createMockPreSearchDataPayload();
     const preSearch: StoredPreSearch = createMockPreSearch({
       status: AnalysisStatuses.STREAMING,
@@ -316,13 +316,13 @@ describe('preSearchStream Loading States', () => {
       />,
     );
 
-    // Should NOT show LoaderFive when data is available
+    // Should NOT show ShimmerText when data is available
     await waitFor(() => {
-      expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
     });
   });
 
-  it('hides LoaderFive when status is COMPLETE with results', async () => {
+  it('hides ShimmerText when status is COMPLETE with results', async () => {
     const searchData = createMockPreSearchDataPayload();
     const preSearch: StoredPreSearch = createMockPreSearch({
       status: AnalysisStatuses.COMPLETE,
@@ -336,9 +336,9 @@ describe('preSearchStream Loading States', () => {
       />,
     );
 
-    // Should NOT show LoaderFive when complete
+    // Should NOT show ShimmerText when complete
     await waitFor(() => {
-      expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
     });
   });
 
@@ -356,8 +356,8 @@ describe('preSearchStream Loading States', () => {
       />,
     );
 
-    // Round 1 should show LoaderFive
-    expect(screen.getByTestId('loader-five')).toBeInTheDocument();
+    // Round 1 should show ShimmerText
+    expect(screen.getByTestId('shimmer-text')).toBeInTheDocument();
 
     // Update to round 2 with different status
     const preSearchRound2: StoredPreSearch = createMockPreSearch({
@@ -373,8 +373,8 @@ describe('preSearchStream Loading States', () => {
       />,
     );
 
-    // Round 2 should NOT show LoaderFive (has data)
-    expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+    // Round 2 should NOT show ShimmerText (has data)
+    expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
   });
 });
 
@@ -391,7 +391,7 @@ describe('moderatorAnalysisStream Loading States', () => {
     ModeratorAnalysisStream = importedModule.ModeratorAnalysisStream;
   });
 
-  it('shows LoaderFive when PENDING with no data', () => {
+  it('shows ShimmerText when PENDING with no data', () => {
     const analysis: StoredModeratorAnalysis = createMockAnalysis({
       status: AnalysisStatuses.PENDING,
       analysisData: null,
@@ -404,13 +404,13 @@ describe('moderatorAnalysisStream Loading States', () => {
       />,
     );
 
-    // Should show LoaderFive with analysis loading text
-    const loader = screen.getByTestId('loader-five');
+    // Should show ShimmerText with analysis loading text
+    const loader = screen.getByTestId('shimmer-text');
     expect(loader).toBeInTheDocument();
     expect(loader.textContent).toContain('Analyzing participant responses');
   });
 
-  it('shows LoaderFive when STREAMING with no data', () => {
+  it('shows ShimmerText when STREAMING with no data', () => {
     const analysis: StoredModeratorAnalysis = createMockAnalysis({
       status: AnalysisStatuses.STREAMING,
       analysisData: null,
@@ -423,13 +423,13 @@ describe('moderatorAnalysisStream Loading States', () => {
       />,
     );
 
-    // Should show LoaderFive with analysis loading text
-    const loader = screen.getByTestId('loader-five');
+    // Should show ShimmerText with analysis loading text
+    const loader = screen.getByTestId('shimmer-text');
     expect(loader).toBeInTheDocument();
     expect(loader.textContent).toContain('Analyzing participant responses');
   });
 
-  it('hides LoaderFive when analysis is COMPLETE with data', async () => {
+  it('hides ShimmerText when analysis is COMPLETE with data', async () => {
     // For COMPLETE status, the component uses analysis.analysisData
     // Must provide valid analysis data that passes hasAnalysisData check
     const analysis: StoredModeratorAnalysis = createMockAnalysis({
@@ -450,9 +450,9 @@ describe('moderatorAnalysisStream Loading States', () => {
       />,
     );
 
-    // Should NOT show LoaderFive when valid data is available
+    // Should NOT show ShimmerText when valid data is available
     await waitFor(() => {
-      expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
     });
   });
 
@@ -472,7 +472,7 @@ describe('moderatorAnalysisStream Loading States', () => {
       />,
     );
 
-    expect(screen.getByTestId('loader-five')).toBeInTheDocument();
+    expect(screen.getByTestId('shimmer-text')).toBeInTheDocument();
 
     // Round 2: Complete with valid data
     const analysisRound2: StoredModeratorAnalysis = createMockAnalysis({
@@ -495,32 +495,32 @@ describe('moderatorAnalysisStream Loading States', () => {
       />,
     );
 
-    // Round 2 should NOT show LoaderFive
-    expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+    // Round 2 should NOT show ShimmerText
+    expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
   });
 });
 
 // ============================================================================
-// LoaderFive Mock Integration Tests
+// ShimmerText Mock Integration Tests
 // ============================================================================
 
 describe('encryptedText Mock Integration', () => {
   it('renders with correct text via mock', () => {
-    // The LoaderFive is mocked at the top of this file
+    // The ShimmerText is mocked at the top of this file
     // This tests that the mock works correctly
     const MockedLoader = ({ text }: { text: string }) => (
-      <div data-testid="loader-five">{text}</div>
+      <div data-testid="shimmer-text">{text}</div>
     );
 
     render(<MockedLoader text="Test loading text" />);
 
-    expect(screen.getByTestId('loader-five')).toBeInTheDocument();
+    expect(screen.getByTestId('shimmer-text')).toBeInTheDocument();
     expect(screen.getByText('Test loading text')).toBeInTheDocument();
   });
 
   it('updates text dynamically', () => {
     const MockedLoader = ({ text }: { text: string }) => (
-      <div data-testid="loader-five">{text}</div>
+      <div data-testid="shimmer-text">{text}</div>
     );
 
     const { rerender } = render(<MockedLoader text="First text" />);
@@ -532,11 +532,11 @@ describe('encryptedText Mock Integration', () => {
 
   it('handles empty text gracefully', () => {
     const MockedLoader = ({ text }: { text: string }) => (
-      <div data-testid="loader-five">{text}</div>
+      <div data-testid="shimmer-text">{text}</div>
     );
 
     render(<MockedLoader text="" />);
-    expect(screen.getByTestId('loader-five')).toBeInTheDocument();
+    expect(screen.getByTestId('shimmer-text')).toBeInTheDocument();
   });
 });
 
@@ -567,7 +567,7 @@ describe('loading State Transitions', () => {
       />,
     );
 
-    expect(screen.getByTestId('loader-five')).toBeInTheDocument();
+    expect(screen.getByTestId('shimmer-text')).toBeInTheDocument();
 
     // Transition: STREAMING with parts
     rerender(
@@ -581,8 +581,8 @@ describe('loading State Transitions', () => {
       />,
     );
 
-    // LoaderFive should be hidden, content should be visible
-    expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+    // ShimmerText should be hidden, content should be visible
+    expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
 
     // Transition: COMPLETE with full content
     rerender(
@@ -596,8 +596,8 @@ describe('loading State Transitions', () => {
       />,
     );
 
-    // LoaderFive should still be hidden
-    expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+    // ShimmerText should still be hidden
+    expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
   });
 
   it('pre-search transitions from pending to complete', async () => {
@@ -617,7 +617,7 @@ describe('loading State Transitions', () => {
       />,
     );
 
-    expect(screen.getByTestId('loader-five')).toBeInTheDocument();
+    expect(screen.getByTestId('shimmer-text')).toBeInTheDocument();
 
     // Transition: COMPLETE with data
     const completePreSearch: StoredPreSearch = createMockPreSearch({
@@ -633,7 +633,7 @@ describe('loading State Transitions', () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByTestId('loader-five')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('shimmer-text')).not.toBeInTheDocument();
     });
   });
 });

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import { PreSearchStream } from '@/components/chat/pre-search-stream';
+import { clearTriggeredPreSearch, clearTriggeredPreSearchForRound, PreSearchStream } from '@/components/chat/pre-search-stream';
 import { testLocale, testMessages, testTimeZone } from '@/lib/testing/test-messages';
 
 // Mock UI components to simplify testing
@@ -84,10 +84,17 @@ describe('preSearchStream Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     globalThis.fetch = vi.fn();
+    // ✅ Clear deduplication state before each test to prevent state leakage
+    clearTriggeredPreSearch(mockPreSearch.id);
+    clearTriggeredPreSearchForRound(mockPreSearch.roundNumber);
   });
 
   afterEach(() => {
     vi.resetAllMocks();
+    // ✅ Clear deduplication state after each test
+    clearTriggeredPreSearch(mockPreSearch.id);
+    clearTriggeredPreSearch('ps-202-test'); // Test-specific ID
+    clearTriggeredPreSearchForRound(mockPreSearch.roundNumber);
   });
 
   it('should handle 409 Conflict by polling for completion', async () => {

@@ -187,7 +187,7 @@ describe('buildAttachmentCitationPrompt', () => {
       // Citation IDs should be in XML attributes
       expect(result).toContain('id="att_example123"');
       // Should include citation format instruction
-      expect(result).toContain('[att_xxxxx]');
+      expect(result).toContain('[att_xxxxxxxx]');
     });
 
     it('should NOT include reference tables', () => {
@@ -198,13 +198,14 @@ describe('buildAttachmentCitationPrompt', () => {
       expect(result).not.toContain('→');
     });
 
-    it('should NOT include numbered rules', () => {
+    it('should include clear numbered rules', () => {
       const attachments = [createMockAttachment()];
       const result = buildAttachmentCitationPrompt(attachments);
 
-      // Should not have numbered instruction lists like "1. ALWAYS cite..."
-      expect(result).not.toMatch(/\d+\.\s+ALWAYS/i);
-      expect(result).not.toMatch(/\d+\.\s+Place/i);
+      // Should have numbered rules for clarity
+      expect(result).toContain('**Rules**:');
+      expect(result).toMatch(/1\.\s+Use the EXACT citation ID/);
+      expect(result).toMatch(/2\.\s+Place citations inline/);
     });
   });
 

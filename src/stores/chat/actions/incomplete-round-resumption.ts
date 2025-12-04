@@ -45,6 +45,19 @@ import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { shouldWaitForPreSearch } from './pending-message-sender';
 
+// ============================================================================
+// AI SDK RESUME PATTERN - NO SEPARATE /resume CALL NEEDED
+// ============================================================================
+// Per AI SDK docs (https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams):
+// - useChat with `resume: true` automatically calls GET /stream on mount
+// - GET /stream returns 204 (no stream) or 200 with SSE (resume stream)
+// - NO separate /resume endpoint is needed
+//
+// Pending round recovery is handled via:
+// - GET /stream includes pending round info in 204 response headers
+// - OR separately on page load from server-side data
+// ============================================================================
+
 export type UseIncompleteRoundResumptionOptions = {
   /**
    * Thread ID to check for incomplete rounds
@@ -139,8 +152,20 @@ export function useIncompleteRoundResumption(
   const activeStreamCheckRef = useRef<string | null>(null);
   const activeStreamCheckCompleteRef = useRef(false);
 
-  // Calculate incomplete round state
+  // Calculate incomplete round state (moved up for use in pending round recovery)
   const enabledParticipants = participants.filter(p => p.isEnabled);
+
+  // ============================================================================
+  // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL
+  // ============================================================================
+  // Per AI SDK docs, useChat with `resume: true` automatically handles stream
+  // resumption via GET /stream endpoint. No separate /resume call needed.
+  //
+  // Pending round recovery (if needed) is handled via:
+  // - GET /stream includes pending round info in 204 response headers
+  // - The AI SDK calls this automatically on mount when resume: true
+  // ============================================================================
+
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 
   // ✅ ORPHANED PRE-SEARCH DETECTION
@@ -206,9 +231,39 @@ export function useIncompleteRoundResumption(
         const modelId = assistantMetadata?.model;
 
         if (msgRound === currentRoundNumber && participantIndex !== null) {
-          respondedParticipantIndices.add(participantIndex);
-          if (modelId) {
-            respondedModelIds.add(modelId);
+          // ✅ FIX: Check if message is actually complete (not still streaming)
+          // AI SDK v5 marks parts with state: 'streaming' while content is being generated
+          // If any part is still streaming, the message is incomplete and participant
+          // has NOT fully responded - we should resume their stream, not trigger next participant
+          const isStillStreaming = msg.parts?.some(
+            p => 'state' in p && p.state === 'streaming',
+          ) || false;
+
+          // ✅ FIX: Check for truly empty interrupted responses
+          // When a stream is interrupted (e.g., page refresh), the backend sends a synthetic
+          // finish event with finishReason: 'unknown' and 0 tokens.
+          //
+          // Two cases to handle:
+          // 1. Response has actual content but finishReason: 'unknown' → COUNT as responded
+          //    (the content was generated, just metadata is incomplete - don't retry)
+          // 2. Response is empty with finishReason: 'unknown' → DON'T count as responded
+          //    (stream was interrupted before any content was generated - retry this participant)
+          //
+          // Check if message has actual text content (not just empty or only whitespace)
+          const hasTextContent = msg.parts?.some(
+            p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
+          ) || false;
+
+          const isEmptyInterruptedResponse = assistantMetadata?.finishReason === 'unknown'
+            && assistantMetadata?.usage?.totalTokens === 0
+            && !hasTextContent;
+
+          // Only count as responded if message is complete (no streaming parts, not empty interrupted)
+          if (!isStillStreaming && !isEmptyInterruptedResponse) {
+            respondedParticipantIndices.add(participantIndex);
+            if (modelId) {
+              respondedModelIds.add(modelId);
+            }
           }
         }
       }
@@ -549,6 +604,38 @@ export function useIncompleteRoundResumption(
       roundNumber: currentRoundNumber,
     })) {
       return;
+    }
+
+    // =========================================================================
+    // ✅ DUPLICATE MESSAGE FIX: Check if participant already has a complete message
+    // =========================================================================
+    // Before triggering a participant, check if they already have a message in the store.
+    // This prevents duplicate messages when:
+    // 1. Participant was streaming before refresh
+    // 2. Stream completed and message was saved to DB
+    // 3. On refresh, this hook detects "incomplete round" and wants to trigger same participant
+    // 4. Without this check, a NEW message would be created (duplicate)
+    //
+    // The deterministic message ID format is: {threadId}_r{roundNumber}_p{participantIndex}
+    const expectedMessageId = `${threadId}_r${currentRoundNumber}_p${effectiveNextParticipant}`;
+    const existingMessage = messages.find(msg => msg.id === expectedMessageId);
+
+    if (existingMessage) {
+      // Check if the existing message is complete (has content and valid finish reason)
+      const existingMetadata = getAssistantMetadata(existingMessage.metadata);
+      const hasContent = existingMessage.parts?.some(
+        p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
+      ) || false;
+      const isComplete = hasContent && existingMetadata?.finishReason !== 'unknown';
+
+      if (isComplete) {
+        // Message already exists and is complete - skip this participant
+        // The incomplete round detection will find the NEXT participant that needs to respond
+        return;
+      }
+
+      // Message exists but is incomplete (empty or interrupted)
+      // Allow triggering to resume/retry this participant
     }
 
     // Mark as attempted to prevent duplicate triggers

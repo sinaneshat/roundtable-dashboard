@@ -345,16 +345,32 @@ export async function getPreSearchStreamChunks(
  * 3. Stream new events to client in real-time
  * 4. Complete when stream is marked as COMPLETED or FAILED
  */
+/**
+ * Create a LIVE SSE streaming response that polls KV for new chunks
+ *
+ * ✅ FIX: Added "no new data" timeout to detect dead streams
+ * If no new chunks arrive within noNewDataTimeoutMs, assume original stream
+ * is dead and send a synthetic done event so frontend can handle recovery.
+ *
+ * @param streamId - Pre-search stream identifier
+ * @param env - Cloudflare environment bindings
+ * @param pollIntervalMs - How often to check for new chunks (default 100ms)
+ * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
+ * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 10 seconds)
+ */
 export function createLivePreSearchResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
   maxPollDurationMs = 5 * 60 * 1000,
+  noNewDataTimeoutMs = 10 * 1000,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let lastChunkIndex = 0;
   const startTime = Date.now();
+  let lastNewDataTime = Date.now();
   let isClosed = false;
+  let sentSyntheticDone = false;
 
   // Helper to safely close controller (handles already-closed state)
   const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -438,10 +454,30 @@ export function createLivePreSearchResumeStream(
             }
           }
           lastChunkIndex = chunks.length;
+          // ✅ FIX: Reset the "no new data" timer when we receive new chunks
+          lastNewDataTime = Date.now();
         }
 
         // Check if stream is complete
         if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+          safeClose(controller);
+          return;
+        }
+
+        // ✅ FIX: Check if original stream appears to be dead (no new data for a while)
+        // This handles the case where user refreshed mid-stream and the original
+        // stream process died. We send a synthetic done event so the frontend
+        // knows the pre-search ended (possibly incomplete).
+        const timeSinceLastNewData = Date.now() - lastNewDataTime;
+        if (timeSinceLastNewData > noNewDataTimeoutMs && !sentSyntheticDone) {
+          sentSyntheticDone = true;
+
+          // ✅ PRE-SEARCH SSE FORMAT: Send synthetic done event
+          // This signals to the frontend that the stream ended (interrupted)
+          const syntheticDone = `event: done\ndata: {"interrupted":true,"reason":"stream_timeout"}\n\n`;
+          safeEnqueue(controller, encoder.encode(syntheticDone));
+
+          // Close the stream after sending done event
           safeClose(controller);
           return;
         }

@@ -986,12 +986,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Uses type-safe builder that enforces all required fields at compile-time
       // PREVENTS: Missing fields that cause schema validation failures
       // ENSURES: Metadata always matches ParticipantMessageMetadataSchema
+      //
+      // ✅ FIX: Include availableSources in streaming metadata so frontend can
+      // show "Sources" section immediately during streaming (not just after refresh)
       const streamMetadata = createStreamingMetadata({
         roundNumber: currentRoundNumber,
         participantId: participant.id,
         participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
         participantRole: participant.role,
         model: participant.modelId,
+        // ✅ CITATIONS: Pass availableSources so frontend shows Sources section during streaming
+        // Note: Resolved inline citations (citations array) only available after onFinish
+        availableSources,
       });
 
       // =========================================================================
@@ -1445,12 +1451,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           return undefined;
         },
 
-        // ✅ RESUMABLE STREAMS: Buffer SSE chunks for stream resumption
-        // AI SDK v5 Pattern: consumeSseStream callback provides access to raw SSE stream
-        // We buffer chunks to KV to enable resumption after page reload
+        // ✅ AI SDK RESUME PATTERN: Buffer SSE chunks for stream resumption
+        // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
+        //
+        // AI SDK consumeSseStream provides access to a tee'd copy of the SSE stream.
+        // One branch goes to the client response, the other is passed here for buffering.
+        //
+        // ⚠️ MUST use waitUntil - blocking would delay the client response!
+        // The GET /stream endpoint polls KV until chunks are available.
         consumeSseStream: async ({ stream }) => {
           // Buffer the stream asynchronously (don't block the response)
-          // The stream continues to the client automatically
+          // The stream continues to the client automatically via the other tee branch
           const bufferStream = async () => {
             try {
               const reader = stream.getReader();

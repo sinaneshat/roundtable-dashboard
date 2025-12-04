@@ -100,7 +100,7 @@ export function ChatView({
   const messages = useChatStore(s => s.messages);
   const isStreaming = useChatStore(s => s.isStreaming);
   const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
-  const stopStreaming = useChatStore(s => s.stop);
+  // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
   const contextParticipants = useChatStore(s => s.participants);
   const preSearches = useChatStore(s => s.preSearches);
   const analyses = useChatStore(s => s.analyses);
@@ -548,12 +548,14 @@ export function ChatView({
             style={{ bottom: `${keyboardOffset + 16}px` }}
           >
             <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+              {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
+                  Per AI SDK docs, resume: true is incompatible with abort/stop.
+                  Streams continue in background via waitUntil() and can be resumed. */}
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
                 onSubmit={onSubmit}
                 status={isInputBlocked ? 'submitted' : 'ready'}
-                onStop={stopStreaming}
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
                 quotaCheckType={mode === 'overview' ? 'threads' : 'messages'}

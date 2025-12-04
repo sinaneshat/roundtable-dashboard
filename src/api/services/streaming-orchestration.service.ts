@@ -1467,21 +1467,6 @@ export async function prepareValidatedMessages(
             errors: errors.slice(0, 5), // Limit to first 5 errors
           });
         }
-      } else {
-        // ✅ CRITICAL DEBUG: Log when no messages to check
-        console.error(
-          '[prepareValidatedMessages] No messages to check for attachments:',
-          {
-            messageIdsToCheckLength: messageIdsToCheck.length,
-            previousMessagesCount: previousMessages.length,
-            userMessageCount: previousMessages.filter(m => m.role === 'user')
-              .length,
-            reason:
-              previousMessages.length === 0
-                ? 'No previous messages'
-                : 'No user messages or file-containing messages found',
-          },
-        );
       }
     } catch (error) {
       // Don't fail if previous message attachment loading fails

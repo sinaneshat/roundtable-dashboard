@@ -27,7 +27,8 @@
  */
 
 import { Database, Download, ExternalLink, FileText, Globe, MessageSquare, Search, Sparkles } from 'lucide-react';
-import * as React from 'react';
+import type { ComponentPropsWithoutRef, ElementType, ReactNode } from 'react';
+import { createContext, use, useMemo, useState } from 'react';
 
 import type { CitationSourceType } from '@/api/core/enums';
 import { CitationSourceTypes } from '@/api/core/enums';
@@ -44,10 +45,10 @@ type InlineCitationContextValue = {
   setIsOpen: (open: boolean) => void;
 };
 
-const InlineCitationContext = React.createContext<InlineCitationContextValue | null>(null);
+const InlineCitationContext = createContext<InlineCitationContextValue | null>(null);
 
 function useInlineCitation() {
-  const context = React.use(InlineCitationContext);
+  const context = use(InlineCitationContext);
   if (!context) {
     throw new Error('InlineCitation components must be used within InlineCitation');
   }
@@ -59,7 +60,7 @@ function useInlineCitation() {
 // ============================================================================
 
 const SOURCE_TYPE_CONFIG: Record<CitationSourceType, {
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   color: string;
 }> = {
@@ -99,12 +100,12 @@ const SOURCE_TYPE_CONFIG: Record<CitationSourceType, {
 // InlineCitation Root
 // ============================================================================
 
-type InlineCitationProps = React.ComponentPropsWithoutRef<'span'>;
+type InlineCitationProps = ComponentPropsWithoutRef<'span'>;
 
 function InlineCitation({ className, children, ...props }: InlineCitationProps) {
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
-  const contextValue = React.useMemo(
+  const contextValue = useMemo(
     () => ({ isOpen, setIsOpen }),
     [isOpen],
   );
@@ -127,7 +128,7 @@ function InlineCitation({ className, children, ...props }: InlineCitationProps) 
 // ============================================================================
 
 type InlineCitationCardProps = {
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
 function InlineCitationCard({ children }: InlineCitationCardProps) {
@@ -188,7 +189,7 @@ function InlineCitationCardTrigger({
 // ============================================================================
 
 type InlineCitationCardBodyProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 };
 
@@ -343,7 +344,7 @@ function InlineCitationSource({
 // ============================================================================
 
 type InlineCitationQuoteProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 };
 
@@ -366,7 +367,7 @@ function InlineCitationQuote({ children, className }: InlineCitationQuoteProps) 
 // InlineCitationText (Inline Text with Citation)
 // ============================================================================
 
-type InlineCitationTextProps = React.ComponentPropsWithoutRef<'span'>;
+type InlineCitationTextProps = ComponentPropsWithoutRef<'span'>;
 
 function InlineCitationText({ className, ...props }: InlineCitationTextProps) {
   return (

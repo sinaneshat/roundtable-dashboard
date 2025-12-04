@@ -38,6 +38,7 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
     projectId: null,
     title: 'Test Thread',
     slug: 'test-thread-abc123',
+    previousSlug: null, // ✅ BACKWARDS COMPATIBLE SLUGS
     mode: ChatModes.DEBATING,
     status: ThreadStatuses.ACTIVE,
     isFavorite: false,

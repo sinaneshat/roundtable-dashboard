@@ -522,6 +522,18 @@ export function analysisChunksToTextStream(chunks: AnalysisStreamChunk[]): Reada
  * @param pollIntervalMs - How often to check for new chunks (default 100ms)
  * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
  */
+/**
+ * Create a LIVE streaming response that polls KV for new chunks
+ *
+ * ✅ FIX: Added "no new data" timeout to detect dead streams
+ * If no new chunks arrive within noNewDataTimeoutMs, assume original stream
+ * is dead and send a synthetic complete event so frontend can handle recovery.
+ *
+ * @param streamId - Analysis stream identifier
+ * @param env - Cloudflare environment bindings
+ * @param pollIntervalMs - How often to check for new chunks (default 100ms)
+ * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
+ */
 export function createLiveAnalysisResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],

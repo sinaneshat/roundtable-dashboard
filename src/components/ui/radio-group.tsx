@@ -1,12 +1,13 @@
 'use client';
 
+import type { ComponentPropsWithoutRef, ElementRef, RefObject } from 'react';
+
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import { Circle } from 'lucide-react';
-import * as React from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
-function RadioGroup({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> & { ref?: React.RefObject<React.ElementRef<typeof RadioGroupPrimitive.Root> | null> }) {
+function RadioGroup({ ref, className, ...props }: ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root> & { ref?: RefObject<ElementRef<typeof RadioGroupPrimitive.Root> | null> }) {
   return (
     <RadioGroupPrimitive.Root
       className={cn('grid gap-2', className)}
@@ -17,7 +18,7 @@ function RadioGroup({ ref, className, ...props }: React.ComponentPropsWithoutRef
 }
 RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
 
-function RadioGroupItem({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & { ref?: React.RefObject<React.ElementRef<typeof RadioGroupPrimitive.Item> | null> }) {
+function RadioGroupItem({ ref, className, ...props }: ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item> & { ref?: RefObject<ElementRef<typeof RadioGroupPrimitive.Item> | null> }) {
   return (
     <RadioGroupPrimitive.Item
       ref={ref}

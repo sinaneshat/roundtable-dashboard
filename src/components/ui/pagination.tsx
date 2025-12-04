@@ -1,14 +1,16 @@
+import type { ComponentProps } from 'react';
+import { forwardRef } from 'react';
+
 import type { VariantProps } from "class-variance-authority";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
-import * as React from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 
-type ButtonProps = React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>;
+type ButtonProps = ComponentProps<"button"> & VariantProps<typeof buttonVariants>;
 
-const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => {
+const Pagination = ({ className, ...props }: ComponentProps<"nav">) => {
   const t = useTranslations();
   return (
     <nav
@@ -21,9 +23,9 @@ const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => {
 };
 Pagination.displayName = "Pagination";
 
-const PaginationContent = React.forwardRef<
+const PaginationContent = forwardRef<
   HTMLUListElement,
-  React.ComponentProps<"ul">
+  ComponentProps<"ul">
 >(({ className, ...props }, ref) => (
   <ul
     ref={ref}
@@ -33,9 +35,9 @@ const PaginationContent = React.forwardRef<
 ));
 PaginationContent.displayName = "PaginationContent";
 
-const PaginationItem = React.forwardRef<
+const PaginationItem = forwardRef<
   HTMLLIElement,
-  React.ComponentProps<"li">
+  ComponentProps<"li">
 >(({ className, ...props }, ref) => (
   <li ref={ref} className={cn("", className)} {...props} />
 ));
@@ -44,7 +46,7 @@ PaginationItem.displayName = "PaginationItem";
 type PaginationLinkProps = {
   isActive?: boolean;
 } & Pick<ButtonProps, "size"> &
-  React.ComponentProps<"a">;
+  ComponentProps<"a">;
 
 const PaginationLink = ({
   className,
@@ -69,7 +71,7 @@ PaginationLink.displayName = "PaginationLink";
 const PaginationPrevious = ({
   className,
   ...props
-}: React.ComponentProps<typeof PaginationLink>) => {
+}: ComponentProps<typeof PaginationLink>) => {
   const t = useTranslations();
   return (
     <PaginationLink
@@ -88,7 +90,7 @@ PaginationPrevious.displayName = "PaginationPrevious";
 const PaginationNext = ({
   className,
   ...props
-}: React.ComponentProps<typeof PaginationLink>) => {
+}: ComponentProps<typeof PaginationLink>) => {
   const t = useTranslations();
   return (
     <PaginationLink

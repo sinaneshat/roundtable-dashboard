@@ -641,6 +641,157 @@ export const ThreadRoundParamSchema = z.object({
 }).openapi('ThreadRoundParam');
 
 // ============================================================================
+// SSE/STREAMING METADATA SCHEMAS
+// ============================================================================
+
+/**
+ * SSE stream metadata for multi-participant rounds
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema
+ */
+export const SSEStreamMetadataSchema = z.object({
+  /** Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex}) */
+  streamId: z.string().optional().openapi({
+    description: 'Stream ID for resumption',
+    example: 'thread_123_r0_p0',
+  }),
+  /** 0-based round number */
+  roundNumber: z.number().int().nonnegative().optional().openapi({
+    description: '0-based round number',
+    example: 0,
+  }),
+  /** Current participant index */
+  participantIndex: z.number().int().nonnegative().optional().openapi({
+    description: 'Current participant index',
+    example: 0,
+  }),
+  /** Total participants in this round */
+  totalParticipants: z.number().int().positive().optional().openapi({
+    description: 'Total participants in this round',
+    example: 3,
+  }),
+  /** Whether stream is actively streaming */
+  isActive: z.boolean().optional().openapi({
+    description: 'Whether stream is actively streaming',
+    example: true,
+  }),
+  /** Status of each participant in the round */
+  participantStatuses: z.record(z.string(), z.string()).optional().openapi({
+    description: 'Status of each participant in the round',
+    example: { 0: 'completed', 1: 'streaming', 2: 'pending' },
+  }),
+  /** Index of next participant to stream (if any) */
+  nextParticipantIndex: z.number().int().nonnegative().optional().openapi({
+    description: 'Index of next participant to stream',
+    example: 1,
+  }),
+  /** Whether round is complete */
+  roundComplete: z.boolean().optional().openapi({
+    description: 'Whether round is complete',
+    example: false,
+  }),
+  /** Whether stream was resumed from buffer */
+  resumedFromBuffer: z.boolean().optional().openapi({
+    description: 'Whether stream was resumed from buffer',
+    example: true,
+  }),
+}).openapi('SSEStreamMetadata');
+
+export type SSEStreamMetadata = z.infer<typeof SSEStreamMetadataSchema>;
+
+/**
+ * Text stream metadata for analysis/object streaming
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema
+ */
+export const TextStreamMetadataSchema = z.object({
+  /** Stream ID for resumption */
+  streamId: z.string().optional().openapi({
+    description: 'Stream ID for resumption',
+    example: 'analysis_123',
+  }),
+  /** Whether stream was resumed from buffer */
+  resumedFromBuffer: z.boolean().optional().openapi({
+    description: 'Whether stream was resumed from buffer',
+    example: true,
+  }),
+  /** Resource ID (e.g., analysis ID) */
+  resourceId: z.string().optional().openapi({
+    description: 'Resource ID (e.g., analysis ID)',
+    example: 'analysis_abc123',
+  }),
+  /** Round number for analysis streams */
+  roundNumber: z.number().int().nonnegative().optional().openapi({
+    description: 'Round number for analysis streams',
+    example: 0,
+  }),
+  /** Analysis ID for analysis streams */
+  analysisId: z.string().optional().openapi({
+    description: 'Analysis ID for analysis streams',
+    example: 'mod_analysis_123',
+  }),
+  /** Stream status (e.g., 'completed', 'streaming') */
+  streamStatus: z.string().optional().openapi({
+    description: 'Stream status',
+    example: 'streaming',
+  }),
+}).openapi('TextStreamMetadata');
+
+export type TextStreamMetadata = z.infer<typeof TextStreamMetadataSchema>;
+
+// ============================================================================
+// HEALTH CHECK SCHEMAS
+// ============================================================================
+
+/**
+ * Health check dependency status
+ * ✅ ZOD-FIRST PATTERN: Uses HealthStatusSchema from enums
+ */
+export const HealthDependencySchema = z.object({
+  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+    description: 'Health status of the dependency',
+    example: 'healthy',
+  }),
+  message: z.string().openapi({
+    description: 'Status message',
+    example: 'Connected',
+  }),
+  duration: z.number().nonnegative().optional().openapi({
+    description: 'Response time in milliseconds',
+    example: 45,
+  }),
+  details: z.record(z.string(), z.unknown()).optional().openapi({
+    description: 'Additional details',
+    example: { version: '1.0.0' },
+  }),
+}).openapi('HealthDependency');
+
+export type HealthDependency = z.infer<typeof HealthDependencySchema>;
+
+/**
+ * Health check summary counts
+ * ✅ ZOD-FIRST PATTERN: Type inferred from schema
+ */
+export const HealthSummarySchema = z.object({
+  total: z.number().int().nonnegative().openapi({
+    description: 'Total number of dependencies',
+    example: 4,
+  }),
+  healthy: z.number().int().nonnegative().openapi({
+    description: 'Number of healthy dependencies',
+    example: 3,
+  }),
+  degraded: z.number().int().nonnegative().openapi({
+    description: 'Number of degraded dependencies',
+    example: 1,
+  }),
+  unhealthy: z.number().int().nonnegative().openapi({
+    description: 'Number of unhealthy dependencies',
+    example: 0,
+  }),
+}).openapi('HealthSummary');
+
+export type HealthSummary = z.infer<typeof HealthSummarySchema>;
+
+// ============================================================================
 // TYPE INFERENCE AND EXPORTS
 // ============================================================================
 

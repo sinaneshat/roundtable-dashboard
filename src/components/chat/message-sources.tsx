@@ -2,6 +2,7 @@
 
 import { Download, FileText, Paperclip } from 'lucide-react';
 
+import type { AvailableSource } from '@/api/types/citations';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,15 +16,8 @@ import { cn } from '@/lib/ui/cn';
 // Types
 // ============================================================================
 
-export type AvailableSource = {
-  id: string;
-  sourceType: string;
-  title: string;
-  downloadUrl?: string;
-  filename?: string;
-  mimeType?: string;
-  fileSize?: number;
-};
+// Re-export for backward compatibility
+export type { AvailableSource } from '@/api/types/citations';
 
 type MessageSourcesProps = {
   sources: AvailableSource[];

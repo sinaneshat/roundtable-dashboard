@@ -8,6 +8,7 @@ import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
@@ -17,7 +18,6 @@ import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
-import { LoaderFive } from '@/components/ui/loader';
 import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -180,7 +180,7 @@ export const ModelMessageCard = memo(({
                       }}
                       className="py-2 text-muted-foreground text-sm"
                     >
-                      <LoaderFive text={loadingText ?? t('generating', { model: modelName })} />
+                      <Shimmer>{loadingText ?? t('generating', { model: modelName })}</Shimmer>
                     </motion.div>
                   )
                 : parts.length > 0

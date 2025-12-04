@@ -101,7 +101,7 @@ export default function ChatOverviewScreen() {
   const preSearches = useChatStore(s => s.preSearches);
 
   // Store actions
-  const stopStreaming = useChatStore(s => s.stop);
+  // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
   const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant, setEnableWebSearch } = useChatStore(
     useShallow(s => ({
       setInputValue: s.setInputValue,
@@ -316,18 +316,9 @@ export default function ChatOverviewScreen() {
     }
   }, [defaultModelId, initialParticipants, selectedParticipants.length, selectedMode, setSelectedParticipants, setSelectedMode]);
 
-  // Stop streaming when returning to initial UI
-  const prevShowInitialUIRef = useRef(showInitialUI);
-  useEffect(() => {
-    if (prevShowInitialUIRef.current !== showInitialUI) {
-      prevShowInitialUIRef.current = showInitialUI;
-      if (showInitialUI && isStreaming) {
-        queueMicrotask(() => {
-          stopStreaming?.();
-        });
-      }
-    }
-  }, [showInitialUI, isStreaming, stopStreaming]);
+  // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
+  // Per AI SDK docs, resume: true is incompatible with abort/stop.
+  // Streams continue in background via waitUntil() and can be resumed.
 
   // Prevent scrolling on initial UI
   useLayoutEffect(() => {
@@ -595,12 +586,14 @@ export default function ChatOverviewScreen() {
                 exit={{ opacity: 0 }}
                 transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
               >
+                {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
+                    Per AI SDK docs, resume: true is incompatible with abort/stop.
+                    Streams continue in background via waitUntil() and can be resumed. */}
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handlePromptSubmit}
                   status={isInitialUIInputBlocked ? 'submitted' : 'ready'}
-                  onStop={stopStreaming}
                   placeholder={t('chat.input.placeholder')}
                   participants={selectedParticipants}
                   quotaCheckType="threads"

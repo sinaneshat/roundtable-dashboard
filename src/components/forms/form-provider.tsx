@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FormEventHandler, ReactNode } from 'react';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import { FormProvider as Form } from 'react-hook-form';
 
@@ -7,9 +7,9 @@ type Props<
   TContext = unknown,
   TTransformedValues = TFieldValues,
 > = {
-  children: React.ReactNode;
+  children: ReactNode;
   methods: UseFormReturn<TFieldValues, TContext, TTransformedValues>;
-  onSubmit?: React.FormEventHandler<HTMLFormElement>;
+  onSubmit?: FormEventHandler<HTMLFormElement>;
 };
 
 function FormProvider<

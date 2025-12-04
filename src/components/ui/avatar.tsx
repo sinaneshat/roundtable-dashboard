@@ -18,15 +18,16 @@
  * - Native browser lazy loading - no JavaScript overhead
  */
 
+import type { ComponentProps, HTMLAttributeReferrerPolicy } from 'react';
+
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
-import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
 
 function Avatar({
   className,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Root>) {
+}: ComponentProps<typeof AvatarPrimitive.Root>) {
   return (
     <AvatarPrimitive.Root
       data-slot="avatar"
@@ -56,9 +57,9 @@ function AvatarImage({
   loading = "lazy", // Default to lazy loading for performance
   referrerPolicy = "no-referrer", // Bypass hotlink protection for external images
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Image> & {
+}: ComponentProps<typeof AvatarPrimitive.Image> & {
   loading?: "lazy" | "eager";
-  referrerPolicy?: React.HTMLAttributeReferrerPolicy;
+  referrerPolicy?: HTMLAttributeReferrerPolicy;
 }) {
   return (
     <AvatarPrimitive.Image
@@ -74,7 +75,7 @@ function AvatarImage({
 function AvatarFallback({
   className,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
+}: ComponentProps<typeof AvatarPrimitive.Fallback>) {
   return (
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"

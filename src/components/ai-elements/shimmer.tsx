@@ -1,13 +1,26 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { memo } from 'react';
 
-export function LoaderFive({ text }: { text: string }) {
+import { cn } from '@/lib/ui/cn';
+
+export type TextShimmerProps = {
+  children: string;
+  className?: string;
+};
+
+function TextShimmerComponent({
+  children,
+  className,
+}: TextShimmerProps) {
   return (
-    <div className="font-sans font-bold [--shadow-color:var(--color-neutral-500)] dark:[--shadow-color:var(--color-neutral-100)]">
-      {text.split('').map((char, i) => (
+    <div className={cn('font-sans font-bold [--shadow-color:var(--color-neutral-500)] dark:[--shadow-color:var(--color-neutral-100)]', className)}>
+      {children.split('').map((char, i) => (
         <motion.span
-          key={i}
+          // Index required for unique keys when characters repeat (e.g., "hello" has duplicate 'l')
+          // eslint-disable-next-line react/no-array-index-key
+          key={`shimmer-char-${i}`}
           className="inline-block"
           initial={{ scale: 1, opacity: 0.5 }}
           animate={{
@@ -34,3 +47,6 @@ export function LoaderFive({ text }: { text: string }) {
     </div>
   );
 }
+
+export const TextShimmer = memo(TextShimmerComponent);
+export const Shimmer = TextShimmer;

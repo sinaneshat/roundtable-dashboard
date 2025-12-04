@@ -1,15 +1,16 @@
 'use client';
 
+import type { ComponentPropsWithoutRef, ElementRef, ReactElement, RefObject } from 'react';
+
 import * as ToastPrimitives from '@radix-ui/react-toast';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
-import * as React from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
 const ToastProvider = ToastPrimitives.Provider;
 
-function ToastViewport({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport> & { ref?: React.RefObject<React.ElementRef<typeof ToastPrimitives.Viewport> | null> }) {
+function ToastViewport({ ref, className, ...props }: ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport> & { ref?: RefObject<ElementRef<typeof ToastPrimitives.Viewport> | null> }) {
   return (
     <ToastPrimitives.Viewport
       ref={ref}
@@ -40,8 +41,8 @@ const toastVariants = cva(
   },
 );
 
-function Toast({ ref, className, variant, ...props }: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-  VariantProps<typeof toastVariants> & { ref?: React.RefObject<React.ElementRef<typeof ToastPrimitives.Root> | null> }) {
+function Toast({ ref, className, variant, ...props }: ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
+  VariantProps<typeof toastVariants> & { ref?: RefObject<ElementRef<typeof ToastPrimitives.Root> | null> }) {
   return (
     <ToastPrimitives.Root
       ref={ref}
@@ -52,7 +53,7 @@ function Toast({ ref, className, variant, ...props }: React.ComponentPropsWithou
 }
 Toast.displayName = ToastPrimitives.Root.displayName;
 
-function ToastAction({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Action> & { ref?: React.RefObject<React.ElementRef<typeof ToastPrimitives.Action> | null> }) {
+function ToastAction({ ref, className, ...props }: ComponentPropsWithoutRef<typeof ToastPrimitives.Action> & { ref?: RefObject<ElementRef<typeof ToastPrimitives.Action> | null> }) {
   return (
     <ToastPrimitives.Action
       ref={ref}
@@ -66,7 +67,7 @@ function ToastAction({ ref, className, ...props }: React.ComponentPropsWithoutRe
 }
 ToastAction.displayName = ToastPrimitives.Action.displayName;
 
-function ToastClose({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close> & { ref?: React.RefObject<React.ElementRef<typeof ToastPrimitives.Close> | null> }) {
+function ToastClose({ ref, className, ...props }: ComponentPropsWithoutRef<typeof ToastPrimitives.Close> & { ref?: RefObject<ElementRef<typeof ToastPrimitives.Close> | null> }) {
   return (
     <ToastPrimitives.Close
       ref={ref}
@@ -83,7 +84,7 @@ function ToastClose({ ref, className, ...props }: React.ComponentPropsWithoutRef
 }
 ToastClose.displayName = ToastPrimitives.Close.displayName;
 
-function ToastTitle({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title> & { ref?: React.RefObject<React.ElementRef<typeof ToastPrimitives.Title> | null> }) {
+function ToastTitle({ ref, className, ...props }: ComponentPropsWithoutRef<typeof ToastPrimitives.Title> & { ref?: RefObject<ElementRef<typeof ToastPrimitives.Title> | null> }) {
   return (
     <ToastPrimitives.Title
       ref={ref}
@@ -94,7 +95,7 @@ function ToastTitle({ ref, className, ...props }: React.ComponentPropsWithoutRef
 }
 ToastTitle.displayName = ToastPrimitives.Title.displayName;
 
-function ToastDescription({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description> & { ref?: React.RefObject<React.ElementRef<typeof ToastPrimitives.Description> | null> }) {
+function ToastDescription({ ref, className, ...props }: ComponentPropsWithoutRef<typeof ToastPrimitives.Description> & { ref?: RefObject<ElementRef<typeof ToastPrimitives.Description> | null> }) {
   return (
     <ToastPrimitives.Description
       ref={ref}
@@ -105,9 +106,9 @@ function ToastDescription({ ref, className, ...props }: React.ComponentPropsWith
 }
 ToastDescription.displayName = ToastPrimitives.Description.displayName;
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>;
+type ToastProps = ComponentPropsWithoutRef<typeof Toast>;
 
-type ToastActionElement = React.ReactElement<typeof ToastAction>;
+type ToastActionElement = ReactElement<typeof ToastAction>;
 
 export {
   Toast,

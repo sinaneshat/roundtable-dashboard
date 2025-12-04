@@ -7,29 +7,12 @@
  * ✅ PATTERN: Import from here, never hardcode model IDs
  * ✅ SINGLE SOURCE: All model assignments consolidated
  * ✅ TYPE-SAFE: Uses ModelIdEnum from models-config.service.ts
+ * ✅ UNIFIED: Same models used in all environments (local/preview/prod)
  *
  * Reference: /docs/backend-patterns.md
  */
 
 import { ModelIdEnum } from '@/api/services/models-config.service';
-
-// ============================================================================
-// ENVIRONMENT DETECTION
-// ============================================================================
-
-/**
- * Check if we should use dev (cheap) models
- */
-function isDevMode(): boolean {
-  return process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
-}
-
-// ============================================================================
-// CHEAP MODELS FOR DEV/SYSTEM OPERATIONS
-// ============================================================================
-
-/** Cheapest model - Gemini 2.0 Flash ($0.10/1M) */
-const CHEAP_FAST_MODEL = ModelIdEnum.enum['google/gemini-2.0-flash-001'];
 
 // ============================================================================
 // ANALYSIS MODELS
@@ -48,12 +31,9 @@ export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet']
 
 /**
  * Model for conversation title generation
- * ✅ DEV: Uses Gemini 2.0 Flash (cheapest)
- * ✅ PROD: Uses Gemini 2.5 Flash (fast, cost-efficient)
+ * Uses Gemini 2.0 Flash - cheapest & fastest ($0.10/M input, $0.40/M output)
  */
-export const TITLE_GENERATION_MODEL_ID = isDevMode()
-  ? CHEAP_FAST_MODEL
-  : ModelIdEnum.enum['google/gemini-2.5-flash'];
+export const TITLE_GENERATION_MODEL_ID = ModelIdEnum.enum['google/gemini-2.0-flash-001'];
 
 // ============================================================================
 // WEB SEARCH MODELS
@@ -61,12 +41,9 @@ export const TITLE_GENERATION_MODEL_ID = isDevMode()
 
 /**
  * Model for web search query generation
- * ✅ DEV: Uses Gemini 2.0 Flash (ultra-fast)
- * ✅ PROD: Uses Claude Sonnet 4 (excellent structured output)
+ * Uses Claude 3.5 Sonnet - reliable structured output, same as analysis
  */
-export const WEB_SEARCH_MODEL_ID = isDevMode()
-  ? CHEAP_FAST_MODEL
-  : ModelIdEnum.enum['anthropic/claude-sonnet-4'];
+export const WEB_SEARCH_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
 
 // ============================================================================
 // EXPORTS

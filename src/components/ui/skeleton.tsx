@@ -1,7 +1,8 @@
-import { cn } from "@/lib/ui/cn"
-import * as React from "react"
+import type { ComponentProps } from 'react';
 
-function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
+import { cn } from "@/lib/ui/cn"
+
+function Skeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="skeleton"

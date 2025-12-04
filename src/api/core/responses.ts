@@ -19,7 +19,17 @@ import type { z } from 'zod';
 import type { DatabaseOperation, HealthStatus } from '@/api/core/enums';
 import { HealthStatuses } from '@/api/core/enums';
 
-import type { ApiResponse, CursorPaginatedResponse, ErrorContext, PaginatedResponse, ResponseMetadata } from './schemas';
+import type {
+  ApiResponse,
+  CursorPaginatedResponse,
+  ErrorContext,
+  HealthDependency,
+  HealthSummary,
+  PaginatedResponse,
+  ResponseMetadata,
+  SSEStreamMetadata,
+  TextStreamMetadata,
+} from './schemas';
 import { ApiErrorResponseSchema, createApiResponseSchema, createPaginatedResponseSchema } from './schemas';
 import type { ValidationError } from './validation';
 
@@ -623,26 +633,8 @@ export function collection<T, M extends Record<string, unknown> = Record<string,
 // HEALTH CHECK RESPONSE BUILDERS
 // ============================================================================
 
-/**
- * Health check dependency status
- * ✅ ENUM PATTERN: Uses HealthStatus type from @/api/core/enums
- */
-export type HealthDependency = {
-  status: HealthStatus;
-  message: string;
-  duration?: number;
-  details?: Record<string, unknown>;
-};
-
-/**
- * Health check summary counts
- */
-export type HealthSummary = {
-  total: number;
-  healthy: number;
-  degraded: number;
-  unhealthy: number;
-};
+// HealthDependency and HealthSummary types are imported from './schemas'
+// ✅ ZOD-FIRST PATTERN: Types inferred from Zod schemas in schemas.ts
 
 /**
  * Create a basic health check response
@@ -734,6 +726,221 @@ export function detailedHealth(
     : HttpStatusCodes.SERVICE_UNAVAILABLE;
 
   return c.json(response, httpStatus);
+}
+
+// ============================================================================
+// SSE/STREAMING RESPONSE BUILDERS
+// ============================================================================
+
+/**
+ * Standard SSE headers for AI SDK and streaming responses
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
+ */
+export const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache, no-transform',
+  'Connection': 'keep-alive',
+  'X-Accel-Buffering': 'no', // Disable nginx buffering
+} as const;
+
+// SSEStreamMetadata type is imported from './schemas'
+// ✅ ZOD-FIRST PATTERN: Type inferred from SSEStreamMetadataSchema
+
+/**
+ * Build SSE metadata headers from stream metadata
+ * @internal
+ */
+function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (metadata.streamId !== undefined) {
+    headers['X-Stream-Id'] = metadata.streamId;
+  }
+  if (metadata.roundNumber !== undefined) {
+    headers['X-Round-Number'] = String(metadata.roundNumber);
+  }
+  if (metadata.participantIndex !== undefined) {
+    headers['X-Participant-Index'] = String(metadata.participantIndex);
+  }
+  if (metadata.totalParticipants !== undefined) {
+    headers['X-Total-Participants'] = String(metadata.totalParticipants);
+  }
+  if (metadata.isActive !== undefined) {
+    headers['X-Stream-Active'] = String(metadata.isActive);
+  }
+  if (metadata.participantStatuses !== undefined) {
+    headers['X-Participant-Statuses'] = JSON.stringify(metadata.participantStatuses);
+  }
+  if (metadata.nextParticipantIndex !== undefined) {
+    headers['X-Next-Participant-Index'] = String(metadata.nextParticipantIndex);
+  }
+  if (metadata.roundComplete !== undefined) {
+    headers['X-Round-Complete'] = String(metadata.roundComplete);
+  }
+  if (metadata.resumedFromBuffer !== undefined) {
+    headers['X-Resumed-From-Buffer'] = String(metadata.resumedFromBuffer);
+  }
+
+  return headers;
+}
+
+/**
+ * Create an SSE streaming response
+ * Returns a Response with standard SSE headers and optional metadata headers
+ *
+ * @example
+ * // Basic SSE stream
+ * const stream = createLiveStream(streamId, env);
+ * return Responses.sse(stream);
+ *
+ * @example
+ * // SSE stream with metadata
+ * return Responses.sse(stream, {
+ *   streamId: 'thread_r0_p0',
+ *   roundNumber: 0,
+ *   participantIndex: 0,
+ *   totalParticipants: 3,
+ *   isActive: true,
+ *   resumedFromBuffer: true,
+ * });
+ */
+export function sse(
+  stream: ReadableStream,
+  metadata?: SSEStreamMetadata,
+): Response {
+  const metadataHeaders = metadata ? buildSSEMetadataHeaders(metadata) : {};
+
+  return new Response(stream, {
+    status: HttpStatusCodes.OK,
+    headers: {
+      ...SSE_HEADERS,
+      ...metadataHeaders,
+    },
+  });
+}
+
+/**
+ * Create a 204 No Content response with optional SSE metadata headers
+ * Used when no active stream exists but metadata should be communicated
+ *
+ * @example
+ * // Simple 204
+ * return Responses.noContentWithHeaders();
+ *
+ * @example
+ * // 204 with round info (next participant needs to stream)
+ * return Responses.noContentWithHeaders({
+ *   roundNumber: 0,
+ *   totalParticipants: 3,
+ *   nextParticipantIndex: 1,
+ *   roundComplete: false,
+ * });
+ */
+export function noContentWithHeaders(
+  metadata?: SSEStreamMetadata,
+): Response {
+  const metadataHeaders = metadata ? buildSSEMetadataHeaders(metadata) : {};
+
+  return new Response(null, {
+    status: HttpStatusCodes.NO_CONTENT,
+    headers: metadataHeaders,
+  });
+}
+
+/**
+ * Standard text stream headers for AI SDK streamObject responses
+ * Used for streaming JSON text (analysis, object generation)
+ */
+export const TEXT_STREAM_HEADERS = {
+  'Content-Type': 'text/plain; charset=utf-8',
+  'Cache-Control': 'no-cache',
+  'Connection': 'keep-alive',
+  'X-Accel-Buffering': 'no', // Disable nginx buffering
+} as const;
+
+// TextStreamMetadata type is imported from './schemas'
+// ✅ ZOD-FIRST PATTERN: Type inferred from TextStreamMetadataSchema
+
+/**
+ * Build text stream metadata headers
+ * @internal
+ */
+function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  if (metadata.streamId !== undefined) {
+    headers['X-Stream-Id'] = metadata.streamId;
+  }
+  if (metadata.resumedFromBuffer !== undefined) {
+    headers['X-Resumed-From-Buffer'] = String(metadata.resumedFromBuffer);
+  }
+  if (metadata.resourceId !== undefined) {
+    headers['X-Resource-Id'] = metadata.resourceId;
+  }
+  if (metadata.roundNumber !== undefined) {
+    headers['X-Round-Number'] = String(metadata.roundNumber);
+  }
+  if (metadata.analysisId !== undefined) {
+    headers['X-Analysis-Id'] = metadata.analysisId;
+  }
+  if (metadata.streamStatus !== undefined) {
+    headers['X-Stream-Status'] = metadata.streamStatus;
+  }
+
+  return headers;
+}
+
+/**
+ * Create a text streaming response (for AI SDK streamObject)
+ * Returns a Response with standard text stream headers and optional metadata
+ *
+ * @example
+ * // Basic text stream
+ * const stream = createLiveStream(streamId, env);
+ * return Responses.textStream(stream);
+ *
+ * @example
+ * // Text stream with metadata (resumed analysis)
+ * return Responses.textStream(stream, {
+ *   streamId: 'analysis_123',
+ *   resumedFromBuffer: true,
+ * });
+ */
+export function textStream(
+  stream: ReadableStream,
+  metadata?: TextStreamMetadata,
+): Response {
+  const metadataHeaders = metadata ? buildTextStreamMetadataHeaders(metadata) : {};
+
+  return new Response(stream, {
+    status: HttpStatusCodes.OK,
+    headers: {
+      ...TEXT_STREAM_HEADERS,
+      ...metadataHeaders,
+    },
+  });
+}
+
+/**
+ * Create a completed text response (for completed analysis)
+ * Returns already-completed text content
+ *
+ * @example
+ * return Responses.textComplete(completedAnalysisText);
+ */
+export function textComplete(
+  content: string,
+  metadata?: TextStreamMetadata,
+): Response {
+  const metadataHeaders = metadata ? buildTextStreamMetadataHeaders(metadata) : {};
+
+  return new Response(content, {
+    status: HttpStatusCodes.OK,
+    headers: {
+      ...TEXT_STREAM_HEADERS,
+      ...metadataHeaders,
+    },
+  });
 }
 
 // ============================================================================
@@ -856,6 +1063,12 @@ export const Responses = {
   jsonRpc,
   polling,
 
+  // SSE/Streaming responses
+  sse,
+  noContentWithHeaders,
+  textStream,
+  textComplete,
+
   // Utilities
   customResponse,
   redirect,
@@ -864,6 +1077,10 @@ export const Responses = {
   validateSuccessResponse,
   validatePaginatedResponse,
   validateErrorResponse,
+
+  // Constants
+  SSE_HEADERS,
+  TEXT_STREAM_HEADERS,
 } as const;
 
 // ============================================================================
@@ -872,5 +1089,14 @@ export const Responses = {
 
 export type ResponseBuilders = typeof Responses;
 
-// Re-export response types
-export type { ApiResponse, ErrorContext, PaginatedResponse };
+// Re-export response types from schemas.ts for convenience
+// ✅ ZOD-FIRST PATTERN: All types are inferred from Zod schemas in schemas.ts
+export type {
+  ApiResponse,
+  ErrorContext,
+  HealthDependency,
+  HealthSummary,
+  PaginatedResponse,
+  SSEStreamMetadata,
+  TextStreamMetadata,
+};

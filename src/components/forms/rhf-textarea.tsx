@@ -1,5 +1,4 @@
 // components/TextInput.tsx
-import React from 'react';
 import { useFormContext } from 'react-hook-form';
 
 import type { GeneralFormProps } from '@/types/general';

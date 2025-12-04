@@ -68,6 +68,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
       id: thread.id,
       title: thread.title,
       slug: thread.slug,
+      previousSlug: thread.previousSlug ?? null, // ✅ BACKWARDS COMPATIBLE: Include original slug
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
       messages: [],

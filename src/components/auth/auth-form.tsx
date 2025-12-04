@@ -277,21 +277,6 @@ function AuthFormContent() {
                       <GoogleButton className="w-full" />
                     </motion.div>
 
-                    <motion.div
-                      variants={{
-                        hidden: { opacity: 0, y: 10 },
-                        show: {
-                          opacity: 1,
-                          y: 0,
-                          transition: { delay: 0.75, duration: 0.3 },
-                        },
-                      }}
-                      className="text-center"
-                    >
-                      <p className="text-sm text-muted-foreground">
-                        {t('auth.secureAuthentication')}
-                      </p>
-                    </motion.div>
                   </CardContent>
                 </Card>
               </motion.div>

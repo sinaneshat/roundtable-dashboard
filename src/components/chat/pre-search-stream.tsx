@@ -8,9 +8,9 @@ import { flushSync } from 'react-dom';
 import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchListResponseSchema, PreSearchResponseSchema } from '@/api/routes/chat/schema';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
-import { LoaderFive } from '@/components/ui/loader';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
@@ -749,7 +749,7 @@ function PreSearchStreamComponent({
   if (isPendingWithNoData || isAutoRetrying.value) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <LoaderFive text={isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')} />
+        <Shimmer>{isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')}</Shimmer>
       </div>
     );
   }

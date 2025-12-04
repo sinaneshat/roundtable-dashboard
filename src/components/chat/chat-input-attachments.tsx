@@ -14,6 +14,7 @@
 import { FileCode, File as FileIcon, FileImage, FileText, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
+import { UploadStatuses } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -86,8 +87,8 @@ function AttachmentTooltipContent({
 }) {
   const { file, preview, status, uploadItem } = attachment;
   const isImage = file.type.startsWith('image/');
-  const isUploading = status === 'uploading';
-  const isFailed = status === 'failed';
+  const isUploading = status === UploadStatuses.UPLOADING;
+  const isFailed = status === UploadStatuses.FAILED;
 
   return (
     <div className="flex flex-col gap-2 max-w-[280px]">
@@ -154,8 +155,8 @@ function AttachmentChip({
 }) {
   const { file, preview, status, uploadItem } = attachment;
   const isImage = file.type.startsWith('image/');
-  const isUploading = status === 'uploading';
-  const isFailed = status === 'failed';
+  const isUploading = status === UploadStatuses.UPLOADING;
+  const isFailed = status === UploadStatuses.FAILED;
   const uploadProgress = uploadItem?.progress.percent ?? 0;
 
   // Truncate filename for display

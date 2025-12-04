@@ -289,12 +289,12 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 - complexity: "basic" | "moderate" | "deep" (lowercase)
 - sourceCount: Number of sources (basic:1-2, moderate:2-3, deep:3) - MAX 3 PER QUERY
 
-**OPTIONAL FIELDS** (per query):
-- topic: "technology" | "news" | "science" | "health" | "finance" etc
-- timeRange: "day" | "week" | "month" | "year" (only if recency matters)
-- needsAnswer: "basic" | "advanced" (true if synthesis needed)
-- includeImages: true (only for visual/UI/design questions)
-- includeImageDescriptions: true (only if images need AI analysis)
+**OPTIONAL FIELDS** (per query - ONLY include if clearly relevant):
+- topic: "general" | "news" | "finance" | "health" | "scientific" | "travel" (OMIT if unsure)
+- timeRange: "day" | "week" | "month" | "year" (ONLY for time-sensitive queries)
+- needsAnswer: "basic" | "advanced" (ONLY if synthesis is needed)
+- includeImages: true (ONLY for visual/design questions)
+- includeImageDescriptions: true (ONLY if images need AI analysis)
 
 **DECOMPOSITION STRATEGY EXAMPLES**:
 
@@ -707,5 +707,19 @@ ${att.textContent}
 ${fileEntries.join('\n\n')}
 </uploaded-files>
 
-When referencing information from these uploaded files, cite using the file's ID: [att_xxxxx]`;
+## Citation Instructions
+When you use information from the uploaded files above, you MUST cite the source using its exact ID in square brackets.
+
+**Format**: Place the citation marker [att_xxxxxxxx] immediately after the information you're referencing.
+
+**Examples**:
+- "The configuration shows port 3000 [att_abc12345]"
+- "According to the document [att_xyz98765], the API endpoint is..."
+- "The code implements a retry mechanism [att_def45678] with exponential backoff"
+
+**Rules**:
+1. Use the EXACT citation ID from the file's "id" attribute (e.g., att_abc12345)
+2. Place citations inline, right after the relevant statement
+3. You may cite the same source multiple times if referencing different parts
+4. Do NOT modify or abbreviate the citation ID`;
 }

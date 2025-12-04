@@ -37,9 +37,9 @@ import { createMockParticipant, createMockPreSearch, createMockUserMessage } fro
 // Mock Setup
 // ============================================================================
 
-vi.mock('@/components/ui/loader', () => ({
-  LoaderFive: ({ text }: { text: string }) => (
-    <div data-testid="loader-five">{text}</div>
+vi.mock('@/components/ai-elements/shimmer', () => ({
+  Shimmer: ({ children }: { children: string }) => (
+    <div data-testid="shimmer-text">{children}</div>
   ),
 }));
 
@@ -230,7 +230,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       expect(content).toBeInTheDocument();
 
       // CRITICAL: Loaders for pending participants (2 and 3) should exist
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // Verify loaders show context-aware loading text (not old "Waiting for response" pattern)
@@ -292,7 +292,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       expect(screen.getByText('Response from first participant')).toBeInTheDocument();
 
       // Loaders for pending participants should still be visible
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // Verify the loaders show context-aware loading text
@@ -375,7 +375,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       expect(second).toBeInTheDocument();
 
       // Third participant should still show loader
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -406,7 +406,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       );
 
       // All participants should show as pending (shimmer loaders)
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders).toHaveLength(3);
 
       // All should show context-aware loading text (not old placeholder pattern)
@@ -469,7 +469,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       expect(screen.getByText('I am priority 0, streaming first!')).toBeInTheDocument();
 
       // Loaders should exist for remaining participants
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // Verify loaders show context-aware loading text
@@ -529,7 +529,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       );
 
       const content = screen.getByText('Streaming content here');
-      const loaders = screen.getAllByTestId('loader-five');
+      const loaders = screen.getAllByTestId('shimmer-text');
 
       // CRITICAL: Both content and loaders should exist (unified rendering)
       expect(content).toBeInTheDocument();
@@ -579,7 +579,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       );
 
       // Both should show shimmer
-      let loaders = screen.getAllByTestId('loader-five');
+      let loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(2);
 
       // Now first participant has content
@@ -617,7 +617,7 @@ describe('streaming Position Stability (REGRESSION)', () => {
       expect(content).toBeInTheDocument();
 
       // CRITICAL: Loaders should still exist for remaining participants
-      loaders = screen.getAllByTestId('loader-five');
+      loaders = screen.getAllByTestId('shimmer-text');
       expect(loaders.length).toBeGreaterThanOrEqual(1);
 
       // Verify loaders show context-aware loading text
@@ -709,7 +709,7 @@ describe('streaming Message Status Detection', () => {
     expect(streamingContent).toBeInTheDocument();
 
     // CRITICAL: Pending participant should show loader
-    const loaders = screen.getAllByTestId('loader-five');
+    const loaders = screen.getAllByTestId('shimmer-text');
     expect(loaders.length).toBeGreaterThanOrEqual(1);
 
     // Verify loaders show context-aware loading text

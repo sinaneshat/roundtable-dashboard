@@ -31,6 +31,7 @@ export type Chat = {
   id: string;
   title: string;
   slug: string;
+  previousSlug?: string | null; // ✅ BACKWARDS COMPATIBLE: Original slug before AI title generation
   createdAt: Date;
   updatedAt: Date;
   messages: never[];
@@ -42,6 +43,17 @@ export type ChatGroup = {
   label: string;
   chats: Chat[];
 };
+
+/**
+ * Check if a chat is active by comparing pathname against both current slug and previousSlug
+ * ✅ BACKWARDS COMPATIBLE: Supports both AI-generated and original slugs
+ */
+function isChatActive(chat: Chat, pathname: string): boolean {
+  const currentSlugUrl = `/chat/${chat.slug}`;
+  const previousSlugUrl = chat.previousSlug ? `/chat/${chat.previousSlug}` : null;
+  return pathname === currentSlugUrl || (previousSlugUrl !== null && pathname === previousSlugUrl);
+}
+
 // eslint-disable-next-line react-refresh/only-export-components -- Utility function closely related to ChatList component
 export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
   const now = Date.now();
@@ -237,8 +249,7 @@ export function ChatList({
                 >
                   <SidebarMenu>
                     {favorites.map((chat) => {
-                      const chatUrl = `/chat/${chat.slug}`;
-                      const isActive = pathname === chatUrl;
+                      const isActive = isChatActive(chat, pathname);
                       const isDeleting = deletingChatId === chat.id;
                       return (
                         <ChatItem
@@ -259,8 +270,7 @@ export function ChatList({
             : (
                 <SidebarMenu>
                   {favorites.map((chat) => {
-                    const chatUrl = `/chat/${chat.slug}`;
-                    const isActive = pathname === chatUrl;
+                    const isActive = isChatActive(chat, pathname);
                     const isDeleting = deletingChatId === chat.id;
                     return (
                       <ChatItem
@@ -330,8 +340,7 @@ export function ChatList({
                   >
                     <SidebarMenu>
                       {group.chats.map((chat) => {
-                        const chatUrl = `/chat/${chat.slug}`;
-                        const isActive = pathname === chatUrl;
+                        const isActive = isChatActive(chat, pathname);
                         const isDeleting = deletingChatId === chat.id;
                         return (
                           <ChatItem
@@ -352,8 +361,7 @@ export function ChatList({
               : (
                   <SidebarMenu>
                     {group.chats.map((chat) => {
-                      const chatUrl = `/chat/${chat.slug}`;
-                      const isActive = pathname === chatUrl;
+                      const isActive = isChatActive(chat, pathname);
                       const isDeleting = deletingChatId === chat.id;
                       return (
                         <ChatItem

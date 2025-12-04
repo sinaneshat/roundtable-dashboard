@@ -1,6 +1,7 @@
 'use client'
 
-import * as React from 'react'
+import type { ComponentType, HTMLAttributes } from 'react';
+
 import { CheckCircle, Clock, AlertCircle, X } from 'lucide-react'
 import { cva } from 'class-variance-authority'
 import { useTranslations } from 'next-intl'
@@ -112,9 +113,9 @@ const statusBadgePropsSchema = z.object({
 });
 
 export type StatusBadgeProps = z.infer<typeof statusBadgePropsSchema> &
-  Omit<React.HTMLAttributes<HTMLSpanElement>, 'variant' | keyof z.infer<typeof statusBadgePropsSchema>> & {
+  Omit<HTMLAttributes<HTMLSpanElement>, 'variant' | keyof z.infer<typeof statusBadgePropsSchema>> & {
   /** Custom icon component */
-  icon?: React.ComponentType<{ className?: string }>
+  icon?: ComponentType<{ className?: string }>
 };
 
 /**

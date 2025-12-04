@@ -517,7 +517,7 @@ export async function saveStreamedMessage(
     }
 
     // Cache invalidation
-    revalidateTag(`thread:${threadId}:messages`);
+    revalidateTag(`thread:${threadId}:messages`, 'max');
 
     // RAG REMOVED: AutoRAG now handles knowledge indexing from project files
     // Per-message embeddings are no longer needed - project-based knowledge only

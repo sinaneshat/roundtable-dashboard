@@ -544,21 +544,29 @@ export async function deleteStreamBuffer(
  * 3. Stream new chunks to client in real-time
  * 4. Complete when stream is marked as COMPLETED or FAILED
  *
+ * ✅ FIX: Added "no new data" timeout to detect dead streams
+ * If no new chunks arrive within noNewDataTimeoutMs, assume original stream
+ * is dead and send a synthetic finish event so frontend can handle recovery.
+ *
  * @param streamId - Stream identifier (format: {threadId}_r{roundNumber}_p{participantIndex})
  * @param env - Cloudflare environment bindings
  * @param pollIntervalMs - How often to check for new chunks (default 100ms)
  * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
+ * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 10 seconds)
  */
 export function createLiveParticipantResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
   maxPollDurationMs = 5 * 60 * 1000,
+  noNewDataTimeoutMs = 10 * 1000,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let lastChunkIndex = 0;
   const startTime = Date.now();
+  let lastNewDataTime = Date.now();
   let isClosed = false;
+  let sentSyntheticFinish = false;
 
   // Helper to safely close controller (handles already-closed state)
   const safeClose = (
@@ -648,6 +656,8 @@ export function createLiveParticipantResumeStream(
             }
           }
           lastChunkIndex = chunks.length;
+          // ✅ FIX: Reset the "no new data" timer when we receive new chunks
+          lastNewDataTime = Date.now();
         }
 
         // Check if stream is complete
@@ -655,6 +665,26 @@ export function createLiveParticipantResumeStream(
           metadata?.status === StreamStatuses.COMPLETED
           || metadata?.status === StreamStatuses.FAILED
         ) {
+          safeClose(controller);
+          return;
+        }
+
+        // ✅ FIX: Check if original stream appears to be dead (no new data for a while)
+        // This handles the case where user refreshed mid-stream and the original
+        // stream process died. We send a synthetic finish event so the AI SDK
+        // knows to call onFinish and the frontend can handle recovery.
+        const timeSinceLastNewData = Date.now() - lastNewDataTime;
+        if (timeSinceLastNewData > noNewDataTimeoutMs && !sentSyntheticFinish) {
+          sentSyntheticFinish = true;
+
+          // ✅ AI SDK v5 FORMAT: Send synthetic finish event
+          // Format matches the SSE format used by other chunks (data: + JSON)
+          // The 'unknown' finishReason signals the stream was interrupted
+          // This allows AI SDK to call onFinish so frontend can handle recovery
+          const syntheticFinish = `data: {"type":"finish","finishReason":"unknown","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+          safeEnqueue(controller, encoder.encode(syntheticFinish));
+
+          // Close the stream after sending finish event
           safeClose(controller);
           return;
         }

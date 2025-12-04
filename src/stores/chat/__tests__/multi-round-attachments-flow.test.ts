@@ -284,6 +284,17 @@ describe('multi-Round Conversation with Attachments', () => {
     });
 
     it('sends message with PDF attachment in round 1', async () => {
+      const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
+
+      // Update mockStoreState with new mocks
+      mockStoreState.prepareForNewMessage = mockPrepareForNewMessage;
+      mockStoreState.setStreamingRoundNumber = mockSetStreamingRoundNumber;
+      mockStoreState.setMessages = mockSetMessages;
+      mockStoreState.setHasEarlyOptimisticMessage = mockSetHasEarlyOptimisticMessage;
+
       mockUpdateThreadMutation.mockResolvedValue({
         data: {
           participants: [
@@ -307,9 +318,15 @@ describe('multi-Round Conversation with Attachments', () => {
       const pdfAttachmentIds = ['upload-pdf-789'];
       await result.current.handleUpdateThreadAndSend('thread-doc-123', pdfAttachmentIds);
 
+      // Streaming round number set immediately for UI feedback
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalledWith(1);
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
       // prepareForNewMessage should receive attachment IDs and file parts
-      const mockPrepare = mockStoreState.prepareForNewMessage as ReturnType<typeof vi.fn>;
-      expect(mockPrepare).toHaveBeenCalledWith(
+      expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Analyze this PDF document',
         [],
         pdfAttachmentIds,
@@ -425,6 +442,17 @@ describe('multi-Round Conversation with Attachments', () => {
     });
 
     it('sends message with multiple attachment types in round 2', async () => {
+      const mockPrepareForNewMessage = vi.fn();
+      const mockSetStreamingRoundNumber = vi.fn();
+      const mockSetMessages = vi.fn();
+      const mockSetHasEarlyOptimisticMessage = vi.fn();
+
+      // Update mockStoreState with new mocks
+      mockStoreState.prepareForNewMessage = mockPrepareForNewMessage;
+      mockStoreState.setStreamingRoundNumber = mockSetStreamingRoundNumber;
+      mockStoreState.setMessages = mockSetMessages;
+      mockStoreState.setHasEarlyOptimisticMessage = mockSetHasEarlyOptimisticMessage;
+
       mockUpdateThreadMutation.mockResolvedValue({
         data: {
           participants: [
@@ -454,8 +482,15 @@ describe('multi-Round Conversation with Attachments', () => {
 
       await result.current.handleUpdateThreadAndSend('thread-multi-123', multipleAttachmentIds);
 
-      const mockPrepare = mockStoreState.prepareForNewMessage as ReturnType<typeof vi.fn>;
-      expect(mockPrepare).toHaveBeenCalledWith(
+      // Streaming round number set immediately for UI feedback
+      expect(mockSetStreamingRoundNumber).toHaveBeenCalledWith(2);
+
+      // Optimistic message added immediately
+      expect(mockSetMessages).toHaveBeenCalled();
+      expect(mockSetHasEarlyOptimisticMessage).toHaveBeenCalledWith(true);
+
+      // prepareForNewMessage should receive attachment IDs and file parts
+      expect(mockPrepareForNewMessage).toHaveBeenCalledWith(
         'Compare these images and documents',
         [],
         multipleAttachmentIds,

@@ -125,7 +125,7 @@ describe('system prompt attachment context', () => {
       expect(prompt).toContain('id="att_file123"');
       expect(prompt).toContain('id="att_file456"');
       // Should have citation format instruction
-      expect(prompt).toContain('[att_xxxxx]');
+      expect(prompt).toContain('[att_xxxxxxxx]');
       // Should NOT have verbose instructions
       expect(prompt).not.toContain('→');
       expect(prompt.toLowerCase()).not.toContain('mandatory');
@@ -338,7 +338,7 @@ describe('end-to-end citation flow', () => {
     expect(systemPrompt).toContain('<uploaded-files>');
     expect(systemPrompt).toContain('name="invoice.pdf"');
     expect(systemPrompt).toContain('id="att_invoice2"'); // Citation ID in attribute
-    expect(systemPrompt).toContain('[att_xxxxx]'); // Citation format instruction
+    expect(systemPrompt).toContain('[att_xxxxxxxx]'); // Citation format instruction
 
     // Step 2: IF AI response happens to include citation (rare without forcing)
     // This tests that parsing still works
@@ -390,7 +390,7 @@ describe('end-to-end citation flow', () => {
     // System prompt has XML with citation IDs and instructions
     expect(systemPrompt).toContain('<uploaded-files>');
     expect(systemPrompt).toContain('id="att_file1"');
-    expect(systemPrompt).toContain('[att_xxxxx]'); // Citation instructions included
+    expect(systemPrompt).toContain('[att_xxxxxxxx]'); // Citation instructions included
 
     // AI response without citations - this is the expected common case now
     const aiResponse = 'Here is a general response without any specific citations to documents.';

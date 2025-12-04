@@ -3,8 +3,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import { LoaderFive } from '@/components/ui/loader';
 import { cn } from '@/lib/ui/cn';
 
 export type StreamingParticipantsLoaderProps = {
@@ -49,7 +49,7 @@ export function StreamingParticipantsLoader({
           transition={{ duration: 0.2 }}
           className="text-sm text-muted-foreground"
         >
-          <LoaderFive text={currentMessage} />
+          <Shimmer>{currentMessage}</Shimmer>
         </motion.div>
       </AnimatePresence>
     </div>

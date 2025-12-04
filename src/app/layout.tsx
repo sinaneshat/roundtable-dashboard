@@ -5,7 +5,7 @@ import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
 import { getMessages, getTranslations } from 'next-intl/server';
-import React from 'react';
+import type { ReactNode } from 'react';
 
 import { AppProviders } from '@/components/providers';
 import { PWAUpdatePrompt } from '@/components/pwa/pwa-update-prompt';
@@ -50,8 +50,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 type RootLayoutProps = {
-  children: React.ReactNode;
-  modal: React.ReactNode;
+  children: ReactNode;
+  modal: ReactNode;
 };
 
 export default async function Layout({ children, modal }: RootLayoutProps) {

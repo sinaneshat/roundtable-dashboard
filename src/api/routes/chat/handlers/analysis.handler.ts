@@ -1,7 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { streamObject } from 'ai';
 import { asc, desc, eq } from 'drizzle-orm';
-import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -368,17 +367,11 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
             // 2. Continues polling KV for new chunks as they arrive
             // 3. Streams new chunks to client in real-time
             // 4. Completes when the original stream finishes
+            // ✅ PATTERN: Uses Responses.textStream() builder for consistent headers
             const liveStream = createLiveAnalysisResumeStream(existingStreamId, c.env);
-            return new Response(liveStream, {
-              status: HttpStatusCodes.OK,
-              headers: {
-                'Content-Type': 'text/plain; charset=utf-8',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-                'X-Accel-Buffering': 'no',
-                'X-Resumed-From-Buffer': 'true',
-                'X-Stream-Id': existingStreamId,
-              },
+            return Responses.textStream(liveStream, {
+              streamId: existingStreamId,
+              resumedFromBuffer: true,
             });
           }
 
@@ -859,7 +852,7 @@ export const resumeAnalysisStreamHandler: RouteHandler<typeof resumeAnalysisStre
 
     // No active stream - return 204 No Content
     if (!activeStreamId) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContent(c);
     }
 
     // Get stream buffer metadata
@@ -867,40 +860,71 @@ export const resumeAnalysisStreamHandler: RouteHandler<typeof resumeAnalysisStre
 
     // No buffer exists - return 204 No Content
     if (!metadata) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContent(c);
     }
 
     // =========================================================================
     // ✅ STREAM STATUS CHECK: Return appropriately based on stream state
     // =========================================================================
     // If stream is COMPLETED, return all buffered chunks as complete text
-    // If stream is ACTIVE, return 202 to indicate polling should continue
-    // This prevents frontend from waiting indefinitely on active streams
+    // If stream is ACTIVE, check for stale streams (worker died after refresh)
+    // If stream is stale, return buffered data or 204 to signal restart
 
     if (metadata.status === StreamStatuses.COMPLETED) {
       // Stream completed - return all buffered chunks as complete text
       const chunks = await getAnalysisStreamChunks(activeStreamId, c.env);
       if (!chunks || chunks.length === 0) {
-        return c.body(null, HttpStatusCodes.NO_CONTENT);
+        return Responses.noContent(c);
       }
 
       // Concatenate all chunks into complete JSON
       const completeText = chunks.map(chunk => chunk.data).join('');
 
-      return new Response(completeText, {
-        status: HttpStatusCodes.OK,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'no-cache',
-          'X-Stream-Id': activeStreamId,
-          'X-Round-Number': String(roundNum),
-          'X-Analysis-Id': metadata.analysisId,
-          'X-Stream-Status': 'completed', // ✅ Indicates data is complete
-        },
+      // ✅ PATTERN: Uses Responses.textComplete() builder for consistent headers
+      return Responses.textComplete(completeText, {
+        streamId: activeStreamId,
+        roundNumber: roundNum,
+        analysisId: metadata.analysisId,
+        streamStatus: 'completed', // ✅ Indicates data is complete
       });
     }
 
-    // Stream is still active - return 202 to indicate polling should continue
+    // =========================================================================
+    // ✅ STALE STREAM DETECTION: Detect streams abandoned after page refresh
+    // =========================================================================
+    // If stream is ACTIVE but createdAt was too long ago (> 30 seconds),
+    // the original worker likely died (user refreshed page).
+    // Return buffered chunks if available, otherwise signal to restart.
+    const STALE_STREAM_TIMEOUT_MS = 30 * 1000; // 30 seconds
+    const streamAge = Date.now() - metadata.createdAt;
+    const isStaleStream = streamAge > STALE_STREAM_TIMEOUT_MS;
+
+    if (isStaleStream) {
+      // Stream is stale - try to return any buffered chunks
+      const chunks = await getAnalysisStreamChunks(activeStreamId, c.env);
+
+      if (chunks && chunks.length > 0) {
+        // We have partial data - return it as complete
+        // Frontend can use this to display partial results
+        const partialText = chunks.map(chunk => chunk.data).join('');
+
+        // Clean up stale stream state
+        await clearActiveAnalysisStream(threadId, roundNum, c.env);
+
+        return Responses.textComplete(partialText, {
+          streamId: activeStreamId,
+          roundNumber: roundNum,
+          analysisId: metadata.analysisId,
+          streamStatus: 'stale-with-data', // ✅ Indicates partial data from stale stream
+        });
+      }
+
+      // No buffered data - clean up and return 204 to signal restart
+      await clearActiveAnalysisStream(threadId, roundNum, c.env);
+      return Responses.noContent(c);
+    }
+
+    // Stream is still active and not stale - return 202 to indicate polling should continue
     // Frontend should poll /analyses endpoint for completion
     return Responses.accepted(c, {
       status: 'streaming',

@@ -1,7 +1,9 @@
+import type { ComponentProps, ReactNode } from 'react';
+import { forwardRef } from 'react';
+
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Loader2 } from "lucide-react"
-import * as React from "react"
 
 import type { ComponentVariant, ComponentSize } from "@/api/core/enums"
 import { cn } from "@/lib/ui/cn"
@@ -67,7 +69,7 @@ const buttonVariants = cva(
  * // Combined features
  * <Button loading variant="secondary" size="lg">Loading...</Button>
  */
-interface ButtonProps extends React.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
+interface ButtonProps extends ComponentProps<"button">, VariantProps<typeof buttonVariants> {
   /** Render as child component using Radix Slot */
   asChild?: boolean
   /** Show loading spinner and disable button */
@@ -75,12 +77,12 @@ interface ButtonProps extends React.ComponentProps<"button">, VariantProps<typeo
   /** Custom text to show when loading (overrides children) */
   loadingText?: string
   /** Icon to display at the start of the button */
-  startIcon?: React.ReactNode
+  startIcon?: ReactNode
   /** Icon to display at the end of the button */
-  endIcon?: React.ReactNode
+  endIcon?: ReactNode
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({
     className,
     variant,

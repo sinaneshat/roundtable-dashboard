@@ -1,10 +1,11 @@
 'use client';
 
+import type { ComponentPropsWithoutRef, ElementRef, HTMLAttributes, RefObject } from 'react';
+
 import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import * as React from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -16,7 +17,7 @@ const SheetClose = SheetPrimitive.Close;
 
 const SheetPortal = SheetPrimitive.Portal;
 
-function SheetOverlay({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay> & { ref?: React.RefObject<React.ElementRef<typeof SheetPrimitive.Overlay> | null> }) {
+function SheetOverlay({ ref, className, ...props }: ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay> & { ref?: RefObject<ElementRef<typeof SheetPrimitive.Overlay> | null> }) {
   return (
     <SheetPrimitive.Overlay
       className={cn(
@@ -49,9 +50,9 @@ const sheetVariants = cva(
   },
 );
 
-type SheetContentProps = {} & React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>;
+type SheetContentProps = {} & ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>;
 
-function SheetContent({ ref, side = 'end', className, children, ...props }: SheetContentProps & { ref?: React.RefObject<React.ElementRef<typeof SheetPrimitive.Content> | null> }) {
+function SheetContent({ ref, side = 'end', className, children, ...props }: SheetContentProps & { ref?: RefObject<ElementRef<typeof SheetPrimitive.Content> | null> }) {
   const t = useTranslations('actions');
 
   return (
@@ -76,7 +77,7 @@ SheetContent.displayName = SheetPrimitive.Content.displayName;
 function SheetHeader({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
@@ -92,7 +93,7 @@ SheetHeader.displayName = 'SheetHeader';
 function SheetFooter({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
@@ -105,7 +106,7 @@ function SheetFooter({
 }
 SheetFooter.displayName = 'SheetFooter';
 
-function SheetTitle({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title> & { ref?: React.RefObject<React.ElementRef<typeof SheetPrimitive.Title> | null> }) {
+function SheetTitle({ ref, className, ...props }: ComponentPropsWithoutRef<typeof SheetPrimitive.Title> & { ref?: RefObject<ElementRef<typeof SheetPrimitive.Title> | null> }) {
   return (
     <SheetPrimitive.Title
       ref={ref}
@@ -116,7 +117,7 @@ function SheetTitle({ ref, className, ...props }: React.ComponentPropsWithoutRef
 }
 SheetTitle.displayName = SheetPrimitive.Title.displayName;
 
-function SheetDescription({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description> & { ref?: React.RefObject<React.ElementRef<typeof SheetPrimitive.Description> | null> }) {
+function SheetDescription({ ref, className, ...props }: ComponentPropsWithoutRef<typeof SheetPrimitive.Description> & { ref?: RefObject<ElementRef<typeof SheetPrimitive.Description> | null> }) {
   return (
     <SheetPrimitive.Description
       ref={ref}

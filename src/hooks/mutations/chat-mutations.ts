@@ -1044,3 +1044,11 @@ export function useCreatePreSearchMutation() {
     throwOnError: true, // Throw errors since pre-search is critical for correct flow
   });
 }
+
+// ============================================================================
+// AI SDK Resume Pattern - No separate mutation needed
+// ============================================================================
+// Per AI SDK docs (https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams):
+// - useChat with `resume: true` automatically calls GET /stream on mount
+// - GET /stream returns 204 (no stream) or 200 with SSE (resume stream)
+// - NO separate /resume service call is needed from the frontend

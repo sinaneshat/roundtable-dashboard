@@ -79,6 +79,13 @@ export {
 } from './chat-pre-search';
 
 // ============================================================================
+// AI SDK Resume Pattern - No separate resume service needed
+// ============================================================================
+// Per AI SDK docs, stream resumption is handled via GET /stream endpoint
+// which is called automatically by useChat with resume: true.
+// No separate /resume service call is needed from the frontend.
+
+// ============================================================================
 // Subscription Management Service Exports (Switch/Cancel)
 // ============================================================================
 

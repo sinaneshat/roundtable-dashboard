@@ -42,7 +42,7 @@ import { showApiErrorToast } from '@/lib/toast';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { ACTIVITY_TIMEOUT_MS, getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
+import { getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, createChatStore, readPreSearchStreamData } from '@/stores/chat';
 
@@ -601,14 +601,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 return; // Pre-search is still running and has recent activity
               }
 
-              // Log timeout with activity info for debugging
-              console.error('[ChatStoreProvider] Pre-search timeout - no activity', {
-                roundNumber: currentRound,
-                status: preSearchForRound.status,
-                lastActivityTime,
-                timeSinceActivity: lastActivityTime ? now - lastActivityTime : 'no tracking',
-                activityTimeoutMs: ACTIVITY_TIMEOUT_MS,
-              });
               // ✅ FIX: Return here - pre-search specific timeout should not trigger full reset
               // The checkStuckPreSearches mechanism will mark this as FAILED, allowing participants to proceed
               return;
@@ -632,13 +624,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               }
 
               // Grace period exceeded but participants still haven't started - unusual state
-              // Log for debugging but don't trigger full reset yet
-              console.error('[ChatStoreProvider] Pre-search complete but participants not started', {
-                roundNumber: currentRound,
-                timeSinceComplete,
-                gracePeriodMs: PARTICIPANT_START_GRACE_PERIOD_MS,
-              });
-              return; // Don't reset - let other mechanisms handle stuck state
+              // Don't reset - let other mechanisms handle stuck state
+              return;
             }
           }
         }
@@ -648,11 +635,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           return; // Still within default timeout window
         }
       }
-
-      console.error('[ChatStoreProvider] Streaming start timeout - clearing waitingToStartStreaming', {
-        webSearchEnabled: latestWebSearchEnabled,
-        elapsedWaitingTime,
-      });
 
       // ✅ FULL RESET: Clear all streaming-related state
       latestState.setWaitingToStartStreaming(false);
@@ -723,6 +705,53 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // Clear the trigger flag after calling (let the effect retry if needed)
     // The flag will be cleared when streaming actually begins
   }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, chat, store]);
+
+  // ✅ SAFETY TIMEOUT: Clear stuck waitingToStartStreaming state on thread screen
+  // In local dev without KV, stream resumption may fail (GET /stream returns 204)
+  // but the incomplete round resumption hook sets waitingToStartStreaming=true.
+  // If AI SDK can't continue within 10 seconds, clear the flag to allow retry.
+  const resumptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Only on thread screen with active resumption state
+    const currentScreenMode = store.getState().screenMode;
+    if (currentScreenMode !== 'thread' || !waitingToStart || nextParticipantToTrigger === null) {
+      // Clear any existing timeout
+      if (resumptionTimeoutRef.current) {
+        clearTimeout(resumptionTimeoutRef.current);
+        resumptionTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // Skip if streaming started
+    if (chatIsStreaming) {
+      if (resumptionTimeoutRef.current) {
+        clearTimeout(resumptionTimeoutRef.current);
+        resumptionTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // Set timeout to clear stuck state
+    resumptionTimeoutRef.current = setTimeout(() => {
+      const latestState = store.getState();
+
+      // Check if still stuck (waitingToStart but not streaming)
+      if (latestState.waitingToStartStreaming && !latestState.isStreaming) {
+        // ✅ FIX: Clear the stuck state to allow user to retry
+        latestState.setWaitingToStartStreaming(false);
+        latestState.setNextParticipantToTrigger(null);
+      }
+    }, 10000); // 10 second timeout for thread screen resumption
+
+    return () => {
+      if (resumptionTimeoutRef.current) {
+        clearTimeout(resumptionTimeoutRef.current);
+        resumptionTimeoutRef.current = null;
+      }
+    };
+  }, [waitingToStart, chatIsStreaming, nextParticipantToTrigger, store]);
 
   // ✅ SAFETY MECHANISM: Auto-complete stuck pre-searches after timeout
   // Prevents pre-searches stuck at 'streaming' or 'pending' from blocking messages
@@ -923,16 +952,72 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         }
       }
 
+      // =========================================================================
+      // ✅ DUPLICATE PARTS FIX: Deduplicate message parts after stream resume
+      // =========================================================================
+      // When AI SDK resumes a stream, there's a race condition:
+      // 1. Hydration sets messages from initialMessages (parts without 'state')
+      // 2. Resume receives buffered chunks (parts with 'state: done')
+      // 3. AI SDK appends resumed parts to hydrated message → duplicates
+      //
+      // Fix: Deduplicate parts within each message, keeping the most complete version
+      const deduplicatedMessages = mergedMessages.map((msg) => {
+        if (msg.role !== MessageRoles.ASSISTANT || !msg.parts || msg.parts.length <= 1) {
+          return msg;
+        }
+
+        // Deduplicate parts by type + content
+        const seenParts = new Map<string, typeof msg.parts[0]>();
+
+        for (const part of msg.parts) {
+          // Create a key based on type and content
+          let key: string;
+          if (part.type === 'text' && 'text' in part) {
+            key = `text:${part.text}`;
+          } else if (part.type === 'reasoning' && 'text' in part) {
+            key = `reasoning:${part.text}`;
+          } else if (part.type === 'step-start') {
+            key = 'step-start';
+          } else {
+            // For other types, keep all (don't deduplicate)
+            key = `other:${Math.random()}`;
+          }
+
+          const existing = seenParts.get(key);
+          if (!existing) {
+            seenParts.set(key, part);
+          } else {
+            // Prefer the part with 'state: done' (more complete from resume)
+            const existingHasState = 'state' in existing && existing.state === 'done';
+            const currentHasState = 'state' in part && part.state === 'done';
+
+            if (currentHasState && !existingHasState) {
+              seenParts.set(key, part);
+            }
+            // Otherwise keep existing (first occurrence)
+          }
+        }
+
+        const uniqueParts = Array.from(seenParts.values());
+
+        // Only create new object if parts actually changed
+        if (uniqueParts.length === msg.parts.length) {
+          return msg;
+        }
+
+        return { ...msg, parts: uniqueParts };
+      });
+
       // ✅ INFINITE LOOP FIX: Only sync if messages actually changed
       // filter() creates a new array reference every time, which would trigger
       // unnecessary re-renders. Check if filtered messages are actually different.
-      const isSameMessages = mergedMessages.length === currentStoreMessages.length
-        && mergedMessages.every((m, i) => m === currentStoreMessages[i]);
+      const isSameMessages = deduplicatedMessages.length === currentStoreMessages.length
+        && deduplicatedMessages.every((m, i) => m === currentStoreMessages[i]);
 
       if (!isSameMessages) {
         prevMessageCountRef.current = chat.messages.length;
         prevChatMessagesRef.current = chat.messages;
-        store.getState().setMessages(mergedMessages);
+        store.getState().setMessages(deduplicatedMessages);
 
         // Update activity on any sync
         lastStreamActivityRef.current = Date.now();

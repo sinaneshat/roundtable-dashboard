@@ -20,7 +20,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
 import { streamSSE } from 'hono/streaming';
-import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -269,17 +268,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         if (existingStreamId) {
           // LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+          // ✅ PATTERN: Uses Responses.sse() builder for consistent SSE headers
           const liveStream = createLivePreSearchResumeStream(existingStreamId, c.env);
-          return new Response(liveStream, {
-            status: HttpStatusCodes.OK,
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-              'Connection': 'keep-alive',
-              'X-Accel-Buffering': 'no',
-              'X-Resumed-From-Buffer': 'true',
-              'X-Stream-Id': existingStreamId,
-            },
+          return Responses.sse(liveStream, {
+            streamId: existingStreamId,
+            resumedFromBuffer: true,
           });
         }
 
@@ -397,53 +390,113 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             const queryStream = streamSearchQuery(body.userQuery, c.env);
 
             // ✅ INCREMENTAL STREAMING: Stream each query update as it's generated
+            // Track best partial result for graceful fallback if final validation fails
             const lastSentQueries: string[] = [];
             let lastTotalQueries = 0;
+            // ✅ TYPE: Use generic partial type to handle AI SDK's PartialObject
+            let bestPartialResult: {
+              totalQueries?: string | number;
+              analysisRationale?: string;
+              queries?: Array<Partial<GeneratedSearchQuery> | undefined>;
+            } | null = null;
 
-            for await (const partialResult of queryStream.partialObjectStream) {
-            // Send start event once we know totalQueries
-              // Coerce string numbers to actual numbers
-              const totalQueries = typeof partialResult.totalQueries === 'string'
-                ? Number.parseInt(partialResult.totalQueries, 10)
-                : partialResult.totalQueries;
+            // ✅ RESILIENT STREAMING: Wrap iteration in try-catch to preserve partial progress
+            try {
+              for await (const partialResult of queryStream.partialObjectStream) {
+                // Track best partial result seen (most complete version)
+                if (partialResult.queries && partialResult.queries.length > 0) {
+                  bestPartialResult = partialResult;
+                }
 
-              if (totalQueries && totalQueries !== lastTotalQueries) {
-                lastTotalQueries = totalQueries;
-                await bufferedWriteSSE({
-                  event: PreSearchSseEvents.START,
-                  data: JSON.stringify({
-                    timestamp: Date.now(),
-                    userQuery: body.userQuery,
-                    totalQueries,
-                    analysisRationale: partialResult.analysisRationale || '',
-                  }),
-                });
-              }
+                // Send start event once we know totalQueries
+                // Coerce string numbers to actual numbers
+                const totalQueries = typeof partialResult.totalQueries === 'string'
+                  ? Number.parseInt(partialResult.totalQueries, 10)
+                  : partialResult.totalQueries;
 
-              // Stream each query as it becomes available
-              if (partialResult.queries && partialResult.queries.length > 0) {
-                for (let i = 0; i < partialResult.queries.length; i++) {
-                  const query = partialResult.queries[i];
-                  if (query?.query && query.query !== lastSentQueries[i]) {
-                    await bufferedWriteSSE({
-                      event: PreSearchSseEvents.QUERY,
-                      data: JSON.stringify({
-                        timestamp: Date.now(),
-                        query: query.query || '',
-                        rationale: query.rationale || '',
-                        searchDepth: query.searchDepth || WebSearchDepths.BASIC,
-                        index: i,
-                        total: totalQueries || 1,
-                      }),
-                    });
-                    lastSentQueries[i] = query.query;
+                if (totalQueries && totalQueries !== lastTotalQueries) {
+                  lastTotalQueries = totalQueries;
+                  await bufferedWriteSSE({
+                    event: PreSearchSseEvents.START,
+                    data: JSON.stringify({
+                      timestamp: Date.now(),
+                      userQuery: body.userQuery,
+                      totalQueries,
+                      analysisRationale: partialResult.analysisRationale || '',
+                    }),
+                  });
+                }
+
+                // Stream each query as it becomes available
+                if (partialResult.queries && partialResult.queries.length > 0) {
+                  for (let i = 0; i < partialResult.queries.length; i++) {
+                    const query = partialResult.queries[i];
+                    if (query?.query && query.query !== lastSentQueries[i]) {
+                      await bufferedWriteSSE({
+                        event: PreSearchSseEvents.QUERY,
+                        data: JSON.stringify({
+                          timestamp: Date.now(),
+                          query: query.query || '',
+                          rationale: query.rationale || '',
+                          searchDepth: query.searchDepth || WebSearchDepths.BASIC,
+                          index: i,
+                          total: totalQueries || 1,
+                        }),
+                      });
+                      lastSentQueries[i] = query.query;
+                    }
                   }
                 }
               }
+            } catch {
+              // ✅ CAPTURE streaming errors but don't throw yet - try to use partial result
+              // Errors are handled by falling back to partial results below
             }
 
-            // Get final complete result
-            multiQueryResult = await queryStream.object;
+            // ✅ GRACEFUL OBJECT RETRIEVAL: Try to get final object, fall back to partial
+            try {
+              multiQueryResult = await queryStream.object;
+            } catch (_objectError) {
+              // ✅ FALLBACK TO PARTIAL: If final validation fails but we have partial queries, use them
+              if (bestPartialResult?.queries && bestPartialResult.queries.length > 0) {
+                // ✅ RECONSTRUCT from partial result
+                // Filter for queries that have the minimum required fields
+                const validQueries = bestPartialResult.queries.filter(
+                  (q): q is Partial<GeneratedSearchQuery> & { query: string } =>
+                    !!(q?.query && typeof q.query === 'string'),
+                );
+
+                if (validQueries.length > 0) {
+                  // ✅ RECONSTRUCT: Build complete GeneratedSearchQuery objects with required fields
+                  multiQueryResult = {
+                    totalQueries: validQueries.length,
+                    analysisRationale: bestPartialResult.analysisRationale || 'Recovered from streaming partial result',
+                    queries: validQueries.map((q): GeneratedSearchQuery => ({
+                      query: q.query, // Already validated to exist
+                      rationale: q.rationale || 'Query from partial streaming result',
+                      searchDepth: q.searchDepth || WebSearchDepths.ADVANCED,
+                      // Optional fields with defaults
+                      complexity: q.complexity || WebSearchComplexities.MODERATE,
+                      sourceCount: q.sourceCount,
+                      requiresFullContent: q.requiresFullContent,
+                      chunksPerSource: q.chunksPerSource,
+                      topic: q.topic,
+                      timeRange: q.timeRange,
+                      needsAnswer: q.needsAnswer,
+                      includeImages: q.includeImages,
+                      includeImageDescriptions: q.includeImageDescriptions,
+                      analysis: q.analysis,
+                    })),
+                  };
+                } else {
+                  // No valid queries in partial - rethrow original error
+                  throw _objectError;
+                }
+              } else {
+                // No partial result to fall back to - rethrow original error
+                throw _objectError;
+              }
+            }
 
             // ✅ FIX: Send FINAL query events with correct searchDepth values
             // During streaming, partial objects may have incomplete searchDepth (defaulted to 'basic')
@@ -473,7 +526,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               throw new Error('Query generation failed - no queries produced');
             }
           } catch {
-          // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed silently)
+          // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed completely)
             try {
               multiQueryResult = await generateSearchQuery(body.userQuery, c.env);
 
@@ -594,17 +647,21 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         }
 
         // ✅ STREAM: Notify frontend about complexity decision
-        await bufferedWriteSSE({
-          event: PreSearchSseEvents.START,
-          data: JSON.stringify({
-            timestamp: Date.now(),
-            userQuery: body.userQuery,
-            totalQueries,
-            analysisRationale: multiQueryResult.analysisRationale,
-            complexity: complexityResult.complexity,
-            complexityReasoning: complexityResult.reasoning,
-          }),
-        });
+        // Skip sending START here for non-searchable queries since we already sent it above
+        // This prevents duplicate START events that confuse the frontend
+        if (queryIsSearchable) {
+          await bufferedWriteSSE({
+            event: PreSearchSseEvents.START,
+            data: JSON.stringify({
+              timestamp: Date.now(),
+              userQuery: body.userQuery,
+              totalQueries,
+              analysisRationale: multiQueryResult.analysisRationale,
+              complexity: complexityResult.complexity,
+              complexityReasoning: complexityResult.reasoning,
+            }),
+          });
+        }
 
         // ✅ POSTHOG TRACKING: Track query generation completion
         const queryGenerationDuration = performance.now() - queryGenerationStartTime;

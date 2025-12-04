@@ -1,13 +1,15 @@
 "use client"
 
+import type { ComponentProps, ElementRef } from 'react';
+import { forwardRef } from 'react';
+
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
-import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
 
-const ScrollArea = React.forwardRef<
-  React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentProps<typeof ScrollAreaPrimitive.Root>
+const ScrollArea = forwardRef<
+  ElementRef<typeof ScrollAreaPrimitive.Root>,
+  ComponentProps<typeof ScrollAreaPrimitive.Root>
 >(({ className, children, ...props }, ref) => {
   return (
     <ScrollAreaPrimitive.Root
@@ -33,7 +35,7 @@ function ScrollBar({
   className,
   orientation = "vertical",
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
+}: ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
   return (
     <ScrollAreaPrimitive.ScrollAreaScrollbar
       data-slot="scroll-area-scrollbar"

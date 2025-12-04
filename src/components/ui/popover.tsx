@@ -1,24 +1,25 @@
 "use client"
 
+import type { ComponentProps } from 'react';
+
 import * as PopoverPrimitive from "@radix-ui/react-popover"
-import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
 import { glassCard } from "@/lib/ui/glassmorphism"
 
 function Popover({
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Root>) {
+}: ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
 function PopoverTrigger({
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
+}: ComponentProps<typeof PopoverPrimitive.Trigger>) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
 }
 
-type PopoverContentProps = React.ComponentProps<typeof PopoverPrimitive.Content> & {
+type PopoverContentProps = ComponentProps<typeof PopoverPrimitive.Content> & {
   glass?: boolean;
 };
 
@@ -50,7 +51,7 @@ function PopoverContent({
 
 function PopoverAnchor({
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {
+}: ComponentProps<typeof PopoverPrimitive.Anchor>) {
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
 

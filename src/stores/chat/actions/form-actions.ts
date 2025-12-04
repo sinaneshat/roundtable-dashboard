@@ -10,6 +10,7 @@
 
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -17,8 +18,12 @@ import { useShallow } from 'zustand/react/shallow';
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import {
+  useCreateThreadMutation,
+  useUpdateThreadMutation,
+} from '@/hooks/mutations/chat-mutations';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
@@ -29,6 +34,7 @@ import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdatePartici
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
 import { createPlaceholderAnalysis, createPlaceholderPreSearch } from '../utils/placeholder-factories';
+import { validateInfiniteQueryCache } from './types';
 
 /**
  * Attachment info for building optimistic file parts
@@ -72,6 +78,8 @@ export type UseChatFormActionsReturn = {
  * await formActions.handleUpdateThreadAndSend(threadId)
  */
 export function useChatFormActions(): UseChatFormActionsReturn {
+  const queryClient = useQueryClient();
+
   // Batch form state selectors with useShallow for performance
   const formState = useChatStore(useShallow(s => ({
     inputValue: s.inputValue,
@@ -185,6 +193,69 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
       actions.setSelectedParticipants(syncedParticipantConfigs);
 
+      // ✅ IMMEDIATE SIDEBAR UPDATE: Add new thread to sidebar cache optimistically
+      // This ensures the sidebar shows the new thread immediately after creation,
+      // even before the AI-generated title is ready (which happens async via waitUntil)
+      queryClient.setQueriesData(
+        {
+          queryKey: queryKeys.threads.all,
+          predicate: (query) => {
+            // Only update infinite queries (thread lists)
+            const key = query.queryKey as string[];
+            return key.length >= 2 && key[1] === 'list';
+          },
+        },
+        (old: unknown) => {
+          const parsedQuery = validateInfiniteQueryCache(old);
+          if (!parsedQuery)
+            return old;
+
+          // Create thread item for cache (matches list item structure)
+          const threadItem = {
+            id: thread.id,
+            title: thread.title,
+            slug: thread.slug,
+            mode: thread.mode,
+            status: thread.status,
+            isFavorite: thread.isFavorite,
+            isPublic: thread.isPublic,
+            isAiGeneratedTitle: thread.isAiGeneratedTitle,
+            enableWebSearch: thread.enableWebSearch,
+            createdAt: thread.createdAt,
+            updatedAt: thread.updatedAt,
+            lastMessageAt: thread.lastMessageAt,
+          };
+
+          // Prepend thread to first page (most recent first)
+          return {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page, index) => {
+              if (index !== 0 || !page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: [threadItem, ...page.data.items],
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // ✅ IMMEDIATE URL REPLACEMENT: Replace URL with initial slug immediately
+      // This updates the browser URL before AI title generation completes
+      // When AI title is ready, flow-controller will replace with AI-generated slug
+      queueMicrotask(() => {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `/chat/${thread.slug}`,
+        );
+      });
+
       // ✅ EAGER RENDERING: Create placeholder analysis immediately for round 0
       // This allows the RoundAnalysisCard to render in PENDING state with loading UI
       // before participants finish streaming. Creates better UX with immediate visual feedback.
@@ -249,6 +320,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     formState.enableWebSearch,
     createThreadMutation,
     actions,
+    queryClient,
   ]);
 
   /**
@@ -263,6 +335,19 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     if (!trimmed || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
       return;
+    }
+
+    // ✅ Calculate round number BEFORE try block so it's accessible in catch for cleanup
+    let pendingRoundNumber = calculateNextRoundNumber(threadState.messages);
+    // Defensive validation
+    if (pendingRoundNumber === 0 && threadState.messages.length > 0) {
+      const round0AssistantMessages = threadState.messages.filter(
+        m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 0,
+      );
+      if (round0AssistantMessages.length > 0) {
+        const userMessages = threadState.messages.filter(m => m.role === MessageRoles.USER);
+        pendingRoundNumber = userMessages.length;
+      }
     }
 
     try {
@@ -280,40 +365,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Fix: Set streamingRoundNumber + add optimistic message immediately
       // Then prepareForNewMessage will merge with this state later
       // ============================================================================
-      let calculatedNextRound = calculateNextRoundNumber(threadState.messages);
-
-      // ✅ CRITICAL: Defensive validation to prevent round override bug
-      // BUG FIX: When navigating from overview to thread, store messages might be stale
-      // If calculatedNextRound is 0 but we already have messages, something is wrong
-      // This prevents accidentally overwriting a completed round
-      if (calculatedNextRound === 0 && threadState.messages.length > 0) {
-        // Check if round 0 already has assistant messages (round completed)
-        // ✅ TYPE-SAFE: Use getRoundNumber utility for Zod-validated metadata extraction
-        const round0AssistantMessages = threadState.messages.filter(
-          m =>
-            m.role === MessageRoles.ASSISTANT
-            && getRoundNumber(m.metadata) === 0,
-        );
-        if (round0AssistantMessages.length > 0) {
-          console.error('[handleUpdateThreadAndSend] Round override detected!', {
-            calculatedRound: calculatedNextRound,
-            totalMessages: threadState.messages.length,
-            round0AssistantCount: round0AssistantMessages.length,
-            // ✅ TYPE-SAFE: Use getRoundNumber for metadata extraction in diagnostic log
-            messageRoundNumbers: threadState.messages.map(m => ({
-              role: m.role,
-              roundNumber: getRoundNumber(m.metadata),
-            })),
-          });
-          // Force recalculate using fallback: count user messages
-          const userMessages = threadState.messages.filter(m => m.role === MessageRoles.USER);
-          calculatedNextRound = userMessages.length;
-          console.error('[handleUpdateThreadAndSend] Correcting to round', calculatedNextRound);
-        }
-      }
-
-      // Use the (potentially corrected) round number
-      const nextRoundNumber = calculatedNextRound;
+      // Use the already calculated and validated round number
+      const nextRoundNumber = pendingRoundNumber;
 
       // Set streamingRoundNumber IMMEDIATELY for accordion collapse
       actions.setStreamingRoundNumber(nextRoundNumber);
@@ -493,6 +546,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // - streamingRoundNumber (causes accordion to collapse)
       // - messages with optimistic user message
       // - hasEarlyOptimisticMessage = true (blocks message sync)
+      // - pending round in KV (for recovery)
       // We must revert these to restore a usable UI state
 
       // Clear the optimistic message flag so message sync can resume

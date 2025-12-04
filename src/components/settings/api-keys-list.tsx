@@ -34,7 +34,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDeleteApiKeyMutation } from '@/hooks';
 import { showApiErrorToast } from '@/lib/toast';
 
@@ -127,44 +126,42 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
     );
   }
 
-  // List with ScrollArea
+  // List - parent modal handles scrolling
   return (
     <div className="space-y-4">
-      <ScrollArea className="h-[400px] pr-4">
-        <div className="space-y-3">
-          <AnimatePresence initial={false}>
-            {apiKeys.map(key => (
-              <motion.div
-                key={key.id}
-                initial={{ opacity: 1 }}
-                exit={{
-                  opacity: 0,
-                  height: 0,
-                  marginBottom: 0,
-                  transition: { duration: 0.15, ease: 'easeOut' },
-                }}
-              >
-                <ApiKeyCard
-                  apiKey={key}
-                  onDelete={setDeleteKeyId}
-                  isDeleting={deleteMutation.isPending && deleteKeyId === key.id}
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </ScrollArea>
+      <div className="space-y-3">
+        <AnimatePresence initial={false}>
+          {apiKeys.map(key => (
+            <motion.div
+              key={key.id}
+              initial={{ opacity: 1 }}
+              exit={{
+                opacity: 0,
+                height: 0,
+                marginBottom: 0,
+                transition: { duration: 0.15, ease: 'easeOut' },
+              }}
+            >
+              <ApiKeyCard
+                apiKey={key}
+                onDelete={setDeleteKeyId}
+                isDeleting={deleteMutation.isPending && deleteKeyId === key.id}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* Delete Confirmation Dialog - Following chat-delete-dialog.tsx pattern */}
       <AlertDialog open={!!deleteKeyId} onOpenChange={() => setDeleteKeyId(null)}>
-        <AlertDialogContent glass={true}>
-          <AlertDialogHeader glass>
+        <AlertDialogContent>
+          <AlertDialogHeader>
             <AlertDialogTitle>{t('apiKeys.list.deleteConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
               {t('apiKeys.list.deleteConfirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter glass>
+          <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMutation.isPending}>
               {t('actions.cancel')}
             </AlertDialogCancel>

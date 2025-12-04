@@ -178,7 +178,6 @@
       "title": "Check your email",
       "useDifferentEmail": "Use a different email"
     },
-    "secureAuthentication": "Secure authentication with Better Auth",
     "signIn": {
       "description": "Enter your email for a magic link or sign in with Google",
       "title": "Sign In"

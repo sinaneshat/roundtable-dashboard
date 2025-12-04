@@ -9,7 +9,6 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
-import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
@@ -91,13 +90,13 @@ export const getStreamStatusHandler: RouteHandler<typeof getStreamStatusRoute, A
 
     // No stream state = no active or completed stream
     if (!streamState) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContent(c);
     }
 
     // Stream is still active - return 204 No Content
     // Frontend should continue polling or wait
     if (streamState.status === OperationStatuses.ACTIVE) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContent(c);
     }
 
     // Stream is completed or failed - return state

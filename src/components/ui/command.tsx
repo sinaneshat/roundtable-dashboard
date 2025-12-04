@@ -1,16 +1,17 @@
 'use client';
 
+import type { ComponentPropsWithoutRef, ElementRef, HTMLAttributes, RefObject } from 'react';
+
 import type { DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
-import * as React from 'react';
 
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { glassCard } from '@/lib/ui/glassmorphism';
 import { cn } from '@/lib/ui/cn';
 
-type CommandProps = React.ComponentPropsWithoutRef<typeof CommandPrimitive> & {
-  ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive> | null>;
+type CommandProps = ComponentPropsWithoutRef<typeof CommandPrimitive> & {
+  ref?: RefObject<ElementRef<typeof CommandPrimitive> | null>;
   glass?: boolean;
 };
 
@@ -43,7 +44,7 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
   );
 }
 
-function CommandInput({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive.Input> | null> }) {
+function CommandInput({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Input> | null> }) {
   return (
     <div className="flex items-center border-b px-3" cmdk-input-wrapper="">
       <Search className="me-2 size-4 shrink-0 opacity-50" />
@@ -61,7 +62,7 @@ function CommandInput({ ref, className, ...props }: React.ComponentPropsWithoutR
 
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 
-function CommandList({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.List> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive.List> | null> }) {
+function CommandList({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.List> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.List> | null> }) {
   return (
     <CommandPrimitive.List
       ref={ref}
@@ -73,7 +74,7 @@ function CommandList({ ref, className, ...props }: React.ComponentPropsWithoutRe
 
 CommandList.displayName = CommandPrimitive.List.displayName;
 
-function CommandEmpty({ ref, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive.Empty> | null> }) {
+function CommandEmpty({ ref, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Empty> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Empty> | null> }) {
   return (
     <CommandPrimitive.Empty
       ref={ref}
@@ -85,7 +86,7 @@ function CommandEmpty({ ref, ...props }: React.ComponentPropsWithoutRef<typeof C
 
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 
-function CommandGroup({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive.Group> | null> }) {
+function CommandGroup({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Group> | null> }) {
   return (
     <CommandPrimitive.Group
       ref={ref}
@@ -100,7 +101,7 @@ function CommandGroup({ ref, className, ...props }: React.ComponentPropsWithoutR
 
 CommandGroup.displayName = CommandPrimitive.Group.displayName;
 
-function CommandSeparator({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive.Separator> | null> }) {
+function CommandSeparator({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Separator> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Separator> | null> }) {
   return (
     <CommandPrimitive.Separator
       ref={ref}
@@ -111,7 +112,7 @@ function CommandSeparator({ ref, className, ...props }: React.ComponentPropsWith
 }
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 
-function CommandItem({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive.Item> | null> }) {
+function CommandItem({ ref, className, ...props }: ComponentPropsWithoutRef<typeof CommandPrimitive.Item> & { ref?: RefObject<ElementRef<typeof CommandPrimitive.Item> | null> }) {
   return (
     <CommandPrimitive.Item
       ref={ref}
@@ -129,7 +130,7 @@ CommandItem.displayName = CommandPrimitive.Item.displayName;
 function CommandShortcut({
   className,
   ...props
-}: React.HTMLAttributes<HTMLSpanElement>) {
+}: HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
       className={cn(

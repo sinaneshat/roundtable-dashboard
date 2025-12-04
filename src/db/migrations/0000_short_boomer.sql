@@ -321,6 +321,7 @@ CREATE TABLE `chat_thread` (
 	`project_id` text,
 	`title` text NOT NULL,
 	`slug` text NOT NULL,
+	`previous_slug` text,
 	`mode` text DEFAULT 'debating' NOT NULL,
 	`status` text DEFAULT 'active' NOT NULL,
 	`is_favorite` integer DEFAULT false NOT NULL,
@@ -342,6 +343,7 @@ CREATE INDEX `chat_thread_project_idx` ON `chat_thread` (`project_id`);--> state
 CREATE INDEX `chat_thread_status_idx` ON `chat_thread` (`status`);--> statement-breakpoint
 CREATE INDEX `chat_thread_updated_idx` ON `chat_thread` (`updated_at`);--> statement-breakpoint
 CREATE INDEX `chat_thread_slug_idx` ON `chat_thread` (`slug`);--> statement-breakpoint
+CREATE INDEX `chat_thread_previous_slug_idx` ON `chat_thread` (`previous_slug`);--> statement-breakpoint
 CREATE INDEX `chat_thread_favorite_idx` ON `chat_thread` (`is_favorite`);--> statement-breakpoint
 CREATE INDEX `chat_thread_public_idx` ON `chat_thread` (`is_public`);--> statement-breakpoint
 CREATE TABLE `chat_thread_changelog` (

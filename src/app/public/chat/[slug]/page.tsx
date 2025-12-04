@@ -1,6 +1,6 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { permanentRedirect, redirect } from 'next/navigation';
 
 import { MessageRoles } from '@/api/core/enums';
 import { BRAND } from '@/constants';
@@ -120,6 +120,15 @@ export default async function PublicChatThreadPage({
         action: 'create',
       });
       redirect(`/auth/sign-in?${params.toString()}`);
+    }
+
+    // ✅ BACKWARDS COMPATIBLE SLUGS: 301 redirect from old slug to new AI-generated slug
+    // If user accesses via previousSlug (original non-AI slug), permanently redirect to current slug
+    // This ensures SEO-friendly URLs and prevents duplicate content issues
+    const threadData = cachedData as { success: boolean; data?: { thread?: { slug: string; isAiGeneratedTitle: boolean } } };
+    const thread = threadData.data?.thread;
+    if (thread?.isAiGeneratedTitle && thread.slug !== slug) {
+      permanentRedirect(`/public/chat/${thread.slug}`);
     }
   } catch (error: unknown) {
     // Type-safe error handling using proper narrowing

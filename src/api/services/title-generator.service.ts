@@ -120,6 +120,9 @@ export async function generateTitleFromMessage(
  *
  * ✅ OPTIMIZED: Single atomic update for both title and slug
  * Following backend-patterns.md - Combine related updates into single operation
+ *
+ * ✅ BACKWARDS COMPATIBLE SLUGS: Preserves the original slug in previousSlug field
+ * Both the new AI-generated slug AND the original slug will work for accessing the thread
  */
 export async function updateThreadTitleAndSlug(
   threadId: string,
@@ -127,15 +130,25 @@ export async function updateThreadTitleAndSlug(
 ): Promise<{ title: string; slug: string }> {
   const db = await getDbAsync();
 
+  // ✅ BACKWARDS COMPATIBLE: Get current slug to preserve it
+  const currentThread = await db.query.chatThread.findFirst({
+    where: eq(tables.chatThread.id, threadId),
+    columns: { slug: true, previousSlug: true },
+  });
+
   // Generate new slug from title (without DB update)
   const newSlug = await generateUniqueSlug(newTitle);
 
-  // ✅ SINGLE ATOMIC UPDATE: title, slug, and isAiGeneratedTitle in one operation
+  // ✅ SINGLE ATOMIC UPDATE: title, slug, previousSlug, and isAiGeneratedTitle
+  // Only set previousSlug if it's not already set (first AI title generation only)
+  // This ensures the ORIGINAL slug is always preserved, even if user manually renames later
   await db
     .update(tables.chatThread)
     .set({
       title: newTitle,
       slug: newSlug,
+      // Preserve original slug for backwards compatibility (only set once)
+      previousSlug: currentThread?.previousSlug ?? currentThread?.slug ?? null,
       isAiGeneratedTitle: true, // Mark that AI generated this title
       updatedAt: new Date(),
     })

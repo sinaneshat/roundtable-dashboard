@@ -1,18 +1,25 @@
 /**
  * Stream Resume Handler - Resume buffered participant stream
  *
- * Following backend-patterns.md: Domain-specific handler module
+ * Following AI SDK Chatbot Resume Streams documentation:
+ * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
  *
  * This handler enables stream resumption by returning buffered SSE chunks from KV.
- * Used when frontend detects page reload during active streaming.
+ * Called automatically by AI SDK when `resume: true` is set in useChat.
+ *
+ * KEY PATTERN (from AI SDK docs):
+ * 1. POST handler uses consumeSseStream to buffer chunks
+ * 2. GET handler returns 204 if no active stream, or resumes the stream
+ * 3. Frontend uses resume: true which triggers GET on mount
+ *
+ * ✅ PATTERN: Uses Responses.sse() and Responses.noContentWithHeaders() from core
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
-import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
-import { createHandler } from '@/api/core';
+import { createHandler, Responses } from '@/api/core';
 import { StreamStatuses } from '@/api/core/enums';
 import { getNextParticipantToStream, getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
 import { createLiveParticipantResumeStream, getStreamMetadata } from '@/api/services/stream-buffer.service';
@@ -84,26 +91,18 @@ export const resumeStreamHandler: RouteHandler<typeof resumeStreamRoute, ApiEnv>
 
     // No buffer exists - return 204 No Content
     if (!metadata) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContentWithHeaders();
     }
 
-    // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
-    // This enables true stream resumption - the stream continues where it left off
-    // and polls for new chunks as they arrive from the original stream
+    // ✅ AI SDK RESUME PATTERN: Return live stream with standard headers
+    // The stream polls KV for new chunks as they arrive from the original stream
     const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
     const liveStream = createLiveParticipantResumeStream(streamId, c.env);
 
-    // Return live SSE stream
-    return new Response(liveStream, {
-      status: HttpStatusCodes.OK,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
-        'X-Resumed-From-Buffer': 'true',
-        'X-Stream-Active': String(isStreamActive),
-      },
+    // Return SSE stream using Responses.sse() builder
+    return Responses.sse(liveStream, {
+      isActive: isStreamActive,
+      resumedFromBuffer: true,
     });
   },
 );
@@ -157,7 +156,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
     // No active stream - return 204 No Content
     if (!activeStream) {
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContentWithHeaders();
     }
 
     // ✅ FIX: Get the next participant that needs to stream (may be different from activeStream.participantIndex)
@@ -179,48 +178,34 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     if (!metadata) {
       // ✅ FIX: Even without buffer, return round info so frontend knows what to do
       if (nextParticipant && !roundComplete) {
-        return new Response(null, {
-          status: HttpStatusCodes.NO_CONTENT,
-          headers: {
-            // Include round info even on 204 so frontend can trigger next participant
-            'X-Round-Number': String(activeStream.roundNumber),
-            'X-Total-Participants': String(activeStream.totalParticipants),
-            'X-Next-Participant-Index': String(nextParticipant.participantIndex),
-            'X-Participant-Statuses': JSON.stringify(activeStream.participantStatuses),
-            'X-Round-Complete': 'false',
-          },
+        return Responses.noContentWithHeaders({
+          roundNumber: activeStream.roundNumber,
+          totalParticipants: activeStream.totalParticipants,
+          nextParticipantIndex: nextParticipant.participantIndex,
+          participantStatuses: activeStream.participantStatuses,
+          roundComplete: false,
         });
       }
-      return c.body(null, HttpStatusCodes.NO_CONTENT);
+      return Responses.noContentWithHeaders();
     }
 
-    // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
-    // This enables true stream resumption - the stream continues where it left off
-    // and polls for new chunks as they arrive from the original stream
+    // ✅ AI SDK RESUME PATTERN: Return live stream with standard headers
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
+    // The stream polls KV for new chunks as they arrive from the original stream
     const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
     const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env);
 
-    // Return live SSE stream with metadata headers
-    // ✅ FIX: Include round completion info so frontend can trigger remaining participants
-    return new Response(liveStream, {
-      status: HttpStatusCodes.OK,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
-        'X-Resumed-From-Buffer': 'true',
-        'X-Stream-Active': String(isStreamActive),
-        // Include stream metadata in headers for frontend to update state
-        'X-Stream-Id': streamIdToResume,
-        'X-Round-Number': String(activeStream.roundNumber),
-        'X-Participant-Index': String(activeStream.participantIndex),
-        // ✅ FIX: Include round completion info for proper multi-participant resumption
-        'X-Total-Participants': String(activeStream.totalParticipants),
-        'X-Participant-Statuses': JSON.stringify(activeStream.participantStatuses),
-        'X-Round-Complete': String(roundComplete),
-        ...(nextParticipant ? { 'X-Next-Participant-Index': String(nextParticipant.participantIndex) } : {}),
-      },
+    // Return SSE stream using Responses.sse() builder with multi-participant metadata
+    return Responses.sse(liveStream, {
+      streamId: streamIdToResume,
+      roundNumber: activeStream.roundNumber,
+      participantIndex: activeStream.participantIndex,
+      totalParticipants: activeStream.totalParticipants,
+      participantStatuses: activeStream.participantStatuses,
+      isActive: isStreamActive,
+      roundComplete,
+      resumedFromBuffer: true,
+      ...(nextParticipant ? { nextParticipantIndex: nextParticipant.participantIndex } : {}),
     });
   },
 );
