@@ -37,10 +37,11 @@ import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core/ai-models';
 import type {
   WebSearchComplexity,
+  WebSearchRawContentFormat,
   WebSearchTimeRange,
   WebSearchTopic,
 } from '@/api/core/enums';
-import { UIMessageRoles } from '@/api/core/enums';
+import { UIMessageRoles, WebSearchRawContentFormats } from '@/api/core/enums';
 import type {
   WebSearchParameters,
   WebSearchResult,
@@ -488,7 +489,7 @@ async function extractLightweightMetadata(url: string): Promise<{
 async function extractPageContent(
   url: string,
   env: ApiEnv['Bindings'],
-  format: 'text' | 'markdown' = 'text',
+  format: WebSearchRawContentFormat = WebSearchRawContentFormats.TEXT,
   timeout = 15000,
 ): Promise<{
   content: string;
@@ -1559,12 +1560,12 @@ export async function* streamSearchResults(
       try {
         // ✅ TYPE-SAFE: Determine content format without type casting
         // TypeScript narrows the union type based on boolean check
-        let rawContentFormat: 'text' | 'markdown' | undefined;
+        let rawContentFormat: WebSearchRawContentFormat | undefined;
         if (params.includeRawContent) {
           rawContentFormat
             = typeof params.includeRawContent === 'boolean'
-              ? 'text'
-              : params.includeRawContent; // Already narrowed to 'text' | 'markdown'
+              ? WebSearchRawContentFormats.TEXT
+              : params.includeRawContent; // Already narrowed to WebSearchRawContentFormat
         }
 
         const extracted = await extractPageContent(
@@ -1798,12 +1799,12 @@ export async function performWebSearch(
 
     // ✅ TYPE-SAFE: Determine content extraction format without type casting
     // TypeScript narrows the union type based on boolean check
-    let rawContentFormat: 'text' | 'markdown' | undefined;
+    let rawContentFormat: WebSearchRawContentFormat | undefined;
     if (params.includeRawContent) {
       if (typeof params.includeRawContent === 'boolean') {
-        rawContentFormat = 'text'; // Default to text
+        rawContentFormat = WebSearchRawContentFormats.TEXT; // Default to text
       } else {
-        rawContentFormat = params.includeRawContent; // Already narrowed to 'text' | 'markdown'
+        rawContentFormat = params.includeRawContent; // Already narrowed to WebSearchRawContentFormat
       }
     }
 

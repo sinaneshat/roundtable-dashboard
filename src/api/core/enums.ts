@@ -919,6 +919,33 @@ export const BillingIntervals = {
 } as const;
 
 // ============================================================================
+// UI BILLING INTERVAL (subset for pricing UI)
+// ============================================================================
+
+export const UI_BILLING_INTERVALS = ['month', 'year'] as const;
+
+export const UIBillingIntervalSchema = z.enum(UI_BILLING_INTERVALS).openapi({
+  description: 'UI billing cycle interval (monthly/annual)',
+  example: 'month',
+});
+
+export type UIBillingInterval = z.infer<typeof UIBillingIntervalSchema>;
+
+export const UIBillingIntervals = {
+  MONTH: 'month' as const,
+  YEAR: 'year' as const,
+} as const;
+
+export const DEFAULT_UI_BILLING_INTERVAL: UIBillingInterval = 'month';
+
+/**
+ * Type guard to validate UIBillingInterval from string
+ */
+export function isUIBillingInterval(value: string): value is UIBillingInterval {
+  return UI_BILLING_INTERVALS.includes(value as UIBillingInterval);
+}
+
+// ============================================================================
 // SCREEN MODE
 // ============================================================================
 

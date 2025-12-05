@@ -6,7 +6,12 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import { StripeSubscriptionStatuses } from '@/api/core/enums';
+import type { UIBillingInterval } from '@/api/core/enums';
+import {
+  DEFAULT_UI_BILLING_INTERVAL,
+  isUIBillingInterval,
+  StripeSubscriptionStatuses,
+} from '@/api/core/enums';
 import type { Product } from '@/api/routes/billing/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,9 +19,6 @@ import { FreePricingCard } from '@/components/ui/free-pricing-card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Subscription } from '@/types/billing';
-
-// UI-specific billing interval (subset of BillingInterval from API)
-type UIBillingInterval = 'month' | 'year';
 
 type PricingContentProps = {
   products: Product[];
@@ -52,7 +54,7 @@ export function PricingContent({
 }: PricingContentProps) {
   const t = useTranslations();
   const router = useRouter();
-  const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>('month');
+  const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>(DEFAULT_UI_BILLING_INTERVAL);
 
   // Get active subscription (excluding canceled or scheduled for cancellation)
   const activeSubscription = subscriptions.find(
@@ -161,7 +163,7 @@ export function PricingContent({
         {/* Pricing Content */}
         <Tabs
           value={selectedInterval}
-          onValueChange={value => setSelectedInterval(value as UIBillingInterval)}
+          onValueChange={value => isUIBillingInterval(value) && setSelectedInterval(value)}
           className="space-y-8"
         >
           {/* Billing Interval Toggle */}

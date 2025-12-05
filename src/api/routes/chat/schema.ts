@@ -678,7 +678,7 @@ export const PreSearchDataPayloadSchema = z.object({
   queries: z.array(z.object({
     query: z.string(),
     rationale: z.string(),
-    searchDepth: z.enum(['basic', 'advanced']),
+    searchDepth: WebSearchDepthSchema,
     index: z.number(),
     total: z.number(),
   })),
@@ -1340,7 +1340,7 @@ export const PreSearchQueryGeneratedDataSchema = z.object({
   timestamp: z.number(),
   query: z.string(),
   rationale: z.string(),
-  searchDepth: z.enum(['basic', 'advanced']),
+  searchDepth: WebSearchDepthSchema,
   index: RoundNumberSchema,
   total: z.union([z.number(), z.string()]),
 }).openapi('PreSearchQueryGeneratedData');
@@ -1352,7 +1352,7 @@ export const PreSearchQueryDataSchema = z.object({
   timestamp: z.number(),
   query: z.string(),
   rationale: z.string(),
-  searchDepth: z.enum(['basic', 'advanced']),
+  searchDepth: WebSearchDepthSchema,
   index: RoundNumberSchema,
   total: z.union([z.number(), z.string()]),
 }).openapi('PreSearchQueryData');
@@ -1435,7 +1435,7 @@ export type PreSearchStreamData = z.infer<typeof PreSearchStreamDataSchema>;
 export const PreSearchQuerySchema = z.object({
   query: z.string(),
   rationale: z.string(),
-  searchDepth: z.enum(['basic', 'advanced']),
+  searchDepth: WebSearchDepthSchema,
   index: RoundNumberSchema,
   total: z.number().int().min(1),
   status: PreSearchQueryStatusSchema,
@@ -1479,7 +1479,7 @@ export const PreSearchQueryEventSchema = z.object({
   data: BaseSSEEventDataSchema.extend({
     query: z.string(),
     rationale: z.string(),
-    searchDepth: z.enum(['basic', 'advanced']),
+    searchDepth: WebSearchDepthSchema,
     index: z.number(),
     total: z.number(),
     fallback: z.boolean().optional(),
@@ -1535,7 +1535,7 @@ export const PreSearchAnswerCompleteEventSchema = z.object({
   event: z.literal('answer_complete'),
   data: z.object({
     answer: z.string(),
-    mode: z.enum(['basic', 'advanced']),
+    mode: WebSearchDepthSchema,
     generatedAt: z.string(),
   }),
 }).openapi('PreSearchAnswerCompleteEvent');
@@ -1579,7 +1579,7 @@ export const PreSearchDoneEventSchema = z.object({
     queries: z.array(z.object({
       query: z.string(),
       rationale: z.string(),
-      searchDepth: z.enum(['basic', 'advanced']),
+      searchDepth: WebSearchDepthSchema,
       index: z.number(),
       total: z.number(),
     })),
