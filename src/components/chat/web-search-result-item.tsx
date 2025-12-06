@@ -1,14 +1,16 @@
 'use client';
 
-import { ChevronDown, ExternalLink, Globe } from 'lucide-react';
+import { BookOpen, Calendar, ChevronDown, Clock, ExternalLink, Globe, Sparkles, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { UNKNOWN_DOMAIN } from '@/api/core/enums';
 import type { WebSearchResultItemProps } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 import { buildGoogleFaviconUrl, handleImageError, safeExtractDomain } from '@/lib/utils';
 
@@ -89,7 +91,50 @@ export function WebSearchResultItem({
               <span className="truncate">{result.title}</span>
               <ExternalLink className="size-3 opacity-0 group-hover:opacity-60 flex-shrink-0 transition-opacity" />
             </a>
-            <span className="text-xs text-muted-foreground">{cleanDomain}</span>
+            {/* Domain + Metadata Row */}
+            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mt-0.5">
+              <span>{cleanDomain}</span>
+              {/* Relevance Score - only show if meaningful (>= 1%) */}
+              {result.score >= 0.01 && (
+                <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
+                  {Math.round(result.score * 100)}
+                  %
+                  {' '}
+                  {t('relevance')}
+                </Badge>
+              )}
+              {/* Published Date */}
+              {result.publishedDate && (
+                <span className="flex items-center gap-0.5">
+                  <Calendar className="size-2.5" />
+                  {formatRelativeTime(result.publishedDate)}
+                </span>
+              )}
+              {/* Author */}
+              {result.metadata?.author && (
+                <span className="flex items-center gap-0.5">
+                  <User className="size-2.5" />
+                  {result.metadata.author}
+                </span>
+              )}
+              {/* Reading Time - only show if > 0 */}
+              {typeof result.metadata?.readingTime === 'number' && result.metadata.readingTime > 0 && (
+                <span className="flex items-center gap-0.5">
+                  <Clock className="size-2.5" />
+                  {result.metadata.readingTime}
+                  {t('minRead')}
+                </span>
+              )}
+              {/* Word Count - only show if > 0 */}
+              {typeof result.metadata?.wordCount === 'number' && result.metadata.wordCount > 0 && (
+                <span className="flex items-center gap-0.5">
+                  <BookOpen className="size-2.5" />
+                  {result.metadata.wordCount.toLocaleString()}
+                  {' '}
+                  {t('words')}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -154,6 +199,32 @@ export function WebSearchResultItem({
                 {allImages.length - 4}
               </a>
             )}
+          </div>
+        )}
+
+        {/* Key Points - AI extracted highlights */}
+        {result.keyPoints && result.keyPoints.length > 0 && (
+          <div className="mt-2.5 space-y-1">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Sparkles className="size-3" />
+              <span>{t('keyPoints')}</span>
+            </div>
+            <ul className="text-xs text-foreground/80 space-y-0.5 pl-4">
+              {result.keyPoints.slice(0, 3).map((point, idx) => (
+                // eslint-disable-next-line react/no-array-index-key -- index is stable for static key points
+                <li key={idx} className="list-disc list-outside">
+                  {point}
+                </li>
+              ))}
+              {result.keyPoints.length > 3 && (
+                <li className="text-muted-foreground list-none">
+                  +
+                  {result.keyPoints.length - 3}
+                  {' '}
+                  {t('morePoints')}
+                </li>
+              )}
+            </ul>
           </div>
         )}
       </div>

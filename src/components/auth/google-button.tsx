@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
+import type { ButtonProps } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth/client';
 
@@ -12,6 +13,7 @@ type GoogleButtonProps = {
   children?: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  size?: ButtonProps['size'];
 };
 
 /**
@@ -26,6 +28,7 @@ export function GoogleButton({
   children,
   className,
   disabled = false,
+  size,
 }: GoogleButtonProps) {
   const t = useTranslations();
 
@@ -44,6 +47,7 @@ export function GoogleButton({
       disabled={disabled}
       className={className}
       variant="outline"
+      size={size}
     >
       <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
         <path

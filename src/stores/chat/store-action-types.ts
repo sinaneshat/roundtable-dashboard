@@ -36,7 +36,7 @@
 
 import type { UIMessage } from 'ai';
 
-import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
+import type { AnalysisStatus, ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
@@ -48,18 +48,17 @@ import type {
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
-import type { ParticipantConfig, StreamResumptionState } from './store-schemas';
+import type { ParticipantConfig, PendingAttachment, StreamResumptionState } from './store-schemas';
 
 // ============================================================================
 // FORM ACTIONS
 // ============================================================================
 
 export type SetInputValue = (value: string) => void;
-export type SetSelectedMode = (mode: ChatModeId | null) => void;
+export type SetSelectedMode = (mode: ChatMode | null) => void;
 export type SetSelectedParticipants = (participants: ParticipantConfig[]) => void;
 export type SetEnableWebSearch = (enabled: boolean) => void;
 export type SetModelOrder = (modelIds: string[]) => void;
@@ -121,10 +120,9 @@ export type ClearAllAnalyses = () => void;
 export type CreatePendingAnalysisParams = {
   roundNumber: number;
   messages: UIMessage[];
-  participants: ChatParticipant[];
   userQuestion: string;
   threadId: string;
-  mode: ChatModeId;
+  mode: ChatMode;
 };
 
 export type CreatePendingAnalysis = (params: CreatePendingAnalysisParams) => void;
@@ -165,18 +163,6 @@ export type SendMessage = (message: string) => Promise<void>;
 export type StartRound = () => Promise<void>;
 
 /**
- * Stop current streaming operation
- * Bound from AI SDK v5 chat hook - cancels in-flight requests
- *
- * ⚠️ DEPRECATED with AI SDK v6 RESUMABLE STREAMS:
- * This function is NOT called anywhere in the codebase.
- * With resumable streams, streams should NEVER be aborted.
- * The property exists for potential AI SDK binding but is intentionally unused.
- * Streams continue in background via waitUntil() regardless of frontend state.
- */
-export type Stop = () => void;
-
-/**
  * Manually set messages (for syncing with AI SDK state)
  * Bound from AI SDK v5 setMessages function
  */
@@ -191,7 +177,6 @@ export type SetCurrentParticipantIndex = (currentParticipantIndex: number) => vo
 export type SetError = (error: Error | null) => void;
 export type SetSendMessage = (fn?: SendMessage) => void;
 export type SetStartRound = (fn?: StartRound) => void;
-export type SetStop = (fn?: Stop) => void;
 export type SetChatSetMessages = (fn?: ChatSetMessages) => void;
 export type CheckStuckStreams = () => void;
 
@@ -389,16 +374,8 @@ export type ClearAnimations = () => void;
 // ATTACHMENTS ACTIONS (File upload management)
 // ============================================================================
 
-/**
- * Pending attachment item for chat input
- * Combines upload item with preview for UI display
- */
-export type PendingAttachment = {
-  id: string;
-  file: File;
-  uploadItem?: UploadItem;
-  preview?: FilePreview;
-};
+// ✅ PendingAttachment type is defined via Zod in store-schemas.ts (single source of truth)
+// Use: import { type PendingAttachment } from './store-schemas'
 
 /**
  * Add files to pending attachments
@@ -519,187 +496,11 @@ export type CompleteRegeneration = (roundNumber: number) => void;
 export type ResetToNewChat = () => void;
 
 /**
- * ✅ RESUMABLE STREAMS: Streaming state reset (NO abort)
- *
- * Resets local streaming state WITHOUT calling abort controller.
- * With AI SDK v6 resumable streams, streams continue in background via waitUntil().
- * This action only updates local UI state - the backend stream continues.
- *
- * Used when:
- * - Navigation away from thread (stream continues in background)
- * - Component unmounts during streaming (stream continues)
- * - Local state needs reset (stream can be resumed via GET endpoint)
- *
- * NOTE: User "stop" button is intentionally NOT supported with resumable streams.
- * Streams should always complete in background for data integrity.
+ * Reset local streaming state (backend continues via waitUntil)
  */
 export type StopStreaming = () => void;
 
 /**
- * ✅ SIMPLE RESET: Alias for resetToOverview
- *
- * Convenience function for resetting to overview state.
- * Used in tests and simple reset scenarios.
+ * Alias for resetToOverview - used in tests
  */
 export type Reset = () => void;
-
-// ============================================================================
-// AGGREGATED ACTION TYPES BY SLICE
-// ============================================================================
-
-export type FormActionsType = {
-  setInputValue: SetInputValue;
-  setSelectedMode: SetSelectedMode;
-  setSelectedParticipants: SetSelectedParticipants;
-  setEnableWebSearch: SetEnableWebSearch;
-  setModelOrder: SetModelOrder;
-  addParticipant: AddParticipant;
-  removeParticipant: RemoveParticipant;
-  updateParticipant: UpdateParticipant;
-  reorderParticipants: ReorderParticipants;
-  resetForm: ResetForm;
-  applyRecommendedAction: ApplyRecommendedAction;
-};
-
-export type FeedbackActionsType = {
-  setFeedback: SetFeedback;
-  setPendingFeedback: SetPendingFeedback;
-  clearFeedback: ClearFeedback;
-  loadFeedbackFromServer: LoadFeedbackFromServer;
-  resetFeedback: ResetFeedback;
-};
-
-export type UIActionsType = {
-  setShowInitialUI: SetShowInitialUI;
-  setWaitingToStartStreaming: SetWaitingToStartStreaming;
-  setIsCreatingThread: SetIsCreatingThread;
-  setCreatedThreadId: SetCreatedThreadId;
-  resetUI: ResetUI;
-};
-
-export type AnalysisActionsType = {
-  setAnalyses: SetAnalyses;
-  addAnalysis: AddAnalysis;
-  updateAnalysisData: UpdateAnalysisData;
-  updateAnalysisStatus: UpdateAnalysisStatus;
-  updateAnalysisError: UpdateAnalysisError;
-  removeAnalysis: RemoveAnalysis;
-  clearAllAnalyses: ClearAllAnalyses;
-  createPendingAnalysis: CreatePendingAnalysis;
-};
-
-export type PreSearchActionsType = {
-  setPreSearches: SetPreSearches;
-  addPreSearch: AddPreSearch;
-  updatePreSearchData: UpdatePreSearchData;
-  updatePreSearchStatus: UpdatePreSearchStatus;
-  updatePreSearchError: UpdatePreSearchError;
-  removePreSearch: RemovePreSearch;
-  clearAllPreSearches: ClearAllPreSearches;
-  checkStuckPreSearches: CheckStuckPreSearches;
-  updatePreSearchActivity: UpdatePreSearchActivity;
-  getPreSearchActivityTime: GetPreSearchActivityTime;
-  clearPreSearchActivity: ClearPreSearchActivity;
-};
-
-export type ThreadActionsType = {
-  setThread: SetThread;
-  setParticipants: SetParticipants;
-  setMessages: SetMessages;
-  setIsStreaming: SetIsStreaming;
-  setCurrentParticipantIndex: SetCurrentParticipantIndex;
-  setError: SetError;
-  setSendMessage: SetSendMessage;
-  setStartRound: SetStartRound;
-  setStop: SetStop;
-  setChatSetMessages: SetChatSetMessages;
-  checkStuckStreams: CheckStuckStreams;
-};
-
-export type FlagsActionsType = {
-  setHasInitiallyLoaded: SetHasInitiallyLoaded;
-  setIsRegenerating: SetIsRegenerating;
-  setIsCreatingAnalysis: SetIsCreatingAnalysis;
-  setIsWaitingForChangelog: SetIsWaitingForChangelog;
-  setHasPendingConfigChanges: SetHasPendingConfigChanges;
-};
-
-export type DataActionsType = {
-  setRegeneratingRoundNumber: SetRegeneratingRoundNumber;
-  setPendingMessage: SetPendingMessage;
-  setPendingAttachmentIds: SetPendingAttachmentIds;
-  setExpectedParticipantIds: SetExpectedParticipantIds;
-  setStreamingRoundNumber: SetStreamingRoundNumber;
-  setCurrentRoundNumber: SetCurrentRoundNumber;
-};
-
-export type TrackingActionsType = {
-  setHasSentPendingMessage: SetHasSentPendingMessage;
-  markAnalysisCreated: MarkAnalysisCreated;
-  hasAnalysisBeenCreated: HasAnalysisBeenCreated;
-  clearAnalysisTracking: ClearAnalysisTracking;
-  markPreSearchTriggered: MarkPreSearchTriggered;
-  hasPreSearchBeenTriggered: HasPreSearchBeenTriggered;
-  clearPreSearchTracking: ClearPreSearchTracking;
-};
-
-export type CallbacksActionsType = {
-  setOnComplete: SetOnComplete;
-};
-
-export type ScreenActionsType = {
-  setScreenMode: SetScreenMode;
-  resetScreenMode: ResetScreenMode;
-};
-
-export type AnimationActionsType = {
-  registerAnimation: RegisterAnimation;
-  completeAnimation: CompleteAnimation;
-  waitForAnimation: WaitForAnimation;
-  /** ✅ FIX: Wait for ALL pending animations to complete */
-  waitForAllAnimations: () => Promise<void>;
-  clearAnimations: ClearAnimations;
-};
-
-export type OperationsActionsType = {
-  resetThreadState: ResetThreadState;
-  resetToOverview: ResetToOverview;
-  initializeThread: InitializeThread;
-  updateParticipants: UpdateParticipants;
-  prepareForNewMessage: PrepareForNewMessage;
-  completeStreaming: CompleteStreaming;
-  startRegeneration: StartRegeneration;
-  completeRegeneration: CompleteRegeneration;
-  stopStreaming: StopStreaming;
-  reset: Reset;
-};
-
-export type AttachmentsActionsType = {
-  addAttachments: AddAttachments;
-  removeAttachment: RemoveAttachment;
-  clearAttachments: ClearAttachments;
-  updateAttachmentUpload: UpdateAttachmentUpload;
-  updateAttachmentPreview: UpdateAttachmentPreview;
-  getAttachments: GetAttachments;
-  hasAttachments: HasAttachments;
-};
-
-// ============================================================================
-// COMPLETE ACTIONS AGGREGATION
-// ============================================================================
-
-export type AllChatStoreActions
-  = & FormActionsType
-    & FeedbackActionsType
-    & UIActionsType
-    & AnalysisActionsType
-    & PreSearchActionsType
-    & ThreadActionsType
-    & FlagsActionsType
-    & DataActionsType
-    & TrackingActionsType
-    & CallbacksActionsType
-    & ScreenActionsType
-    & AnimationActionsType
-    & OperationsActionsType
-    & AttachmentsActionsType;

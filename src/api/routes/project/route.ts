@@ -5,8 +5,8 @@ import { StandardApiResponses } from '@/api/core/response-schemas';
 import { IdParamSchema } from '@/api/core/schemas';
 
 import {
-  AddAttachmentToProjectRequestSchema,
   AddProjectAttachmentResponseSchema,
+  AddUploadToProjectRequestSchema,
   CreateProjectMemoryRequestSchema,
   CreateProjectRequestSchema,
   DeleteResponseSchema,
@@ -204,7 +204,7 @@ export const addAttachmentToProjectRoute = createRoute({
     body: {
       content: {
         'application/json': {
-          schema: AddAttachmentToProjectRequestSchema,
+          schema: AddUploadToProjectRequestSchema,
         },
       },
     },

@@ -34,8 +34,33 @@ export type { UseRecommendedActionsOptions, UseRecommendedActionsReturn } from '
 export { useRecommendedActions } from './actions/recommended-actions';
 export type { UseScreenInitializationOptions } from './actions/screen-initialization';
 export { useScreenInitialization } from './actions/screen-initialization';
-export type { UseThreadActionsOptions, UseThreadActionsReturn } from './actions/thread-actions';
+export type { UseThreadActionsOptions } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
+// Cache validation utilities (used by queries/mutations)
+export type {
+  AnalysesCacheData,
+  AnalysisDeduplicationOptions,
+  InfiniteQueryCache,
+  ThreadCacheData,
+  ThreadDetailCacheData,
+  ThreadDetailPayloadCache,
+  ThreadDetailResponseCache,
+  ThreadsListCachePage,
+  UsageStatsData,
+} from './actions/types';
+export {
+  AnalysesCacheDataSchema,
+  ThreadCacheDataSchema,
+  validateAnalysesCache,
+  validateInfiniteQueryCache,
+  validateThreadDetailCache,
+  validateThreadDetailPayloadCache,
+  validateThreadDetailResponseCache,
+  validateThreadsListPages,
+  validateUsageStatsCache,
+} from './actions/types';
+
+// UseThreadActionsReturn is UseConfigChangeHandlersReturn - import from hooks/
 // Store
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
@@ -44,6 +69,7 @@ export { createChatStore } from './store';
 export type { AnimationIndex } from './store-constants';
 export {
   AnimationIndices,
+  getStatusPriority,
   isAnalysisAnimation,
   isParticipantAnimation,
   isPreSearchAnimation,
@@ -56,8 +82,3 @@ export {
   readPreSearchStreamData,
   shouldWaitForPreSearch,
 } from './utils/pre-search-execution';
-
-// Re-exported enums
-export type { FlowState, ScreenMode } from '@/api/core/enums';
-// Re-export commonly used types for tests
-export type { ChatThread } from '@/db/validation';

@@ -179,7 +179,12 @@ export function Reasoning({
       <Collapsible
         open={isOpen}
         onOpenChange={handleOpenChange}
-        className={cn('not-prose w-full mb-3', className)}
+        className={cn(
+          'not-prose w-full mb-3',
+          // ✅ Visual differentiation: subtle bg + border to distinguish from main content
+          'rounded-lg bg-muted/30 border border-border/50 px-4 py-3',
+          className,
+        )}
         {...props}
       >
         {children}
@@ -325,7 +330,7 @@ export function ReasoningContent({
   return (
     <CollapsibleContent
       className={cn(
-        'mt-4 w-full text-sm text-muted-foreground',
+        'mt-3 pt-3 w-full text-base text-muted-foreground border-t border-border/30',
         className,
       )}
       {...props}

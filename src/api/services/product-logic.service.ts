@@ -142,13 +142,21 @@ export const MAX_MODEL_PRICING_BY_TIER: Record<
 } as const;
 
 /**
+ * Recommended minimum models for best experience
+ * Used for defaults and pre-built suggestions to encourage multi-model discussions
+ * NOT enforced - users can choose 1+ models freely
+ */
+export const MIN_MODELS_REQUIRED = 3;
+
+/**
  * Maximum models per conversation by tier
+ * Tiered limits to encourage upgrades for more models
  */
 export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number> = {
-  free: 2,
-  starter: 3,
-  pro: 5,
-  power: 10,
+  free: 4,
+  starter: 6,
+  pro: 8,
+  power: 12,
 } as const;
 
 /**

@@ -10,35 +10,17 @@
  * @module lib/utils/date-transforms
  */
 
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
-import { StoredPreSearchSchema } from '@/api/routes/chat/schema';
+import { StoredModeratorAnalysisSchema, StoredPreSearchSchema } from '@/api/routes/chat/schema';
 
 // ============================================================================
-// ZOD SCHEMAS FOR API RESPONSES - SINGLE SOURCE OF TRUTH
+// TYPE INFERENCE FROM SINGLE SOURCE OF TRUTH
 // ============================================================================
 
-/**
- * Schema for raw API response with string dates (before transformation)
- * Used for validating and inferring types from API responses
- */
-const RawStoredModeratorAnalysisSchema = z.object({
-  id: z.string(),
-  threadId: z.string(),
-  roundNumber: z.number(),
-  mode: z.string(),
-  userQuestion: z.string(),
-  status: z.string(),
-  participantMessageIds: z.array(z.string()),
-  errorMessage: z.string().nullable(),
-  analysisData: z.unknown().nullable(),
-  createdAt: z.union([z.string(), z.date()]),
-  completedAt: z.union([z.string(), z.date()]).nullable(),
-}).passthrough(); // Allow additional fields from API
-
-/** Inferred type for raw API response */
-export type RawStoredModeratorAnalysis = z.infer<typeof RawStoredModeratorAnalysisSchema>;
+/** Inferred type for raw API response - uses schema from @/api/routes/chat/schema */
+export type RawStoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
 
 // ============================================================================
 // CORE DATE UTILITIES
@@ -77,6 +59,41 @@ export function ensureDateOrNull(value: string | Date | null | undefined): Date 
     return null;
   }
   return ensureDate(value);
+}
+
+/**
+ * Convert Date or string to ISO string (for cache serialization)
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use for Date → string when serializing for cache/API.
+ *
+ * @param value - Date or string value
+ * @returns ISO string
+ *
+ * @example
+ * ```typescript
+ * const isoString = toISOString(item.createdAt); // Date | string → string
+ * ```
+ */
+export function toISOString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * Convert nullable Date or string to ISO string or null
+ *
+ * @param value - Date, string, or null value
+ * @returns ISO string or null
+ *
+ * @example
+ * ```typescript
+ * const isoString = toISOStringOrNull(item.lastMessageAt); // Date | string | null → string | null
+ * ```
+ */
+export function toISOStringOrNull(value: string | Date | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return toISOString(value);
 }
 
 // ============================================================================
@@ -196,13 +213,15 @@ export function transformModeratorAnalysis(
   analysis: unknown,
 ): StoredModeratorAnalysis {
   // Validate input against schema
-  const validated = RawStoredModeratorAnalysisSchema.parse(analysis);
+  const validated = StoredModeratorAnalysisSchema.parse(analysis);
 
+  // ✅ TYPE-SAFE: Return properly typed object
+  // Schema validation ensures this matches StoredModeratorAnalysis
   return {
     ...validated,
     createdAt: ensureDate(validated.createdAt),
     completedAt: ensureDateOrNull(validated.completedAt),
-  } as StoredModeratorAnalysis;
+  };
 }
 
 // ============================================================================

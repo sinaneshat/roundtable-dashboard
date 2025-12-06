@@ -869,72 +869,62 @@ export const ChatMessageList = memo(
           if (group.type === 'user-group') {
             return (
               <div key={`user-group-wrapper-${group.messages[0]?.index}`} className="mb-8">
-                <div
-                  key={`user-group-${group.messages[0]?.index}`}
-                  className="flex justify-end"
-                >
-                  <div className="w-full">
-                    {/* Header at top of message box */}
-                    <div className="flex items-center gap-3 mb-6 flex-row-reverse">
-                      <div className="relative flex-shrink-0 drop-shadow-[0_0_12px_hsl(var(--white)/0.3)]">
-                        <Avatar className="size-8">
-                          <AvatarImage alt="" className="mt-0 mb-0" src={group.headerInfo.avatarSrc} />
-                          <AvatarFallback>{group.headerInfo.avatarName?.slice(0, 2) || 'ME'}</AvatarFallback>
-                        </Avatar>
+                {/* User messages - right-aligned bubbles, no avatar/name */}
+                <div className="flex flex-col items-end gap-2">
+                  {group.messages.map(({ message, index }) => {
+                    const messageKey = keyForMessage(message, index);
+
+                    // Extract file attachments and text parts separately
+                    // ✅ TYPE-SAFE: Use isFilePart type guard for proper narrowing
+                    const fileAttachments: MessageAttachment[] = message.parts
+                      .filter((part): part is FilePart => isFilePart(part))
+                      .map(filePart => ({
+                        url: filePart.url,
+                        filename: filePart.filename,
+                        mediaType: filePart.mediaType,
+                      }));
+
+                    const textParts = message.parts.filter(
+                      part => part.type === MessagePartTypes.TEXT,
+                    );
+
+                    return (
+                      <div
+                        key={messageKey}
+                        className={cn(
+                          'max-w-[85%]',
+                          'bg-card text-card-foreground',
+                          'border border-border/50',
+                          'rounded-2xl rounded-br-md px-4 py-3',
+                          'text-base leading-relaxed',
+                        )}
+                      >
+                        {/* Attachments displayed above text */}
+                        {fileAttachments.length > 0 && (
+                          <MessageAttachmentPreview
+                            attachments={fileAttachments}
+                            messageId={message.id}
+                          />
+                        )}
+
+                        {/* Text content */}
+                        {textParts.map((part) => {
+                          if (part.type === MessagePartTypes.TEXT) {
+                            return (
+                              <Streamdown
+                                key={`${message.id}-text-${part.text.substring(0, 20)}`}
+                                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                components={streamdownComponents}
+                              >
+                                {part.text}
+                              </Streamdown>
+                            );
+                          }
+                          return null;
+                        })}
                       </div>
-                      <span className="text-xl font-semibold text-muted-foreground">
-                        {group.headerInfo.displayName}
-                      </span>
-                    </div>
-                    {/* Message content */}
-                    <div className="space-y-4">
-                      {group.messages.map(({ message, index }) => {
-                        const messageKey = keyForMessage(message, index);
-
-                        // Extract file attachments and text parts separately
-                        // ✅ TYPE-SAFE: Use isFilePart type guard for proper narrowing
-                        const fileAttachments: MessageAttachment[] = message.parts
-                          .filter((part): part is FilePart => isFilePart(part))
-                          .map(filePart => ({
-                            url: filePart.url,
-                            filename: filePart.filename,
-                            mediaType: filePart.mediaType,
-                          }));
-
-                        const textParts = message.parts.filter(
-                          part => part.type === MessagePartTypes.TEXT,
-                        );
-
-                        return (
-                          <div key={messageKey} className="text-foreground text-sm leading-relaxed">
-                            {/* Attachments displayed above text in compact grid */}
-                            {fileAttachments.length > 0 && (
-                              <MessageAttachmentPreview
-                                attachments={fileAttachments}
-                                messageId={message.id}
-                              />
-                            )}
-
-                            {/* Text content */}
-                            {textParts.map((part) => {
-                              if (part.type === MessagePartTypes.TEXT) {
-                                return (
-                                  <Streamdown
-                                    key={`${message.id}-text-${part.text.substring(0, 20)}`}
-                                    className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                                    components={streamdownComponents}
-                                  >
-                                    {part.text}
-                                  </Streamdown>
-                                );
-                              }
-                              return null;
-                            })}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
 
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}

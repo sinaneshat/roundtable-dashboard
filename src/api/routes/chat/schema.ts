@@ -666,6 +666,14 @@ export const PreSearchRequestSchema = z.object({
     description: 'User query for web search',
     example: 'What is the current Bitcoin price?',
   }),
+  attachmentIds: z.array(z.string()).optional().openapi({
+    description: 'Optional attachment IDs whose content should be considered in query generation',
+    example: ['upload_123', 'upload_456'],
+  }),
+  fileContext: z.string().max(10000).optional().openapi({
+    description: 'Optional extracted text content from uploaded files to consider in search query generation',
+    example: 'Contents of the uploaded PDF document...',
+  }),
 }).openapi('PreSearchRequest');
 
 export type PreSearchRequest = z.infer<typeof PreSearchRequestSchema>;
@@ -687,6 +695,7 @@ export const PreSearchDataPayloadSchema = z.object({
     answer: z.string().nullable(),
     results: z.array(WebSearchResultItemSchema),
     responseTime: z.number(),
+    index: z.number().optional(), // ✅ Index for matching during progressive streaming
   })),
   analysis: z.string(),
   successCount: z.number(),

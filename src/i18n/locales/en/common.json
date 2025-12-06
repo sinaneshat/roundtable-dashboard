@@ -168,9 +168,10 @@
       "verificationDesc": "Please check your email to verify your account before signing in."
     },
     "layout": {
-      "subtitle": "Your AI collaboration platform",
+      "subtitle": "Experience collaborative AI brainstorming with multiple leading AI models",
       "welcomeTo": "Welcome to {brand}"
     },
+    "continueWithEmail": "Continue with Email",
     "magicLink": {
       "emailSentMessage": "We've sent a magic link to {email}. Click the link to sign in.",
       "error": "Error",
@@ -179,8 +180,8 @@
       "useDifferentEmail": "Use a different email"
     },
     "signIn": {
-      "description": "Enter your email for a magic link or sign in with Google",
-      "title": "Sign In"
+      "description": "Sign in to your account",
+      "title": "Welcome back"
     },
     "signUp": {
       "title": "Sign Up",
@@ -192,7 +193,7 @@
         "publicSharing": "Share conversations publicly"
       }
     },
-    "signInWithGoogle": "Sign in with Google"
+    "signInWithGoogle": "Continue with Google"
   },
   "billing": {
     "cancelSubscription": {
@@ -327,12 +328,16 @@
       "dragToReorder": "Drag to reorder",
       "dragDisabled": "Drag disabled",
       "limitReached": "Limit Reached",
+      "minRequired": "Min 3 required",
       "yourPlan": "Your Plan",
       "mostPopular": "Most Popular",
       "topModels": "Top AI Models",
       "model": "model",
       "upgradeToUnlock": "Upgrade to unlock these models",
-      "minimumRequired": "At least one participant is required",
+      "minimumRequired": {
+        "title": "Minimum Models Required",
+        "description": "At least {count} models must be selected"
+      },
       "yourModels": "Your Models",
       "availableModels": "Available Models",
       "premiumModels": "Premium Models",
@@ -416,6 +421,8 @@
       "autoRetryingSearch": "Search in progress, auto-retrying...",
       "error": "Error",
       "retry": "Retry",
+      "source": "source",
+      "sources": "sources",
       "searchDepth": {
         "basic": "basic",
         "advanced": "advanced"
@@ -787,6 +794,7 @@
     "searchChatsDescription": "Search and navigate through your chat conversations",
     "noChatsYet": "No chats yet",
     "noChatsDescription": "Start a new conversation to begin collaborating with AI participants",
+    "emptyStateHint": "Start a conversation",
     "status": {
       "streaming": "AI is thinking...",
       "navigating": "Navigating to conversation..."
@@ -1304,7 +1312,9 @@
     "pricing": "Pricing",
     "searchChats": "Search chats",
     "signOut": "Sign Out",
-    "upgrade": "Upgrade"
+    "upgrade": "Upgrade",
+    "upgradeDescription": "Unlock more features",
+    "managePlan": "Manage your plan"
   },
   "networkStatus": {
     "connectionError": "Connection Error",
@@ -1528,6 +1538,7 @@
   "transfer-encoding": "Transfer-encoding",
   "url": "Url",
   "usage": {
+    "active": "Active",
     "daysLeft": "days left",
     "errorLoading": "Unable to load usage data",
     "messages": "Messages",
@@ -1586,7 +1597,11 @@
       "keyPoints": "Key Points",
       "relevanceScore": "Relevance: {score}%",
       "openExternal": "Open in new tab",
-      "copyLink": "Copy link"
+      "copyLink": "Copy link",
+      "relevance": "relevant",
+      "minRead": " min",
+      "words": "words",
+      "morePoints": "more"
     },
     "config": {
       "title": "Search Configuration",

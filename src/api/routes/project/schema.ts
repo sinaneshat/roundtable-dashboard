@@ -125,9 +125,6 @@ export const AddUploadToProjectRequestSchema = z.object({
   }),
 }).openapi('AddUploadToProjectRequest');
 
-// Backwards-compatible alias
-export const AddAttachmentToProjectRequestSchema = AddUploadToProjectRequestSchema;
-
 /**
  * Update Project Attachment Request Schema
  */
@@ -371,7 +368,7 @@ export type ListProjectAttachmentsQuery = z.infer<typeof ListProjectAttachmentsQ
 export type ListProjectMemoriesQuery = z.infer<typeof ListProjectMemoriesQuerySchema>;
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
 export type UpdateProjectRequest = z.infer<typeof UpdateProjectRequestSchema>;
-export type AddAttachmentToProjectRequest = z.infer<typeof AddAttachmentToProjectRequestSchema>;
+export type AddUploadToProjectRequest = z.infer<typeof AddUploadToProjectRequestSchema>;
 export type UpdateProjectAttachmentRequest = z.infer<typeof UpdateProjectAttachmentRequestSchema>;
 export type CreateProjectMemoryRequest = z.infer<typeof CreateProjectMemoryRequestSchema>;
 export type UpdateProjectMemoryRequest = z.infer<typeof UpdateProjectMemoryRequestSchema>;

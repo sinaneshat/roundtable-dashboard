@@ -1,19 +1,21 @@
 'use client';
 
-import { Search } from 'lucide-react';
+import { Search, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
+import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
+import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
+import { cn } from '@/lib/ui/cn';
 import { executePreSearchStreamService, getThreadPreSearchesService } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
@@ -364,10 +366,10 @@ function PreSearchStreamComponent({
 
         // ✅ CRITICAL FIX: Process events helper function
         // Extracted to be used both during streaming AND after stream ends
-        // ✅ PROGRESSIVE UI UPDATE: Uses flushSync to force immediate DOM updates
-        // Without flushSync, React 18 batches all state updates from rapid SSE events
-        // into a single render, causing UI to wait until all events are received
-        const processEvent = (event: string, data: string) => {
+        // ✅ PROGRESSIVE UI UPDATE: Uses flushSync + frame yield for immediate DOM updates
+        // flushSync commits React updates, but browser may batch paints together
+        // Adding frame yield after flushSync ensures browser actually paints between events
+        const processEvent = async (event: string, data: string) => {
           try {
             if (event === PreSearchSseEvents.START) {
               onStreamStartRef.current?.();
@@ -389,6 +391,9 @@ function PreSearchStreamComponent({
               flushSync(() => {
                 setPartialSearchData({ queries, results });
               });
+              // ✅ Frame yield: Give browser time to paint after React commit
+              // Without this, rapid flushSync calls may have their paints batched together
+              await new Promise(resolve => requestAnimationFrame(resolve));
             } else if (event === PreSearchSseEvents.RESULT) {
               const resultData = JSON.parse(data);
               resultsMap.set(resultData.index, {
@@ -396,6 +401,7 @@ function PreSearchStreamComponent({
                 answer: resultData.answer,
                 results: resultData.results || [],
                 responseTime: resultData.responseTime,
+                index: resultData.index, // ✅ Store index for matching
               });
               // Convert Maps to arrays sorted by index
               const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
@@ -406,6 +412,8 @@ function PreSearchStreamComponent({
               flushSync(() => {
                 setPartialSearchData({ queries, results });
               });
+              // ✅ Frame yield: Give browser time to paint after React commit
+              await new Promise(resolve => requestAnimationFrame(resolve));
             } else if (event === PreSearchSseEvents.DONE) {
               const finalData = JSON.parse(data);
               // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
@@ -440,8 +448,8 @@ function PreSearchStreamComponent({
             } else if (line.startsWith('data:')) {
               currentData = line.slice(5).trim();
             } else if (line === '' && currentEvent && currentData) {
-              // Process complete event
-              processEvent(currentEvent, currentData);
+              // Process complete event (await for frame yield to work)
+              await processEvent(currentEvent, currentData);
 
               // Reset for next event
               currentEvent = '';
@@ -454,7 +462,7 @@ function PreSearchStreamComponent({
         // If the last event doesn't have a trailing newline, it won't be processed in the loop
         // This ensures the final 'done' event is always processed, even without a trailing newline
         if (currentEvent && currentData) {
-          processEvent(currentEvent, currentData);
+          await processEvent(currentEvent, currentData);
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
@@ -777,7 +785,10 @@ function PreSearchStreamComponent({
           return null;
         }
 
-        const searchResult = validResults.find(r => r?.query === query?.query);
+        // ✅ FIX: Match by index instead of query text to ensure results show progressively
+        // Query text matching can fail due to normalization or casing differences
+        const searchResult = validResults.find(r => r?.index === query?.index)
+          || validResults.find(r => r?.query === query?.query); // Fallback to text match
         const hasResult = !!searchResult;
         const uniqueKey = `query-${query?.query || queryIndex}`;
         const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
@@ -788,16 +799,42 @@ function PreSearchStreamComponent({
             itemKey={uniqueKey}
           >
             <div className="space-y-2">
-              {/* Query header - minimal */}
+              {/* Query header with rationale and depth */}
               <div className="flex items-start gap-2">
                 <Search className="size-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground">{query?.query}</p>
+                  {/* Query text + depth badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm text-foreground">{query?.query}</p>
+                    {query?.searchDepth && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'h-4 px-1.5 text-[10px] font-normal',
+                          query.searchDepth === WebSearchDepths.ADVANCED
+                            ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                            : 'bg-muted/50 text-muted-foreground border-border/50',
+                        )}
+                      >
+                        {query.searchDepth === WebSearchDepths.ADVANCED && (
+                          <Zap className="size-2.5 mr-0.5" />
+                        )}
+                        {query.searchDepth}
+                      </Badge>
+                    )}
+                  </div>
+                  {/* Query rationale */}
+                  {query?.rationale && (
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {query.rationale}
+                    </p>
+                  )}
+                  {/* Result count */}
                   {hasResult && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground/70 mt-1">
                       {searchResult.results.length}
                       {' '}
-                      {searchResult.results.length === 1 ? 'result' : 'results'}
+                      {searchResult.results.length === 1 ? t('source') : t('sources')}
                     </p>
                   )}
                 </div>

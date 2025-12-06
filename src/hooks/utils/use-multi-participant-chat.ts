@@ -1142,7 +1142,12 @@ export function useMultiParticipantChat(
         && initialMessages.length > 0;
 
     if (shouldHydrate) {
-      setMessages(initialMessages);
+      // ✅ CRITICAL FIX: Deep clone messages to break Immer proxy freeze
+      // Store messages come from Zustand+Immer which freezes all arrays (Object.freeze)
+      // AI SDK needs mutable arrays to push streaming parts during response generation
+      // Without this, streaming fails with "Cannot add property 0, object is not extensible"
+      const mutableMessages = structuredClone(initialMessages);
+      setMessages(mutableMessages);
       hasHydratedRef.current = true;
     }
   }, [messages.length, initialMessages, setMessages]);

@@ -19,6 +19,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { TextPart, UIMessage } from 'ai';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { FlowState, ScreenMode } from '@/api/core/enums';
 import {
@@ -274,26 +275,34 @@ export function useFlowStateMachine(
   const queryClient = useQueryClient();
 
   // ============================================================================
-  // GATHER CONTEXT FROM STORE
+  // ✅ REACT 19 PATTERN: Batched store selectors with useShallow
+  // Reduces re-renders by batching related state subscriptions
   // ============================================================================
 
-  // Thread state
-  const thread = useChatStore(s => s.thread);
-  const createdThreadId = useChatStore(s => s.createdThreadId);
-  const isCreatingThread = useChatStore(s => s.isCreatingThread);
+  // State subscriptions (batched)
+  const {
+    thread,
+    createdThreadId,
+    isCreatingThread,
+    messages,
+    participants,
+    analyses,
+    isCreatingAnalysis,
+    isAiSdkStreaming,
+    screenMode,
+  } = useChatStore(useShallow(s => ({
+    thread: s.thread,
+    createdThreadId: s.createdThreadId,
+    isCreatingThread: s.isCreatingThread,
+    messages: s.messages,
+    participants: s.participants,
+    analyses: s.analyses,
+    isCreatingAnalysis: s.isCreatingAnalysis,
+    isAiSdkStreaming: s.isStreaming,
+    screenMode: s.screenMode,
+  })));
 
-  // Message/participant state
-  const messages = useChatStore(s => s.messages);
-  const participants = useChatStore(s => s.participants);
-
-  // Analysis state
-  const analyses = useChatStore(s => s.analyses);
-  const isCreatingAnalysis = useChatStore(s => s.isCreatingAnalysis);
-
-  // AI SDK state
-  const isAiSdkStreaming = useChatStore(s => s.isStreaming);
-
-  // Store actions
+  // Actions (stable references - no need for useShallow)
   const createPendingAnalysis = useChatStore(s => s.createPendingAnalysis);
   const markAnalysisCreated = useChatStore(s => s.markAnalysisCreated);
   const hasAnalysisBeenCreated = useChatStore(s => s.hasAnalysisBeenCreated);
@@ -305,9 +314,6 @@ export function useFlowStateMachine(
   // ============================================================================
   // BUILD FLOW CONTEXT
   // ============================================================================
-
-  // Get screen mode from store
-  const screenMode = useChatStore(s => s.screenMode);
 
   const context = useMemo((): FlowContext => {
     const threadId = thread?.id || createdThreadId;
@@ -415,7 +421,6 @@ export function useFlowStateMachine(
             createPendingAnalysis({
               roundNumber: currentRound,
               messages,
-              participants,
               userQuestion,
               threadId,
               mode: thread?.mode || DEFAULT_CHAT_MODE,

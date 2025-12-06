@@ -34,7 +34,7 @@ import {
   validateThreadDetailResponseCache,
   validateThreadsListPages,
   validateUsageStatsCache,
-} from '@/stores/chat/actions/types';
+} from '@/stores/chat';
 
 // ============================================================================
 // Thread Mutations

@@ -43,7 +43,7 @@ import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
+import { extractFileContextForSearch, getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import { executePreSearchStreamService, getThreadMessagesService } from '@/services/api';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, createChatStore, readPreSearchStreamData } from '@/stores/chat';
@@ -161,7 +161,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           currentState.createPendingAnalysis({
             roundNumber,
             messages: sdkMessages,
-            participants: storeParticipants,
             userQuestion,
             threadId,
             mode,
@@ -399,6 +398,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         queueMicrotask(() => {
           const executeSearch = async () => {
             try {
+              // ✅ FILE CONTEXT: Extract text from uploaded files for search query generation
+              const attachments = store.getState().getAttachments();
+              const fileContext = await extractFileContextForSearch(attachments);
+
               // If placeholder, create DB record first
               if (isPlaceholder) {
                 const createResponse = await createPreSearch.mutateAsync({
@@ -406,7 +409,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                     threadId: threadIdForSearch,
                     roundNumber: currentRound.toString(),
                   },
-                  json: { userQuery },
+                  json: { userQuery, fileContext: fileContext || undefined },
                 });
 
                 if (createResponse?.data) {
@@ -429,6 +432,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 },
                 json: {
                   userQuery,
+                  fileContext: fileContext || undefined,
                 },
               });
 
@@ -1019,7 +1023,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       if (!isSameMessages) {
         prevMessageCountRef.current = chat.messages.length;
         prevChatMessagesRef.current = chat.messages;
-        store.getState().setMessages(deduplicatedMessages);
+        // ✅ CRITICAL FIX: Deep clone messages before passing to Zustand store
+        // Immer middleware freezes all objects passed to the store (Object.freeze)
+        // But AI SDK still holds references to the SAME message objects
+        // When AI SDK tries to push parts during streaming, it fails because arrays are frozen
+        // Error: "Cannot add property 0, object is not extensible"
+        // structuredClone creates independent copies that Immer can safely freeze
+        store.getState().setMessages(structuredClone(deduplicatedMessages));
 
         // Update activity on any sync
         lastStreamActivityRef.current = Date.now();
@@ -1274,7 +1284,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         // PreSearchStream only renders after user message exists, but message waits for pre-search
         // This breaks the circular dependency: create → execute → complete → send message
         const effectiveThreadId = thread?.id || '';
-        queueMicrotask(() => {
+        queueMicrotask(async () => {
+          // ✅ FILE CONTEXT: Extract text from uploaded files for search query generation
+          const attachments = store.getState().getAttachments();
+          const fileContext = await extractFileContextForSearch(attachments);
+
           createPreSearch.mutateAsync({
             param: {
               threadId: effectiveThreadId,
@@ -1282,6 +1296,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             },
             json: {
               userQuery: pendingMessage,
+              fileContext: fileContext || undefined,
             },
           }).then((createResponse) => {
             // ✅ CRITICAL FIX: Add pre-search to store immediately after creation
@@ -1305,6 +1320,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               },
               json: {
                 userQuery: pendingMessage,
+                fileContext: fileContext || undefined,
               },
             });
           }).then(async (response) => {
@@ -1376,7 +1392,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         // Without this check, executePreSearch returns NOT_FOUND error
         const isPlaceholder = preSearchForRound.id.startsWith('placeholder-');
 
-        queueMicrotask(() => {
+        queueMicrotask(async () => {
+          // ✅ FILE CONTEXT: Extract text from uploaded files for search query generation
+          const attachments = store.getState().getAttachments();
+          const fileContext = await extractFileContextForSearch(attachments);
+
           // ✅ TYPE-SAFE: Use service instead of direct fetch
           const executePreSearch = () => executePreSearchStreamService({
             param: {
@@ -1385,6 +1405,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             },
             json: {
               userQuery: pendingMessage,
+              fileContext: fileContext || undefined,
             },
           });
 
@@ -1430,6 +1451,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               },
               json: {
                 userQuery: pendingMessage,
+                fileContext: fileContext || undefined,
               },
             }).then((createResponse) => {
               // Update store with real pre-search data (replace placeholder)

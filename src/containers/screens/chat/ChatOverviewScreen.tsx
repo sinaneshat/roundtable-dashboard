@@ -48,6 +48,10 @@ import {
   useOverviewActions,
   useScreenInitialization,
 } from '@/stores/chat';
+import {
+  useModelPreferencesHydrated,
+  useModelPreferencesStore,
+} from '@/stores/preferences';
 
 import { ChatView } from './ChatView';
 
@@ -59,6 +63,17 @@ export default function ChatOverviewScreen() {
 
   // Model lookup for defaults
   const { defaultModelId } = useModelLookup();
+
+  // ============================================================================
+  // PREFERENCES STORE (Cookie-persisted model selection)
+  // ============================================================================
+  const preferencesHydrated = useModelPreferencesHydrated();
+  const {
+    modelOrder: persistedModelOrder,
+    setSelectedModelIds: setPersistedModelIds,
+    setModelOrder: setPersistedModelOrder,
+    getInitialModelIds,
+  } = useModelPreferencesStore();
 
   // ============================================================================
   // STORE STATE
@@ -127,11 +142,8 @@ export default function ChatOverviewScreen() {
   // Chat attachments
   const chatAttachments = useChatAttachments();
 
-  // Attachment click handler (registered by ChatInput, used by toolbar)
+  // ✅ SIMPLIFIED: Ref-based attachment click (no registration callback needed)
   const attachmentClickRef = useRef<(() => void) | null>(null);
-  const handleRegisterAttachmentClick = useCallback((clickHandler: () => void) => {
-    attachmentClickRef.current = clickHandler;
-  }, []);
   const handleAttachmentClick = useCallback(() => {
     attachmentClickRef.current?.();
   }, []);
@@ -167,17 +179,46 @@ export default function ChatOverviewScreen() {
     useShallow(s => [s.modelOrder, s.setModelOrder]),
   );
 
+  // ============================================================================
+  // INITIAL PARTICIPANTS (centralized in preferences store)
+  // - User's persisted selection takes priority (even if 1-2 models)
+  // - Defaults to first 3 accessible models if no persisted selection
+  // ============================================================================
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
+    // Wait for preferences to hydrate and models to load
+    if (!preferencesHydrated || allEnabledModels.length === 0) {
+      return [];
+    }
+
+    // Get accessible model IDs (user can use these)
+    const accessibleModelIds = allEnabledModels
+      .filter(m => m.is_accessible_to_user)
+      .map(m => m.id);
+
+    // Use centralized store method (handles persisted vs defaults)
+    const modelIds = getInitialModelIds(accessibleModelIds);
+
+    if (modelIds.length > 0) {
+      return modelIds.map((modelId, index) => ({
+        id: modelId,
+        modelId,
+        role: '',
+        priority: index,
+      }));
+    }
+
+    // Fallback to default model if no accessible models
     if (defaultModelId) {
       return [{
-        id: 'participant-default',
+        id: defaultModelId,
         modelId: defaultModelId,
         role: '',
         priority: 0,
       }];
     }
+
     return [];
-  }, [defaultModelId]);
+  }, [preferencesHydrated, allEnabledModels, defaultModelId, getInitialModelIds]);
 
   const orderedModels = useMemo<OrderedModel[]>(() => {
     if (allEnabledModels.length === 0)
@@ -208,12 +249,25 @@ export default function ChatOverviewScreen() {
   const formActions = useChatFormActions();
   const overviewActions = useOverviewActions();
 
-  // Initialize model order when models first load
+  // Initialize model order when models first load (use persisted order if available)
   useEffect(() => {
-    if (allEnabledModels.length > 0 && modelOrder.length === 0) {
-      setModelOrder(allEnabledModels.map(m => m.id));
+    if (allEnabledModels.length > 0 && modelOrder.length === 0 && preferencesHydrated) {
+      // Use persisted order if available and valid
+      if (persistedModelOrder.length > 0) {
+        // Validate that all persisted IDs exist in available models
+        const availableIds = new Set(allEnabledModels.map(m => m.id));
+        const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
+        // Add any new models not in persisted order
+        const newModelIds = allEnabledModels
+          .filter(m => !validPersistedOrder.includes(m.id))
+          .map(m => m.id);
+        const fullOrder = [...validPersistedOrder, ...newModelIds];
+        setModelOrder(fullOrder);
+      } else {
+        setModelOrder(allEnabledModels.map(m => m.id));
+      }
     }
-  }, [allEnabledModels, modelOrder.length, setModelOrder]);
+  }, [allEnabledModels, modelOrder.length, setModelOrder, preferencesHydrated, persistedModelOrder]);
 
   // Screen initialization for orchestrator
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
@@ -260,47 +314,26 @@ export default function ChatOverviewScreen() {
     setThreadActions(null);
   }, [currentThread?.isAiGeneratedTitle, currentThread?.title, setThreadTitle, setThreadActions]);
 
-  // Reset on navigation to /chat
-  const prevPathnameRef = useRef<string | null>(null);
-  const hasResetOnMount = useRef(false);
-  // ✅ Stable ref for clearAttachments to avoid re-running effect on every render
-  const clearAttachmentsRef = useRef(chatAttachments.clearAttachments);
-  // Update ref in effect to avoid refs-during-render lint error
-  useEffect(() => {
-    clearAttachmentsRef.current = chatAttachments.clearAttachments;
-  }, [chatAttachments.clearAttachments]);
+  // ✅ SIMPLIFIED: Reset on navigation to /chat
+  // Single ref tracks last reset pathname to prevent duplicate resets
+  const lastResetPathRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
-    if (!hasResetOnMount.current && pathname === '/chat') {
-      hasResetOnMount.current = true;
+    // Only reset when navigating TO /chat from elsewhere (or on initial mount at /chat)
+    if (pathname === '/chat' && lastResetPathRef.current !== '/chat') {
+      lastResetPathRef.current = '/chat';
       resetToOverview();
       hasSentInitialPromptRef.current = false;
-      // ✅ Clear hook's local attachment state (separate from store)
-      clearAttachmentsRef.current();
+      chatAttachments.clearAttachments();
 
       if (defaultModelId && initialParticipants.length > 0) {
         setSelectedMode(getDefaultChatMode());
         setSelectedParticipants(initialParticipants);
       }
-      prevPathnameRef.current = pathname;
-      return;
+    } else {
+      lastResetPathRef.current = pathname;
     }
-
-    const isNavigatingToChat = pathname === '/chat' && prevPathnameRef.current !== '/chat';
-    if (isNavigatingToChat) {
-      resetToOverview();
-      hasSentInitialPromptRef.current = false;
-      // ✅ Clear hook's local attachment state (separate from store)
-      clearAttachmentsRef.current();
-
-      if (defaultModelId && initialParticipants.length > 0) {
-        setSelectedMode(getDefaultChatMode());
-        setSelectedParticipants(initialParticipants);
-      }
-    }
-
-    prevPathnameRef.current = pathname;
-  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants]);
+  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments]);
 
   // Initialize defaults when defaultModelId becomes available
   useEffect(() => {
@@ -409,14 +442,16 @@ export default function ChatOverviewScreen() {
   );
 
   // Model modal callbacks
-  const participantIdCounterRef = useRef(0);
-
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
     if (!orderedModel)
       return;
 
     if (orderedModel.participant) {
+      // Prevent removing the last model - must have at least 1
+      if (selectedParticipants.length <= 1) {
+        return;
+      }
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
@@ -425,10 +460,13 @@ export default function ChatOverviewScreen() {
       });
       const reindexed = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
       setSelectedParticipants(reindexed);
+
+      // Persist to cookie storage
+      setPersistedModelIds(reindexed.map(p => p.modelId));
     } else {
-      participantIdCounterRef.current += 1;
+      // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
       const newParticipant: ParticipantConfig = {
-        id: `participant-${participantIdCounterRef.current}`,
+        id: modelId,
         modelId,
         role: '',
         priority: selectedParticipants.length,
@@ -440,8 +478,11 @@ export default function ChatOverviewScreen() {
       });
       const reindexed = updated.map((p, index) => ({ ...p, priority: index }));
       setSelectedParticipants(reindexed);
+
+      // Persist to cookie storage
+      setPersistedModelIds(reindexed.map(p => p.modelId));
     }
-  }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder]);
+  }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder, setPersistedModelIds]);
 
   const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
     setSelectedParticipants(
@@ -470,7 +511,11 @@ export default function ChatOverviewScreen() {
         priority: index,
       }));
     setSelectedParticipants(reorderedParticipants);
-  }, [setSelectedParticipants, setModelOrder]);
+
+    // Persist to cookie storage
+    setPersistedModelOrder(newModelOrder);
+    setPersistedModelIds(reorderedParticipants.map(p => p.modelId));
+  }, [setSelectedParticipants, setModelOrder, setPersistedModelOrder, setPersistedModelIds]);
 
   // ============================================================================
   // RENDER
@@ -602,7 +647,7 @@ export default function ChatOverviewScreen() {
                   onAddAttachments={chatAttachments.addFiles}
                   onRemoveAttachment={chatAttachments.removeAttachment}
                   enableAttachments={!isInitialUIInputBlocked}
-                  onRegisterAttachmentClick={handleRegisterAttachmentClick}
+                  attachmentClickRef={attachmentClickRef}
                   toolbar={(
                     <ChatInputToolbarMenu
                       selectedParticipants={selectedParticipants}

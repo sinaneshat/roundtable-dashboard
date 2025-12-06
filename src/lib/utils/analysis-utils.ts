@@ -15,7 +15,7 @@ import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import { messageHasError } from '@/lib/schemas/message-metadata';
-import { getStatusPriority } from '@/stores/chat/store-constants';
+import { getStatusPriority } from '@/stores/chat';
 
 import { isObject } from './type-guards';
 
@@ -289,24 +289,29 @@ export function isCompleteAnalysis(
  * @returns Normalized data with consistent array formats
  */
 export function normalizeAnalysisData<T>(data: T): T {
-  if (!data || typeof data !== 'object') {
+  // ✅ TYPE-SAFE: Use type guard instead of force cast
+  if (!isObject(data)) {
     return data;
   }
 
   // Deep clone to avoid mutation
-  const normalized = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+  const normalized: Record<string, unknown> = JSON.parse(JSON.stringify(data));
 
   // Normalize consensusAnalysis if present
-  if (normalized.consensusAnalysis && typeof normalized.consensusAnalysis === 'object') {
-    const consensus = normalized.consensusAnalysis as Record<string, unknown>;
+  if (isObject(normalized.consensusAnalysis)) {
+    const consensus = normalized.consensusAnalysis;
 
     // Normalize agreementHeatmap perspectives
     if (Array.isArray(consensus.agreementHeatmap)) {
-      consensus.agreementHeatmap = (consensus.agreementHeatmap as Array<Record<string, unknown>>).map((entry) => {
-        if (entry.perspectives && !Array.isArray(entry.perspectives)) {
+      consensus.agreementHeatmap = consensus.agreementHeatmap.map((entry: unknown) => {
+        // ✅ TYPE-SAFE: Use type guard for entry validation
+        if (!isObject(entry)) {
+          return entry;
+        }
+
+        if (entry.perspectives && !Array.isArray(entry.perspectives) && isObject(entry.perspectives)) {
           // Convert { "modelName": "status" } to [{ modelName, status }]
-          const perspectivesObj = entry.perspectives as Record<string, string>;
-          entry.perspectives = Object.entries(perspectivesObj).map(([modelName, status]) => ({
+          entry.perspectives = Object.entries(entry.perspectives).map(([modelName, status]) => ({
             modelName,
             status,
           }));
@@ -316,12 +321,11 @@ export function normalizeAnalysisData<T>(data: T): T {
     }
 
     // Normalize argumentStrengthProfile
-    if (consensus.argumentStrengthProfile && !Array.isArray(consensus.argumentStrengthProfile)) {
+    if (consensus.argumentStrengthProfile && !Array.isArray(consensus.argumentStrengthProfile) && isObject(consensus.argumentStrengthProfile)) {
       // Convert { "modelName": { scores } } to [{ modelName, ...scores }]
-      const profileObj = consensus.argumentStrengthProfile as Record<string, Record<string, unknown>>;
-      consensus.argumentStrengthProfile = Object.entries(profileObj).map(([modelName, scores]) => ({
+      consensus.argumentStrengthProfile = Object.entries(consensus.argumentStrengthProfile).map(([modelName, scores]) => ({
         modelName,
-        ...scores,
+        ...(isObject(scores) ? scores : {}),
       }));
     }
   }

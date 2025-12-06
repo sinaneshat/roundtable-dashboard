@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Mic, MoreHorizontal, Paperclip, Sparkles, StopCircle } from 'lucide-react';
+import { AlertCircle, Globe, Mic, MoreHorizontal, Paperclip, Sparkles, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useState } from 'react';
 
@@ -70,6 +70,7 @@ export const ChatInputToolbarMenu = memo(({
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
+  const hasNoModelsSelected = selectedParticipants.length === 0;
 
   // Handle file input click
   const handleAttachClick = useCallback(() => {
@@ -93,15 +94,21 @@ export const ChatInputToolbarMenu = memo(({
           size="sm"
           disabled={disabled}
           onClick={onOpenModelModal}
-          className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+          className={cn(
+            'h-9 rounded-2xl gap-1.5 text-xs px-3',
+            hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/10',
+          )}
         >
+          {hasNoModelsSelected && <AlertCircle className="size-3.5" />}
           <span>{t('chat.models.models')}</span>
-          <AvatarGroup
-            participants={selectedParticipants}
-            allModels={allModels}
-            size="sm"
-            maxVisible={3}
-          />
+          {!hasNoModelsSelected && (
+            <AvatarGroup
+              participants={selectedParticipants}
+              allModels={allModels}
+              size="sm"
+              maxVisible={3}
+            />
+          )}
         </Button>
         {/* Mode button */}
         <Button
@@ -181,27 +188,48 @@ export const ChatInputToolbarMenu = memo(({
           <button
             type="button"
             onClick={onOpenModelModal}
-            className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors"
+            className={cn(
+              'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+              hasNoModelsSelected
+                ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
+                : 'bg-white/5 hover:bg-white/10 active:bg-white/15',
+            )}
           >
-            <div className="flex items-center justify-center size-10 rounded-full bg-cyan-500/10">
-              <Sparkles className="size-5 text-cyan-400" />
+            <div className={cn(
+              'flex items-center justify-center size-10 rounded-full',
+              hasNoModelsSelected ? 'bg-destructive/20' : 'bg-cyan-500/10',
+            )}
+            >
+              {hasNoModelsSelected
+                ? <AlertCircle className="size-5 text-destructive" />
+                : <Sparkles className="size-5 text-cyan-400" />}
             </div>
             <div className="flex flex-col flex-1 min-w-0 text-left">
-              <span className="text-sm font-medium text-foreground">
+              <span className={cn(
+                'text-sm font-medium',
+                hasNoModelsSelected ? 'text-destructive' : 'text-foreground',
+              )}
+              >
                 {t('chat.models.aiModels')}
               </span>
-              <span className="text-xs text-muted-foreground truncate">
-                {selectedParticipants.length}
-                {' '}
-                {t('chat.toolbar.selected')}
+              <span className={cn(
+                'text-xs truncate',
+                hasNoModelsSelected ? 'text-destructive/70' : 'text-muted-foreground',
+              )}
+              >
+                {hasNoModelsSelected
+                  ? t('chat.models.minimumRequired.description', { count: 1 })
+                  : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
               </span>
             </div>
-            <AvatarGroup
-              participants={selectedParticipants}
-              allModels={allModels}
-              size="sm"
-              maxVisible={3}
-            />
+            {!hasNoModelsSelected && (
+              <AvatarGroup
+                participants={selectedParticipants}
+                allModels={allModels}
+                size="sm"
+                maxVisible={3}
+              />
+            )}
           </button>
 
           {/* Conversation Mode */}

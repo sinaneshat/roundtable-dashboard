@@ -44,7 +44,7 @@ import type {
   updateProjectRoute,
 } from './route';
 import {
-  AddAttachmentToProjectRequestSchema,
+  AddUploadToProjectRequestSchema,
   CreateProjectMemoryRequestSchema,
   CreateProjectRequestSchema,
   ListProjectAttachmentsQuerySchema,
@@ -443,7 +443,7 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
   {
     auth: 'session',
     validateParams: IdParamSchema,
-    validateBody: AddAttachmentToProjectRequestSchema,
+    validateBody: AddUploadToProjectRequestSchema,
     operationName: 'addUploadToProject',
   },
   async (c) => {

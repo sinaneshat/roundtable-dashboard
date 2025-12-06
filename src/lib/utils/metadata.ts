@@ -34,6 +34,8 @@ import {
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
 
+import { isObject } from './type-guards';
+
 // ============================================================================
 // Type Guards with Zod Validation
 // ============================================================================
@@ -161,28 +163,26 @@ export function extractMessageMetadata(
  * @returns ISO date string or null
  */
 export function getCreatedAt(message: unknown): string | null {
-  if (!message || typeof message !== 'object') {
+  // ✅ TYPE-SAFE: Use type guard instead of force cast
+  if (!isObject(message)) {
     return null;
   }
 
-  const msg = message as Record<string, unknown>;
-
   // 1. Check direct createdAt property (ChatMessage or extended UIMessage)
-  if ('createdAt' in msg && msg.createdAt !== undefined) {
-    if (msg.createdAt instanceof Date) {
-      return msg.createdAt.toISOString();
+  if ('createdAt' in message && message.createdAt !== undefined) {
+    if (message.createdAt instanceof Date) {
+      return message.createdAt.toISOString();
     }
-    if (typeof msg.createdAt === 'string') {
-      return msg.createdAt;
+    if (typeof message.createdAt === 'string') {
+      return message.createdAt;
     }
   }
 
   // 2. Check metadata.createdAt (our custom metadata field)
-  if ('metadata' in msg && msg.metadata && typeof msg.metadata === 'object') {
-    const metadata = msg.metadata as Record<string, unknown>;
-    if ('createdAt' in metadata && metadata.createdAt !== undefined) {
-      if (typeof metadata.createdAt === 'string') {
-        return metadata.createdAt;
+  if ('metadata' in message && isObject(message.metadata)) {
+    if ('createdAt' in message.metadata && message.metadata.createdAt !== undefined) {
+      if (typeof message.metadata.createdAt === 'string') {
+        return message.metadata.createdAt;
       }
     }
   }

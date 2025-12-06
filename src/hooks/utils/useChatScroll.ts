@@ -214,7 +214,8 @@ export function useChatScroll({
 
   // ============================================================================
   // EFFECT 2: ResizeObserver on scroll anchor to detect ANY content growth
-  // ✅ This catches loader text, streaming text, new messages - EVERYTHING
+  // ✅ Auto-scroll DISABLED during streaming (ChatGPT-style behavior)
+  // ✅ Auto-scroll ENABLED for showLoader only (pre-streaming phases)
   // ============================================================================
   const isActive = isStreaming || showLoader;
 
@@ -244,13 +245,18 @@ export function useChatScroll({
       if (!contentGrew)
         return;
 
+      // ✅ DISABLE AUTO-SCROLL DURING STREAMING
+      // Let user read content in place, show scroll button instead
+      if (isStreaming)
+        return;
+
       // ✅ THROTTLE: Max once per 50ms for smooth but not excessive scrolling
       const now = Date.now();
       if (now - scrollThrottleRef.current < 50)
         return;
       scrollThrottleRef.current = now;
 
-      // Auto-scroll to keep bottom in view
+      // Auto-scroll only for non-streaming content (loader, etc)
       requestAnimationFrame(() => {
         if (isAtBottomRef.current && !isProgrammaticScrollRef.current) {
           scrollToBottom('auto');
@@ -261,6 +267,10 @@ export function useChatScroll({
     // ✅ MUTATION OBSERVER: Catches DOM changes that don't trigger resize
     const mutationObserver = new MutationObserver(() => {
       if (!isAtBottomRef.current || isProgrammaticScrollRef.current)
+        return;
+
+      // ✅ DISABLE AUTO-SCROLL DURING STREAMING
+      if (isStreaming)
         return;
 
       // ✅ THROTTLE
@@ -300,7 +310,7 @@ export function useChatScroll({
       resizeObserver.disconnect();
       mutationObserver.disconnect();
     };
-  }, [isActive, scrollAnchorRef, scrollToBottom]);
+  }, [isActive, isStreaming, scrollAnchorRef, scrollToBottom]);
 
   // ============================================================================
   // EFFECT 3: Initial scroll when loading/streaming starts

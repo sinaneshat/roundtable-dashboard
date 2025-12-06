@@ -5,23 +5,24 @@
  * Consolidates thread-specific logic (participant sync, changelog management)
  * Uses TanStack Query for data fetching - no setTimeout/timing patterns
  *
+ * ✅ REFACTORED: Uses shared hooks from /src/stores/chat/hooks/
+ * - useConfigChangeHandlers: Config change handling (mode, participants, web search)
+ *
  * Location: /src/stores/chat/actions/thread-actions.ts
  * Used by: ChatThreadScreen
  */
 
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import type { ChatThread } from '@/db/validation';
-import type { ChatModeId } from '@/lib/config/chat-modes';
-import { queryKeys } from '@/lib/data/query-keys';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { sortByPriority } from '@/lib/utils/participant';
+
+import type { UseConfigChangeHandlersReturn } from '../hooks';
+import { useConfigChangeHandlers } from '../hooks';
 
 export type UseThreadActionsOptions = {
   /** Thread slug for query invalidation */
@@ -32,23 +33,13 @@ export type UseThreadActionsOptions = {
   isChangelogFetching: boolean;
 };
 
-export type UseThreadActionsReturn = {
-  /** Handle mode change with config change tracking */
-  handleModeChange: (mode: ChatModeId) => void;
-  /** Handle participants change with config change tracking */
-  handleParticipantsChange: (participants: ParticipantConfig[]) => void;
-  /** Handle web search toggle with config change tracking */
-  handleWebSearchToggle: (enabled: boolean) => void;
-};
-
 /**
  * Hook for managing thread screen actions
  *
  * Consolidates:
  * - Participant sync from context to form state
  * - Changelog wait flag management (clears when fetch completes)
- * - Mode/participant change handlers with config tracking
- * - Query invalidation for proper data updates
+ * - Mode/participant change handlers with config tracking (via useConfigChangeHandlers)
  *
  * Uses TanStack Query for data fetching - no setTimeout/timing patterns
  *
@@ -61,27 +52,24 @@ export type UseThreadActionsReturn = {
  *
  * <ChatModeSelector onModeChange={threadActions.handleModeChange} />
  */
-export function useThreadActions(options: UseThreadActionsOptions): UseThreadActionsReturn {
+export function useThreadActions(options: UseThreadActionsOptions): UseConfigChangeHandlersReturn {
   const { slug, isRoundInProgress, isChangelogFetching } = options;
 
-  // Query client for invalidation
-  const queryClient = useQueryClient();
+  // ✅ REFACTORED: Use shared hook for config change handlers
+  const configHandlers = useConfigChangeHandlers({ slug, isRoundInProgress });
 
   // Batch related state selectors with useShallow for performance
   const contextParticipants = useChatStore(s => s.participants);
 
   // Flags - batch with useShallow
-  const flags = useChatStore(useShallow(s => ({
+  const { hasPendingConfigChanges, isWaitingForChangelog } = useChatStore(useShallow(s => ({
     hasPendingConfigChanges: s.hasPendingConfigChanges,
     isWaitingForChangelog: s.isWaitingForChangelog,
   })));
 
-  // Actions - batch with useShallow
+  // Actions - batched with useShallow for stable reference
   const actions = useChatStore(useShallow(s => ({
     setSelectedParticipants: s.setSelectedParticipants,
-    setSelectedMode: s.setSelectedMode,
-    setEnableWebSearch: s.setEnableWebSearch,
-    setHasPendingConfigChanges: s.setHasPendingConfigChanges,
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
   })));
 
@@ -93,127 +81,53 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
    * Allows users to modify participants and have changes staged until next message
    */
   useEffect(() => {
-    if (contextParticipants.length === 0) {
+    if (contextParticipants.length === 0)
       return;
-    }
+    if (isRoundInProgress || hasPendingConfigChanges)
+      return;
 
-    if (isRoundInProgress || flags.hasPendingConfigChanges) {
+    // ✅ FIX: Detect new participants by checking if id === modelId (not persisted yet)
+    const hasNewParticipants = contextParticipants.some(p => p.id === p.modelId);
+    if (hasNewParticipants)
       return;
-    }
-
-    const hasTemporaryIds = contextParticipants.some(p => p.id.startsWith('participant-'));
-    if (hasTemporaryIds) {
-      return;
-    }
 
     // Use participant comparison utility (with ID for context tracking)
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-    const contextKey = sortByPriority(contextParticipants.filter(p => p.isEnabled))
-      .map(p => `${p.id}:${p.modelId}:${p.priority}`)
-      .join('|');
+    const enabledParticipants = sortByPriority(contextParticipants.filter(p => p.isEnabled));
+    const contextKey = enabledParticipants.map(p => `${p.id}:${p.modelId}:${p.priority}`).join('|');
 
-    if (contextKey === lastSyncedContextRef.current) {
+    if (contextKey === lastSyncedContextRef.current)
       return;
-    }
-
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-    const syncedParticipants: ParticipantConfig[] = sortByPriority(contextParticipants.filter(p => p.isEnabled))
-      .map((p, index) => ({
-        id: p.id,
-        modelId: p.modelId,
-        role: p.role,
-        customRoleId: p.customRoleId || undefined,
-        priority: index,
-      }));
 
     lastSyncedContextRef.current = contextKey;
-    actions.setSelectedParticipants(syncedParticipants);
-    // ✅ STABLE DEPS: Zustand store actions are stable, exclude from deps to prevent infinite loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextParticipants, isRoundInProgress, flags.hasPendingConfigChanges]);
+    actions.setSelectedParticipants(enabledParticipants.map((p, index) => ({
+      id: p.id,
+      modelId: p.modelId,
+      role: p.role,
+      customRoleId: p.customRoleId || undefined,
+      priority: index,
+    })));
+  }, [contextParticipants, isRoundInProgress, hasPendingConfigChanges, actions]);
 
   /**
    * Clear changelog waiting flag when changelog fetch completes
    * Uses TanStack Query status for proper async coordination
-   *
-   * ✅ FIX: Clear immediately if already not fetching when flag set
-   * Previous logic only cleared on transition (fetching → complete)
-   * If changelog already complete, flag stuck forever → message never sends
-   *
-   * ✅ SAFETY NET: Auto-timeout after 30s to prevent permanent blocking
-   * Primary path relies on React Query completion, timeout is last resort
-   * If timeout triggers frequently, indicates changelog query issues
    */
   useEffect(() => {
-    // PRIMARY PATH: Clear waiting flag when changelog is not fetching
-    // This handles both:
-    // 1. Transition from fetching → complete (original case)
-    // 2. Already complete when flag set (new case - fixes stuck messages)
-    if (flags.isWaitingForChangelog && !isChangelogFetching) {
+    // Clear immediately if not fetching
+    if (isWaitingForChangelog && !isChangelogFetching) {
       actions.setIsWaitingForChangelog(false);
       return undefined;
     }
 
-    // SAFETY NET: Auto-release after 30s if changelog query hangs
-    // This should rarely trigger - React Query has its own timeout handling
-    // If this triggers frequently, indicates changelog query or network issues
-    if (flags.isWaitingForChangelog) {
-      const SAFETY_TIMEOUT_MS = 30000; // 30 seconds (increased from 10s)
-      const timeout = setTimeout(() => {
-        actions.setIsWaitingForChangelog(false);
-      }, SAFETY_TIMEOUT_MS);
-
+    // Safety timeout for edge cases
+    if (isWaitingForChangelog) {
+      const timeout = setTimeout(() => actions.setIsWaitingForChangelog(false), 30000);
       return () => clearTimeout(timeout);
     }
 
     return undefined;
-    // ✅ STABLE DEPS: Zustand store actions are stable, exclude from deps to prevent infinite loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flags.isWaitingForChangelog, isChangelogFetching]);
+  }, [isWaitingForChangelog, isChangelogFetching, actions]);
 
-  /**
-   * Factory for creating config change handlers with consistent behavior
-   * All handlers: guard check → state update → mark pending → invalidate queries
-   */
-  const createConfigChangeHandler = useCallback(<TValue>(
-    stateSetter: (value: TValue) => void,
-  ) => {
-    return (value: TValue) => {
-      if (isRoundInProgress)
-        return;
-      stateSetter(value);
-      actions.setHasPendingConfigChanges(true);
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
-    };
-  }, [isRoundInProgress, actions, queryClient, slug]);
-
-  /** Handle mode change with config change tracking */
-  const handleModeChange = useCallback(
-    (value: ChatThread['mode']) => {
-      createConfigChangeHandler(actions.setSelectedMode)(value);
-    },
-    [createConfigChangeHandler, actions.setSelectedMode],
-  );
-
-  /** Handle participants change with config change tracking */
-  const handleParticipantsChange = useCallback(
-    (value: ParticipantConfig[]) => {
-      createConfigChangeHandler(actions.setSelectedParticipants)(value);
-    },
-    [createConfigChangeHandler, actions.setSelectedParticipants],
-  );
-
-  /** Handle web search toggle with config change tracking */
-  const handleWebSearchToggle = useCallback(
-    (value: boolean) => {
-      createConfigChangeHandler(actions.setEnableWebSearch)(value);
-    },
-    [createConfigChangeHandler, actions.setEnableWebSearch],
-  );
-
-  return useMemoizedReturn({
-    handleModeChange,
-    handleParticipantsChange,
-    handleWebSearchToggle,
-  }, [handleModeChange, handleParticipantsChange, handleWebSearchToggle]);
+  // ✅ REFACTORED: Return config handlers from shared hook
+  return useMemoizedReturn(configHandlers, [configHandlers]);
 }

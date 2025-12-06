@@ -54,6 +54,7 @@ import {
   enrichMessageWithParticipant,
   getAssistantMetadata,
   getParticipantId,
+  getPreSearchMetadata,
   getRoundNumber,
   getUserMetadata,
   hasParticipantEnrichment,
@@ -232,18 +233,22 @@ export function chatMessagesToUIMessages(
 
           if (participant && !hasParticipantEnrichment(message.metadata)) {
             const baseMetadata = getAssistantMetadata(message.metadata);
+            // Use buildAssistantMetadata to create valid metadata
+            const metadataForEnrichment = buildAssistantMetadata(
+              baseMetadata || {},
+              {
+                roundNumber: explicitRound,
+                participantId: participant.id,
+                model: participant.modelId,
+                participantRole: participant.role,
+                participantIndex: 0,
+              },
+            );
+
             return {
               ...message,
               metadata: enrichMessageWithParticipant(
-                baseMetadata
-                  ? ({
-                      ...baseMetadata,
-                      role: message.role,
-                    } as DbMessageMetadata)
-                  : ({
-                      role: message.role,
-                      roundNumber: explicitRound,
-                    } as DbMessageMetadata),
+                metadataForEnrichment,
                 {
                   id: participant.id,
                   modelId: participant.modelId,
@@ -319,7 +324,9 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = null;
         }
       } else {
-        enrichedMetadata = message.metadata as DbMessageMetadata;
+        // isPreSearchMsg is true - validate and use pre-search metadata
+        const preSearchMeta = getPreSearchMetadata(message.metadata);
+        enrichedMetadata = preSearchMeta;
       }
     } else {
       enrichedMetadata = null;

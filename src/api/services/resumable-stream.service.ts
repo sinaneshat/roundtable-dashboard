@@ -26,7 +26,7 @@ import type { TypedLogger } from '@/api/types/logger';
 import type { SSEChunk, StreamMetadata } from '@/api/types/streaming';
 import {
   SSEChunksArraySchema,
-  STREAM_TTL_SECONDS,
+  STREAM_BUFFER_TTL_SECONDS,
   StreamMetadataSchema,
 } from '@/api/types/streaming';
 
@@ -96,21 +96,21 @@ export async function createResumableStream(
     await env.KV.put(
       getStreamMetadataKey(streamId),
       JSON.stringify(metadata),
-      { expirationTtl: STREAM_TTL_SECONDS },
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
     // Initialize empty chunks array
     await env.KV.put(
       getStreamChunksKey(streamId),
       JSON.stringify([]),
-      { expirationTtl: STREAM_TTL_SECONDS },
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
     // Track as active stream
     await env.KV.put(
       getActiveStreamKey(threadId, roundNumber, participantIndex),
       streamId,
-      { expirationTtl: STREAM_TTL_SECONDS },
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
     if (logger) {
@@ -176,7 +176,7 @@ export async function appendStreamChunk(
     await env.KV.put(
       chunksKey,
       JSON.stringify(updatedChunks),
-      { expirationTtl: STREAM_TTL_SECONDS },
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
     // Update metadata with Zod validation
@@ -194,7 +194,7 @@ export async function appendStreamChunk(
       await env.KV.put(
         metadataKey,
         JSON.stringify(updatedMetadata),
-        { expirationTtl: STREAM_TTL_SECONDS },
+        { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
       );
     }
   } catch (error) {
@@ -336,7 +336,7 @@ export async function updateStreamStatus(
     await env.KV.put(
       getStreamMetadataKey(streamId),
       JSON.stringify(metadata),
-      { expirationTtl: STREAM_TTL_SECONDS },
+      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
     if (logger) {

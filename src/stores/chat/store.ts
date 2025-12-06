@@ -61,25 +61,25 @@
  * - TrackingSlice: Deduplication and tracking
  * - CallbacksSlice: Completion and retry callbacks
  * - ScreenSlice: Screen mode and readonly state
- * - OperationsSlice: Composite operations
+ * - OperationsActions: Composite operations
  *
  * PATTERN: Slices + Vanilla + Context (official Next.js pattern)
  * TYPES: All inferred from Zod schemas in store-schemas.ts
  */
 
 import type { UIMessage } from 'ai';
+import { castDraft, current, enableMapSet } from 'immer';
 import type { z } from 'zod';
 import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
-import type { AnalysisStatus, FeedbackType, ScreenMode } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModeSchema, MessagePartTypes, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import type { ScreenMode } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
-  PreSearchDataPayload,
   Recommendation,
-  RoundFeedbackData,
   StoredModeratorAnalysis,
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
@@ -129,9 +129,8 @@ import type {
   FeedbackSlice,
   FlagsSlice,
   FormSlice,
-  OperationsSlice,
+  OperationsActions,
   ParticipantConfig,
-  PendingAttachment,
   PreSearchSlice,
   ScreenSlice,
   StreamResumptionSlice,
@@ -141,6 +140,9 @@ import type {
 } from './store-schemas';
 
 type ChatMode = z.infer<typeof ChatModeSchema>;
+
+// Enable Map/Set support for Immer (required for feedbackByRound, preSearchActivityTimes, etc.)
+enableMapSet();
 
 // ============================================================================
 // RE-EXPORT TYPES FROM SCHEMAS (Single Source of Truth)
@@ -158,7 +160,7 @@ export type { ChatStore } from './store-schemas';
  */
 const createFormSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   FormSlice
 > = (set, get) => ({
@@ -174,34 +176,38 @@ const createFormSlice: StateCreator<
     set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
   setModelOrder: (modelIds: string[]) =>
     set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
+  // ✅ IMMER: Direct mutations instead of spread patterns
   addParticipant: (participant: ParticipantConfig) =>
-    set(state => ({
-      selectedParticipants: state.selectedParticipants.some(p => p.modelId === participant.modelId)
-        ? state.selectedParticipants
-        : [...state.selectedParticipants, { ...participant, priority: state.selectedParticipants.length }],
-    }), false, 'form/addParticipant'),
-  removeParticipant: (participantId: string) =>
-    set(state => ({
-      selectedParticipants: state.selectedParticipants
-        .filter(p => p.id !== participantId && p.modelId !== participantId)
-        .map((p, index) => ({ ...p, priority: index })),
-    }), false, 'form/removeParticipant'),
-  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
-    set(state => ({
-      selectedParticipants: state.selectedParticipants.map(p =>
-        p.id === participantId ? { ...p, ...updates } : p,
-      ),
-    }), false, 'form/updateParticipant'),
-  reorderParticipants: (fromIndex: number, toIndex: number) =>
-    set((state) => {
-      const copy = [...state.selectedParticipants];
-      const [removed] = copy.splice(fromIndex, 1);
-      if (removed) {
-        copy.splice(toIndex, 0, removed);
+    set((draft) => {
+      if (!draft.selectedParticipants.some(p => p.modelId === participant.modelId)) {
+        draft.selectedParticipants.push({ ...participant, priority: draft.selectedParticipants.length });
       }
-      return {
-        selectedParticipants: copy.map((p, index) => ({ ...p, priority: index })),
-      };
+    }, false, 'form/addParticipant'),
+  removeParticipant: (participantId: string) =>
+    set((draft) => {
+      const idx = draft.selectedParticipants.findIndex(p => p.id === participantId || p.modelId === participantId);
+      if (idx !== -1) {
+        draft.selectedParticipants.splice(idx, 1);
+        draft.selectedParticipants.forEach((p, i) => {
+          p.priority = i;
+        });
+      }
+    }, false, 'form/removeParticipant'),
+  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
+    set((draft) => {
+      const p = draft.selectedParticipants.find(p => p.id === participantId);
+      if (p)
+        Object.assign(p, updates);
+    }, false, 'form/updateParticipant'),
+  reorderParticipants: (fromIndex: number, toIndex: number) =>
+    set((draft) => {
+      const [removed] = draft.selectedParticipants.splice(fromIndex, 1);
+      if (removed) {
+        draft.selectedParticipants.splice(toIndex, 0, removed);
+        draft.selectedParticipants.forEach((p, i) => {
+          p.priority = i;
+        });
+      }
     }, false, 'form/reorderParticipants'),
   resetForm: () =>
     set(FORM_DEFAULTS, false, 'form/resetForm'),
@@ -253,27 +259,23 @@ const createFormSlice: StateCreator<
  */
 const createFeedbackSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   FeedbackSlice
 > = set => ({
   ...FEEDBACK_DEFAULTS,
 
-  setFeedback: (roundNumber: number, type: FeedbackType | null) =>
-    set((state) => {
-      const updated = new Map(state.feedbackByRound);
-      updated.set(roundNumber, type);
-      return { feedbackByRound: updated };
+  setFeedback: (roundNumber, type) =>
+    set((draft) => {
+      draft.feedbackByRound.set(roundNumber, type);
     }, false, 'feedback/setFeedback'),
-  setPendingFeedback: (feedback: { roundNumber: number; type: FeedbackType } | null) =>
+  setPendingFeedback: feedback =>
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-  clearFeedback: (roundNumber: number) =>
-    set((state) => {
-      const updated = new Map(state.feedbackByRound);
-      updated.delete(roundNumber);
-      return { feedbackByRound: updated };
+  clearFeedback: roundNumber =>
+    set((draft) => {
+      draft.feedbackByRound.delete(roundNumber);
     }, false, 'feedback/clearFeedback'),
-  loadFeedbackFromServer: (data: RoundFeedbackData[]) =>
+  loadFeedbackFromServer: data =>
     set({
       feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
       hasLoadedFeedback: true,
@@ -288,7 +290,7 @@ const createFeedbackSlice: StateCreator<
  */
 const createUISlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   UISlice
 > = set => ({
@@ -312,7 +314,7 @@ const createUISlice: StateCreator<
  */
 const createAnalysisSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   AnalysisSlice
 > = set => ({
@@ -320,72 +322,53 @@ const createAnalysisSlice: StateCreator<
 
   setAnalyses: (analyses: StoredModeratorAnalysis[]) =>
     set({ analyses }, false, 'analysis/setAnalyses'),
+  // ✅ IMMER: Direct mutations
   addAnalysis: (analysis: StoredModeratorAnalysis) =>
-    set((state) => {
-      // ✅ CRITICAL FIX: Deduplicate by roundNumber to prevent retrigger bug
-      // Multiple trigger points (Provider, FlowStateMachine) can race to add
-      // analyses for the same round. Without deduplication, both would be added
-      // causing the stream to retrigger and data mismatch issues.
-      const exists = state.analyses.some(
+    set((draft) => {
+      // Deduplicate by roundNumber to prevent retrigger bug
+      const exists = draft.analyses.some(
         a => a.threadId === analysis.threadId && a.roundNumber === analysis.roundNumber,
       );
-
-      if (exists) {
-        // eslint-disable-next-line no-console
-        console.debug(
-          '[addAnalysis] Skipping duplicate analysis for round',
-          analysis.roundNumber,
-          'threadId',
-          analysis.threadId,
-        );
-        return state;
+      if (!exists) {
+        draft.analyses.push(analysis);
       }
-
-      return {
-        analyses: [...state.analyses, analysis],
-      };
     }, false, 'analysis/addAnalysis'),
   updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) =>
-    set(state => ({
-      analyses: state.analyses.map((a) => {
-        if (a.roundNumber !== roundNumber) {
-          return a;
-        }
-
-        // Validate mode from analysis payload (comes as string from backend)
+    set((draft) => {
+      const a = draft.analyses.find(a => a.roundNumber === roundNumber);
+      if (a) {
+        // Update mode at analysis level
         const modeResult = ChatModeSchema.safeParse(data.mode);
-        const mode = modeResult.success ? modeResult.data : a.mode; // Fallback to existing mode
-
-        return {
-          ...a,
-          analysisData: {
-            ...data,
-            mode,
-          },
-          status: AnalysisStatuses.COMPLETE,
-        };
-      }),
-    }), false, 'analysis/updateAnalysisData'),
-  updateAnalysisStatus: (roundNumber: number, status: AnalysisStatus) =>
-    set(state => ({
-      analyses: state.analyses.map(a =>
-        a.roundNumber === roundNumber
-          ? { ...a, status }
-          : a,
-      ),
-    }), false, 'analysis/updateAnalysisStatus'),
-  updateAnalysisError: (roundNumber: number, errorMessage: string) =>
-    set(state => ({
-      analyses: state.analyses.map(a =>
-        a.roundNumber === roundNumber
-          ? { ...a, status: AnalysisStatuses.FAILED, errorMessage }
-          : a,
-      ),
-    }), false, 'analysis/updateAnalysisError'),
-  removeAnalysis: (roundNumber: number) =>
-    set(state => ({
-      analyses: state.analyses.filter(a => a.roundNumber !== roundNumber),
-    }), false, 'analysis/removeAnalysis'),
+        if (modeResult.success)
+          a.mode = modeResult.data;
+        // analysisData excludes roundNumber, mode, userQuestion (stored at analysis level)
+        const { roundNumber: _, mode: __, userQuestion: ___, ...analysisContent } = data;
+        a.analysisData = analysisContent;
+        a.status = AnalysisStatuses.COMPLETE;
+      }
+    }, false, 'analysis/updateAnalysisData'),
+  updateAnalysisStatus: (roundNumber, status) =>
+    set((draft) => {
+      draft.analyses.forEach((a) => {
+        if (a.roundNumber === roundNumber)
+          a.status = status;
+      });
+    }, false, 'analysis/updateAnalysisStatus'),
+  updateAnalysisError: (roundNumber, errorMessage) =>
+    set((draft) => {
+      draft.analyses.forEach((a) => {
+        if (a.roundNumber === roundNumber) {
+          a.status = AnalysisStatuses.FAILED;
+          a.errorMessage = errorMessage;
+        }
+      });
+    }, false, 'analysis/updateAnalysisError'),
+  removeAnalysis: roundNumber =>
+    set((draft) => {
+      const idx = draft.analyses.findIndex(a => a.roundNumber === roundNumber);
+      if (idx !== -1)
+        draft.analyses.splice(idx, 1);
+    }, false, 'analysis/removeAnalysis'),
   clearAllAnalyses: () =>
     set(ANALYSIS_DEFAULTS, false, 'analysis/clearAllAnalyses'),
   createPendingAnalysis: (params: { roundNumber: number; messages: UIMessage[]; userQuestion: string; threadId: string; mode: ChatMode }) => {
@@ -508,46 +491,23 @@ const createAnalysisSlice: StateCreator<
       createdAt: new Date(),
     };
 
-    // ✅ CRITICAL FIX: Add to store with deduplication OR update placeholder
-    // Check if analysis already exists before adding (defense-in-depth)
-    // Even with markAnalysisCreated() called first, React state batching
-    // can cause this to be called twice before state propagates
-    //
-    // ✅ EAGER RENDERING FIX: If a placeholder exists (empty participantMessageIds),
-    // update it with real data instead of skipping. This enables the eager UI pattern
-    // where placeholders are created immediately for loading states.
-    set((state) => {
-      // Check if analysis already exists for this thread+round
-      const existingIndex = state.analyses.findIndex(
+    // ✅ IMMER: Direct mutation with deduplication
+    set((draft) => {
+      const existingIndex = draft.analyses.findIndex(
         a => a.threadId === threadId && a.roundNumber === roundNumber,
       );
 
       if (existingIndex >= 0) {
-        const existing = state.analyses[existingIndex]!;
-
-        // ✅ FIX: If existing is a placeholder (empty participantMessageIds), update it
-        // Placeholder analyses are created for eager UI rendering with loading states
-        // When participants finish, we update the placeholder with real participantMessageIds
+        const existing = draft.analyses[existingIndex]!;
+        // Update placeholder (empty participantMessageIds) with real data
         if (!existing.participantMessageIds || existing.participantMessageIds.length === 0) {
-          const updatedAnalyses = [...state.analyses];
-          updatedAnalyses[existingIndex] = {
-            ...existing,
-            ...pendingAnalysis,
-            // Keep original ID and createdAt from placeholder
-            id: existing.id,
-            createdAt: existing.createdAt,
-          };
-          return { analyses: updatedAnalyses };
+          Object.assign(existing, pendingAnalysis, { id: existing.id, createdAt: existing.createdAt });
         }
-
-        // Real analysis exists, skip
-        return state;
+        // else: Real analysis exists, skip
+      } else {
+        // Add new analysis
+        draft.analyses.push(pendingAnalysis);
       }
-
-      // Safe to add new analysis
-      return {
-        analyses: [...state.analyses, pendingAnalysis],
-      };
     }, false, 'analysis/createPendingAnalysis');
   },
 });
@@ -558,7 +518,7 @@ const createAnalysisSlice: StateCreator<
  */
 const createPreSearchSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   PreSearchSlice
 > = (set, get) => ({
@@ -566,131 +526,87 @@ const createPreSearchSlice: StateCreator<
 
   setPreSearches: (preSearches: StoredPreSearch[]) =>
     set({ preSearches }, false, 'preSearch/setPreSearches'),
+  // ✅ IMMER: Direct mutations + race condition fix
   addPreSearch: (preSearch: StoredPreSearch) =>
-    set((state) => {
-      // ✅ CRITICAL FIX: Handle race condition between orchestrator and provider
-      // Race condition: Provider creates pre-search → mutation's onSuccess invalidates query
-      // → orchestrator syncs PENDING → provider's .then() tries to add STREAMING
-      // Without this fix: STREAMING is skipped, PreSearchStream sees PENDING and triggers duplicate POST
-      const existingIndex = state.preSearches.findIndex(
+    set((draft) => {
+      const existingIndex = draft.preSearches.findIndex(
         ps => ps.threadId === preSearch.threadId && ps.roundNumber === preSearch.roundNumber,
       );
 
       if (existingIndex !== -1) {
-        const existing = state.preSearches[existingIndex];
+        const existing = draft.preSearches[existingIndex];
         if (!existing)
-          return state;
+          return;
 
-        // ✅ RACE CONDITION FIX: If existing is PENDING and new is STREAMING, UPDATE instead of skip
-        // This ensures PreSearchStream sees STREAMING status and doesn't trigger duplicate POST
-        // Status priority: STREAMING > PENDING (provider's execution should win over orchestrator's sync)
+        // Race condition fix: STREAMING > PENDING (provider wins over orchestrator)
         if (existing.status === AnalysisStatuses.PENDING && preSearch.status === AnalysisStatuses.STREAMING) {
-          const updatedPreSearches = [...state.preSearches];
-          updatedPreSearches[existingIndex] = {
-            ...existing,
-            ...preSearch,
-            status: AnalysisStatuses.STREAMING,
-          };
-          return { preSearches: updatedPreSearches };
+          Object.assign(existing, preSearch, { status: AnalysisStatuses.STREAMING });
         }
-
-        // Otherwise skip duplicate (same round, already at same or better status)
-        return state;
+        // Otherwise skip duplicate
+        return;
       }
 
-      return {
-        preSearches: [...state.preSearches, preSearch],
-      };
+      draft.preSearches.push(preSearch);
     }, false, 'preSearch/addPreSearch'),
-  updatePreSearchData: (roundNumber: number, data: PreSearchDataPayload) =>
-    set(state => ({
-      preSearches: state.preSearches.map(ps =>
-        ps.roundNumber === roundNumber
-          ? { ...ps, searchData: data, status: AnalysisStatuses.COMPLETE }
-          : ps,
-      ),
-    }), false, 'preSearch/updatePreSearchData'),
-  updatePreSearchStatus: (roundNumber: number, status: AnalysisStatus) =>
-    set(state => ({
-      preSearches: state.preSearches.map(ps =>
-        ps.roundNumber === roundNumber
-          ? { ...ps, status }
-          : ps,
-      ),
-    }), false, 'preSearch/updatePreSearchStatus'),
+  updatePreSearchData: (roundNumber, data) =>
+    set((draft) => {
+      draft.preSearches.forEach((ps) => {
+        if (ps.roundNumber === roundNumber) {
+          ps.searchData = data;
+          ps.status = AnalysisStatuses.COMPLETE;
+        }
+      });
+    }, false, 'preSearch/updatePreSearchData'),
+  updatePreSearchStatus: (roundNumber, status) =>
+    set((draft) => {
+      draft.preSearches.forEach((ps) => {
+        if (ps.roundNumber === roundNumber)
+          ps.status = status;
+      });
+    }, false, 'preSearch/updatePreSearchStatus'),
   updatePreSearchError: (roundNumber: number, errorMessage: string | null) =>
-    set(state => ({
-      preSearches: state.preSearches.map(ps =>
-        ps.roundNumber === roundNumber
-          ? { ...ps, status: AnalysisStatuses.FAILED, errorMessage }
-          : ps,
-      ),
-    }), false, 'preSearch/updatePreSearchError'),
-  removePreSearch: (roundNumber: number) =>
-    set(state => ({
-      preSearches: state.preSearches.filter(ps => ps.roundNumber !== roundNumber),
-    }), false, 'preSearch/removePreSearch'),
+    set((draft) => {
+      draft.preSearches.forEach((ps) => {
+        if (ps.roundNumber === roundNumber) {
+          ps.status = AnalysisStatuses.FAILED;
+          ps.errorMessage = errorMessage;
+        }
+      });
+    }, false, 'preSearch/updatePreSearchError'),
+  removePreSearch: roundNumber =>
+    set((draft) => {
+      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
+      if (idx !== -1)
+        draft.preSearches.splice(idx, 1);
+    }, false, 'preSearch/removePreSearch'),
   clearAllPreSearches: () =>
     set({
       ...PRESEARCH_DEFAULTS,
       triggeredPreSearchRounds: new Set<number>(),
     }, false, 'preSearch/clearAllPreSearches'),
   checkStuckPreSearches: () =>
-    set((state) => {
-      // ✅ ACTIVITY-BASED TIMEOUT: Uses both total time AND activity tracking
-      // Replaces hardcoded 30 second timeout with dynamic calculation that considers:
-      // 1. Total elapsed time (based on query complexity)
-      // 2. Time since last SSE activity (data flow check)
+    set((draft) => {
       const now = Date.now();
-      let hasChanges = false;
-
-      const updatedPreSearches = state.preSearches.map((ps) => {
-        if (ps.status !== AnalysisStatuses.STREAMING && ps.status !== AnalysisStatuses.PENDING) {
-          return ps;
-        }
-
-        // ✅ ACTIVITY-BASED: Check both total time AND activity tracking
-        // A pre-search is considered stuck if:
-        // 1. Total time exceeds dynamic timeout, OR
-        // 2. No SSE activity within ACTIVITY_TIMEOUT_MS
-        const lastActivityTime = state.preSearchActivityTimes.get(ps.roundNumber);
+      draft.preSearches.forEach((ps) => {
+        if (ps.status !== AnalysisStatuses.STREAMING && ps.status !== AnalysisStatuses.PENDING)
+          return;
+        const lastActivityTime = draft.preSearchActivityTimes.get(ps.roundNumber);
         if (shouldPreSearchTimeout(ps, lastActivityTime, now)) {
-          hasChanges = true;
-          // Mark as complete to unblock message sending
-          return { ...ps, status: AnalysisStatuses.COMPLETE };
+          ps.status = AnalysisStatuses.COMPLETE;
         }
-
-        return ps;
       });
-
-      if (!hasChanges) {
-        return state;
-      }
-
-      // If we auto-completed any pre-searches, we should also check if we need to send pending message
-      // But that logic is in the Provider effect which watches preSearches.
-      // Updating the store here will trigger that effect.
-
-      return { preSearches: updatedPreSearches };
     }, false, 'preSearch/checkStuckPreSearches'),
 
-  // ✅ ACTIVITY TRACKING: For dynamic timeout calculation based on SSE events
-  updatePreSearchActivity: (roundNumber: number) =>
-    set((state) => {
-      const newActivityTimes = new Map(state.preSearchActivityTimes);
-      newActivityTimes.set(roundNumber, Date.now());
-      return { preSearchActivityTimes: newActivityTimes };
+  updatePreSearchActivity: roundNumber =>
+    set((draft) => {
+      draft.preSearchActivityTimes.set(roundNumber, Date.now());
     }, false, 'preSearch/updatePreSearchActivity'),
 
-  getPreSearchActivityTime: (roundNumber: number) => {
-    return get().preSearchActivityTimes.get(roundNumber);
-  },
+  getPreSearchActivityTime: roundNumber => get().preSearchActivityTimes.get(roundNumber),
 
-  clearPreSearchActivity: (roundNumber: number) =>
-    set((state) => {
-      const newActivityTimes = new Map(state.preSearchActivityTimes);
-      newActivityTimes.delete(roundNumber);
-      return { preSearchActivityTimes: newActivityTimes };
+  clearPreSearchActivity: roundNumber =>
+    set((draft) => {
+      draft.preSearchActivityTimes.delete(roundNumber);
     }, false, 'preSearch/clearPreSearchActivity'),
 });
 
@@ -700,10 +616,10 @@ const createPreSearchSlice: StateCreator<
  */
 const createThreadSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   ThreadSlice
-> = set => ({
+> = (set, get) => ({
   ...THREAD_DEFAULTS,
 
   setThread: (thread: ChatThread | null) =>
@@ -717,52 +633,12 @@ const createThreadSlice: StateCreator<
     // ✅ DEFENSIVE SORT: Always sort participants by priority to ensure correct streaming order
     // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
-  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) =>
-    set((state) => {
-      const newMessages = typeof messages === 'function' ? messages(state.messages) : messages;
-
-      // ✅ DEFENSIVE CHECK: Log when messages have invalid parts structure
-      if (Array.isArray(newMessages)) {
-        newMessages.forEach((msg, idx) => {
-          if (!msg.parts || !Array.isArray(msg.parts)) {
-            console.error('[Store] Message has invalid parts structure:', {
-              messageIndex: idx,
-              messageId: msg.id,
-              role: msg.role,
-              parts: msg.parts,
-              metadata: msg.metadata,
-            });
-          } else {
-            // Check for undefined parts within the array
-            const invalidParts = msg.parts.filter((p, pIdx) => {
-              if (!p || typeof p !== 'object') {
-                console.error('[Store] Message has undefined or invalid part:', {
-                  messageIndex: idx,
-                  messageId: msg.id,
-                  role: msg.role,
-                  partIndex: pIdx,
-                  part: p,
-                  allParts: msg.parts,
-                });
-                return true;
-              }
-              return false;
-            });
-
-            if (invalidParts.length > 0) {
-              console.error('[Store] Message has invalid parts:', {
-                messageIndex: idx,
-                messageId: msg.id,
-                invalidPartCount: invalidParts.length,
-                totalParts: msg.parts.length,
-              });
-            }
-          }
-        });
-      }
-
-      return { messages: newMessages };
-    }, false, 'thread/setMessages'),
+  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {
+    // Use get() to avoid Draft type issues with function callbacks
+    const prevMessages = get().messages;
+    const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
+    set({ messages: newMessages }, false, 'thread/setMessages');
+  },
   setIsStreaming: (isStreaming: boolean) =>
     set({ isStreaming }, false, 'thread/setIsStreaming'),
   setCurrentParticipantIndex: (currentParticipantIndex: number) =>
@@ -773,58 +649,13 @@ const createThreadSlice: StateCreator<
     set({ sendMessage: fn }, false, 'thread/setSendMessage'),
   setStartRound: (fn?: StartRound) =>
     set({ startRound: fn }, false, 'thread/setStartRound'),
-  setStop: (fn?: (() => void)) =>
-    set({ stop: fn }, false, 'thread/setStop'),
   setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
     set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
   checkStuckStreams: () =>
     set((state) => {
-      // Only check if streaming
       if (!state.isStreaming)
         return state;
-
-      // We need to track activity. Since we can't easily store a timestamp in the store
-      // without causing re-renders, we'll rely on the Provider to call this action
-      // ONLY when it detects a timeout.
-
-      // Actually, the Provider logic I wrote earlier handles the detection.
-      // This action is just the "Force Stop" command.
-      // But to make it testable, we should probably move the logic here?
-      // No, the timestamp tracking is best done in the Provider/Effect to avoid store updates on every message chunk.
-
-      // So this action is effectively "Force Stop Streaming"
-
-      // If we want to test the TIMEOUT logic in unit tests, we need the timestamp in the store.
-      // But updating the store on every message chunk is bad for performance.
-
-      // Compromise: The Provider tracks the timestamp. When it detects timeout, it calls this action.
-      // BUT, for the unit test to fail/pass based on logic, the logic needs to be here?
-
-      // Let's make this action accept a "lastActivityTimestamp" and "currentTimestamp"
-      // No, that's messy.
-
-      // Let's stick to the plan: Provider detects timeout -> Calls this action to stop.
-      // The unit test will simulate the "Provider detected timeout" by calling this action.
-      // Wait, that doesn't test the detection logic.
-
-      // To test the detection logic in unit tests, we need the detection logic in the store.
-      // We can add a `lastStreamActivity` to the store, but only update it periodically?
-      // Or update it on every message?
-
-      // Let's go with: This action simply stops streaming.
-      // The Provider handles the detection.
-      // The unit test will verify that IF this action is called, streaming stops.
-      // AND we will add a separate test for the Provider logic (if possible) or just rely on the integration.
-
-      // Actually, the user wants "more tests to catch those problems".
-      // If the detection logic is in a useEffect, it's hard to unit test.
-
-      // Let's move the detection state to a ref in the store? No, store is state.
-
-      // OK, I will implement this action as "force stop" and update the Provider to use it.
-      // I will also update the test to manually call this action to verify it stops streaming.
-      // This verifies the "recovery" part.
-
+      // Force stop streaming - called by Provider when timeout detected
       return { isStreaming: false };
     }, false, 'thread/checkStuckStreams'),
 });
@@ -835,7 +666,7 @@ const createThreadSlice: StateCreator<
  */
 const createFlagsSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   FlagsSlice
 > = set => ({
@@ -859,7 +690,7 @@ const createFlagsSlice: StateCreator<
  */
 const createDataSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   DataSlice
 > = set => ({
@@ -885,43 +716,35 @@ const createDataSlice: StateCreator<
  */
 const createTrackingSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   TrackingSlice
 > = (set, get) => ({
   ...TRACKING_DEFAULTS,
 
-  setHasSentPendingMessage: (value: boolean) =>
+  setHasSentPendingMessage: value =>
     set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
-  markAnalysisCreated: (roundNumber: number) =>
-    set((state) => {
-      const newSet = new Set(state.createdAnalysisRounds);
-      newSet.add(roundNumber);
-      return { createdAnalysisRounds: newSet };
+  markAnalysisCreated: roundNumber =>
+    set((draft) => {
+      draft.createdAnalysisRounds.add(roundNumber);
     }, false, 'tracking/markAnalysisCreated'),
-  hasAnalysisBeenCreated: (roundNumber: number) =>
+  hasAnalysisBeenCreated: roundNumber =>
     get().createdAnalysisRounds.has(roundNumber),
-  clearAnalysisTracking: (roundNumber: number) =>
-    set((state) => {
-      const newSet = new Set(state.createdAnalysisRounds);
-      newSet.delete(roundNumber);
-      return { createdAnalysisRounds: newSet };
+  clearAnalysisTracking: roundNumber =>
+    set((draft) => {
+      draft.createdAnalysisRounds.delete(roundNumber);
     }, false, 'tracking/clearAnalysisTracking'),
-  markPreSearchTriggered: (roundNumber: number) =>
-    set((state) => {
-      const newSet = new Set(state.triggeredPreSearchRounds);
-      newSet.add(roundNumber);
-      return { triggeredPreSearchRounds: newSet };
+  markPreSearchTriggered: roundNumber =>
+    set((draft) => {
+      draft.triggeredPreSearchRounds.add(roundNumber);
     }, false, 'tracking/markPreSearchTriggered'),
-  hasPreSearchBeenTriggered: (roundNumber: number) =>
+  hasPreSearchBeenTriggered: roundNumber =>
     get().triggeredPreSearchRounds.has(roundNumber),
-  clearPreSearchTracking: (roundNumber: number) =>
-    set((state) => {
-      const newSet = new Set(state.triggeredPreSearchRounds);
-      newSet.delete(roundNumber);
-      return { triggeredPreSearchRounds: newSet };
+  clearPreSearchTracking: roundNumber =>
+    set((draft) => {
+      draft.triggeredPreSearchRounds.delete(roundNumber);
     }, false, 'tracking/clearPreSearchTracking'),
-  setHasEarlyOptimisticMessage: (value: boolean) =>
+  setHasEarlyOptimisticMessage: value =>
     set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
 });
 
@@ -931,7 +754,7 @@ const createTrackingSlice: StateCreator<
  */
 const createCallbacksSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   CallbacksSlice
 > = set => ({
@@ -947,7 +770,7 @@ const createCallbacksSlice: StateCreator<
  */
 const createScreenSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   ScreenSlice
 > = set => ({
@@ -968,7 +791,7 @@ const createScreenSlice: StateCreator<
  */
 const createStreamResumptionSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   StreamResumptionSlice
 > = (set, get) => ({
@@ -1063,15 +886,11 @@ const createStreamResumptionSlice: StateCreator<
 
   markResumptionAttempted: (roundNumber, participantIndex) => {
     const key = `${roundNumber}_${participantIndex}`;
-    const attempts = get().resumptionAttempts;
-
-    if (attempts.has(key)) {
-      return false; // Already attempted
-    }
-
-    const newAttempts = new Set(attempts);
-    newAttempts.add(key);
-    set({ resumptionAttempts: newAttempts }, false, 'streamResumption/markResumptionAttempted');
+    if (get().resumptionAttempts.has(key))
+      return false;
+    set((draft) => {
+      draft.resumptionAttempts.add(key);
+    }, false, 'streamResumption/markResumptionAttempted');
     return true;
   },
 
@@ -1098,34 +917,25 @@ const createStreamResumptionSlice: StateCreator<
  */
 const createAnimationSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   AnimationSlice
 > = (set, get) => ({
   ...ANIMATION_DEFAULTS,
 
-  registerAnimation: (participantIndex: number) =>
-    set((state) => {
-      const newPending = new Set(state.pendingAnimations);
-      newPending.add(participantIndex);
-      return { pendingAnimations: newPending };
+  registerAnimation: participantIndex =>
+    set((draft) => {
+      draft.pendingAnimations.add(participantIndex);
     }, false, 'animation/registerAnimation'),
 
-  completeAnimation: (participantIndex: number) =>
-    set((state) => {
-      const newPending = new Set(state.pendingAnimations);
-      newPending.delete(participantIndex);
-
-      // Resolve any waiting promises
-      const resolver = state.animationResolvers.get(participantIndex);
+  completeAnimation: participantIndex =>
+    set((draft) => {
+      draft.pendingAnimations.delete(participantIndex);
+      const resolver = draft.animationResolvers.get(participantIndex);
       if (resolver) {
         resolver();
-        const newResolvers = new Map(state.animationResolvers);
-        newResolvers.delete(participantIndex);
-        return { pendingAnimations: newPending, animationResolvers: newResolvers };
+        draft.animationResolvers.delete(participantIndex);
       }
-
-      return { pendingAnimations: newPending };
     }, false, 'animation/completeAnimation'),
 
   waitForAnimation: (participantIndex: number) => {
@@ -1194,64 +1004,46 @@ const createAnimationSlice: StateCreator<
  */
 const createAttachmentsSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
   AttachmentsSlice
 > = (set, get) => ({
   ...ATTACHMENTS_DEFAULTS,
 
-  addAttachments: (files: File[]) => {
-    const newAttachments: PendingAttachment[] = files.map(file => ({
-      id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      file,
-    }));
+  // ✅ IMMER: Direct mutations instead of spread patterns
+  addAttachments: (files: File[]) =>
+    set((draft) => {
+      files.forEach((file) => {
+        draft.pendingAttachments.push({
+          id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          file,
+        });
+      });
+    }, false, 'attachments/addAttachments'),
 
-    set(
-      state => ({
-        pendingAttachments: [...state.pendingAttachments, ...newAttachments],
-      }),
-      false,
-      'attachments/addAttachments',
-    );
-  },
+  removeAttachment: (id: string) =>
+    set((draft) => {
+      const idx = draft.pendingAttachments.findIndex(a => a.id === id);
+      if (idx !== -1)
+        draft.pendingAttachments.splice(idx, 1);
+    }, false, 'attachments/removeAttachment'),
 
-  removeAttachment: (id: string) => {
-    set(
-      state => ({
-        pendingAttachments: state.pendingAttachments.filter(a => a.id !== id),
-      }),
-      false,
-      'attachments/removeAttachment',
-    );
-  },
+  clearAttachments: () =>
+    set({ pendingAttachments: [] }, false, 'attachments/clearAttachments'),
 
-  clearAttachments: () => {
-    set({ pendingAttachments: [] }, false, 'attachments/clearAttachments');
-  },
+  updateAttachmentUpload: (id: string, uploadItem: UploadItem) =>
+    set((draft) => {
+      const attachment = draft.pendingAttachments.find(a => a.id === id);
+      if (attachment)
+        attachment.uploadItem = castDraft(uploadItem);
+    }, false, 'attachments/updateAttachmentUpload'),
 
-  updateAttachmentUpload: (id: string, uploadItem: UploadItem) => {
-    set(
-      state => ({
-        pendingAttachments: state.pendingAttachments.map(a =>
-          a.id === id ? { ...a, uploadItem } : a,
-        ),
-      }),
-      false,
-      'attachments/updateAttachmentUpload',
-    );
-  },
-
-  updateAttachmentPreview: (id: string, preview: FilePreview) => {
-    set(
-      state => ({
-        pendingAttachments: state.pendingAttachments.map(a =>
-          a.id === id ? { ...a, preview } : a,
-        ),
-      }),
-      false,
-      'attachments/updateAttachmentPreview',
-    );
-  },
+  updateAttachmentPreview: (id: string, preview: FilePreview) =>
+    set((draft) => {
+      const attachment = draft.pendingAttachments.find(a => a.id === id);
+      if (attachment)
+        attachment.preview = preview;
+    }, false, 'attachments/updateAttachmentPreview'),
 
   getAttachments: () => get().pendingAttachments,
 
@@ -1264,9 +1056,9 @@ const createAttachmentsSlice: StateCreator<
  */
 const createOperationsSlice: StateCreator<
   ChatStore,
-  [['zustand/devtools', never]],
+  [['zustand/devtools', never], ['zustand/immer', never]],
   [],
-  OperationsSlice
+  OperationsActions
 > = (set, get) => ({
   resetThreadState: () =>
     set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
@@ -1288,11 +1080,7 @@ const createOperationsSlice: StateCreator<
   resetForThreadNavigation: () => {
     const state = get();
 
-    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
-    // Streams continue in background via waitUntil() regardless of navigation
-    // The AI SDK v6 resumable streams pattern is incompatible with abort
-
-    // ✅ CRITICAL: Clear AI SDK hook's internal messages via chatSetMessages
+    // Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
     // This is the root cause of the state leakage bug
     state.chatSetMessages?.([]);
@@ -1313,11 +1101,7 @@ const createOperationsSlice: StateCreator<
   resetToOverview: () => {
     const state = get();
 
-    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
-    // Streams continue in background via waitUntil() regardless of navigation
-    // The AI SDK v6 resumable streams pattern is incompatible with abort
-
-    // ✅ CRITICAL FIX: Clear AI SDK hook's internal messages via chatSetMessages
+    // Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
     // after resetToOverview clears store.messages to [], causing state leakage
     state.chatSetMessages?.([]);
@@ -1386,17 +1170,44 @@ const createOperationsSlice: StateCreator<
 
     // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     const sortedParticipants = sortByPriority(participants);
-
+    // ✅ CONSOLIDATED: All thread initialization + reset state in one place
+    // Eliminates duplicate useEffects in ChatThreadScreen
     set({
+      // Reset flags (previously in ChatThreadScreen useEffect via resetThreadState)
+      waitingToStartStreaming: false,
+      isRegenerating: false,
+      isCreatingAnalysis: false,
+      isWaitingForChangelog: false,
+      hasPendingConfigChanges: false,
+      regeneratingRoundNumber: null,
+      pendingMessage: null,
+      pendingAttachmentIds: null,
+      pendingFileParts: null,
+      expectedParticipantIds: null,
+      streamingRoundNumber: null,
+      currentRoundNumber: null,
+      hasSentPendingMessage: false,
+      createdAnalysisRounds: new Set<number>(),
+      triggeredPreSearchRounds: new Set<number>(),
+      preSearchActivityTimes: new Map<number, number>(),
+      hasEarlyOptimisticMessage: false,
+      streamResumptionState: null,
+      resumptionAttempts: new Set<string>(),
+      nextParticipantToTrigger: null,
+      pendingAnimations: new Set<number>(),
+      animationResolvers: new Map(),
+      // Thread data
       thread,
       participants: sortedParticipants,
       messages: messagesToSet,
       error: null,
       isStreaming: false,
-      // ✅ FIX: Sync form state with thread state on initialization
-      // Form state is the sole source of truth for web search enabled
-      // This ensures form state reflects thread settings when loaded
+      // Form state sync - use Zod parsing for type safety
       enableWebSearch: thread.enableWebSearch,
+      selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+      // UI state
+      showInitialUI: false,
+      hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
   },
 
@@ -1406,89 +1217,61 @@ const createOperationsSlice: StateCreator<
 
   // ✅ Uses ExtendedFilePart from message-schemas.ts (single source of truth for file parts with uploadId)
   prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) =>
-    set((state) => {
-      // ✅ FIX: Calculate next round number for mid-conversation messages
-      const nextRoundNumber = calculateNextRoundNumber(state.messages);
+    set((draft) => {
+      // ✅ Immer: Use current() with explicit type to avoid deep type inference
+      const currentMessages = current(draft.messages) as UIMessage[];
+      const nextRoundNumber = calculateNextRoundNumber(currentMessages);
 
-      // ✅ OPTIMISTIC MESSAGE LOGIC:
-      // - Round 0 (handleCreateThread): Backend creates user message, NO optimistic message needed
-      // - Round 1+ (handleUpdateThreadAndSend): Optimistic message added by handleUpdateThreadAndSend
-      //   BEFORE calling prepareForNewMessage (sets hasEarlyOptimisticMessage=true)
-      //
-      // This check handles the legacy path where prepareForNewMessage might be called directly
-      // on thread screen without the early optimistic message being set.
-      const isOnThreadScreen = state.screenMode === ScreenModes.THREAD;
-
-      // ✅ IMMEDIATE UI FEEDBACK FIX: Use explicit flag instead of heuristic detection
-      // handleUpdateThreadAndSend sets this flag when it adds an early optimistic message
-      // This prevents duplicate messages and is reliable across multiple rounds
-      //
-      // Previous heuristic using `streamingRoundNumber === nextRoundNumber - 1` was buggy
-      // because streamingRoundNumber persists from previous rounds if not cleared,
-      // causing false positives in subsequent rounds.
-      const hasExistingOptimisticMessage = state.hasEarlyOptimisticMessage;
-
-      // Only create optimistic message for THREAD screen AND if one doesn't already exist
-      // ✅ FIX: Use provided file parts directly instead of building from pendingAttachments
-      // pendingAttachments is never synced from the hook's attachment state,
-      // so we pass file parts directly from handleUpdateThreadAndSend/handleCreateThread
+      const isOnThreadScreen = draft.screenMode === ScreenModes.THREAD;
+      const hasExistingOptimisticMessage = draft.hasEarlyOptimisticMessage;
       const fileParts = providedFileParts || [];
 
-      const optimisticUserMessage: UIMessage | null = isOnThreadScreen && !hasExistingOptimisticMessage
-        ? {
-            id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
-            role: MessageRoles.USER,
-            parts: [
-              ...fileParts, // Files first (matches UI layout)
-              { type: MessagePartTypes.TEXT, text: message },
-            ],
-            metadata: {
-              role: MessageRoles.USER,
-              roundNumber: nextRoundNumber,
-              isOptimistic: true, // Flag to identify optimistic messages
-            },
-          }
-        : null;
+      // Reset streaming state
+      draft.waitingToStartStreaming = false;
+      draft.isStreaming = false;
+      draft.currentParticipantIndex = 0;
+      draft.error = null;
 
-      // ✅ IMMEDIATE UI FEEDBACK FIX: Preserve streamingRoundNumber if optimistic message exists
-      // When handleUpdateThreadAndSend adds an early optimistic message, it also sets streamingRoundNumber.
-      // We should preserve that value rather than recalculating (which would be wrong due to the
-      // optimistic message affecting calculateNextRoundNumber).
-      //
-      // If no optimistic message exists, calculate normally based on screen mode.
-      const preserveStreamingRoundNumber = hasExistingOptimisticMessage
-        ? state.streamingRoundNumber // Preserve the early-set value
+      // Reset regeneration state
+      draft.isRegenerating = false;
+      draft.regeneratingRoundNumber = null;
+
+      // Reset stream resumption
+      draft.streamResumptionState = null;
+      draft.resumptionAttempts = new Set<string>();
+      draft.nextParticipantToTrigger = null;
+
+      // Set message state
+      draft.isCreatingAnalysis = false;
+      draft.isWaitingForChangelog = true;
+      draft.pendingMessage = message;
+      draft.pendingAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : null;
+      draft.pendingFileParts = fileParts.length > 0 ? fileParts : null;
+      draft.expectedParticipantIds = participantIds.length > 0 ? participantIds : draft.expectedParticipantIds;
+      draft.hasSentPendingMessage = false;
+      draft.hasEarlyOptimisticMessage = false;
+
+      // Preserve or calculate streamingRoundNumber
+      draft.streamingRoundNumber = hasExistingOptimisticMessage
+        ? draft.streamingRoundNumber
         : (isOnThreadScreen ? nextRoundNumber : null);
 
-      return {
-        // ✅ TYPE-SAFE: Use reset groups to ensure ALL flags are cleared
-        // This prevents bugs where individual fields are forgotten
-        ...STREAMING_STATE_RESET,
-        ...REGENERATION_STATE_RESET,
-        ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
-        isCreatingAnalysis: false,
-        // Prepare new message state
-        isWaitingForChangelog: true,
-        pendingMessage: message,
-        pendingAttachmentIds: attachmentIds && attachmentIds.length > 0 ? attachmentIds : null,
-        // ✅ ATTACHMENTS: Store file parts for AI SDK message creation
-        // This must be set BEFORE clearAttachments() is called in form-actions
-        // The hook reads this to include files in aiSendMessage
-        pendingFileParts: fileParts.length > 0 ? fileParts : null,
-        expectedParticipantIds: participantIds.length > 0
-          ? participantIds
-          : state.expectedParticipantIds,
-        hasSentPendingMessage: false,
-        // ✅ FIX: Add optimistic user message only if not already added by handleUpdateThreadAndSend
-        // (prevents duplicates from early UI feedback)
-        messages: optimisticUserMessage
-          ? [...state.messages, optimisticUserMessage]
-          : state.messages,
-        // ✅ FIX: Preserve streamingRoundNumber if already set (for immediate accordion collapse)
-        streamingRoundNumber: preserveStreamingRoundNumber,
-        // ✅ IMMEDIATE UI FEEDBACK: Clear flag after using it (ready for next round)
-        hasEarlyOptimisticMessage: false,
-      };
+      // Add optimistic user message if needed
+      if (isOnThreadScreen && !hasExistingOptimisticMessage) {
+        draft.messages.push({
+          id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
+          role: MessageRoles.USER,
+          parts: [
+            ...fileParts,
+            { type: MessagePartTypes.TEXT, text: message },
+          ],
+          metadata: {
+            role: MessageRoles.USER,
+            roundNumber: nextRoundNumber,
+            isOptimistic: true,
+          },
+        });
+      }
     }, false, 'operations/prepareForNewMessage'),
 
   completeStreaming: () =>
@@ -1541,20 +1324,14 @@ const createOperationsSlice: StateCreator<
    * - User navigates to /chat route
    *
    * Ensures complete cleanup:
-   * - Cancels ongoing streams
    * - Clears AI SDK hook messages
    * - Resets all state to defaults
    * - Clears tracking Sets
-   * - Aborts pending operations
    */
   resetToNewChat: () => {
     const state = get();
 
-    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
-    // Streams continue in background via waitUntil() regardless of navigation
-    // The AI SDK v6 resumable streams pattern is incompatible with abort
-
-    // ✅ CRITICAL FIX: Clear AI SDK hook's internal messages via chatSetMessages
+    // Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
     state.chatSetMessages?.([]);
 
@@ -1572,26 +1349,10 @@ const createOperationsSlice: StateCreator<
   },
 
   /**
-   * ✅ RESUMABLE STREAMS: Streaming state reset (NO abort)
-   *
-   * Resets local streaming state WITHOUT calling abort controller.
-   * With AI SDK v6 resumable streams, streams continue in background via waitUntil().
-   * This action only updates local UI state - the backend stream continues.
-   *
-   * Used when:
-   * - Navigation away from thread (stream continues in background)
-   * - Component unmounts during streaming (stream continues)
-   * - Local state needs reset (stream can be resumed via GET endpoint)
-   *
-   * NOTE: User "stop" button is intentionally NOT supported with resumable streams.
-   * Streams should always complete in background for data integrity.
+   * Reset local streaming state (backend continues via waitUntil)
+   * Used on navigation - streams complete in background for data integrity
    */
   stopStreaming: () => {
-    // ✅ RESUMABLE STREAMS: Do NOT call state.stop?.() here
-    // Streams continue in background via waitUntil() regardless of frontend state
-    // The AI SDK v6 resumable streams pattern is incompatible with abort
-
-    // Reset local streaming state only (backend stream continues)
     set({
       isStreaming: false,
       currentParticipantIndex: 0,
@@ -1627,26 +1388,28 @@ const createOperationsSlice: StateCreator<
 export function createChatStore() {
   const store = createStore<ChatStore>()(
     devtools(
-      (...args) => ({
-        ...createFormSlice(...args),
-        ...createFeedbackSlice(...args),
-        ...createUISlice(...args),
-        ...createAnalysisSlice(...args),
-        ...createPreSearchSlice(...args),
-        ...createThreadSlice(...args),
-        ...createFlagsSlice(...args),
-        ...createDataSlice(...args),
-        ...createTrackingSlice(...args),
-        ...createCallbacksSlice(...args),
-        ...createScreenSlice(...args),
-        ...createStreamResumptionSlice(...args),
-        ...createAnimationSlice(...args),
-        ...createAttachmentsSlice(...args),
-        ...createOperationsSlice(...args),
-      }),
+      immer(
+        (...args) => ({
+          ...createFormSlice(...args),
+          ...createFeedbackSlice(...args),
+          ...createUISlice(...args),
+          ...createAnalysisSlice(...args),
+          ...createPreSearchSlice(...args),
+          ...createThreadSlice(...args),
+          ...createFlagsSlice(...args),
+          ...createDataSlice(...args),
+          ...createTrackingSlice(...args),
+          ...createCallbacksSlice(...args),
+          ...createScreenSlice(...args),
+          ...createStreamResumptionSlice(...args),
+          ...createAnimationSlice(...args),
+          ...createAttachmentsSlice(...args),
+          ...createOperationsSlice(...args),
+        }),
+      ),
       {
         name: 'ChatStore',
-        enabled: true, // Always enable for debugging
+        enabled: true,
         anonymousActionType: 'unknown-action',
       },
     ),

@@ -125,7 +125,6 @@ import type {
   SetSendMessage,
   SetShowInitialUI,
   SetStartRound,
-  SetStop,
   SetStreamingRoundNumber,
   SetThread,
   SetWaitingToStartStreaming,
@@ -143,24 +142,8 @@ import type {
   WaitForAnimation,
 } from './store-action-types';
 
-// ============================================================================
-// RE-EXPORT: Unified ParticipantConfig Schema
-// ============================================================================
-/**
- * ✅ MIGRATED: ParticipantConfig schema now defined in /src/lib/schemas/participant-schemas.ts
- *
- * This import replaces the duplicate schema that was defined here (lines 25-31).
- * The unified schema includes all fields (id, modelId, role, customRoleId, priority, settings).
- *
- * MIGRATION NOTES:
- * - OLD: ParticipantConfig had no `settings` field
- * - NEW: ParticipantConfig includes optional `settings` object for UI customization
- * - Store still works with both variants (settings field optional)
- *
- * @see /src/lib/schemas/participant-schemas.ts - Single source of truth
- */
+// Re-export ParticipantConfig from single source of truth
 export { ParticipantConfigSchema };
-// Re-export type from participant-schemas (not duplicate)
 export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 
 // ScreenModeSchema is imported from @/api/core/enums (single source of truth)
@@ -304,7 +287,6 @@ export const ThreadStateSchema = z.object({
   error: z.custom<Error | null>(),
   sendMessage: z.custom<((content: string) => Promise<void>) | undefined>().optional(),
   startRound: z.custom<(() => Promise<void>) | undefined>().optional(),
-  stop: z.custom<(() => void) | undefined>().optional(),
   chatSetMessages: ChatSetMessagesFnSchema.optional(),
 });
 
@@ -317,7 +299,6 @@ export const ThreadActionsSchema = z.object({
   setError: z.custom<SetError>(),
   setSendMessage: z.custom<SetSendMessage>(),
   setStartRound: z.custom<SetStartRound>(),
-  setStop: z.custom<SetStop>(),
   setChatSetMessages: z.custom<SetChatSetMessages>(),
   checkStuckStreams: z.custom<CheckStuckStreams>(),
 });
@@ -548,8 +529,6 @@ export const OperationsActionsSchema = z.object({
   completeRegeneration: z.custom<CompleteRegeneration>(),
 });
 
-export const OperationsSliceSchema = OperationsActionsSchema;
-
 // ============================================================================
 // COMPLETE STORE SCHEMA
 // ============================================================================
@@ -589,7 +568,7 @@ export const ChatStoreSchema = z.intersection(
     ),
     z.intersection(AnimationSliceSchema, AttachmentsSliceSchema),
   ),
-  OperationsSliceSchema,
+  OperationsActionsSchema, // Operations slice has no state, only actions
 );
 
 // ============================================================================
@@ -652,7 +631,6 @@ export type ScreenActions = z.infer<typeof ScreenActionsSchema>;
 export type ScreenSlice = z.infer<typeof ScreenSliceSchema>;
 
 export type OperationsActions = z.infer<typeof OperationsActionsSchema>;
-export type OperationsSlice = z.infer<typeof OperationsSliceSchema>;
 
 export type StreamResumptionSliceState = z.infer<typeof StreamResumptionSliceStateSchema>;
 export type StreamResumptionActions = z.infer<typeof StreamResumptionActionsSchema>;

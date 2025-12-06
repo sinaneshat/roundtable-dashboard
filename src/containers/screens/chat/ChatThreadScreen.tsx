@@ -13,9 +13,10 @@
  * - ChatView handles all content rendering (same as overview screen)
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { ChatMode } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -23,7 +24,6 @@ import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import {
   useChatFormActions,
@@ -115,15 +115,8 @@ export default function ChatThreadScreen({
   const inputValue = useChatStore(s => s.inputValue);
   const selectedParticipants = useChatStore(s => s.selectedParticipants);
 
-  const { resetThreadState, setShowInitialUI, setHasInitiallyLoaded, setSelectedMode, setEnableWebSearch } = useChatStore(
-    useShallow(s => ({
-      resetThreadState: s.resetThreadState,
-      setShowInitialUI: s.setShowInitialUI,
-      setHasInitiallyLoaded: s.setHasInitiallyLoaded,
-      setSelectedMode: s.setSelectedMode,
-      setEnableWebSearch: s.setEnableWebSearch,
-    })),
-  );
+  // ✅ SIMPLIFIED: initializeThread now handles all state setup
+  // Removed: resetThreadState, setShowInitialUI, setHasInitiallyLoaded, setSelectedMode, setEnableWebSearch
 
   // ============================================================================
   // MEMOIZED DATA
@@ -156,7 +149,7 @@ export default function ChatThreadScreen({
     thread,
     participants,
     initialMessages: uiMessages,
-    chatMode: selectedMode || (thread.mode as ChatModeId),
+    chatMode: selectedMode || (thread.mode as ChatMode),
     isRegeneration: regeneratingRoundNumber !== null,
     regeneratingRoundNumber,
     enableOrchestrator: !isRegenerating && !hasStreamingAnalysis,
@@ -165,32 +158,8 @@ export default function ChatThreadScreen({
   // Input blocking for submit guard only (ChatView handles its own input state)
   const isSubmitBlocked = isStreaming || isCreatingAnalysis || Boolean(pendingMessage);
 
-  // ============================================================================
-  // REFS & EFFECTS
-  // ============================================================================
-
-  const isInitialMount = useRef(true);
-  const lastSyncedEnableWebSearchRef = useRef<boolean | undefined>(undefined);
-
-  // Initialize thread on mount and when thread ID changes
-  useEffect(() => {
-    if (!isInitialMount.current) {
-      resetThreadState();
-    }
-    isInitialMount.current = false;
-
-    if (thread?.mode) {
-      setSelectedMode(thread.mode as ChatModeId);
-    }
-
-    const threadEnableWebSearch = thread.enableWebSearch || false;
-    setEnableWebSearch(threadEnableWebSearch);
-    lastSyncedEnableWebSearchRef.current = threadEnableWebSearch;
-
-    setShowInitialUI(false);
-    setHasInitiallyLoaded(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id]);
+  // ✅ SIMPLIFIED: Removed duplicate initialization useEffect
+  // All state setup now happens in initializeThread (called by useScreenInitialization)
 
   // ============================================================================
   // CALLBACKS

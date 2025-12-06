@@ -13,6 +13,8 @@
  * @module lib/utils/participant
  */
 
+import { z } from 'zod';
+
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 
@@ -59,10 +61,27 @@ export type ComparableParticipant = Pick<
   isEnabled?: boolean;
 };
 
-/**
- * Comparison mode for participant equality
- */
-export type ParticipantComparisonMode = 'modelIds' | 'strict';
+// ============================================================================
+// PARTICIPANT COMPARISON MODE (5-Part Enum Pattern)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT
+export const PARTICIPANT_COMPARISON_MODES = ['modelIds', 'strict'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 'strict';
+
+// 3️⃣ ZOD SCHEMA
+export const ParticipantComparisonModeSchema = z.enum(PARTICIPANT_COMPARISON_MODES);
+
+// 4️⃣ TYPESCRIPT TYPE
+export type ParticipantComparisonMode = z.infer<typeof ParticipantComparisonModeSchema>;
+
+// 5️⃣ CONSTANT OBJECT
+export const ParticipantComparisonModes = {
+  MODEL_IDS: 'modelIds' as const,
+  STRICT: 'strict' as const,
+} as const;
 
 /**
  * Update payload for participant changes
@@ -89,9 +108,9 @@ export type UpdateParticipantPayload = {
  */
 export function getParticipantKey(
   participant: ComparableParticipant,
-  mode: ParticipantComparisonMode = 'strict',
+  mode: ParticipantComparisonMode = ParticipantComparisonModes.STRICT,
 ): string {
-  if (mode === 'modelIds') {
+  if (mode === ParticipantComparisonModes.MODEL_IDS) {
     return participant.modelId;
   }
 
@@ -108,7 +127,7 @@ export function getParticipantKey(
  */
 export function getParticipantsKey(
   participants: ComparableParticipant[],
-  mode: ParticipantComparisonMode = 'strict',
+  mode: ParticipantComparisonMode = ParticipantComparisonModes.STRICT,
   filterEnabled = true,
 ): string {
   const filtered = filterEnabled
@@ -133,7 +152,7 @@ export function getParticipantsKey(
 export function compareParticipants(
   a: ComparableParticipant[],
   b: ComparableParticipant[],
-  mode: ParticipantComparisonMode = 'strict',
+  mode: ParticipantComparisonMode = ParticipantComparisonModes.STRICT,
   options?: { filterEnabled?: boolean },
 ): boolean {
   const { filterEnabled = true } = options || {};
@@ -153,7 +172,7 @@ export function compareParticipants(
 export function hasParticipantsChanged(
   current: ComparableParticipant[],
   updated: ComparableParticipant[],
-  mode: ParticipantComparisonMode = 'strict',
+  mode: ParticipantComparisonMode = ParticipantComparisonModes.STRICT,
 ): boolean {
   return !compareParticipants(current, updated, mode);
 }
@@ -186,8 +205,13 @@ export function getParticipantModelIds(
 export function participantConfigToUpdatePayload(
   participant: ParticipantConfig,
 ): UpdateParticipantPayload {
+  // ✅ FIX: Detect if this is a new participant (id === modelId) vs existing (id is ULID)
+  // - New participants use modelId as their ID (e.g., 'openai/gpt-4')
+  // - Existing participants have database-assigned IDs (ULIDs)
+  // - Backend uses empty string to trigger "find by modelId" logic for new participants
+  const isNewParticipant = participant.id === participant.modelId;
   return {
-    id: participant.id.startsWith('participant-') ? '' : participant.id,
+    id: isNewParticipant ? '' : participant.id,
     modelId: participant.modelId,
     role: participant.role || null,
     customRoleId: participant.customRoleId || null,
@@ -388,9 +412,10 @@ export function detectParticipantChanges(
   currentParticipants: ChatParticipant[],
   selectedParticipants: ParticipantConfig[],
 ): ParticipantUpdateResult {
-  // Check for temporary IDs (participants not yet persisted)
+  // ✅ FIX: Detect new participants by checking if id === modelId (not persisted yet)
+  // New participants use modelId as their ID, existing use database-assigned ULIDs
   const hasTemporaryIds = selectedParticipants.some(p =>
-    p.id.startsWith('participant-'),
+    p.id === p.modelId,
   );
 
   // Compare participant configurations using strict mode
@@ -398,7 +423,7 @@ export function detectParticipantChanges(
   const participantsChanged = hasParticipantsChanged(
     currentParticipants,
     selectedParticipants,
-    'strict',
+    ParticipantComparisonModes.STRICT,
   );
 
   const hasChanges = hasTemporaryIds || participantsChanged;

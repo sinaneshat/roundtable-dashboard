@@ -163,7 +163,7 @@ export function UnifiedLoadingIndicator({
         exit={{ opacity: 0, y: -10 }}
         className="text-left pointer-events-none"
       >
-        <div className="text-sm py-2">
+        <div className="text-base py-2">
           {/* Key ensures component remounts and resets cycling when message set changes */}
           <CyclingMessage key={messageSetKey} messages={messageSet} />
         </div>

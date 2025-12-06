@@ -33,7 +33,7 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
       </FadeInText>
 
       {/* Markdown content - uses Streamdown for proper streaming animation */}
-      <div className="text-sm">
+      <div className="text-base">
         {isStreaming
           ? (
               <div>
@@ -48,7 +48,7 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
               </div>
             )
           : (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
+              <div className="prose prose-base dark:prose-invert max-w-none">
                 <ReactMarkdown components={defaultMarkdownComponents}>
                   {answer}
                 </ReactMarkdown>

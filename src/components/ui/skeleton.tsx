@@ -264,20 +264,32 @@ function ThreadMessagesSkeleton({
 }
 
 /**
- * Quick start cards skeleton - matches ChatQuickStart grid
+ * Quick start cards skeleton - matches ChatQuickStart vertical list
  * Reusable for overview loading page
  */
 function QuickStartSkeleton({ count = 3, className, ...props }: { count?: number } & React.ComponentProps<"div">) {
   return (
-    <div className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3", className)} {...props}>
+    <div className={cn("flex flex-col", className)} {...props}>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="rounded-lg bg-card/50 backdrop-blur-sm p-3 sm:p-4 border border-white/5 space-y-2">
-          <Skeleton className="h-4 sm:h-5 w-full bg-white/20" />
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Skeleton className="size-4 rounded-full bg-white/15" />
-            <Skeleton className="h-3 w-16 bg-white/15" />
-            <Skeleton className="size-4 rounded-full bg-white/15" />
-            <Skeleton className="h-3 w-20 bg-white/15" />
+        <div
+          key={i}
+          className={`px-4 py-3 ${i < count - 1 ? 'border-b border-white/[0.06]' : ''}`}
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+            {/* Question skeleton */}
+            <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4 bg-white/15" />
+            {/* Mode badge + avatars */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
+              <div className="flex items-center">
+                <div className="flex -space-x-2">
+                  <Skeleton className="size-6 rounded-full bg-white/15 relative z-[3]" />
+                  <Skeleton className="size-6 rounded-full bg-white/15 relative z-[2]" />
+                  <Skeleton className="size-6 rounded-full bg-white/15 relative z-[1]" />
+                </div>
+                <Skeleton className="size-6 rounded-full bg-white/30 ml-2" />
+              </div>
+            </div>
           </div>
         </div>
       ))}

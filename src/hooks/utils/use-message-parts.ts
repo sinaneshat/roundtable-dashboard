@@ -25,11 +25,6 @@ export type UseMessagePartsOptions = {
 };
 
 /**
- * Hook return type - same as core utility
- */
-export type UseMessagePartsReturn = MessagePartsAnalysis;
-
-/**
  * Extract and filter message parts with memoization
  *
  * React hook version with automatic memoization for component scope.
@@ -55,7 +50,7 @@ export type UseMessagePartsReturn = MessagePartsAnalysis;
  */
 export function useMessageParts({
   message,
-}: UseMessagePartsOptions): UseMessagePartsReturn {
+}: UseMessagePartsOptions): MessagePartsAnalysis {
   return useMemo(
     () => getMessageParts(message),
     [message], // Only recompute when message changes

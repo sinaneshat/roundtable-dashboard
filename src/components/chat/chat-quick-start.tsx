@@ -3,28 +3,29 @@ import { MessageSquare, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
+import type { ChatMode } from '@/api/core/enums';
 import { ChatModes } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import {
+  MIN_MODELS_REQUIRED,
   SubscriptionTiers,
 } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 
 type QuickStartSuggestion = {
   title: string;
   prompt: string;
-  mode: ChatModeId;
+  mode: ChatMode;
   participants: ParticipantConfig[];
 };
 type ChatQuickStartProps = {
   onSuggestionClick: (
     prompt: string,
-    mode: ChatModeId,
+    mode: ChatMode,
     participants: ParticipantConfig[],
   ) => void;
   className?: string;
@@ -125,8 +126,9 @@ export function ChatQuickStart({
       return models;
     };
 
-    const freeModels = getModelsForTier(2);
-    const starterModels = getModelsForTier(3);
+    // All tiers get at least MIN_MODELS_REQUIRED (3) models for diverse discussions
+    const freeModels = getModelsForTier(MIN_MODELS_REQUIRED);
+    const starterModels = getModelsForTier(MIN_MODELS_REQUIRED);
     const proModels = getModelsForTier(4);
     const powerModels = getModelsForTier(6);
 
@@ -165,6 +167,7 @@ export function ChatQuickStart({
           participants: buildParticipants([
             'Privacy Advocate',
             'Security Realist',
+            'Legal Scholar',
           ]),
         },
         {
@@ -176,6 +179,7 @@ export function ChatQuickStart({
           participants: buildParticipants([
             'Conservation Biologist',
             'Bioethicist',
+            'Ecologist',
           ]),
         },
         {
@@ -183,7 +187,11 @@ export function ChatQuickStart({
           prompt:
             'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
           mode: ChatModes.DEBATING,
-          participants: buildParticipants(['Sociologist', 'Economist']),
+          participants: buildParticipants([
+            'Sociologist',
+            'Economist',
+            'Historian',
+          ]),
         },
       ];
 
@@ -399,7 +407,7 @@ export function ChatQuickStart({
 
     return tierSuggestions;
   }, [userTier, accessibleModels, selectUniqueProviderModels]);
-  const getModeConfig = (mode: ChatModeId) => {
+  const getModeConfig = (mode: ChatMode) => {
     switch (mode) {
       case ChatModes.DEBATING:
         return {

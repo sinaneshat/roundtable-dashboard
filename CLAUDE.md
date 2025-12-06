@@ -138,6 +138,52 @@ src/
 - All user text through `useTranslations()` - NO hardcoded strings (English-only)
 - Dark theme only (no theme switching)
 
+### State Management Layer (Zustand v5)
+**🚨 MANDATORY**: Use `/store-fix` command for ALL store-related work.
+**Reference**: Context7 MCP `/pmndrs/zustand` for official patterns - fetch latest docs before implementation.
+
+**Ground Rules** (from official Zustand + Next.js docs):
+1. **NO Global Stores**: Factory function (`createChatStore()`) + Context, NOT module-level `create()`
+2. **Vanilla Store**: Use `createStore()` from `zustand/vanilla` for SSR isolation
+3. **Context + useRef**: Provider uses `useRef` to create store once per instance
+4. **RSC Forbidden**: React Server Components cannot read/write store - client only
+5. **StateCreator Chain**: All slices typed with `[['zustand/devtools', never]]` middleware chain
+6. **Action Names**: ALL `set()` calls MUST have third param `set({}, undefined, 'slice/action')`
+7. **useShallow**: Batch object/array selectors - individual selectors cause re-renders
+8. **Middleware at Combined Level**: Never apply devtools/persist inside individual slices
+
+**Store Architecture** (`src/stores/{domain}/`):
+- `store.ts`: Slice implementations + vanilla factory (`createStore()`)
+- `store-schemas.ts`: Zod schemas → type inference (SINGLE SOURCE OF TRUTH)
+- `store-action-types.ts`: Explicit action function type definitions
+- `store-defaults.ts`: Default values + reset state groups
+- `actions/`: Complex action logic extracted (form-actions, thread-actions)
+- `hooks/`: Reusable selector hooks with useShallow batching
+
+**File Structure**:
+```
+src/stores/{domain}/
+├── index.ts              # Public API exports only
+├── store.ts              # Slices + createStore factory + devtools
+├── store-schemas.ts      # Zod schemas + z.infer types
+├── store-action-types.ts # Action type definitions
+├── store-defaults.ts     # Defaults + reset groups (STREAMING_STATE_RESET, etc.)
+├── store-constants.ts    # Enums, animation indices
+├── actions/              # Complex action hooks
+├── hooks/                # Selector hooks (useShallow)
+└── utils/                # Pure utility functions
+```
+
+**Forbidden Patterns** (IMMEDIATE FIX):
+- `create()` hook → use `createStore()` vanilla
+- `set()` without action name → add `'slice/action'` third param
+- `StateCreator<Store>` → add `[['zustand/devtools', never]]` chain
+- Multiple individual selectors → batch with `useShallow`
+- Manual interfaces → use Zod `z.infer<>`
+- `any` or `as Type` casts in store code
+- Global module stores → factory + Context
+- RSC store access → client components only
+
 ### Testing Layer (Vitest + React Testing Library)
 **Test Infrastructure** (`vitest.config.ts`, `vitest.setup.ts`):
 - Vitest v4 configured with Vite for Next.js support

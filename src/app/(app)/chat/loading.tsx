@@ -1,55 +1,108 @@
 import Image from 'next/image';
 
 import { RadialGlow } from '@/components/ui/radial-glow';
-import { QuickStartSkeleton, Skeleton, StickyInputSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 
 /**
  * Loading State for Chat Overview Page
  *
- * Uses reusable skeleton components for consistency:
- * - QuickStartSkeleton: Quick start cards grid
- * - StickyInputSkeleton: Sticky bottom input
+ * Matches exact structure of ChatOverviewScreen:
+ * - Logo: h-20 w-20 sm:h-24 sm:w-24
+ * - Title: text-3xl sm:text-4xl
+ * - Quick start: Simple list items with mode badge and avatars
+ * - Input: Inline at bottom (not sticky)
  *
  * Pattern: Next.js App Router loading.tsx convention
  */
 export default function ChatOverviewLoading() {
   return (
-    <div className="relative min-h-svh flex flex-col overflow-x-hidden">
-      {/* Main content */}
-      <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-12 pb-32 flex-1 relative">
-        {/* Hero Section */}
-        <div className="py-6 sm:py-8">
-          <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center relative">
-            {/* Logo */}
-            <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36 z-10" style={{ overflow: 'visible' }}>
-              <RadialGlow size={800} offsetY={40} duration={15} animate />
+    <div className="flex flex-col relative flex-1 min-h-dvh">
+      {/* Radial glow - matches ChatOverviewScreen */}
+      <div
+        className="fixed inset-0 pointer-events-none overflow-hidden"
+        style={{ zIndex: 0 }}
+      >
+        <div
+          className="absolute"
+          style={{
+            top: '-100px',
+            left: '63%',
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <RadialGlow size={500} offsetY={0} duration={18} animate useLogoColors />
+        </div>
+      </div>
+
+      {/* Main content - matches ChatOverviewScreen container */}
+      <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
+        <div className="w-full">
+          <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+            {/* Logo - matches: h-20 w-20 sm:h-24 sm:w-24 */}
+            <div className="relative h-20 w-20 sm:h-24 sm:w-24">
               <Image
                 src={BRAND.logos.main}
-                alt={`${BRAND.displayName} Logo`}
-                fill
-                sizes="(max-width: 480px) 80px, (max-width: 640px) 96px, (max-width: 768px) 112px, (max-width: 1024px) 128px, 144px"
-                className="object-contain drop-shadow-2xl relative z-10"
+                alt={BRAND.name}
+                className="w-full h-full object-contain"
+                width={96}
+                height={96}
                 priority
               />
             </div>
 
-            {/* Title skeleton */}
-            <Skeleton className="h-10 sm:h-12 md:h-14 lg:h-16 w-64 sm:w-80 md:w-96 bg-white/20" />
+            {/* Title and tagline - matches: text-3xl sm:text-4xl + text-sm sm:text-base */}
+            <div className="flex flex-col items-center gap-1.5">
+              <Skeleton className="h-9 sm:h-10 w-40 sm:w-48 bg-white/20" />
+              <Skeleton className="h-4 sm:h-5 w-64 sm:w-80 bg-white/15" />
+            </div>
 
-            {/* Subtitle skeleton */}
-            <Skeleton className="h-5 sm:h-6 md:h-7 w-48 sm:w-64 md:w-80 max-w-2xl bg-white/15" />
+            {/* Quick Start Cards - matches ChatQuickStart structure */}
+            <div className="w-full mt-6 sm:mt-8">
+              <div className="flex flex-col">
+                {[0, 1, 2].map(i => (
+                  <div
+                    key={i}
+                    className={`px-4 py-3 ${i < 2 ? 'border-b border-white/[0.06]' : ''}`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+                      {/* Question skeleton */}
+                      <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4 bg-white/15" />
+                      {/* Mode badge + avatars */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Skeleton className="h-6 w-16 rounded-2xl bg-white/10" />
+                        <div className="flex items-center">
+                          <div className="flex -space-x-2">
+                            <Skeleton className="size-6 rounded-full bg-white/15 relative z-[3]" />
+                            <Skeleton className="size-6 rounded-full bg-white/15 relative z-[2]" />
+                            <Skeleton className="size-6 rounded-full bg-white/15 relative z-[1]" />
+                          </div>
+                          <Skeleton className="size-6 rounded-full bg-white/30 ml-2" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Quick Start Cards */}
-        <div className="py-4">
-          <QuickStartSkeleton count={3} />
+        {/* Input skeleton - matches inline ChatInput placement */}
+        <div className="w-full mt-6 sm:mt-8 pb-4">
+          <div className="rounded-xl bg-card/60 backdrop-blur-md border border-white/10 p-3">
+            <Skeleton className="h-10 w-full bg-white/10 rounded-lg" />
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="size-5 rounded bg-white/10" />
+                <Skeleton className="size-5 rounded bg-white/10" />
+                <Skeleton className="size-5 rounded bg-white/10" />
+              </div>
+              <Skeleton className="size-7 rounded-full bg-white/15" />
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Sticky input */}
-      <StickyInputSkeleton />
     </div>
   );
 }

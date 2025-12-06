@@ -33,7 +33,7 @@ import {
   useSubscriptionsQuery,
   useUsageStatsQuery,
 } from '@/hooks';
-import { useBoolean, useIsMobile } from '@/hooks/utils';
+import { useBoolean } from '@/hooks/utils';
 import { signOut, useSession } from '@/lib/auth/client';
 import { showApiErrorToast } from '@/lib/toast';
 
@@ -41,7 +41,6 @@ export function NavUser() {
   const router = useRouter();
   const { data: session } = useSession();
   const t = useTranslations();
-  const isMobile = useIsMobile();
   const { data: usageData } = useUsageStatsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
@@ -58,9 +57,11 @@ export function NavUser() {
     setIsMounted(true);
   }, []);
 
+  // ✅ FIX: Defer user-dependent values to client to prevent hydration mismatch
+  // Server has no session (renders defaults), client has session (renders actual values)
   const userInitials = useMemo(() => {
     if (!isMounted)
-      return 'U'; // Prevent hydration mismatch
+      return 'U';
     return user?.name
       ? user.name
           .split(' ')
@@ -68,6 +69,18 @@ export function NavUser() {
           .join('')
           .toUpperCase()
       : user?.email?.[0]?.toUpperCase() || 'U';
+  }, [isMounted, user]);
+
+  const displayName = useMemo(() => {
+    if (!isMounted)
+      return t('user.defaultName');
+    return user?.name || t('user.defaultName');
+  }, [isMounted, user, t]);
+
+  const displayEmail = useMemo(() => {
+    if (!isMounted)
+      return '';
+    return user?.email || '';
   }, [isMounted, user]);
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
@@ -114,29 +127,29 @@ export function NavUser() {
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
             size="lg"
-            tooltip={user?.name || t('user.defaultName')}
+            tooltip={displayName}
             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
             <Avatar className="h-8 w-8 rounded-full">
               <AvatarImage
                 src={user?.image || undefined}
-                alt={user?.name || t('user.defaultName')}
+                alt={displayName}
               />
               <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate font-semibold">
-                {user?.name || t('user.defaultName')}
+                {displayName}
               </span>
-              <span className="truncate text-xs">{user?.email}</span>
+              <span className="truncate text-xs">{displayEmail}</span>
             </div>
             <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className={isMobile ? 'w-[calc(var(--sidebar-width)-1rem)] rounded-lg' : 'min-w-56 rounded-lg'}
-          side={isMobile ? 'top' : 'right'}
-          align={isMobile ? 'start' : 'end'}
+          className="w-[calc(var(--sidebar-width)-1.5rem)] min-w-56 rounded-lg"
+          side="top"
+          align="start"
           sideOffset={8}
         >
           <DropdownMenuLabel className="p-0 font-normal">
@@ -144,15 +157,15 @@ export function NavUser() {
               <Avatar className="h-8 w-8 rounded-full">
                 <AvatarImage
                   src={user?.image || undefined}
-                  alt={user?.name || t('user.defaultName')}
+                  alt={displayName}
                 />
                 <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">
-                  {user?.name || t('user.defaultName')}
+                  {displayName}
                 </span>
-                <span className="truncate text-xs">{user?.email}</span>
+                <span className="truncate text-xs">{displayEmail}</span>
               </div>
             </div>
           </DropdownMenuLabel>

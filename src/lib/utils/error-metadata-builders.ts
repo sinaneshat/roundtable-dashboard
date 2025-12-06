@@ -443,9 +443,11 @@ export function isTransientErrorFromObject(error: unknown): boolean {
     return true; // No error is treated as transient
   }
 
-  // Check HTTP status code if available
-  const httpError = error as Error & { statusCode?: number };
-  const statusCode = httpError.statusCode;
+  // ✅ TYPE-SAFE: Check HTTP status code if available using type guard
+  let statusCode: number | undefined;
+  if (isObject(error) && 'statusCode' in error && typeof error.statusCode === 'number') {
+    statusCode = error.statusCode;
+  }
 
   if (statusCode === 429 || statusCode === 503 || statusCode === 502) {
     return true; // Rate limits and server errors are transient

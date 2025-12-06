@@ -21,7 +21,7 @@ import Image from 'next/image';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDownloadUrlQuery } from '@/hooks/queries';
-import { getFileIconName, getFileTypeLabel } from '@/hooks/utils/use-file-preview';
+import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
 export type MessageAttachment = {

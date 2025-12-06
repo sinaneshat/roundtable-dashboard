@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCreateCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { toastManager } from '@/lib/toast/toast-manager';
+import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 import { getRoleColors } from '@/lib/utils/role-colors';
@@ -185,9 +185,12 @@ export function ModelSelectionModal({
   const customRoleRemaining = usageData?.data?.customRoles?.remaining ?? 0;
   const canCreateCustomRoles = customRoleLimit > 0 && customRoleRemaining > 0;
 
+  // Check if filtering is active - disable reorder when filtering to prevent corruption
+  const isFiltering = searchQuery.trim().length > 0;
+
   // Filter models based on search query
   const filteredModels = useMemo(() => {
-    if (!searchQuery.trim()) {
+    if (!isFiltering) {
       return orderedModels;
     }
 
@@ -201,7 +204,17 @@ export function ModelSelectionModal({
         || model.id.toLowerCase().includes(query)
       );
     });
-  }, [orderedModels, searchQuery]);
+  }, [orderedModels, searchQuery, isFiltering]);
+
+  // Stable reorder handler that preserves unfiltered items
+  // CRITICAL: Only allow reorder when NOT filtering to prevent state corruption
+  const handleReorder = useCallback((reorderedItems: typeof orderedModels) => {
+    if (isFiltering) {
+      // Should not happen since we disable drag when filtering, but safety check
+      return;
+    }
+    onReorder(reorderedItems);
+  }, [isFiltering, onReorder]);
 
   // Get selected model data
   const selectedModelData = useMemo(() => {
@@ -308,10 +321,10 @@ export function ModelSelectionModal({
               ? (
                   <motion.div
                     key="role-selection"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.2 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
                     className="flex flex-col flex-1 min-h-0"
                   >
                     {/* Scrollable role list - NO padding */}
@@ -454,7 +467,7 @@ export function ModelSelectionModal({
                             </div>
                           )
                         : (
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 w-full">
                               <Input
                                 placeholder={canCreateCustomRoles ? 'Enter custom role name...' : 'Limit reached'}
                                 value={customRoleInput}
@@ -465,13 +478,13 @@ export function ModelSelectionModal({
                                   }
                                 }}
                                 disabled={!canCreateCustomRoles}
-                                className="flex-1 h-8 text-sm"
+                                className="flex-1 min-w-0 h-8 text-sm"
                               />
                               <Button
                                 onClick={handleCustomRoleCreate}
                                 disabled={!customRoleInput.trim() || !canCreateCustomRoles}
                                 size="sm"
-                                className="h-8"
+                                className="h-8 shrink-0"
                               >
                                 Save
                               </Button>
@@ -481,101 +494,110 @@ export function ModelSelectionModal({
                   </motion.div>
                 )
               : (
-                  <>
-                    {/* Model List View */}
-                    <motion.div
-                      key="model-list"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      transition={{ duration: 0.2 }}
-                      className="flex flex-col gap-4 pt-4 pb-0"
-                    >
-                      {/* Search Input */}
-                      <div className="shrink-0 mb-4">
-                        <Input
-                          ref={searchInputRef}
-                          type="text"
-                          placeholder={t('searchPlaceholder')}
-                          value={searchQuery}
-                          onChange={e => setSearchQuery(e.target.value)}
-                          startIcon={<Search />}
-                          endIcon={searchQuery
-                            ? (
-                                <X
-                                  className="cursor-pointer"
-                                  onClick={() => {
-                                    setSearchQuery('');
-                                    searchInputRef.current?.focus();
-                                  }}
-                                />
-                              )
-                            : undefined}
-                          endIconClickable={!!searchQuery}
-                        />
-                      </div>
-
-                      {/* Model List - ScrollArea with fixed height */}
-                      <ScrollArea className="h-[400px] max-h-[400px]">
-                        {filteredModels.length === 0
+                  /* Model List View - NO motion.div wrapper to avoid layout interference with Reorder drag */
+                  <div
+                    key="model-list"
+                    className="flex flex-col gap-4 pt-4 pb-0"
+                  >
+                    {/* Search Input */}
+                    <div className="shrink-0 mb-4">
+                      <Input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder={t('searchPlaceholder')}
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        startIcon={<Search />}
+                        endIcon={searchQuery
                           ? (
-                              <div className="flex flex-col items-center justify-center py-12">
-                                <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
-                              </div>
+                              <X
+                                className="cursor-pointer"
+                                onClick={() => {
+                                  setSearchQuery('');
+                                  searchInputRef.current?.focus();
+                                }}
+                              />
                             )
-                          : enableDrag
-                            ? (
-                                <Reorder.Group
-                                  axis="y"
-                                  values={filteredModels}
-                                  onReorder={onReorder}
-                                  layoutScroll
-                                  style={{ overflowY: 'visible' }}
-                                  className="flex flex-col gap-2"
-                                >
-                                  {filteredModels.map(orderedModel => (
-                                    <ModelItem
-                                      key={orderedModel.model.id}
-                                      orderedModel={orderedModel}
-                                      allParticipants={allParticipants}
-                                      customRoles={customRoles}
-                                      onToggle={() => onToggle(orderedModel.model.id)}
-                                      onRoleChange={(role, customRoleId) =>
-                                        onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                      onClearRole={() => onClearRole(orderedModel.model.id)}
-                                      selectedCount={selectedCount}
-                                      maxModels={maxModels}
-                                      enableDrag={enableDrag}
-                                      userTierInfo={userTierInfo}
-                                      onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
-                                    />
-                                  ))}
-                                </Reorder.Group>
-                              )
-                            : (
-                                <div className="flex flex-col gap-2">
-                                  {filteredModels.map(orderedModel => (
-                                    <ModelItem
-                                      key={orderedModel.model.id}
-                                      orderedModel={orderedModel}
-                                      allParticipants={allParticipants}
-                                      customRoles={customRoles}
-                                      onToggle={() => onToggle(orderedModel.model.id)}
-                                      onRoleChange={(role, customRoleId) =>
-                                        onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                      onClearRole={() => onClearRole(orderedModel.model.id)}
-                                      selectedCount={selectedCount}
-                                      maxModels={maxModels}
-                                      enableDrag={false}
-                                      userTierInfo={userTierInfo}
-                                      onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                      </ScrollArea>
-                    </motion.div>
-                  </>
+                          : undefined}
+                        endIconClickable={!!searchQuery}
+                      />
+                    </div>
+
+                    {/* Error: No models selected */}
+                    {selectedCount === 0 && (
+                      <div
+                        className={cn(
+                          'flex items-center gap-2 px-3 py-2 rounded-xl -mt-2 mb-2',
+                          'bg-destructive/10 border border-destructive/20',
+                          'text-xs text-destructive',
+                        )}
+                      >
+                        <AlertCircle className="size-3.5 shrink-0" />
+                        <span>{tModels('minimumRequired.description', { count: 1 })}</span>
+                      </div>
+                    )}
+
+                    {/* Model List */}
+                    {filteredModels.length === 0
+                      ? (
+                          <div className="flex flex-col items-center justify-center py-12 h-[400px]">
+                            <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
+                          </div>
+                        )
+                      : enableDrag && !isFiltering
+                        ? (
+                            <ScrollArea className="h-[400px]">
+                              <Reorder.Group
+                                axis="y"
+                                values={filteredModels}
+                                onReorder={handleReorder}
+                                layoutScroll
+                                className="flex flex-col gap-2"
+                              >
+                                {filteredModels.map(orderedModel => (
+                                  <ModelItem
+                                    key={orderedModel.model.id}
+                                    orderedModel={orderedModel}
+                                    allParticipants={allParticipants}
+                                    customRoles={customRoles}
+                                    onToggle={() => onToggle(orderedModel.model.id)}
+                                    onRoleChange={(role, customRoleId) =>
+                                      onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                    onClearRole={() => onClearRole(orderedModel.model.id)}
+                                    selectedCount={selectedCount}
+                                    maxModels={maxModels}
+                                    enableDrag
+                                    userTierInfo={userTierInfo}
+                                    onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                  />
+                                ))}
+                              </Reorder.Group>
+                            </ScrollArea>
+                          )
+                        : (
+                            <ScrollArea className="h-[400px]">
+                              <div className="flex flex-col gap-2">
+                                {filteredModels.map(orderedModel => (
+                                  <ModelItem
+                                    key={orderedModel.model.id}
+                                    orderedModel={orderedModel}
+                                    allParticipants={allParticipants}
+                                    customRoles={customRoles}
+                                    onToggle={() => onToggle(orderedModel.model.id)}
+                                    onRoleChange={(role, customRoleId) =>
+                                      onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                    onClearRole={() => onClearRole(orderedModel.model.id)}
+                                    selectedCount={selectedCount}
+                                    maxModels={maxModels}
+                                    enableDrag={false}
+                                    userTierInfo={userTierInfo}
+                                    onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                  />
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          )}
+                  </div>
                 )}
           </AnimatePresence>
         </DialogBody>

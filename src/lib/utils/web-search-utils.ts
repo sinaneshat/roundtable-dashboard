@@ -357,3 +357,98 @@ export function handleImageError(
   // Trigger fallback behavior if provided
   onFallback?.();
 }
+
+// ============================================================================
+// FILE CONTENT EXTRACTION FOR SEARCH QUERIES
+// ============================================================================
+
+/**
+ * MIME types that can have text extracted client-side
+ */
+const TEXT_EXTRACTABLE_MIMES = new Set([
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'text/html',
+  'text/css',
+  'text/javascript',
+  'application/json',
+  'application/xml',
+  'application/javascript',
+  'application/typescript',
+]);
+
+/**
+ * Check if a file's MIME type supports client-side text extraction
+ */
+function isTextExtractable(mimeType: string): boolean {
+  return TEXT_EXTRACTABLE_MIMES.has(mimeType)
+    || mimeType.startsWith('text/')
+    || mimeType.includes('json')
+    || mimeType.includes('xml');
+}
+
+/**
+ * Extract text content from a File object
+ * Only works for text-based files that can be read client-side
+ *
+ * @param file - File object to extract text from
+ * @param maxLength - Maximum characters to extract (default: 5000)
+ * @returns Text content or empty string if extraction fails/not supported
+ */
+async function extractTextFromFile(file: File, maxLength = 5000): Promise<string> {
+  if (!isTextExtractable(file.type)) {
+    return '';
+  }
+
+  try {
+    const text = await file.text();
+    return text.slice(0, maxLength);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Extract file context from pending attachments for search query generation
+ * Combines text content from all text-extractable files
+ *
+ * @param attachments - Array of pending attachments with File objects
+ * @param maxTotalLength - Maximum total characters for all files combined (default: 8000)
+ * @returns Combined text context from all files, or empty string if none
+ *
+ * @example
+ * ```ts
+ * const attachments = store.getState().getAttachments();
+ * const fileContext = await extractFileContextForSearch(attachments);
+ * // Pass fileContext to pre-search API
+ * ```
+ */
+export async function extractFileContextForSearch(
+  attachments: Array<{ file: File; id?: string }>,
+  maxTotalLength = 8000,
+): Promise<string> {
+  if (!attachments || attachments.length === 0) {
+    return '';
+  }
+
+  const textParts: string[] = [];
+  let remainingLength = maxTotalLength;
+
+  for (const attachment of attachments) {
+    if (remainingLength <= 0)
+      break;
+
+    const perFileMax = Math.min(5000, remainingLength);
+    const text = await extractTextFromFile(attachment.file, perFileMax);
+
+    if (text.trim()) {
+      const header = `[File: ${attachment.file.name}]`;
+      const content = `${header}\n${text.trim()}`;
+      textParts.push(content);
+      remainingLength -= content.length;
+    }
+  }
+
+  return textParts.join('\n\n');
+}

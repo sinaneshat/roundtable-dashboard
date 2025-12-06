@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { toastManager } from '@/lib/toast/toast-manager';
+import { toastManager } from '@/lib/toast';
 
 type ChatDeleteDialogProps = {
   isOpen: boolean;

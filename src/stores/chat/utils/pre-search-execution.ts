@@ -100,7 +100,7 @@ export async function readPreSearchStreamData(
  */
 export type ExecutePreSearchStreamMutateAsync = (params: {
   param: { threadId: string; roundNumber: string };
-  json: { userQuery: string };
+  json: { userQuery: string; fileContext?: string };
 }) => Promise<Response>;
 
 /**
@@ -112,6 +112,8 @@ export type ExecutePreSearchOptions = {
   threadId: string;
   roundNumber: number;
   userQuery: string;
+  /** Optional extracted text content from uploaded files to include in search query generation */
+  fileContext?: string;
   existingPreSearch: StoredPreSearch | null;
   createPreSearchMutation: UseMutationResult<
     { data: StoredPreSearch } | undefined,
@@ -140,6 +142,7 @@ export async function executePreSearch(
     threadId,
     roundNumber,
     userQuery,
+    fileContext,
     existingPreSearch,
     createPreSearchMutation,
     executePreSearchMutateAsync,
@@ -199,6 +202,7 @@ export async function executePreSearch(
     }
 
     // ✅ PATTERN: Use mutation instead of direct service import
+    // ✅ FILE CONTEXT: Pass file content for query generation consideration
     const response = await executePreSearchMutateAsync({
       param: {
         threadId,
@@ -206,6 +210,7 @@ export async function executePreSearch(
       },
       json: {
         userQuery,
+        ...(fileContext && { fileContext }),
       },
     });
 

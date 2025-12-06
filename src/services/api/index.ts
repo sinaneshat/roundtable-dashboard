@@ -205,9 +205,9 @@ export {
 
 export {
   // Project attachment operations (reference-based)
-  type AddAttachmentToProjectRequest,
-  type AddAttachmentToProjectResponse,
-  addAttachmentToProjectService,
+  type AddUploadToProjectRequest,
+  type AddUploadToProjectResponse,
+  addUploadToProjectService,
   // Project memory operations
   type CreateProjectMemoryRequest,
   type CreateProjectMemoryResponse,

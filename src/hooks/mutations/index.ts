@@ -58,7 +58,7 @@ export {
   // Single-request uploads
   useDeleteAttachmentMutation,
   useMultipartUpload,
+  useSecureUploadMutation,
   useUpdateAttachmentMutation,
-  useUploadAttachmentMutation,
   useUploadPartMutation,
 } from './upload-mutations';

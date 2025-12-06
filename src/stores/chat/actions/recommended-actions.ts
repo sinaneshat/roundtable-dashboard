@@ -16,6 +16,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { Recommendation } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
@@ -76,9 +77,11 @@ export function useRecommendedActions(
     preserveThreadState = false,
   } = options;
 
-  // Store actions
-  const applyRecommendedAction = useChatStore(s => s.applyRecommendedAction);
-  const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
+  // Store actions - batched with useShallow for stable reference
+  const actions = useChatStore(useShallow(s => ({
+    applyRecommendedAction: s.applyRecommendedAction,
+    setHasPendingConfigChanges: s.setHasPendingConfigChanges,
+  })));
 
   // Get tier config and models data for filtering by tier access
   const { data: modelsData } = useModelsQuery();
@@ -92,7 +95,7 @@ export function useRecommendedActions(
   const handleActionClick = useCallback((action: Recommendation) => {
     // ✅ BUSINESS LOGIC: Delegate to store action (single source of truth)
     // This handles: full state reset, setting input, applying mode, filtering models by tier, adding participants
-    applyRecommendedAction(action, {
+    actions.applyRecommendedAction(action, {
       maxModels: userTierConfig?.max_models,
       tierName: userTierConfig?.tier_name,
       userTier: userTierConfig?.tier,
@@ -103,7 +106,7 @@ export function useRecommendedActions(
 
     // ✅ UI CONCERN: Mark config as changed if enabled (thread screen)
     if (markConfigChanged) {
-      setHasPendingConfigChanges(true);
+      actions.setHasPendingConfigChanges(true);
     }
 
     // ✅ UI CONCERN: Scroll to input if enabled (thread screen only)
@@ -121,9 +124,8 @@ export function useRecommendedActions(
       });
     }
   }, [
-    applyRecommendedAction,
+    actions,
     markConfigChanged,
-    setHasPendingConfigChanges,
     enableScroll,
     inputContainerRef,
     userTierConfig,

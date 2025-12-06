@@ -30,7 +30,7 @@ import { Skeleton } from "./skeleton"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -205,7 +205,7 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col p-2">
+          <div className="flex h-full w-full flex-col p-3">
             {children}
           </div>
         </SheetContent>
@@ -262,7 +262,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
           className={cn(
-            "bg-card group-data-[variant=floating]:border-border flex h-full w-full flex-col rounded-2xl group-data-[variant=floating]:border group-data-[variant=floating]:shadow-lg p-2"
+            "bg-card group-data-[variant=floating]:border-border flex h-full w-full flex-col rounded-2xl group-data-[variant=floating]:border group-data-[variant=floating]:shadow-lg p-3"
           )}
         >
           {children}
@@ -314,7 +314,7 @@ function SidebarRail({ className, ...props }: ComponentProps<"button">) {
       onClick={toggleSidebar}
       title={t('accessibility.toggleSidebar')}
       className={cn(
-        "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=start]:-end-4 group-data-[side=end]:start-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] sm:flex",
+        "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=start]:-end-4 group-data-[side=end]:start-0 sm:flex",
         "in-data-[side=start]:cursor-w-resize in-data-[side=end]:cursor-e-resize",
         "[[data-side=start][data-state=collapsed]_&]:cursor-e-resize [[data-side=end][data-state=collapsed]_&]:cursor-w-resize",
         "hover:group-data-[collapsible=offcanvas]:bg-sidebar group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:start-full",

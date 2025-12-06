@@ -11,7 +11,6 @@ import { z } from '@hono/zod-openapi';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { CHAT_MODES } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import { getAllModels } from '@/api/services/models-config.service';
 import {
   canAccessModelByPricing,
@@ -24,8 +23,6 @@ import type { TypedLogger } from '@/api/types/logger';
 import { DbChangelogDataSchema } from '@/db/schemas/chat-metadata';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 import { DEFAULT_ROLES } from '@/lib/utils/ai-display';
-
-export type ModeratorAnalysis = ModeratorAnalysisPayload;
 
 /**
  * Participant response schema for moderator analysis

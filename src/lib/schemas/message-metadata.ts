@@ -234,11 +234,10 @@ export function messageHasError(
     | MessageMetadata
     | import('@/db/schemas/chat-metadata').DbMessageMetadata,
 ): boolean {
-  if (isAssistantMetadata(metadata as MessageMetadata)) {
-    return (
-      (metadata as Extract<MessageMetadata, { role: 'assistant' }>).hasError
-      === true
-    );
+  // Type guard narrows the metadata type
+  const narrowedMetadata = metadata as MessageMetadata;
+  if (isAssistantMetadata(narrowedMetadata)) {
+    return narrowedMetadata.hasError === true;
   }
   return false; // User messages don't have error state
 }

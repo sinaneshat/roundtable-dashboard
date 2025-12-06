@@ -27,14 +27,10 @@ import { useThreadPreSearchesQuery } from '@/hooks/queries/chat/pre-search';
 import { transformPreSearches } from '@/lib/utils/date-transforms';
 
 import { getStatusPriority, PRE_SEARCH_COMPARE_KEYS } from '../store-constants';
-import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
 
 // Type-safe response type for pre-searches endpoint
 type PreSearchApiResponse = ApiResponse<{ items: StoredPreSearch[] }>;
-
-export type UsePreSearchOrchestratorOptions = OrchestratorOptions;
-export type UsePreSearchOrchestratorReturn = OrchestratorReturn;
 
 /**
  * Hook for orchestrating pre-search data between server and store

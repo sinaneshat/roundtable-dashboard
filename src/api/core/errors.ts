@@ -256,29 +256,8 @@ export const ApiErrors = {
   },
 } as const;
 
-/**
- * Error Context Builder Shortcuts
- *
- * Direct access to error context builders for cases where you need
- * custom error creation with specific contexts.
- *
- * @example
- * const context = ErrorContexts.database('select', 'users');
- * throw createError.internal('Custom error message', context);
- */
-export const ErrorContexts = ErrorContextBuilders;
-
-/**
- * Error Codes Export
- *
- * Export error codes for direct usage in custom error scenarios.
- *
- * @example
- * if (error.code === ErrorCodes.RESOURCE_NOT_FOUND) {
- *   // Handle not found
- * }
- */
-export const ErrorCodes = ERROR_CODES;
+// ✅ Use ErrorContextBuilders directly from '@/api/common/error-contexts'
+// ✅ Use ERROR_CODES directly from '@/api/common/error-handling'
 
 /**
  * Type guard to check if an error is an AppError

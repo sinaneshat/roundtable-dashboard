@@ -45,6 +45,7 @@
     --font-sans: var(--font-geist-sans), sans-serif;
     --font-serif: Georgia, serif;
     --font-mono: var(--font-geist-mono), monospace;
+    --font-display: var(--font-space-grotesk), var(--font-geist-sans), sans-serif;
     --radius: 0.5rem;
     --shadow-x: 0px;
     --shadow-y: 1px;
@@ -65,11 +66,11 @@
   }
 
   .dark {
-    --background: hsl(0 0% 0%);
+    --background: hsl(240 6% 4%);
     --foreground: hsl(223.8136 -172.5242% 100%);
     --card: hsl(240 6.67% 8.82%);
     --card-foreground: hsl(223.8136 -172.5242% 100%);
-    --popover: hsl(223.8136 0% 6.8692%);
+    --popover: hsl(240 6% 5.5%);
     --popover-foreground: hsl(223.8136 -172.5242% 100%);
     --primary: hsl(223.8136 -172.5242% 100%);
     --primary-foreground: hsl(0 0% 0%);
@@ -104,6 +105,7 @@
     --font-sans: var(--font-geist-sans), sans-serif;
     --font-serif: Georgia, serif;
     --font-mono: var(--font-geist-mono), monospace;
+    --font-display: var(--font-space-grotesk), var(--font-geist-sans), sans-serif;
     --radius: 0.5rem;
     --shadow-x: 0px;
     --shadow-y: 1px;
@@ -162,6 +164,7 @@
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
     --font-serif: var(--font-serif);
+    --font-display: var(--font-display);
 
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);

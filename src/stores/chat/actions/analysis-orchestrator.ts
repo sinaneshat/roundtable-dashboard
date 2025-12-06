@@ -29,7 +29,7 @@ import { deduplicateAnalyses } from '@/lib/utils/analysis-utils';
 import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 
 import { getStatusPriority, MODERATOR_ANALYSIS_COMPARE_KEYS } from '../store-constants';
-import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
+import type { OrchestratorOptions } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
 import type { AnalysesCacheData, AnalysisDeduplicationOptions } from './types';
 
@@ -41,7 +41,6 @@ type AnalysesApiResponse = AnalysesCacheData;
 type RawAnalysisItem = AnalysesCacheData['data']['items'][number];
 
 export type UseAnalysisOrchestratorOptions = OrchestratorOptions<readonly [], AnalysisDeduplicationOptions>;
-export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
 
 /**
  * Hook for orchestrating analysis data between server and store

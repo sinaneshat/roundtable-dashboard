@@ -19,8 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import type { PendingAttachment } from '@/hooks/utils/use-chat-attachments';
-import { getFileIconName, getFileTypeLabel } from '@/hooks/utils/use-file-preview';
+import type { PendingAttachment } from '@/hooks/utils';
+import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
 type ChatInputAttachmentsProps = {

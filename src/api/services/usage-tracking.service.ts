@@ -30,7 +30,7 @@ import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags
 import * as tables from '@/db/schema';
 import type { UserChatUsage } from '@/db/validation';
 
-import type { UsageStats, UsageStatus } from '../routes/usage/schema';
+import type { UsageStatsPayload, UsageStatus } from '../routes/usage/schema';
 import type { SubscriptionTier } from './product-logic.service';
 import { subscriptionTierSchema, TIER_QUOTAS } from './product-logic.service';
 
@@ -515,7 +515,7 @@ export async function incrementAnalysisUsage(userId: string, count = 1): Promise
  * Get comprehensive usage statistics for a user
  * Used for displaying usage in the UI
  */
-export async function getUserUsageStats(userId: string): Promise<UsageStats> {
+export async function getUserUsageStats(userId: string): Promise<UsageStatsPayload> {
   const usage = await ensureUserUsageRecord(userId);
   const now = new Date();
 

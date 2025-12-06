@@ -11,18 +11,17 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import type { UIMessage } from 'ai';
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import type { ChatMode } from '@/api/core/enums';
+import { MessageRoles } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import {
   useCreateThreadMutation,
   useUpdateThreadMutation,
 } from '@/hooks/mutations/chat-mutations';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
@@ -33,7 +32,7 @@ import { getRoundNumber } from '@/lib/utils/metadata';
 import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
-import { createPlaceholderAnalysis, createPlaceholderPreSearch } from '../utils/placeholder-factories';
+import { createOptimisticUserMessage, createPlaceholderAnalysis, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
 
 /**
@@ -55,7 +54,7 @@ export type UseChatFormActionsReturn = {
   /** Reset form to initial state */
   handleResetForm: () => void;
   /** Change mode and mark as having pending changes */
-  handleModeChange: (mode: ChatModeId) => void;
+  handleModeChange: (mode: ChatMode) => void;
   /** Toggle web search on/off */
   handleWebSearchToggle: (enabled: boolean) => void;
   /** Check if form is valid for submission */
@@ -397,19 +396,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           }))
         : [];
 
-      const optimisticUserMessage: UIMessage = {
-        id: `optimistic-user-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [
-          ...fileParts, // Files first (matches UI layout)
-          { type: MessagePartTypes.TEXT, text: trimmed },
-        ],
-        metadata: {
-          role: MessageRoles.USER,
-          roundNumber: nextRoundNumber,
-          isOptimistic: true, // Marker for optimistic update
-        },
-      };
+      // ✅ REFACTORED: Use createOptimisticUserMessage factory for single source of truth
+      const optimisticUserMessage = createOptimisticUserMessage({
+        roundNumber: nextRoundNumber,
+        text: trimmed,
+        fileParts,
+      });
       actions.setMessages([...threadState.messages, optimisticUserMessage]);
 
       // ✅ IMMEDIATE UI FEEDBACK: Set flag to tell prepareForNewMessage not to add duplicate
@@ -586,7 +578,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
    * Change mode and mark as having pending changes
    * Used by ChatThreadScreen
    */
-  const handleModeChange = useCallback((mode: ChatModeId) => {
+  const handleModeChange = useCallback((mode: ChatMode) => {
     actions.setSelectedMode(mode);
     actions.setHasPendingConfigChanges(true);
   }, [actions]);

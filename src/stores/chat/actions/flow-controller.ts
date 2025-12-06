@@ -29,6 +29,8 @@ import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { createEmptyListCache, createPrefetchMeta } from '@/lib/utils/cache-helpers';
+import { toISOString, toISOStringOrNull } from '@/lib/utils/date-transforms';
 import { getCreatedAt } from '@/lib/utils/metadata';
 
 import { validateInfiniteQueryCache } from './types';
@@ -102,6 +104,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     // 1. Pre-populate thread detail (thread, participants, messages, user)
     // Format matches getThreadBySlugService response
+    // ✅ REFACTORED: Use toISOString/toISOStringOrNull utilities for date serialization
     queryClient.setQueryData(
       queryKeys.threads.detail(threadId),
       {
@@ -109,24 +112,19 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         data: {
           thread: {
             ...thread,
-            // Ensure dates are ISO strings for consistency with server response
-            createdAt: thread.createdAt instanceof Date ? thread.createdAt.toISOString() : thread.createdAt,
-            updatedAt: thread.updatedAt instanceof Date ? thread.updatedAt.toISOString() : thread.updatedAt,
-            lastMessageAt: thread.lastMessageAt
-              ? (thread.lastMessageAt instanceof Date ? thread.lastMessageAt.toISOString() : thread.lastMessageAt)
-              : null,
+            createdAt: toISOString(thread.createdAt),
+            updatedAt: toISOString(thread.updatedAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
           },
           participants: currentParticipants.map(p => ({
             ...p,
-            createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
-            updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
+            createdAt: toISOString(p.createdAt),
+            updatedAt: toISOString(p.updatedAt),
           })),
           // Messages from store - add createdAt for server format compatibility
-          // UIMessage from AI SDK doesn't have createdAt, but the page expects it
           // ✅ TYPE-SAFE: Use getCreatedAt utility instead of force casts
           messages: currentMessages.map(m => ({
             ...m,
-            // Use metadata.createdAt if available (our custom field), else default to now
             createdAt: getCreatedAt(m) ?? new Date().toISOString(),
           })),
           user: {
@@ -134,16 +132,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
             image: currentSession?.user?.image || null,
           },
         },
-        meta: {
-          requestId: 'prefetch',
-          timestamp: new Date().toISOString(),
-          version: 'v1',
-        },
+        meta: createPrefetchMeta(),
       },
     );
 
     // 2. Pre-populate analyses
     // Format matches getThreadAnalysesService response
+    // ✅ REFACTORED: Use toISOString/toISOStringOrNull utilities
     if (currentAnalyses.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.analyses(threadId),
@@ -152,22 +147,17 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
           data: {
             items: currentAnalyses.map(a => ({
               ...a,
-              createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : a.createdAt,
-              completedAt: a.completedAt
-                ? (a.completedAt instanceof Date ? a.completedAt.toISOString() : a.completedAt)
-                : null,
+              createdAt: toISOString(a.createdAt),
+              completedAt: toISOStringOrNull(a.completedAt),
             })),
           },
-          meta: {
-            requestId: 'prefetch',
-            timestamp: new Date().toISOString(),
-            version: 'v1',
-          },
+          meta: createPrefetchMeta(),
         },
       );
     }
 
     // 3. Pre-populate pre-searches (if web search enabled)
+    // ✅ REFACTORED: Use toISOString/toISOStringOrNull utilities
     if (currentPreSearches.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.preSearches(threadId),
@@ -176,51 +166,27 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
           data: {
             items: currentPreSearches.map(ps => ({
               ...ps,
-              createdAt: ps.createdAt instanceof Date ? ps.createdAt.toISOString() : ps.createdAt,
-              completedAt: ps.completedAt
-                ? (ps.completedAt instanceof Date ? ps.completedAt.toISOString() : ps.completedAt)
-                : null,
+              createdAt: toISOString(ps.createdAt),
+              completedAt: toISOStringOrNull(ps.completedAt),
             })),
           },
-          meta: {
-            requestId: 'prefetch',
-            timestamp: new Date().toISOString(),
-            version: 'v1',
-          },
+          meta: createPrefetchMeta(),
         },
       );
     }
 
     // 4. Pre-populate empty changelog (we don't have this data yet, but prevents loading)
+    // ✅ REFACTORED: Use createEmptyListCache utility
     queryClient.setQueryData(
       queryKeys.threads.changelog(threadId),
-      {
-        success: true,
-        data: {
-          items: [],
-        },
-        meta: {
-          requestId: 'prefetch',
-          timestamp: new Date().toISOString(),
-          version: 'v1',
-        },
-      },
+      createEmptyListCache(),
     );
 
     // 5. Pre-populate empty feedback (we don't have this data yet, but prevents loading)
+    // ✅ REFACTORED: Use createEmptyListCache utility
     queryClient.setQueryData(
       queryKeys.threads.feedback(threadId),
-      {
-        success: true,
-        data: {
-          items: [],
-        },
-        meta: {
-          requestId: 'prefetch',
-          timestamp: new Date().toISOString(),
-          version: 'v1',
-        },
-      },
+      createEmptyListCache(),
     );
     // ✅ REACT BEST PRACTICE: Only stable dependencies (storeApi, queryClient)
     // State is read imperatively via getState() at call time

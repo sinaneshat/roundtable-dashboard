@@ -28,7 +28,7 @@ import {
   useCompleteMultipartUploadMutation,
   useCreateMultipartUploadMutation,
   useDeleteAttachmentMutation,
-  useUploadAttachmentMutation,
+  useSecureUploadMutation,
   useUploadPartMutation,
 } from '@/hooks/mutations';
 
@@ -229,7 +229,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const { previews, addFiles: addPreviews, removePreview, clearPreviews } = useFilePreview();
 
   // Mutations
-  const uploadSingle = useUploadAttachmentMutation();
+  const uploadSingle = useSecureUploadMutation();
   const createMultipart = useCreateMultipartUploadMutation();
   const uploadPart = useUploadPartMutation();
   const completeMultipart = useCompleteMultipartUploadMutation();
@@ -731,7 +731,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const validation = useFileValidation();
-  const uploadMutation = useUploadAttachmentMutation();
+  const uploadMutation = useSecureUploadMutation();
 
   const reset = useCallback(() => {
     setProgress(createInitialProgress());

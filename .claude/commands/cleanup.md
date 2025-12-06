@@ -13,7 +13,8 @@ Ask the user which cleanup tasks they want to run. Present these options:
 4. **Enum Patterns** - Apply enum-based patterns for reusability
 5. **Dead Code** - Remove legacy/backwards-compatible/duplicate code
 6. **Anti-Patterns** - Fix anti-patterns by comparing to sibling files
-7. **Full Cleanup** - Run all of the above
+7. **React 19 Patterns** - Fix useEffect anti-patterns, apply callback-based patterns
+8. **Full Cleanup** - Run all of the above
 
 If user provided scope argument: $ARGUMENTS
 
@@ -73,6 +74,42 @@ Remove without hesitation:
 - Re-exports from multiple locations (consolidate to barrel)
 - `// removed` or `// deprecated` markers
 
+## Const Reassignment Violations
+
+**FORBIDDEN - No const reassignment without transformation:**
+```typescript
+// ❌ FORBIDDEN - redundant alias
+const NewSchema = ExistingSchema;
+export const AliasName = OriginalName;
+
+// ❌ FORBIDDEN - backwards-compatible alias
+export const OldName = NewName; // "for backwards compatibility"
+
+// ❌ FORBIDDEN - @deprecated aliases
+/** @deprecated */ export const LegacyHook = CurrentHook;
+```
+
+**ALLOWED - Legitimate patterns:**
+```typescript
+// ✅ ALLOWED - Next.js route handlers (required by framework)
+export const GET = handler;
+export const POST = handler;
+
+// ✅ ALLOWED - barrel exports (index.ts re-exporting from modules)
+export { useQuery } from './queries';
+export type { QueryResult } from './types';
+
+// ✅ ALLOWED - const with literal value assignment
+export const DEFAULT_VALUE = 'pending';
+export const MAX_RETRIES = 3;
+```
+
+**Migration Strategy:**
+1. Find all usages of the alias
+2. Update all usages to use the original name
+3. Delete the alias completely
+4. Update barrel exports to use original name
+
 ## Test Fixing Strategy
 
 When fixing tests:
@@ -91,6 +128,288 @@ Compare each file to its siblings and fix:
 - Missing error handling present in siblings
 - Different import styles
 
+## React 19 + Next.js 15 Patterns
+
+**MANDATORY**: Follow React 19 and Next.js 15 best practices. Reference official docs via Context7 MCP (`/reactjs/react.dev`, `/vercel/next.js`) when uncertain.
+
+### Callback-Over-Effect Rule (CRITICAL)
+
+**You Might Not Need an Effect** - Most side effects belong in callbacks, not useEffect.
+
+**FORBIDDEN - useEffect for user interactions:**
+```typescript
+// ❌ ANTI-PATTERN: Effect responding to user action
+const [submitted, setSubmitted] = useState(false);
+useEffect(() => {
+  if (submitted) {
+    sendAnalytics('form_submitted');
+    showNotification('Success!');
+  }
+}, [submitted]);
+
+// ❌ ANTI-PATTERN: Effect chain for derived state
+useEffect(() => {
+  setFullName(`${firstName} ${lastName}`);
+}, [firstName, lastName]);
+
+// ❌ ANTI-PATTERN: Effect to transform data for rendering
+useEffect(() => {
+  setFilteredItems(items.filter(i => i.active));
+}, [items]);
+```
+
+**REQUIRED - Callback-based patterns:**
+```typescript
+// ✅ CORRECT: Logic in event handler
+function handleSubmit() {
+  sendAnalytics('form_submitted');
+  showNotification('Success!');
+  submitForm();
+}
+
+// ✅ CORRECT: Derive during render
+const fullName = `${firstName} ${lastName}`;
+
+// ✅ CORRECT: useMemo for expensive computations
+const filteredItems = useMemo(
+  () => items.filter(i => i.active),
+  [items]
+);
+```
+
+**When useEffect IS appropriate:**
+- Synchronizing with external systems (WebSocket, DOM APIs, third-party widgets)
+- Data fetching (but prefer React Query/SWR)
+- Setting up subscriptions that need cleanup
+
+### Ref Callback Cleanup (React 19)
+
+**MANDATORY**: All ref callbacks MUST return cleanup functions.
+
+```typescript
+// ❌ ANTI-PATTERN: No cleanup (memory leak)
+<li ref={(node) => {
+  itemsRef.current.push(node);
+}} />
+
+// ❌ ANTI-PATTERN: Implicit return (TypeScript error in React 19)
+<div ref={current => (instance = current)} />
+
+// ✅ CORRECT: Explicit cleanup function
+<li ref={(node) => {
+  const list = itemsRef.current;
+  const item = { id, node };
+  list.push(item);
+
+  return () => {
+    list.splice(list.indexOf(item), 1);
+  };
+}} />
+
+// ✅ CORRECT: Block statement (no implicit return)
+<div ref={current => { instance = current }} />
+```
+
+### useEffect Cleanup Patterns
+
+**MANDATORY**: Every useEffect with setup MUST have matching cleanup.
+
+```typescript
+// ❌ ANTI-PATTERN: Missing cleanup
+useEffect(() => {
+  const interval = setInterval(tick, 1000);
+  // Memory leak: interval never cleared
+}, []);
+
+// ❌ ANTI-PATTERN: Stale ref in cleanup
+useEffect(() => {
+  return () => {
+    timeoutsRef.current.forEach(clearTimeout); // May be stale
+  };
+}, []);
+
+// ✅ CORRECT: Capture refs at effect start
+useEffect(() => {
+  const timeouts = timeoutsRef.current;
+  const intervals = intervalsRef.current;
+
+  return () => {
+    timeouts.forEach(clearTimeout);
+    intervals.forEach(clearInterval);
+  };
+}, []);
+
+// ✅ CORRECT: Cleanup matches setup
+useEffect(() => {
+  const controller = new AbortController();
+  fetchData({ signal: controller.signal });
+
+  return () => controller.abort();
+}, []);
+```
+
+### Race Condition Prevention
+
+```typescript
+// ❌ ANTI-PATTERN: Race condition in fetch
+useEffect(() => {
+  fetchUser(userId).then(setUser);
+}, [userId]);
+
+// ✅ CORRECT: Ignore stale responses
+useEffect(() => {
+  let ignore = false;
+
+  fetchUser(userId).then(user => {
+    if (!ignore) setUser(user);
+  });
+
+  return () => { ignore = true };
+}, [userId]);
+
+// ✅ PREFERRED: Use React Query with automatic cancellation
+const { data: user } = useQuery({
+  queryKey: ['user', userId],
+  queryFn: () => fetchUser(userId),
+});
+```
+
+### Render Optimization Patterns
+
+**MANDATORY**: Prevent unnecessary re-renders with proper memoization.
+
+```typescript
+// ❌ ANTI-PATTERN: New object/function every render
+<Form onSubmit={(data) => handleSubmit(data)} />
+<List items={items.filter(i => i.active)} />
+
+// ✅ CORRECT: useCallback for stable function refs
+const handleSubmit = useCallback((data) => {
+  post('/api/submit', { productId, data });
+}, [productId]);
+
+// ✅ CORRECT: useMemo for derived data
+const activeItems = useMemo(
+  () => items.filter(i => i.active),
+  [items]
+);
+
+// ✅ CORRECT: memo for expensive child components
+const ExpensiveList = memo(function ExpensiveList({ items }) {
+  return items.map(item => <ExpensiveItem key={item.id} {...item} />);
+});
+```
+
+### Context Optimization
+
+```typescript
+// ❌ ANTI-PATTERN: New object every render causes all consumers to re-render
+function Provider({ children }) {
+  const [user, setUser] = useState(null);
+  return (
+    <AuthContext value={{ user, setUser }}>
+      {children}
+    </AuthContext>
+  );
+}
+
+// ✅ CORRECT: Memoize context value
+function Provider({ children }) {
+  const [user, setUser] = useState(null);
+
+  const contextValue = useMemo(() => ({
+    user,
+    setUser,
+  }), [user]);
+
+  return (
+    <AuthContext value={contextValue}>
+      {children}
+    </AuthContext>
+  );
+}
+```
+
+### Form Actions (React 19 + Next.js 15)
+
+**PREFERRED**: Use useActionState over useEffect for form handling.
+
+```typescript
+// ❌ ANTI-PATTERN: useEffect for form submission state
+const [error, setError] = useState(null);
+const [pending, setPending] = useState(false);
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  setPending(true);
+  const result = await submitForm(new FormData(e.target));
+  setPending(false);
+  if (result.error) setError(result.error);
+}
+
+// ✅ CORRECT: useActionState (React 19)
+const [error, submitAction, isPending] = useActionState(
+  async (prevState, formData) => {
+    const result = await updateName(formData.get('name'));
+    if (result.error) return result.error;
+    redirect('/success');
+    return null;
+  },
+  null
+);
+
+return (
+  <form action={submitAction}>
+    <input name="name" />
+    <button disabled={isPending}>Submit</button>
+    {error && <p>{error}</p>}
+  </form>
+);
+```
+
+### Async Server Components (Next.js 15)
+
+```typescript
+// ✅ CORRECT: Async server component
+async function UserProfile({ userId }: { userId: string }) {
+  const user = await fetchUser(userId);
+  return <ProfileCard user={user} />;
+}
+
+// ✅ CORRECT: Parallel data fetching
+async function Dashboard() {
+  const [user, posts, notifications] = await Promise.all([
+    fetchUser(),
+    fetchPosts(),
+    fetchNotifications(),
+  ]);
+
+  return <DashboardView user={user} posts={posts} notifications={notifications} />;
+}
+
+// ✅ CORRECT: params are async in Next.js 15
+async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const data = await fetchData(id);
+  return <Content data={data} />;
+}
+```
+
+### React 19 Cleanup Checklist
+
+When auditing components for React 19 compliance:
+
+1. **Ref callbacks**: Return cleanup functions, use block statements
+2. **useEffect**: Match every setup with cleanup, capture refs at start
+3. **Event handlers**: Move user interaction logic out of effects
+4. **Derived state**: Calculate during render or useMemo, not useEffect
+5. **Data transforms**: useMemo, not useEffect + setState
+6. **Form state**: useActionState over manual state + effects
+7. **Context values**: useMemo to prevent cascading re-renders
+8. **Callback props**: useCallback for stable references
+9. **Expensive children**: memo() wrapper
+10. **Strict Mode**: Ensure effects handle double-mount gracefully
+
 ## Execution
 
 After user selects options:
@@ -100,3 +419,41 @@ After user selects options:
 4. Fix issues following established patterns in `/docs/type-inference-patterns.md`
 5. Run `pnpm test` to verify fixes don't break tests
 6. Report summary of changes made
+
+### React 19 Pattern Search Commands
+
+When running React 19 cleanup, search for these patterns:
+
+```bash
+# Find useEffect with setState (potential anti-pattern)
+grep -rn "useEffect.*setState\|useEffect.*set[A-Z]" src/
+
+# Find ref callbacks without cleanup
+grep -rn "ref={(node)\|ref={node =>" src/ | grep -v "return"
+
+# Find inline functions in JSX props
+grep -rn "onClick={() =>\|onSubmit={() =>\|onChange={() =>" src/
+
+# Find effects without cleanup return
+grep -rn "useEffect(() => {" src/ -A 10 | grep -v "return"
+
+# Find context providers without useMemo
+grep -rn "Context.Provider value={{" src/
+```
+
+### Context7 MCP Reference
+
+For official React 19 and Next.js 15 documentation, use Context7:
+
+```
+Library IDs:
+- React 19: /reactjs/react.dev or /websites/react_dev_reference
+- Next.js 15: /vercel/next.js (use v15.1.8 or latest)
+
+Topics to query:
+- "useEffect cleanup best practices"
+- "ref callback cleanup function"
+- "useActionState form handling"
+- "useMemo useCallback optimization"
+- "you might not need an effect"
+```

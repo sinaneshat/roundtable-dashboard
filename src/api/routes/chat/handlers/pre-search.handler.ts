@@ -46,7 +46,7 @@ import {
   initializePreSearchStreamBuffer,
 } from '@/api/services/pre-search-stream-buffer.service';
 import { analyzeQueryComplexity } from '@/api/services/prompts.service';
-import { isQuerySearchable, simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
+import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import {
   createSearchCache,
@@ -336,58 +336,19 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // ✅ MULTI-QUERY: Stream query generation and get all queries
         let multiQueryResult: MultiQueryGeneration | null = null;
 
-        // ✅ EARLY CHECK: Skip AI generation for non-searchable queries
-        // Prevents AI_NoObjectGeneratedError for greetings, commands, etc.
-        const queryIsSearchable = isQuerySearchable(body.userQuery);
+        // ✅ ALWAYS ATTEMPT AI GENERATION: Generate meaningful search queries for any input
+        // The AI will extract searchable terms from any content including conversational input
+        {
+          // ✅ FILE CONTEXT: Include uploaded file content in query generation
+          // This ensures search queries are relevant to both user message AND file contents
+          let queryMessage = body.userQuery;
+          if (body.fileContext && body.fileContext.trim()) {
+            queryMessage = `${body.userQuery}\n\n<file-context>\nThe user has uploaded files with the following content that should be considered when generating search queries:\n${body.fileContext}\n</file-context>`;
+          }
 
-        if (!queryIsSearchable) {
-          const optimizedQuery = simpleOptimizeQuery(body.userQuery);
-
-          // Create fallback with single query
-          multiQueryResult = {
-            totalQueries: 1,
-            analysisRationale: 'Fallback: Query not suitable for complex search',
-            queries: [{
-              query: optimizedQuery,
-              searchDepth: WebSearchDepths.BASIC,
-              complexity: WebSearchComplexities.BASIC,
-              rationale: 'Simple query optimization (non-searchable content detected)',
-              sourceCount: 3,
-              requiresFullContent: false,
-              chunksPerSource: 1,
-              needsAnswer: 'basic',
-              analysis: `Fallback: Query "${body.userQuery}" simplified to "${optimizedQuery}"`,
-            }],
-          };
-
-          // Send start event for fallback
-          await bufferedWriteSSE({
-            event: PreSearchSseEvents.START,
-            data: JSON.stringify({
-              timestamp: Date.now(),
-              userQuery: body.userQuery,
-              totalQueries: 1,
-              analysisRationale: 'Fallback mode - non-searchable query',
-            }),
-          });
-
-          // Notify frontend about fallback
-          await bufferedWriteSSE({
-            event: PreSearchSseEvents.QUERY,
-            data: JSON.stringify({
-              timestamp: Date.now(),
-              query: optimizedQuery,
-              rationale: 'Simple query optimization (non-searchable content detected)',
-              searchDepth: WebSearchDepths.BASIC,
-              index: 0,
-              total: 1,
-              fallback: true,
-            }),
-          });
-        } else {
           // ✅ NORMAL FLOW: Attempt AI generation for searchable queries
           try {
-            const queryStream = streamSearchQuery(body.userQuery, c.env);
+            const queryStream = streamSearchQuery(queryMessage, c.env);
 
             // ✅ INCREMENTAL STREAMING: Stream each query update as it's generated
             // Track best partial result for graceful fallback if final validation fails
@@ -564,38 +525,38 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 }
               }
             } catch {
-            // ✅ FALLBACK LEVEL 2: If all AI fails, use simple query optimizer
+              // ✅ FALLBACK: If AI generation fails, extract key terms from user input
               const optimizedQuery = simpleOptimizeQuery(body.userQuery);
 
-              // Create fallback with single query
+              // Create fallback with single query using extracted terms
               multiQueryResult = {
                 totalQueries: 1,
-                analysisRationale: 'Fallback: AI generation unavailable',
+                analysisRationale: 'Searching based on key terms from your message',
                 queries: [{
                   query: optimizedQuery,
                   searchDepth: WebSearchDepths.BASIC,
                   complexity: WebSearchComplexities.MODERATE,
-                  rationale: 'Simple query optimization (AI generation unavailable)',
+                  rationale: 'Searching for relevant information based on your input',
                   sourceCount: 4,
                   requiresFullContent: false,
                   chunksPerSource: 1,
                   needsAnswer: 'basic',
-                  analysis: `Fallback: Using simplified query transformation from "${body.userQuery}"`,
+                  analysis: `Extracting search terms from: "${body.userQuery}"`,
                 }],
               };
 
-              // Send start event for fallback
+              // Send start event
               await bufferedWriteSSE({
                 event: PreSearchSseEvents.START,
                 data: JSON.stringify({
                   timestamp: Date.now(),
                   userQuery: body.userQuery,
                   totalQueries: 1,
-                  analysisRationale: 'Fallback mode',
+                  analysisRationale: 'Searching based on key terms from your message',
                 }),
               });
 
-              // Notify frontend about fallback
+              // Send query event
               const fallbackQuery = multiQueryResult.queries[0];
               if (fallbackQuery) {
                 await bufferedWriteSSE({
@@ -607,13 +568,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                     searchDepth: WebSearchDepths.BASIC,
                     index: 0,
                     total: 1,
-                    fallback: true,
                   }),
                 });
               }
             }
           }
-        } // Close the else block for queryIsSearchable
+        }
 
         // Type guard
         if (!multiQueryResult) {
@@ -647,21 +607,18 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         }
 
         // ✅ STREAM: Notify frontend about complexity decision
-        // Skip sending START here for non-searchable queries since we already sent it above
-        // This prevents duplicate START events that confuse the frontend
-        if (queryIsSearchable) {
-          await bufferedWriteSSE({
-            event: PreSearchSseEvents.START,
-            data: JSON.stringify({
-              timestamp: Date.now(),
-              userQuery: body.userQuery,
-              totalQueries,
-              analysisRationale: multiQueryResult.analysisRationale,
-              complexity: complexityResult.complexity,
-              complexityReasoning: complexityResult.reasoning,
-            }),
-          });
-        }
+        // Note: We may have already sent START during fallback, but frontend handles duplicates
+        await bufferedWriteSSE({
+          event: PreSearchSseEvents.START,
+          data: JSON.stringify({
+            timestamp: Date.now(),
+            userQuery: body.userQuery,
+            totalQueries,
+            analysisRationale: multiQueryResult.analysisRationale,
+            complexity: complexityResult.complexity,
+            complexityReasoning: complexityResult.reasoning,
+          }),
+        });
 
         // ✅ POSTHOG TRACKING: Track query generation completion
         const queryGenerationDuration = performance.now() - queryGenerationStartTime;
@@ -912,24 +869,30 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               total: totalQueries,
             })),
             // ✅ FULL RAW DATA: Include fullContent, rawContent for participant access
-            results: successfulResults.map(r => ({
-              query: r.result!.query,
-              answer: null, // No pre-generated answers - participants synthesize from raw data
-              results: r.result!.results.map((res: WebSearchResult['results'][number]) => ({
-                title: res.title,
-                url: res.url,
-                content: res.content,
-                excerpt: res.excerpt,
-                fullContent: res.fullContent, // ✅ CRITICAL: Full scraped content
-                rawContent: res.rawContent, // ✅ CRITICAL: Raw markdown content
-                score: res.score,
-                publishedDate: res.publishedDate ?? null,
-                domain: res.domain,
-                metadata: res.metadata,
-                images: res.images,
-              })),
-              responseTime: r.duration,
-            })),
+            // ✅ FIX: Include index for frontend matching during progressive streaming
+            results: successfulResults.map((r, idx) => {
+              // Find original query index from allResults
+              const originalIdx = allResults.findIndex(ar => ar.query === r.query);
+              return {
+                query: r.result!.query,
+                answer: null, // No pre-generated answers - participants synthesize from raw data
+                results: r.result!.results.map((res: WebSearchResult['results'][number]) => ({
+                  title: res.title,
+                  url: res.url,
+                  content: res.content,
+                  excerpt: res.excerpt,
+                  fullContent: res.fullContent, // ✅ CRITICAL: Full scraped content
+                  rawContent: res.rawContent, // ✅ CRITICAL: Raw markdown content
+                  score: res.score,
+                  publishedDate: res.publishedDate ?? null,
+                  domain: res.domain,
+                  metadata: res.metadata,
+                  images: res.images,
+                })),
+                responseTime: r.duration,
+                index: originalIdx >= 0 ? originalIdx : idx, // ✅ Original query index for matching
+              };
+            }),
             analysis: multiQueryResult.analysisRationale || `Multi-query search: ${totalQueries} queries`,
             successCount: successfulResults.length,
             failureCount: totalQueries - successfulResults.length,

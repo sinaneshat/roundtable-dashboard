@@ -50,12 +50,14 @@ export { useFlowLoading } from './use-flow-loading';
 export { useFuzzySearch } from './use-fuzzy-search';
 export { useKeyboardAwareScroll } from './use-keyboard-aware-scroll';
 export { useMediaQuery } from './use-media-query';
-export type { UseMessagePartsOptions, UseMessagePartsReturn } from './use-message-parts';
+export type { UseMessagePartsOptions } from './use-message-parts';
 export { useMessageParts } from './use-message-parts';
+// UseMessagePartsReturn is MessagePartsAnalysis - import from @/lib/utils/message-status
 export { useIsMobile } from './use-mobile';
 export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
+export { useNavigationReset, useResetOnUnmount } from './use-navigation-reset';
 export { useSelectedParticipants } from './use-selected-participants';
 export { useSortedParticipants } from './use-sorted-participants';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';

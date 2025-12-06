@@ -37,7 +37,7 @@ function RHFTextField({
       name={name}
       render={({ field }) => (
         <FormItem className={className || 'w-full'}>
-          <FormLabel>{title}</FormLabel>
+          {title && <FormLabel>{title}</FormLabel>}
           <FormControl>
             <Input
               {...field}

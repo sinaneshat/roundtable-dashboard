@@ -17,8 +17,8 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadAnalysesService } from '@/services/api';
-import type { AnalysesCacheData } from '@/stores/chat/actions/types';
-import { validateAnalysesCache } from '@/stores/chat/actions/types';
+import type { AnalysesCacheData } from '@/stores/chat';
+import { validateAnalysesCache } from '@/stores/chat';
 
 /**
  * Hook to fetch thread moderator analyses

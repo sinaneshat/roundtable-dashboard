@@ -12,12 +12,12 @@
  * Used by: store.ts applyRecommendedAction (thin wrapper)
  */
 
+import type { ChatMode } from '@/api/core/enums';
 import { ChatModeSchema } from '@/api/core/enums';
 import type { Recommendation } from '@/api/routes/chat/schema';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 export type ApplyRecommendedActionOptions = {
@@ -48,7 +48,7 @@ export type ApplyRecommendedActionInternalResult = {
   modelsSkipped?: number;
   updates: {
     inputValue?: string;
-    selectedMode?: ChatModeId;
+    selectedMode?: ChatMode;
     selectedParticipants?: ParticipantConfig[];
   };
 };
@@ -135,10 +135,11 @@ export function applyRecommendedAction(
         const modelsToAdd = accessibleModels.slice(0, availableSlots);
         modelsSkipped += accessibleModels.length - availableSlots;
 
+        // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
         const newParticipants = modelsToAdd.map((modelId, index) => {
           const originalIndex = action.suggestedModels!.indexOf(modelId);
           return {
-            id: `participant-${Date.now()}-${index}`,
+            id: modelId,
             modelId,
             role: action.suggestedRoles?.[originalIndex] || null,
             customRoleId: undefined,
@@ -151,10 +152,11 @@ export function applyRecommendedAction(
         error = `Only ${modelsAdded} of ${accessibleModels.length} suggested models were added. Your ${tierName || 'current'} plan allows up to ${maxModels} models. Upgrade to add more.`;
       } else {
         // All accessible models fit within limit
+        // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
         const newParticipants = accessibleModels.map((modelId, index) => {
           const originalIndex = action.suggestedModels!.indexOf(modelId);
           return {
-            id: `participant-${Date.now()}-${index}`,
+            id: modelId,
             modelId,
             role: action.suggestedRoles?.[originalIndex] || null,
             customRoleId: undefined,
@@ -168,10 +170,11 @@ export function applyRecommendedAction(
     } else {
       // No tier limit provided, add all accessible models
       if (accessibleModels.length > 0) {
+        // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
         const newParticipants = accessibleModels.map((modelId, index) => {
           const originalIndex = action.suggestedModels!.indexOf(modelId);
           return {
-            id: `participant-${Date.now()}-${index}`,
+            id: modelId,
             modelId,
             role: action.suggestedRoles?.[originalIndex] || null,
             customRoleId: undefined,

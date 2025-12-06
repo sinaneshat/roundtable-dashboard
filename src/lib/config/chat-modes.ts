@@ -19,16 +19,6 @@ import type { ChatMode } from '@/api/core/enums';
 import { ChatModes, DEFAULT_CHAT_MODE as DEFAULT_MODE_FROM_ENUM } from '@/api/core/enums';
 
 // ============================================================================
-// Type Alias for Chat Mode ID
-// ============================================================================
-
-/**
- * Chat mode ID type alias
- * ✅ Import ChatMode from /src/api/core/enums.ts instead of using this alias
- */
-export type ChatModeId = ChatMode;
-
-// ============================================================================
 // Chat Mode Configuration Types
 // ============================================================================
 
@@ -41,9 +31,9 @@ export type ChatModeMetadata = {
 };
 
 export type ChatModeConfig = {
-  id: ChatModeId;
+  id: ChatMode;
   label: string;
-  value: ChatModeId;
+  value: ChatMode;
   icon: LucideIcon;
   metadata: ChatModeMetadata;
   isEnabled: boolean;
@@ -145,7 +135,7 @@ export function getEnabledChatModes(): ChatModeConfig[] {
 /**
  * Get chat mode label by ID
  */
-export function getChatModeLabel(modeId: ChatModeId): string {
+export function getChatModeLabel(modeId: ChatMode): string {
   const mode = getChatModeById(modeId);
   return mode?.label ?? modeId;
 }
@@ -153,7 +143,7 @@ export function getChatModeLabel(modeId: ChatModeId): string {
 /**
  * Get chat mode icon by ID
  */
-export function getChatModeIcon(modeId: ChatModeId): LucideIcon | undefined {
+export function getChatModeIcon(modeId: ChatMode): LucideIcon | undefined {
   const mode = getChatModeById(modeId);
   return mode?.icon;
 }
@@ -161,15 +151,14 @@ export function getChatModeIcon(modeId: ChatModeId): LucideIcon | undefined {
 /**
  * Default chat mode constant
  * ✅ SINGLE SOURCE: Re-export from /src/api/core/enums.ts
- * ✅ TYPE-SAFE: Uses ChatMode enum from /src/api/core/enums.ts
  */
-export const DEFAULT_CHAT_MODE: ChatModeId = DEFAULT_MODE_FROM_ENUM;
+export const DEFAULT_CHAT_MODE: ChatMode = DEFAULT_MODE_FROM_ENUM;
 
 /**
  * Get default chat mode
  * ✅ Returns constant from enum file
  */
-export function getDefaultChatMode(): ChatModeId {
+export function getDefaultChatMode(): ChatMode {
   return DEFAULT_CHAT_MODE;
 }
 
@@ -181,7 +170,7 @@ export function getDefaultChatMode(): ChatModeId {
  * Chat mode selection option for UI components
  */
 export type ChatModeOption = {
-  value: ChatModeId;
+  value: ChatMode;
   label: string;
   icon: LucideIcon;
 };

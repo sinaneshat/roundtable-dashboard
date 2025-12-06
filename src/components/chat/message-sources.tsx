@@ -16,9 +16,6 @@ import { cn } from '@/lib/ui/cn';
 // Types
 // ============================================================================
 
-// Re-export for backward compatibility
-export type { AvailableSource } from '@/api/types/citations';
-
 type MessageSourcesProps = {
   sources: AvailableSource[];
   className?: string;

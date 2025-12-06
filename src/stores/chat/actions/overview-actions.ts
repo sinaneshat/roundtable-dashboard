@@ -14,9 +14,10 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
+import type { ChatMode } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
@@ -24,7 +25,7 @@ import { useFlowController } from './flow-controller';
 
 export type UseOverviewActionsReturn = {
   /** Handle suggestion click - sets input, mode, and participants */
-  handleSuggestionClick: (prompt: string, mode: ChatModeId, participants: ParticipantConfig[]) => void;
+  handleSuggestionClick: (prompt: string, mode: ChatMode, participants: ParticipantConfig[]) => void;
 };
 
 /**
@@ -40,11 +41,15 @@ export type UseOverviewActionsReturn = {
  * <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
  */
 export function useOverviewActions(): UseOverviewActionsReturn {
-  // Store actions
+  // State selector (separate from actions)
   const showInitialUI = useChatStore(s => s.showInitialUI);
-  const setInputValue = useChatStore(s => s.setInputValue);
-  const setSelectedMode = useChatStore(s => s.setSelectedMode);
-  const setSelectedParticipants = useChatStore(s => s.setSelectedParticipants);
+
+  // Action selectors - batched with useShallow for stable reference
+  const actions = useChatStore(useShallow(s => ({
+    setInputValue: s.setInputValue,
+    setSelectedMode: s.setSelectedMode,
+    setSelectedParticipants: s.setSelectedParticipants,
+  })));
 
   // Delegate flow control to centralized controller
   useFlowController({ enabled: !showInitialUI });
@@ -55,13 +60,13 @@ export function useOverviewActions(): UseOverviewActionsReturn {
    */
   const handleSuggestionClick = useCallback((
     prompt: string,
-    mode: ChatModeId,
+    mode: ChatMode,
     participants: ParticipantConfig[],
   ) => {
-    setInputValue(prompt);
-    setSelectedMode(mode);
-    setSelectedParticipants(participants);
-  }, [setInputValue, setSelectedMode, setSelectedParticipants]);
+    actions.setInputValue(prompt);
+    actions.setSelectedMode(mode);
+    actions.setSelectedParticipants(participants);
+  }, [actions]);
 
   return useMemoizedReturn({
     handleSuggestionClick,

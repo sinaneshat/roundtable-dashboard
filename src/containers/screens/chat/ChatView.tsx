@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 // ✅ SCROLL ANCHOR: Used by useChatScroll for smooth auto-scrolling
-import type { FeedbackType } from '@/api/core/enums';
+import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -34,7 +34,7 @@ import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indic
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
-import type { TimelineItem } from '@/hooks/utils';
+import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
   useBoolean,
   useChatScroll,
@@ -43,8 +43,6 @@ import {
   useThreadTimeline,
   useVisualViewportPosition,
 } from '@/hooks/utils';
-import type { UseChatAttachmentsReturn } from '@/hooks/utils/use-chat-attachments';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import {
@@ -84,11 +82,8 @@ export function ChatView({
   const isModeModalOpen = useBoolean(false);
   const isModelModalOpen = useBoolean(false);
 
-  // Attachment click handler (registered by ChatInput, used by toolbar)
+  // ✅ SIMPLIFIED: Ref-based attachment click (no registration callback needed)
   const attachmentClickRef = useRef<(() => void) | null>(null);
-  const handleRegisterAttachmentClick = useCallback((clickHandler: () => void) => {
-    attachmentClickRef.current = clickHandler;
-  }, []);
   const handleAttachmentClick = useCallback(() => {
     attachmentClickRef.current?.();
   }, []);
@@ -202,8 +197,7 @@ export function ChatView({
     });
   }, [changelogResponse]);
 
-  // Model ordering for modal
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  // Model ordering for modal - stable references for Motion Reorder
   const orderedModels = useMemo((): OrderedModel[] => {
     if (allEnabledModels.length === 0)
       return [];
@@ -212,20 +206,39 @@ export function ChatView({
       selectedParticipants.map(p => [p.modelId, p]),
     );
     const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
-    const orderedIds = modelOrder.length > 0 ? modelOrder : allEnabledModels.map(m => m.id);
 
-    return orderedIds
-      .map((modelId) => {
-        const model = modelMap.get(modelId);
-        if (!model)
-          return null;
-        return {
-          model,
-          participant: participantMap.get(modelId) || null,
-          order: orderedIds.indexOf(modelId),
-        };
-      })
-      .filter(Boolean) as typeof orderedModels;
+    // Build ordered list from modelOrder, deduplicating as we go
+    const seen = new Set<string>();
+    const orderedFromStore: OrderedModel[] = [];
+
+    // First, add models in the stored order
+    for (const modelId of modelOrder) {
+      if (seen.has(modelId))
+        continue;
+      const model = modelMap.get(modelId);
+      if (!model)
+        continue;
+      seen.add(modelId);
+      orderedFromStore.push({
+        model,
+        participant: participantMap.get(modelId) || null,
+        order: orderedFromStore.length,
+      });
+    }
+
+    // Then, append any models not yet in the order (newly available models)
+    for (const model of allEnabledModels) {
+      if (seen.has(model.id))
+        continue;
+      seen.add(model.id);
+      orderedFromStore.push({
+        model,
+        participant: participantMap.get(model.id) || null,
+        order: orderedFromStore.length,
+      });
+    }
+
+    return orderedFromStore;
   }, [selectedParticipants, allEnabledModels, modelOrder]);
 
   // Timeline with messages, analyses, changelog, and pre-searches
@@ -243,12 +256,8 @@ export function ChatView({
   // HOOKS
   // ============================================================================
 
-  // Initialize model order when models first load
-  useEffect(() => {
-    if (allEnabledModels.length > 0 && modelOrder.length === 0) {
-      setModelOrder(allEnabledModels.map(m => m.id));
-    }
-  }, [allEnabledModels, modelOrder.length, setModelOrder]);
+  // ✅ NOTE: Model order initialization happens in ChatOverviewScreen only
+  // ChatView receives already-initialized modelOrder from store
 
   // Feedback management
   const feedbackByRound = useChatStore(s => s.feedbackByRound);
@@ -366,7 +375,7 @@ export function ChatView({
   // CALLBACKS
   // ============================================================================
 
-  const handleModeSelect = useCallback((newMode: ChatModeId) => {
+  const handleModeSelect = useCallback((newMode: ChatMode) => {
     if (mode === 'thread') {
       threadActions.handleModeChange(newMode);
     } else {
@@ -384,19 +393,36 @@ export function ChatView({
   }, [mode, threadActions, formActions]);
 
   const handleModelReorder = useCallback((reordered: typeof orderedModels) => {
-    const newModelOrder = reordered.map(om => om.model.id);
+    // Extract model IDs and deduplicate to prevent corruption
+    const seen = new Set<string>();
+    const newModelOrder = reordered
+      .map(om => om.model.id)
+      .filter((id) => {
+        if (seen.has(id))
+          return false;
+        seen.add(id);
+        return true;
+      });
+
     setModelOrder(newModelOrder);
 
-    const reorderedParticipants = reordered
-      .filter(om => om.participant !== null)
-      .map((om, index) => ({ ...om.participant!, priority: index }));
+    // Recalculate participants from current state using new order
+    // This ensures we use fresh data instead of potentially stale references
+    const reorderedParticipants = newModelOrder
+      .map((modelId, visualIndex) => {
+        const participant = selectedParticipants.find(p => p.modelId === modelId);
+        return participant ? { ...participant, priority: visualIndex } : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      // Re-index priorities to be sequential (0, 1, 2...) for selected models only
+      .map((p, idx) => ({ ...p, priority: idx }));
 
     if (mode === 'thread') {
       threadActions.handleParticipantsChange(reorderedParticipants);
     } else {
       setSelectedParticipants(reorderedParticipants);
     }
-  }, [mode, threadActions, setModelOrder, setSelectedParticipants]);
+  }, [mode, threadActions, setModelOrder, setSelectedParticipants, selectedParticipants]);
 
   const handleModelToggle = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
@@ -405,6 +431,7 @@ export function ChatView({
 
     let updatedParticipants;
     if (orderedModel.participant) {
+      // Allow deselecting all - validation shown in UI
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
@@ -413,8 +440,9 @@ export function ChatView({
       });
       updatedParticipants = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
     } else {
+      // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
       const newParticipant = {
-        id: `participant-${Date.now()}`,
+        id: modelId,
         modelId,
         role: '',
         priority: selectedParticipants.length,
@@ -494,7 +522,7 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context="chat">
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-4">
+          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-6 pb-4">
             <ThreadTimeline
               timelineItems={timelineItems}
               scrollContainerId="main-scroll-container"
@@ -564,14 +592,14 @@ export function ChatView({
                 onAddAttachments={chatAttachments.addFiles}
                 onRemoveAttachment={chatAttachments.removeAttachment}
                 enableAttachments={!isInputBlocked}
-                onRegisterAttachmentClick={handleRegisterAttachmentClick}
+                attachmentClickRef={attachmentClickRef}
                 isUploading={chatAttachments.isUploading}
                 toolbar={(
                   <ChatInputToolbarMenu
                     selectedParticipants={selectedParticipants}
                     allModels={allEnabledModels}
                     onOpenModelModal={isModelModalOpen.onTrue}
-                    selectedMode={selectedMode || (thread?.mode as ChatModeId) || getDefaultChatMode()}
+                    selectedMode={selectedMode || (thread?.mode as ChatMode) || getDefaultChatMode()}
                     onOpenModeModal={isModeModalOpen.onTrue}
                     enableWebSearch={enableWebSearch}
                     onWebSearchToggle={handleWebSearchToggle}
@@ -593,7 +621,7 @@ export function ChatView({
       <ConversationModeModal
         open={isModeModalOpen.value}
         onOpenChange={isModeModalOpen.setValue}
-        selectedMode={selectedMode || (thread?.mode as ChatModeId) || getDefaultChatMode()}
+        selectedMode={selectedMode || (thread?.mode as ChatMode) || getDefaultChatMode()}
         onModeSelect={handleModeSelect}
       />
 

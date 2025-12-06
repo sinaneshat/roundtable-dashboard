@@ -406,8 +406,8 @@ export const StreamStatuses = {
   INITIALIZING: 'initializing' as const, // AI model loading
   STREAMING: 'streaming' as const, // Actively generating content
   COMPLETING: 'completing' as const, // Finishing up, saving to DB
-  // Legacy states (kept for backward compatibility)
-  ACTIVE: 'active' as const, // Alias for STREAMING
+  // Terminal states
+  ACTIVE: 'active' as const, // Stream has started (stored in KV)
   COMPLETED: 'completed' as const, // Successfully finished
   FAILED: 'failed' as const, // Error occurred
   EXPIRED: 'expired' as const, // TTL expired

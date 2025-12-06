@@ -95,7 +95,6 @@ export const THREAD_DEFAULTS = {
   // AI SDK methods
   sendMessage: undefined,
   startRound: undefined,
-  stop: undefined,
   chatSetMessages: undefined,
 } satisfies ThreadState;
 
@@ -276,7 +275,6 @@ export const COMPLETE_RESET_STATE = {
   error: THREAD_DEFAULTS.error,
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
-  stop: THREAD_DEFAULTS.stop,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
@@ -348,7 +346,6 @@ export const THREAD_RESET_STATE = {
   // AI SDK methods (thread-related)
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
-  stop: THREAD_DEFAULTS.stop,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   // Callbacks (included in thread reset)
   onComplete: CALLBACKS_DEFAULTS.onComplete,
@@ -387,24 +384,3 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   createdThreadId: UI_DEFAULTS.createdThreadId,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
 };
-
-// ============================================================================
-// TYPE EXPORTS - Derived from constants for type safety
-// ============================================================================
-
-export type FormDefaults = typeof FORM_DEFAULTS;
-export type FeedbackDefaults = typeof FEEDBACK_DEFAULTS;
-export type UIDefaults = typeof UI_DEFAULTS;
-export type AnalysisDefaults = typeof ANALYSIS_DEFAULTS;
-export type PreSearchDefaults = typeof PRESEARCH_DEFAULTS;
-export type ThreadDefaults = typeof THREAD_DEFAULTS;
-export type FlagsDefaults = typeof FLAGS_DEFAULTS;
-export type DataDefaults = typeof DATA_DEFAULTS;
-export type TrackingDefaults = typeof TRACKING_DEFAULTS;
-export type CallbacksDefaults = typeof CALLBACKS_DEFAULTS;
-export type ScreenDefaults = typeof SCREEN_DEFAULTS;
-export type CompleteResetState = typeof COMPLETE_RESET_STATE;
-export type ThreadResetState = typeof THREAD_RESET_STATE;
-export type ThreadNavigationResetState = typeof THREAD_NAVIGATION_RESET_STATE;
-export type AnimationDefaults = typeof ANIMATION_DEFAULTS;
-export type AttachmentsDefaults = typeof ATTACHMENTS_DEFAULTS;

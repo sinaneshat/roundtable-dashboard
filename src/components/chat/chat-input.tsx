@@ -15,13 +15,13 @@ import { VoiceVisualization } from '@/components/chat/voice-visualization';
 import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants/validation';
 import { useUsageStatsQuery } from '@/hooks/queries';
+import type { PendingAttachment } from '@/hooks/utils';
 import {
   useAutoResizeTextarea,
+  useDragDrop,
   useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
-import type { PendingAttachment } from '@/hooks/utils/use-chat-attachments';
-import { useDragDrop } from '@/hooks/utils/use-drag-drop';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
@@ -52,8 +52,8 @@ type ChatInputProps = {
   onAddAttachments?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   enableAttachments?: boolean;
-  /** Callback to register the attachment click handler (opens file picker) */
-  onRegisterAttachmentClick?: (clickHandler: () => void) => void;
+  /** Ref to expose attachment click handler to parent (for toolbar integration) */
+  attachmentClickRef?: React.MutableRefObject<(() => void) | null>;
   /** Whether files are currently uploading - disables submit until complete */
   isUploading?: boolean;
 };
@@ -85,7 +85,7 @@ export const ChatInput = memo(({
   onAddAttachments,
   onRemoveAttachment,
   enableAttachments = true,
-  onRegisterAttachmentClick,
+  attachmentClickRef,
   isUploading = false,
 }: ChatInputProps) => {
   const t = useTranslations();
@@ -158,12 +158,12 @@ export const ChatInput = memo(({
     fileInputRef.current?.click();
   }, []);
 
-  // Register the attachment click handler with parent component
+  // ✅ Sync ref after render commits (refs can't be updated during render)
   useEffect(() => {
-    if (onRegisterAttachmentClick && enableAttachments) {
-      onRegisterAttachmentClick(handleAttachmentClick);
+    if (attachmentClickRef && enableAttachments) {
+      attachmentClickRef.current = handleAttachmentClick;
     }
-  }, [onRegisterAttachmentClick, handleAttachmentClick, enableAttachments]);
+  }, [attachmentClickRef, enableAttachments, handleAttachmentClick]);
 
   // Drag and drop support
   const { isDragging, dragHandlers } = useDragDrop(handleFilesSelected);

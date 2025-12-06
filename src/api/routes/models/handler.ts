@@ -1,13 +1,8 @@
 /**
  * Models API Handlers
  *
- * ✅ USER-FACING MODELS: Curated 6 best multimodal models for UI selection
- * - Gemini 2.5 Flash ($0.30/M) - Fast, affordable multimodal
- * - Gemini 2.5 Pro ($1.25/M) - #1 on LMArena, flagship
- * - GPT-5.1 ($1.25/M) - OpenAI latest flagship, multimodal
- * - Gemini 3 Pro Preview ($2/M) - Gemini 3 flagship (preview)
- * - Claude Sonnet 4.5 ($3/M) - Agent-optimized, 1M context
- * - Claude Opus 4.5 ($5/M) - 80.9% SWE-bench, best reasoning
+ * Returns all available models with tier-based access control.
+ * Each model includes pricing, capabilities, and user accessibility info.
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -15,7 +10,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { getUserFacingModels } from '@/api/services/models-config.service';
+import { getAllModels } from '@/api/services/models-config.service';
 import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
@@ -27,18 +22,12 @@ import type { listModelsRoute } from './route';
 // ============================================================================
 
 /**
- * List curated 6 best multimodal models with tier-based access control
+ * List all available models with tier-based access control
  *
  * GET /api/v1/models
  *
- * ✅ USER-FACING APPROACH:
- * - 6 best multimodal models for perfect results
- * - Google (3): Gemini 2.5 Flash, Pro, 3 Pro Preview
- * - OpenAI (1): GPT-5.1
- * - Anthropic (2): Claude Sonnet 4.5, Opus 4.5
- *
- * ✅ MULTIMODAL FOCUS: All models support vision + text
- * Uses existing subscription tier logic from product-logic.service.ts
+ * Returns all models from HARDCODED_MODELS with tier access info.
+ * Uses subscription tier logic from product-logic.service.ts
  *
  * Returns:
  * - Tier information (required_tier, is_accessible_to_user)
@@ -61,9 +50,9 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = user ? await getUserTier(user.id) : 'free';
 
     // ============================================================================
-    // ✅ USER-FACING MODELS: Curated 6 best multimodal models for UI selection
+    // ✅ ALL MODELS: Show all available models for user selection
     // ============================================================================
-    const allModels = getUserFacingModels();
+    const allModels = getAllModels();
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection

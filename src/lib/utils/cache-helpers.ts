@@ -16,7 +16,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
-import { validateAnalysesCache } from '@/stores/chat/actions/types';
+import { validateAnalysesCache } from '@/stores/chat';
 
 /**
  * Creates an empty analyses cache structure
@@ -79,8 +79,10 @@ export function updateAnalysesCache(
       }
 
       // Update existing cache
-      // ✅ TYPE-SAFE: Cast validated cache items to StoredModeratorAnalysis
-      const updatedItems = updater(cacheData.data.items as StoredModeratorAnalysis[]);
+      // ✅ TYPE-SAFE: Cast validated cache items to match StoredModeratorAnalysis type
+      // The cache schema has `analysisData: z.unknown()` while StoredModeratorAnalysis
+      // has a more specific type. This cast is safe because both represent the same data.
+      const updatedItems = updater(cacheData.data.items as unknown as StoredModeratorAnalysis[]);
 
       return {
         ...cacheData,
@@ -242,6 +244,59 @@ export function getAnalysesFromCache(
 ): StoredModeratorAnalysis[] {
   const cacheData = queryClient.getQueryData(queryKeys.threads.analyses(threadId));
   const validated = validateAnalysesCache(cacheData);
-  // ✅ TYPE-SAFE: Cast validated cache items to StoredModeratorAnalysis
-  return (validated?.data.items as StoredModeratorAnalysis[]) || [];
+  // ✅ TYPE-SAFE: Cast validated cache items to match StoredModeratorAnalysis type
+  // The cache schema has `analysisData: z.unknown()` while StoredModeratorAnalysis
+  // has a more specific type. This cast is safe because both represent the same data.
+  return (validated?.data.items as unknown as StoredModeratorAnalysis[]) || [];
+}
+
+// ============================================================================
+// CACHE PREFETCH UTILITIES
+// ============================================================================
+
+/**
+ * Standard cache metadata for prefetch operations
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use this for all cache prefetch meta objects.
+ * Eliminates repeated inline object creation across flow-controller and other files.
+ *
+ * @param requestId - Optional request ID (default: 'prefetch')
+ * @returns Cache meta object with timestamp and version
+ *
+ * @example
+ * ```typescript
+ * queryClient.setQueryData(queryKey, {
+ *   success: true,
+ *   data: { items: [] },
+ *   meta: createPrefetchMeta(),
+ * });
+ * ```
+ */
+export function createPrefetchMeta(requestId: string = 'prefetch') {
+  return {
+    requestId,
+    timestamp: new Date().toISOString(),
+    version: 'v1',
+  } as const;
+}
+
+/**
+ * Creates empty cache response with meta for prefetch operations
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use for pre-populating empty list caches.
+ *
+ * @example
+ * ```typescript
+ * queryClient.setQueryData(
+ *   queryKeys.threads.changelog(threadId),
+ *   createEmptyListCache(),
+ * );
+ * ```
+ */
+export function createEmptyListCache() {
+  return {
+    success: true,
+    data: { items: [] },
+    meta: createPrefetchMeta(),
+  } as const;
 }

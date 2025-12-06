@@ -32,8 +32,7 @@ export function AvatarGroup({
   // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
   const visibleParticipants = sortByPriority(participants).slice(0, maxVisible);
 
-  const remainingCount = participants.length - maxVisible;
-
+  const totalCount = participants.length;
   const overlapOffset = size === 'sm' ? -8 : -12;
 
   return (
@@ -70,20 +69,18 @@ export function AvatarGroup({
           </div>
         );
       })}
-      {remainingCount > 0 && (
-        <div
-          className={cn(
-            sizeClasses[size],
-            'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
-            size === 'sm' ? 'ml-1' : 'ml-2',
-          )}
-        >
-          <span className={cn(textSizeClasses[size], 'tabular-nums')}>
-            +
-            {remainingCount}
-          </span>
-        </div>
-      )}
+      {/* Total count badge */}
+      <div
+        className={cn(
+          sizeClasses[size],
+          'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
+          size === 'sm' ? 'ml-2' : 'ml-3',
+        )}
+      >
+        <span className={cn(textSizeClasses[size], 'tabular-nums')}>
+          {totalCount}
+        </span>
+      </div>
     </div>
   );
 }

@@ -137,8 +137,11 @@ export function getUploadIdFromFilePart(part: FilePart): string | null {
 export function getFilenameFromPart(part: unknown): string | undefined {
   if (!part || typeof part !== 'object')
     return undefined;
-  if ('filename' in part && typeof (part as { filename?: unknown }).filename === 'string') {
-    return (part as { filename: string }).filename;
+  if ('filename' in part) {
+    const filenameValue = (part as Record<string, unknown>).filename;
+    if (typeof filenameValue === 'string') {
+      return filenameValue;
+    }
   }
   return undefined;
 }
@@ -153,12 +156,15 @@ export function getFilenameFromPart(part: unknown): string | undefined {
 export function getMimeTypeFromPart(part: unknown, defaultType = 'application/octet-stream'): string {
   if (!part || typeof part !== 'object')
     return defaultType;
+
+  const partRecord = part as Record<string, unknown>;
+
   // Check mimeType first (legacy), then mediaType (AI SDK v5)
-  if ('mimeType' in part && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
-    return (part as { mimeType: string }).mimeType;
+  if ('mimeType' in part && typeof partRecord.mimeType === 'string') {
+    return partRecord.mimeType;
   }
-  if ('mediaType' in part && typeof (part as { mediaType?: unknown }).mediaType === 'string') {
-    return (part as { mediaType: string }).mediaType;
+  if ('mediaType' in part && typeof partRecord.mediaType === 'string') {
+    return partRecord.mediaType;
   }
   return defaultType;
 }
@@ -173,8 +179,11 @@ export function getMimeTypeFromPart(part: unknown, defaultType = 'application/oc
 export function getUrlFromPart(part: unknown): string | undefined {
   if (!part || typeof part !== 'object')
     return undefined;
-  if ('url' in part && typeof (part as { url?: unknown }).url === 'string') {
-    return (part as { url: string }).url;
+  if ('url' in part) {
+    const urlValue = (part as Record<string, unknown>).url;
+    if (typeof urlValue === 'string') {
+      return urlValue;
+    }
   }
   return undefined;
 }

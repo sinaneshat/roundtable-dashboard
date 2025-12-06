@@ -14,7 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { listProjectsService } from '@/services/api';
 import {
-  addAttachmentToProjectService,
+  addUploadToProjectService,
   createProjectMemoryService,
   createProjectService,
   deleteProjectMemoryService,
@@ -205,7 +205,7 @@ export function useAddAttachmentToProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: addAttachmentToProjectService,
+    mutationFn: addUploadToProjectService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 

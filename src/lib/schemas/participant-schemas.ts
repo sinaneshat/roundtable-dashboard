@@ -248,12 +248,6 @@ export function extractModel(metadata: unknown): string | null {
   return null;
 }
 
-/**
- * Metadata creation functions are now centralized in /src/lib/utils/metadata-builder.ts
- * Re-exporting here for backward compatibility
- */
-export { createParticipantMetadata } from '@/lib/utils/metadata-builder';
-
 // ============================================================================
 // PARTICIPANT SCHEMAS - SINGLE SOURCE OF TRUTH
 // ============================================================================

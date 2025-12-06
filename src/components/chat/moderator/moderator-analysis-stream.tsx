@@ -263,28 +263,6 @@ function ModeratorAnalysisStreamComponent({
     };
   }, []);
 
-  // ✅ MOCK MODE: Mock streaming effect (disabled in favor of real API)
-  // useEffect(() => {
-  //   if (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) {
-  //     if (!hasStartedStreamingRef.current) {
-  //       hasStartedStreamingRef.current = true;
-  //       onStreamStartRef.current?.();
-  //     }
-  //     const mockData = createMockAnalysisData(analysis.roundNumber);
-  //     let progress = 0;
-  //     const interval = setInterval(() => {
-  //       progress += 0.1;
-  //       if (progress >= 1) {
-  //         clearInterval(interval);
-  //         setPartialAnalysis(mockData);
-  //         onStreamCompleteRef.current?.(mockData);
-  //       }
-  //     }, 800);
-  //     return () => clearInterval(interval);
-  //   }
-  //   return undefined;
-  // }, [analysis.status, analysis.roundNumber]);
-
   // AI SDK v5 Pattern: useObject hook for streaming structured data
   const { object: partialAnalysis, error: _error, submit } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,

@@ -188,9 +188,4 @@ export const UsageStatsResponseSchema = createApiResponseSchema(
  */
 export type UsageStatsPayload = z.infer<typeof UsageStatsPayloadSchema>;
 
-/**
- * Backward-compatible type aliases
- * These are used by usage-tracking.service.ts
- */
-export type UsageStats = UsageStatsPayload;
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;

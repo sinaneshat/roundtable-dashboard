@@ -69,11 +69,11 @@ export type ListProjectAttachmentsResponse = InferResponseType<
   ApiClientType['projects'][':id']['attachments']['$get']
 >;
 
-export type AddAttachmentToProjectRequest = InferRequestType<
+export type AddUploadToProjectRequest = InferRequestType<
   ApiClientType['projects'][':id']['attachments']['$post']
 >;
 
-export type AddAttachmentToProjectResponse = InferResponseType<
+export type AddUploadToProjectResponse = InferResponseType<
   ApiClientType['projects'][':id']['attachments']['$post']
 >;
 
@@ -264,9 +264,9 @@ export async function listProjectAttachmentsService(data: ListProjectAttachments
  *
  * @param data - Request with param.id for project ID and json body with uploadId
  */
-export async function addAttachmentToProjectService(data: AddAttachmentToProjectRequest) {
+export async function addUploadToProjectService(data: AddUploadToProjectRequest) {
   const client = await createApiClient();
-  const params: AddAttachmentToProjectRequest = {
+  const params: AddUploadToProjectRequest = {
     param: data.param ?? { id: '' },
     json: data.json ?? { uploadId: '' },
   };

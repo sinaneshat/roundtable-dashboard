@@ -178,7 +178,7 @@ export const ModelMessageCard = memo(({
                         duration: ANIMATION_DURATION.fast,
                         ease: ANIMATION_EASE.standard,
                       }}
-                      className="py-2 text-muted-foreground text-sm"
+                      className="py-2 text-muted-foreground text-base"
                     >
                       <Shimmer>{loadingText ?? t('generating', { model: modelName })}</Shimmer>
                     </motion.div>
@@ -219,7 +219,7 @@ export const ModelMessageCard = memo(({
                                       text={part.text}
                                       citations={resolvedCitations}
                                       isStreaming={isStreaming}
-                                      className="text-foreground text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                      className="text-foreground text-base leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                     />
                                     {isStreaming && isLastTextPart && <StreamingCursor />}
                                   </div>
@@ -229,7 +229,7 @@ export const ModelMessageCard = memo(({
                               return (
                                 <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
                                   <Streamdown
-                                    className="text-foreground text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    className="text-foreground text-base leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                     components={streamdownComponents}
                                   >
                                     {part.text}

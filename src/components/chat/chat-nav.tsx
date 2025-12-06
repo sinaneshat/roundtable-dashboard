@@ -1,10 +1,12 @@
 'use client';
-import { MessageSquarePlus, Plus, Search, Sparkles, Star } from 'lucide-react';
+import { MessageSquare, Plus, Search, Sparkles, Star } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import type { Chat } from '@/components/chat/chat-list';
 import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
 import {
@@ -13,13 +15,6 @@ import {
 } from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
@@ -30,15 +25,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
-import { useNavigationReset } from '@/hooks/utils/use-navigation-reset';
-import { toastManager } from '@/lib/toast/toast-manager';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useNavigationReset } from '@/hooks/utils';
+import { toastManager } from '@/lib/toast';
 
 function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
@@ -58,6 +53,9 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     error,
   } = useThreadsQuery();
   const deleteThreadMutation = useDeleteThreadMutation();
+  const { data: usageData } = useUsageStatsQuery();
+  const subscriptionTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
+  const isPaidUser = subscriptionTier !== 'free';
   const chats: Chat[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
@@ -240,20 +238,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton asChild isActive={pathname?.startsWith('/chat/pricing')}>
-                  <Link href="/chat/pricing">
-                    <Sparkles className="size-4 shrink-0" />
-                    <span
-                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                      style={{ maxWidth: '12rem' }}
-                    >
-                      {t('navigation.upgrade')}
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
               {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
@@ -277,17 +261,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <SidebarMenuButton
-                  asChild
-                  tooltip={t('navigation.upgrade')}
-                  isActive={pathname?.startsWith('/chat/pricing')}
-                >
-                  <Link href="/chat/pricing">
-                    <Sparkles />
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent className="p-0 w-full min-w-0">
@@ -347,21 +320,19 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   </SidebarGroup>
                 )}
 
-                {/* Empty State */}
+                {/* Empty State - shadcn pattern */}
                 {!isLoading && !isError && chats.length === 0 && (
-                  <SidebarGroup className="group-data-[collapsible=icon]:hidden px-2">
-                    <Empty className="border-none p-6">
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon" className="mb-3">
-                          <MessageSquarePlus className="size-5" />
-                        </EmptyMedia>
-                        <EmptyTitle className="text-sm font-semibold">{t('chat.noChatsYet')}</EmptyTitle>
-                        <EmptyDescription className="text-xs text-muted-foreground leading-relaxed mt-1.5">
-                          {t('chat.noChatsDescription')}
-                        </EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  </SidebarGroup>
+                  <div className="flex flex-col items-center justify-center py-12 group-data-[collapsible=icon]:hidden">
+                    <div className="flex size-12 items-center justify-center rounded-xl bg-muted/60 mb-3">
+                      <MessageSquare className="size-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground/90 mb-0.5">
+                      {t('chat.noChatsYet')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('chat.emptyStateHint')}
+                    </p>
+                  </div>
                 )}
 
                 {/* Main Chat List */}
@@ -390,14 +361,45 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </div>
             </ScrollArea>
           </SidebarContent>
-          <SidebarFooter>
+          <SidebarFooter className="gap-2">
+            {/* Plan CTA */}
+            <Link
+              href="/chat/pricing"
+              className="group/upgrade group-data-[collapsible=icon]:hidden flex items-center gap-3 rounded-xl bg-accent px-3 py-2.5 transition-colors duration-200 hover:bg-accent/80"
+            >
+              <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground'}`}>
+                <Sparkles className="size-4" />
+              </div>
+              <div className="flex flex-1 flex-col min-w-0">
+                <span className="text-sm font-medium text-foreground truncate">
+                  {isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
+                </span>
+                <span className="text-xs text-muted-foreground truncate">
+                  {isPaidUser ? t('navigation.managePlan') : t('navigation.upgradeDescription')}
+                </span>
+              </div>
+            </Link>
+            {/* Collapsed icon */}
+            <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
+                  isActive={pathname?.startsWith('/chat/pricing')}
+                >
+                  <Link href="/chat/pricing">
+                    <Sparkles className={isPaidUser ? 'text-success' : ''} />
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            {/* User Nav */}
             <SidebarMenu>
               <SidebarMenuItem>
                 <NavUser />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
-          <SidebarRail />
         </Sidebar>
         <CommandSearch
           isOpen={isSearchOpen}

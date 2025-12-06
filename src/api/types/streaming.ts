@@ -30,11 +30,6 @@ import type { TypedLogger } from '@/api/types/logger';
  */
 export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 
-/**
- * Stream storage TTL - 1 hour (alias for backwards compatibility)
- */
-export const STREAM_TTL_SECONDS = STREAM_BUFFER_TTL_SECONDS;
-
 // ============================================================================
 // STREAM CHUNK TYPES
 // ============================================================================

@@ -57,12 +57,6 @@ export function useSecureUploadMutation() {
 }
 
 /**
- * @deprecated Use useSecureUploadMutation instead
- * Legacy hook name for backwards compatibility during migration
- */
-export const useUploadAttachmentMutation = useSecureUploadMutation;
-
-/**
  * Hook to update attachment metadata or associations
  * Protected endpoint - requires authentication
  *

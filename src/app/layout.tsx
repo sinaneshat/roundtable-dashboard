@@ -16,6 +16,7 @@ import {
 } from '@/components/seo';
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants/brand';
+import { spaceGrotesk } from '@/lib/fonts';
 import { createMetadata } from '@/utils/metadata';
 
 export const viewport: Viewport = {
@@ -78,7 +79,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
     <html
       lang="en"
       dir="ltr"
-      className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
+      className={`dark ${GeistSans.variable} ${GeistMono.variable} ${spaceGrotesk.variable}`}
     >
       <head>
         {/* 2025 AI Search Optimization - Answer Engine Optimization */}

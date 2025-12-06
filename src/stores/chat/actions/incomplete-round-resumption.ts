@@ -35,14 +35,15 @@
 
 'use client';
 
-import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
+import { createOptimisticUserMessage } from '../utils/placeholder-factories';
 import { shouldWaitForPreSearch } from './pending-message-sender';
 
 // ============================================================================
@@ -105,50 +106,54 @@ export function useIncompleteRoundResumption(
 ): UseIncompleteRoundResumptionReturn {
   const { threadId, enabled = true } = options;
 
-  // Store subscriptions
-  const messages = useChatStore(s => s.messages);
-  const participants = useChatStore(s => s.participants);
-  const preSearches = useChatStore(s => s.preSearches);
-  const isStreaming = useChatStore(s => s.isStreaming);
-  const setNextParticipantToTrigger = useChatStore(s => s.setNextParticipantToTrigger);
-  const setStreamingRoundNumber = useChatStore(s => s.setStreamingRoundNumber);
-  const setCurrentParticipantIndex = useChatStore(s => s.setCurrentParticipantIndex);
-  const waitingToStartStreaming = useChatStore(s => s.waitingToStartStreaming);
-  const setWaitingToStartStreaming = useChatStore(s => s.setWaitingToStartStreaming);
+  // ============================================================================
+  // ✅ REACT 19 PATTERN: Batched store selectors with useShallow
+  // Reduces re-renders by batching related state subscriptions
+  // ============================================================================
 
-  // ✅ ORPHANED PRE-SEARCH FIX: Actions needed to recover from orphaned pre-search state
-  const prepareForNewMessage = useChatStore(s => s.prepareForNewMessage);
-  const setExpectedParticipantIds = useChatStore(s => s.setExpectedParticipantIds);
-  const setMessages = useChatStore(s => s.setMessages);
-  // ✅ FIX: Need to clear isWaitingForChangelog after recovery since there's no changelog to wait for
-  const setIsWaitingForChangelog = useChatStore(s => s.setIsWaitingForChangelog);
+  // State subscriptions (batched)
+  const {
+    messages,
+    participants,
+    preSearches,
+    isStreaming,
+    waitingToStartStreaming,
+    pendingMessage,
+    hasSentPendingMessage,
+    hasEarlyOptimisticMessage,
+    enableWebSearch,
+    thread,
+  } = useChatStore(useShallow(s => ({
+    messages: s.messages,
+    participants: s.participants,
+    preSearches: s.preSearches,
+    isStreaming: s.isStreaming,
+    waitingToStartStreaming: s.waitingToStartStreaming,
+    pendingMessage: s.pendingMessage,
+    hasSentPendingMessage: s.hasSentPendingMessage,
+    hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
+    enableWebSearch: s.enableWebSearch,
+    thread: s.thread,
+  })));
 
-  // ✅ INFINITE LOOP FIX: Subscribe to submission state to avoid interfering with normal submissions
-  // When user submits a message, pendingMessage is set. The resumption hook should NOT try to
-  // "resume" the round that the user just started - that's handled by the pending message effect.
-  const pendingMessage = useChatStore(s => s.pendingMessage);
-  const hasSentPendingMessage = useChatStore(s => s.hasSentPendingMessage);
-  const hasEarlyOptimisticMessage = useChatStore(s => s.hasEarlyOptimisticMessage);
+  // Actions - batched with useShallow for stable reference
+  const actions = useChatStore(useShallow(s => ({
+    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
+    setStreamingRoundNumber: s.setStreamingRoundNumber,
+    setCurrentParticipantIndex: s.setCurrentParticipantIndex,
+    setWaitingToStartStreaming: s.setWaitingToStartStreaming,
+    prepareForNewMessage: s.prepareForNewMessage,
+    setExpectedParticipantIds: s.setExpectedParticipantIds,
+    setMessages: s.setMessages,
+    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
+  })));
 
-  // ✅ PRE-SEARCH BLOCKING FIX: Subscribe to web search state for pre-search blocking check
-  // Resumption should NOT trigger participants if pre-search is still in progress
-  const enableWebSearch = useChatStore(s => s.enableWebSearch);
-  // ✅ RACE CONDITION FIX: Also subscribe to thread to check its enableWebSearch
-  // Store's enableWebSearch defaults to false and takes time to sync from thread
-  // We need to check the thread's value directly to avoid race conditions
-  const thread = useChatStore(s => s.thread);
-
-  // Track if we've already attempted resumption for this thread
+  // ============================================================================
+  // REF DECLARATIONS (grouped for consolidated reset effect)
+  // ============================================================================
   const resumptionAttemptedRef = useRef<string | null>(null);
-  // Track if we've already attempted orphaned pre-search recovery for this specific pre-search
-  // ✅ FIX: Track by pre-search ID instead of thread ID to allow recovery for different rounds
-  // Previously used threadId which blocked ALL recovery attempts on the same thread
   const orphanedPreSearchRecoveryAttemptedRef = useRef<string | null>(null);
-
-  // ✅ OPTIMIZED: Track check state using refs (no longer makes network calls)
-  // - activeStreamCheckRef: Which thread we've checked (prevents duplicate checks)
-  // - activeStreamCheckCompleteRef: Whether check is done (used by resumption effect)
-  // AI SDK handles stream resumption via resume:true in useChat - we don't need separate fetch
+  const orphanedPreSearchUIRecoveryRef = useRef<string | null>(null);
   const activeStreamCheckRef = useRef<string | null>(null);
   const activeStreamCheckCompleteRef = useRef(false);
 
@@ -341,21 +346,27 @@ export function useIncompleteRoundResumption(
     // When round is incomplete, set streamingRoundNumber immediately for placeholder rendering
     // This removes the need for a duplicate backend fetch just to read headers
     if (isIncomplete && nextParticipantIndex !== null) {
-      setStreamingRoundNumber(currentRoundNumber);
-      setCurrentParticipantIndex(nextParticipantIndex);
+      actions.setStreamingRoundNumber(currentRoundNumber);
+      actions.setCurrentParticipantIndex(nextParticipantIndex);
     }
 
     // Mark as checked - we've made a decision (either incomplete or complete)
     // AI SDK handles stream resumption via resume:true in useChat
     activeStreamCheckRef.current = threadId;
     activeStreamCheckCompleteRef.current = true;
-  }, [enabled, threadId, isIncomplete, currentRoundNumber, nextParticipantIndex, setStreamingRoundNumber, setCurrentParticipantIndex]);
+  }, [enabled, threadId, isIncomplete, currentRoundNumber, nextParticipantIndex, actions]);
 
-  // ✅ OPTIMIZED: Reset refs when threadId changes
+  // ============================================================================
+  // ✅ REACT 19 PATTERN: Consolidated ref reset effect
+  // All refs that need to reset when threadId changes are handled in one effect
+  // This follows React best practice of consolidating related side effects
+  // ============================================================================
   useEffect(() => {
-    // Reset all refs on thread change (synchronous, no setState)
     activeStreamCheckRef.current = null;
     activeStreamCheckCompleteRef.current = false;
+    orphanedPreSearchUIRecoveryRef.current = null;
+    orphanedPreSearchRecoveryAttemptedRef.current = null;
+    resumptionAttemptedRef.current = null;
   }, [threadId]);
 
   // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT
@@ -367,8 +378,6 @@ export function useIncompleteRoundResumption(
   // - User might refresh while round N is completing AND round N+1 pre-search is running
   // - We want to show round N+1 user message immediately (UI feedback)
   // - But we don't trigger participants until round N finishes AND pre-search completes
-  const orphanedPreSearchUIRecoveryRef = useRef<string | null>(null);
-
   useEffect(() => {
     // Skip if not enabled
     if (!enabled) {
@@ -408,33 +417,21 @@ export function useIncompleteRoundResumption(
 
     const recoveredQuery = orphanedPreSearch.userQuery;
 
-    // Add optimistic user message for UI display
-    // AI SDK v5 UIMessage uses parts array, not content property
-    const optimisticUserMessage: UIMessage = {
-      id: `optimistic-user-${orphanedRoundNumber}-${Date.now()}`,
-      role: MessageRoles.USER,
-      parts: [{ type: 'text', text: recoveredQuery }],
-      metadata: {
-        role: MessageRoles.USER,
-        roundNumber: orphanedRoundNumber,
-        isOptimistic: true,
-      },
-    };
+    // ✅ REFACTORED: Use createOptimisticUserMessage factory for single source of truth
+    const optimisticUserMessage = createOptimisticUserMessage({
+      roundNumber: orphanedRoundNumber,
+      text: recoveredQuery,
+    });
 
     // Add the message to display (preserving existing messages)
-    setMessages([...messages, optimisticUserMessage]);
+    actions.setMessages([...messages, optimisticUserMessage]);
 
     // ✅ FIX: Also set streamingRoundNumber if pre-search is still streaming
     // This enables participant placeholder rendering
     if (orphanedPreSearch.status === AnalysisStatuses.STREAMING) {
-      setStreamingRoundNumber(orphanedRoundNumber);
+      actions.setStreamingRoundNumber(orphanedRoundNumber);
     }
-  }, [enabled, orphanedPreSearch, messages, setMessages, setStreamingRoundNumber]);
-
-  // Reset UI recovery ref when threadId changes
-  useEffect(() => {
-    orphanedPreSearchUIRecoveryRef.current = null;
-  }, [threadId]);
+  }, [enabled, orphanedPreSearch, messages, actions]);
 
   // ✅ ORPHANED PRE-SEARCH PARTICIPANT TRIGGERING EFFECT
   // This effect triggers participants ONLY when:
@@ -494,19 +491,19 @@ export function useIncompleteRoundResumption(
       const msgRound = getRoundNumber(metadata);
       return msgRound !== orphanedRoundNumber;
     });
-    setMessages(messagesWithoutOrphanedOptimistic);
+    actions.setMessages(messagesWithoutOrphanedOptimistic);
 
     // Get enabled participant MODEL IDs for the expected participants
     const expectedModelIds = enabledParticipants.map(p => p.modelId);
 
     // Set expected participant IDs (required by pendingMessage effect)
-    setExpectedParticipantIds(expectedModelIds);
+    actions.setExpectedParticipantIds(expectedModelIds);
 
     // Prepare for new message - this sets pendingMessage and adds optimistic user message
-    prepareForNewMessage(recoveredQuery, expectedModelIds);
+    actions.prepareForNewMessage(recoveredQuery, expectedModelIds);
 
     // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
-    setIsWaitingForChangelog(false);
+    actions.setIsWaitingForChangelog(false);
   }, [
     enabled,
     isStreaming,
@@ -517,16 +514,8 @@ export function useIncompleteRoundResumption(
     orphanedPreSearch,
     enabledParticipants,
     messages,
-    prepareForNewMessage,
-    setExpectedParticipantIds,
-    setMessages,
-    setIsWaitingForChangelog,
+    actions,
   ]);
-
-  // Reset the orphaned pre-search recovery ref when threadId changes
-  useEffect(() => {
-    orphanedPreSearchRecoveryAttemptedRef.current = null;
-  }, [threadId]);
 
   // Effect to trigger resumption
   useEffect(() => {
@@ -643,12 +632,12 @@ export function useIncompleteRoundResumption(
 
     // Set up store state for resumption
     // The provider's effect watching nextParticipantToTrigger will trigger the participant
-    setStreamingRoundNumber(currentRoundNumber);
-    setNextParticipantToTrigger(effectiveNextParticipant);
-    setCurrentParticipantIndex(effectiveNextParticipant);
+    actions.setStreamingRoundNumber(currentRoundNumber);
+    actions.setNextParticipantToTrigger(effectiveNextParticipant);
+    actions.setCurrentParticipantIndex(effectiveNextParticipant);
 
     // Set waiting flag so provider knows to start streaming
-    setWaitingToStartStreaming(true);
+    actions.setWaitingToStartStreaming(true);
   }, [
     enabled,
     isStreaming,
@@ -670,16 +659,8 @@ export function useIncompleteRoundResumption(
     thread,
     // Note: refs (activeStreamCheckCompleteRef, backendNextParticipantRef) are not in deps
     // because they don't cause re-renders - the effect checks their values when it runs
-    setNextParticipantToTrigger,
-    setStreamingRoundNumber,
-    setCurrentParticipantIndex,
-    setWaitingToStartStreaming,
+    actions,
   ]);
-
-  // Reset the ref when threadId changes
-  useEffect(() => {
-    resumptionAttemptedRef.current = null;
-  }, [threadId]);
 
   return {
     isIncomplete,

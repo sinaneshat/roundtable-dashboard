@@ -11,6 +11,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { FeedbackType } from '@/api/core/enums';
 import type { RoundFeedbackData } from '@/api/routes/chat/schema';
@@ -50,11 +51,13 @@ export type UseFeedbackActionsReturn = {
 export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedbackActionsReturn {
   const { threadId } = options;
 
-  // Store selectors
-  const setFeedback = useChatStore(s => s.setFeedback);
-  const setPendingFeedback = useChatStore(s => s.setPendingFeedback);
-  const clearFeedback = useChatStore(s => s.clearFeedback);
-  const loadFeedbackFromServer = useChatStore(s => s.loadFeedbackFromServer);
+  // Store actions - batched with useShallow for stable reference
+  const actions = useChatStore(useShallow(s => ({
+    setFeedback: s.setFeedback,
+    setPendingFeedback: s.setPendingFeedback,
+    clearFeedback: s.clearFeedback,
+    loadFeedbackFromServer: s.loadFeedbackFromServer,
+  })));
 
   // Mutation
   const setRoundFeedbackMutation = useSetRoundFeedbackMutation();
@@ -66,10 +69,10 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
   const getFeedbackHandler = useCallback((roundNumber: number) => {
     return (feedbackType: FeedbackType | null) => {
       // Update store immediately (optimistic)
-      setFeedback(roundNumber, feedbackType);
+      actions.setFeedback(roundNumber, feedbackType);
 
       if (feedbackType) {
-        setPendingFeedback({ roundNumber, type: feedbackType });
+        actions.setPendingFeedback({ roundNumber, type: feedbackType });
       }
 
       // Trigger mutation to persist to server
@@ -83,28 +86,28 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
         },
         {
           onSettled: () => {
-            setPendingFeedback(null);
+            actions.setPendingFeedback(null);
           },
         },
       );
     };
-  }, [threadId, setFeedback, setPendingFeedback, setRoundFeedbackMutation]);
+  }, [threadId, actions, setRoundFeedbackMutation]);
 
   /**
    * Load feedback from server
    * Called once on mount with server data
    */
   const loadFeedback = useCallback((data: RoundFeedbackData[]) => {
-    loadFeedbackFromServer(data);
-  }, [loadFeedbackFromServer]);
+    actions.loadFeedbackFromServer(data);
+  }, [actions]);
 
   /**
    * Clear feedback for a round
    * Used during regeneration to reset feedback state
    */
   const clearRoundFeedback = useCallback((roundNumber: number) => {
-    clearFeedback(roundNumber);
-  }, [clearFeedback]);
+    actions.clearFeedback(roundNumber);
+  }, [actions]);
 
   // Memoize return object to prevent unnecessary re-renders
   return useMemoizedReturn({

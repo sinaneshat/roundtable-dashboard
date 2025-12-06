@@ -56,8 +56,6 @@ export { APP_CONFIG, FEATURE_FLAGS, STREAMING_CONFIG } from './config';
 export {
   // ✅ Consolidated API error factory (defined in errors.ts)
   ApiErrors,
-  // ✅ Error context shortcuts (defined in errors.ts)
-  ErrorContexts,
   // ✅ Error utilities (defined in errors.ts)
   formatErrorResponse,
   isAppError,

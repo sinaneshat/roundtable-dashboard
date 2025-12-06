@@ -3,7 +3,7 @@ import { Loader2, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import {
   AlertDialog,
@@ -115,6 +115,9 @@ function ChatItem({
 }) {
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
+  // Hover-based prefetch: only prefetch when user hovers (Next.js optimization for large lists)
+  const [shouldPrefetch, setShouldPrefetch] = useState(false);
+  const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
 
   const content = (
     <SidebarMenuItem>
@@ -125,7 +128,8 @@ function ChatItem({
       >
         <Link
           href={chatUrl}
-          prefetch={false}
+          prefetch={shouldPrefetch ? null : false}
+          onMouseEnter={handleMouseEnter}
           onClick={() => {
             if (isMobile && onNavigate) {
               onNavigate();

@@ -3,11 +3,11 @@
  * Prevents duplicate toasts, provides centralized control, and supports advanced features
  */
 
-// import { AlertCircle, AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
 import React from 'react';
 
 import type { ToastVariant } from '@/api/core/enums';
 import { ToastVariants } from '@/api/core/enums';
+import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
@@ -18,18 +18,6 @@ const progressToasts = new Map<string, { progress: number; callback?: ToastProgr
 const toastQueue: ToastOptions[] = [];
 let isProcessingQueue = false;
 let maxConcurrentToasts = 3;
-
-// Toast type icons mapping (for future use)
-// const _TOAST_ICONS: Record<ToastVariant, React.ComponentType<{ className?: string }>> = {
-//   default: Info,
-//   destructive: AlertCircle,
-//   success: CheckCircle,
-//   warning: AlertTriangle,
-//   info: Info,
-//   loading: Loader2,
-// };
-
-// ToastVariant type now imported from @/api/core/enums
 
 export type ToastOptions = {
   id?: string;
@@ -99,8 +87,8 @@ function showToastInternal(options: ToastOptions): void {
     duration = variant === ToastVariants.LOADING ? 0 : 5000,
     preventDuplicates = true,
     action,
-    icon: _icon,
-    dismissible: _dismissible = true,
+    // icon and dismissible are defined in ToastOptions but not used in toast rendering
+    // They're kept in the type for future extensibility
   } = options;
 
   const toastId = id || createToastId(title, description);
@@ -127,11 +115,13 @@ function showToastInternal(options: ToastOptions): void {
       ? ToastVariants.DEFAULT
       : variant,
     duration,
+    // ToastActionElement type mismatch requires double cast - React.createElement returns
+    // FunctionComponentElement which doesn't directly satisfy ReactElement<typeof ToastAction>
     action: action
       ? React.createElement(ToastAction, {
         altText: action.label,
         onClick: action.onClick,
-      }, action.label) as unknown as React.ReactElement<typeof ToastAction>
+      }, action.label) as unknown as ToastActionElement
       : undefined,
   };
 
