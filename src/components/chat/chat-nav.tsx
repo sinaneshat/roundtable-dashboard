@@ -33,9 +33,15 @@ import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useNavigationReset } from '@/hooks/utils';
+import type { Session, User } from '@/lib/auth/types';
 import { toastManager } from '@/lib/toast';
 
-function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  /** Server-side session for hydration - prevents mismatch */
+  initialSession?: { session: Session; user: User } | null;
+};
+
+function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations();
@@ -396,7 +402,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
             {/* User Nav */}
             <SidebarMenu>
               <SidebarMenuItem>
-                <NavUser />
+                <NavUser initialSession={initialSession} />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>

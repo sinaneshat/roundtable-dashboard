@@ -448,10 +448,7 @@ export default function ChatOverviewScreen() {
       return;
 
     if (orderedModel.participant) {
-      // Prevent removing the last model - must have at least 1
-      if (selectedParticipants.length <= 1) {
-        return;
-      }
+      // Allow deselecting all - validation shown in UI
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);

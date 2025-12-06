@@ -485,8 +485,7 @@ export function ChatView({
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
-    if (selectedParticipants.length <= 1)
-      return;
+    // Allow removing all - validation shown in UI
     removeParticipant(participantId);
     if (mode === 'thread') {
       setHasPendingConfigChanges(true);

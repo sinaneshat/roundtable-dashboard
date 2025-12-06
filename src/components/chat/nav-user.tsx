@@ -3,7 +3,7 @@
 import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -35,11 +35,19 @@ import {
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
 import { signOut, useSession } from '@/lib/auth/client';
+import type { Session, User } from '@/lib/auth/types';
 import { showApiErrorToast } from '@/lib/toast';
 
-export function NavUser() {
+type NavUserProps = {
+  /** Server-side session for hydration - prevents mismatch */
+  initialSession?: { session: Session; user: User } | null;
+};
+
+export function NavUser({ initialSession }: NavUserProps) {
   const router = useRouter();
-  const { data: session } = useSession();
+  // ✅ HYDRATION FIX: Use server-side session for initial render
+  // Client useSession will sync after hydration for real-time updates
+  const { data: clientSession } = useSession();
   const t = useTranslations();
   const { data: usageData } = useUsageStatsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
@@ -47,41 +55,26 @@ export function NavUser() {
   const showApiKeysModal = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
-  const user = session?.user;
-  // ✅ FIX: Prevent hydration mismatch by deferring initials calculation to client
-  // Server has no session, client does - causes 'U' (server) vs 'AB' (client) mismatch
-  const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect, react-hooks/set-state-in-effect -- Standard mounted flag pattern for hydration
-    setIsMounted(true);
-  }, []);
+  // ✅ HYDRATION: Use initialSession for SSR, fall back to client session after hydration
+  // This ensures server and client render identical HTML initially
+  const user = clientSession?.user ?? initialSession?.user;
 
-  // ✅ FIX: Defer user-dependent values to client to prevent hydration mismatch
-  // Server has no session (renders defaults), client has session (renders actual values)
+  // ✅ Compute display values directly from user (no isMounted needed with server-side session)
   const userInitials = useMemo(() => {
-    if (!isMounted)
+    if (!user?.name && !user?.email)
       return 'U';
-    return user?.name
+    return user.name
       ? user.name
           .split(' ')
           .map((n: string) => n[0])
           .join('')
           .toUpperCase()
-      : user?.email?.[0]?.toUpperCase() || 'U';
-  }, [isMounted, user]);
+      : user.email?.[0]?.toUpperCase() || 'U';
+  }, [user]);
 
-  const displayName = useMemo(() => {
-    if (!isMounted)
-      return t('user.defaultName');
-    return user?.name || t('user.defaultName');
-  }, [isMounted, user, t]);
-
-  const displayEmail = useMemo(() => {
-    if (!isMounted)
-      return '';
-    return user?.email || '';
-  }, [isMounted, user]);
+  const displayName = user?.name || t('user.defaultName');
+  const displayEmail = user?.email || '';
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,

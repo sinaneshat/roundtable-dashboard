@@ -1,4 +1,5 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
+import { headers } from 'next/headers';
 import type React from 'react';
 import { Suspense } from 'react';
 
@@ -9,6 +10,7 @@ import { ContentLoadingFallback, SidebarLoadingFallback } from '@/components/loa
 import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { LIMITS } from '@/constants/limits';
+import { auth } from '@/lib/auth/server';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
@@ -62,6 +64,12 @@ type ChatLayoutProps = {
  */
 export default async function ChatLayout({ children }: ChatLayoutProps) {
   const queryClient = getQueryClient();
+
+  // ✅ SERVER-SIDE SESSION: Fetch session to prevent hydration mismatch
+  // Better Auth pattern: Server renders with actual user data, client hydrates matching state
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
 
   // Prefetch all critical data in parallel for optimal performance
   // This eliminates loading states and provides instant data on first load
@@ -122,7 +130,7 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
         <SidebarProvider>
           {/* ✅ OPTIMIZATION: Suspense boundary for sidebar streaming */}
           <Suspense fallback={<SidebarLoadingFallback count={10} showFavorites={false} />}>
-            <AppSidebar />
+            <AppSidebar initialSession={session} />
           </Suspense>
 
           {/* Body-based scrolling for native OS scroll behavior */}
