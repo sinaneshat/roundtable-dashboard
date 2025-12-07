@@ -51,8 +51,12 @@ function NavigationHeaderComponent({
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations();
+
+  // ✅ ZUSTAND PATTERN: Thread title comes from store, not context
+  const storeThreadTitle = useChatStore(s => s.thread?.title ?? null);
   const context = useThreadHeaderOptional();
-  const threadTitle = threadTitleProp ?? (showSidebarTrigger ? context.threadTitle : null);
+
+  const threadTitle = threadTitleProp ?? (showSidebarTrigger ? storeThreadTitle : null);
   const threadParent = threadParentProp ?? '/chat';
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
   const isThreadPage = (

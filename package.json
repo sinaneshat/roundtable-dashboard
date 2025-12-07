@@ -43,7 +43,7 @@
     "node": ">=22.14.0"
   },
   "scripts": {
-    "dev": "pnpm local:clear-uploads && next dev --turbo",
+    "dev": "pnpm clean && pnpm local:clear-uploads && next dev --turbo",
     "dev:keep-uploads": "next dev --turbo",
     "dev:email": "email dev --dir src/emails --port 3001",
     "email:preview": "email dev --dir src/emails --port 3001",

@@ -24,6 +24,7 @@ import { ConfigurationChangesGroup } from './configuration-changes-group';
 import type { DemoSectionOpenStates } from './moderator/moderator-analysis-panel';
 import { RoundAnalysisCard } from './moderator/round-analysis-card';
 import { PreSearchCard } from './pre-search-card';
+import { RoundCopyAction } from './round-copy-action';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
@@ -40,6 +41,7 @@ type ThreadTimelineProps = {
   };
   participants: ChatParticipant[];
   threadId: string;
+  threadTitle?: string;
 
   // Streaming state (optional - null for public view)
   isStreaming?: boolean;
@@ -78,6 +80,7 @@ export function ThreadTimeline({
   user,
   participants,
   threadId,
+  threadTitle,
   isStreaming = false,
   currentParticipantIndex = 0,
   currentStreamingParticipant = null,
@@ -133,12 +136,11 @@ export function ThreadTimeline({
   // ✅ VIRTUALIZATION: Window-level virtualization with streaming protection
   // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
   // ✅ MOBILE OPTIMIZED: Hook automatically increases overscan to 25+ on touch devices
-  // ✅ HEIGHT FIX: Zero estimates/padding - height matches content exactly
-  const ESTIMATE_SIZE = 1; // Near-zero - forces immediate measurement
+  // ✅ TANSTACK DOCS: Use realistic estimateSize (250px default) to prevent jumpy/overlapping behavior
   const { virtualItems, totalSize, scrollMargin, measureElement } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
-    estimateSize: ESTIMATE_SIZE,
+    estimateSize: 250, // ✅ TANSTACK DOCS: Realistic estimate close to average item height
     overscan: 15, // Desktop: 15 items | Mobile: 25+ (auto-adjusted by hook)
     paddingEnd: 0, // Zero padding - content fits exactly
     streamingRounds, // Pass streaming rounds to prevent unmounting during streams
@@ -148,15 +150,11 @@ export function ThreadTimeline({
     <div
       style={{
         position: 'relative',
-        // ✅ OFFICIAL PATTERN: getTotalSize() already includes paddingEnd
-        // No manual padding needed - virtualizer handles this automatically
+        // ✅ TANSTACK DOCS: getTotalSize() already includes paddingEnd
         height: `${totalSize}px`,
         width: '100%',
-        // ✅ MOBILE FIX: Add will-change for better mobile transform performance
-        willChange: 'height',
         // ✅ SCROLL FIX: Disable browser scroll anchoring to prevent snap-back
         // When virtualized items change position, browser tries to maintain anchor
-        // This causes unwanted scroll jumping when changelogs/content changes
         overflowAnchor: 'none',
       }}
     >
@@ -284,6 +282,13 @@ export function ThreadTimeline({
                           }
                         />
                       )}
+                      <RoundCopyAction
+                        key={`copy-${threadId}-${roundNumber}`}
+                        messages={item.data}
+                        participants={participants}
+                        roundNumber={roundNumber}
+                        threadTitle={threadTitle}
+                      />
                     </Actions>
                   );
                 })()}

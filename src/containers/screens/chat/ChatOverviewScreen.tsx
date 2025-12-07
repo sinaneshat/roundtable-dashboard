@@ -73,7 +73,14 @@ export default function ChatOverviewScreen() {
     setSelectedModelIds: setPersistedModelIds,
     setModelOrder: setPersistedModelOrder,
     getInitialModelIds,
-  } = useModelPreferencesStore();
+    syncWithAccessibleModels,
+  } = useModelPreferencesStore(useShallow(s => ({
+    modelOrder: s.modelOrder,
+    setSelectedModelIds: s.setSelectedModelIds,
+    setModelOrder: s.setModelOrder,
+    getInitialModelIds: s.getInitialModelIds,
+    syncWithAccessibleModels: s.syncWithAccessibleModels,
+  })));
 
   // ============================================================================
   // STORE STATE
@@ -133,7 +140,9 @@ export default function ChatOverviewScreen() {
   // ============================================================================
 
   const hasSentInitialPromptRef = useRef(false);
-  const { setThreadTitle, setThreadActions } = useThreadHeader();
+  const hasInitializedModelsRef = useRef(false);
+  // ✅ ZUSTAND PATTERN: Thread title comes from store - only manage threadActions here
+  const { setThreadActions } = useThreadHeader();
 
   // Modal state
   const modeModal = useBoolean(false);
@@ -249,6 +258,35 @@ export default function ChatOverviewScreen() {
   const formActions = useChatFormActions();
   const overviewActions = useOverviewActions();
 
+  // ✅ SYNC: Keep preferences AND chat participants in sync with accessible models
+  // Removes invalid models from persistence and active selection when models change
+  useEffect(() => {
+    if (preferencesHydrated && allEnabledModels.length > 0) {
+      const accessibleModelIds = allEnabledModels
+        .filter(m => m.is_accessible_to_user)
+        .map(m => m.id);
+      const accessibleSet = new Set(accessibleModelIds);
+
+      // Sync preferences store (persisted cookie state)
+      syncWithAccessibleModels(accessibleModelIds);
+
+      // Also sync current chat store participants (active session state)
+      if (selectedParticipants.length > 0) {
+        const validParticipants = selectedParticipants.filter(p =>
+          accessibleSet.has(p.modelId),
+        );
+        if (validParticipants.length !== selectedParticipants.length) {
+          // Re-index priorities after removing invalid models
+          const reindexed = validParticipants.map((p, idx) => ({
+            ...p,
+            priority: idx,
+          }));
+          setSelectedParticipants(reindexed);
+        }
+      }
+    }
+  }, [preferencesHydrated, allEnabledModels, syncWithAccessibleModels, selectedParticipants, setSelectedParticipants]);
+
   // Initialize model order when models first load (use persisted order if available)
   useEffect(() => {
     if (allEnabledModels.length > 0 && modelOrder.length === 0 && preferencesHydrated) {
@@ -304,15 +342,11 @@ export default function ChatOverviewScreen() {
   // EFFECTS
   // ============================================================================
 
-  // Thread header management
+  // ✅ ZUSTAND PATTERN: Clear thread actions when in overview mode
+  // Thread title comes from store automatically via s.thread?.title
   useEffect(() => {
-    if (currentThread?.isAiGeneratedTitle && currentThread?.title) {
-      setThreadTitle(currentThread.title);
-    } else {
-      setThreadTitle(null);
-    }
     setThreadActions(null);
-  }, [currentThread?.isAiGeneratedTitle, currentThread?.title, setThreadTitle, setThreadActions]);
+  }, [setThreadActions]);
 
   // ✅ SIMPLIFIED: Reset on navigation to /chat
   // Single ref tracks last reset pathname to prevent duplicate resets
@@ -324,24 +358,29 @@ export default function ChatOverviewScreen() {
       lastResetPathRef.current = '/chat';
       resetToOverview();
       hasSentInitialPromptRef.current = false;
+      hasInitializedModelsRef.current = false; // Reset so we can re-initialize
       chatAttachments.clearAttachments();
 
       if (defaultModelId && initialParticipants.length > 0) {
         setSelectedMode(getDefaultChatMode());
         setSelectedParticipants(initialParticipants);
+        hasInitializedModelsRef.current = true; // Mark as initialized
       }
     } else {
       lastResetPathRef.current = pathname;
     }
   }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments]);
 
-  // Initialize defaults when defaultModelId becomes available
+  // Initialize defaults when defaultModelId becomes available (one-time only)
+  // Don't re-initialize if user explicitly cleared all models
   useEffect(() => {
     if (
-      selectedParticipants.length === 0
+      !hasInitializedModelsRef.current
+      && selectedParticipants.length === 0
       && defaultModelId
       && initialParticipants.length > 0
     ) {
+      hasInitializedModelsRef.current = true;
       setSelectedParticipants(initialParticipants);
       if (!selectedMode) {
         setSelectedMode(getDefaultChatMode());
@@ -448,7 +487,6 @@ export default function ChatOverviewScreen() {
       return;
 
     if (orderedModel.participant) {
-      // Allow deselecting all - validation shown in UI
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);

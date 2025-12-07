@@ -2,12 +2,20 @@
  * Unified Markdown Components
  *
  * Single source of truth for markdown rendering across the application.
- * Follows AI SDK Elements patterns and provides consistent styling for:
- * - AI responses (streaming and completed)
- * - Analysis content
- * - Web search results
- * - Pre-search summaries
- * - Any other markdown-formatted text
+ * Typography matches AI SDK AI Elements Response component exactly:
+ * - text-base (16px) body text
+ * - leading-7 (28px / 1.75 line-height)
+ * - Proper semantic heading hierarchy
+ * - Generous spacing between elements
+ *
+ * Features:
+ * - Shiki syntax highlighting for code blocks
+ * - Copy-to-clipboard buttons on code blocks
+ * - Proper dark/light theme support
+ * - Clean table styling with borders
+ *
+ * @see https://ai-sdk.dev/elements/overview
+ * @see https://www.aisdkagents.com/docs/ai/ai-elements
  *
  * @module components/markdown
  */
@@ -15,6 +23,7 @@
 import { ExternalLink } from 'lucide-react';
 import type { Components } from 'react-markdown';
 
+import { MarkdownCode, MarkdownPre } from '@/components/markdown/markdown-code-block';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -24,14 +33,15 @@ export type MarkdownPreset = 'default' | 'compact' | 'web-content';
 
 /**
  * Markdown components for AI-generated and web content
- * Following AI SDK Elements patterns for consistent text rendering
+ * Following AI SDK AI Elements patterns for consistent text rendering
  *
- * Features:
- * - External link indicators
- * - Code block syntax highlighting support
- * - Table rendering
- * - Proper spacing and typography
- * - Dark mode support via Tailwind prose
+ * Typography specs (matching AI SDK AI Elements):
+ * - Body: text-base (16px), leading-7 (28px line-height = 1.75)
+ * - H1: text-2xl (24px), font-semibold, tracking-tight
+ * - H2: text-xl (20px), font-semibold
+ * - H3: text-lg (18px), font-semibold
+ * - H4: text-base (16px), font-semibold
+ * - Code: text-sm (14px), font-mono with Shiki syntax highlighting
  *
  * @param preset - Component style preset
  * @returns React Markdown components configuration
@@ -49,94 +59,91 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
         rel="noopener noreferrer"
         className={cn(
           'text-primary hover:text-primary/80',
-          'underline decoration-primary/30 underline-offset-2',
-          'transition-colors',
-          isWebContent && 'inline-flex items-center gap-0.5',
+          'underline decoration-primary/40 underline-offset-4',
+          'transition-colors inline-flex items-center gap-1',
         )}
         {...props}
       >
         {children}
-        {isWebContent && <ExternalLink className="size-2.5 opacity-50" />}
+        <ExternalLink className="size-3.5 opacity-60 shrink-0" />
       </a>
     ),
 
-    // Paragraphs
+    // Paragraphs - AI Elements: text-base leading-7 mb-4
     p: ({ children }: { children?: React.ReactNode }) => (
       <p
         className={cn(
-          'leading-relaxed last:mb-0',
-          isCompact ? 'mb-2' : 'mb-3',
-          isWebContent && 'text-sm',
+          'last:mb-0',
+          isCompact
+            ? 'text-sm leading-6 mb-3'
+            : isWebContent
+              ? 'text-sm leading-6 mb-3'
+              : 'text-base leading-7 mb-4',
         )}
       >
         {children}
       </p>
     ),
 
-    // Unordered lists
+    // Unordered lists - AI Elements: proper nesting, mb-4
     ul: ({ children }: { children?: React.ReactNode }) => (
       <ul
         className={cn(
-          'list-disc list-inside space-y-1.5',
-          isCompact ? 'my-2 ml-1' : 'my-3 ml-1',
-          isWebContent && 'ml-2',
+          'list-disc last:mb-0 [&_ul]:mt-2 [&_ul]:mb-0',
+          isCompact
+            ? 'pl-5 mb-3 space-y-1.5'
+            : isWebContent
+              ? 'pl-5 mb-3 space-y-1.5'
+              : 'pl-6 mb-4 space-y-2',
         )}
       >
         {children}
       </ul>
     ),
 
-    // Ordered lists
+    // Ordered lists - AI Elements: proper nesting, mb-4
     ol: ({ children }: { children?: React.ReactNode }) => (
       <ol
         className={cn(
-          'list-decimal list-inside space-y-1.5',
-          isCompact ? 'my-2 ml-1' : 'my-3 ml-1',
-          isWebContent && 'ml-2',
+          'list-decimal last:mb-0 [&_ol]:mt-2 [&_ol]:mb-0',
+          isCompact
+            ? 'pl-5 mb-3 space-y-1.5'
+            : isWebContent
+              ? 'pl-5 mb-3 space-y-1.5'
+              : 'pl-6 mb-4 space-y-2',
         )}
       >
         {children}
       </ol>
     ),
 
-    // List items
+    // List items - AI Elements: text-base leading-7
     li: ({ children }: { children?: React.ReactNode }) => (
-      <li className={cn('text-foreground/90', isWebContent && 'text-sm')}>
+      <li
+        className={cn(
+          isCompact
+            ? 'text-sm leading-6'
+            : isWebContent
+              ? 'text-sm leading-6'
+              : 'text-base leading-7',
+        )}
+      >
         {children}
       </li>
     ),
 
-    // Code blocks and inline code
-    code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) => {
-      if (inline) {
-        return (
-          <code
-            className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono"
-            {...props}
-          >
-            {children}
-          </code>
-        );
-      }
-      return (
-        <code
-          className={cn(
-            'block bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto',
-            isWebContent ? 'my-2' : 'my-3',
-          )}
-          {...props}
-        >
-          {children}
-        </code>
-      );
-    },
+    // Code blocks and inline code - Shiki syntax highlighting with copy button
+    code: MarkdownCode as Components['code'],
 
-    // Blockquotes
+    // Preformatted text / code blocks with syntax highlighting
+    pre: MarkdownPre as Components['pre'],
+
+    // Blockquotes - AI Elements: left border, italic, proper spacing
     blockquote: ({ children }: { children?: React.ReactNode }) => (
       <blockquote
         className={cn(
-          'border-l-4 border-primary/30 pl-4 py-1 italic text-foreground/80',
-          isWebContent ? 'my-2' : 'my-3',
+          'border-l-4 border-border pl-4 py-1 my-4',
+          'text-base leading-7 italic text-muted-foreground',
         )}
       >
         {children}
@@ -145,78 +152,117 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
 
     // Bold/strong text
     strong: ({ children }: { children?: React.ReactNode }) => (
-      <strong className="font-semibold text-foreground">{children}</strong>
+      <strong className="font-semibold">{children}</strong>
     ),
 
-    // Headings
+    // Emphasis/italic
+    em: ({ children }: { children?: React.ReactNode }) => (
+      <em className="italic">{children}</em>
+    ),
+
+    // Headings - AI Elements semantic sizing with proper margins
+    // H1: text-2xl (24px), font-semibold, tracking-tight
     h1: ({ children }: { children?: React.ReactNode }) => (
       <h1
         className={cn(
-          'font-bold mt-4 mb-2 first:mt-0',
-          isWebContent ? 'text-lg' : 'text-base',
+          'font-semibold first:mt-0',
+          isCompact
+            ? 'text-lg mt-4 mb-2'
+            : isWebContent
+              ? 'text-lg mt-4 mb-2'
+              : 'text-2xl tracking-tight mt-8 mb-4',
         )}
       >
         {children}
       </h1>
     ),
 
+    // H2: text-xl (20px), font-semibold
     h2: ({ children }: { children?: React.ReactNode }) => (
       <h2
         className={cn(
-          'font-semibold mt-3 mb-2 first:mt-0',
-          isWebContent ? 'text-base' : 'text-sm',
+          'font-semibold first:mt-0',
+          isCompact
+            ? 'text-base mt-4 mb-2'
+            : isWebContent
+              ? 'text-base mt-4 mb-2'
+              : 'text-xl mt-8 mb-4',
         )}
       >
         {children}
       </h2>
     ),
 
+    // H3: text-lg (18px), font-semibold
     h3: ({ children }: { children?: React.ReactNode }) => (
       <h3
         className={cn(
-          isWebContent ? 'font-semibold' : 'font-medium',
-          'text-sm mt-2 mb-1 first:mt-0',
+          'font-semibold first:mt-0',
+          isCompact
+            ? 'text-sm mt-3 mb-1.5'
+            : isWebContent
+              ? 'text-sm mt-3 mb-1.5'
+              : 'text-lg mt-6 mb-3',
         )}
       >
         {children}
       </h3>
     ),
 
+    // H4: text-base (16px), font-semibold
     h4: ({ children }: { children?: React.ReactNode }) => (
-      <h4 className="text-sm font-medium mt-2 mb-1 first:mt-0">{children}</h4>
+      <h4 className="text-base font-semibold mt-6 mb-2 first:mt-0">{children}</h4>
     ),
 
+    // H5: text-base, font-medium
     h5: ({ children }: { children?: React.ReactNode }) => (
-      <h5 className="text-xs font-medium mt-2 mb-1 first:mt-0">{children}</h5>
+      <h5 className="text-base font-medium mt-4 mb-2 first:mt-0">{children}</h5>
     ),
 
+    // H6: text-sm, font-medium, muted
     h6: ({ children }: { children?: React.ReactNode }) => (
-      <h6 className="text-xs font-medium mt-2 mb-1 first:mt-0 text-muted-foreground">
+      <h6 className="text-sm font-medium mt-4 mb-2 first:mt-0 text-muted-foreground">
         {children}
       </h6>
     ),
 
-    // Tables (for web content)
+    // Tables - AI Elements: clean, readable tables with borders
     table: ({ children }: { children?: React.ReactNode }) => (
-      <div className={cn('overflow-x-auto', isWebContent ? 'my-3' : 'my-4')}>
-        <table className="min-w-full border-collapse border border-border">
+      <div className="overflow-x-auto my-6 rounded-lg border border-border">
+        <table className="min-w-full border-collapse text-sm">
           {children}
         </table>
       </div>
     ),
 
+    thead: ({ children }: { children?: React.ReactNode }) => (
+      <thead className="bg-muted/60">{children}</thead>
+    ),
+
+    tbody: ({ children }: { children?: React.ReactNode }) => (
+      <tbody className="divide-y divide-border bg-background">{children}</tbody>
+    ),
+
+    tr: ({ children }: { children?: React.ReactNode }) => (
+      <tr className="transition-colors hover:bg-muted/30">{children}</tr>
+    ),
+
     th: ({ children }: { children?: React.ReactNode }) => (
-      <th className="border border-border bg-muted px-3 py-2 text-left text-xs font-semibold">
+      <th className={cn(
+        'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider',
+        'text-muted-foreground border-b border-border',
+      )}
+      >
         {children}
       </th>
     ),
 
     td: ({ children }: { children?: React.ReactNode }) => (
-      <td className="border border-border px-3 py-2 text-sm">{children}</td>
+      <td className="px-4 py-3 text-sm text-foreground">{children}</td>
     ),
 
     // Horizontal rule
-    hr: () => <hr className="my-4 border-border" />,
+    hr: () => <hr className="my-6 border-border" />,
 
     // Images
     img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => (
@@ -224,7 +270,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
       <img
         src={src}
         alt={alt || ''}
-        className="max-w-full h-auto rounded-lg my-3"
+        className="max-w-full h-auto rounded-lg my-4"
         loading="lazy"
         referrerPolicy="no-referrer"
         {...props}

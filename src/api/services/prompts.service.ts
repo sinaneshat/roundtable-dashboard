@@ -35,6 +35,105 @@ import type { AttachmentCitationInfo } from '@/api/types/citations';
 export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5 words max) for this conversation. Output only the title, no quotes or extra text.';
 
 // ============================================================================
+// Image Analysis Prompts - Single Source of Truth
+// ============================================================================
+
+/**
+ * Image analysis prompt for search context extraction
+ * ✅ SINGLE SOURCE: Used by pre-search.handler.ts for analyzing images before web search
+ *
+ * Purpose: Describe image contents to generate relevant search queries
+ *
+ * Used by:
+ * - /src/api/routes/chat/handlers/pre-search.handler.ts - analyzeImagesForSearchContext()
+ */
+export const IMAGE_ANALYSIS_FOR_SEARCH_PROMPT = `Analyze the following image(s) and describe what you see in detail. Focus on:
+1. Main subjects, objects, or people visible
+2. Any text, labels, logos, or identifiable content
+3. Context clues about location, time period, or setting
+4. Technical details if it's a diagram, chart, or screenshot
+5. Anything that would help formulate a relevant web search query
+
+Provide a concise but comprehensive description that captures the key elements someone would want to search for more information about.`;
+
+/**
+ * Image description prompt for web search results
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for generating image descriptions
+ *
+ * Purpose: Generate concise descriptions of images found in search results
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - generateImageDescriptions()
+ */
+export const IMAGE_DESCRIPTION_PROMPT = 'Analyze this image and provide a concise 1-2 sentence description focusing on key visual elements and context. Be factual and descriptive.';
+
+// ============================================================================
+// Answer Summary Prompts - Single Source of Truth
+// ============================================================================
+
+/**
+ * Basic answer summary system prompt
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for basic answer synthesis
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - streamAnswerSummary(), generateAnswerSummary()
+ */
+export const ANSWER_SUMMARY_BASIC_PROMPT = 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
+
+/**
+ * Advanced answer summary system prompt
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for advanced answer synthesis
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - streamAnswerSummary(), generateAnswerSummary()
+ */
+export const ANSWER_SUMMARY_ADVANCED_PROMPT = 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.';
+
+/**
+ * Get answer summary prompt based on mode
+ * @param mode - 'basic' or 'advanced'
+ * @returns Appropriate system prompt for answer generation
+ */
+export function getAnswerSummaryPrompt(mode: 'basic' | 'advanced'): string {
+  return mode === 'advanced' ? ANSWER_SUMMARY_ADVANCED_PROMPT : ANSWER_SUMMARY_BASIC_PROMPT;
+}
+
+// ============================================================================
+// Auto-Parameter Detection Prompt - Single Source of Truth
+// ============================================================================
+
+/**
+ * Auto-parameter detection prompt for search optimization
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for detecting optimal search params
+ *
+ * Purpose: Analyze query and recommend topic, timeRange, searchDepth
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - detectSearchParameters()
+ *
+ * @param query - Search query to analyze
+ * @returns Formatted prompt for parameter detection
+ */
+export function buildAutoParameterDetectionPrompt(query: string): string {
+  return `Analyze this search query and recommend optimal search parameters.
+
+Query: "${query}"
+
+Determine:
+1. Topic category: general, news, finance, health, scientific, or travel
+2. Time relevance: day, week, month, year, or null if timeless
+3. Search depth: basic (quick answer) or advanced (comprehensive research)
+
+Respond in JSON format:
+{
+  "topic": "general|news|finance|health|scientific|travel",
+  "timeRange": "day|week|month|year|null",
+  "searchDepth": "basic|advanced",
+  "reasoning": "Brief explanation of choices"
+}`;
+}
+
+// ============================================================================
 // Query Complexity Detection
 // ============================================================================
 

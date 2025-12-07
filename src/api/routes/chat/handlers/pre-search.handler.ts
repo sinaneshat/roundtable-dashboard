@@ -25,9 +25,12 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
-import { AnalysisStatuses, MessagePartTypes, PreSearchQueryStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { AIModels } from '@/api/core/ai-models';
+import { AnalysisStatuses, IMAGE_MIME_TYPES, MessagePartTypes, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
+import { loadAttachmentContent } from '@/api/services/attachment-content.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
+import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import type { PreSearchTrackingContext } from '@/api/services/posthog-llm-tracking.service';
 import {
   initializePreSearchTracking,
@@ -45,7 +48,7 @@ import {
   getActivePreSearchStreamId,
   initializePreSearchStreamBuffer,
 } from '@/api/services/pre-search-stream-buffer.service';
-import { analyzeQueryComplexity } from '@/api/services/prompts.service';
+import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT } from '@/api/services/prompts.service';
 import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import {
@@ -150,6 +153,96 @@ export const createPreSearchHandler: RouteHandler<typeof createPreSearchRoute, A
     return Responses.ok(c, preSearch);
   },
 );
+
+// ============================================================================
+// IMAGE ANALYSIS FOR SEARCH CONTEXT
+// ============================================================================
+
+/**
+ * Analyze images using vision model to extract searchable context
+ *
+ * This function is critical for web search with image attachments:
+ * - Images cannot be directly searched, but their contents can inform search queries
+ * - Uses a vision model to describe what's in the image
+ * - The description is then used to generate relevant search queries
+ *
+ * @param fileParts - Image file parts loaded from attachments
+ * @param env - API environment bindings
+ * @returns Description of image contents for search context
+ */
+async function analyzeImagesForSearchContext(
+  fileParts: Array<{
+    type: string;
+    data?: Uint8Array;
+    mimeType?: string;
+    filename?: string;
+    url?: string;
+  }>,
+  env: ApiEnv['Bindings'],
+): Promise<string> {
+  // Filter for image files only - use includes() for string comparison
+  const imageFileParts = fileParts.filter(
+    part => part.mimeType && (IMAGE_MIME_TYPES as readonly string[]).includes(part.mimeType),
+  );
+
+  if (imageFileParts.length === 0) {
+    return '';
+  }
+
+  // Initialize OpenRouter for vision model
+  initializeOpenRouter(env);
+
+  try {
+    // Build message parts for vision model
+    // Use literal types to satisfy UIMessagePart type requirements
+    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
+    const textPart = {
+      type: 'text' as const,
+      text: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT,
+    };
+
+    // Build file parts for images
+    // FileUIPart requires: type, mediaType, url (and optionally data)
+    const filePartsList = imageFileParts
+      .filter(part => part.data && part.mimeType)
+      .map((part) => {
+        // Convert Uint8Array to base64 for data URL
+        const base64 = btoa(String.fromCharCode(...part.data!));
+        const dataUrl = `data:${part.mimeType};base64,${base64}`;
+        return {
+          type: 'file' as const,
+          mediaType: part.mimeType!,
+          url: dataUrl,
+        };
+      });
+
+    // Call vision model to analyze images
+    const result = await openRouterService.generateText({
+      modelId: AIModels.IMAGE_ANALYSIS,
+      messages: [
+        {
+          id: `img-analysis-${ulid()}`,
+          role: UIMessageRoles.USER,
+          parts: [textPart, ...filePartsList],
+        },
+      ],
+      temperature: 0.3, // Lower temperature for more accurate descriptions
+      maxTokens: 1000, // Enough for detailed description
+    });
+
+    const description = result.text.trim();
+
+    if (description) {
+      return `[Image Content Analysis]\n${description}`;
+    }
+
+    return '';
+  } catch (error) {
+    // Log error but don't fail the pre-search - continue without image context
+    console.error('[Pre-search] Image analysis failed:', error);
+    return '';
+  }
+}
 
 // ============================================================================
 // POST Pre-Search Handler (Streaming)
@@ -339,11 +432,44 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // ✅ ALWAYS ATTEMPT AI GENERATION: Generate meaningful search queries for any input
         // The AI will extract searchable terms from any content including conversational input
         {
+          // ✅ IMAGE ANALYSIS: Analyze uploaded images to extract searchable context
+          // This is critical for web search with image attachments - images must be described
+          // before we can generate relevant search queries about their contents
+          let imageContext = '';
+          if (body.attachmentIds && body.attachmentIds.length > 0) {
+            try {
+              const { fileParts } = await loadAttachmentContent({
+                attachmentIds: body.attachmentIds,
+                r2Bucket: c.env.UPLOADS_R2_BUCKET,
+                db,
+              });
+
+              if (fileParts.length > 0) {
+                // Analyze images with vision model to get searchable descriptions
+                imageContext = await analyzeImagesForSearchContext(fileParts, c.env);
+              }
+            } catch (error) {
+              // Log but don't fail - continue without image context
+              console.error('[Pre-search] Failed to load/analyze attachments:', error);
+            }
+          }
+
           // ✅ FILE CONTEXT: Include uploaded file content in query generation
           // This ensures search queries are relevant to both user message AND file contents
-          let queryMessage = body.userQuery;
+          // Combine text file context with image analysis context
+          let combinedContext = '';
           if (body.fileContext && body.fileContext.trim()) {
-            queryMessage = `${body.userQuery}\n\n<file-context>\nThe user has uploaded files with the following content that should be considered when generating search queries:\n${body.fileContext}\n</file-context>`;
+            combinedContext = body.fileContext.trim();
+          }
+          if (imageContext) {
+            combinedContext = combinedContext
+              ? `${combinedContext}\n\n${imageContext}`
+              : imageContext;
+          }
+
+          let queryMessage = body.userQuery;
+          if (combinedContext) {
+            queryMessage = `${body.userQuery}\n\n<file-context>\nThe user has uploaded files with the following content that should be considered when generating search queries:\n${combinedContext}\n</file-context>`;
           }
 
           // ✅ NORMAL FLOW: Attempt AI generation for searchable queries

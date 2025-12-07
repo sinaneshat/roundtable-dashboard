@@ -4,6 +4,7 @@ import './global.css';
 import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
+import { cookies } from 'next/headers';
 import { getMessages, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 
@@ -17,6 +18,7 @@ import {
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants/brand';
 import { spaceGrotesk } from '@/lib/fonts';
+import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
 import { createMetadata } from '@/utils/metadata';
 
 export const viewport: Viewport = {
@@ -74,6 +76,13 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
   // ✅ FIX: Get base URL once for SEO components to ensure consistency
   // This prevents hydration mismatch from getBaseUrl() using window.location on client
   const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://app.roundtable.now';
+
+  // ✅ SSR HYDRATION: Parse preferences cookie for instant store hydration
+  // This prevents flash of default state on initial page load
+  // Cookie is read server-side and parsed, then passed to client providers
+  const cookieStore = await cookies();
+  const preferencesCookie = cookieStore.get(PREFERENCES_COOKIE_NAME);
+  const initialPreferences = parsePreferencesCookie(preferencesCookie?.value);
 
   return (
     <html
@@ -138,6 +147,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
             NEXT_PUBLIC_POSTHOG_API_KEY: env.NEXT_PUBLIC_POSTHOG_API_KEY,
             NEXT_PUBLIC_POSTHOG_HOST: env.NEXT_PUBLIC_POSTHOG_HOST,
           }}
+          initialPreferences={initialPreferences}
         >
           <main>{children}</main>
           {modal}

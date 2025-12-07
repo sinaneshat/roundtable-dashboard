@@ -167,6 +167,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     user={user || { name: t('user.defaultName'), image: null }}
                     participants={participants}
                     threadId={thread.id}
+                    threadTitle={thread.title}
                     feedbackByRound={feedbackByRound}
                     isReadOnly={true}
                     preSearches={preSearches}

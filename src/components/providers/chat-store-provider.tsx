@@ -402,6 +402,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               const attachments = store.getState().getAttachments();
               const fileContext = await extractFileContextForSearch(attachments);
 
+              // ✅ IMAGE ANALYSIS: Get attachment IDs for server-side image analysis
+              // The backend will analyze images with a vision model to generate relevant search queries
+              const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
               // If placeholder, create DB record first
               if (isPlaceholder) {
                 const createResponse = await createPreSearch.mutateAsync({
@@ -409,7 +413,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                     threadId: threadIdForSearch,
                     roundNumber: currentRound.toString(),
                   },
-                  json: { userQuery, fileContext: fileContext || undefined },
+                  json: { userQuery, fileContext: fileContext || undefined, attachmentIds },
                 });
 
                 if (createResponse?.data) {
@@ -433,6 +437,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 json: {
                   userQuery,
                   fileContext: fileContext || undefined,
+                  attachmentIds,
                 },
               });
 
@@ -1289,6 +1294,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const attachments = store.getState().getAttachments();
           const fileContext = await extractFileContextForSearch(attachments);
 
+          // ✅ IMAGE ANALYSIS: Get attachment IDs for server-side image analysis
+          // The backend will analyze images with a vision model to generate relevant search queries
+          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
           createPreSearch.mutateAsync({
             param: {
               threadId: effectiveThreadId,
@@ -1297,6 +1306,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             json: {
               userQuery: pendingMessage,
               fileContext: fileContext || undefined,
+              attachmentIds,
             },
           }).then((createResponse) => {
             // ✅ CRITICAL FIX: Add pre-search to store immediately after creation
@@ -1321,6 +1331,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               json: {
                 userQuery: pendingMessage,
                 fileContext: fileContext || undefined,
+                attachmentIds,
               },
             });
           }).then(async (response) => {
@@ -1397,6 +1408,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const attachments = store.getState().getAttachments();
           const fileContext = await extractFileContextForSearch(attachments);
 
+          // ✅ IMAGE ANALYSIS: Get attachment IDs for server-side image analysis
+          // The backend will analyze images with a vision model to generate relevant search queries
+          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
           // ✅ TYPE-SAFE: Use service instead of direct fetch
           const executePreSearch = () => executePreSearchStreamService({
             param: {
@@ -1406,6 +1421,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             json: {
               userQuery: pendingMessage,
               fileContext: fileContext || undefined,
+              attachmentIds,
             },
           });
 
@@ -1452,6 +1468,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               json: {
                 userQuery: pendingMessage,
                 fileContext: fileContext || undefined,
+                attachmentIds,
               },
             }).then((createResponse) => {
               // Update store with real pre-search data (replace placeholder)

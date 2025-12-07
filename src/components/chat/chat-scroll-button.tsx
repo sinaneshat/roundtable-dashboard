@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
 type ChatScrollButtonProps = {
-  variant?: 'floating' | 'header';
+  variant?: 'floating' | 'header' | 'input';
   className?: string;
 };
 
@@ -51,23 +51,10 @@ export function ChatScrollButton({
       cancelAnimationFrame(rafRef.current);
     }
 
-    // ✅ BODY-BASED SCROLL: Use anchor position for accurate targeting
+    // Scroll to absolute bottom of the document
     rafRef.current = requestAnimationFrame(() => {
-      const scrollAnchor = document.querySelector('[data-scroll-anchor="chat-bottom"]');
-      let targetScrollTop: number;
-
-      if (scrollAnchor) {
-        // Calculate position based on anchor
-        const anchorRect = scrollAnchor.getBoundingClientRect();
-        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
-        targetScrollTop = currentScrollTop + anchorRect.bottom - window.innerHeight;
-      } else {
-        // Fallback to document bottom
-        targetScrollTop = document.documentElement.scrollHeight - window.innerHeight;
-      }
-
       window.scrollTo({
-        top: Math.max(0, targetScrollTop),
+        top: document.documentElement.scrollHeight,
         behavior: 'smooth',
       });
       rafRef.current = null;
@@ -76,6 +63,29 @@ export function ChatScrollButton({
 
   if (!showButton)
     return null;
+
+  if (variant === 'input') {
+    return (
+      <div className="flex justify-center mb-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn(
+            'size-9 rounded-full shadow-md',
+            'bg-background/95 backdrop-blur-sm',
+            'border-border/50',
+            'hover:bg-accent hover:text-accent-foreground',
+            'transition-all duration-200',
+            className,
+          )}
+          onClick={scrollToBottom}
+          aria-label="Scroll to bottom"
+        >
+          <ArrowDown className="size-4" />
+        </Button>
+      </div>
+    );
+  }
 
   if (variant === 'header') {
     return (

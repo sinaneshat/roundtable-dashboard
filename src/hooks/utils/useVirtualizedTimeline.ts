@@ -29,7 +29,9 @@ export type UseVirtualizedTimelineOptions = {
   /**
    * Estimated size per timeline item in pixels
    * This is a starting estimate - actual sizes will be measured dynamically
-   * Default: 1px (near-zero forces immediate measurement)
+   * ✅ TANSTACK DOCS: Use realistic estimate close to average actual size
+   * Too low (1px) causes constant recalculation and jumpy/overlapping behavior
+   * Default: 250px (reasonable average for chat messages, analyses, changelogs)
    */
   estimateSize?: number;
 
@@ -176,7 +178,7 @@ export type UseVirtualizedTimelineResult = {
 export function useVirtualizedTimeline({
   timelineItems,
   scrollContainerId = 'chat-scroll-container',
-  estimateSize = 1, // Near-zero - forces immediate measurement
+  estimateSize = 250, // ✅ TANSTACK DOCS: Realistic estimate prevents jumpy/overlapping behavior
   overscan = 10, // ✅ INCREASED from 1 to 10 for smoother fast scrolling (25+ on mobile)
   enabled = true,
   onScrollOffsetChange,

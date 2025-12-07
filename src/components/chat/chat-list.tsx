@@ -146,6 +146,7 @@ function ChatItem({
       </SidebarMenuButton>
       <SidebarMenuAction
         showOnHover
+        className="text-destructive hover:text-destructive"
         disabled={isDeleting}
         onClick={(e) => {
           e.preventDefault();

@@ -113,7 +113,7 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
           className={cn(
             'flex items-center justify-between gap-3 px-3 py-2',
             'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
-            'bg-destructive/10 backdrop-blur-xl',
+            'bg-destructive/10',
           )}
         >
           <p className="text-[10px] leading-tight text-destructive font-medium text-left flex-1 min-w-0">

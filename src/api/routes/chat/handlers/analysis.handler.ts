@@ -838,6 +838,12 @@ export const resumeAnalysisStreamHandler: RouteHandler<typeof resumeAnalysisStre
     operationName: 'resumeAnalysisStream',
   },
   async (c) => {
+    // ✅ LOCAL DEV FIX: If KV is not available, return 204 immediately
+    // Without KV, stream resumption cannot work properly.
+    if (!c.env?.KV) {
+      return Responses.noContent(c);
+    }
+
     const { user } = c.auth();
     const { threadId, roundNumber } = c.validated.params;
 

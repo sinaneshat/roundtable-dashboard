@@ -1,47 +1,65 @@
+/**
+ * Global CSS - Roundtable
+ * @version 1.1.0
+ * @updated 2025-12-07
+ * Dark theme only - no light mode support
+ */
 @import 'tailwindcss';
+
+/* Required for Streamdown MessageResponse component styling */
+@source "../node_modules/streamdown/dist/index.js";
 
 @variant dark (&:is(.dark *));
 
 @plugin "tailwindcss-animate";
 
+/* Force dark background immediately to prevent white flash */
+html {
+  background-color: hsl(0 0% 2%);
+}
+
 @layer base {
-  :root {
-    --background: hsl(223.8136 0.0005% 98.6829%);
-    --foreground: hsl(0 0% 0%);
-    --card: hsl(223.8136 -172.5242% 100%);
-    --card-foreground: hsl(0 0% 0%);
-    --popover: hsl(223.8136 0.0005% 98.6829%);
-    --popover-foreground: hsl(0 0% 0%);
-    --primary: hsl(0 0% 0%);
-    --primary-foreground: hsl(223.8136 -172.5242% 100%);
-    --secondary: hsl(223.8136 0.0001% 92.1478%);
-    --secondary-foreground: hsl(0 0% 0%);
-    --muted: hsl(223.8136 0.0002% 96.0587%);
-    --muted-foreground: hsl(223.8136 0% 32.3067%);
-    --accent: hsl(223.8136 0.0001% 92.1478%);
-    --accent-foreground: hsl(0 0% 0%);
-    --destructive: hsl(358.4334 74.912% 59.7455%);
-    --destructive-foreground: hsl(223.8136 -172.5242% 100%);
+  /* Dark theme only - no light mode support */
+  :root,
+  .dark {
+    color-scheme: dark;
+    /* Dark background with lighter cards/sidebar floating on top */
+    --background: hsl(0 0% 2%);
+    --foreground: hsl(0 0% 92%);
+    --card: hsl(0 0% 12%);
+    --card-foreground: hsl(0 0% 92%);
+    --popover: hsl(0 0% 14%);
+    --popover-foreground: hsl(0 0% 92%);
+    --primary: hsl(0 0% 100%);
+    --primary-foreground: hsl(0 0% 0%);
+    --secondary: hsl(0 0% 16%);
+    --secondary-foreground: hsl(0 0% 92%);
+    --muted: hsl(0 0% 14%);
+    --muted-foreground: hsl(0 0% 55%);
+    --accent: hsl(0 0% 15%);
+    --accent-foreground: hsl(0 0% 92%);
+    --destructive: hsl(0 62% 50%);
+    --destructive-foreground: hsl(0 0% 100%);
     --warning: hsl(38 92% 50%);
     --warning-foreground: hsl(0 0% 0%);
-    --success: hsl(142 76% 36%);
+    --success: hsl(142 71% 45%);
     --success-foreground: hsl(0 0% 100%);
-    --border: hsl(223.8136 0.0001% 89.5577%);
-    --input: hsl(223.8136 0.0001% 92.1478%);
-    --ring: hsl(0 0% 0%);
-    --chart-1: hsl(40.6655 100.2361% 50.9228%);
-    --chart-2: hsl(223.749 85.9924% 55.8092%);
-    --chart-3: hsl(223.8136 0% 64.471%);
-    --chart-4: hsl(223.8136 0.0001% 89.5577%);
-    --chart-5: hsl(223.8136 0% 45.6078%);
-    --sidebar: hsl(0 0% 100%);
-    --sidebar-foreground: hsl(240 5.3% 26.1%);
-    --sidebar-primary: hsl(240 5.9% 10%);
-    --sidebar-primary-foreground: hsl(0 0% 98%);
-    --sidebar-accent: hsl(240 4.8% 95.9%);
-    --sidebar-accent-foreground: hsl(240 5.9% 10%);
-    --sidebar-border: hsl(220 13% 91%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --border: hsl(0 0% 18%);
+    --input: hsl(0 0% 14%);
+    --ring: hsl(0 0% 75%);
+    --chart-1: hsl(40 100% 50%);
+    --chart-2: hsl(200 80% 50%);
+    --chart-3: hsl(0 0% 50%);
+    --chart-4: hsl(0 0% 28%);
+    --chart-5: hsl(0 0% 85%);
+    --sidebar: hsl(0 0% 10%);
+    --sidebar-foreground: hsl(0 0% 92%);
+    --sidebar-primary: hsl(0 0% 100%);
+    --sidebar-primary-foreground: hsl(0 0% 0%);
+    --sidebar-accent: hsl(0 0% 14%);
+    --sidebar-accent-foreground: hsl(0 0% 92%);
+    --sidebar-border: hsl(0 0% 16%);
+    --sidebar-ring: hsl(0 0% 45%);
     --font-sans: var(--font-geist-sans), sans-serif;
     --font-serif: Georgia, serif;
     --font-mono: var(--font-geist-mono), monospace;
@@ -63,64 +81,6 @@
     --shadow-2xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.45);
     --tracking-normal: 0em;
     --spacing: 0.25rem;
-  }
-
-  .dark {
-    --background: hsl(240 6% 4%);
-    --foreground: hsl(223.8136 -172.5242% 100%);
-    --card: hsl(240 6.67% 8.82%);
-    --card-foreground: hsl(223.8136 -172.5242% 100%);
-    --popover: hsl(240 6% 5.5%);
-    --popover-foreground: hsl(223.8136 -172.5242% 100%);
-    --primary: hsl(223.8136 -172.5242% 100%);
-    --primary-foreground: hsl(0 0% 0%);
-    --secondary: hsl(223.8136 0% 13.1499%);
-    --secondary-foreground: hsl(223.8136 -172.5242% 100%);
-    --muted: hsl(223.8136 0% 11.304%);
-    --muted-foreground: hsl(223.8136 0% 64.471%);
-    --accent: hsl(223.8136 0% 19.8916%);
-    --accent-foreground: hsl(223.8136 -172.5242% 100%);
-    --destructive: hsl(359.9132 100.2494% 67.8807%);
-    --destructive-foreground: hsl(0 0% 0%);
-    --warning: hsl(38 92% 50%);
-    --warning-foreground: hsl(0 0% 0%);
-    --success: hsl(142 71% 45%);
-    --success-foreground: hsl(0 0% 100%);
-    --border: hsl(223.8136 0% 14.0871%);
-    --input: hsl(223.8136 0% 19.8916%);
-    --ring: hsl(223.8136 0% 64.471%);
-    --chart-1: hsl(40.6655 100.2361% 50.9228%);
-    --chart-2: hsl(218.1624 90.0354% 55.1618%);
-    --chart-3: hsl(223.8136 0% 45.6078%);
-    --chart-4: hsl(223.8136 0% 32.3067%);
-    --chart-5: hsl(223.8136 0.0001% 89.5577%);
-    --sidebar: hsl(240 6.67% 12%);
-    --sidebar-foreground: hsl(240 4.8% 95.9%);
-    --sidebar-primary: hsl(224.3 76.3% 48%);
-    --sidebar-primary-foreground: hsl(0 0% 100%);
-    --sidebar-accent: hsl(240 6.67% 8.82%);
-    --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-    --sidebar-border: hsl(240 6.67% 15%);
-    --sidebar-ring: hsl(217.2 91.2% 59.8%);
-    --font-sans: var(--font-geist-sans), sans-serif;
-    --font-serif: Georgia, serif;
-    --font-mono: var(--font-geist-mono), monospace;
-    --font-display: var(--font-space-grotesk), var(--font-geist-sans), sans-serif;
-    --radius: 0.5rem;
-    --shadow-x: 0px;
-    --shadow-y: 1px;
-    --shadow-blur: 2px;
-    --shadow-spread: 0px;
-    --shadow-opacity: 0.18;
-    --shadow-color: hsl(0 0% 0%);
-    --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.09);
-    --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.09);
-    --shadow-sm: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 1px 2px -1px hsl(0 0% 0% / 0.18);
-    --shadow: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 1px 2px -1px hsl(0 0% 0% / 0.18);
-    --shadow-md: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 2px 4px -1px hsl(0 0% 0% / 0.18);
-    --shadow-lg: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 4px 6px -1px hsl(0 0% 0% / 0.18);
-    --shadow-xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 8px 10px -1px hsl(0 0% 0% / 0.18);
-    --shadow-2xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.45);
   }
 
   @theme inline {
@@ -407,94 +367,5 @@
     @apply border-indigo-500/30 border-teal-500/30 border-orange-500/30 border-cyan-500/30 border-pink-500/30;
     @apply border-lime-500/30 border-amber-500/30 border-emerald-500/30 border-violet-500/30 border-fuchsia-500/30;
     @apply border-rose-500/30 border-sky-500/30 border-slate-500/30;
-  }
-
-  /* Streamdown markdown styling - consistent spacing and typography */
-  [data-streamdown='heading-1'] {
-    @apply text-lg font-semibold mt-4 mb-2 text-foreground;
-  }
-
-  [data-streamdown='heading-1']:first-child {
-    @apply mt-0;
-  }
-
-  [data-streamdown='heading-2'] {
-    @apply text-base font-semibold mt-3 mb-2 text-foreground;
-  }
-
-  [data-streamdown='heading-2']:first-child {
-    @apply mt-0;
-  }
-
-  [data-streamdown='heading-3'] {
-    @apply text-sm font-semibold mt-3 mb-1.5 text-foreground;
-  }
-
-  [data-streamdown='heading-3']:first-child {
-    @apply mt-0;
-  }
-
-  [data-streamdown='unordered-list'] {
-    @apply list-disc pl-5 my-2 space-y-1;
-  }
-
-  [data-streamdown='unordered-list'] [data-streamdown='unordered-list'] {
-    @apply mt-1 mb-0;
-  }
-
-  [data-streamdown='ordered-list'] {
-    @apply list-decimal pl-5 my-2 space-y-1;
-  }
-
-  [data-streamdown='ordered-list'] [data-streamdown='ordered-list'] {
-    @apply mt-1 mb-0;
-  }
-
-  [data-streamdown='list-item'] {
-    @apply text-sm leading-relaxed pl-1;
-  }
-
-  [data-streamdown='blockquote'] {
-    @apply border-l-2 border-primary/30 pl-3 py-0.5 my-2 text-sm italic text-foreground/80;
-  }
-
-  [data-streamdown='code-block'] {
-    @apply bg-muted rounded-lg overflow-hidden my-2;
-  }
-
-  [data-streamdown='inline-code'] {
-    @apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono;
-  }
-
-  [data-streamdown='link'] {
-    @apply text-primary hover:text-primary/80 underline decoration-primary/30 underline-offset-2 transition-colors;
-  }
-
-  [data-streamdown='horizontal-rule'] {
-    @apply my-3 border-border;
-  }
-
-  [data-streamdown='table-wrapper'] {
-    @apply overflow-x-auto my-3;
-  }
-
-  [data-streamdown='table'] {
-    @apply min-w-full border-collapse text-sm;
-  }
-
-  [data-streamdown='table-header'] {
-    @apply bg-muted/50;
-  }
-
-  [data-streamdown='table-header-cell'] {
-    @apply px-3 py-2 text-left text-xs font-semibold text-foreground border-b border-border;
-  }
-
-  [data-streamdown='table-cell'] {
-    @apply px-3 py-2 text-sm border-b border-border;
-  }
-
-  [data-streamdown='strong'] {
-    @apply font-semibold text-foreground;
   }
 }

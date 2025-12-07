@@ -25,12 +25,12 @@ import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
+import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -107,13 +107,14 @@ export function ChatView({
     })),
   );
 
-  const { streamingRoundNumber, isCreatingAnalysis, waitingToStartStreaming, isCreatingThread, pendingMessage } = useChatStore(
+  const { streamingRoundNumber, isCreatingAnalysis, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded } = useChatStore(
     useShallow(s => ({
       streamingRoundNumber: s.streamingRoundNumber,
       isCreatingAnalysis: s.isCreatingAnalysis,
       waitingToStartStreaming: s.waitingToStartStreaming,
       isCreatingThread: s.isCreatingThread,
       pendingMessage: s.pendingMessage,
+      hasInitiallyLoaded: s.hasInitiallyLoaded,
     })),
   );
 
@@ -304,7 +305,7 @@ export function ChatView({
   const formActions = useChatFormActions();
 
   // Loading state - needed before scroll hook
-  const { showLoader, loadingDetails } = useFlowLoading({ mode });
+  const { showLoader } = useFlowLoading({ mode });
 
   // Scroll management - uses single scroll anchor for smooth auto-scrolling
   useChatScroll({
@@ -431,7 +432,6 @@ export function ChatView({
 
     let updatedParticipants;
     if (orderedModel.participant) {
-      // Allow deselecting all - validation shown in UI
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
@@ -490,7 +490,7 @@ export function ChatView({
     if (mode === 'thread') {
       setHasPendingConfigChanges(true);
     }
-  }, [selectedParticipants.length, removeParticipant, mode, setHasPendingConfigChanges]);
+  }, [removeParticipant, mode, setHasPendingConfigChanges]);
 
   const handleAnalysisStreamStart = useCallback((roundNumber: number) => {
     updateAnalysisStatus(roundNumber, AnalysisStatuses.STREAMING);
@@ -528,6 +528,7 @@ export function ChatView({
               user={user}
               participants={contextParticipants}
               threadId={effectiveThreadId}
+              threadTitle={thread?.title}
               isStreaming={isStreaming}
               currentParticipantIndex={currentParticipantIndex}
               currentStreamingParticipant={
@@ -548,15 +549,6 @@ export function ChatView({
               preSearches={preSearches}
             />
 
-            {/* Loading indicator */}
-            <div className="mt-4 mb-2">
-              <UnifiedLoadingIndicator
-                showLoader={showLoader}
-                loadingDetails={loadingDetails}
-                preSearches={preSearches}
-              />
-            </div>
-
             {/* ✅ SCROLL ANCHOR: Single marker for smooth auto-scroll snapping
                 This element is the ONLY target for scroll behavior
                 Placed at the very bottom of the chat content area */}
@@ -575,9 +567,12 @@ export function ChatView({
             style={{ bottom: `${keyboardOffset + 16}px` }}
           >
             <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+              {/* Scroll to bottom button - positioned above input */}
+              <ChatScrollButton variant="input" />
               {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
                   Per AI SDK docs, resume: true is incompatible with abort/stop.
-                  Streams continue in background via waitUntil() and can be resumed. */}
+                  Streams continue in background via waitUntil() and can be resumed.
+                  ✅ HYDRATION FIX: Pass isHydrating to suppress "no models" error flash */}
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
@@ -593,6 +588,7 @@ export function ChatView({
                 enableAttachments={!isInputBlocked}
                 attachmentClickRef={attachmentClickRef}
                 isUploading={chatAttachments.isUploading}
+                isHydrating={mode === 'thread' && !hasInitiallyLoaded}
                 toolbar={(
                   <ChatInputToolbarMenu
                     selectedParticipants={selectedParticipants}

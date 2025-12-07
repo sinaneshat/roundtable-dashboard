@@ -46,6 +46,7 @@ import type {
   CheckStuckStreams,
   ClearAllAnalyses,
   ClearAllPreSearches,
+  ClearAnalysisStreamTracking,
   ClearAnalysisTracking,
   ClearAnimations,
   ClearAttachments,
@@ -63,6 +64,7 @@ import type {
   HandleResumedStreamComplete,
   HandleStreamResumptionFailure,
   HasAnalysisBeenCreated,
+  HasAnalysisStreamBeenTriggered,
   HasAttachments,
   HasPreSearchBeenTriggered,
   InitializeThread,
@@ -70,6 +72,7 @@ import type {
   IsStreamResumptionValid,
   LoadFeedbackFromServer,
   MarkAnalysisCreated,
+  MarkAnalysisStreamTriggered,
   MarkPreSearchTriggered,
   MarkResumptionAttempted,
   NeedsMessageSync,
@@ -362,6 +365,10 @@ export const TrackingStateSchema = z.object({
   hasSentPendingMessage: z.boolean(),
   createdAnalysisRounds: z.custom<Set<number>>(),
   triggeredPreSearchRounds: z.custom<Set<number>>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by round number */
+  triggeredAnalysisRounds: z.custom<Set<number>>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by analysis ID */
+  triggeredAnalysisIds: z.custom<Set<string>>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Flag to track early optimistic message from handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: z.boolean(),
 });
@@ -374,6 +381,12 @@ export const TrackingActionsSchema = z.object({
   markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
   clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Mark analysis stream as triggered (ID + round) */
+  markAnalysisStreamTriggered: z.custom<MarkAnalysisStreamTriggered>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Check if analysis stream was triggered */
+  hasAnalysisStreamBeenTriggered: z.custom<HasAnalysisStreamBeenTriggered>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Clear tracking for regeneration */
+  clearAnalysisStreamTracking: z.custom<ClearAnalysisStreamTracking>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Set when early optimistic message added by handleUpdateThreadAndSend */
   setHasEarlyOptimisticMessage: z.custom<SetHasEarlyOptimisticMessage>(),
 });

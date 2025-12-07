@@ -375,6 +375,11 @@ export async function getActiveStreamId(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<string | null> {
+  // ✅ LOCAL DEV: Return null if KV not available
+  if (!env?.KV) {
+    return null;
+  }
+
   try {
     const streamId = await env.KV.get(
       getActiveKey(threadId, roundNumber, participantIndex),
@@ -412,6 +417,11 @@ export async function getStreamMetadata(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<StreamBufferMetadata | null> {
+  // ✅ LOCAL DEV: Return null if KV not available
+  if (!env?.KV) {
+    return null;
+  }
+
   try {
     // ✅ TYPE-SAFE: Use safe parser instead of force casting
     const metadata = parseStreamBufferMetadata(await env.KV.get(getMetadataKey(streamId), 'json'));
@@ -445,6 +455,11 @@ export async function getStreamChunks(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<StreamChunk[] | null> {
+  // ✅ LOCAL DEV: Return null if KV not available
+  if (!env?.KV) {
+    return null;
+  }
+
   try {
     // ✅ TYPE-SAFE: Use safe parser instead of force casting
     const chunks = parseStreamChunksArray(await env.KV.get(getChunksKey(streamId), 'json'));
@@ -479,6 +494,11 @@ export async function clearActiveStream(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
+  // ✅ LOCAL DEV: Skip if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
   try {
     await env.KV.delete(getActiveKey(threadId, roundNumber, participantIndex));
 
@@ -511,6 +531,11 @@ export async function deleteStreamBuffer(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
+  // ✅ LOCAL DEV: Skip if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
   try {
     await Promise.all([
       env.KV.delete(getMetadataKey(streamId)),

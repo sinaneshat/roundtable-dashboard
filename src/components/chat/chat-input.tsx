@@ -13,6 +13,12 @@ import {
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { STRING_LIMITS } from '@/constants/validation';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
@@ -56,6 +62,8 @@ type ChatInputProps = {
   attachmentClickRef?: React.MutableRefObject<(() => void) | null>;
   /** Whether files are currently uploading - disables submit until complete */
   isUploading?: boolean;
+  /** Suppress validation errors during hydration (prevents flash of "no models" error) */
+  isHydrating?: boolean;
 };
 
 // ✅ RENDER OPTIMIZATION: Memoize ChatInput to prevent unnecessary re-renders
@@ -87,6 +95,7 @@ export const ChatInput = memo(({
   enableAttachments = true,
   attachmentClickRef,
   isUploading = false,
+  isHydrating = false,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -267,6 +276,9 @@ export const ChatInput = memo(({
     }
   };
 
+  // ✅ HYDRATION FIX: Don't show error during hydration (prevents flash before store initializes)
+  const showNoModelsError = participants.length === 0 && !isQuotaExceeded && !isHydrating;
+
   return (
     <div className="w-full">
       {/* Hidden file input for attachment selection */}
@@ -285,13 +297,13 @@ export const ChatInput = memo(({
         className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-2xl',
-          'border border-border',
+          'border border-white/10',
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
-          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && 'cursor-not-allowed',
+          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
           isStreaming && 'ring-2 ring-primary/20',
-          isOverLimit && 'border-destructive',
+          (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -303,17 +315,32 @@ export const ChatInput = memo(({
           {/* Quota Alert Extension - appears at top when quota exceeded */}
           {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
 
-          {/* Content limit alert - appears at top when message too long */}
-          {isOverLimit && (
+          {/* No models selected alert - appears at top when no participants */}
+          {showNoModelsError && (
             <div
               className={cn(
-                'flex items-center gap-2 px-3 py-2',
+                'flex items-center gap-3 px-3 py-2',
                 'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
                 'bg-destructive/10',
               )}
             >
-              <p className="text-[10px] leading-tight text-destructive font-medium">
-                Message too long. Please shorten your message to send.
+              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
+                {t('chat.input.noModelsSelected')}
+              </p>
+            </div>
+          )}
+
+          {/* Content limit alert - appears at top when message too long */}
+          {isOverLimit && (
+            <div
+              className={cn(
+                'flex items-center gap-3 px-3 py-2',
+                'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
+                'bg-destructive/10',
+              )}
+            >
+              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
+                {t('chat.input.messageTooLong')}
               </p>
             </div>
           )}
@@ -381,31 +408,41 @@ export const ChatInput = memo(({
             {/* Toolbar and submit */}
             <div>
               <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
-                {/* Left side: Toolbar (AI Models + Mode + WebSearch) */}
-                {toolbar && (
-                  <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
-                    {toolbar}
-                  </div>
-                )}
+                {/* Left side: Toolbar */}
+                <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
+                  {toolbar}
+                </div>
 
                 {/* Right side: Speech + Submit buttons */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {/* Speech recognition button - always enabled during streaming */}
                   {enableSpeech && isSpeechSupported && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant={isListening ? 'default' : 'ghost'}
-                      onClick={toggleSpeech}
-                      disabled={isMicDisabled && !isListening}
-                      className={cn(
-                        'size-8 sm:size-9 shrink-0 rounded-full',
-                        isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
-                      )}
-                      title={isListening ? 'Stop recording' : t('chat.input.voiceInput')}
-                    >
-                      {isListening ? <StopCircle className="size-3.5 sm:size-4" /> : <Mic className="size-3.5 sm:size-4" />}
-                    </Button>
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant={isListening ? 'default' : 'ghost'}
+                            onClick={toggleSpeech}
+                            disabled={isMicDisabled && !isListening}
+                            className={cn(
+                              'size-8 sm:size-9 shrink-0 rounded-full',
+                              isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
+                            )}
+                          >
+                            {isListening ? <StopCircle className="size-3.5 sm:size-4" /> : <Mic className="size-3.5 sm:size-4" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p className="text-xs">
+                            {isListening
+                              ? t('chat.toolbar.tooltips.stopRecording')
+                              : t('chat.toolbar.tooltips.microphone')}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
 
                   {/* Submit/Stop button */}

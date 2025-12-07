@@ -8,7 +8,7 @@ import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Shimmer } from '@/components/ai-elements/shimmer';
+import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
@@ -180,7 +180,7 @@ export const ModelMessageCard = memo(({
                       }}
                       className="py-2 text-muted-foreground text-base"
                     >
-                      <Shimmer>{loadingText ?? t('generating', { model: modelName })}</Shimmer>
+                      <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
                     </motion.div>
                   )
                 : parts.length > 0
@@ -219,7 +219,7 @@ export const ModelMessageCard = memo(({
                                       text={part.text}
                                       citations={resolvedCitations}
                                       isStreaming={isStreaming}
-                                      className="text-foreground text-base leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                      className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                     />
                                     {isStreaming && isLastTextPart && <StreamingCursor />}
                                   </div>
@@ -229,7 +229,7 @@ export const ModelMessageCard = memo(({
                               return (
                                 <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
                                   <Streamdown
-                                    className="text-foreground text-base leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                     components={streamdownComponents}
                                   >
                                     {part.text}

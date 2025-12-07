@@ -515,16 +515,16 @@ export function StaggerContainer({
 }
 
 // StaggerItem Component
-export function StaggerItem({ 
-  children, 
+export function StaggerItem({
+  children,
   className,
   variants = staggerItem,
-  ...props 
+  ...props
 }: MotionComponentProps & { variants?: Variants }) {
   return (
     <motion.div
       variants={variants}
-      className={cn(className)}
+      className={cn('w-full', className)}
       {...props}
     >
       {children}

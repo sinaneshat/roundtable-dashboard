@@ -16,6 +16,12 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '@/components/ui/drawer';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
@@ -86,77 +92,116 @@ export const ChatInputToolbarMenu = memo(({
   // After mount, show desktop version
   if (mounted && isDesktop) {
     return (
-      <div className="flex items-center gap-2">
-        {/* Models button */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={onOpenModelModal}
-          className={cn(
-            'h-9 rounded-2xl gap-1.5 text-xs px-3',
-            hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/10',
+      <TooltipProvider delayDuration={300}>
+        <div className="flex items-center gap-2">
+          {/* Models button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={onOpenModelModal}
+                className={cn(
+                  'h-9 rounded-2xl gap-1.5 text-xs px-3',
+                  hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/10',
+                )}
+              >
+                {hasNoModelsSelected && <AlertCircle className="size-3.5" />}
+                <span>{t('chat.models.models')}</span>
+                {!hasNoModelsSelected && (
+                  <AvatarGroup
+                    participants={selectedParticipants}
+                    allModels={allModels}
+                    size="sm"
+                    maxVisible={3}
+                  />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">{t('chat.toolbar.tooltips.models')}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Mode button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={onOpenModeModal}
+                className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+              >
+                {ModeIcon && <ModeIcon className="size-4" />}
+                <span>{currentMode?.label || t('chat.modes.mode')}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">{t('chat.toolbar.tooltips.mode')}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Attach button - always visible when handler provided, disabled when blocked */}
+          {onAttachmentClick && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={disabled || !enableAttachments}
+                  onClick={handleAttachClick}
+                  className={cn(
+                    'size-9',
+                    attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
+                  )}
+                >
+                  <Paperclip className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  {enableAttachments
+                    ? t('chat.toolbar.tooltips.attach')
+                    : t('chat.toolbar.tooltips.attachDisabled')}
+                </p>
+              </TooltipContent>
+            </Tooltip>
           )}
-        >
-          {hasNoModelsSelected && <AlertCircle className="size-3.5" />}
-          <span>{t('chat.models.models')}</span>
-          {!hasNoModelsSelected && (
-            <AvatarGroup
-              participants={selectedParticipants}
-              allModels={allModels}
-              size="sm"
-              maxVisible={3}
-            />
-          )}
-        </Button>
-        {/* Mode button */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={onOpenModeModal}
-          className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-        >
-          {ModeIcon && <ModeIcon className="size-4" />}
-          <span>{currentMode?.label || t('chat.modes.mode')}</span>
-        </Button>
-        {/* Attach button - always visible when handler provided, disabled when blocked */}
-        {onAttachmentClick && (
-          <button
-            type="button"
-            disabled={disabled || !enableAttachments}
-            onClick={handleAttachClick}
-            className={cn(
-              'flex items-center justify-center rounded-full transition-colors',
-              'h-9 w-9 p-0',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-              attachmentCount > 0
-                ? 'bg-primary/10 border border-primary/50 text-primary hover:bg-primary/20 hover:border-primary/60'
-                : 'bg-muted/40 border border-border/50 hover:bg-muted/60',
-            )}
-          >
-            <Paperclip className="size-4" />
-          </button>
-        )}
-        {/* Web search toggle */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onWebSearchToggle?.(!enableWebSearch)}
-          className={cn(
-            'flex items-center justify-center rounded-full transition-colors',
-            'h-9 w-9 p-0',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-            enableWebSearch
-              ? 'bg-primary/10 border border-primary/50 text-primary hover:bg-primary/20 hover:border-primary/60'
-              : 'bg-muted/40 border border-border/50 hover:bg-muted/60',
-          )}
-        >
-          <Globe className="size-4" />
-        </button>
-      </div>
+
+          {/* Web search toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={disabled}
+                onClick={() => onWebSearchToggle?.(!enableWebSearch)}
+                className={cn(
+                  'size-9 transition-colors',
+                  enableWebSearch
+                    ? 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/25'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Globe className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">
+                {enableWebSearch
+                  ? t('chat.toolbar.tooltips.webSearchEnabled')
+                  : t('chat.toolbar.tooltips.webSearch')}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
     );
   }
 

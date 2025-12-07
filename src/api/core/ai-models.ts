@@ -46,6 +46,17 @@ export const TITLE_GENERATION_MODEL_ID = ModelIdEnum.enum['google/gemini-2.0-fla
 export const WEB_SEARCH_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
 
 // ============================================================================
+// IMAGE ANALYSIS MODELS
+// ============================================================================
+
+/**
+ * Model for image content analysis (pre-search context extraction)
+ * Uses Gemini 2.0 Flash - fast, cheap, vision-capable
+ * Used to describe image contents before generating search queries
+ */
+export const IMAGE_ANALYSIS_MODEL_ID = ModelIdEnum.enum['google/gemini-2.0-flash-001'];
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -53,4 +64,5 @@ export const AIModels = {
   ANALYSIS: ANALYSIS_MODEL_ID,
   TITLE_GENERATION: TITLE_GENERATION_MODEL_ID,
   WEB_SEARCH: WEB_SEARCH_MODEL_ID,
+  IMAGE_ANALYSIS: IMAGE_ANALYSIS_MODEL_ID,
 } as const;

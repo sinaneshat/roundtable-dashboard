@@ -58,7 +58,10 @@ import {
   openRouterService,
 } from '@/api/services/openrouter.service';
 import {
+  buildAutoParameterDetectionPrompt,
   buildWebSearchQueryPrompt,
+  getAnswerSummaryPrompt,
+  IMAGE_DESCRIPTION_PROMPT,
   WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
 } from '@/api/services/prompts.service';
 // ============================================================================
@@ -1072,6 +1075,7 @@ async function generateImageDescriptions(
             // ✅ FIX: Use AI SDK v5 multimodal pattern with actual vision API
             // Reference: AI SDK v5 documentation - multimodal messages
             // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-modal-messages
+            // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
             const result = await generateText({
               model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
               messages: [
@@ -1080,7 +1084,7 @@ async function generateImageDescriptions(
                   content: [
                     {
                       type: 'text',
-                      text: 'Analyze this image and provide a concise 1-2 sentence description focusing on key visual elements and context. Be factual and descriptive.',
+                      text: IMAGE_DESCRIPTION_PROMPT,
                     },
                     {
                       type: 'image',
@@ -1178,10 +1182,8 @@ export function streamAnswerSummary(
       })
       .join('\n\n---\n\n');
 
-    const systemPrompt
-      = mode === 'advanced'
-        ? 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.'
-        : 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
+    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
+    const systemPrompt = getAnswerSummaryPrompt(mode);
 
     // ✅ FIX: Use streamText() for progressive streaming
     return streamText({
@@ -1245,10 +1247,8 @@ async function generateAnswerSummary(
       })
       .join('\n\n---\n\n');
 
-    const systemPrompt
-      = mode === 'advanced'
-        ? 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.'
-        : 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
+    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
+    const systemPrompt = getAnswerSummaryPrompt(mode);
 
     const result = await openRouterService.generateText({
       modelId: AIModels.WEB_SEARCH,
@@ -1309,6 +1309,7 @@ async function detectSearchParameters(
   try {
     initializeOpenRouter(env);
 
+    // ✅ SINGLE SOURCE OF TRUTH: Prompt imported from prompts.service.ts
     const result = await openRouterService.generateText({
       modelId: AIModels.WEB_SEARCH,
       messages: [
@@ -1318,22 +1319,7 @@ async function detectSearchParameters(
           parts: [
             {
               type: 'text',
-              text: `Analyze this search query and recommend optimal search parameters.
-
-Query: "${query}"
-
-Determine:
-1. Topic category: general, news, finance, health, scientific, or travel
-2. Time relevance: day, week, month, year, or null if timeless
-3. Search depth: basic (quick answer) or advanced (comprehensive research)
-
-Respond in JSON format:
-{
-  "topic": "general|news|finance|health|scientific|travel",
-  "timeRange": "day|week|month|year|null",
-  "searchDepth": "basic|advanced",
-  "reasoning": "Brief explanation of choices"
-}`,
+              text: buildAutoParameterDetectionPrompt(query),
             },
           ],
         },

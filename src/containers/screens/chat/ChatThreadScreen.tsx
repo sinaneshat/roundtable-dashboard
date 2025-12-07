@@ -45,6 +45,7 @@ type ChatThreadScreenProps = {
 
 /**
  * Memoized thread header updater to prevent infinite render loops
+ * ✅ ZUSTAND PATTERN: Thread title comes from store - only set threadActions here
  */
 function useThreadHeaderUpdater({
   thread,
@@ -55,7 +56,7 @@ function useThreadHeaderUpdater({
   slug: string;
   onDeleteClick: () => void;
 }) {
-  const { setThreadActions, setThreadTitle } = useThreadHeader();
+  const { setThreadActions } = useThreadHeader();
   const threadId = thread.id;
   const threadTitle = thread.title;
   const isPublic = thread.isPublic;
@@ -73,9 +74,8 @@ function useThreadHeaderUpdater({
   );
 
   useEffect(() => {
-    setThreadTitle(threadTitle);
     setThreadActions(threadActions);
-  }, [threadTitle, threadActions, setThreadTitle, setThreadActions]);
+  }, [threadActions, setThreadActions]);
 }
 
 export default function ChatThreadScreen({

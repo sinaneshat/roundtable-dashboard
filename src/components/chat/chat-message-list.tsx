@@ -893,8 +893,7 @@ export const ChatMessageList = memo(
                         key={messageKey}
                         className={cn(
                           'max-w-[85%]',
-                          'bg-card text-card-foreground',
-                          'border border-border/50',
+                          'bg-secondary text-secondary-foreground',
                           'rounded-2xl rounded-br-md px-4 py-3',
                           'text-base leading-relaxed',
                         )}

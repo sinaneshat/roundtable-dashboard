@@ -3,30 +3,30 @@
 import type { ComponentProps, CSSProperties } from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { Slot } from "@radix-ui/react-slot"
-import { cva, VariantProps } from "class-variance-authority"
-import { PanelLeftIcon } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { Slot } from "@radix-ui/react-slot";
+import { cva, VariantProps } from "class-variance-authority";
+import { PanelLeftIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet"
+} from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { useIsMobile } from "@/hooks/utils"
-import { cn } from "@/lib/ui/cn"
-import { Skeleton } from "./skeleton"
+} from "@/components/ui/tooltip";
+import { useIsMobile } from "@/hooks/utils";
+import { cn } from "@/lib/ui/cn";
+import { Skeleton } from "./skeleton";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -262,7 +262,8 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
           className={cn(
-            "bg-card group-data-[variant=floating]:border-border flex h-full w-full flex-col rounded-2xl group-data-[variant=floating]:border group-data-[variant=floating]:shadow-lg p-3"
+            "bg-card flex h-full w-full flex-col rounded-2xl p-3",
+            "border border-white/10 shadow-lg"
           )}
         >
           {children}
@@ -490,7 +491,7 @@ function SidebarMenuItem({ className, ...props }: ComponentProps<"li">) {
     <li
       data-slot="sidebar-menu-item"
       data-sidebar="menu-item"
-      className={cn("group/menu-item relative w-full min-w-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto", className)}
+      className={cn("group/menu-item relative w-full", className)}
       {...props}
     />
   )
@@ -503,7 +504,7 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: "hover:bg-accent",
         outline:
-          "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-accent hover:shadow-[0_0_0_1px_var(--border)]",
+          "bg-card shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-accent hover:shadow-[0_0_0_1px_var(--border)]",
       },
       size: {
         default: "h-9 text-sm group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!min-w-[2.5rem] group-data-[collapsible=icon]:!max-w-[2.5rem] group-data-[collapsible=icon]:!min-h-[2.5rem] group-data-[collapsible=icon]:!max-h-[2.5rem]",
@@ -584,15 +585,24 @@ function SidebarMenuAction({
       data-slot="sidebar-menu-action"
       data-sidebar="menu-action"
       className={cn(
-        "text-sidebar-foreground ring-sidebar-ring hover:bg-accent absolute top-1.5 end-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 outline-hidden transition-all duration-200 focus-visible:ring-2 active:bg-accent active:scale-[0.998] [&>svg]:size-4 [&>svg]:shrink-0",
-        // Increases the hit area of the button on mobile.
+        // Base styles - full rounded icon button with destructive hover
+        "absolute end-2 flex size-6 items-center justify-center rounded-full p-0 outline-hidden",
+        "text-sidebar-foreground/60 ring-sidebar-ring",
+        "hover:bg-destructive/15 hover:text-destructive",
+        "focus-visible:ring-2 focus-visible:ring-destructive/50",
+        "transition-all duration-150 ease-out",
+        "[&>svg]:size-3.5 [&>svg]:shrink-0",
+        // Touch target
         "after:absolute after:-inset-2 md:after:hidden",
+        // Size-responsive positioning
         "peer-data-[size=sm]/menu-button:top-1",
         "peer-data-[size=default]/menu-button:top-1.5",
         "peer-data-[size=lg]/menu-button:top-2.5",
+        // Hide in icon mode
         "group-data-[collapsible=icon]:hidden",
+        // Show on hover with fade animation
         showOnHover &&
-          "group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+          "opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100",
         className
       )}
       {...props}
@@ -746,5 +756,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar
-}
+};
 
