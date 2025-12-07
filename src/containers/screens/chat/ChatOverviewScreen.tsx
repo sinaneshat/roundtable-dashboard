@@ -48,10 +48,7 @@ import {
   useOverviewActions,
   useScreenInitialization,
 } from '@/stores/chat';
-import {
-  useModelPreferencesHydrated,
-  useModelPreferencesStore,
-} from '@/stores/preferences';
+import { useModelPreferencesStore } from '@/stores/preferences';
 
 import { ChatView } from './ChatView';
 
@@ -67,26 +64,30 @@ export default function ChatOverviewScreen() {
   // ============================================================================
   // PREFERENCES STORE (Cookie-persisted model selection + mode/webSearch)
   // ============================================================================
-  const preferencesHydrated = useModelPreferencesHydrated();
+  // ✅ FIX: Read _hasHydrated directly from store state instead of useModelPreferencesHydrated hook
+  // The hook uses useState(false) + useEffect which creates a timing gap on first render.
+  // Reading from store state ensures we see the true hydration status immediately.
   const {
+    _hasHydrated: preferencesHydrated,
     modelOrder: persistedModelOrder,
     selectedMode: persistedMode,
     enableWebSearch: persistedWebSearch,
+    selectedModelIds: persistedModelIds,
     setSelectedModelIds: setPersistedModelIds,
     setModelOrder: setPersistedModelOrder,
     setSelectedMode: setPersistedMode,
     setEnableWebSearch: setPersistedWebSearch,
-    getInitialModelIds,
     syncWithAccessibleModels,
   } = useModelPreferencesStore(useShallow(s => ({
+    _hasHydrated: s._hasHydrated,
     modelOrder: s.modelOrder,
     selectedMode: s.selectedMode,
     enableWebSearch: s.enableWebSearch,
+    selectedModelIds: s.selectedModelIds,
     setSelectedModelIds: s.setSelectedModelIds,
     setModelOrder: s.setModelOrder,
     setSelectedMode: s.setSelectedMode,
     setEnableWebSearch: s.setEnableWebSearch,
-    getInitialModelIds: s.getInitialModelIds,
     syncWithAccessibleModels: s.syncWithAccessibleModels,
   })));
 
@@ -197,26 +198,45 @@ export default function ChatOverviewScreen() {
   );
 
   // ============================================================================
-  // INITIAL PARTICIPANTS (centralized in preferences store)
-  // - User's persisted selection takes priority (even if 1-2 models)
-  // - Defaults to first 3 accessible models if no persisted selection
+  // ACCESSIBLE MODELS (computed from enabled models)
+  // ============================================================================
+  const accessibleModelIds = useMemo(() => {
+    if (allEnabledModels.length === 0)
+      return [];
+    return allEnabledModels
+      .filter(m => m.is_accessible_to_user)
+      .map(m => m.id);
+  }, [allEnabledModels]);
+
+  // ============================================================================
+  // INITIAL PARTICIPANTS (pure computation - NO side effects)
+  // - Uses persisted selection if valid models exist
+  // - Otherwise uses first 3 accessible models
+  // - Side effect (persisting defaults) handled in useEffect below
   // ============================================================================
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     // Wait for preferences to hydrate and models to load
-    if (!preferencesHydrated || allEnabledModels.length === 0) {
+    if (!preferencesHydrated || accessibleModelIds.length === 0) {
       return [];
     }
 
-    // Get accessible model IDs (user can use these)
-    const accessibleModelIds = allEnabledModels
-      .filter(m => m.is_accessible_to_user)
-      .map(m => m.id);
+    // PRIORITY 1: Use persisted selection if valid models exist
+    if (persistedModelIds.length > 0) {
+      const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
+      if (validIds.length > 0) {
+        return validIds.map((modelId, index) => ({
+          id: modelId,
+          modelId,
+          role: '',
+          priority: index,
+        }));
+      }
+    }
 
-    // Use centralized store method (handles persisted vs defaults)
-    const modelIds = getInitialModelIds(accessibleModelIds);
-
-    if (modelIds.length > 0) {
-      return modelIds.map((modelId, index) => ({
+    // PRIORITY 2: Use first 3 accessible models as defaults
+    const defaultIds = accessibleModelIds.slice(0, 3);
+    if (defaultIds.length > 0) {
+      return defaultIds.map((modelId, index) => ({
         id: modelId,
         modelId,
         role: '',
@@ -224,7 +244,7 @@ export default function ChatOverviewScreen() {
       }));
     }
 
-    // Fallback to default model if no accessible models
+    // Fallback to default model
     if (defaultModelId) {
       return [{
         id: defaultModelId,
@@ -235,7 +255,7 @@ export default function ChatOverviewScreen() {
     }
 
     return [];
-  }, [preferencesHydrated, allEnabledModels, defaultModelId, getInitialModelIds]);
+  }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
 
   const orderedModels = useMemo<OrderedModel[]>(() => {
     if (allEnabledModels.length === 0)
@@ -266,13 +286,25 @@ export default function ChatOverviewScreen() {
   const formActions = useChatFormActions();
   const overviewActions = useOverviewActions();
 
+  // ✅ PERSIST DEFAULT SELECTION: When no persisted models, save first 3 accessible as defaults
+  // This is a side effect that was previously incorrectly placed in useMemo
+  useEffect(() => {
+    if (
+      preferencesHydrated
+      && accessibleModelIds.length > 0
+      && persistedModelIds.length === 0
+    ) {
+      const defaultIds = accessibleModelIds.slice(0, 3);
+      if (defaultIds.length > 0) {
+        setPersistedModelIds(defaultIds);
+      }
+    }
+  }, [preferencesHydrated, accessibleModelIds, persistedModelIds.length, setPersistedModelIds]);
+
   // ✅ SYNC: Keep preferences AND chat participants in sync with accessible models
   // Removes invalid models from persistence and active selection when models change
   useEffect(() => {
-    if (preferencesHydrated && allEnabledModels.length > 0) {
-      const accessibleModelIds = allEnabledModels
-        .filter(m => m.is_accessible_to_user)
-        .map(m => m.id);
+    if (preferencesHydrated && accessibleModelIds.length > 0) {
       const accessibleSet = new Set(accessibleModelIds);
 
       // Sync preferences store (persisted cookie state)
@@ -293,7 +325,7 @@ export default function ChatOverviewScreen() {
         }
       }
     }
-  }, [preferencesHydrated, allEnabledModels, syncWithAccessibleModels, selectedParticipants, setSelectedParticipants]);
+  }, [preferencesHydrated, accessibleModelIds, syncWithAccessibleModels, selectedParticipants, setSelectedParticipants]);
 
   // Initialize model order when models first load (use persisted order if available)
   useEffect(() => {
