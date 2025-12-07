@@ -50,9 +50,9 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
   const errorDetails = getErrorDetails();
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+    <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
       <StaggerContainer
-        className="flex w-full max-w-2xl flex-col items-center gap-6 text-center"
+        className="flex w-full max-w-2xl flex-col items-center gap-6 text-center mx-auto"
         staggerDelay={0.15}
         delayChildren={0.1}
       >

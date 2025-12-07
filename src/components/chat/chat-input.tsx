@@ -297,12 +297,11 @@ export const ChatInput = memo(({
         className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-2xl',
-          'border border-white/10',
+          'border border-white/[0.12]',
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
-          isStreaming && 'ring-2 ring-primary/20',
           (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
           className,
         )}

@@ -90,7 +90,7 @@ export default function ChatOverviewLoading() {
 
         {/* Input skeleton - matches inline ChatInput placement */}
         <div className="w-full mt-6 sm:mt-8 pb-4">
-          <div className="rounded-xl bg-card/60 backdrop-blur-md border border-white/10 p-3">
+          <div className="rounded-2xl bg-card border border-white/[0.12] shadow-lg p-3">
             <Skeleton className="h-10 w-full bg-white/10 rounded-lg" />
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-2">

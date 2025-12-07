@@ -222,7 +222,7 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
       {...props}
     >
       <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
-        <div className="rounded-xl bg-card/60 backdrop-blur-md border border-white/10 p-4">
+        <div className="rounded-2xl bg-card border border-white/[0.12] shadow-lg p-4">
           <Skeleton className="h-12 w-full bg-white/10 rounded-lg" />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">

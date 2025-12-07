@@ -88,9 +88,9 @@ function SubscriptionChangedContent() {
 
   if (!isLoadingData && !displaySubscription) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+      <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
         <StaggerContainer
-          className="flex flex-col items-center gap-6 text-center max-w-md"
+          className="flex flex-col items-center gap-6 text-center max-w-md mx-auto"
           staggerDelay={0.15}
           delayChildren={0.1}
         >
@@ -164,9 +164,9 @@ function SubscriptionChangedContent() {
     : null;
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+    <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
       <StaggerContainer
-        className="flex flex-col items-center gap-8 text-center max-w-2xl w-full"
+        className="flex flex-col items-center gap-8 text-center max-w-2xl w-full mx-auto"
         staggerDelay={0.15}
         delayChildren={0.1}
       >
@@ -415,8 +415,8 @@ export function SubscriptionChangedClient() {
   return (
     <Suspense
       fallback={(
-        <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
-          <div className="flex flex-col items-center gap-6 text-center max-w-md">
+        <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
+          <div className="flex flex-col items-center gap-6 text-center max-w-md mx-auto">
             <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 md:size-24">
               <CheckCircle className="size-10 text-primary md:size-12 animate-pulse" strokeWidth={2} />
             </div>

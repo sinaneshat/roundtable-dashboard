@@ -245,7 +245,7 @@ export const chatGlass = {
   // Chat input box - Liquid Glass effect (fully transparent with blur)
   inputBox: cn(
     'backdrop-blur-2xl',
-    'border border-white/10',
+    'border border-white/[0.12]',
     'hover:border-white/20',
     'focus-within:border-white/20',
     'transition-all duration-200',
@@ -285,6 +285,6 @@ export const dashboardGlass = {
   sidebar: cn(
     'backdrop-blur-xl',
     'bg-white/5',
-    'border border-white/10',
+    'border border-white/[0.12]',
   ),
 } as const;

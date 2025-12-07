@@ -20,7 +20,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -65,19 +65,27 @@ export default function ChatOverviewScreen() {
   const { defaultModelId } = useModelLookup();
 
   // ============================================================================
-  // PREFERENCES STORE (Cookie-persisted model selection)
+  // PREFERENCES STORE (Cookie-persisted model selection + mode/webSearch)
   // ============================================================================
   const preferencesHydrated = useModelPreferencesHydrated();
   const {
     modelOrder: persistedModelOrder,
+    selectedMode: persistedMode,
+    enableWebSearch: persistedWebSearch,
     setSelectedModelIds: setPersistedModelIds,
     setModelOrder: setPersistedModelOrder,
+    setSelectedMode: setPersistedMode,
+    setEnableWebSearch: setPersistedWebSearch,
     getInitialModelIds,
     syncWithAccessibleModels,
   } = useModelPreferencesStore(useShallow(s => ({
     modelOrder: s.modelOrder,
+    selectedMode: s.selectedMode,
+    enableWebSearch: s.enableWebSearch,
     setSelectedModelIds: s.setSelectedModelIds,
     setModelOrder: s.setModelOrder,
+    setSelectedMode: s.setSelectedMode,
+    setEnableWebSearch: s.setEnableWebSearch,
     getInitialModelIds: s.getInitialModelIds,
     syncWithAccessibleModels: s.syncWithAccessibleModels,
   })));
@@ -362,14 +370,18 @@ export default function ChatOverviewScreen() {
       chatAttachments.clearAttachments();
 
       if (defaultModelId && initialParticipants.length > 0) {
-        setSelectedMode(getDefaultChatMode());
+        // Use persisted mode if valid, otherwise default
+        const modeResult = ChatModeSchema.safeParse(persistedMode);
+        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
         setSelectedParticipants(initialParticipants);
+        // Use persisted webSearch preference
+        setEnableWebSearch(persistedWebSearch);
         hasInitializedModelsRef.current = true; // Mark as initialized
       }
     } else {
       lastResetPathRef.current = pathname;
     }
-  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments]);
+  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments, persistedMode, persistedWebSearch, setEnableWebSearch]);
 
   // Initialize defaults when defaultModelId becomes available (one-time only)
   // Don't re-initialize if user explicitly cleared all models
@@ -383,10 +395,14 @@ export default function ChatOverviewScreen() {
       hasInitializedModelsRef.current = true;
       setSelectedParticipants(initialParticipants);
       if (!selectedMode) {
-        setSelectedMode(getDefaultChatMode());
+        // Use persisted mode if valid, otherwise default
+        const modeResult = ChatModeSchema.safeParse(persistedMode);
+        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
       }
+      // Apply persisted webSearch preference
+      setEnableWebSearch(persistedWebSearch);
     }
-  }, [defaultModelId, initialParticipants, selectedParticipants.length, selectedMode, setSelectedParticipants, setSelectedMode]);
+  }, [defaultModelId, initialParticipants, selectedParticipants.length, selectedMode, setSelectedParticipants, setSelectedMode, persistedMode, persistedWebSearch, setEnableWebSearch]);
 
   // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
   // Per AI SDK docs, resume: true is incompatible with abort/stop.
@@ -552,6 +568,12 @@ export default function ChatOverviewScreen() {
     setPersistedModelIds(reorderedParticipants.map(p => p.modelId));
   }, [setSelectedParticipants, setModelOrder, setPersistedModelOrder, setPersistedModelIds]);
 
+  // Web search toggle with persistence
+  const handleWebSearchToggle = useCallback((enabled: boolean) => {
+    setEnableWebSearch(enabled);
+    setPersistedWebSearch(enabled); // Persist to cookie
+  }, [setEnableWebSearch, setPersistedWebSearch]);
+
   // ============================================================================
   // RENDER
   // ============================================================================
@@ -691,7 +713,7 @@ export default function ChatOverviewScreen() {
                       selectedMode={selectedMode || getDefaultChatMode()}
                       onOpenModeModal={() => modeModal.onTrue()}
                       enableWebSearch={enableWebSearch}
-                      onWebSearchToggle={setEnableWebSearch}
+                      onWebSearchToggle={handleWebSearchToggle}
                       onAttachmentClick={handleAttachmentClick}
                       attachmentCount={chatAttachments.attachments.length}
                       enableAttachments={!isInitialUIInputBlocked}
@@ -734,6 +756,7 @@ export default function ChatOverviewScreen() {
         selectedMode={selectedMode || getDefaultChatMode()}
         onModeSelect={(mode) => {
           setSelectedMode(mode);
+          setPersistedMode(mode); // Persist to cookie
           modeModal.onFalse();
         }}
       />

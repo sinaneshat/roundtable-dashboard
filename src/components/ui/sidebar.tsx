@@ -263,7 +263,7 @@ function Sidebar({
           data-slot="sidebar-inner"
           className={cn(
             "bg-card flex h-full w-full flex-col rounded-2xl p-3",
-            "border border-white/10 shadow-lg"
+            "border border-white/[0.12] shadow-lg"
           )}
         >
           {children}

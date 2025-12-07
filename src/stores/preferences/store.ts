@@ -89,6 +89,10 @@ export type ModelPreferencesState = {
   selectedModelIds: string[];
   /** Model order for display (drag-and-drop order) */
   modelOrder: string[];
+  /** Selected chat mode (analyzing/brainstorming/etc) */
+  selectedMode: string | null;
+  /** Web search enabled preference */
+  enableWebSearch: boolean;
   /** Hydration tracking for SSR */
   _hasHydrated: boolean;
 };
@@ -101,6 +105,8 @@ export type ModelPreferencesActions = {
   setSelectedModelIds: (ids: string[]) => void;
   toggleModel: (modelId: string) => boolean;
   setModelOrder: (order: string[]) => void;
+  setSelectedMode: (mode: string | null) => void;
+  setEnableWebSearch: (enabled: boolean) => void;
   getInitialModelIds: (accessibleModelIds: string[]) => string[];
   /**
    * Sync persisted preferences with currently accessible models
@@ -123,7 +129,7 @@ export type ModelPreferencesStore = ModelPreferencesState & ModelPreferencesActi
  * Persisted state subset (what gets saved to cookie)
  * Source: persist.md - "partialize" pattern
  */
-export type PersistedModelPreferences = Pick<ModelPreferencesState, 'selectedModelIds' | 'modelOrder'>;
+export type PersistedModelPreferences = Pick<ModelPreferencesState, 'selectedModelIds' | 'modelOrder' | 'selectedMode' | 'enableWebSearch'>;
 
 // ============================================================================
 // DEFAULT STATE (Official Pattern)
@@ -133,6 +139,8 @@ export type PersistedModelPreferences = Pick<ModelPreferencesState, 'selectedMod
 export const defaultInitState: ModelPreferencesState = {
   selectedModelIds: [],
   modelOrder: [],
+  selectedMode: null, // null = use default mode
+  enableWebSearch: false,
   _hasHydrated: false,
 };
 
@@ -185,7 +193,12 @@ export function parsePreferencesCookie(
   try {
     const decoded = decodeURIComponent(cookieValue);
     const parsed = JSON.parse(decoded) as {
-      state?: { selectedModelIds?: string[]; modelOrder?: string[] };
+      state?: {
+        selectedModelIds?: string[];
+        modelOrder?: string[];
+        selectedMode?: string | null;
+        enableWebSearch?: boolean;
+      };
     };
 
     // Zustand persist wraps state in { state: {...}, version: number }
@@ -197,6 +210,12 @@ export function parsePreferencesCookie(
         modelOrder: Array.isArray(parsed.state.modelOrder)
           ? parsed.state.modelOrder
           : [],
+        selectedMode: typeof parsed.state.selectedMode === 'string'
+          ? parsed.state.selectedMode
+          : null,
+        enableWebSearch: typeof parsed.state.enableWebSearch === 'boolean'
+          ? parsed.state.enableWebSearch
+          : false,
         _hasHydrated: true,
       };
     }
@@ -281,6 +300,24 @@ export function createModelPreferencesStore(
               },
               false,
               'preferences/setModelOrder',
+            ),
+
+          setSelectedMode: (mode: string | null) =>
+            set(
+              (draft) => {
+                draft.selectedMode = mode;
+              },
+              false,
+              'preferences/setSelectedMode',
+            ),
+
+          setEnableWebSearch: (enabled: boolean) =>
+            set(
+              (draft) => {
+                draft.enableWebSearch = enabled;
+              },
+              false,
+              'preferences/setEnableWebSearch',
             ),
 
           getInitialModelIds: (accessibleModelIds: string[]): string[] => {
@@ -396,6 +433,8 @@ export function createModelPreferencesStore(
           partialize: state => ({
             selectedModelIds: state.selectedModelIds,
             modelOrder: state.modelOrder,
+            selectedMode: state.selectedMode,
+            enableWebSearch: state.enableWebSearch,
           }) as unknown as ModelPreferencesStore,
           // ✅ OFFICIAL PATTERN: skipHydration for SSR
           // Source: persist.md - prevents automatic hydration

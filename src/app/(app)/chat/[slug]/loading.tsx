@@ -50,7 +50,7 @@ export default function ChatThreadLoading() {
       {/* Chat input skeleton - sticky at bottom */}
       <div className="sticky bottom-4 z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6">
         <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
-          <div className="rounded-2xl border border-white/10 bg-card shadow-lg p-3">
+          <div className="rounded-2xl border border-white/[0.12] bg-card shadow-lg p-3">
             {/* Toolbar skeleton */}
             <div className="flex items-center gap-2 mb-3">
               <Skeleton className="h-8 w-8 rounded-lg bg-white/10" />
