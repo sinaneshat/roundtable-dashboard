@@ -20,7 +20,7 @@ import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
 import type { FilePart, MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
-import { isFilePart } from '@/lib/schemas/message-schemas';
+import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
@@ -882,6 +882,7 @@ export const ChatMessageList = memo(
                         url: filePart.url,
                         filename: filePart.filename,
                         mediaType: filePart.mediaType,
+                        uploadId: getUploadIdFromFilePart(filePart) ?? undefined,
                       }));
 
                     const textParts = message.parts.filter(

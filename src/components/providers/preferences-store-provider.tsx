@@ -147,17 +147,20 @@ export function useModelPreferencesStoreApi(): ModelPreferencesStoreApi {
 }
 
 // ============================================================================
-// HYDRATION HOOK (Official Pattern)
-// Source: persist.md - "useHydration" pattern
+// HYDRATION HOOK (Official Zustand v5 Pattern)
+// Source: https://github.com/pmndrs/zustand/blob/main/docs/integrations/persisting-store-data.md
 // ============================================================================
 
 /**
  * Hook to track store hydration status
  *
- * Official Zustand pattern for handling hydration in SSR apps:
- * - Uses persist API events (onHydrate, onFinishHydration)
- * - Handles both initial and manual rehydration
- * - Returns boolean indicating if store is ready
+ * ✅ OFFICIAL ZUSTAND V5 PATTERN (from Context7 docs):
+ * 1. Subscribe to onHydrate and onFinishHydration FIRST
+ * 2. THEN check hasHydrated() synchronously to catch race condition
+ * 3. Return boolean indicating if store is ready
+ *
+ * This pattern handles the case where rehydration completes before
+ * the effect subscribes to the finish event.
  *
  * @example
  * const hydrated = useModelPreferencesHydrated();
@@ -166,18 +169,17 @@ export function useModelPreferencesStoreApi(): ModelPreferencesStoreApi {
 // eslint-disable-next-line react-refresh/only-export-components -- Store hook export
 export function useModelPreferencesHydrated(): boolean {
   const storeContext = use(PreferencesStoreContext);
-  const [hydrated, setHydrated] = useState(() => {
-    // Initialize with current hydration state to avoid flash
-    return storeContext?.persist.hasHydrated() ?? false;
-  });
+  // ✅ OFFICIAL PATTERN: Initialize with false, let effect handle hydration state
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     if (!storeContext) {
       return;
     }
 
-    // Official Pattern: Subscribe to hydration events
+    // ✅ OFFICIAL PATTERN: Subscribe to hydration events FIRST
     // Source: persist.md - "onHydrate" and "onFinishHydration"
+    // Note: onHydrate is for manual rehydration scenarios
     const unsubHydrate = storeContext.persist.onHydrate(() => {
       setHydrated(false);
     });
@@ -185,6 +187,12 @@ export function useModelPreferencesHydrated(): boolean {
     const unsubFinishHydration = storeContext.persist.onFinishHydration(() => {
       setHydrated(true);
     });
+
+    // ✅ OFFICIAL PATTERN: THEN check if already hydrated (catches race condition)
+    // This sync call is intentional - subscriptions are set up first, so any future
+    // hydration events will still be captured even if this triggers a re-render
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Official Zustand v5 pattern: sync setState after subscribing to catch completed hydration
+    setHydrated(storeContext.persist.hasHydrated());
 
     return () => {
       unsubHydrate();

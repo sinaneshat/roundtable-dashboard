@@ -122,9 +122,9 @@ export function BillingSuccessClient() {
 
   if (isLoadingData) {
     return (
-      <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
+      <div className="flex flex-1 min-h-0 w-full flex-col items-center justify-center px-4 py-8">
         <StaggerContainer
-          className="flex flex-col items-center gap-6 text-center max-w-md mx-auto"
+          className="flex flex-col items-center gap-6 text-center max-w-md w-full mx-auto"
           staggerDelay={0.15}
           delayChildren={0.1}
         >
@@ -151,9 +151,9 @@ export function BillingSuccessClient() {
 
   if (syncMutation.isError) {
     return (
-      <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
+      <div className="flex flex-1 min-h-0 w-full flex-col items-center justify-center px-4 py-8">
         <StaggerContainer
-          className="flex flex-col items-center gap-6 text-center max-w-md mx-auto"
+          className="flex flex-col items-center gap-6 text-center max-w-md w-full mx-auto"
           staggerDelay={0.15}
           delayChildren={0.1}
         >
@@ -215,7 +215,7 @@ export function BillingSuccessClient() {
   const isDowngrade = validTiers.indexOf(currentTier) < validTiers.indexOf(previousTier);
 
   return (
-    <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
+    <div className="flex flex-1 min-h-0 w-full flex-col items-center justify-center px-4 py-8">
       <StaggerContainer
         className="flex flex-col items-center gap-8 text-center max-w-2xl w-full mx-auto"
         staggerDelay={0.15}

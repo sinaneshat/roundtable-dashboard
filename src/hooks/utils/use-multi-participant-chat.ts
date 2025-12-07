@@ -1676,6 +1676,43 @@ export function useMultiParticipantChat(
   // Stream resumption is incompatible with abort signals
   // Streams now continue until completion and can resume after page reload
 
+  // ✅ CRITICAL FIX: Detect resumed stream from AI SDK status
+  // When AI SDK auto-resumes via `resume: true`, its status becomes 'streaming'
+  // but isExplicitlyStreaming stays false because none of the entry points were called.
+  // This causes the store's isStreaming to be false even though events are being received.
+  // Fix: When AI SDK status is 'streaming' but we haven't set isExplicitlyStreaming,
+  // this indicates a resumed stream - set the flag so UI responds properly.
+  useLayoutEffect(() => {
+    // Only act when AI SDK says it's streaming but we haven't acknowledged it
+    if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
+      // ✅ GUARD: Don't set during form submission (hasEarlyOptimisticMessage check)
+      if (callbackRefs.hasEarlyOptimisticMessage.current) {
+        return;
+      }
+
+      // ✅ GUARD: Only if we have a valid thread ID (not on overview page initial load)
+      if (!callbackRefs.threadId.current || callbackRefs.threadId.current.trim() === '') {
+        return;
+      }
+
+      // ✅ GUARD: Need messages to determine round/participant context
+      if (messagesRef.current.length === 0) {
+        return;
+      }
+
+      // Detected resumed stream - set streaming flag
+      // This ensures store.isStreaming reflects the actual state
+      isStreamingRef.current = true;
+      setIsExplicitlyStreaming(true);
+
+      // Also populate roundParticipantsRef if needed for proper orchestration
+      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+        roundParticipantsRef.current = enabled;
+      }
+    }
+  }, [status, isExplicitlyStreaming]);
+
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
   // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'
   // - isExplicitlyStreaming: Our manual flag for participant orchestration
