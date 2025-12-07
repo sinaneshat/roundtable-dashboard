@@ -1703,6 +1703,7 @@ export function useMultiParticipantChat(
       // Detected resumed stream - set streaming flag
       // This ensures store.isStreaming reflects the actual state
       isStreamingRef.current = true;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: syncing external state (AI SDK status) to internal flag
       setIsExplicitlyStreaming(true);
 
       // Also populate roundParticipantsRef if needed for proper orchestration
@@ -1711,6 +1712,7 @@ export function useMultiParticipantChat(
         roundParticipantsRef.current = enabled;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
   }, [status, isExplicitlyStreaming]);
 
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
