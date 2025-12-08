@@ -12,11 +12,18 @@ This workspace is configured to automatically start your development environment
    ```
 
 2. **VS Code will automatically**:
+   - **Fetch latest changes** from all remote branches
+   - **Merge `origin/preview`** into your current branch (auto-merge, no conflicts)
    - Start Claude Code with `--dangerously-skip-permissions`
    - Start the development server (`pnpm dev`)
    - Open terminals in split view on the right side
 
 3. **First time setup**: When you first open the workspace, VS Code may ask if you trust the tasks. Click "Allow" to enable auto-run.
+
+4. **Git Sync Behavior**:
+   - If merge conflicts occur, you'll see a warning message
+   - You can resolve conflicts manually and continue
+   - The startup script (`.vscode/startup.sh`) has interactive prompts for uncommitted changes
 
 ### Option 2: Using Folder with Tasks
 
@@ -28,6 +35,7 @@ This workspace is configured to automatically start your development environment
 2. **Allow tasks to run**: When prompted, allow the tasks to run on folder open
 
 3. **Tasks will start automatically**:
+   - Git sync (fetch and merge from `origin/preview`)
    - Claude Code terminal (skip permissions)
    - Development server terminal
 
@@ -41,21 +49,33 @@ Run the included startup script:
 ./.vscode/startup.sh
 ```
 
-This will start both Claude Code and the dev server in the background.
+This will:
+1. Fetch all remote branches
+2. Attempt to merge `origin/preview` (with interactive prompts for uncommitted changes)
+3. Start Claude Code with skip permissions
+4. Start the development server
+
+The script has safety features:
+- Prompts before stashing uncommitted changes
+- Handles merge conflicts gracefully
+- Shows recent commits after sync
 
 ### Using VS Code Tasks
 
 Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux) and run:
 
+- `Tasks: Run Task` → `Git Sync: Fetch and Merge Preview`
 - `Tasks: Run Task` → `Start Claude (Skip Permissions)`
 - `Tasks: Run Task` → `Start Development Server`
+- `Tasks: Run Task` → `Manual: Git Status` (check status and recent commits)
+- `Tasks: Run Task` → `Manual: Stop All Services` (kill port 3000)
 
 ## Terminal Layout
 
 The workspace is configured to:
 - Open terminals in the editor area (not bottom panel)
 - Display tabs on the right side
-- Keep terminals grouped by task (`claude` and `dev` groups)
+- Keep terminals grouped by task (`git`, `claude`, and `dev` groups)
 
 ## Settings Overview
 
@@ -66,15 +86,33 @@ The workspace is configured to:
 - Terminal: Editor location, tabs on right
 
 ### Tasks (`tasks.json`)
-1. **Start Claude (Skip Permissions)**
-   - Command: `claude --dangerously-skip-permissions`
-   - Auto-runs on folder open
-   - Dedicated panel in `claude` group
+1. **Git Sync: Fetch and Merge Preview**
+   - Command: `git fetch --all && git merge origin/preview --no-edit`
+   - Auto-runs on folder open (runs FIRST, before other tasks)
+   - Shared panel in `git` group
+   - Handles merge conflicts gracefully
 
-2. **Start Development Server**
+2. **Start Claude (Skip Permissions)**
+   - Command: `claude --dangerously-skip-permissions`
+   - Auto-runs on folder open (after git sync)
+   - Dedicated panel in `claude` group
+   - Depends on Git Sync task
+
+3. **Start Development Server**
    - Command: `pnpm dev`
-   - Auto-runs on folder open
+   - Auto-runs on folder open (after git sync)
    - Dedicated panel in `dev` group
+   - Depends on Git Sync task
+
+4. **Manual: Git Status**
+   - Command: `git status && git log -3 --oneline`
+   - Manual execution only
+   - Shows current status and recent commits
+
+5. **Manual: Stop All Services**
+   - Command: `lsof -ti:3000 | xargs kill -9`
+   - Manual execution only
+   - Kills all services on port 3000
 
 ## Troubleshooting
 
@@ -107,6 +145,30 @@ If not found, install Claude Code CLI first.
 If port 3000 is already in use:
 1. Kill existing processes: `lsof -ti:3000 | xargs kill -9`
 2. Or configure a different port in your environment
+3. Or use the manual task: `Tasks: Run Task` → `Manual: Stop All Services`
+
+### Git Sync Issues
+
+**Merge Conflicts**:
+If the auto-merge from `origin/preview` fails:
+1. The task will show a warning message
+2. Resolve conflicts manually: `git status` to see conflicting files
+3. After resolving: `git add .` then `git merge --continue`
+4. Or abort the merge: `git merge --abort`
+
+**Uncommitted Changes**:
+- VS Code tasks will attempt to merge even with uncommitted changes (may fail)
+- Use `.vscode/startup.sh` instead - it prompts to stash changes first
+- Or manually stash: `git stash push -m "work in progress"`
+
+**No Preview Branch**:
+If `origin/preview` doesn't exist, the task will show a warning but continue starting Claude and dev server.
+
+**Skip Git Sync**:
+To disable auto-sync temporarily:
+1. `Cmd+Shift+P` → `Tasks: Configure Task`
+2. Remove `"runOptions": { "runOn": "folderOpen" }` from "Git Sync" task
+3. Or close the terminal panel showing the git sync warning
 
 ## Customization
 
