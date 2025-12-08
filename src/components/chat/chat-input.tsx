@@ -28,6 +28,7 @@ import {
   useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
@@ -203,17 +204,26 @@ export const ChatInput = memo(({
     enableAudioVisualization: true,
   });
 
-  // When recording starts, save what was already there and reset hook
+  // ✅ CONSOLIDATED: Speech recognition state transitions (start/stop)
+  // React 19: Valid effect for external system (speech recognition) sync
   const prevIsListening = useRef(false);
   useEffect(() => {
-    if (!prevIsListening.current && isListening) {
-      baseTextRef.current = value;
-      resetTranscripts(); // Clear hook's accumulated transcripts
-    }
+    const wasListening = prevIsListening.current;
     prevIsListening.current = isListening;
-  }, [isListening, value, resetTranscripts]);
 
-  // Real-time display: baseText + finalTranscript (from hook) + interimTranscript
+    if (!wasListening && isListening) {
+      // Recording STARTED - save base text and reset hook
+      baseTextRef.current = value;
+      resetTranscripts();
+    } else if (wasListening && !isListening) {
+      // Recording STOPPED - commit final result
+      const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
+      onChange(parts.join(' ').trim());
+    }
+  }, [isListening, value, finalTranscript, onChange, resetTranscripts]);
+
+  // Real-time display during listening: baseText + finalTranscript + interimTranscript
+  // React 19: Valid effect for external system (speech recognition) sync
   useEffect(() => {
     if (!isListening)
       return;
@@ -226,23 +236,10 @@ export const ChatInput = memo(({
     }
   }, [isListening, finalTranscript, interimTranscript, value, onChange]);
 
-  // When stopped, keep the final result
-  useEffect(() => {
-    if (prevIsListening.current && !isListening) {
-      const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
-      onChange(parts.join(' ').trim());
-    }
-  }, [isListening, finalTranscript, onChange]);
-
-  // AI SDK v5 Pattern: Use requestAnimationFrame for focus after DOM renders
+  // Focus textarea after DOM renders and paints
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
-      const rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          textareaRef.current?.focus();
-        });
-      });
-      return () => cancelAnimationFrame(rafId);
+      return afterPaint(() => textareaRef.current?.focus());
     }
     return undefined;
   }, [autoFocus]);

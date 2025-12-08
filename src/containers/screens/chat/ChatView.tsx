@@ -27,7 +27,6 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -39,6 +38,7 @@ import {
   useBoolean,
   useChatScroll,
   useFlowLoading,
+  useOrderedModels,
   useSortedParticipants,
   useThreadTimeline,
   useVisualViewportPosition,
@@ -199,48 +199,11 @@ export function ChatView({
   }, [changelogResponse]);
 
   // Model ordering for modal - stable references for Motion Reorder
-  const orderedModels = useMemo((): OrderedModel[] => {
-    if (allEnabledModels.length === 0)
-      return [];
-
-    const participantMap = new Map(
-      selectedParticipants.map(p => [p.modelId, p]),
-    );
-    const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
-
-    // Build ordered list from modelOrder, deduplicating as we go
-    const seen = new Set<string>();
-    const orderedFromStore: OrderedModel[] = [];
-
-    // First, add models in the stored order
-    for (const modelId of modelOrder) {
-      if (seen.has(modelId))
-        continue;
-      const model = modelMap.get(modelId);
-      if (!model)
-        continue;
-      seen.add(modelId);
-      orderedFromStore.push({
-        model,
-        participant: participantMap.get(modelId) || null,
-        order: orderedFromStore.length,
-      });
-    }
-
-    // Then, append any models not yet in the order (newly available models)
-    for (const model of allEnabledModels) {
-      if (seen.has(model.id))
-        continue;
-      seen.add(model.id);
-      orderedFromStore.push({
-        model,
-        participant: participantMap.get(model.id) || null,
-        order: orderedFromStore.length,
-      });
-    }
-
-    return orderedFromStore;
-  }, [selectedParticipants, allEnabledModels, modelOrder]);
+  const orderedModels = useOrderedModels({
+    selectedParticipants,
+    allEnabledModels,
+    modelOrder,
+  });
 
   // Timeline with messages, analyses, changelog, and pre-searches
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
@@ -332,16 +295,11 @@ export function ChatView({
   // Mobile keyboard handling
   const keyboardOffset = useVisualViewportPosition();
 
-  // Stuck analysis cleanup
-  const stuckAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
+  // Stuck analysis cleanup - timer-based cleanup for analyses that get stuck streaming
+  // React 19: Valid effect for timer (external system)
+  // Uses interval to periodically check for stuck analyses
   useEffect(() => {
     const ANALYSIS_TIMEOUT_MS = 90000;
-
-    if (stuckAnalysisIntervalRef.current) {
-      clearInterval(stuckAnalysisIntervalRef.current);
-      stuckAnalysisIntervalRef.current = null;
-    }
 
     const checkStuckAnalyses = () => {
       const stuckAnalyses = analyses.filter((analysis) => {
@@ -361,15 +319,11 @@ export function ChatView({
       }
     };
 
+    // Check immediately and set up interval
     checkStuckAnalyses();
-    stuckAnalysisIntervalRef.current = setInterval(checkStuckAnalyses, 10000);
+    const intervalId = setInterval(checkStuckAnalyses, 10000);
 
-    return () => {
-      if (stuckAnalysisIntervalRef.current) {
-        clearInterval(stuckAnalysisIntervalRef.current);
-        stuckAnalysisIntervalRef.current = null;
-      }
-    };
+    return () => clearInterval(intervalId);
   }, [analyses, updateAnalysisStatus]);
 
   // ============================================================================

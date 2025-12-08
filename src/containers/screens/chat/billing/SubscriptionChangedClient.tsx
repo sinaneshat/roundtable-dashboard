@@ -3,7 +3,7 @@
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense } from 'react';
 
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/services/product-logic.service';
@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useCountdownRedirect } from '@/hooks/utils';
 
 function ChangeBadge({ changeType, t }: {
   changeType: SubscriptionChangeType;
@@ -52,7 +53,6 @@ function SubscriptionChangedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations();
-  const [countdown, setCountdown] = useState(10);
 
   const changeType = searchParams.get('changeType') as SubscriptionChangeType | null;
   const oldProductId = searchParams.get('oldProductId');
@@ -70,21 +70,11 @@ function SubscriptionChangedContent() {
 
   const isLoadingData = isSubscriptionsFetching || isCurrentSubscriptionFetching || isUsageStatsFetching;
 
-  useEffect(() => {
-    if (isLoadingData)
-      return;
-
-    if (countdown <= 0) {
-      router.replace('/chat');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setCountdown(prev => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [countdown, isLoadingData, router]);
+  // ✅ React 19: Timer-based redirect extracted to shared hook
+  const { countdown } = useCountdownRedirect({
+    enabled: !isLoadingData,
+    redirectPath: '/chat',
+  });
 
   if (!isLoadingData && !displaySubscription) {
     return (

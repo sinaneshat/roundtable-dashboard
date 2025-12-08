@@ -3,7 +3,7 @@ import { Loader2, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
 
 import {
   AlertDialog,
@@ -181,22 +181,19 @@ export function ChatList({
   const pathname = useCurrentPathname();
   const t = useTranslations();
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
-  const [hasAnimated, setHasAnimated] = useState(false);
 
-  // Only animate on first render, then disable forever
+  // ✅ FIRST-MOUNT ANIMATION: Track if component has animated (one-time stagger effect)
+  // Uses useState (not ref) because React 19 concurrent mode rules prevent reading refs during render
+  // The extra re-render is intentional and minimal - required for animation control
+  const [hasAnimated, setHasAnimated] = useState(false);
   const shouldAnimate = !disableAnimations && !hasAnimated;
 
   useEffect(() => {
     if (!disableAnimations && !hasAnimated) {
-      // Mark as animated after mount to prevent future animations
-      // This intentional one-time state update controls animation behavior
-      // Wrapped in queueMicrotask to defer state update after render
-      queueMicrotask(() => {
-        setHasAnimated(true);
-      });
+      // ✅ REACT 19: startTransition for non-urgent state update
+      startTransition(() => setHasAnimated(true));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
+  }, [disableAnimations, hasAnimated]);
   const handleDeleteClick = (chat: Chat) => {
     setChatToDelete(chat);
   };

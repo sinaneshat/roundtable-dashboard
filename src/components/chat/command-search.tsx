@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
 type CommandSearchProps = {
@@ -84,18 +85,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     setSelectedIndex(0);
     onClose();
   }, [onClose]);
-  // AI SDK v5 Pattern: Use requestAnimationFrame for focus after modal renders
-  // This ensures the input is visible and properly mounted before focusing
-  // More reliable than arbitrary setTimeout delays
+  // Focus input after modal renders and paints
   useEffect(() => {
     if (isOpen) {
-      // Double rAF ensures focus happens after browser completes layout and paint
-      const rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          searchInputRef.current?.focus();
-        });
-      });
-      return () => cancelAnimationFrame(rafId);
+      return afterPaint(() => searchInputRef.current?.focus());
     }
     return undefined;
   }, [isOpen]);
@@ -152,23 +145,19 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     };
   });
 
-  // AI SDK v5 Pattern: Use requestAnimationFrame to add listener after modal renders
+  // Add click-outside listener after modal renders and paints
   // This prevents click-outside from immediately firing during modal opening
-  // More deterministic than arbitrary setTimeout delays
   useEffect(() => {
     if (!isOpen)
       return;
     const handleClickOutside = (event: MouseEvent) => {
       clickOutsideHandlerRef.current?.(event);
     };
-    // Double rAF ensures listener is added after modal is fully rendered and painted
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      });
+    const cancelPaint = afterPaint(() => {
+      document.addEventListener('mousedown', handleClickOutside);
     });
     return () => {
-      cancelAnimationFrame(rafId);
+      cancelPaint();
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]); // Only depend on isOpen - ref always has latest handleClose

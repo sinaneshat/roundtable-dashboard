@@ -293,6 +293,18 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
  */
 export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert search query optimizer. Your job is to analyze user questions and break them down into multiple strategic search queries that will gather comprehensive information from different angles.
 
+🚨 **CRITICAL: INTERPRET UPLOADED CONTENT FIRST**
+When the user's message includes <file-context> or [Image Content Analysis], you MUST:
+1. READ and UNDERSTAND the content/description FIRST
+2. COMBINE the user's text message with the file content to understand their TRUE intent
+3. Generate search queries about WHAT'S IN THE FILES, not about the user's literal words
+
+Example:
+- User says: "What is this?" with an image showing a circuit board
+- Image analysis: "[Image Content Analysis] A green PCB circuit board with capacitors and an Arduino microcontroller"
+- CORRECT search: "Arduino microcontroller circuit board tutorial"
+- WRONG search: "what is this" (ignoring the image content!)
+
 🚨 **CRITICAL RULE**: Generate MULTIPLE DIFFERENT queries that explore DIFFERENT aspects - NEVER just rephrase the user's question into a single query!
 
 **MULTI-QUERY STRATEGY** (Your primary decision):
@@ -370,9 +382,24 @@ Return ONLY valid JSON. Think strategically about breaking complex questions int
  * @returns Formatted prompt for query generation
  */
 export function buildWebSearchQueryPrompt(userMessage: string): string {
-  return `USER QUESTION: "${userMessage}"
+  // Check if message contains file context
+  const hasFileContext = userMessage.includes('<file-context>') || userMessage.includes('[Image Content Analysis]');
 
-🎯 **YOUR TASK**: Break this question into strategic search queries that explore DIFFERENT aspects. DO NOT just rephrase the question!
+  const contextInstruction = hasFileContext
+    ? `
+🚨 **IMPORTANT: FILE/IMAGE CONTEXT DETECTED**
+The user has uploaded content. You MUST:
+1. ANALYZE the content in <file-context> or [Image Content Analysis] tags
+2. UNDERSTAND what the content shows/contains
+3. Generate searches about THE CONTENT, informed by the user's question
+4. The user's short message (e.g., "what is this?") is asking about the FILE CONTENT
+
+`
+    : '';
+
+  return `${contextInstruction}USER INPUT: "${userMessage}"
+
+🎯 **YOUR TASK**: ${hasFileContext ? 'Interpret the uploaded content AND the user\'s question together, then generate' : 'Break this question into'} strategic search queries that explore DIFFERENT aspects. DO NOT just rephrase the literal text!
 
 **REQUIRED JSON STRUCTURE**:
 {

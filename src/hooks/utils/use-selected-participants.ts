@@ -22,6 +22,7 @@ import { z } from 'zod';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ParticipantConfigSchema } from '@/components/chat/chat-form-schemas';
+import { reindexParticipantPriorities } from '@/lib/utils/participant';
 
 /**
  * Zod schema for initial participants validation
@@ -81,14 +82,8 @@ export function useSelectedParticipants(
   const handleRemoveParticipant = useCallback((participantId: string) => {
     setSelectedParticipants((prev) => {
       const filtered = prev.filter(p => p.id !== participantId && p.modelId !== participantId);
-
-      // Reindex the remaining participants to maintain continuous priority
-      const reindexed = filtered.map((p, index) => ({
-        ...p,
-        priority: index,
-      }));
-
-      return reindexed;
+      // ✅ SINGLE SOURCE OF TRUTH: Use shared utility for reindexing
+      return reindexParticipantPriorities(filtered);
     });
   }, []);
 
@@ -143,12 +138,8 @@ export function useSelectedParticipants(
       if (removed) {
         copy.splice(toIndex, 0, removed);
       }
-
-      // Reindex all participants after reordering
-      return copy.map((p, index) => ({
-        ...p,
-        priority: index,
-      }));
+      // ✅ SINGLE SOURCE OF TRUTH: Use shared utility for reindexing
+      return reindexParticipantPriorities(copy);
     });
   }, []);
 

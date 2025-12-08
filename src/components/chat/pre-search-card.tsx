@@ -2,7 +2,7 @@
 
 import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -62,12 +62,10 @@ export function PreSearchCard({
   const [manuallyOpen, setManuallyOpen] = useState(false);
 
   // Auto-close logic: Close older searches when newer round streams
-  // Pattern from round-analysis-card.tsx:74-85
   useEffect(() => {
     if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > preSearch.roundNumber) {
-      // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
-      // This schedules state updates in the microtask queue, more efficient than timer queue
-      queueMicrotask(() => {
+      // ✅ REACT 19: startTransition for non-urgent state updates
+      startTransition(() => {
         setIsManuallyControlled(false);
         setManuallyOpen(false);
       });

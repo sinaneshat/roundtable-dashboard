@@ -314,6 +314,7 @@ export function useChatScroll({
 
   // ============================================================================
   // EFFECT 3: Initial scroll when loading/streaming starts
+  // React 19: Valid effect - responding to activity state transitions
   // ============================================================================
   const wasActiveRef = useRef(false);
 
@@ -331,7 +332,10 @@ export function useChatScroll({
     }
   }, [isActive, scrollToBottom]);
 
-  // Track analyses
+  // ============================================================================
+  // EFFECT 4: Track analyses - consolidated with ref for ID tracking
+  // React 19: Valid effect - updating tracking state on data changes
+  // ============================================================================
   useEffect(() => {
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     if (newAnalyses.length > 0) {
@@ -339,7 +343,7 @@ export function useChatScroll({
     }
   }, [analyses]);
 
-  // Cleanup on unmount
+  // Cleanup RAF on unmount
   useEffect(() => {
     return () => {
       if (scrollRafRef.current) {

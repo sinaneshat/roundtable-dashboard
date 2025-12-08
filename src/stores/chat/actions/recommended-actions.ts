@@ -21,6 +21,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Recommendation } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useModelsQuery } from '@/hooks/queries/models';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 export type UseRecommendedActionsOptions = {
@@ -110,17 +111,16 @@ export function useRecommendedActions(
     }
 
     // ✅ UI CONCERN: Scroll to input if enabled (thread screen only)
+    // Uses afterPaint utility to ensure DOM is painted before scrolling
     if (enableScroll && inputContainerRef?.current) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          inputContainerRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-          });
-          // Try to focus the textarea inside
-          const textarea = inputContainerRef.current?.querySelector('textarea');
-          textarea?.focus();
+      afterPaint(() => {
+        inputContainerRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
         });
+        // Try to focus the textarea inside
+        const textarea = inputContainerRef.current?.querySelector('textarea');
+        textarea?.focus();
       });
     }
   }, [

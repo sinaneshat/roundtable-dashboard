@@ -94,14 +94,13 @@ function PreSearchStreamComponent({
     };
   }, []);
 
-  // Store callbacks in refs for stability and to allow calling after unmount
-  const onStreamCompleteRef = useRef(onStreamComplete);
-  const onStreamStartRef = useRef(onStreamStart);
-
   // ✅ STABLE REFS: Store callback functions in refs to avoid effect re-runs
-  // useBoolean returns new object on each render, so we use refs for callbacks
-  // Defined early to avoid use-before-define in effects
   // Direct assignment on each render keeps refs current without triggering effects
+  // This is the React 19 recommended pattern for callback refs
+  const onStreamCompleteRef = useRef(onStreamComplete);
+  onStreamCompleteRef.current = onStreamComplete;
+  const onStreamStartRef = useRef(onStreamStart);
+  onStreamStartRef.current = onStreamStart;
   const is409ConflictOnFalseRef = useRef(is409Conflict.onFalse);
   is409ConflictOnFalseRef.current = is409Conflict.onFalse;
   const isAutoRetryingOnTrueRef = useRef(isAutoRetrying.onTrue);
@@ -128,13 +127,7 @@ function PreSearchStreamComponent({
     };
   }, []); // Empty deps = only runs on mount/unmount
 
-  useEffect(() => {
-    onStreamCompleteRef.current = onStreamComplete;
-  }, [onStreamComplete]);
-
-  useEffect(() => {
-    onStreamStartRef.current = onStreamStart;
-  }, [onStreamStart]);
+  // ✅ REMOVED: useEffect syncs for callback refs (now using direct assignment above)
 
   // Custom SSE handler for backend's custom event format (POST with fetch)
   // ✅ RESUMABLE STREAMS: Now also triggers for STREAMING status to attempt resumption

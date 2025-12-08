@@ -26,7 +26,6 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -39,6 +38,7 @@ import {
   useBoolean,
   useChatAttachments,
   useModelLookup,
+  useOrderedModels,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -257,27 +257,11 @@ export default function ChatOverviewScreen() {
     return [];
   }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
 
-  const orderedModels = useMemo<OrderedModel[]>(() => {
-    if (allEnabledModels.length === 0)
-      return [];
-
-    const participantMap = new Map(selectedParticipants.map(p => [p.modelId, p]));
-    const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
-    const orderedIds = modelOrder.length > 0 ? modelOrder : allEnabledModels.map(m => m.id);
-
-    const result: OrderedModel[] = [];
-    for (const modelId of orderedIds) {
-      const model = modelMap.get(modelId);
-      if (model) {
-        result.push({
-          model,
-          participant: participantMap.get(modelId) ?? null,
-          order: orderedIds.indexOf(modelId),
-        });
-      }
-    }
-    return result;
-  }, [selectedParticipants, allEnabledModels, modelOrder]);
+  const orderedModels = useOrderedModels({
+    selectedParticipants,
+    allEnabledModels,
+    modelOrder,
+  });
 
   // ============================================================================
   // HOOKS
@@ -286,66 +270,112 @@ export default function ChatOverviewScreen() {
   const formActions = useChatFormActions();
   const overviewActions = useOverviewActions();
 
-  // ✅ PERSIST DEFAULT SELECTION: When no persisted models, save first 3 accessible as defaults
-  // This is a side effect that was previously incorrectly placed in useMemo
+  // ============================================================================
+  // CONSOLIDATED INITIALIZATION EFFECT
+  // React 19: Single effect for all initialization that requires external sync
+  // Combines previously scattered effects into one with proper state tracking
+  // ============================================================================
+
+  // Track what has been initialized to prevent re-running
+  const initStateRef = useRef({
+    persistedDefaults: false,
+    syncedModels: false,
+    modelOrder: false,
+    participants: false,
+    threadActions: false,
+  });
+
   useEffect(() => {
+    const init = initStateRef.current;
+
+    // INIT 1: Persist defaults when no saved selection
     if (
-      preferencesHydrated
+      !init.persistedDefaults
+      && preferencesHydrated
       && accessibleModelIds.length > 0
       && persistedModelIds.length === 0
     ) {
+      init.persistedDefaults = true;
       const defaultIds = accessibleModelIds.slice(0, 3);
       if (defaultIds.length > 0) {
         setPersistedModelIds(defaultIds);
       }
     }
-  }, [preferencesHydrated, accessibleModelIds, persistedModelIds.length, setPersistedModelIds]);
 
-  // ✅ SYNC: Keep preferences AND chat participants in sync with accessible models
-  // Removes invalid models from persistence and active selection when models change
-  useEffect(() => {
-    if (preferencesHydrated && accessibleModelIds.length > 0) {
-      const accessibleSet = new Set(accessibleModelIds);
-
-      // Sync preferences store (persisted cookie state)
+    // INIT 2: Sync models with accessible list (one-time when models load)
+    if (
+      !init.syncedModels
+      && preferencesHydrated
+      && accessibleModelIds.length > 0
+    ) {
+      init.syncedModels = true;
       syncWithAccessibleModels(accessibleModelIds);
-
-      // Also sync current chat store participants (active session state)
-      if (selectedParticipants.length > 0) {
-        const validParticipants = selectedParticipants.filter(p =>
-          accessibleSet.has(p.modelId),
-        );
-        if (validParticipants.length !== selectedParticipants.length) {
-          // Re-index priorities after removing invalid models
-          const reindexed = validParticipants.map((p, idx) => ({
-            ...p,
-            priority: idx,
-          }));
-          setSelectedParticipants(reindexed);
-        }
-      }
     }
-  }, [preferencesHydrated, accessibleModelIds, syncWithAccessibleModels, selectedParticipants, setSelectedParticipants]);
 
-  // Initialize model order when models first load (use persisted order if available)
-  useEffect(() => {
-    if (allEnabledModels.length > 0 && modelOrder.length === 0 && preferencesHydrated) {
-      // Use persisted order if available and valid
+    // INIT 3: Model order initialization
+    if (
+      !init.modelOrder
+      && allEnabledModels.length > 0
+      && modelOrder.length === 0
+      && preferencesHydrated
+    ) {
+      init.modelOrder = true;
+      let fullOrder: string[];
       if (persistedModelOrder.length > 0) {
-        // Validate that all persisted IDs exist in available models
         const availableIds = new Set(allEnabledModels.map(m => m.id));
         const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
-        // Add any new models not in persisted order
         const newModelIds = allEnabledModels
           .filter(m => !validPersistedOrder.includes(m.id))
           .map(m => m.id);
-        const fullOrder = [...validPersistedOrder, ...newModelIds];
-        setModelOrder(fullOrder);
+        fullOrder = [...validPersistedOrder, ...newModelIds];
       } else {
-        setModelOrder(allEnabledModels.map(m => m.id));
+        fullOrder = allEnabledModels.map(m => m.id);
       }
+      setModelOrder(fullOrder);
     }
-  }, [allEnabledModels, modelOrder.length, setModelOrder, preferencesHydrated, persistedModelOrder]);
+
+    // INIT 4: Initialize participants when models available
+    if (
+      !init.participants
+      && selectedParticipants.length === 0
+      && defaultModelId
+      && initialParticipants.length > 0
+    ) {
+      init.participants = true;
+      setSelectedParticipants(initialParticipants);
+      if (!selectedMode) {
+        const modeResult = ChatModeSchema.safeParse(persistedMode);
+        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
+      }
+      setEnableWebSearch(persistedWebSearch);
+    }
+
+    // INIT 5: Clear thread actions for overview
+    if (!init.threadActions) {
+      init.threadActions = true;
+      setThreadActions(null);
+    }
+  }, [
+    preferencesHydrated,
+    accessibleModelIds,
+    persistedModelIds.length,
+    setPersistedModelIds,
+    syncWithAccessibleModels,
+    allEnabledModels,
+    modelOrder.length,
+    persistedModelOrder,
+    setModelOrder,
+    selectedParticipants.length,
+    defaultModelId,
+    initialParticipants,
+    setSelectedParticipants,
+    selectedMode,
+    persistedMode,
+    setSelectedMode,
+    persistedWebSearch,
+    setEnableWebSearch,
+    setThreadActions,
+  ]);
 
   // Screen initialization for orchestrator
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
@@ -379,14 +409,8 @@ export default function ChatOverviewScreen() {
   const isSubmitBlocked = isStreaming || isCreatingAnalysis || Boolean(pendingMessage);
 
   // ============================================================================
-  // EFFECTS
+  // LAYOUT EFFECTS (external system sync only - DOM, scroll, navigation)
   // ============================================================================
-
-  // ✅ ZUSTAND PATTERN: Clear thread actions when in overview mode
-  // Thread title comes from store automatically via s.thread?.title
-  useEffect(() => {
-    setThreadActions(null);
-  }, [setThreadActions]);
 
   // ✅ SIMPLIFIED: Reset on navigation to /chat
   // Single ref tracks last reset pathname to prevent duplicate resets
@@ -414,27 +438,6 @@ export default function ChatOverviewScreen() {
       lastResetPathRef.current = pathname;
     }
   }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments, persistedMode, persistedWebSearch, setEnableWebSearch]);
-
-  // Initialize defaults when defaultModelId becomes available (one-time only)
-  // Don't re-initialize if user explicitly cleared all models
-  useEffect(() => {
-    if (
-      !hasInitializedModelsRef.current
-      && selectedParticipants.length === 0
-      && defaultModelId
-      && initialParticipants.length > 0
-    ) {
-      hasInitializedModelsRef.current = true;
-      setSelectedParticipants(initialParticipants);
-      if (!selectedMode) {
-        // Use persisted mode if valid, otherwise default
-        const modeResult = ChatModeSchema.safeParse(persistedMode);
-        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
-      }
-      // Apply persisted webSearch preference
-      setEnableWebSearch(persistedWebSearch);
-    }
-  }, [defaultModelId, initialParticipants, selectedParticipants.length, selectedMode, setSelectedParticipants, setSelectedMode, persistedMode, persistedWebSearch, setEnableWebSearch]);
 
   // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
   // Per AI SDK docs, resume: true is incompatible with abort/stop.

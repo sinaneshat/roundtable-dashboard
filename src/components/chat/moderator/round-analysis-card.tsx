@@ -1,7 +1,7 @@
 'use client';
 import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, Recommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
@@ -81,16 +81,11 @@ export function RoundAnalysisCard({
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
 
-  // React 19 Pattern: Effect runs when streamingRoundNumber changes (dependency array handles detection)
-  // No need for ref to track previous value - effect dependencies already do this
+  // Auto-close when newer round starts streaming
   useEffect(() => {
-    // ✅ FIX: Remove !isLatest check - when a new round starts streaming,
-    // collapse this analysis even if timeline hasn't updated yet.
-    // streamingRoundNumber > analysis.roundNumber is sufficient to know this is not the current round.
     if (streamingRoundNumber != null && streamingRoundNumber > analysis.roundNumber) {
-      // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
-      // This schedules state updates in the microtask queue, more efficient than timer queue
-      queueMicrotask(() => {
+      // ✅ REACT 19: startTransition for non-urgent state updates
+      startTransition(() => {
         setIsManuallyControlled(false);
         setManuallyOpen(false);
       });
