@@ -204,8 +204,15 @@ export function useIncompleteRoundResumption(
     // This only fires if waitingToStartStreaming was ALREADY true at mount time
     // (leftover from crashed session), not if resumption hook just set it
     if (waitingToStartStreaming && pendingMessage === null && !isStreaming) {
-      // Clear the stale state so incomplete round resumption can work
+      // ✅ RACE CONDITION FIX: Clear ALL related stale state, not just waitingToStartStreaming
+      // Previously only cleared waitingToStartStreaming, leaving nextParticipantToTrigger set.
+      // This caused provider effect to see nextParticipantToTrigger=0 but waitingToStart=false,
+      // which doesn't match any condition and leaves the system stuck.
+      // Clear everything to ensure consistent state.
       actions.setWaitingToStartStreaming(false);
+      actions.setNextParticipantToTrigger(null);
+      actions.setStreamingRoundNumber(null);
+      actions.setCurrentParticipantIndex(0);
     }
   }, [waitingToStartStreaming, pendingMessage, isStreaming, actions]);
 
@@ -399,6 +406,9 @@ export function useIncompleteRoundResumption(
   // All refs that need to reset when threadId changes are handled in one effect
   // This follows React best practice of consolidating related side effects
   // ============================================================================
+  // ✅ RACE CONDITION FIX: Track round state signature for re-check detection
+  const lastCheckedSignatureRef = useRef<string | null>(null);
+
   useEffect(() => {
     activeStreamCheckRef.current = null;
     activeStreamCheckCompleteRef.current = false;
@@ -406,7 +416,38 @@ export function useIncompleteRoundResumption(
     orphanedPreSearchRecoveryAttemptedRef.current = null;
     resumptionAttemptedRef.current = null;
     staleWaitingStateRef.current = false; // Reset so stale state detection works on navigation
+    lastCheckedSignatureRef.current = null; // Reset signature to allow fresh check
   }, [threadId]);
+
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: Reset check refs when round state fundamentally changes
+  // The activeStreamCheckRef prevents re-checking for the same threadId, but if
+  // a round becomes incomplete AFTER the initial check (e.g., message deleted,
+  // participant config changed), we need to re-check.
+  //
+  // Track the "signature" of the state we checked: threadId + isIncomplete + currentRoundNumber
+  // If any of these change, reset the refs to allow re-checking.
+  // ============================================================================
+  useEffect(() => {
+    const currentSignature = `${threadId}_${isIncomplete}_${currentRoundNumber}`;
+
+    // If signature changed and we previously checked as "complete", reset refs
+    // This allows re-checking when round becomes incomplete
+    if (lastCheckedSignatureRef.current !== null
+      && lastCheckedSignatureRef.current !== currentSignature
+      && activeStreamCheckRef.current === threadId
+    ) {
+      // Round state changed - need to re-check
+      // But only reset if we're not currently in the middle of resumption
+      if (!waitingToStartStreaming && !isStreaming) {
+        activeStreamCheckRef.current = null;
+        activeStreamCheckCompleteRef.current = false;
+        resumptionAttemptedRef.current = null;
+      }
+    }
+
+    lastCheckedSignatureRef.current = currentSignature;
+  }, [threadId, isIncomplete, currentRoundNumber, waitingToStartStreaming, isStreaming]);
 
   // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT
   // When a user refreshes during pre-search/changelog phase, the pre-search may be

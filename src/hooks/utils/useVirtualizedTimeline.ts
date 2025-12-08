@@ -84,6 +84,20 @@ export type UseVirtualizedTimelineOptions = {
    * Default: undefined (no streaming protection)
    */
   streamingRounds?: Set<number>;
+
+  /**
+   * Scroll to bottom on initial load after virtualization is ready
+   * Used for thread pages where user should land at the bottom of conversation
+   * Default: false
+   */
+  initialScrollToBottom?: boolean;
+
+  /**
+   * Whether the data is ready for initial scroll
+   * Prevents scroll before store hydration is complete
+   * Default: true
+   */
+  isDataReady?: boolean;
 };
 
 export type UseVirtualizedTimelineResult = {
@@ -186,6 +200,8 @@ export function useVirtualizedTimeline({
   smoothScrollDuration = 1000,
   paddingEnd = 0, // Zero padding - content fits exactly
   streamingRounds,
+  initialScrollToBottom = false,
+  isDataReady = true,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // ✅ MOBILE FIX: Detect touch devices for mobile-specific optimizations
   const isTouchDevice = useTouchDevice();
@@ -419,6 +435,79 @@ export function useVirtualizedTimeline({
       onScrollOffsetChange(offset);
     }
   }, [virtualizer.scrollOffset, onScrollOffsetChange]);
+
+  // ============================================================================
+  // INITIAL SCROLL TO BOTTOM
+  // ✅ Waits for virtualization to be ready before scrolling
+  // ✅ Uses virtualizer's scrollToIndex for accurate positioning
+  // ✅ Retries until actually at bottom (handles dynamic content)
+  // ============================================================================
+  const hasInitialScrolledRef = useRef(false);
+
+  useEffect(() => {
+    // Only scroll once on initial load when:
+    // 1. initialScrollToBottom is enabled
+    // 2. Haven't scrolled yet
+    // 3. Data is ready (store hydrated)
+    // 4. Timeline has items
+    // 5. Virtualizer has calculated sizes (totalSize > 0)
+    if (
+      !initialScrollToBottom
+      || hasInitialScrolledRef.current
+      || !isDataReady
+      || timelineItems.length === 0
+      || totalSize === 0
+    ) {
+      return;
+    }
+
+    // Mark as scrolled to prevent re-triggering
+    hasInitialScrolledRef.current = true;
+
+    let attempts = 0;
+    const maxAttempts = 15;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const scrollToBottom = () => {
+      const lastIndex = timelineItems.length - 1;
+
+      // Use virtualizer's scrollToIndex for accurate positioning
+      virtualizer.scrollToIndex(lastIndex, { align: 'end', behavior: 'auto' });
+
+      attempts++;
+
+      // Check if we're actually at the bottom
+      const scrollHeight = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight,
+      );
+      const currentScroll = window.scrollY;
+      const viewportHeight = window.innerHeight;
+      const maxScroll = scrollHeight - viewportHeight;
+      const isAtBottom = currentScroll >= maxScroll - 100;
+
+      // Retry if not at bottom and haven't exceeded max attempts
+      if (!isAtBottom && attempts < maxAttempts) {
+        // Increasing delays to allow virtualization to settle
+        timeoutId = setTimeout(scrollToBottom, 50 + (attempts * 30));
+      }
+    };
+
+    // Initial delay to let virtualization measure items
+    timeoutId = setTimeout(scrollToBottom, 150);
+
+    return () => {
+      if (timeoutId)
+        clearTimeout(timeoutId);
+    };
+  }, [initialScrollToBottom, isDataReady, timelineItems.length, totalSize, virtualizer]);
+
+  // Reset initial scroll flag when timeline items change significantly (navigation)
+  useEffect(() => {
+    if (timelineItems.length === 0) {
+      hasInitialScrolledRef.current = false;
+    }
+  }, [timelineItems.length]);
 
   return {
     virtualizer,

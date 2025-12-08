@@ -176,6 +176,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     feedbackByRound={feedbackByRound}
                     isReadOnly={true}
                     preSearches={preSearches}
+                    initialScrollToBottom={true}
+                    isDataReady={isStoreReady}
                   />
 
                   <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">

@@ -1069,11 +1069,10 @@ export function useMultiParticipantChat(
         const hasErrorInMetadata = completeMetadata?.hasError === true;
 
         if (hasErrorInMetadata) {
-          // ✅ REACT 19: Use RAF callback directly instead of Promise wrapper
           // Error messages don't animate - trigger next participant after frame
-          requestAnimationFrame(() => {
-            triggerNextParticipantWithRefs();
-          });
+          // ✅ FIX: Must await to block onFinish from returning before next trigger
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          triggerNextParticipantWithRefs();
           return;
         }
       }
@@ -1082,12 +1081,11 @@ export function useMultiParticipantChat(
       // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
       // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
       // which has its own timeout mechanism for analysis creation
-      // ✅ REACT 19: Use RAF callback directly - cleaner than async IIFE with Promise wrapper
-      requestAnimationFrame(() => {
-        // Trigger next participant immediately - no animation waiting here
-        // Analysis creation (in handleComplete) will wait for animations separately
-        triggerNextParticipantWithRefs();
-      });
+      // ✅ FIX: Must await to block onFinish from returning before next participant triggers
+      // Without await, onFinish returns immediately and AI SDK status changes,
+      // allowing multiple streams to start concurrently (race condition)
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      triggerNextParticipantWithRefs();
     },
 
     /**
@@ -1390,9 +1388,14 @@ export function useMultiParticipantChat(
         ) || false;
 
         if (hasContent) {
-          // Message already exists with content - skip this participant
-          // The flow controller will detect the next incomplete participant
+          // ✅ RACE CONDITION FIX: Notify store when skipping a completed participant
+          // Previously, this would return early without notifying anyone, leaving
+          // the system stuck with nextParticipantToTrigger set but no streaming starting.
+          // Now we call onResumedStreamComplete which tells the store to advance to next participant.
           isTriggeringRef.current = false;
+          // Notify store that this participant was "completed" (already had content)
+          // Store will then find and trigger the NEXT incomplete participant
+          onResumedStreamComplete?.(roundNumber, fromIndex);
           return;
         }
       }
@@ -1430,7 +1433,7 @@ export function useMultiParticipantChat(
     // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
     // Same fix as triggerNextParticipantWithRefs - prevents race conditions
     isTriggeringRef.current = false;
-  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId]);
+  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
 
   /**
    * Send a user message and start a new round

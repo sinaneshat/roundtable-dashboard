@@ -506,6 +506,8 @@ export function ChatView({
               onAnalysisStreamComplete={handleAnalysisStreamComplete}
               onActionClick={recommendedActions.handleActionClick}
               preSearches={preSearches}
+              initialScrollToBottom={mode === 'thread'}
+              isDataReady={isStoreReady}
             />
 
             {/* ✅ SCROLL ANCHOR: Single marker for smooth auto-scroll snapping

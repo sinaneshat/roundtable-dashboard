@@ -675,6 +675,33 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // on page load. It calls continueFromParticipant to trigger the remaining participants.
   const nextParticipantToTrigger = useStore(store, s => s.nextParticipantToTrigger);
 
+  // ✅ RACE CONDITION FIX: Clean up dangling nextParticipantToTrigger
+  // If waitingToStart is false but nextParticipantToTrigger is set, this is inconsistent state
+  // that can occur when stale state detection clears waitingToStart but misses other flags.
+  // Clean up to prevent the system from being stuck with unprocessed trigger.
+  useEffect(() => {
+    // Only clean up if we have dangling state: participant set but not waiting/streaming
+    if (nextParticipantToTrigger === null || waitingToStart || chatIsStreaming) {
+      return; // No cleanup needed
+    }
+
+    // Give a short delay to allow normal resumption to happen first
+    // This prevents clearing during the brief window between setting flags
+    const timeoutId = setTimeout(() => {
+      const latestState = store.getState();
+      // Double-check state hasn't changed - still dangling?
+      if (latestState.nextParticipantToTrigger !== null
+        && !latestState.waitingToStartStreaming
+        && !latestState.isStreaming
+      ) {
+        // Clear the dangling state
+        latestState.setNextParticipantToTrigger(null);
+      }
+    }, 500); // 500ms grace period
+
+    return () => clearTimeout(timeoutId);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, store]);
+
   useEffect(() => {
     // Skip if no participant to trigger or not waiting to resume
     if (nextParticipantToTrigger === null || !waitingToStart) {
@@ -1032,10 +1059,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       });
 
       // ✅ INFINITE LOOP FIX: Only sync if messages actually changed
-      // filter() creates a new array reference every time, which would trigger
-      // unnecessary re-renders. Check if filtered messages are actually different.
+      // CRITICAL: structuredClone creates NEW object references, so we CANNOT compare by reference
+      // Instead, compare by message ID and parts length (content proxy)
+      // This prevents infinite loops where cloned objects never === original objects
       const isSameMessages = deduplicatedMessages.length === currentStoreMessages.length
-        && deduplicatedMessages.every((m, i) => m === currentStoreMessages[i]);
+        && deduplicatedMessages.every((m, i) => {
+          const storeMsg = currentStoreMessages[i];
+          // Compare by ID (stable identifier)
+          if (m.id !== storeMsg?.id)
+            return false;
+          // Compare parts count as proxy for content changes during streaming
+          if (m.parts?.length !== storeMsg?.parts?.length)
+            return false;
+          return true;
+        });
 
       if (!isSameMessages) {
         prevMessageCountRef.current = chat.messages.length;

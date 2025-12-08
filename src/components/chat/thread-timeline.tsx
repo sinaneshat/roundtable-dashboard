@@ -72,6 +72,10 @@ type ThreadTimelineProps = {
   demoPreSearchOpen?: boolean;
   demoAnalysisOpen?: boolean;
   demoAnalysisSectionStates?: DemoSectionOpenStates;
+
+  // Initial scroll to bottom (for thread pages)
+  initialScrollToBottom?: boolean;
+  isDataReady?: boolean;
 };
 
 export function ThreadTimeline({
@@ -97,6 +101,8 @@ export function ThreadTimeline({
   demoPreSearchOpen,
   demoAnalysisOpen,
   demoAnalysisSectionStates,
+  initialScrollToBottom = false,
+  isDataReady = true,
 }: ThreadTimelineProps) {
   // ✅ STREAMING SAFETY: Calculate which rounds are currently streaming
   // Prevents virtualization from removing DOM elements during active streaming
@@ -144,6 +150,8 @@ export function ThreadTimeline({
     overscan: 15, // Desktop: 15 items | Mobile: 25+ (auto-adjusted by hook)
     paddingEnd: 0, // Zero padding - content fits exactly
     streamingRounds, // Pass streaming rounds to prevent unmounting during streams
+    initialScrollToBottom, // ✅ Scroll to bottom once virtualization is ready
+    isDataReady, // ✅ Wait for store hydration before scrolling
   });
 
   return (

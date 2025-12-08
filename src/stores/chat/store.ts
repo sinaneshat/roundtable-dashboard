@@ -885,11 +885,17 @@ const createStreamResumptionSlice: StateCreator<
     const state = get();
     const participantCount = state.participants.length;
     const nextIndex = participantIndex + 1;
+    const hasMoreParticipants = nextIndex < participantCount;
 
-    // Clear resumption state
+    // ✅ RACE CONDITION FIX: Set waitingToStartStreaming when advancing to next participant
+    // Previously only set nextParticipantToTrigger, but the provider effect requires BOTH
+    // nextParticipantToTrigger !== null AND waitingToStartStreaming === true to trigger.
+    // Without setting waitingToStartStreaming, the next participant would never be triggered.
     set({
       streamResumptionState: null,
-      nextParticipantToTrigger: nextIndex < participantCount ? nextIndex : null,
+      nextParticipantToTrigger: hasMoreParticipants ? nextIndex : null,
+      // Set waitingToStartStreaming if there are more participants to trigger
+      waitingToStartStreaming: hasMoreParticipants,
     }, false, 'streamResumption/handleResumedStreamComplete');
   },
 
