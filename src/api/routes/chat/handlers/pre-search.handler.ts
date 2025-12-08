@@ -207,7 +207,17 @@ async function analyzeImagesForSearchContext(
       .filter(part => part.data && part.mimeType)
       .map((part) => {
         // Convert Uint8Array to base64 for data URL
-        const base64 = btoa(String.fromCharCode(...part.data!));
+        // NOTE: Using chunk-based conversion to avoid stack overflow with large files
+        // The spread operator (...part.data!) causes "Maximum call stack size exceeded"
+        // for images larger than a few KB because it passes millions of bytes as args
+        const bytes = part.data!;
+        let binary = '';
+        const chunkSize = 8192; // Process 8KB at a time to avoid stack issues
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+          binary += String.fromCharCode(...chunk);
+        }
+        const base64 = btoa(binary);
         const dataUrl = `data:${part.mimeType};base64,${base64}`;
         return {
           type: 'file' as const,

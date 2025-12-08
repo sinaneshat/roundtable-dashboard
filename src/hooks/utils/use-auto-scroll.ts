@@ -11,7 +11,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 
 // ============================================================================
 // CSS OVERFLOW VALUES - Following 5-part enum pattern
@@ -172,6 +172,74 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
 
   const elementRef = useRef<T>(null);
 
+  // ✅ REACT 19: Track scroll container ref for event handlers
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+
+  // ✅ REACT 19: Track user opt-out state in ref (mutable across renders)
+  const userOptedOutRef = useRef(false);
+
+  // ✅ REACT 19: useEffectEvent for scroll handler - reads bottomThreshold without re-creating observer
+  const onUserScroll = useEffectEvent(() => {
+    if (!scrollContainerRef.current)
+      return;
+    const isAtBottom = isScrolledToBottom(scrollContainerRef.current, bottomThreshold);
+    if (!isAtBottom) {
+      userOptedOutRef.current = true;
+    } else {
+      // User scrolled back to bottom - re-enable auto-scroll
+      userOptedOutRef.current = false;
+    }
+  });
+
+  // ✅ REACT 19: useEffectEvent for resize handler - reads all options without deps
+  const onResize = useEffectEvent((heightTracker: { lastHeight: number }) => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer)
+      return null;
+
+    // If user has opted out, don't auto-scroll
+    if (userOptedOutRef.current) {
+      return null;
+    }
+
+    const isAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
+
+    // Strict check - only scroll if currently at bottom
+    if (onlyIfAtBottom && !isAtBottom) {
+      return null;
+    }
+
+    // Only scroll on meaningful height changes
+    const newHeight = scrollContainer.scrollHeight;
+    const heightDelta = newHeight - heightTracker.lastHeight;
+
+    if (heightDelta < minHeightChange) {
+      return null;
+    }
+
+    heightTracker.lastHeight = newHeight;
+    return { scrollContainer, behavior };
+  });
+
+  // ✅ REACT 19: useEffectEvent for debounced scroll check
+  const onDebouncedScrollCheck = useEffectEvent(() => {
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer)
+      return null;
+
+    // Re-check opt-out status after debounce
+    if (userOptedOutRef.current) {
+      return null;
+    }
+
+    // Re-check position after debounce
+    if (onlyIfAtBottom && !isScrolledToBottom(scrollContainer, bottomThreshold)) {
+      return null;
+    }
+
+    return { scrollContainer, behavior };
+  });
+
   useEffect(() => {
     if (!enabled || !shouldScroll || !elementRef.current) {
       return;
@@ -184,67 +252,45 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
       return;
     }
 
-    // ✅ IMPROVED: Track height changes to prevent micro-scrolls
-    let lastHeight = scrollContainer.scrollHeight;
+    // Store scroll container for event handlers
+    scrollContainerRef.current = scrollContainer;
+    userOptedOutRef.current = false;
+
+    // Track height changes to prevent micro-scrolls
+    const heightTracker = { lastHeight: scrollContainer.scrollHeight };
     let debounceTimeout: NodeJS.Timeout | null = null;
     let pendingScrollRAF: number | null = null;
 
-    // ✅ FIX: Track if user has scrolled up (opted out of auto-scroll)
-    // This persists across ResizeObserver callbacks during a single streaming session
-    let userOptedOut = false;
+    // Throttled scroll handler using RAF
+    let scrollTicking = false;
     const handleUserScroll = () => {
-      const isAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
-      if (!isAtBottom) {
-        userOptedOut = true;
-      } else {
-        // User scrolled back to bottom - re-enable auto-scroll
-        userOptedOut = false;
-      }
+      if (scrollTicking)
+        return;
+      scrollTicking = true;
+      requestAnimationFrame(() => {
+        onUserScroll();
+        scrollTicking = false;
+      });
     };
 
     // Listen for user scroll events to detect opt-out
     window.addEventListener('scroll', handleUserScroll, { passive: true });
 
-    // ✅ IMPROVED: Only check current state, don't use wasAtBottom
-    // wasAtBottom was causing scroll even after user scrolled away
+    // ResizeObserver callback
     const resizeObserver = new ResizeObserver(() => {
-      // ✅ FIX: If user has opted out, don't auto-scroll
-      if (userOptedOut) {
+      const resizeResult = onResize(heightTracker);
+      if (!resizeResult)
         return;
-      }
 
-      const isAtBottom = isScrolledToBottom(scrollContainer, bottomThreshold);
-
-      // ✅ IMPROVED: Strict check - only scroll if currently at bottom
-      if (onlyIfAtBottom && !isAtBottom) {
-        return;
-      }
-
-      // ✅ IMPROVED: Only scroll on meaningful height changes
-      const newHeight = scrollContainer.scrollHeight;
-      const heightDelta = newHeight - lastHeight;
-
-      if (heightDelta < minHeightChange) {
-        return;
-      }
-
-      lastHeight = newHeight;
-
-      // ✅ IMPROVED: Debounce scroll calls to prevent rapid-fire scrolling
+      // Debounce scroll calls to prevent rapid-fire scrolling
       if (debounceTimeout) {
         clearTimeout(debounceTimeout);
       }
 
       debounceTimeout = setTimeout(() => {
-        // ✅ FIX: Re-check opt-out status after debounce (user might have scrolled)
-        if (userOptedOut) {
+        const scrollResult = onDebouncedScrollCheck();
+        if (!scrollResult)
           return;
-        }
-
-        // Re-check position after debounce (user might have scrolled)
-        if (onlyIfAtBottom && !isScrolledToBottom(scrollContainer, bottomThreshold)) {
-          return;
-        }
 
         // Cancel any pending RAF
         if (pendingScrollRAF) {
@@ -252,7 +298,7 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
         }
 
         pendingScrollRAF = requestAnimationFrame(() => {
-          scrollToBottom(scrollContainer, behavior);
+          scrollToBottom(scrollResult.scrollContainer, scrollResult.behavior);
           pendingScrollRAF = null;
         });
 
@@ -263,12 +309,7 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
     resizeObserver.observe(scrollContainer);
     resizeObserver.observe(element);
 
-    // ✅ FIX: Remove initial scroll - useChatScroll handles initial positioning
-    // Initial scroll was causing unwanted scroll jumps when streaming started
-    // The scroll should only happen in response to content growth, not on mount
-
     return () => {
-      // ✅ FIX: Clean up scroll listener to prevent memory leaks
       window.removeEventListener('scroll', handleUserScroll);
       if (debounceTimeout) {
         clearTimeout(debounceTimeout);
@@ -277,8 +318,9 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
         cancelAnimationFrame(pendingScrollRAF);
       }
       resizeObserver.disconnect();
+      scrollContainerRef.current = null;
     };
-  }, [shouldScroll, behavior, onlyIfAtBottom, bottomThreshold, enabled, minHeightChange, debounceMs]);
+  }, [shouldScroll, enabled, debounceMs]); // ✅ REACT 19: Removed behavior, onlyIfAtBottom, bottomThreshold, minHeightChange - accessed via useEffectEvent
 
   return elementRef;
 }

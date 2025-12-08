@@ -46,7 +46,7 @@ import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { extractFileContextForSearch, getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import { executePreSearchStreamService, getThreadMessagesService } from '@/services/api';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
-import { AnimationIndices, createChatStore, readPreSearchStreamData } from '@/stores/chat';
+import { AnimationIndices, createChatStore, readPreSearchStreamData, shouldWaitForPreSearch } from '@/stores/chat';
 
 // ============================================================================
 // CONTEXT (Official Pattern)
@@ -709,13 +709,25 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
+    // ✅ PRE-SEARCH BLOCKING: Wait for pre-search to complete before starting participants
+    // This handles the case where thread is created on overview screen and user navigates
+    // to thread screen before pre-search completes. Without this, participants would start
+    // before search results are available.
+    const currentRound = getCurrentRoundNumber(storeMessages);
+    const webSearchEnabled = storeThread?.enableWebSearch ?? false;
+    const preSearchForRound = storePreSearches.find(ps => ps.roundNumber === currentRound);
+    if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
+      // Effect will re-run when preSearches updates (status changes)
+      return;
+    }
+
     // ✅ CRITICAL: Call continueFromParticipant to resume from the specific participant
     // This triggers streaming for the missing participant, not from the beginning
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
 
     // Clear the trigger flag after calling (let the effect retry if needed)
     // The flag will be cleared when streaming actually begins
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, storePreSearches, storeThread, chat, store]);
 
   // ✅ SAFETY TIMEOUT: Clear stuck waitingToStartStreaming state on thread screen
   // In local dev without KV, stream resumption may fail (GET /stream returns 204)

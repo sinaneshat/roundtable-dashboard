@@ -3,7 +3,7 @@ import { MessageSquare, Plus, Search, Sparkles, Star } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
@@ -29,12 +29,10 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
-import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useNavigationReset } from '@/hooks/utils';
 import type { Session, User } from '@/lib/auth/types';
-import { toastManager } from '@/lib/toast';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */
@@ -58,7 +56,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     isError,
     error,
   } = useThreadsQuery();
-  const deleteThreadMutation = useDeleteThreadMutation();
   const { data: usageData } = useUsageStatsQuery();
   const subscriptionTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
   const isPaidUser = subscriptionTier !== 'free';
@@ -80,31 +77,22 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       isPublic: thread.isPublic ?? false,
     }));
   }, [threadsData]);
-  // React 19.2 Pattern: Use ref to store callback, preventing listener re-mounting
-  // Ref allows reading latest isMobile/setOpenMobile without re-adding listener
-  const keyDownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
-
-  // React 19.2: Store latest callback in ref using useLayoutEffect (synchronous, before paint)
-  // This avoids the "Cannot access refs during render" rule violation
-  useLayoutEffect(() => {
-    keyDownHandlerRef.current = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsSearchOpen(true);
-        if (isMobile) {
-          setOpenMobile(false);
-        }
+  // ✅ REACT 19: useEffectEvent for keyboard shortcut handler
+  // Automatically captures latest isMobile/setOpenMobile without re-mounting listener
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      setIsSearchOpen(true);
+      if (isMobile) {
+        setOpenMobile(false);
       }
-    };
+    }
   });
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      keyDownHandlerRef.current?.(e);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []); // No dependencies - ref always has latest callback
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
   const handleNavLinkClick = useCallback((e: React.MouseEvent) => {
     // ✅ CRITICAL: Prevent default link navigation
     // We need to reset FIRST, then navigate manually
@@ -122,34 +110,13 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       setOpenMobile(false);
     }
   }, [handleNavigationReset, router, isMobile, setOpenMobile]);
-  const handleDeleteChat = (chatId: string) => {
-    const chat = chats.find(c => c.id === chatId);
-    const chatSlug = chat?.slug;
-    deleteThreadMutation.mutate({ param: { id: chatId } }, {
-      onSuccess: () => {
-        if (chatSlug) {
-          const currentPath = window.location.pathname;
-          if (currentPath.includes(`/chat/${chatSlug}`)) {
-            router.push('/chat');
-          }
-        }
-      },
-      onError: () => {
-        toastManager.error(
-          t('chat.threadDeleteFailed'),
-          t('chat.threadDeleteFailedDescription'),
-        );
-      },
-    });
-  };
+
   const favorites = useMemo(() =>
     chats.filter(chat => chat.isFavorite), [chats]);
   const nonFavoriteChats = useMemo(() =>
     chats.filter(chat => !chat.isFavorite), [chats]);
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
-  const deletingChatId = deleteThreadMutation.isPending && deleteThreadMutation.variables?.param?.id
-    ? deleteThreadMutation.variables.param.id
-    : null;
+
   const handleScroll = useCallback(() => {
     if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
       return;
@@ -292,9 +259,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     <ChatList
                       chatGroups={[]}
                       favorites={favorites}
-                      onDeleteChat={handleDeleteChat}
                       searchTerm=""
-                      deletingChatId={deletingChatId}
                       isMobile={isMobile}
                       onNavigate={() => {
                         if (isMobile) {
@@ -347,9 +312,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     <ChatList
                       chatGroups={chatGroups}
                       favorites={[]}
-                      onDeleteChat={handleDeleteChat}
                       searchTerm=""
-                      deletingChatId={deletingChatId}
                       isMobile={isMobile}
                       onNavigate={() => {
                         if (isMobile) {

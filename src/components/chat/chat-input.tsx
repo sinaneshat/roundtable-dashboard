@@ -3,7 +3,7 @@ import type { ChatStatus } from 'ai';
 import { ArrowUp, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import {
@@ -185,8 +185,9 @@ export const ChatInput = memo(({
     maxHeight,
   });
 
-  // Mobile keyboard handling: Simple scroll into view on focus
-  useKeyboardAwareScroll(textareaRef, { enabled: true });
+  // ✅ AUTO-SCROLL DISABLED: No forced scrolling on mobile keyboard focus
+  // User controls scroll position via manual scroll-to-bottom button
+  useKeyboardAwareScroll(textareaRef, { enabled: false });
 
   // Speech recognition - simple pattern: base text + hook's accumulated transcripts
   const baseTextRef = useRef('');
@@ -204,8 +205,13 @@ export const ChatInput = memo(({
     enableAudioVisualization: true,
   });
 
+  // ✅ REACT 19: useEffectEvent for onChange callback - stable reference, always latest value
+  const onChangeEvent = useEffectEvent((newValue: string) => {
+    onChange(newValue);
+  });
+
   // ✅ CONSOLIDATED: Speech recognition state transitions (start/stop)
-  // React 19: Valid effect for external system (speech recognition) sync
+  // React 19: useEffectEvent removes onChange from deps - no re-subscription on parent re-render
   const prevIsListening = useRef(false);
   useEffect(() => {
     const wasListening = prevIsListening.current;
@@ -218,12 +224,12 @@ export const ChatInput = memo(({
     } else if (wasListening && !isListening) {
       // Recording STOPPED - commit final result
       const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
-      onChange(parts.join(' ').trim());
+      onChangeEvent(parts.join(' ').trim());
     }
-  }, [isListening, value, finalTranscript, onChange, resetTranscripts]);
+  }, [isListening, value, finalTranscript, resetTranscripts]); // ✅ onChange removed - accessed via useEffectEvent
 
   // Real-time display during listening: baseText + finalTranscript + interimTranscript
-  // React 19: Valid effect for external system (speech recognition) sync
+  // React 19: useEffectEvent removes onChange from deps
   useEffect(() => {
     if (!isListening)
       return;
@@ -232,9 +238,9 @@ export const ChatInput = memo(({
     const displayText = parts.join(' ').trim();
 
     if (displayText !== value) {
-      onChange(displayText);
+      onChangeEvent(displayText);
     }
-  }, [isListening, finalTranscript, interimTranscript, value, onChange]);
+  }, [isListening, finalTranscript, interimTranscript, value]); // ✅ onChange removed - accessed via useEffectEvent
 
   // Focus textarea after DOM renders and paints
   useEffect(() => {

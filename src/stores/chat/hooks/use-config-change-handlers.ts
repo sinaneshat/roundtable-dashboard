@@ -31,7 +31,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
@@ -91,8 +91,39 @@ export function useConfigChangeHandlers(
     setHasPendingConfigChanges: s.setHasPendingConfigChanges,
   })));
 
+  // ✅ REACT 19: Simplified memoization - each handler uses useCallback directly
+  // Previous pattern had 5 layers of memoization (useCallback → useMemo × 3 → useMemo)
+  // Now: 4 useCallbacks with same dependencies, plain object return
+
+  /** Handle mode change */
+  const handleModeChange = useCallback((mode: ChatMode) => {
+    if (isRoundInProgress)
+      return;
+    actions.setSelectedMode(mode);
+    actions.setHasPendingConfigChanges(true);
+    queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
+  }, [isRoundInProgress, actions, queryClient, slug]);
+
+  /** Handle participants change */
+  const handleParticipantsChange = useCallback((participants: ParticipantConfig[]) => {
+    if (isRoundInProgress)
+      return;
+    actions.setSelectedParticipants(participants);
+    actions.setHasPendingConfigChanges(true);
+    queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
+  }, [isRoundInProgress, actions, queryClient, slug]);
+
+  /** Handle web search toggle */
+  const handleWebSearchToggle = useCallback((enabled: boolean) => {
+    if (isRoundInProgress)
+      return;
+    actions.setEnableWebSearch(enabled);
+    actions.setHasPendingConfigChanges(true);
+    queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
+  }, [isRoundInProgress, actions, queryClient, slug]);
+
   /**
-   * Generic factory for creating config change handlers
+   * Generic factory for creating additional config change handlers
    * Exposed for custom handlers beyond the built-in ones
    */
   const createConfigChangeHandler = useCallback(<TValue>(
@@ -107,34 +138,11 @@ export function useConfigChangeHandlers(
     };
   }, [isRoundInProgress, actions, queryClient, slug]);
 
-  /** Handle mode change */
-  const handleModeChange = useMemo(
-    () => createConfigChangeHandler(actions.setSelectedMode),
-    [createConfigChangeHandler, actions],
-  );
-
-  /** Handle participants change */
-  const handleParticipantsChange = useMemo(
-    () => createConfigChangeHandler(actions.setSelectedParticipants),
-    [createConfigChangeHandler, actions],
-  );
-
-  /** Handle web search toggle */
-  const handleWebSearchToggle = useMemo(
-    () => createConfigChangeHandler(actions.setEnableWebSearch),
-    [createConfigChangeHandler, actions],
-  );
-
-  // Memoize return object
-  return useMemo(() => ({
+  // ✅ REACT 19: Plain object return - handlers are already memoized via useCallback
+  return {
     handleModeChange,
     handleParticipantsChange,
     handleWebSearchToggle,
     createConfigChangeHandler,
-  }), [
-    handleModeChange,
-    handleParticipantsChange,
-    handleWebSearchToggle,
-    createConfigChangeHandler,
-  ]);
+  };
 }

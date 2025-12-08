@@ -191,7 +191,7 @@ export function useModelPreferencesHydrated(): boolean {
     // ✅ OFFICIAL PATTERN: THEN check if already hydrated (catches race condition)
     // This sync call is intentional - subscriptions are set up first, so any future
     // hydration events will still be captured even if this triggers a re-render
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Official Zustand v5 pattern: sync setState after subscribing to catch completed hydration
+    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks-extra/no-direct-set-state-in-use-effect -- Official Zustand v5 pattern: sync setState after subscribing to catch completed hydration
     setHydrated(storeContext.persist.hasHydrated());
 
     return () => {

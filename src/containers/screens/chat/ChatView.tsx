@@ -271,6 +271,9 @@ export function ChatView({
   const { showLoader } = useFlowLoading({ mode });
 
   // Scroll management - uses single scroll anchor for smooth auto-scrolling
+  // ✅ HYDRATION: isStoreReady ensures scroll waits for server data to load into store
+  const isStoreReady = mode === 'thread' ? (hasInitiallyLoaded && messages.length > 0) : true;
+
   useChatScroll({
     messages,
     analyses,
@@ -281,6 +284,8 @@ export function ChatView({
     bottomOffset: 180,
     scrollAnchorRef, // ✅ SMOOTH SCROLL: Enables scrollIntoView for smoother mobile scrolling
     showLoader, // ✅ LOADING STATE: Triggers scroll when loader appears
+    initialScrollToBottom: mode === 'thread', // ✅ THREAD MODE: Scroll to bottom on initial load
+    isStoreReady, // ✅ HYDRATION: Wait for store to be hydrated before initial scroll
   });
 
   // Input blocking - unified calculation for both screens

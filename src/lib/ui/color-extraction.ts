@@ -196,6 +196,26 @@ export function clearColorCache(): void {
 }
 
 /**
+ * ✅ REACT 19: Synchronous cache check for initial render
+ * Returns cached color if available, otherwise returns default
+ * Use this for sync initial render, then extractColorFromImage to populate cache
+ *
+ * @param imageSrc - Image source URL
+ * @param defaultColor - Default color to return if not cached
+ * @returns Cached color or default
+ */
+export function getCachedImageColor(imageSrc: string, defaultColor = 'muted-foreground'): string {
+  return colorCache.get(imageSrc) ?? defaultColor;
+}
+
+/**
+ * Check if a color is cached for an image
+ */
+export function hasColorCached(imageSrc: string): boolean {
+  return colorCache.has(imageSrc);
+}
+
+/**
  * Preload and extract color from an image
  * Useful for preloading colors before they're needed
  *

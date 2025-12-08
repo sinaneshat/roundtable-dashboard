@@ -1,6 +1,6 @@
 'use client';
 import { ArrowDown } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
@@ -17,27 +17,31 @@ export function ChatScrollButton({
   const [showButton, setShowButton] = useState(false);
   const rafRef = useRef<number | null>(null);
 
+  // ✅ REACT 19: useEffectEvent for scroll position check - stable handler
+
+  const onCheckScrollPosition = useEffectEvent(() => {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- setState in useEffectEvent is valid React 19 pattern
+    setShowButton(distanceFromBottom > 200);
+  });
+
   useEffect(() => {
     let ticking = false;
-
-    const checkScrollPosition = () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = window.innerHeight;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: updating state based on scroll position
-      setShowButton(distanceFromBottom > 200);
-      ticking = false;
-    };
 
     const handleScroll = () => {
       if (!ticking) {
         ticking = true;
-        requestAnimationFrame(checkScrollPosition);
+        requestAnimationFrame(() => {
+          onCheckScrollPosition();
+          ticking = false;
+        });
       }
     };
 
-    checkScrollPosition();
+    onCheckScrollPosition(); // Initial check
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {

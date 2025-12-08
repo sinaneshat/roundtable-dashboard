@@ -814,6 +814,17 @@
     "shareConversation": "Share Conversation",
     "shareThread": "Share Thread",
     "shareThreadDescription": "Share this link with anyone to give them access to this thread",
+    "shareDialog": {
+      "publicStatus": "Public",
+      "shareOn": "Share on",
+      "privateWarningTitle": "This will revoke public access",
+      "privateWarningDescription": "Anyone with the existing link will no longer be able to view this thread.",
+      "previewLabel": "Preview",
+      "copyLinkLabel": "Share Link",
+      "shareOnSocialLabel": "Share on Social",
+      "embedOptionsLabel": "Embed Options",
+      "embedOptionsDescription": "HTML and Markdown snippets"
+    },
     "streaming": {
       "remaining": "remaining",
       "responding": "responding",

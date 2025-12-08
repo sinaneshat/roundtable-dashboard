@@ -196,9 +196,8 @@ type InlineCitationCardBodyProps = {
 function InlineCitationCardBody({ children, className }: InlineCitationCardBodyProps) {
   return (
     <PopoverContent
-      glass
       className={cn(
-        'w-80 p-0',
+        'w-80 p-0 backdrop-blur-lg bg-popover/95',
         className,
       )}
       align="start"

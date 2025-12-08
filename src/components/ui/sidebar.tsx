@@ -1,7 +1,7 @@
 "use client"
 
 import type { ComponentProps, CSSProperties } from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState } from 'react';
 
 import { Slot } from "@radix-ui/react-slot";
 import { cva, VariantProps } from "class-variance-authority";
@@ -97,21 +97,22 @@ function SidebarProvider({
     return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open)
   }, [isMobile, setOpen, setOpenMobile])
 
-  // Adds a keyboard shortcut to toggle the sidebar.
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-        (event.metaKey || event.ctrlKey)
-      ) {
-        event.preventDefault()
-        toggleSidebar()
-      }
+  // ✅ REACT 19: useEffectEvent for keyboard shortcut
+  // Automatically captures latest toggleSidebar without re-mounting listener
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+      (event.metaKey || event.ctrlKey)
+    ) {
+      event.preventDefault()
+      toggleSidebar()
     }
+  })
 
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [toggleSidebar])
+  useEffect(() => {
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [onKeyDown])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
@@ -592,7 +593,7 @@ function SidebarMenuAction({
         "focus-visible:ring-2 focus-visible:ring-destructive/50",
         "transition-all duration-150 ease-out",
         "[&>svg]:size-3.5 [&>svg]:shrink-0",
-        // Touch target
+        // Touch target - larger hit area on mobile
         "after:absolute after:-inset-2 md:after:hidden",
         // Size-responsive positioning
         "peer-data-[size=sm]/menu-button:top-1",
@@ -600,9 +601,9 @@ function SidebarMenuAction({
         "peer-data-[size=lg]/menu-button:top-2.5",
         // Hide in icon mode
         "group-data-[collapsible=icon]:hidden",
-        // Show on hover with fade animation
+        // Show on hover (desktop only) - always visible on mobile for touch accessibility
         showOnHover &&
-          "opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100",
+          "group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
         className
       )}
       {...props}

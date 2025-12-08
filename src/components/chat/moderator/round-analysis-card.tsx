@@ -1,7 +1,7 @@
 'use client';
 import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { startTransition, useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, Recommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
@@ -78,37 +78,46 @@ export function RoundAnalysisCard({
     },
   } as const;
   const config = statusConfig[analysis.status];
-  const [isManuallyControlled, setIsManuallyControlled] = useState(false);
-  const [manuallyOpen, setManuallyOpen] = useState(false);
 
-  // Auto-close when newer round starts streaming
-  useEffect(() => {
-    if (streamingRoundNumber != null && streamingRoundNumber > analysis.roundNumber) {
-      // ✅ REACT 19: startTransition for non-urgent state updates
-      startTransition(() => {
-        setIsManuallyControlled(false);
-        setManuallyOpen(false);
-      });
+  // ✅ REACT 19: Manual control state with round tracking (derived state pattern)
+  // Track the round number when user took manual control - allows auto-invalidation
+  const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
+
+  // ✅ REACT 19: Derive if manual control is still valid (no useEffect needed)
+  // Manual control is invalidated when a newer round starts streaming
+  const isManualControlValid = useMemo(() => {
+    if (!manualControl)
+      return false;
+    // If streaming a newer round, manual control is no longer valid
+    if (streamingRoundNumber != null && streamingRoundNumber > manualControl.round) {
+      return false;
     }
-  }, [streamingRoundNumber, analysis.roundNumber]);
-
-  // Demo mode override: If demoOpen is provided, use it instead of computed state
-  const isOpen = demoOpen !== undefined
-    ? demoOpen
-    : (isManuallyControlled ? manuallyOpen : isLatest);
+    return true;
+  }, [manualControl, streamingRoundNumber]);
 
   // Disable accordion interaction during streaming/pending
   const isStreamingOrPending = analysis.status === AnalysisStatuses.STREAMING
     || analysis.status === AnalysisStatuses.PENDING;
 
+  // ✅ REACT 19: Event handler (not useEffect) for user interaction
   const handleOpenChange = useCallback((open: boolean) => {
     // Prevent interaction during streaming
     if (isStreamingOrPending)
       return;
 
-    setIsManuallyControlled(true);
-    setManuallyOpen(open);
-  }, [isStreamingOrPending]);
+    // Store manual control with current round number for invalidation tracking
+    setManualControl({ round: analysis.roundNumber, open });
+  }, [isStreamingOrPending, analysis.roundNumber]);
+
+  // ✅ REACT 19: Fully derived accordion state (no useEffect needed)
+  // Priority: demoOpen > valid manual control > isLatest
+  const isOpen = useMemo(() => {
+    if (demoOpen !== undefined)
+      return demoOpen;
+    if (isManualControlValid && manualControl)
+      return manualControl.open;
+    return isLatest;
+  }, [demoOpen, isManualControlValid, manualControl, isLatest]);
 
   // ✅ SCROLL FIX: Removed independent scrollIntoView - scroll is managed centrally by useChatScroll
   // Having each RoundAnalysisCard call scrollIntoView caused multiple scroll anchors to conflict,

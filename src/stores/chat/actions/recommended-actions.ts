@@ -110,17 +110,12 @@ export function useRecommendedActions(
       actions.setHasPendingConfigChanges(true);
     }
 
-    // ✅ UI CONCERN: Scroll to input if enabled (thread screen only)
-    // Uses afterPaint utility to ensure DOM is painted before scrolling
+    // ✅ AUTO-SCROLL DISABLED: No forced scrolling - user controls scroll position
+    // Focus textarea without scrolling (user can use scroll-to-bottom button if needed)
     if (enableScroll && inputContainerRef?.current) {
       afterPaint(() => {
-        inputContainerRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-        });
-        // Try to focus the textarea inside
         const textarea = inputContainerRef.current?.querySelector('textarea');
-        textarea?.focus();
+        textarea?.focus({ preventScroll: true });
       });
     }
   }, [

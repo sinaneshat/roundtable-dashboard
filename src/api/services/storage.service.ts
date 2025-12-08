@@ -310,6 +310,8 @@ export function getPublicUrl(key: string, baseUrl: string): string {
 // ============================================================================
 
 const LOCAL_DIR = '.local-uploads';
+// Wrangler stores R2 objects in this directory when using `pnpm preview`
+const WRANGLER_R2_DIR = '.wrangler/state/r2/roundtable-dashboard-r2-uploads-local';
 
 /**
  * Cross-realm safe ArrayBuffer check
@@ -380,6 +382,23 @@ async function putFileLocal(
   }
 }
 
+/**
+ * Try to read file from Wrangler R2 state directory
+ * Wrangler stores R2 objects with their original key path structure
+ */
+async function tryReadFromWranglerR2(key: string): Promise<Uint8Array | null> {
+  try {
+    const { promises: fs } = await import('node:fs');
+    const path = await import('node:path');
+
+    // Wrangler stores files with their original path structure
+    const filePath = path.join(WRANGLER_R2_DIR, key);
+    return await fs.readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
 async function getFileStreamLocal(key: string): Promise<R2StreamResult> {
   const notFound: R2StreamResult = {
     found: false,
@@ -393,15 +412,28 @@ async function getFileStreamLocal(key: string): Promise<R2StreamResult> {
     const { promises: fs } = await import('node:fs');
     const path = await import('node:path');
 
+    // First try LOCAL_DIR (pnpm dev uploads)
     const filePath = path.join(LOCAL_DIR, key.replace(/\//g, '_'));
-    const fileBuffer = await fs.readFile(filePath);
-
+    let fileBuffer: Uint8Array;
     let metadata: StorageMetadata | undefined;
+
     try {
-      const metaData = await fs.readFile(`${filePath}.meta.json`, 'utf-8');
-      metadata = JSON.parse(metaData);
+      fileBuffer = await fs.readFile(filePath);
+      // Try to read metadata
+      try {
+        const metaData = await fs.readFile(`${filePath}.meta.json`, 'utf-8');
+        metadata = JSON.parse(metaData);
+      } catch {
+        // No metadata
+      }
     } catch {
-      // No metadata
+      // File not found in LOCAL_DIR, try Wrangler R2 state (pnpm preview uploads)
+      const wranglerBuffer = await tryReadFromWranglerR2(key);
+      if (!wranglerBuffer) {
+        return notFound;
+      }
+      fileBuffer = wranglerBuffer;
+      // No metadata file for Wrangler R2 uploads - infer from key if possible
     }
 
     const stream = new ReadableStream({
@@ -435,21 +467,34 @@ async function getFileLocal(
     const { promises: fs } = await import('node:fs');
     const path = await import('node:path');
 
+    // First try LOCAL_DIR (pnpm dev uploads)
     const filePath = path.join(LOCAL_DIR, key.replace(/\//g, '_'));
-    const fileBuffer = await fs.readFile(filePath);
-
+    let fileBuffer: Uint8Array;
     let metadata: StorageMetadata | undefined;
+
     try {
-      const metaData = await fs.readFile(`${filePath}.meta.json`, 'utf-8');
-      metadata = JSON.parse(metaData);
+      fileBuffer = await fs.readFile(filePath);
+      // Try to read metadata
+      try {
+        const metaData = await fs.readFile(`${filePath}.meta.json`, 'utf-8');
+        metadata = JSON.parse(metaData);
+      } catch {
+        // No metadata
+      }
     } catch {
-      // No metadata
+      // File not found in LOCAL_DIR, try Wrangler R2 state (pnpm preview uploads)
+      const wranglerBuffer = await tryReadFromWranglerR2(key);
+      if (!wranglerBuffer) {
+        return { data: null };
+      }
+      fileBuffer = wranglerBuffer;
     }
 
+    // Convert Uint8Array to ArrayBuffer
     const arrayBuffer = fileBuffer.buffer.slice(
       fileBuffer.byteOffset,
       fileBuffer.byteOffset + fileBuffer.byteLength,
-    );
+    ) as ArrayBuffer;
 
     return { data: arrayBuffer, metadata };
   } catch {
@@ -479,9 +524,17 @@ async function fileExistsLocal(key: string): Promise<boolean> {
     const { promises: fs } = await import('node:fs');
     const path = await import('node:path');
 
+    // First try LOCAL_DIR (pnpm dev uploads)
     const filePath = path.join(LOCAL_DIR, key.replace(/\//g, '_'));
-    await fs.access(filePath);
-    return true;
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      // File not found in LOCAL_DIR, try Wrangler R2 state (pnpm preview uploads)
+      const wranglerPath = path.join(WRANGLER_R2_DIR, key);
+      await fs.access(wranglerPath);
+      return true;
+    }
   } catch {
     return false;
   }

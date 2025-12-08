@@ -97,7 +97,10 @@ function SheetFooter({
   return (
     <div
       className={cn(
-        'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 rtl:space-x-reverse',
+        // Mobile: Stack vertically with gap
+        'flex flex-col-reverse gap-3',
+        // Desktop: Horizontal layout with proper spacing
+        'sm:flex-row sm:justify-end sm:gap-2',
         className,
       )}
       {...props}

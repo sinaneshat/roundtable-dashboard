@@ -59,9 +59,16 @@ export async function getBase64Image(relativePath: string): Promise<string> {
   }
 
   // Convert to base64 using browser-compatible method
+  // NOTE: Using chunk-based conversion to avoid stack overflow with large images
   const arrayBuffer = await response.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
-  const base64 = btoa(String.fromCharCode(...uint8Array));
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  const base64 = btoa(binary);
 
   // Determine MIME type from file extension
   const ext = cleanPath.split('.').pop()?.toLowerCase();

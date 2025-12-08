@@ -54,7 +54,13 @@ function NavigationHeaderComponent({
 
   // ✅ ZUSTAND PATTERN: Thread title comes from store, not context
   const storeThreadTitle = useChatStore(s => s.thread?.title ?? null);
+  const showInitialUI = useChatStore(s => s.showInitialUI);
+  const createdThreadId = useChatStore(s => s.createdThreadId);
+  const thread = useChatStore(s => s.thread);
   const context = useThreadHeaderOptional();
+
+  // Detect active thread from store (created from overview, URL still /chat)
+  const hasActiveThread = !showInitialUI && (createdThreadId || thread);
 
   const threadTitle = threadTitleProp ?? (showSidebarTrigger ? storeThreadTitle : null);
   const threadParent = threadParentProp ?? '/chat';
@@ -63,8 +69,11 @@ function NavigationHeaderComponent({
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing')
     || pathname?.startsWith('/public/chat/')
   );
-  const isOverviewPage = pathname === '/chat';
-  const currentPage = isThreadPage && threadTitle
+  // Treat as non-overview when we have active thread (even if pathname is /chat)
+  const isOverviewPage = pathname === '/chat' && !hasActiveThread;
+  // Show thread breadcrumb when on thread page OR active thread from overview
+  const showThreadBreadcrumb = (isThreadPage || hasActiveThread) && threadTitle;
+  const currentPage = showThreadBreadcrumb
     ? { titleKey: threadTitle, parent: threadParent, isDynamic: true }
     : pathname ? breadcrumbMap[pathname] : undefined;
   const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;

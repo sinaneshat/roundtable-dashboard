@@ -115,6 +115,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     addAnalysis: s.addAnalysis,
     // ✅ IMMEDIATE UI FEEDBACK: For eager accordion collapse and optimistic message
     setStreamingRoundNumber: s.setStreamingRoundNumber,
+    // ✅ THREAD SCREEN RESUMPTION: Required for continueFromParticipant effect
+    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
     setMessages: s.setMessages,
     setHasEarlyOptimisticMessage: s.setHasEarlyOptimisticMessage,
     // ✅ ATTACHMENT CLEARING: Clear attachments after thread/message is created
@@ -306,6 +308,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Set flag to trigger streaming once chat is ready
       // Store subscription will wait for startRound to be registered by provider
       actions.setWaitingToStartStreaming(true);
+
+      // ✅ THREAD SCREEN RESUMPTION FIX: Set nextParticipantToTrigger for thread screen
+      // BUG: When user creates thread on overview and navigates to thread screen before
+      // streaming starts, the overview effect returns early (not on overview screen) and
+      // continueFromParticipant effect requires nextParticipantToTrigger to be set.
+      // Without this, streaming never starts - system enters deadlock.
+      actions.setNextParticipantToTrigger(0);
     } catch (error) {
       showApiErrorToast('Error creating thread', error);
       actions.setShowInitialUI(true);

@@ -108,7 +108,10 @@ function AlertDialogFooter({ className, glass = false, ...props }: AlertDialogFo
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+        // Mobile: Stack vertically with gap, action button on top (more prominent)
+        "flex flex-col-reverse gap-3",
+        // Desktop: Horizontal layout with proper spacing
+        "sm:flex-row sm:justify-end sm:gap-2",
         glass && "bg-black/30 px-4 sm:px-5 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-3 sm:pt-4",
         className
       )}
@@ -149,7 +152,12 @@ function AlertDialogAction({
 }: ComponentProps<typeof AlertDialogPrimitive.Action>) {
   return (
     <AlertDialogPrimitive.Action
-      className={cn(buttonVariants(), className)}
+      className={cn(
+        buttonVariants(),
+        // Mobile: Full width buttons for better touch targets
+        "w-full sm:w-auto",
+        className
+      )}
       {...props}
     />
   )
@@ -161,7 +169,12 @@ function AlertDialogCancel({
 }: ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
   return (
     <AlertDialogPrimitive.Cancel
-      className={cn(buttonVariants({ variant: "outline" }), className)}
+      className={cn(
+        buttonVariants({ variant: "outline" }),
+        // Mobile: Full width buttons for better touch targets
+        "w-full sm:w-auto",
+        className
+      )}
       {...props}
     />
   )

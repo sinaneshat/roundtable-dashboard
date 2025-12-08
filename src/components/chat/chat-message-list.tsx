@@ -21,7 +21,7 @@ import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
 import type { FilePart, MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
-import { extractColorFromImage } from '@/lib/ui';
+import { extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { getMessageStatus } from '@/lib/utils/message-status';
@@ -103,9 +103,15 @@ function ParticipantHeader({
   isStreaming = false,
   hasError = false,
 }: ParticipantHeaderProps) {
-  const [colorClass, setColorClass] = useState<string>('muted-foreground');
+  // ✅ REACT 19: Sync initial render from cache, effect only populates cache if needed
+  const [colorClass, setColorClass] = useState<string>(() => getCachedImageColor(avatarSrc));
 
+  // ✅ REACT 19: Only run effect if not already cached (external system sync for image processing)
   useEffect(() => {
+    // Skip if already cached - no async work needed
+    if (hasColorCached(avatarSrc))
+      return;
+
     let mounted = true;
     extractColorFromImage(avatarSrc, false)
       .then((color: string) => {

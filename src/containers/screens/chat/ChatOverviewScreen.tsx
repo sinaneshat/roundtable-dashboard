@@ -25,6 +25,7 @@ import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -37,6 +38,7 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import {
   useBoolean,
   useChatAttachments,
+  useIsMobile,
   useModelLookup,
   useOrderedModels,
 } from '@/hooks/utils';
@@ -157,6 +159,9 @@ export default function ChatOverviewScreen() {
   const modeModal = useBoolean(false);
   const modelModal = useBoolean(false);
 
+  // Responsive breakpoint - use hook pattern instead of CSS for SSR safety
+  const isMobile = useIsMobile();
+
   // Chat attachments
   const chatAttachments = useChatAttachments();
 
@@ -193,9 +198,9 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  const [modelOrder, setModelOrder] = useChatStore(
-    useShallow(s => [s.modelOrder, s.setModelOrder]),
-  );
+  // ✅ REACT 19: Separate selectors instead of array (avoids new array on every render)
+  const modelOrder = useChatStore(s => s.modelOrder);
+  const setModelOrder = useChatStore(s => s.setModelOrder);
 
   // ============================================================================
   // ACCESSIBLE MODELS (computed from enabled models)
@@ -377,6 +382,23 @@ export default function ChatOverviewScreen() {
     setThreadActions,
   ]);
 
+  // ============================================================================
+  // THREAD ACTIONS SYNC (for header when thread is active on overview)
+  // ============================================================================
+  // When a thread is created from overview, set thread actions for the header
+  // This mirrors what ChatThreadScreen does via useThreadHeaderUpdater
+  // ✅ REACT 19: Effect is valid - syncing with context (external to this component)
+  const threadActions = useMemo(
+    () => currentThread && !showInitialUI
+      ? <ChatThreadActions thread={currentThread} slug={currentThread.slug} />
+      : null,
+    [currentThread, showInitialUI],
+  );
+
+  useEffect(() => {
+    setThreadActions(threadActions);
+  }, [threadActions, setThreadActions]);
+
   // Screen initialization for orchestrator
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
   const hasActivePreSearch = preSearches.some(
@@ -443,18 +465,8 @@ export default function ChatOverviewScreen() {
   // Per AI SDK docs, resume: true is incompatible with abort/stop.
   // Streams continue in background via waitUntil() and can be resumed.
 
-  // Prevent scrolling on initial UI
-  useLayoutEffect(() => {
-    if (showInitialUI) {
-      document.documentElement.classList.add('overflow-hidden');
-    } else {
-      document.documentElement.classList.remove('overflow-hidden');
-    }
-
-    return () => {
-      document.documentElement.classList.remove('overflow-hidden');
-    };
-  }, [showInitialUI]);
+  // ✅ MOBILE FIX: Removed overflow-hidden to allow scrolling on small screens
+  // Previously prevented scrolling which caused content to be cut off on small mobile devices
 
   // ============================================================================
   // CALLBACKS
@@ -570,7 +582,8 @@ export default function ChatOverviewScreen() {
     }
   }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder, setPersistedModelIds]);
 
-  const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
+  // ✅ REACT 19: Consolidated role handlers (DRY pattern)
+  const updateParticipantRole = useCallback((modelId: string, role: string, customRoleId?: string) => {
     setSelectedParticipants(
       selectedParticipants.map(p =>
         p.modelId === modelId ? { ...p, role, customRoleId } : p,
@@ -578,13 +591,11 @@ export default function ChatOverviewScreen() {
     );
   }, [selectedParticipants, setSelectedParticipants]);
 
-  const handleClearRole = useCallback((modelId: string) => {
-    setSelectedParticipants(
-      selectedParticipants.map(p =>
-        p.modelId === modelId ? { ...p, role: '', customRoleId: undefined } : p,
-      ),
-    );
-  }, [selectedParticipants, setSelectedParticipants]);
+  const handleRoleChange = updateParticipantRole;
+  const handleClearRole = useCallback(
+    (modelId: string) => updateParticipantRole(modelId, '', undefined),
+    [updateParticipantRole],
+  );
 
   const handleReorderModels = useCallback((newOrder: typeof orderedModels) => {
     const newModelOrder = newOrder.map(om => om.model.id);
@@ -608,6 +619,69 @@ export default function ChatOverviewScreen() {
     setEnableWebSearch(enabled);
     setPersistedWebSearch(enabled); // Persist to cookie
   }, [setEnableWebSearch, setPersistedWebSearch]);
+
+  // ============================================================================
+  // MEMOIZED CHAT INPUT PROPS (DRY - shared between desktop and mobile)
+  // ============================================================================
+
+  // ✅ REACT 19: Memoize toolbar to prevent recreation on every render
+  const chatInputToolbar = useMemo(() => (
+    <ChatInputToolbarMenu
+      selectedParticipants={selectedParticipants}
+      allModels={allEnabledModels}
+      onOpenModelModal={() => modelModal.onTrue()}
+      selectedMode={selectedMode || getDefaultChatMode()}
+      onOpenModeModal={() => modeModal.onTrue()}
+      enableWebSearch={enableWebSearch}
+      onWebSearchToggle={handleWebSearchToggle}
+      onAttachmentClick={handleAttachmentClick}
+      attachmentCount={chatAttachments.attachments.length}
+      enableAttachments={!isInitialUIInputBlocked}
+      disabled={isInitialUIInputBlocked}
+    />
+  ), [
+    selectedParticipants,
+    allEnabledModels,
+    modelModal,
+    selectedMode,
+    modeModal,
+    enableWebSearch,
+    handleWebSearchToggle,
+    handleAttachmentClick,
+    chatAttachments.attachments.length,
+    isInitialUIInputBlocked,
+  ]);
+
+  // ✅ REACT 19: Shared ChatInput props (DRY - prevents duplicate prop lists)
+  const sharedChatInputProps = useMemo(() => ({
+    value: inputValue,
+    onChange: setInputValue,
+    onSubmit: handlePromptSubmit,
+    status: isInitialUIInputBlocked ? 'submitted' as const : 'ready' as const,
+    placeholder: t('chat.input.placeholder'),
+    participants: selectedParticipants,
+    quotaCheckType: 'threads' as const,
+    onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
+    attachments: chatAttachments.attachments,
+    onAddAttachments: chatAttachments.addFiles,
+    onRemoveAttachment: chatAttachments.removeAttachment,
+    enableAttachments: !isInitialUIInputBlocked,
+    attachmentClickRef,
+    toolbar: chatInputToolbar,
+  }), [
+    inputValue,
+    setInputValue,
+    handlePromptSubmit,
+    isInitialUIInputBlocked,
+    t,
+    selectedParticipants,
+    removeParticipant,
+    chatAttachments.attachments,
+    chatAttachments.addFiles,
+    chatAttachments.removeAttachment,
+    attachmentClickRef,
+    chatInputToolbar,
+  ]);
 
   // ============================================================================
   // RENDER
@@ -654,110 +728,101 @@ export default function ChatOverviewScreen() {
 
           {/* Initial UI - logo, tagline, suggestions */}
           {showInitialUI && (
-            <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
-              <motion.div
-                key="initial-ui"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-                className="w-full"
-              >
-                <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+            <>
+              {/* Scrollable content area */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
                   <motion.div
-                    className="relative h-20 w-20 sm:h-24 sm:w-24"
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                    transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                    key="initial-ui"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="w-full"
                   >
-                    <Image
-                      src={BRAND.logos.main}
-                      alt={BRAND.name}
-                      className="w-full h-full object-contain"
-                      width={96}
-                      height={96}
-                      priority
-                    />
-                  </motion.div>
+                    <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+                      <motion.div
+                        className="relative h-20 w-20 sm:h-24 sm:w-24"
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.5, opacity: 0, y: -50 }}
+                        transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                      >
+                        <Image
+                          src={BRAND.logos.main}
+                          alt={BRAND.name}
+                          className="w-full h-full object-contain"
+                          width={96}
+                          height={96}
+                          priority
+                        />
+                      </motion.div>
 
-                  <div className="flex flex-col items-center gap-1.5">
-                    <motion.h1
-                      className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -30 }}
-                      transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
-                    >
-                      {BRAND.name}
-                    </motion.h1>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <motion.h1
+                          className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -30 }}
+                          transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
+                        >
+                          {BRAND.name}
+                        </motion.h1>
 
-                    <motion.p
-                      className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -30 }}
-                      transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
-                    >
-                      {BRAND.tagline}
-                    </motion.p>
-                  </div>
+                        <motion.p
+                          className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -30 }}
+                          transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
+                        >
+                          {BRAND.tagline}
+                        </motion.p>
+                      </div>
 
-                  <motion.div
-                    className="w-full mt-6 sm:mt-8"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
-                  >
-                    <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
+                      <motion.div
+                        className="w-full mt-6 sm:mt-8"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
+                      >
+                        <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
+                      </motion.div>
+
+                      {/* Desktop: Chat input inline under suggestions */}
+                      {!isMobile && (
+                        <motion.div
+                          className="w-full mt-6"
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+                        >
+                          <ChatInput {...sharedChatInputProps} />
+                        </motion.div>
+                      )}
+                    </div>
                   </motion.div>
                 </div>
-              </motion.div>
+              </div>
 
-              {/* Initial UI input */}
-              <motion.div
-                className="w-full mt-6 sm:mt-8 pb-4"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
-              >
-                {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
-                    Per AI SDK docs, resume: true is incompatible with abort/stop.
-                    Streams continue in background via waitUntil() and can be resumed. */}
-                <ChatInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onSubmit={handlePromptSubmit}
-                  status={isInitialUIInputBlocked ? 'submitted' : 'ready'}
-                  placeholder={t('chat.input.placeholder')}
-                  participants={selectedParticipants}
-                  quotaCheckType="threads"
-                  onRemoveParticipant={isInitialUIInputBlocked ? undefined : removeParticipant}
-                  attachments={chatAttachments.attachments}
-                  onAddAttachments={chatAttachments.addFiles}
-                  onRemoveAttachment={chatAttachments.removeAttachment}
-                  enableAttachments={!isInitialUIInputBlocked}
-                  attachmentClickRef={attachmentClickRef}
-                  toolbar={(
-                    <ChatInputToolbarMenu
-                      selectedParticipants={selectedParticipants}
-                      allModels={allEnabledModels}
-                      onOpenModelModal={() => modelModal.onTrue()}
-                      selectedMode={selectedMode || getDefaultChatMode()}
-                      onOpenModeModal={() => modeModal.onTrue()}
-                      enableWebSearch={enableWebSearch}
-                      onWebSearchToggle={handleWebSearchToggle}
-                      onAttachmentClick={handleAttachmentClick}
-                      attachmentCount={chatAttachments.attachments.length}
-                      enableAttachments={!isInitialUIInputBlocked}
-                      disabled={isInitialUIInputBlocked}
-                    />
-                  )}
-                />
-              </motion.div>
-            </div>
+              {/* Mobile: Sticky input at bottom */}
+              {isMobile && (
+                <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-4">
+                  <div className="container max-w-3xl mx-auto px-2 sm:px-4 pb-4">
+                    <motion.div
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+                    >
+                      <ChatInput {...sharedChatInputProps} />
+                    </motion.div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Chat UI - unified with thread screen via ChatView */}

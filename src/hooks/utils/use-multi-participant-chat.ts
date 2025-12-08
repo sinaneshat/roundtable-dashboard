@@ -1069,9 +1069,11 @@ export function useMultiParticipantChat(
         const hasErrorInMetadata = completeMetadata?.hasError === true;
 
         if (hasErrorInMetadata) {
-          // Error messages don't animate - trigger next participant immediately
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          triggerNextParticipantWithRefs();
+          // ✅ REACT 19: Use RAF callback directly instead of Promise wrapper
+          // Error messages don't animate - trigger next participant after frame
+          requestAnimationFrame(() => {
+            triggerNextParticipantWithRefs();
+          });
           return;
         }
       }
@@ -1080,22 +1082,12 @@ export function useMultiParticipantChat(
       // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
       // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
       // which has its own timeout mechanism for analysis creation
-      const triggerWithAnimationWait = async () => {
-        try {
-          // Small delay to ensure React has committed any pending state updates
-          await new Promise(resolve => requestAnimationFrame(resolve));
-
-          // Trigger next participant immediately - no animation waiting here
-          // Analysis creation (in handleComplete) will wait for animations separately
-          triggerNextParticipantWithRefs();
-        } catch (error) {
-          console.error('[triggerWithAnimationWait] ERROR:', error);
-          // Still try to trigger next participant on error
-          triggerNextParticipantWithRefs();
-        }
-      };
-
-      triggerWithAnimationWait();
+      // ✅ REACT 19: Use RAF callback directly - cleaner than async IIFE with Promise wrapper
+      requestAnimationFrame(() => {
+        // Trigger next participant immediately - no animation waiting here
+        // Analysis creation (in handleComplete) will wait for animations separately
+        triggerNextParticipantWithRefs();
+      });
     },
 
     /**

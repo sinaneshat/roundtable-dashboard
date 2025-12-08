@@ -171,6 +171,44 @@ export function useIncompleteRoundResumption(
   // - The AI SDK calls this automatically on mount when resume: true
   // ============================================================================
 
+  // ============================================================================
+  // ✅ STALE STATE FIX: Clear waitingToStartStreaming on page refresh
+  // When user refreshes during submission flow:
+  // 1. waitingToStartStreaming: true persists (via Zustand persist)
+  // 2. But pendingMessage: null (not persisted or cleared)
+  // 3. This causes a deadlock - nothing triggers streaming
+  //
+  // Detection: waitingToStartStreaming: true AND pendingMessage: null AND !isStreaming
+  // Fix: Clear waitingToStartStreaming so incomplete round resumption can work
+  //
+  // ✅ RACE CONDITION FIX: Only check ONCE on mount, not on subsequent renders
+  // Previously, if the resumption effect set waitingToStartStreaming=true AFTER this
+  // effect first ran, this effect would re-run (dependency changed) and incorrectly
+  // clear the flag, preventing resumption from triggering.
+  // Fix: Set the ref immediately on first run to prevent subsequent checks.
+  // ============================================================================
+  const staleWaitingStateRef = useRef(false);
+
+  useEffect(() => {
+    // ✅ RACE CONDITION FIX: Mark as checked IMMEDIATELY on first run
+    // This prevents the effect from re-running when resumption hook sets
+    // waitingToStartStreaming=true, which would incorrectly clear the flag.
+    // The stale state check should ONLY happen on initial mount.
+    if (staleWaitingStateRef.current) {
+      return;
+    }
+    // Mark as checked BEFORE evaluating condition (not after)
+    staleWaitingStateRef.current = true;
+
+    // Detect stale state: waiting but no pending message and not streaming
+    // This only fires if waitingToStartStreaming was ALREADY true at mount time
+    // (leftover from crashed session), not if resumption hook just set it
+    if (waitingToStartStreaming && pendingMessage === null && !isStreaming) {
+      // Clear the stale state so incomplete round resumption can work
+      actions.setWaitingToStartStreaming(false);
+    }
+  }, [waitingToStartStreaming, pendingMessage, isStreaming, actions]);
+
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 
   // ✅ ORPHANED PRE-SEARCH DETECTION
@@ -367,6 +405,7 @@ export function useIncompleteRoundResumption(
     orphanedPreSearchUIRecoveryRef.current = null;
     orphanedPreSearchRecoveryAttemptedRef.current = null;
     resumptionAttemptedRef.current = null;
+    staleWaitingStateRef.current = false; // Reset so stale state detection works on navigation
   }, [threadId]);
 
   // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT

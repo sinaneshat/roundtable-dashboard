@@ -2,7 +2,7 @@
 
 import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -57,20 +57,21 @@ export function PreSearchCard({
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(preSearch.status);
 
-  // Manual control state for accordion (follows RoundAnalysisCard pattern)
-  const [isManuallyControlled, setIsManuallyControlled] = useState(false);
-  const [manuallyOpen, setManuallyOpen] = useState(false);
+  // ✅ REACT 19: Manual control state with round tracking (derived state pattern)
+  // Track the round number when user took manual control - allows auto-invalidation
+  const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
 
-  // Auto-close logic: Close older searches when newer round streams
-  useEffect(() => {
-    if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > preSearch.roundNumber) {
-      // ✅ REACT 19: startTransition for non-urgent state updates
-      startTransition(() => {
-        setIsManuallyControlled(false);
-        setManuallyOpen(false);
-      });
+  // ✅ REACT 19: Derive if manual control is still valid (no useEffect needed)
+  // Manual control is invalidated when a newer round starts streaming
+  const isManualControlValid = useMemo(() => {
+    if (!manualControl)
+      return false;
+    // If streaming a newer round, manual control is no longer valid
+    if (streamingRoundNumber != null && streamingRoundNumber > manualControl.round) {
+      return false;
     }
-  }, [streamingRoundNumber, isLatest, preSearch.roundNumber]);
+    return true;
+  }, [manualControl, streamingRoundNumber]);
 
   // ✅ FIX: Use useLayoutEffect for synchronous animation registration
   // This ensures animations are registered BEFORE any callbacks fire
@@ -139,21 +140,25 @@ export function PreSearchCard({
   const isStreamingOrPending = preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING;
   const hasError = preSearch.status === AnalysisStatuses.FAILED;
 
-  // Disable interaction during streaming
-  // Pattern from round-analysis-card.tsx:91-98
+  // ✅ REACT 19: Event handler (not useEffect) for user interaction
   const handleOpenChange = useCallback((open: boolean) => {
     // Prevent interaction during streaming
     if (isStreamingOrPending)
       return;
 
-    setIsManuallyControlled(true);
-    setManuallyOpen(open);
-  }, [isStreamingOrPending]);
+    // Store manual control with current round number for invalidation tracking
+    setManualControl({ round: preSearch.roundNumber, open });
+  }, [isStreamingOrPending, preSearch.roundNumber]);
 
-  // Determine accordion state (follows RoundAnalysisCard pattern)
-  // Pattern from round-analysis-card.tsx:86
-  // Demo mode override: If demoOpen is provided, use it instead of computed state
-  const isOpen = demoOpen !== undefined ? demoOpen : (isManuallyControlled ? manuallyOpen : isLatest);
+  // ✅ REACT 19: Fully derived accordion state (no useEffect needed)
+  // Priority: demoOpen > valid manual control > isLatest
+  const isOpen = useMemo(() => {
+    if (demoOpen !== undefined)
+      return demoOpen;
+    if (isManualControlValid && manualControl)
+      return manualControl.open;
+    return isLatest;
+  }, [demoOpen, isManualControlValid, manualControl, isLatest]);
 
   return (
     <div className={cn('mb-4', className)}>
