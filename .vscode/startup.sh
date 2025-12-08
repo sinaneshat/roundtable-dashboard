@@ -9,7 +9,17 @@ echo "🚀 Starting Roundtable Development Environment..."
 echo ""
 
 # ============================================
-# STEP 1: Git Sync
+# STEP 1: Install Dependencies
+# ============================================
+echo "📦 Installing dependencies..."
+pnpm install
+
+echo ""
+echo "   ✅ Dependencies installed"
+echo ""
+
+# ============================================
+# STEP 2: Git Sync
 # ============================================
 echo "📡 Syncing with remote repository..."
 
@@ -69,7 +79,7 @@ git log -3 --oneline --decorate
 echo ""
 
 # ============================================
-# STEP 2: Start Services
+# STEP 3: Start Services
 # ============================================
 echo "🔧 Starting development services..."
 

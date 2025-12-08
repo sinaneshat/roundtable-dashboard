@@ -12,6 +12,7 @@ This workspace is configured to automatically start your development environment
    ```
 
 2. **VS Code will automatically**:
+   - **Install dependencies** (`pnpm install`)
    - **Fetch latest changes** from all remote branches
    - **Merge `origin/preview`** into your current branch (auto-merge, no conflicts)
    - Start Claude Code with `--dangerously-skip-permissions`
@@ -35,6 +36,7 @@ This workspace is configured to automatically start your development environment
 2. **Allow tasks to run**: When prompted, allow the tasks to run on folder open
 
 3. **Tasks will start automatically**:
+   - Install dependencies (`pnpm install`)
    - Git sync (fetch and merge from `origin/preview`)
    - Claude Code terminal (skip permissions)
    - Development server terminal
@@ -50,10 +52,11 @@ Run the included startup script:
 ```
 
 This will:
-1. Fetch all remote branches
-2. Attempt to merge `origin/preview` (with interactive prompts for uncommitted changes)
-3. Start Claude Code with skip permissions
-4. Start the development server
+1. Install dependencies (`pnpm install`)
+2. Fetch all remote branches
+3. Attempt to merge `origin/preview` (with interactive prompts for uncommitted changes)
+4. Start Claude Code with skip permissions
+5. Start the development server
 
 The script has safety features:
 - Prompts before stashing uncommitted changes
@@ -64,6 +67,7 @@ The script has safety features:
 
 Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux) and run:
 
+- `Tasks: Run Task` → `Install Dependencies`
 - `Tasks: Run Task` → `Git Sync: Fetch and Merge Preview`
 - `Tasks: Run Task` → `Start Claude (Skip Permissions)`
 - `Tasks: Run Task` → `Start Development Server`
@@ -75,7 +79,7 @@ Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux) and run:
 The workspace is configured to:
 - Open terminals in the editor area (not bottom panel)
 - Display tabs on the right side
-- Keep terminals grouped by task (`git`, `claude`, and `dev` groups)
+- Keep terminals grouped by task (`setup`, `git`, `claude`, and `dev` groups)
 
 ## Settings Overview
 
@@ -86,30 +90,37 @@ The workspace is configured to:
 - Terminal: Editor location, tabs on right
 
 ### Tasks (`tasks.json`)
-1. **Git Sync: Fetch and Merge Preview**
+1. **Install Dependencies**
+   - Command: `pnpm install`
+   - Auto-runs on folder open (runs FIRST, before all other tasks)
+   - Shared panel in `setup` group
+   - Ensures dependencies are up-to-date
+
+2. **Git Sync: Fetch and Merge Preview**
    - Command: `git fetch --all && git merge origin/preview --no-edit`
-   - Auto-runs on folder open (runs FIRST, before other tasks)
+   - Auto-runs on folder open (after dependency install)
    - Shared panel in `git` group
    - Handles merge conflicts gracefully
+   - Depends on Install Dependencies task
 
-2. **Start Claude (Skip Permissions)**
+3. **Start Claude (Skip Permissions)**
    - Command: `claude --dangerously-skip-permissions`
    - Auto-runs on folder open (after git sync)
    - Dedicated panel in `claude` group
    - Depends on Git Sync task
 
-3. **Start Development Server**
+4. **Start Development Server**
    - Command: `pnpm dev`
    - Auto-runs on folder open (after git sync)
    - Dedicated panel in `dev` group
    - Depends on Git Sync task
 
-4. **Manual: Git Status**
+5. **Manual: Git Status**
    - Command: `git status && git log -3 --oneline`
    - Manual execution only
    - Shows current status and recent commits
 
-5. **Manual: Stop All Services**
+6. **Manual: Stop All Services**
    - Command: `lsof -ti:3000 | xargs kill -9`
    - Manual execution only
    - Kills all services on port 3000

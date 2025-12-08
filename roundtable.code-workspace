@@ -63,6 +63,24 @@
     "version": "2.0.0",
     "tasks": [
       {
+        "label": "Install Dependencies",
+        "type": "shell",
+        "command": "pnpm install",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared",
+          "showReuseMessage": false,
+          "clear": false,
+          "group": "setup"
+        },
+        "problemMatcher": [],
+        "runOptions": {
+          "runOn": "folderOpen"
+        }
+      },
+      {
         "label": "Git Sync: Fetch and Merge Preview",
         "type": "shell",
         "command": "git fetch --all && git merge origin/preview --no-edit || echo '⚠️  Merge conflict or no changes - please resolve manually'",
@@ -76,6 +94,7 @@
           "group": "git"
         },
         "problemMatcher": [],
+        "dependsOn": ["Install Dependencies"],
         "runOptions": {
           "runOn": "folderOpen"
         }
