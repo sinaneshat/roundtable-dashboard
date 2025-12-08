@@ -8,7 +8,7 @@ import { flushSync } from 'react-dom';
 import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
-import { Shimmer } from '@/components/ai-elements/shimmer';
+import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
@@ -33,29 +33,12 @@ type PreSearchStreamProps = {
   providerTriggered?: boolean;
 };
 
-// Track at TWO levels to prevent duplicate submissions
-const triggeredSearchIds = new Map<string, boolean>();
-const triggeredRounds = new Map<string, Set<number>>();
-
-// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
-export function clearTriggeredPreSearch(searchId: string) {
-  triggeredSearchIds.delete(searchId);
-}
-
-// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
-export function clearTriggeredPreSearchForRound(roundNumber: number) {
-  const keysToDelete: string[] = [];
-  triggeredSearchIds.forEach((_value, key) => {
-    if (key.includes(`-${roundNumber}-`) || key.includes(`round-${roundNumber}`)) {
-      keysToDelete.push(key);
-    }
-  });
-  keysToDelete.forEach(key => triggeredSearchIds.delete(key));
-
-  triggeredRounds.forEach((roundSet) => {
-    roundSet.delete(roundNumber);
-  });
-}
+// ✅ ZUSTAND PATTERN: Pre-search deduplication moved to store
+// - store.triggeredPreSearchRounds: Set<number> - tracks triggered rounds
+// - store.markPreSearchTriggered(roundNumber) - marks round as triggered
+// - store.hasPreSearchBeenTriggered(roundNumber) - checks if triggered
+// - store.clearPreSearchTracking(roundNumber) - clears for retry
+// This eliminates module-level state anti-pattern and memory leaks
 
 function PreSearchStreamComponent({
   threadId,
@@ -82,10 +65,11 @@ function PreSearchStreamComponent({
   // This prevents race conditions where render-time values are stale when effects run
   const store = use(ChatStoreContext);
 
-  // ✅ CRITICAL FIX: Get markPreSearchTriggered to signal to provider
+  // ✅ ZUSTAND PATTERN: Use store for pre-search deduplication tracking
   // When PreSearchStream decides to execute, it MUST mark the store so provider knows
   // Without this, both PreSearchStream and provider can race to execute simultaneously
   const markPreSearchTriggered = useChatStore(s => s.markPreSearchTriggered);
+  const clearPreSearchTracking = useChatStore(s => s.clearPreSearchTracking);
 
   // Local streaming state
   const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
@@ -110,14 +94,13 @@ function PreSearchStreamComponent({
     };
   }, []);
 
-  // Store callbacks in refs for stability and to allow calling after unmount
-  const onStreamCompleteRef = useRef(onStreamComplete);
-  const onStreamStartRef = useRef(onStreamStart);
-
   // ✅ STABLE REFS: Store callback functions in refs to avoid effect re-runs
-  // useBoolean returns new object on each render, so we use refs for callbacks
-  // Defined early to avoid use-before-define in effects
   // Direct assignment on each render keeps refs current without triggering effects
+  // This is the React 19 recommended pattern for callback refs
+  const onStreamCompleteRef = useRef(onStreamComplete);
+  onStreamCompleteRef.current = onStreamComplete;
+  const onStreamStartRef = useRef(onStreamStart);
+  onStreamStartRef.current = onStreamStart;
   const is409ConflictOnFalseRef = useRef(is409Conflict.onFalse);
   is409ConflictOnFalseRef.current = is409Conflict.onFalse;
   const isAutoRetryingOnTrueRef = useRef(isAutoRetrying.onTrue);
@@ -134,7 +117,7 @@ function PreSearchStreamComponent({
   //
   // Instead, we let the fetch complete naturally:
   // - The callback refs (onStreamCompleteRef) allow callbacks to fire even after unmount
-  // - Deduplication (triggeredSearchIds) prevents duplicate fetches
+  // - Store deduplication (triggeredPreSearchRounds) prevents duplicate fetches
   // - The store updates will still happen via the ref callbacks
   useEffect(() => {
     return () => {
@@ -144,13 +127,7 @@ function PreSearchStreamComponent({
     };
   }, []); // Empty deps = only runs on mount/unmount
 
-  useEffect(() => {
-    onStreamCompleteRef.current = onStreamComplete;
-  }, [onStreamComplete]);
-
-  useEffect(() => {
-    onStreamStartRef.current = onStreamStart;
-  }, [onStreamStart]);
+  // ✅ REMOVED: useEffect syncs for callback refs (now using direct assignment above)
 
   // Custom SSE handler for backend's custom event format (POST with fetch)
   // ✅ RESUMABLE STREAMS: Now also triggers for STREAMING status to attempt resumption
@@ -180,30 +157,10 @@ function PreSearchStreamComponent({
       return;
     }
 
-    // ✅ CRITICAL: Check BOTH id-level AND round-level deduplication
-    const idAlreadyTriggered = triggeredSearchIds.has(preSearch.id);
-    const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
-
-    // If EITHER check passes, don't trigger
-    if (idAlreadyTriggered || roundAlreadyTriggered) {
-      return;
-    }
-
-    // Mark as triggered BEFORE starting stream to prevent duplicate submissions
-    triggeredSearchIds.set(preSearch.id, true);
-
-    const roundSet = triggeredRounds.get(threadId);
-    if (roundSet) {
-      roundSet.add(preSearch.roundNumber);
-    } else {
-      triggeredRounds.set(threadId, new Set([preSearch.roundNumber]));
-    }
-
-    // ✅ CRITICAL FIX: Also mark store's triggeredPreSearchRounds
-    // This signals to the provider that PreSearchStream is handling this pre-search
-    // Without this, provider's pendingMessage effect may also try to execute,
-    // causing duplicate fetches and "Malformed JSON in request body" errors
-    // @see ChatStoreProvider pendingMessage effect at lines 1076-1224
+    // ✅ ZUSTAND PATTERN: Mark store BEFORE starting stream to prevent duplicates
+    // This signals to provider that PreSearchStream is handling this pre-search
+    // Without this, provider's pendingMessage effect may also try to execute
+    // @see ChatStoreProvider pendingMessage effect
     markPreSearchTriggered(preSearch.roundNumber);
 
     const abortController = new AbortController();
@@ -485,12 +442,8 @@ function PreSearchStreamComponent({
 
           // Schedule retry after interval
           retryTimeoutRef.current = setTimeout(() => {
-            // Reset deduplication flags to allow retry
-            triggeredSearchIds.delete(preSearch.id);
-            const roundSet = triggeredRounds.get(threadId);
-            if (roundSet) {
-              roundSet.delete(preSearch.roundNumber);
-            }
+            // ✅ ZUSTAND PATTERN: Use store to clear tracking for retry
+            clearPreSearchTracking(preSearch.roundNumber);
 
             // Retry by calling startStream again
             startStream().catch(() => {
@@ -521,7 +474,7 @@ function PreSearchStreamComponent({
     // The effect should only run once per unique search (id + roundNumber)
     // Status changes (pending→streaming→completed) should NOT re-trigger the effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered, clearPreSearchTracking]);
 
   // ✅ POLLING DEDUPLICATION: Prevent multiple concurrent polling loops
   const isPollingRef = useRef(false);
@@ -613,12 +566,8 @@ function PreSearchStreamComponent({
                 timeoutMs: POLLING_TIMEOUT_MS,
               });
 
-              // Clear deduplication to allow fresh POST request
-              triggeredSearchIds.delete(preSearch.id);
-              const threadRounds = triggeredRounds.get(threadId);
-              if (threadRounds) {
-                threadRounds.delete(preSearch.roundNumber);
-              }
+              // ✅ ZUSTAND PATTERN: Use store to clear tracking for fresh POST request
+              clearPreSearchTracking(preSearch.roundNumber);
 
               // Clear conflict state - this will stop this polling effect
               // and the main SSE effect will re-trigger due to status still being STREAMING
@@ -658,35 +607,28 @@ function PreSearchStreamComponent({
       clearTimeout(timeoutId);
       isAutoRetryingOnFalseRef.current(); // Clear auto-retry state on cleanup
     };
-    // ✅ FIX: Only depend on primitives, not object references
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [is409Conflict.value, threadId, preSearch.id]);
+  }, [is409Conflict.value, threadId, preSearch.id, preSearch.roundNumber, clearPreSearchTracking]);
 
   // ✅ REMOVED: Separate STREAMING polling effect is no longer needed
   // The main SSE effect now handles STREAMING status via stream resumption
   // Backend returns resumed stream (200 with X-Resumed-From-Buffer header) or 202 (poll)
   // 202 triggers the 409 conflict polling mechanism above
 
-  // Mark completed/failed pre-searches as triggered to prevent re-triggering on re-renders
-  // ✅ RESUMABLE STREAMS: Do NOT mark STREAMING here - that would prevent useEffect from
-  // triggering the stream resumption. STREAMING is handled by the main effect now.
-  const roundAlreadyMarked = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
+  // ✅ ZUSTAND PATTERN: Mark completed/failed pre-searches to prevent re-triggering
+  // ✅ FIX: Wrap in useEffect to avoid setState during render (React 19 strict mode)
+  // Do NOT mark STREAMING - that would prevent useEffect from triggering resumption
+  useEffect(() => {
+    const currentState = store?.getState();
+    const roundAlreadyMarked = currentState?.hasPreSearchBeenTriggered(preSearch.roundNumber) ?? false;
 
-  if (
-    !triggeredSearchIds.has(preSearch.id)
-    && !roundAlreadyMarked
-    && (preSearch.status === AnalysisStatuses.COMPLETE
-      || preSearch.status === AnalysisStatuses.FAILED)
-  ) {
-    triggeredSearchIds.set(preSearch.id, true);
-
-    const roundSet = triggeredRounds.get(threadId);
-    if (roundSet) {
-      roundSet.add(preSearch.roundNumber);
-    } else {
-      triggeredRounds.set(threadId, new Set([preSearch.roundNumber]));
+    if (
+      !roundAlreadyMarked
+      && (preSearch.status === AnalysisStatuses.COMPLETE
+        || preSearch.status === AnalysisStatuses.FAILED)
+    ) {
+      markPreSearchTriggered(preSearch.roundNumber);
     }
-  }
+  }, [store, preSearch.roundNumber, preSearch.status, markPreSearchTriggered]);
 
   // Show error if present (excluding abort and conflict errors)
   const shouldShowError = error && !is409Conflict.value && !(
@@ -751,7 +693,7 @@ function PreSearchStreamComponent({
   if (isPendingWithNoData || isAutoRetrying.value) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <Shimmer>{isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')}</Shimmer>
+        <TextShimmer>{isAutoRetrying.value ? t('autoRetryingSearch') : t('pendingSearch')}</TextShimmer>
       </div>
     );
   }

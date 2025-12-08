@@ -3,7 +3,7 @@
 import { Download, X } from 'lucide-react';
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -128,9 +128,9 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
 
   useEffect(() => {
     // In debug mode, show the prompt immediately for testing/preview
-    // Use queueMicrotask to avoid synchronous setState in effect (prevents cascading renders)
+    // ✅ REACT 19: startTransition for non-urgent state update
     if (isDebugMode) {
-      queueMicrotask(() => setUpdateAvailable(true));
+      startTransition(() => setUpdateAvailable(true));
       return;
     }
 

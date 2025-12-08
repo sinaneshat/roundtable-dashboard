@@ -66,7 +66,7 @@ export const RadialGlow = ({
         <motion.div
           className="absolute inset-0 rounded-full will-change-transform"
           style={{
-            background: `radial-gradient(circle, rgba(30, 58, 138, 0.20) 0%, rgba(30, 64, 175, 0.14) 25%, rgba(37, 99, 235, 0.09) 50%, transparent 70%)`,
+            background: `radial-gradient(circle, rgba(30, 58, 138, 0.55) 0%, rgba(30, 64, 175, 0.42) 25%, rgba(37, 99, 235, 0.28) 50%, transparent 70%)`,
             filter: 'blur(100px)',
             transform: 'translateZ(0)',
             backfaceVisibility: 'hidden',
@@ -87,7 +87,7 @@ export const RadialGlow = ({
         <motion.div
           className="absolute inset-0 rounded-full will-change-transform"
           style={{
-            background: `radial-gradient(circle, rgba(30, 64, 175, 0.15) 0%, rgba(37, 99, 235, 0.10) 30%, rgba(59, 130, 246, 0.06) 60%, transparent 80%)`,
+            background: `radial-gradient(circle, rgba(30, 64, 175, 0.45) 0%, rgba(37, 99, 235, 0.32) 30%, rgba(59, 130, 246, 0.20) 60%, transparent 80%)`,
             filter: 'blur(140px)',
             transform: 'translateZ(0) scale(1.3)',
             backfaceVisibility: 'hidden',
@@ -108,7 +108,7 @@ export const RadialGlow = ({
         <motion.div
           className="absolute inset-0 rounded-full will-change-transform"
           style={{
-            background: `radial-gradient(circle, rgba(37, 99, 235, 0.12) 0%, rgba(59, 130, 246, 0.08) 40%, rgba(96, 165, 250, 0.04) 70%, transparent 90%)`,
+            background: `radial-gradient(circle, rgba(37, 99, 235, 0.38) 0%, rgba(59, 130, 246, 0.26) 40%, rgba(96, 165, 250, 0.16) 70%, transparent 90%)`,
             filter: 'blur(180px)',
             transform: 'translateZ(0) scale(1.6)',
             backfaceVisibility: 'hidden',

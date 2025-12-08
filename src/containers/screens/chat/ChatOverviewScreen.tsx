@@ -20,13 +20,13 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -38,7 +38,9 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import {
   useBoolean,
   useChatAttachments,
+  useIsMobile,
   useModelLookup,
+  useOrderedModels,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -48,10 +50,7 @@ import {
   useOverviewActions,
   useScreenInitialization,
 } from '@/stores/chat';
-import {
-  useModelPreferencesHydrated,
-  useModelPreferencesStore,
-} from '@/stores/preferences';
+import { useModelPreferencesStore } from '@/stores/preferences';
 
 import { ChatView } from './ChatView';
 
@@ -65,15 +64,34 @@ export default function ChatOverviewScreen() {
   const { defaultModelId } = useModelLookup();
 
   // ============================================================================
-  // PREFERENCES STORE (Cookie-persisted model selection)
+  // PREFERENCES STORE (Cookie-persisted model selection + mode/webSearch)
   // ============================================================================
-  const preferencesHydrated = useModelPreferencesHydrated();
+  // ✅ FIX: Read _hasHydrated directly from store state instead of useModelPreferencesHydrated hook
+  // The hook uses useState(false) + useEffect which creates a timing gap on first render.
+  // Reading from store state ensures we see the true hydration status immediately.
   const {
+    _hasHydrated: preferencesHydrated,
     modelOrder: persistedModelOrder,
+    selectedMode: persistedMode,
+    enableWebSearch: persistedWebSearch,
+    selectedModelIds: persistedModelIds,
     setSelectedModelIds: setPersistedModelIds,
     setModelOrder: setPersistedModelOrder,
-    getInitialModelIds,
-  } = useModelPreferencesStore();
+    setSelectedMode: setPersistedMode,
+    setEnableWebSearch: setPersistedWebSearch,
+    syncWithAccessibleModels,
+  } = useModelPreferencesStore(useShallow(s => ({
+    _hasHydrated: s._hasHydrated,
+    modelOrder: s.modelOrder,
+    selectedMode: s.selectedMode,
+    enableWebSearch: s.enableWebSearch,
+    selectedModelIds: s.selectedModelIds,
+    setSelectedModelIds: s.setSelectedModelIds,
+    setModelOrder: s.setModelOrder,
+    setSelectedMode: s.setSelectedMode,
+    setEnableWebSearch: s.setEnableWebSearch,
+    syncWithAccessibleModels: s.syncWithAccessibleModels,
+  })));
 
   // ============================================================================
   // STORE STATE
@@ -133,11 +151,16 @@ export default function ChatOverviewScreen() {
   // ============================================================================
 
   const hasSentInitialPromptRef = useRef(false);
-  const { setThreadTitle, setThreadActions } = useThreadHeader();
+  const hasInitializedModelsRef = useRef(false);
+  // ✅ ZUSTAND PATTERN: Thread title comes from store - only manage threadActions here
+  const { setThreadActions } = useThreadHeader();
 
   // Modal state
   const modeModal = useBoolean(false);
   const modelModal = useBoolean(false);
+
+  // Responsive breakpoint - use hook pattern instead of CSS for SSR safety
+  const isMobile = useIsMobile();
 
   // Chat attachments
   const chatAttachments = useChatAttachments();
@@ -175,31 +198,50 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  const [modelOrder, setModelOrder] = useChatStore(
-    useShallow(s => [s.modelOrder, s.setModelOrder]),
-  );
+  // ✅ REACT 19: Separate selectors instead of array (avoids new array on every render)
+  const modelOrder = useChatStore(s => s.modelOrder);
+  const setModelOrder = useChatStore(s => s.setModelOrder);
 
   // ============================================================================
-  // INITIAL PARTICIPANTS (centralized in preferences store)
-  // - User's persisted selection takes priority (even if 1-2 models)
-  // - Defaults to first 3 accessible models if no persisted selection
+  // ACCESSIBLE MODELS (computed from enabled models)
+  // ============================================================================
+  const accessibleModelIds = useMemo(() => {
+    if (allEnabledModels.length === 0)
+      return [];
+    return allEnabledModels
+      .filter(m => m.is_accessible_to_user)
+      .map(m => m.id);
+  }, [allEnabledModels]);
+
+  // ============================================================================
+  // INITIAL PARTICIPANTS (pure computation - NO side effects)
+  // - Uses persisted selection if valid models exist
+  // - Otherwise uses first 3 accessible models
+  // - Side effect (persisting defaults) handled in useEffect below
   // ============================================================================
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     // Wait for preferences to hydrate and models to load
-    if (!preferencesHydrated || allEnabledModels.length === 0) {
+    if (!preferencesHydrated || accessibleModelIds.length === 0) {
       return [];
     }
 
-    // Get accessible model IDs (user can use these)
-    const accessibleModelIds = allEnabledModels
-      .filter(m => m.is_accessible_to_user)
-      .map(m => m.id);
+    // PRIORITY 1: Use persisted selection if valid models exist
+    if (persistedModelIds.length > 0) {
+      const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
+      if (validIds.length > 0) {
+        return validIds.map((modelId, index) => ({
+          id: modelId,
+          modelId,
+          role: '',
+          priority: index,
+        }));
+      }
+    }
 
-    // Use centralized store method (handles persisted vs defaults)
-    const modelIds = getInitialModelIds(accessibleModelIds);
-
-    if (modelIds.length > 0) {
-      return modelIds.map((modelId, index) => ({
+    // PRIORITY 2: Use first 3 accessible models as defaults
+    const defaultIds = accessibleModelIds.slice(0, 3);
+    if (defaultIds.length > 0) {
+      return defaultIds.map((modelId, index) => ({
         id: modelId,
         modelId,
         role: '',
@@ -207,7 +249,7 @@ export default function ChatOverviewScreen() {
       }));
     }
 
-    // Fallback to default model if no accessible models
+    // Fallback to default model
     if (defaultModelId) {
       return [{
         id: defaultModelId,
@@ -218,29 +260,13 @@ export default function ChatOverviewScreen() {
     }
 
     return [];
-  }, [preferencesHydrated, allEnabledModels, defaultModelId, getInitialModelIds]);
+  }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
 
-  const orderedModels = useMemo<OrderedModel[]>(() => {
-    if (allEnabledModels.length === 0)
-      return [];
-
-    const participantMap = new Map(selectedParticipants.map(p => [p.modelId, p]));
-    const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
-    const orderedIds = modelOrder.length > 0 ? modelOrder : allEnabledModels.map(m => m.id);
-
-    const result: OrderedModel[] = [];
-    for (const modelId of orderedIds) {
-      const model = modelMap.get(modelId);
-      if (model) {
-        result.push({
-          model,
-          participant: participantMap.get(modelId) ?? null,
-          order: orderedIds.indexOf(modelId),
-        });
-      }
-    }
-    return result;
-  }, [selectedParticipants, allEnabledModels, modelOrder]);
+  const orderedModels = useOrderedModels({
+    selectedParticipants,
+    allEnabledModels,
+    modelOrder,
+  });
 
   // ============================================================================
   // HOOKS
@@ -249,25 +275,129 @@ export default function ChatOverviewScreen() {
   const formActions = useChatFormActions();
   const overviewActions = useOverviewActions();
 
-  // Initialize model order when models first load (use persisted order if available)
+  // ============================================================================
+  // CONSOLIDATED INITIALIZATION EFFECT
+  // React 19: Single effect for all initialization that requires external sync
+  // Combines previously scattered effects into one with proper state tracking
+  // ============================================================================
+
+  // Track what has been initialized to prevent re-running
+  const initStateRef = useRef({
+    persistedDefaults: false,
+    syncedModels: false,
+    modelOrder: false,
+    participants: false,
+    threadActions: false,
+  });
+
   useEffect(() => {
-    if (allEnabledModels.length > 0 && modelOrder.length === 0 && preferencesHydrated) {
-      // Use persisted order if available and valid
+    const init = initStateRef.current;
+
+    // INIT 1: Persist defaults when no saved selection
+    if (
+      !init.persistedDefaults
+      && preferencesHydrated
+      && accessibleModelIds.length > 0
+      && persistedModelIds.length === 0
+    ) {
+      init.persistedDefaults = true;
+      const defaultIds = accessibleModelIds.slice(0, 3);
+      if (defaultIds.length > 0) {
+        setPersistedModelIds(defaultIds);
+      }
+    }
+
+    // INIT 2: Sync models with accessible list (one-time when models load)
+    if (
+      !init.syncedModels
+      && preferencesHydrated
+      && accessibleModelIds.length > 0
+    ) {
+      init.syncedModels = true;
+      syncWithAccessibleModels(accessibleModelIds);
+    }
+
+    // INIT 3: Model order initialization
+    if (
+      !init.modelOrder
+      && allEnabledModels.length > 0
+      && modelOrder.length === 0
+      && preferencesHydrated
+    ) {
+      init.modelOrder = true;
+      let fullOrder: string[];
       if (persistedModelOrder.length > 0) {
-        // Validate that all persisted IDs exist in available models
         const availableIds = new Set(allEnabledModels.map(m => m.id));
         const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
-        // Add any new models not in persisted order
         const newModelIds = allEnabledModels
           .filter(m => !validPersistedOrder.includes(m.id))
           .map(m => m.id);
-        const fullOrder = [...validPersistedOrder, ...newModelIds];
-        setModelOrder(fullOrder);
+        fullOrder = [...validPersistedOrder, ...newModelIds];
       } else {
-        setModelOrder(allEnabledModels.map(m => m.id));
+        fullOrder = allEnabledModels.map(m => m.id);
       }
+      setModelOrder(fullOrder);
     }
-  }, [allEnabledModels, modelOrder.length, setModelOrder, preferencesHydrated, persistedModelOrder]);
+
+    // INIT 4: Initialize participants when models available
+    if (
+      !init.participants
+      && selectedParticipants.length === 0
+      && defaultModelId
+      && initialParticipants.length > 0
+    ) {
+      init.participants = true;
+      setSelectedParticipants(initialParticipants);
+      if (!selectedMode) {
+        const modeResult = ChatModeSchema.safeParse(persistedMode);
+        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
+      }
+      setEnableWebSearch(persistedWebSearch);
+    }
+
+    // INIT 5: Clear thread actions for overview
+    if (!init.threadActions) {
+      init.threadActions = true;
+      setThreadActions(null);
+    }
+  }, [
+    preferencesHydrated,
+    accessibleModelIds,
+    persistedModelIds.length,
+    setPersistedModelIds,
+    syncWithAccessibleModels,
+    allEnabledModels,
+    modelOrder.length,
+    persistedModelOrder,
+    setModelOrder,
+    selectedParticipants.length,
+    defaultModelId,
+    initialParticipants,
+    setSelectedParticipants,
+    selectedMode,
+    persistedMode,
+    setSelectedMode,
+    persistedWebSearch,
+    setEnableWebSearch,
+    setThreadActions,
+  ]);
+
+  // ============================================================================
+  // THREAD ACTIONS SYNC (for header when thread is active on overview)
+  // ============================================================================
+  // When a thread is created from overview, set thread actions for the header
+  // This mirrors what ChatThreadScreen does via useThreadHeaderUpdater
+  // ✅ REACT 19: Effect is valid - syncing with context (external to this component)
+  const threadActions = useMemo(
+    () => currentThread && !showInitialUI
+      ? <ChatThreadActions thread={currentThread} slug={currentThread.slug} />
+      : null,
+    [currentThread, showInitialUI],
+  );
+
+  useEffect(() => {
+    setThreadActions(threadActions);
+  }, [threadActions, setThreadActions]);
 
   // Screen initialization for orchestrator
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
@@ -301,18 +431,8 @@ export default function ChatOverviewScreen() {
   const isSubmitBlocked = isStreaming || isCreatingAnalysis || Boolean(pendingMessage);
 
   // ============================================================================
-  // EFFECTS
+  // LAYOUT EFFECTS (external system sync only - DOM, scroll, navigation)
   // ============================================================================
-
-  // Thread header management
-  useEffect(() => {
-    if (currentThread?.isAiGeneratedTitle && currentThread?.title) {
-      setThreadTitle(currentThread.title);
-    } else {
-      setThreadTitle(null);
-    }
-    setThreadActions(null);
-  }, [currentThread?.isAiGeneratedTitle, currentThread?.title, setThreadTitle, setThreadActions]);
 
   // ✅ SIMPLIFIED: Reset on navigation to /chat
   // Single ref tracks last reset pathname to prevent duplicate resets
@@ -324,47 +444,29 @@ export default function ChatOverviewScreen() {
       lastResetPathRef.current = '/chat';
       resetToOverview();
       hasSentInitialPromptRef.current = false;
+      hasInitializedModelsRef.current = false; // Reset so we can re-initialize
       chatAttachments.clearAttachments();
 
       if (defaultModelId && initialParticipants.length > 0) {
-        setSelectedMode(getDefaultChatMode());
+        // Use persisted mode if valid, otherwise default
+        const modeResult = ChatModeSchema.safeParse(persistedMode);
+        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
         setSelectedParticipants(initialParticipants);
+        // Use persisted webSearch preference
+        setEnableWebSearch(persistedWebSearch);
+        hasInitializedModelsRef.current = true; // Mark as initialized
       }
     } else {
       lastResetPathRef.current = pathname;
     }
-  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments]);
-
-  // Initialize defaults when defaultModelId becomes available
-  useEffect(() => {
-    if (
-      selectedParticipants.length === 0
-      && defaultModelId
-      && initialParticipants.length > 0
-    ) {
-      setSelectedParticipants(initialParticipants);
-      if (!selectedMode) {
-        setSelectedMode(getDefaultChatMode());
-      }
-    }
-  }, [defaultModelId, initialParticipants, selectedParticipants.length, selectedMode, setSelectedParticipants, setSelectedMode]);
+  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments, persistedMode, persistedWebSearch, setEnableWebSearch]);
 
   // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
   // Per AI SDK docs, resume: true is incompatible with abort/stop.
   // Streams continue in background via waitUntil() and can be resumed.
 
-  // Prevent scrolling on initial UI
-  useLayoutEffect(() => {
-    if (showInitialUI) {
-      document.documentElement.classList.add('overflow-hidden');
-    } else {
-      document.documentElement.classList.remove('overflow-hidden');
-    }
-
-    return () => {
-      document.documentElement.classList.remove('overflow-hidden');
-    };
-  }, [showInitialUI]);
+  // ✅ MOBILE FIX: Removed overflow-hidden to allow scrolling on small screens
+  // Previously prevented scrolling which caused content to be cut off on small mobile devices
 
   // ============================================================================
   // CALLBACKS
@@ -448,7 +550,6 @@ export default function ChatOverviewScreen() {
       return;
 
     if (orderedModel.participant) {
-      // Allow deselecting all - validation shown in UI
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
@@ -481,7 +582,8 @@ export default function ChatOverviewScreen() {
     }
   }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder, setPersistedModelIds]);
 
-  const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
+  // ✅ REACT 19: Consolidated role handlers (DRY pattern)
+  const updateParticipantRole = useCallback((modelId: string, role: string, customRoleId?: string) => {
     setSelectedParticipants(
       selectedParticipants.map(p =>
         p.modelId === modelId ? { ...p, role, customRoleId } : p,
@@ -489,13 +591,11 @@ export default function ChatOverviewScreen() {
     );
   }, [selectedParticipants, setSelectedParticipants]);
 
-  const handleClearRole = useCallback((modelId: string) => {
-    setSelectedParticipants(
-      selectedParticipants.map(p =>
-        p.modelId === modelId ? { ...p, role: '', customRoleId: undefined } : p,
-      ),
-    );
-  }, [selectedParticipants, setSelectedParticipants]);
+  const handleRoleChange = updateParticipantRole;
+  const handleClearRole = useCallback(
+    (modelId: string) => updateParticipantRole(modelId, '', undefined),
+    [updateParticipantRole],
+  );
 
   const handleReorderModels = useCallback((newOrder: typeof orderedModels) => {
     const newModelOrder = newOrder.map(om => om.model.id);
@@ -513,6 +613,75 @@ export default function ChatOverviewScreen() {
     setPersistedModelOrder(newModelOrder);
     setPersistedModelIds(reorderedParticipants.map(p => p.modelId));
   }, [setSelectedParticipants, setModelOrder, setPersistedModelOrder, setPersistedModelIds]);
+
+  // Web search toggle with persistence
+  const handleWebSearchToggle = useCallback((enabled: boolean) => {
+    setEnableWebSearch(enabled);
+    setPersistedWebSearch(enabled); // Persist to cookie
+  }, [setEnableWebSearch, setPersistedWebSearch]);
+
+  // ============================================================================
+  // MEMOIZED CHAT INPUT PROPS (DRY - shared between desktop and mobile)
+  // ============================================================================
+
+  // ✅ REACT 19: Memoize toolbar to prevent recreation on every render
+  const chatInputToolbar = useMemo(() => (
+    <ChatInputToolbarMenu
+      selectedParticipants={selectedParticipants}
+      allModels={allEnabledModels}
+      onOpenModelModal={() => modelModal.onTrue()}
+      selectedMode={selectedMode || getDefaultChatMode()}
+      onOpenModeModal={() => modeModal.onTrue()}
+      enableWebSearch={enableWebSearch}
+      onWebSearchToggle={handleWebSearchToggle}
+      onAttachmentClick={handleAttachmentClick}
+      attachmentCount={chatAttachments.attachments.length}
+      enableAttachments={!isInitialUIInputBlocked}
+      disabled={isInitialUIInputBlocked}
+    />
+  ), [
+    selectedParticipants,
+    allEnabledModels,
+    modelModal,
+    selectedMode,
+    modeModal,
+    enableWebSearch,
+    handleWebSearchToggle,
+    handleAttachmentClick,
+    chatAttachments.attachments.length,
+    isInitialUIInputBlocked,
+  ]);
+
+  // ✅ REACT 19: Shared ChatInput props (DRY - prevents duplicate prop lists)
+  const sharedChatInputProps = useMemo(() => ({
+    value: inputValue,
+    onChange: setInputValue,
+    onSubmit: handlePromptSubmit,
+    status: isInitialUIInputBlocked ? 'submitted' as const : 'ready' as const,
+    placeholder: t('chat.input.placeholder'),
+    participants: selectedParticipants,
+    quotaCheckType: 'threads' as const,
+    onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
+    attachments: chatAttachments.attachments,
+    onAddAttachments: chatAttachments.addFiles,
+    onRemoveAttachment: chatAttachments.removeAttachment,
+    enableAttachments: !isInitialUIInputBlocked,
+    attachmentClickRef,
+    toolbar: chatInputToolbar,
+  }), [
+    inputValue,
+    setInputValue,
+    handlePromptSubmit,
+    isInitialUIInputBlocked,
+    t,
+    selectedParticipants,
+    removeParticipant,
+    chatAttachments.attachments,
+    chatAttachments.addFiles,
+    chatAttachments.removeAttachment,
+    attachmentClickRef,
+    chatInputToolbar,
+  ]);
 
   // ============================================================================
   // RENDER
@@ -559,110 +728,101 @@ export default function ChatOverviewScreen() {
 
           {/* Initial UI - logo, tagline, suggestions */}
           {showInitialUI && (
-            <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
-              <motion.div
-                key="initial-ui"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-                className="w-full"
-              >
-                <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+            <>
+              {/* Scrollable content area */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
                   <motion.div
-                    className="relative h-20 w-20 sm:h-24 sm:w-24"
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                    transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                    key="initial-ui"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="w-full"
                   >
-                    <Image
-                      src={BRAND.logos.main}
-                      alt={BRAND.name}
-                      className="w-full h-full object-contain"
-                      width={96}
-                      height={96}
-                      priority
-                    />
-                  </motion.div>
+                    <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
+                      <motion.div
+                        className="relative h-20 w-20 sm:h-24 sm:w-24"
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.5, opacity: 0, y: -50 }}
+                        transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                      >
+                        <Image
+                          src={BRAND.logos.main}
+                          alt={BRAND.name}
+                          className="w-full h-full object-contain"
+                          width={96}
+                          height={96}
+                          priority
+                        />
+                      </motion.div>
 
-                  <div className="flex flex-col items-center gap-1.5">
-                    <motion.h1
-                      className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -30 }}
-                      transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
-                    >
-                      {BRAND.name}
-                    </motion.h1>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <motion.h1
+                          className="text-3xl sm:text-4xl font-semibold text-white px-4 leading-tight"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -30 }}
+                          transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
+                        >
+                          {BRAND.name}
+                        </motion.h1>
 
-                    <motion.p
-                      className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -30 }}
-                      transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
-                    >
-                      {BRAND.tagline}
-                    </motion.p>
-                  </div>
+                        <motion.p
+                          className="text-sm sm:text-base text-gray-300 max-w-2xl px-4 leading-relaxed"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -30 }}
+                          transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
+                        >
+                          {BRAND.tagline}
+                        </motion.p>
+                      </div>
 
-                  <motion.div
-                    className="w-full mt-6 sm:mt-8"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
-                  >
-                    <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
+                      <motion.div
+                        className="w-full mt-6 sm:mt-8"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
+                      >
+                        <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
+                      </motion.div>
+
+                      {/* Desktop: Chat input inline under suggestions */}
+                      {!isMobile && (
+                        <motion.div
+                          className="w-full mt-6"
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+                        >
+                          <ChatInput {...sharedChatInputProps} />
+                        </motion.div>
+                      )}
+                    </div>
                   </motion.div>
                 </div>
-              </motion.div>
+              </div>
 
-              {/* Initial UI input */}
-              <motion.div
-                className="w-full mt-6 sm:mt-8 pb-4"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
-              >
-                {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
-                    Per AI SDK docs, resume: true is incompatible with abort/stop.
-                    Streams continue in background via waitUntil() and can be resumed. */}
-                <ChatInput
-                  value={inputValue}
-                  onChange={setInputValue}
-                  onSubmit={handlePromptSubmit}
-                  status={isInitialUIInputBlocked ? 'submitted' : 'ready'}
-                  placeholder={t('chat.input.placeholder')}
-                  participants={selectedParticipants}
-                  quotaCheckType="threads"
-                  onRemoveParticipant={isInitialUIInputBlocked ? undefined : removeParticipant}
-                  attachments={chatAttachments.attachments}
-                  onAddAttachments={chatAttachments.addFiles}
-                  onRemoveAttachment={chatAttachments.removeAttachment}
-                  enableAttachments={!isInitialUIInputBlocked}
-                  attachmentClickRef={attachmentClickRef}
-                  toolbar={(
-                    <ChatInputToolbarMenu
-                      selectedParticipants={selectedParticipants}
-                      allModels={allEnabledModels}
-                      onOpenModelModal={() => modelModal.onTrue()}
-                      selectedMode={selectedMode || getDefaultChatMode()}
-                      onOpenModeModal={() => modeModal.onTrue()}
-                      enableWebSearch={enableWebSearch}
-                      onWebSearchToggle={setEnableWebSearch}
-                      onAttachmentClick={handleAttachmentClick}
-                      attachmentCount={chatAttachments.attachments.length}
-                      enableAttachments={!isInitialUIInputBlocked}
-                      disabled={isInitialUIInputBlocked}
-                    />
-                  )}
-                />
-              </motion.div>
-            </div>
+              {/* Mobile: Sticky input at bottom */}
+              {isMobile && (
+                <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-4">
+                  <div className="container max-w-3xl mx-auto px-2 sm:px-4 pb-4">
+                    <motion.div
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+                    >
+                      <ChatInput {...sharedChatInputProps} />
+                    </motion.div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Chat UI - unified with thread screen via ChatView */}
@@ -696,6 +856,7 @@ export default function ChatOverviewScreen() {
         selectedMode={selectedMode || getDefaultChatMode()}
         onModeSelect={(mode) => {
           setSelectedMode(mode);
+          setPersistedMode(mode); // Persist to cookie
           modeModal.onFalse();
         }}
       />

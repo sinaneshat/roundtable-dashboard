@@ -335,8 +335,8 @@
       "model": "model",
       "upgradeToUnlock": "Upgrade to unlock these models",
       "minimumRequired": {
-        "title": "Minimum Models Required",
-        "description": "At least {count} models must be selected"
+        "title": "Model Required",
+        "description": "Select at least {count} model to continue"
       },
       "yourModels": "Your Models",
       "availableModels": "Available Models",
@@ -412,7 +412,17 @@
     },
     "toolbar": {
       "options": "Options",
-      "selected": "selected"
+      "selected": "selected",
+      "tooltips": {
+        "models": "Select AI models",
+        "mode": "Set conversation mode",
+        "attach": "Attach files",
+        "attachDisabled": "Attachments unavailable",
+        "webSearch": "Enable web search",
+        "webSearchEnabled": "Web search enabled",
+        "microphone": "Voice input",
+        "stopRecording": "Stop recording"
+      }
     },
     "preSearch": {
       "title": "Web Research",
@@ -737,7 +747,9 @@
       "dropFilesHere": "Drop files here",
       "uploadFilesDescription": "Upload files to include in your message",
       "removeAttachment": "Remove attachment",
-      "attachmentUploadFailed": "Upload failed"
+      "attachmentUploadFailed": "Upload failed",
+      "noModelsSelected": "Select at least 1 model to send a message",
+      "messageTooLong": "Message too long. Please shorten to send."
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {
@@ -802,44 +814,21 @@
     "shareConversation": "Share Conversation",
     "shareThread": "Share Thread",
     "shareThreadDescription": "Share this link with anyone to give them access to this thread",
+    "shareDialog": {
+      "publicStatus": "Public",
+      "shareOn": "Share on",
+      "privateWarningTitle": "This will revoke public access",
+      "privateWarningDescription": "Anyone with the existing link will no longer be able to view this thread.",
+      "previewLabel": "Preview",
+      "copyLinkLabel": "Share Link",
+      "shareOnSocialLabel": "Share on Social",
+      "embedOptionsLabel": "Embed Options",
+      "embedOptionsDescription": "HTML and Markdown snippets"
+    },
     "streaming": {
       "remaining": "remaining",
       "responding": "responding",
-      "waiting": "waiting",
-      "thinkingMessages": [
-        "Consulting the neural pathways...",
-        "Pondering the possibilities...",
-        "Weighing all the options...",
-        "Gathering thoughts from the void...",
-        "Channeling digital wisdom...",
-        "Computing clever responses...",
-        "Brewing a fresh batch of words...",
-        "Summoning silicon insights...",
-        "Calibrating wit and wisdom...",
-        "Synthesizing brilliant ideas...",
-        "Excavating knowledge gems...",
-        "Distilling pure intelligence...",
-        "Weaving words with care...",
-        "Crafting the perfect response...",
-        "Thinking deeply about this...",
-        "Consulting the hivemind...",
-        "Tuning the language model...",
-        "Loading profound insights...",
-        "Generating thoughtful prose...",
-        "Awakening dormant neurons..."
-      ],
-      "analyzingMessages": [
-        "Analyzing diverse perspectives...",
-        "Synthesizing collective insights...",
-        "Evaluating response quality...",
-        "Comparing different viewpoints...",
-        "Identifying key themes...",
-        "Measuring agreement levels...",
-        "Extracting valuable patterns...",
-        "Assessing response coherence...",
-        "Highlighting unique contributions...",
-        "Preparing comprehensive analysis..."
-      ]
+      "waiting": "waiting"
     },
     "chainOfThought": {
       "viewReasoning": "View reasoning process",
@@ -865,11 +854,11 @@
       "defaultName": "You"
     },
     "participant": {
-      "waiting": "Waiting for response...",
-      "waitingNamed": "Waiting for {name}'s response...",
-      "generating": "Generating response from {model}...",
-      "gatheringThoughts": "Gathering thoughts...",
-      "waitingForWebResults": "Waiting for results from the web..."
+      "waiting": "Thinking...",
+      "waitingNamed": "Thinking...",
+      "generating": "Thinking...",
+      "gatheringThoughts": "Thinking...",
+      "waitingForWebResults": "Searching..."
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -888,6 +877,13 @@
     "feedback": {
       "like": "This round was helpful",
       "dislike": "This round was not helpful"
+    },
+    "roundActions": {
+      "copyRound": "Copy round",
+      "copySuccess": "Round copied",
+      "copySuccessDescription": "Round copied to clipboard as markdown",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy round to clipboard"
     },
     "quota": {
       "messageQuotaExceeded": "Message Quota Reached",
@@ -1130,23 +1126,6 @@
       "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists.",
       "emptyResponseError": "Analysis generation failed. The AI model did not return a response. Please try again."
     },
-    "thinkingMessages": [
-      "Evaluating participant insights...",
-      "Comparing response quality...",
-      "Assessing analytical depth...",
-      "Measuring creativity levels...",
-      "Ranking contributions...",
-      "Identifying key strengths...",
-      "Spotting areas for growth...",
-      "Synthesizing feedback...",
-      "Calculating performance scores...",
-      "Weighing evidence and reasoning...",
-      "Examining clarity and structure...",
-      "Judging overall impact...",
-      "Building comprehensive analysis...",
-      "Crafting detailed insights...",
-      "Preparing final verdict..."
-    ],
     "mode": {
       "analyzing": "Analyzing",
       "brainstorming": "Brainstorming",

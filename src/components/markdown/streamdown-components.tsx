@@ -2,15 +2,26 @@
  * Streamdown Components Configuration
  *
  * Custom React components for Streamdown markdown rendering.
- * Aligned with shadcn/ui design system and optimized for AI streaming content.
- * Fixes spacing/height issues with proper margins and typography.
+ * Typography matches AI SDK AI Elements Response component exactly:
+ * - text-base (16px) body text
+ * - leading-7 (28px / 1.75 line-height)
+ * - Proper semantic heading hierarchy
+ * - Generous spacing between elements
  *
- * @see https://streamdown.ai/docs/styling
+ * Features:
+ * - Shiki syntax highlighting for code blocks
+ * - Copy-to-clipboard buttons on code blocks
+ * - Proper dark/light theme support
+ * - Clean table styling with borders
+ *
+ * @see https://ai-sdk.dev/elements/overview
+ * @see https://www.aisdkagents.com/docs/ai/ai-elements
  */
 
 import { ExternalLink } from 'lucide-react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
+import { MarkdownCode, MarkdownPre } from '@/components/markdown/markdown-code-block';
 import { cn } from '@/lib/ui/cn';
 
 type BaseProps = {
@@ -19,15 +30,22 @@ type BaseProps = {
 };
 
 type LinkProps = BaseProps & ComponentPropsWithoutRef<'a'>;
-type CodeProps = BaseProps & { inline?: boolean };
 
 /**
- * Streamdown component overrides for consistent shadcn styling
+ * AI Elements-aligned Streamdown component overrides
+ *
+ * Typography specs (matching AI SDK AI Elements):
+ * - Body: text-base (16px), leading-7 (28px line-height = 1.75)
+ * - H1: text-2xl (24px), font-semibold, tracking-tight
+ * - H2: text-xl (20px), font-semibold
+ * - H3: text-lg (18px), font-semibold
+ * - H4: text-base (16px), font-semibold
+ * - Code: text-sm (14px), font-mono
  */
 export const streamdownComponents = {
-  // Paragraphs - tight spacing for streaming content
+  // Paragraphs - AI Elements: text-base leading-7 mb-4
   p: ({ children, className }: BaseProps) => (
-    <p className={cn('text-sm leading-relaxed mb-3 last:mb-0', className)}>
+    <p className={cn('text-base leading-7 mb-4 last:mb-0', className)}>
       {children}
     </p>
   ),
@@ -40,110 +58,94 @@ export const streamdownComponents = {
       rel="noopener noreferrer"
       className={cn(
         'text-primary hover:text-primary/80',
-        'underline decoration-primary/30 underline-offset-2',
-        'transition-colors inline-flex items-center gap-0.5',
+        'underline decoration-primary/40 underline-offset-4',
+        'transition-colors inline-flex items-center gap-1',
         className,
       )}
       {...props}
     >
       {children}
-      <ExternalLink className="size-3 opacity-50 shrink-0" />
+      <ExternalLink className="size-3.5 opacity-60 shrink-0" />
     </a>
   ),
 
-  // Unordered lists - proper nesting and spacing
+  // Unordered lists - AI Elements: proper nesting, mb-4
   ul: ({ children, className }: BaseProps) => (
-    <ul className={cn('list-disc pl-5 my-2 space-y-1 [&_ul]:mt-1 [&_ul]:mb-0', className)}>
+    <ul className={cn('list-disc pl-6 mb-4 last:mb-0 space-y-2 [&_ul]:mt-2 [&_ul]:mb-0', className)}>
       {children}
     </ul>
   ),
 
-  // Ordered lists - proper nesting and spacing
+  // Ordered lists - AI Elements: proper nesting, mb-4
   ol: ({ children, className }: BaseProps) => (
-    <ol className={cn('list-decimal pl-5 my-2 space-y-1 [&_ol]:mt-1 [&_ol]:mb-0', className)}>
+    <ol className={cn('list-decimal pl-6 mb-4 last:mb-0 space-y-2 [&_ol]:mt-2 [&_ol]:mb-0', className)}>
       {children}
     </ol>
   ),
 
-  // List items - consistent typography
+  // List items - AI Elements: text-base leading-7
   li: ({ children, className }: BaseProps) => (
-    <li className={cn('text-sm leading-relaxed text-foreground/90 pl-1', className)}>
+    <li className={cn('text-base leading-7', className)}>
       {children}
     </li>
   ),
 
-  // Headings - semantic sizing with proper margins
+  // Headings - AI Elements semantic sizing with proper margins
+  // H1: text-2xl (24px), font-semibold, tracking-tight
   h1: ({ children, className }: BaseProps) => (
-    <h1 className={cn('text-lg font-semibold mt-4 mb-2 first:mt-0 text-foreground', className)}>
+    <h1 className={cn('text-2xl font-semibold tracking-tight mt-8 mb-4 first:mt-0', className)}>
       {children}
     </h1>
   ),
 
+  // H2: text-xl (20px), font-semibold
   h2: ({ children, className }: BaseProps) => (
-    <h2 className={cn('text-base font-semibold mt-3 mb-2 first:mt-0 text-foreground', className)}>
+    <h2 className={cn('text-xl font-semibold mt-8 mb-4 first:mt-0', className)}>
       {children}
     </h2>
   ),
 
+  // H3: text-lg (18px), font-semibold
   h3: ({ children, className }: BaseProps) => (
-    <h3 className={cn('text-sm font-semibold mt-3 mb-1.5 first:mt-0 text-foreground', className)}>
+    <h3 className={cn('text-lg font-semibold mt-6 mb-3 first:mt-0', className)}>
       {children}
     </h3>
   ),
 
+  // H4: text-base (16px), font-semibold
   h4: ({ children, className }: BaseProps) => (
-    <h4 className={cn('text-sm font-medium mt-2 mb-1 first:mt-0 text-foreground', className)}>
+    <h4 className={cn('text-base font-semibold mt-6 mb-2 first:mt-0', className)}>
       {children}
     </h4>
   ),
 
+  // H5: text-base, font-medium
   h5: ({ children, className }: BaseProps) => (
-    <h5 className={cn('text-xs font-medium mt-2 mb-1 first:mt-0 text-foreground', className)}>
+    <h5 className={cn('text-base font-medium mt-4 mb-2 first:mt-0', className)}>
       {children}
     </h5>
   ),
 
+  // H6: text-sm, font-medium, muted
   h6: ({ children, className }: BaseProps) => (
-    <h6 className={cn('text-xs font-medium mt-2 mb-1 first:mt-0 text-muted-foreground', className)}>
+    <h6 className={cn('text-sm font-medium mt-4 mb-2 first:mt-0 text-muted-foreground', className)}>
       {children}
     </h6>
   ),
 
-  // Code - inline and block variants
-  code: ({ children, inline, className, ...props }: CodeProps) => {
-    if (inline) {
-      return (
-        <code
-          className={cn('bg-muted px-1.5 py-0.5 rounded text-xs font-mono', className)}
-          {...props}
-        >
-          {children}
-        </code>
-      );
-    }
-    return (
-      <code
-        className={cn('block bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto my-2', className)}
-        {...props}
-      >
-        {children}
-      </code>
-    );
-  },
+  // Code - inline and block variants with Shiki syntax highlighting
+  // AI Elements: text-sm for code, with proper backgrounds and copy buttons
+  code: MarkdownCode,
 
-  // Preformatted text / code blocks
-  pre: ({ children, className }: BaseProps) => (
-    <pre className={cn('bg-muted rounded-lg overflow-x-auto my-2 text-xs', className)}>
-      {children}
-    </pre>
-  ),
+  // Preformatted text / code blocks with syntax highlighting
+  pre: MarkdownPre,
 
-  // Blockquotes
+  // Blockquotes - AI Elements: left border, italic, proper spacing
   blockquote: ({ children, className }: BaseProps) => (
     <blockquote
       className={cn(
-        'border-l-2 border-primary/30 pl-3 py-0.5 my-2',
-        'text-sm italic text-foreground/80',
+        'border-l-4 border-border pl-4 py-1 my-4',
+        'text-base leading-7 italic text-muted-foreground',
         className,
       )}
     >
@@ -153,7 +155,7 @@ export const streamdownComponents = {
 
   // Strong/bold
   strong: ({ children, className }: BaseProps) => (
-    <strong className={cn('font-semibold text-foreground', className)}>{children}</strong>
+    <strong className={cn('font-semibold', className)}>{children}</strong>
   ),
 
   // Emphasis/italic
@@ -163,12 +165,12 @@ export const streamdownComponents = {
 
   // Horizontal rule
   hr: ({ className }: { className?: string }) => (
-    <hr className={cn('my-3 border-border', className)} />
+    <hr className={cn('my-6 border-border', className)} />
   ),
 
-  // Tables
+  // Tables - AI Elements: clean, readable tables with borders
   table: ({ children, className }: BaseProps) => (
-    <div className={cn('overflow-x-auto my-3', className)}>
+    <div className={cn('overflow-x-auto my-6 rounded-lg border border-border', className)}>
       <table className="min-w-full border-collapse text-sm">
         {children}
       </table>
@@ -176,25 +178,30 @@ export const streamdownComponents = {
   ),
 
   thead: ({ children, className }: BaseProps) => (
-    <thead className={cn('bg-muted/50', className)}>{children}</thead>
+    <thead className={cn('bg-muted/60', className)}>{children}</thead>
   ),
 
   tbody: ({ children, className }: BaseProps) => (
-    <tbody className={cn('divide-y divide-border', className)}>{children}</tbody>
+    <tbody className={cn('divide-y divide-border bg-background', className)}>{children}</tbody>
   ),
 
   tr: ({ children, className }: BaseProps) => (
-    <tr className={cn('border-b border-border last:border-0', className)}>{children}</tr>
+    <tr className={cn('transition-colors hover:bg-muted/30', className)}>{children}</tr>
   ),
 
   th: ({ children, className }: BaseProps) => (
-    <th className={cn('px-3 py-2 text-left text-xs font-semibold text-foreground', className)}>
+    <th className={cn(
+      'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider',
+      'text-muted-foreground border-b border-border',
+      className,
+    )}
+    >
       {children}
     </th>
   ),
 
   td: ({ children, className }: BaseProps) => (
-    <td className={cn('px-3 py-2 text-sm', className)}>{children}</td>
+    <td className={cn('px-4 py-3 text-sm text-foreground', className)}>{children}</td>
   ),
 
   // Images
@@ -203,7 +210,7 @@ export const streamdownComponents = {
     <img
       src={src}
       alt={alt || ''}
-      className={cn('max-w-full h-auto rounded-lg my-2', className)}
+      className={cn('max-w-full h-auto rounded-lg my-4', className)}
       loading="lazy"
       referrerPolicy="no-referrer"
       {...props}
@@ -213,25 +220,41 @@ export const streamdownComponents = {
 
 /**
  * Compact variant for smaller UI contexts (previews, summaries)
+ * Scales down proportionally from the main components
  */
 export const streamdownCompactComponents = {
   ...streamdownComponents,
   p: ({ children, className }: BaseProps) => (
-    <p className={cn('text-xs leading-relaxed mb-2 last:mb-0', className)}>
+    <p className={cn('text-sm leading-6 mb-3 last:mb-0', className)}>
       {children}
     </p>
   ),
   ul: ({ children, className }: BaseProps) => (
-    <ul className={cn('list-disc pl-4 my-1.5 space-y-0.5 text-xs', className)}>
+    <ul className={cn('list-disc pl-5 mb-3 last:mb-0 space-y-1.5 text-sm', className)}>
       {children}
     </ul>
   ),
   ol: ({ children, className }: BaseProps) => (
-    <ol className={cn('list-decimal pl-4 my-1.5 space-y-0.5 text-xs', className)}>
+    <ol className={cn('list-decimal pl-5 mb-3 last:mb-0 space-y-1.5 text-sm', className)}>
       {children}
     </ol>
   ),
   li: ({ children, className }: BaseProps) => (
-    <li className={cn('text-xs leading-relaxed', className)}>{children}</li>
+    <li className={cn('text-sm leading-6', className)}>{children}</li>
+  ),
+  h1: ({ children, className }: BaseProps) => (
+    <h1 className={cn('text-lg font-semibold mt-4 mb-2 first:mt-0', className)}>
+      {children}
+    </h1>
+  ),
+  h2: ({ children, className }: BaseProps) => (
+    <h2 className={cn('text-base font-semibold mt-4 mb-2 first:mt-0', className)}>
+      {children}
+    </h2>
+  ),
+  h3: ({ children, className }: BaseProps) => (
+    <h3 className={cn('text-sm font-semibold mt-3 mb-1.5 first:mt-0', className)}>
+      {children}
+    </h3>
   ),
 };

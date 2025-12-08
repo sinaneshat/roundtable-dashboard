@@ -21,6 +21,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Recommendation } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useModelsQuery } from '@/hooks/queries/models';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 export type UseRecommendedActionsOptions = {
@@ -109,18 +110,12 @@ export function useRecommendedActions(
       actions.setHasPendingConfigChanges(true);
     }
 
-    // ✅ UI CONCERN: Scroll to input if enabled (thread screen only)
+    // ✅ AUTO-SCROLL DISABLED: No forced scrolling - user controls scroll position
+    // Focus textarea without scrolling (user can use scroll-to-bottom button if needed)
     if (enableScroll && inputContainerRef?.current) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          inputContainerRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-          });
-          // Try to focus the textarea inside
-          const textarea = inputContainerRef.current?.querySelector('textarea');
-          textarea?.focus();
-        });
+      afterPaint(() => {
+        const textarea = inputContainerRef.current?.querySelector('textarea');
+        textarea?.focus({ preventScroll: true });
       });
     }
   }, [

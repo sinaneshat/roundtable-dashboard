@@ -3,13 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 /**
  * Loading State for Chat Thread Page
  *
- * Minimal loading skeleton for message area only.
- * NO input skeleton - avoids duplication with ChatView's real input.
- *
- * Architecture:
- * - Layout Suspense uses ContentLoadingFallback (minimal)
- * - This loading.tsx shows message area skeleton only
- * - ChatView provides the real sticky input when loaded
+ * Shows skeleton for message area and input box.
  *
  * Pattern: Next.js App Router loading.tsx convention
  */
@@ -51,6 +45,25 @@ export default function ChatThreadLoading() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Chat input skeleton - sticky at bottom */}
+      <div className="sticky bottom-4 z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6">
+        <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+          <div className="rounded-2xl border border-white/[0.12] bg-card shadow-lg p-3">
+            {/* Toolbar skeleton */}
+            <div className="flex items-center gap-2 mb-3">
+              <Skeleton className="h-8 w-8 rounded-lg bg-white/10" />
+              <Skeleton className="h-8 w-8 rounded-lg bg-white/10" />
+              <Skeleton className="h-8 w-20 rounded-lg bg-white/10" />
+            </div>
+            {/* Textarea skeleton */}
+            <div className="flex items-end gap-2">
+              <Skeleton className="flex-1 h-[72px] rounded-xl bg-white/5" />
+              <Skeleton className="h-10 w-10 rounded-full bg-white/10" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

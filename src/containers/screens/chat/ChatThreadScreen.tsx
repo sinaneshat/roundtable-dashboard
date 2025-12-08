@@ -45,6 +45,8 @@ type ChatThreadScreenProps = {
 
 /**
  * Memoized thread header updater to prevent infinite render loops
+ * ✅ ZUSTAND PATTERN: Thread title comes from store - only set threadActions here
+ * ✅ REACT 19: Effect is valid - syncing with context (external to this component)
  */
 function useThreadHeaderUpdater({
   thread,
@@ -55,11 +57,9 @@ function useThreadHeaderUpdater({
   slug: string;
   onDeleteClick: () => void;
 }) {
-  const { setThreadActions, setThreadTitle } = useThreadHeader();
-  const threadId = thread.id;
-  const threadTitle = thread.title;
-  const isPublic = thread.isPublic;
+  const { setThreadActions } = useThreadHeader();
 
+  // Memoize to prevent unnecessary context updates
   const threadActions = useMemo(
     () => (
       <ChatThreadActions
@@ -68,14 +68,13 @@ function useThreadHeaderUpdater({
         onDeleteClick={onDeleteClick}
       />
     ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [threadId, threadTitle, isPublic, slug, onDeleteClick],
+    [thread, slug, onDeleteClick],
   );
 
+  // Sync to context - valid effect per React 19 (external system synchronization)
   useEffect(() => {
-    setThreadTitle(threadTitle);
     setThreadActions(threadActions);
-  }, [threadTitle, threadActions, setThreadTitle, setThreadActions]);
+  }, [threadActions, setThreadActions]);
 }
 
 export default function ChatThreadScreen({

@@ -1,17 +1,9 @@
 'use client';
+
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { toastManager } from '@/lib/toast';
 
@@ -22,6 +14,7 @@ type ChatDeleteDialogProps = {
   threadSlug?: string;
   redirectIfCurrent?: boolean;
 };
+
 export function ChatDeleteDialog({
   isOpen,
   onOpenChange,
@@ -33,6 +26,7 @@ export function ChatDeleteDialog({
   const tActions = useTranslations('actions');
   const router = useRouter();
   const deleteThreadMutation = useDeleteThreadMutation();
+
   const handleDelete = () => {
     deleteThreadMutation.mutate({ param: { id: threadId } }, {
       onSuccess: () => {
@@ -56,28 +50,19 @@ export function ChatDeleteDialog({
       },
     });
   };
+
   return (
-    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('deleteThreadConfirmTitle')}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {t('deleteThreadConfirmDescription')}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={deleteThreadMutation.isPending}>
-            {tActions('cancel')}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleDelete}
-            disabled={deleteThreadMutation.isPending}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            {deleteThreadMutation.isPending ? tActions('deleting') : tActions('delete')}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmationDialog
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      title={t('deleteThreadConfirmTitle')}
+      description={t('deleteThreadConfirmDescription')}
+      confirmText={tActions('delete')}
+      confirmingText={tActions('deleting')}
+      cancelText={tActions('cancel')}
+      isLoading={deleteThreadMutation.isPending}
+      variant="destructive"
+      onConfirm={handleDelete}
+    />
   );
 }

@@ -86,6 +86,18 @@ export function ModelItem({
           <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             <span className="text-sm font-semibold truncate min-w-0">{model.name}</span>
 
+            {/* Tier/Limit badges - show immediately after name */}
+            {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
+              <Badge variant="secondary" className="text-[10px] px-2 py-0.5 h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
+                {model.required_tier_name || model.required_tier}
+              </Badge>
+            )}
+            {isDisabledDueToLimit && !isDisabledDueToTier && (
+              <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-warning/50 text-warning shrink-0">
+                {tModels('limitReached')}
+              </Badge>
+            )}
+
             {/* Role badges or Add Role button - always rendered to prevent layout shift */}
             {!isDisabledDueToTier && (
               <div
@@ -138,17 +150,6 @@ export function ModelItem({
                       </button>
                     )}
               </div>
-            )}
-
-            {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
-              <Badge variant="secondary" className="text-[10px] px-2 py-0.5 h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
-                {model.required_tier_name || model.required_tier}
-              </Badge>
-            )}
-            {isDisabledDueToLimit && !isDisabledDueToTier && (
-              <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-warning/50 text-warning shrink-0">
-                {tModels('limitReached')}
-              </Badge>
             )}
           </div>
           <div className="text-xs text-muted-foreground truncate w-full min-w-0">

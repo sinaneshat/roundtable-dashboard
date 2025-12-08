@@ -8,7 +8,7 @@ import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Shimmer } from '@/components/ai-elements/shimmer';
+import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
@@ -75,19 +75,33 @@ export const ModelMessageCard = memo(({
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(status);
 
-  // ✅ FIX: Use useLayoutEffect for synchronous animation registration
-  // This ensures animations are registered BEFORE any callbacks fire
-  // useLayoutEffect runs synchronously after DOM mutations, before browser paint
+  // ✅ CONSOLIDATED: Animation lifecycle - registration and completion
+  // Handles: register when streaming starts, complete when streaming ends
   useLayoutEffect(() => {
+    const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
+    const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
+
+    // Register animation when streaming starts
     if (isStreaming && !hasRegisteredRef.current && participantIndex >= 0) {
       registerAnimation(participantIndex);
       hasRegisteredRef.current = true;
     }
-  }, [isStreaming, participantIndex, registerAnimation]);
 
-  // ✅ CRITICAL: Cleanup animation on unmount
-  // If component unmounts while animation is registered (e.g., navigation during streaming),
-  // complete the animation to prevent orphaned entries blocking handleComplete
+    // Complete animation when streaming ends (use RAF for deterministic timing)
+    if (wasStreaming && nowComplete && hasRegisteredRef.current && participantIndex >= 0) {
+      const rafId = requestAnimationFrame(() => {
+        completeAnimation(participantIndex);
+        hasRegisteredRef.current = false;
+      });
+      prevStatusRef.current = status;
+      return () => cancelAnimationFrame(rafId);
+    }
+
+    prevStatusRef.current = status;
+    return undefined;
+  }, [status, isStreaming, participantIndex, registerAnimation, completeAnimation]);
+
+  // ✅ CLEANUP: Complete animation on unmount (prevents orphaned entries)
   useLayoutEffect(() => {
     const index = participantIndex;
     return () => {
@@ -97,28 +111,6 @@ export const ModelMessageCard = memo(({
       }
     };
   }, [participantIndex, completeAnimation]);
-
-  // ✅ FIX: Use requestAnimationFrame instead of setTimeout for deterministic timing
-  // RAF aligns with browser paint cycle, more reliable than arbitrary 16ms delay
-  useLayoutEffect(() => {
-    const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
-    const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
-
-    if (wasStreaming && nowComplete && hasRegisteredRef.current && participantIndex >= 0) {
-      // Use RAF to complete animation on next frame
-      // This is more deterministic than setTimeout and aligns with browser rendering
-      const rafId = requestAnimationFrame(() => {
-        completeAnimation(participantIndex);
-        hasRegisteredRef.current = false;
-      });
-
-      prevStatusRef.current = status;
-      return () => cancelAnimationFrame(rafId);
-    }
-
-    prevStatusRef.current = status;
-    return undefined;
-  }, [status, participantIndex, completeAnimation]);
 
   // ✅ STRICT TYPING: Only assistant messages have error fields
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
@@ -180,7 +172,7 @@ export const ModelMessageCard = memo(({
                       }}
                       className="py-2 text-muted-foreground text-base"
                     >
-                      <Shimmer>{loadingText ?? t('generating', { model: modelName })}</Shimmer>
+                      <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
                     </motion.div>
                   )
                 : parts.length > 0
@@ -219,7 +211,7 @@ export const ModelMessageCard = memo(({
                                       text={part.text}
                                       citations={resolvedCitations}
                                       isStreaming={isStreaming}
-                                      className="text-foreground text-base leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                      className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                     />
                                     {isStreaming && isLastTextPart && <StreamingCursor />}
                                   </div>
@@ -229,7 +221,7 @@ export const ModelMessageCard = memo(({
                               return (
                                 <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
                                   <Streamdown
-                                    className="text-foreground text-base leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                    className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                     components={streamdownComponents}
                                   >
                                     {part.text}

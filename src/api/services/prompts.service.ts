@@ -35,6 +35,105 @@ import type { AttachmentCitationInfo } from '@/api/types/citations';
 export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5 words max) for this conversation. Output only the title, no quotes or extra text.';
 
 // ============================================================================
+// Image Analysis Prompts - Single Source of Truth
+// ============================================================================
+
+/**
+ * Image analysis prompt for search context extraction
+ * ✅ SINGLE SOURCE: Used by pre-search.handler.ts for analyzing images before web search
+ *
+ * Purpose: Describe image contents to generate relevant search queries
+ *
+ * Used by:
+ * - /src/api/routes/chat/handlers/pre-search.handler.ts - analyzeImagesForSearchContext()
+ */
+export const IMAGE_ANALYSIS_FOR_SEARCH_PROMPT = `Analyze the following image(s) and describe what you see in detail. Focus on:
+1. Main subjects, objects, or people visible
+2. Any text, labels, logos, or identifiable content
+3. Context clues about location, time period, or setting
+4. Technical details if it's a diagram, chart, or screenshot
+5. Anything that would help formulate a relevant web search query
+
+Provide a concise but comprehensive description that captures the key elements someone would want to search for more information about.`;
+
+/**
+ * Image description prompt for web search results
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for generating image descriptions
+ *
+ * Purpose: Generate concise descriptions of images found in search results
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - generateImageDescriptions()
+ */
+export const IMAGE_DESCRIPTION_PROMPT = 'Analyze this image and provide a concise 1-2 sentence description focusing on key visual elements and context. Be factual and descriptive.';
+
+// ============================================================================
+// Answer Summary Prompts - Single Source of Truth
+// ============================================================================
+
+/**
+ * Basic answer summary system prompt
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for basic answer synthesis
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - streamAnswerSummary(), generateAnswerSummary()
+ */
+export const ANSWER_SUMMARY_BASIC_PROMPT = 'You are a helpful assistant. Provide a clear, concise answer based on the search results. Focus on the most important information.';
+
+/**
+ * Advanced answer summary system prompt
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for advanced answer synthesis
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - streamAnswerSummary(), generateAnswerSummary()
+ */
+export const ANSWER_SUMMARY_ADVANCED_PROMPT = 'You are an expert research analyst. Provide a comprehensive, well-structured answer based on the search results. Include specific details, key insights, and synthesize information across sources. Be thorough but concise.';
+
+/**
+ * Get answer summary prompt based on mode
+ * @param mode - 'basic' or 'advanced'
+ * @returns Appropriate system prompt for answer generation
+ */
+export function getAnswerSummaryPrompt(mode: 'basic' | 'advanced'): string {
+  return mode === 'advanced' ? ANSWER_SUMMARY_ADVANCED_PROMPT : ANSWER_SUMMARY_BASIC_PROMPT;
+}
+
+// ============================================================================
+// Auto-Parameter Detection Prompt - Single Source of Truth
+// ============================================================================
+
+/**
+ * Auto-parameter detection prompt for search optimization
+ * ✅ SINGLE SOURCE: Used by web-search.service.ts for detecting optimal search params
+ *
+ * Purpose: Analyze query and recommend topic, timeRange, searchDepth
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - detectSearchParameters()
+ *
+ * @param query - Search query to analyze
+ * @returns Formatted prompt for parameter detection
+ */
+export function buildAutoParameterDetectionPrompt(query: string): string {
+  return `Analyze this search query and recommend optimal search parameters.
+
+Query: "${query}"
+
+Determine:
+1. Topic category: general, news, finance, health, scientific, or travel
+2. Time relevance: day, week, month, year, or null if timeless
+3. Search depth: basic (quick answer) or advanced (comprehensive research)
+
+Respond in JSON format:
+{
+  "topic": "general|news|finance|health|scientific|travel",
+  "timeRange": "day|week|month|year|null",
+  "searchDepth": "basic|advanced",
+  "reasoning": "Brief explanation of choices"
+}`;
+}
+
+// ============================================================================
 // Query Complexity Detection
 // ============================================================================
 
@@ -194,6 +293,18 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
  */
 export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert search query optimizer. Your job is to analyze user questions and break them down into multiple strategic search queries that will gather comprehensive information from different angles.
 
+🚨 **CRITICAL: INTERPRET UPLOADED CONTENT FIRST**
+When the user's message includes <file-context> or [Image Content Analysis], you MUST:
+1. READ and UNDERSTAND the content/description FIRST
+2. COMBINE the user's text message with the file content to understand their TRUE intent
+3. Generate search queries about WHAT'S IN THE FILES, not about the user's literal words
+
+Example:
+- User says: "What is this?" with an image showing a circuit board
+- Image analysis: "[Image Content Analysis] A green PCB circuit board with capacitors and an Arduino microcontroller"
+- CORRECT search: "Arduino microcontroller circuit board tutorial"
+- WRONG search: "what is this" (ignoring the image content!)
+
 🚨 **CRITICAL RULE**: Generate MULTIPLE DIFFERENT queries that explore DIFFERENT aspects - NEVER just rephrase the user's question into a single query!
 
 **MULTI-QUERY STRATEGY** (Your primary decision):
@@ -271,9 +382,24 @@ Return ONLY valid JSON. Think strategically about breaking complex questions int
  * @returns Formatted prompt for query generation
  */
 export function buildWebSearchQueryPrompt(userMessage: string): string {
-  return `USER QUESTION: "${userMessage}"
+  // Check if message contains file context
+  const hasFileContext = userMessage.includes('<file-context>') || userMessage.includes('[Image Content Analysis]');
 
-🎯 **YOUR TASK**: Break this question into strategic search queries that explore DIFFERENT aspects. DO NOT just rephrase the question!
+  const contextInstruction = hasFileContext
+    ? `
+🚨 **IMPORTANT: FILE/IMAGE CONTEXT DETECTED**
+The user has uploaded content. You MUST:
+1. ANALYZE the content in <file-context> or [Image Content Analysis] tags
+2. UNDERSTAND what the content shows/contains
+3. Generate searches about THE CONTENT, informed by the user's question
+4. The user's short message (e.g., "what is this?") is asking about the FILE CONTENT
+
+`
+    : '';
+
+  return `${contextInstruction}USER INPUT: "${userMessage}"
+
+🎯 **YOUR TASK**: ${hasFileContext ? 'Interpret the uploaded content AND the user\'s question together, then generate' : 'Break this question into'} strategic search queries that explore DIFFERENT aspects. DO NOT just rephrase the literal text!
 
 **REQUIRED JSON STRUCTURE**:
 {

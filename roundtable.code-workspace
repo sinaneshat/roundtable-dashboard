@@ -63,6 +63,24 @@
     "version": "2.0.0",
     "tasks": [
       {
+        "label": "Git Sync: Fetch and Merge Preview",
+        "type": "shell",
+        "command": "git fetch --all && git merge origin/preview --no-edit || echo '⚠️  Merge conflict or no changes - please resolve manually'",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared",
+          "showReuseMessage": false,
+          "clear": false,
+          "group": "git"
+        },
+        "problemMatcher": [],
+        "runOptions": {
+          "runOn": "folderOpen"
+        }
+      },
+      {
         "label": "Start Claude (Skip Permissions)",
         "type": "shell",
         "command": "claude --dangerously-skip-permissions",
@@ -77,6 +95,7 @@
         },
         "isBackground": true,
         "problemMatcher": [],
+        "dependsOn": ["Git Sync: Fetch and Merge Preview"],
         "runOptions": {
           "runOn": "folderOpen"
         }
@@ -108,9 +127,36 @@
             "endsPattern": "."
           }
         },
+        "dependsOn": ["Git Sync: Fetch and Merge Preview"],
         "runOptions": {
           "runOn": "folderOpen"
         }
+      },
+      {
+        "label": "Manual: Git Status",
+        "type": "shell",
+        "command": "git status && git log -3 --oneline",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": true,
+          "panel": "shared",
+          "showReuseMessage": false
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "Manual: Stop All Services",
+        "type": "shell",
+        "command": "lsof -ti:3000 | xargs kill -9 2>/dev/null || echo 'No services running on port 3000'",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": true,
+          "panel": "shared",
+          "showReuseMessage": false
+        },
+        "problemMatcher": []
       }
     ]
   },

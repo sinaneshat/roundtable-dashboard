@@ -13,6 +13,8 @@ export { useAutoScroll, useAutoScrollWithTrigger } from './use-auto-scroll';
 export { useBoolean } from './use-boolean';
 export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';
 export { PendingAttachmentSchema, useChatAttachments } from './use-chat-attachments';
+export type { UseCountdownRedirectOptions, UseCountdownRedirectReturn } from './use-countdown-redirect';
+export { useCountdownRedirect } from './use-countdown-redirect';
 export { useCurrentPathname } from './use-current-pathname';
 export { useDebouncedValue } from './use-debounced-value';
 // Drag and drop utilities
@@ -58,6 +60,8 @@ export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
 export { useNavigationReset, useResetOnUnmount } from './use-navigation-reset';
+export type { UseOrderedModelsOptions } from './use-ordered-models';
+export { useOrderedModels } from './use-ordered-models';
 export { useSelectedParticipants } from './use-selected-participants';
 export { useSortedParticipants } from './use-sorted-participants';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';

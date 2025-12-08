@@ -3,14 +3,16 @@
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 
 import { VersionUpdateModal } from '@/components/changelog-modal';
 import { Toaster } from '@/components/ui/toaster';
+import type { ModelPreferencesState } from '@/stores/preferences';
 
 import { ChatStoreProvider } from './chat-store-provider';
 import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
+import { PreferencesStoreProvider } from './preferences-store-provider';
 import QueryClientProvider from './query-client-provider';
 
 type AppProvidersProps = {
@@ -25,6 +27,12 @@ type AppProvidersProps = {
     NEXT_PUBLIC_POSTHOG_API_KEY?: string;
     NEXT_PUBLIC_POSTHOG_HOST?: string;
   };
+  /**
+   * SSR HYDRATION: Initial preferences state from server-side cookie parsing
+   * Parsed in root layout using parsePreferencesCookie() for instant hydration
+   * Source: Zustand v5 Next.js guide - pass server state to provider
+   */
+  initialPreferences?: ModelPreferencesState | null;
 };
 
 /**
@@ -46,7 +54,28 @@ export function AppProviders({
   timeZone,
   now,
   env,
+  initialPreferences,
 }: AppProvidersProps) {
+  // ✅ DEV MODE: Unregister service workers and clear caches to prevent stale styles
+  useEffect(() => {
+    if (env.NEXT_PUBLIC_WEBAPP_ENV === 'local' && 'serviceWorker' in navigator) {
+      // Unregister all service workers
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+      // Clear all caches
+      if ('caches' in window) {
+        caches.keys().then((names) => {
+          for (const name of names) {
+            caches.delete(name);
+          }
+        });
+      }
+    }
+  }, [env.NEXT_PUBLIC_WEBAPP_ENV]);
+
   return (
     <PostHogProvider
       apiKey={env.NEXT_PUBLIC_POSTHOG_API_KEY}
@@ -59,25 +88,27 @@ export function AppProviders({
         <PostHogPageview />
       </Suspense>
       <QueryClientProvider>
-        {/* ✅ ZUSTAND PATTERN: Chat store provider wraps entire app */}
-        <ChatStoreProvider>
-          <NuqsAdapter>
-            <NextIntlClientProvider
-              messages={messages}
-              locale={locale}
-              timeZone={timeZone}
-              now={now}
-            >
-              {env.NEXT_PUBLIC_MAINTENANCE !== 'true'
-                ? children
-                : (
-                    <div>Maintenance</div>
-                  )}
-              <VersionUpdateModal />
-              <Toaster />
-            </NextIntlClientProvider>
-          </NuqsAdapter>
-        </ChatStoreProvider>
+        {/* ✅ ZUSTAND V5 PATTERN: Store providers with SSR hydration */}
+        <PreferencesStoreProvider initialState={initialPreferences}>
+          <ChatStoreProvider>
+            <NuqsAdapter>
+              <NextIntlClientProvider
+                messages={messages}
+                locale={locale}
+                timeZone={timeZone}
+                now={now}
+              >
+                {env.NEXT_PUBLIC_MAINTENANCE !== 'true'
+                  ? children
+                  : (
+                      <div>Maintenance</div>
+                    )}
+                <VersionUpdateModal />
+                <Toaster />
+              </NextIntlClientProvider>
+            </NuqsAdapter>
+          </ChatStoreProvider>
+        </PreferencesStoreProvider>
       </QueryClientProvider>
     </PostHogProvider>
   );

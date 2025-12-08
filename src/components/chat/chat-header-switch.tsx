@@ -1,48 +1,27 @@
 'use client';
 import { usePathname } from 'next/navigation';
 
+import { useChatStore } from '@/components/providers/chat-store-provider';
+
 import { MinimalHeader, NavigationHeader } from './chat-header';
-
-/**
- * Determines if scroll-to-bottom button should be shown based on pathname
- *
- * Show scroll button on:
- * - Chat thread pages: /chat/[slug]
- * - Public chat pages: /public/chat/[slug]
- * - Chat overview: / (root)
- *
- * Don't show on:
- * - Other /chat pages (pricing, settings, etc.)
- */
-function shouldShowScrollButton(pathname: string | null): boolean {
-  if (!pathname)
-    return false;
-
-  // Root page (chat overview)
-  if (pathname === '/')
-    return true;
-
-  // Chat thread pages (but not /chat itself or /chat/pricing etc.)
-  if (pathname.startsWith('/chat/') && pathname !== '/chat' && !pathname.startsWith('/chat/pricing') && !pathname.startsWith('/chat/settings')) {
-    return true;
-  }
-
-  // Public chat pages
-  if (pathname.startsWith('/public/chat/')) {
-    return true;
-  }
-
-  return false;
-}
 
 export function ChatHeaderSwitch() {
   const pathname = usePathname();
 
-  if (pathname === '/chat') {
+  // Store state to detect active thread even when URL is still /chat
+  const showInitialUI = useChatStore(s => s.showInitialUI);
+  const createdThreadId = useChatStore(s => s.createdThreadId);
+  const thread = useChatStore(s => s.thread);
+
+  // Thread is active when created from overview (URL stays /chat but store has thread)
+  const hasActiveThread = !showInitialUI && (createdThreadId || thread);
+
+  // Show NavigationHeader when:
+  // 1. On a thread page (/chat/[slug]) - pathname check
+  // 2. On /chat with active thread - store state check (thread created, streaming started)
+  if (pathname === '/chat' && !hasActiveThread) {
     return <MinimalHeader />;
   }
 
-  const showScrollButton = shouldShowScrollButton(pathname);
-
-  return <NavigationHeader showScrollButton={showScrollButton} />;
+  return <NavigationHeader />;
 }

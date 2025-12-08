@@ -1,20 +1,11 @@
 'use client';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { StaggerItem } from '@/components/ui/motion';
 import {
   SidebarGroup,
@@ -87,9 +78,7 @@ export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
 type ChatListProps = {
   chatGroups: ChatGroup[];
   favorites: Chat[];
-  onDeleteChat: (chatId: string) => void;
   searchTerm: string;
-  deletingChatId?: string | null;
   isMobile?: boolean;
   onNavigate?: () => void;
   disableAnimations?: boolean;
@@ -99,7 +88,6 @@ const EMPTY_FAVORITES: Chat[] = [];
 function ChatItem({
   chat,
   isActive,
-  isDeleting,
   isMobile,
   onNavigate,
   onDeleteClick,
@@ -107,7 +95,6 @@ function ChatItem({
 }: {
   chat: Chat;
   isActive: boolean;
-  isDeleting: boolean;
   isMobile: boolean;
   onNavigate?: () => void;
   onDeleteClick: (chat: Chat) => void;
@@ -124,7 +111,6 @@ function ChatItem({
       <SidebarMenuButton
         asChild
         isActive={isActive}
-        disabled={isDeleting}
       >
         <Link
           href={chatUrl}
@@ -146,14 +132,14 @@ function ChatItem({
       </SidebarMenuButton>
       <SidebarMenuAction
         showOnHover
-        disabled={isDeleting}
+        className="text-destructive hover:text-destructive"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           onDeleteClick(chat);
         }}
       >
-        {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+        <Trash2 className="size-3.5" />
         <span className="sr-only">{t('chat.deleteChat')}</span>
       </SidebarMenuAction>
     </SidebarMenuItem>
@@ -168,9 +154,7 @@ function ChatItem({
 export function ChatList({
   chatGroups,
   favorites = EMPTY_FAVORITES,
-  onDeleteChat,
   searchTerm = '',
-  deletingChatId,
   isMobile = false,
   onNavigate,
   disableAnimations = false,
@@ -180,33 +164,31 @@ export function ChatList({
   const pathname = useCurrentPathname();
   const t = useTranslations();
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
-  const [hasAnimated, setHasAnimated] = useState(false);
 
-  // Only animate on first render, then disable forever
+  // ✅ REACT 19: First-mount animation tracking with ref guard
+  // Uses ref to prevent duplicate triggers, state for render logic
+  // Ref guards the effect, state controls shouldAnimate during render
+  const hasTriggeredAnimationRef = useRef(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
   const shouldAnimate = !disableAnimations && !hasAnimated;
 
-  useEffect(() => {
-    if (!disableAnimations && !hasAnimated) {
-      // Mark as animated after mount to prevent future animations
-      // This intentional one-time state update controls animation behavior
-      // Wrapped in queueMicrotask to defer state update after render
-      queueMicrotask(() => {
-        setHasAnimated(true);
-      });
+  // ✅ REACT 19: useLayoutEffect runs once, ref prevents duplicate triggers
+  // Effect only depends on disableAnimations (stable prop), not on hasAnimated
+  useLayoutEffect(() => {
+    if (!disableAnimations && !hasTriggeredAnimationRef.current) {
+      hasTriggeredAnimationRef.current = true;
+      startTransition(() => setHasAnimated(true));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
+  }, [disableAnimations]);
+
   const handleDeleteClick = (chat: Chat) => {
     setChatToDelete(chat);
   };
-  const handleConfirmDelete = () => {
-    if (chatToDelete) {
-      onDeleteChat(chatToDelete.id);
+
+  const handleDeleteDialogClose = (open: boolean) => {
+    if (!open) {
       setChatToDelete(null);
     }
-  };
-  const handleCancelDelete = () => {
-    setChatToDelete(null);
   };
   const formatGroupLabel = (label: string) => {
     if (label.includes(':')) {
@@ -257,13 +239,11 @@ export function ChatList({
                   <SidebarMenu>
                     {favorites.map((chat) => {
                       const isActive = isChatActive(chat, pathname);
-                      const isDeleting = deletingChatId === chat.id;
                       return (
                         <ChatItem
                           key={chat.id}
                           chat={chat}
                           isActive={isActive}
-                          isDeleting={isDeleting}
                           isMobile={isMobile}
                           onNavigate={onNavigate}
                           onDeleteClick={handleDeleteClick}
@@ -278,13 +258,11 @@ export function ChatList({
                 <SidebarMenu>
                   {favorites.map((chat) => {
                     const isActive = isChatActive(chat, pathname);
-                    const isDeleting = deletingChatId === chat.id;
                     return (
                       <ChatItem
                         key={chat.id}
                         chat={chat}
                         isActive={isActive}
-                        isDeleting={isDeleting}
                         isMobile={isMobile}
                         onNavigate={onNavigate}
                         onDeleteClick={handleDeleteClick}
@@ -348,13 +326,11 @@ export function ChatList({
                     <SidebarMenu>
                       {group.chats.map((chat) => {
                         const isActive = isChatActive(chat, pathname);
-                        const isDeleting = deletingChatId === chat.id;
                         return (
                           <ChatItem
                             key={chat.id}
                             chat={chat}
                             isActive={isActive}
-                            isDeleting={isDeleting}
                             isMobile={isMobile}
                             onNavigate={onNavigate}
                             onDeleteClick={handleDeleteClick}
@@ -369,13 +345,11 @@ export function ChatList({
                   <SidebarMenu>
                     {group.chats.map((chat) => {
                       const isActive = isChatActive(chat, pathname);
-                      const isDeleting = deletingChatId === chat.id;
                       return (
                         <ChatItem
                           key={chat.id}
                           chat={chat}
                           isActive={isActive}
-                          isDeleting={isDeleting}
                           isMobile={isMobile}
                           onNavigate={onNavigate}
                           onDeleteClick={handleDeleteClick}
@@ -388,24 +362,14 @@ export function ChatList({
           </SidebarGroup>
         );
       })}
-      <AlertDialog open={!!chatToDelete} onOpenChange={open => !open && handleCancelDelete()}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('chat.deleteThreadConfirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('chat.deleteThreadConfirmDescription')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelDelete}>
-              {t('actions.cancel')}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {t('actions.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* ✅ REUSABLE: Uses same ChatDeleteDialog as thread header actions */}
+      <ChatDeleteDialog
+        isOpen={!!chatToDelete}
+        onOpenChange={handleDeleteDialogClose}
+        threadId={chatToDelete?.id ?? ''}
+        threadSlug={chatToDelete?.slug}
+        redirectIfCurrent={true}
+      />
     </>
   );
 }

@@ -1,4 +1,7 @@
+"use client";
+
 import type { ComponentProps } from 'react';
+import { useState } from 'react';
 
 import { cn } from "@/lib/ui/cn"
 
@@ -222,7 +225,7 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
       {...props}
     >
       <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
-        <div className="rounded-xl bg-card/60 backdrop-blur-md border border-white/10 p-4">
+        <div className="rounded-2xl bg-card border border-white/[0.12] shadow-lg p-4">
           <Skeleton className="h-12 w-full bg-white/10 rounded-lg" />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
@@ -297,6 +300,60 @@ function QuickStartSkeleton({ count = 3, className, ...props }: { count?: number
   )
 }
 
+/**
+ * Image with skeleton loading - prevents CLS with fixed dimensions
+ * Shows skeleton while image loads, fades in when ready
+ */
+function ImageWithSkeleton({
+  src,
+  alt,
+  width,
+  height,
+  className,
+  skeletonClassName,
+  ...props
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  className?: string;
+  skeletonClassName?: string;
+} & Omit<ComponentProps<"img">, "src" | "alt" | "width" | "height">) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  return (
+    <div
+      className="relative"
+      style={{ width, height }}
+    >
+      {/* Skeleton placeholder - always rendered to reserve space */}
+      {!isLoaded && !hasError && (
+        <Skeleton
+          className={cn("absolute inset-0", skeletonClassName)}
+          style={{ width, height }}
+        />
+      )}
+      {/* Actual image */}
+      <img
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        onLoad={() => setIsLoaded(true)}
+        onError={() => setHasError(true)}
+        className={cn(
+          "transition-opacity duration-300",
+          isLoaded ? "opacity-100" : "opacity-0",
+          className
+        )}
+        {...props}
+      />
+    </div>
+  );
+}
+
 export {
   Skeleton,
   CardSkeleton,
@@ -311,5 +368,6 @@ export {
   StickyInputSkeleton,
   ThreadMessagesSkeleton,
   QuickStartSkeleton,
+  ImageWithSkeleton,
 }
 

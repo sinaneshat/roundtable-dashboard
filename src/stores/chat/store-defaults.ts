@@ -137,6 +137,10 @@ export const TRACKING_DEFAULTS = {
   hasSentPendingMessage: false,
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by round number */
+  triggeredAnalysisRounds: new Set<number>(),
+  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by analysis ID */
+  triggeredAnalysisIds: new Set<string>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Track when early optimistic message added by handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: false,
 } satisfies TrackingState;
@@ -295,6 +299,8 @@ export const COMPLETE_RESET_STATE = {
   // 🚨 BUG FIX: Create fresh Set instances for each complete reset
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
+  triggeredAnalysisRounds: new Set<number>(),
+  triggeredAnalysisIds: new Set<string>(),
   hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // Callbacks state
   onComplete: CALLBACKS_DEFAULTS.onComplete,
@@ -341,6 +347,8 @@ export const THREAD_RESET_STATE = {
   // 🚨 BUG FIX: Create fresh Set/Map instances for each thread reset
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
+  triggeredAnalysisRounds: new Set<number>(),
+  triggeredAnalysisIds: new Set<string>(),
   preSearchActivityTimes: new Map<number, number>(),
   hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // AI SDK methods (thread-related)

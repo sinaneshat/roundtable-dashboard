@@ -238,6 +238,24 @@ export type HasPreSearchBeenTriggered = (roundNumber: number) => boolean;
 export type ClearPreSearchTracking = (roundNumber: number) => void;
 
 /**
+ * Mark analysis stream as triggered (prevents duplicate stream submissions)
+ * Takes both analysisId and roundNumber for two-level deduplication
+ */
+export type MarkAnalysisStreamTriggered = (analysisId: string, roundNumber: number) => void;
+
+/**
+ * Check if analysis stream has been triggered (returns boolean)
+ * Can check by analysisId or roundNumber
+ */
+export type HasAnalysisStreamBeenTriggered = (analysisId: string, roundNumber: number) => boolean;
+
+/**
+ * Clear analysis stream tracking for a round (used during regeneration)
+ * Clears both round tracking and any analysis IDs containing the round number
+ */
+export type ClearAnalysisStreamTracking = (roundNumber: number) => void;
+
+/**
  * ✅ IMMEDIATE UI FEEDBACK: Set flag when early optimistic message is added
  * Used by handleUpdateThreadAndSend to indicate it already added an optimistic message
  * so prepareForNewMessage can skip adding a duplicate

@@ -8,6 +8,8 @@ if (process.env.NODE_ENV === 'development') {
   initOpenNextCloudflareForDev();
 }
 
+const isDev = process.env.NODE_ENV === 'development';
+
 const nextConfig: NextConfig = {
   // Required for OpenNext deployment
   output: 'standalone',
@@ -46,22 +48,55 @@ const nextConfig: NextConfig = {
     'react-email',
   ],
 
+  // Block service worker in development to prevent caching issues
+  async rewrites() {
+    if (isDev) {
+      return {
+        beforeFiles: [
+          {
+            // Block sw.js requests in dev - return 404 via non-existent path
+            source: '/sw.js',
+            destination: '/_dev-sw-blocked',
+          },
+        ],
+        afterFiles: [],
+        fallback: [],
+      };
+    }
+    return { beforeFiles: [], afterFiles: [], fallback: [] };
+  },
+
   // Cache optimization headers
   async headers() {
     return [
       {
         // Static assets cache optimization
         source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable', // 1 year
-          },
-          {
-            key: 'X-Cache-Type',
-            value: 'static-asset',
-          },
-        ],
+        headers: isDev
+          ? [
+              {
+                key: 'Cache-Control',
+                value: 'no-cache, no-store, must-revalidate', // No cache in dev
+              },
+              {
+                key: 'Pragma',
+                value: 'no-cache',
+              },
+              {
+                key: 'Expires',
+                value: '0',
+              },
+            ]
+          : [
+              {
+                key: 'Cache-Control',
+                value: 'public, max-age=31536000, immutable', // 1 year in prod
+              },
+              {
+                key: 'X-Cache-Type',
+                value: 'static-asset',
+              },
+            ],
       },
       {
         // Image optimization
@@ -105,6 +140,19 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Block service worker caching in development
+      ...(isDev
+        ? [
+            {
+              source: '/sw.js',
+              headers: [
+                { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+                { key: 'Pragma', value: 'no-cache' },
+                { key: 'Expires', value: '0' },
+              ],
+            },
+          ]
+        : []),
       {
         // API routes - no cache by default (handled by middleware)
         source: '/api/:path*',
@@ -112,6 +160,36 @@ const nextConfig: NextConfig = {
           {
             key: 'X-API-Cache',
             value: 'controlled-by-middleware',
+          },
+        ],
+      },
+      {
+        // Public chat embed pages - allow iframe embedding
+        source: '/public/chat/:path*/embed',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              'default-src \'self\'',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'style-src \'self\' \'unsafe-inline\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'img-src * data: blob:',
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https: wss://*.posthog.com wss://us.posthog.com wss://eu.posthog.com`,
+              'worker-src \'self\' blob: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              'font-src \'self\' data: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com https://cdn.jsdelivr.net',
+              'frame-src \'self\' https://accounts.google.com https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              'frame-ancestors *',
+              'base-uri \'self\'',
+              'form-action \'self\' https://accounts.google.com',
+            ].join('; '),
           },
         ],
       },

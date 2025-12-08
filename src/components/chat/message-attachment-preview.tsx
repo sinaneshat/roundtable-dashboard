@@ -17,8 +17,8 @@
  */
 
 import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
-import Image from 'next/image';
 
+import { SmartImage } from '@/components/ui/smart-image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDownloadUrlQuery } from '@/hooks/queries';
 import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
@@ -158,13 +158,18 @@ function AttachmentThumbnail({
               )
             : canShowImage
               ? (
-                  <Image
+                  <SmartImage
                     src={effectiveUrl}
                     alt={displayName}
                     fill
-                    className="object-cover"
                     sizes="48px"
                     unoptimized
+                    containerClassName="size-full"
+                    fallback={(
+                      <div className="size-full flex items-center justify-center">
+                        <ImageIcon className="size-5 text-muted-foreground" />
+                      </div>
+                    )}
                   />
                 )
               : (

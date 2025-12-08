@@ -3,13 +3,14 @@ import { Search, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
 type CommandSearchProps = {
@@ -84,109 +85,78 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     setSelectedIndex(0);
     onClose();
   }, [onClose]);
-  // AI SDK v5 Pattern: Use requestAnimationFrame for focus after modal renders
-  // This ensures the input is visible and properly mounted before focusing
-  // More reliable than arbitrary setTimeout delays
+  // Focus input after modal renders and paints
   useEffect(() => {
     if (isOpen) {
-      // Double rAF ensures focus happens after browser completes layout and paint
-      const rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          searchInputRef.current?.focus();
-        });
-      });
-      return () => cancelAnimationFrame(rafId);
+      return afterPaint(() => searchInputRef.current?.focus());
     }
     return undefined;
   }, [isOpen]);
-  // React 19.2 Pattern: Use ref to store callback, preventing listener re-mounting
-  // Ref allows reading latest values without causing effect to re-run
-  const keyDownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
-
-  // React 19.2: Store latest callback in ref using useLayoutEffect (synchronous, before paint)
-  // This avoids the "Cannot access refs during render" rule violation
-  useLayoutEffect(() => {
-    keyDownHandlerRef.current = (e: KeyboardEvent) => {
-      if (!isOpen)
-        return;
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedIndex(prev => (prev + 1) % threads.length);
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedIndex(prev => (prev - 1 + threads.length) % threads.length);
-          break;
-        case 'Enter':
-          e.preventDefault();
-          if (threads[selectedIndex]) {
-            router.push(`/chat/${threads[selectedIndex].slug}`);
-            handleClose();
-          }
-          break;
-        case 'Escape':
-          e.preventDefault();
+  // ✅ REACT 19: useEffectEvent for keyboard handler
+  // Automatically captures latest values (isOpen, threads, selectedIndex, router, handleClose)
+  // without causing the event listener effect to re-run
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    if (!isOpen)
+      return;
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex(prev => (prev + 1) % threads.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex(prev => (prev - 1 + threads.length) % threads.length);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (threads[selectedIndex]) {
+          router.push(`/chat/${threads[selectedIndex].slug}`);
           handleClose();
-          break;
-      }
-    };
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        handleClose();
+        break;
+    }
   });
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      keyDownHandlerRef.current?.(e);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []); // No dependencies - ref always has latest callback
-  // React 19.2 Pattern: Use ref to store click outside handler
-  const clickOutsideHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
-
-  // React 19.2: Store latest callback in ref using useLayoutEffect
-  useLayoutEffect(() => {
-    clickOutsideHandlerRef.current = (event: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        handleClose();
-      }
-    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+  // ✅ REACT 19: useEffectEvent for click outside handler
+  // Automatically captures latest handleClose without re-mounting listener
+  const onClickOutside = useEffectEvent((event: MouseEvent) => {
+    if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+      handleClose();
+    }
   });
 
-  // AI SDK v5 Pattern: Use requestAnimationFrame to add listener after modal renders
+  // Add click-outside listener after modal renders and paints
   // This prevents click-outside from immediately firing during modal opening
-  // More deterministic than arbitrary setTimeout delays
   useEffect(() => {
     if (!isOpen)
       return;
-    const handleClickOutside = (event: MouseEvent) => {
-      clickOutsideHandlerRef.current?.(event);
-    };
-    // Double rAF ensures listener is added after modal is fully rendered and painted
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      });
+    const cancelPaint = afterPaint(() => {
+      document.addEventListener('mousedown', onClickOutside);
     });
     return () => {
-      cancelAnimationFrame(rafId);
-      document.removeEventListener('mousedown', handleClickOutside);
+      cancelPaint();
+      document.removeEventListener('mousedown', onClickOutside);
     };
-  }, [isOpen]); // Only depend on isOpen - ref always has latest handleClose
-  // React 19.2 Pattern: Use ref to store scroll handler
-  // This prevents listener re-mounting when pagination state changes
-  const scrollHandlerRef = useRef<(() => void) | null>(null);
-
-  // React 19.2: Store latest callback in ref using useLayoutEffect
-  useLayoutEffect(() => {
-    scrollHandlerRef.current = () => {
-      if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage)
-        return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
-      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-      if (scrollPercentage > 0.8) {
-        fetchNextPage();
-      }
-    };
+  }, [isOpen]);
+  // ✅ REACT 19: useEffectEvent for scroll handler
+  // Automatically captures latest hasNextPage, isFetchingNextPage, fetchNextPage
+  // without re-mounting the scroll listener
+  const onScroll = useEffectEvent(() => {
+    if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage)
+      return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+    if (scrollPercentage > 0.8) {
+      fetchNextPage();
+    }
   });
 
   useEffect(() => {
@@ -198,12 +168,9 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     if (!viewport)
       return;
     scrollViewportRef.current = viewport;
-    const handleScroll = () => {
-      scrollHandlerRef.current?.();
-    };
-    viewport.addEventListener('scroll', handleScroll);
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, []); // No dependencies - ref always has latest callback
+    viewport.addEventListener('scroll', onScroll);
+    return () => viewport.removeEventListener('scroll', onScroll);
+  }, []);
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && handleClose()}>
       <DialogContent

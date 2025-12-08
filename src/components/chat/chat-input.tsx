@@ -3,7 +3,7 @@ import type { ChatStatus } from 'ai';
 import { ArrowUp, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import {
@@ -13,6 +13,12 @@ import {
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { VoiceVisualization } from '@/components/chat/voice-visualization';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { STRING_LIMITS } from '@/constants/validation';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
@@ -22,6 +28,7 @@ import {
   useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
+import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
@@ -56,6 +63,8 @@ type ChatInputProps = {
   attachmentClickRef?: React.MutableRefObject<(() => void) | null>;
   /** Whether files are currently uploading - disables submit until complete */
   isUploading?: boolean;
+  /** Suppress validation errors during hydration (prevents flash of "no models" error) */
+  isHydrating?: boolean;
 };
 
 // ✅ RENDER OPTIMIZATION: Memoize ChatInput to prevent unnecessary re-renders
@@ -87,6 +96,7 @@ export const ChatInput = memo(({
   enableAttachments = true,
   attachmentClickRef,
   isUploading = false,
+  isHydrating = false,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -175,8 +185,9 @@ export const ChatInput = memo(({
     maxHeight,
   });
 
-  // Mobile keyboard handling: Simple scroll into view on focus
-  useKeyboardAwareScroll(textareaRef, { enabled: true });
+  // ✅ AUTO-SCROLL DISABLED: No forced scrolling on mobile keyboard focus
+  // User controls scroll position via manual scroll-to-bottom button
+  useKeyboardAwareScroll(textareaRef, { enabled: false });
 
   // Speech recognition - simple pattern: base text + hook's accumulated transcripts
   const baseTextRef = useRef('');
@@ -194,17 +205,31 @@ export const ChatInput = memo(({
     enableAudioVisualization: true,
   });
 
-  // When recording starts, save what was already there and reset hook
+  // ✅ REACT 19: useEffectEvent for onChange callback - stable reference, always latest value
+  const onChangeEvent = useEffectEvent((newValue: string) => {
+    onChange(newValue);
+  });
+
+  // ✅ CONSOLIDATED: Speech recognition state transitions (start/stop)
+  // React 19: useEffectEvent removes onChange from deps - no re-subscription on parent re-render
   const prevIsListening = useRef(false);
   useEffect(() => {
-    if (!prevIsListening.current && isListening) {
-      baseTextRef.current = value;
-      resetTranscripts(); // Clear hook's accumulated transcripts
-    }
+    const wasListening = prevIsListening.current;
     prevIsListening.current = isListening;
-  }, [isListening, value, resetTranscripts]);
 
-  // Real-time display: baseText + finalTranscript (from hook) + interimTranscript
+    if (!wasListening && isListening) {
+      // Recording STARTED - save base text and reset hook
+      baseTextRef.current = value;
+      resetTranscripts();
+    } else if (wasListening && !isListening) {
+      // Recording STOPPED - commit final result
+      const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
+      onChangeEvent(parts.join(' ').trim());
+    }
+  }, [isListening, value, finalTranscript, resetTranscripts]); // ✅ onChange removed - accessed via useEffectEvent
+
+  // Real-time display during listening: baseText + finalTranscript + interimTranscript
+  // React 19: useEffectEvent removes onChange from deps
   useEffect(() => {
     if (!isListening)
       return;
@@ -213,27 +238,14 @@ export const ChatInput = memo(({
     const displayText = parts.join(' ').trim();
 
     if (displayText !== value) {
-      onChange(displayText);
+      onChangeEvent(displayText);
     }
-  }, [isListening, finalTranscript, interimTranscript, value, onChange]);
+  }, [isListening, finalTranscript, interimTranscript, value]); // ✅ onChange removed - accessed via useEffectEvent
 
-  // When stopped, keep the final result
-  useEffect(() => {
-    if (prevIsListening.current && !isListening) {
-      const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
-      onChange(parts.join(' ').trim());
-    }
-  }, [isListening, finalTranscript, onChange]);
-
-  // AI SDK v5 Pattern: Use requestAnimationFrame for focus after DOM renders
+  // Focus textarea after DOM renders and paints
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
-      const rafId = requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          textareaRef.current?.focus();
-        });
-      });
-      return () => cancelAnimationFrame(rafId);
+      return afterPaint(() => textareaRef.current?.focus());
     }
     return undefined;
   }, [autoFocus]);
@@ -267,6 +279,9 @@ export const ChatInput = memo(({
     }
   };
 
+  // ✅ HYDRATION FIX: Don't show error during hydration (prevents flash before store initializes)
+  const showNoModelsError = participants.length === 0 && !isQuotaExceeded && !isHydrating;
+
   return (
     <div className="w-full">
       {/* Hidden file input for attachment selection */}
@@ -285,13 +300,12 @@ export const ChatInput = memo(({
         className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-2xl',
-          'border border-border',
+          'border border-white/[0.12]',
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
-          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && 'cursor-not-allowed',
-          isStreaming && 'ring-2 ring-primary/20',
-          isOverLimit && 'border-destructive',
+          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
+          (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -303,17 +317,32 @@ export const ChatInput = memo(({
           {/* Quota Alert Extension - appears at top when quota exceeded */}
           {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
 
-          {/* Content limit alert - appears at top when message too long */}
-          {isOverLimit && (
+          {/* No models selected alert - appears at top when no participants */}
+          {showNoModelsError && (
             <div
               className={cn(
-                'flex items-center gap-2 px-3 py-2',
+                'flex items-center gap-3 px-3 py-2',
                 'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
                 'bg-destructive/10',
               )}
             >
-              <p className="text-[10px] leading-tight text-destructive font-medium">
-                Message too long. Please shorten your message to send.
+              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
+                {t('chat.input.noModelsSelected')}
+              </p>
+            </div>
+          )}
+
+          {/* Content limit alert - appears at top when message too long */}
+          {isOverLimit && (
+            <div
+              className={cn(
+                'flex items-center gap-3 px-3 py-2',
+                'border-0 border-b border-destructive/20 rounded-none rounded-t-2xl',
+                'bg-destructive/10',
+              )}
+            >
+              <p className="text-[10px] leading-tight text-destructive font-medium flex-1 min-w-0">
+                {t('chat.input.messageTooLong')}
               </p>
             </div>
           )}
@@ -381,31 +410,41 @@ export const ChatInput = memo(({
             {/* Toolbar and submit */}
             <div>
               <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
-                {/* Left side: Toolbar (AI Models + Mode + WebSearch) */}
-                {toolbar && (
-                  <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
-                    {toolbar}
-                  </div>
-                )}
+                {/* Left side: Toolbar */}
+                <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
+                  {toolbar}
+                </div>
 
                 {/* Right side: Speech + Submit buttons */}
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   {/* Speech recognition button - always enabled during streaming */}
                   {enableSpeech && isSpeechSupported && (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant={isListening ? 'default' : 'ghost'}
-                      onClick={toggleSpeech}
-                      disabled={isMicDisabled && !isListening}
-                      className={cn(
-                        'size-8 sm:size-9 shrink-0 rounded-full',
-                        isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
-                      )}
-                      title={isListening ? 'Stop recording' : t('chat.input.voiceInput')}
-                    >
-                      {isListening ? <StopCircle className="size-3.5 sm:size-4" /> : <Mic className="size-3.5 sm:size-4" />}
-                    </Button>
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant={isListening ? 'default' : 'ghost'}
+                            onClick={toggleSpeech}
+                            disabled={isMicDisabled && !isListening}
+                            className={cn(
+                              'size-8 sm:size-9 shrink-0 rounded-full',
+                              isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
+                            )}
+                          >
+                            {isListening ? <StopCircle className="size-3.5 sm:size-4" /> : <Mic className="size-3.5 sm:size-4" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p className="text-xs">
+                            {isListening
+                              ? t('chat.toolbar.tooltips.stopRecording')
+                              : t('chat.toolbar.tooltips.microphone')}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
 
                   {/* Submit/Stop button */}

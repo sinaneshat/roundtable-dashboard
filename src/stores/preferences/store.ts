@@ -1,46 +1,51 @@
 /**
- * Model Preferences Store - Cookie-Persisted State
+ * Model Preferences Store - Zustand v5 Official Next.js Pattern
  *
- * Zustand v5 store with persist middleware for model selection preferences.
- * Uses cookie storage for persistence across sessions.
+ * ============================================================================
+ * OFFICIAL ZUSTAND V5 + NEXT.JS PATTERN (from Context7 docs)
+ * ============================================================================
+ * Source: https://github.com/pmndrs/zustand/blob/main/docs/guides/nextjs.md
  *
- * ✅ PATTERN: Zustand v5 persist middleware + custom cookie storage
- * ✅ PERSISTENCE: Selected model IDs and order saved to cookies
- * ✅ MINIMUM MODELS: Enforces minimum 3 models selection
+ * PATTERN:
+ * 1. Separate State and Actions types
+ * 2. Export defaultInitState for static defaults
+ * 3. Export initPreferencesStore() for dynamic initialization
+ * 4. Export createModelPreferencesStore(initState) factory
+ * 5. Use createStore from zustand/vanilla
+ * 6. skipHydration: true for SSR
+ * 7. onRehydrateStorage callback for hydration tracking
+ *
+ * MIDDLEWARE ORDER: devtools(persist(immer(...)))
  */
 
-import { create } from 'zustand';
-import type { StateStorage } from 'zustand/middleware';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import { createStore } from 'zustand/vanilla';
 
 import { MIN_MODELS_REQUIRED } from '@/api/services/product-logic.service';
 
 // ============================================================================
-// CONSTANTS
+// CONSTANTS (Official Pattern)
 // ============================================================================
 
-/** Minimum number of models required - re-export from backend for convenience */
+/** Minimum models required - re-export from backend */
 export const MIN_MODELS = MIN_MODELS_REQUIRED;
 
-/** Cookie name for preferences */
-const COOKIE_NAME = 'model-preferences';
+/** Cookie name for preferences storage */
+export const PREFERENCES_COOKIE_NAME = 'model-preferences';
 
-/** Cookie max age in seconds (30 days) */
+/** Cookie max age: 30 days */
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
 
 // ============================================================================
-// COOKIE STORAGE ADAPTER
+// COOKIE STORAGE ADAPTER (Official Pattern)
 // ============================================================================
 
-/**
- * Custom cookie storage adapter for Zustand persist middleware
- * Implements StateStorage interface for cookie-based persistence
- */
-const cookieStorage: StateStorage = {
+const cookieStorage = {
   getItem: (name: string): string | null => {
-    if (typeof document === 'undefined')
+    if (typeof document === 'undefined') {
       return null;
-
+    }
     const cookies = document.cookie.split(';');
     for (const cookie of cookies) {
       const [key, value] = cookie.trim().split('=');
@@ -56,171 +61,399 @@ const cookieStorage: StateStorage = {
   },
 
   setItem: (name: string, value: string): void => {
-    if (typeof document === 'undefined')
+    if (typeof document === 'undefined') {
       return;
-
+    }
     const encodedValue = encodeURIComponent(value);
     document.cookie = `${name}=${encodedValue}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
   },
 
   removeItem: (name: string): void => {
-    if (typeof document === 'undefined')
+    if (typeof document === 'undefined') {
       return;
-
+    }
     document.cookie = `${name}=; path=/; max-age=0`;
   },
 };
 
 // ============================================================================
-// STORE TYPES
+// STATE TYPES (Official Pattern: Separate State from Actions)
 // ============================================================================
 
-type ModelPreferencesState = {
-  /** Selected model IDs (minimum 3 required) */
+/**
+ * State shape for model preferences
+ * Source: nextjs.md - "CounterState" pattern
+ */
+export type ModelPreferencesState = {
+  /** Selected model IDs (user's selection) */
   selectedModelIds: string[];
   /** Model order for display (drag-and-drop order) */
   modelOrder: string[];
-  /** Whether preferences have been hydrated from storage */
+  /** Selected chat mode (analyzing/brainstorming/etc) */
+  selectedMode: string | null;
+  /** Web search enabled preference */
+  enableWebSearch: boolean;
+  /** Hydration tracking for SSR */
   _hasHydrated: boolean;
 };
 
-type ModelPreferencesActions = {
-  /** Set selected model IDs */
+/**
+ * Actions for model preferences
+ * Source: nextjs.md - "CounterActions" pattern
+ */
+export type ModelPreferencesActions = {
   setSelectedModelIds: (ids: string[]) => void;
-  /** Toggle a model selection (add/remove) */
   toggleModel: (modelId: string) => boolean;
-  /** Set model display order */
   setModelOrder: (order: string[]) => void;
-  /**
-   * Get initial model IDs based on persisted preferences or defaults
-   * - Returns persisted selection if any valid models exist (user's choice takes priority)
-   * - Falls back to first 3 accessible models if no persisted selection
-   * - Persists defaults if used
-   * @param accessibleModelIds - Model IDs the user can access based on tier
-   * @returns Array of model IDs to use as initial selection
-   */
+  setSelectedMode: (mode: string | null) => void;
+  setEnableWebSearch: (enabled: boolean) => void;
   getInitialModelIds: (accessibleModelIds: string[]) => string[];
-  /** Check if model is selected */
+  /**
+   * Sync persisted preferences with currently accessible models
+   * Removes invalid models from persistence and updates order
+   * Call this when accessible models change (tier change, models disabled)
+   */
+  syncWithAccessibleModels: (accessibleModelIds: string[]) => void;
   isModelSelected: (modelId: string) => boolean;
-  /** Get count of selected models */
   getSelectedCount: () => number;
-  /** Mark hydration complete */
   setHasHydrated: (state: boolean) => void;
 };
 
+/**
+ * Complete store type
+ * Source: nextjs.md - "CounterStore = CounterState & CounterActions"
+ */
 export type ModelPreferencesStore = ModelPreferencesState & ModelPreferencesActions;
 
+/**
+ * Persisted state subset (what gets saved to cookie)
+ * Source: persist.md - "partialize" pattern
+ */
+export type PersistedModelPreferences = Pick<ModelPreferencesState, 'selectedModelIds' | 'modelOrder' | 'selectedMode' | 'enableWebSearch'>;
+
 // ============================================================================
-// DEFAULT STATE
+// DEFAULT STATE (Official Pattern)
+// Source: nextjs.md - "defaultInitState"
 // ============================================================================
 
-const DEFAULT_STATE: ModelPreferencesState = {
+export const defaultInitState: ModelPreferencesState = {
   selectedModelIds: [],
   modelOrder: [],
+  selectedMode: null, // null = use default mode
+  enableWebSearch: false,
   _hasHydrated: false,
 };
 
 // ============================================================================
-// STORE CREATION
+// INIT FUNCTION (Official Pattern)
+// Source: nextjs.md - "initCounterStore()"
 // ============================================================================
 
 /**
- * Model preferences store with cookie persistence
+ * Initialize preferences state dynamically
+ * Called by provider to get initial state
  *
- * Stores user's model selection preferences in cookies for cross-session persistence.
- * Enforces minimum 3 models selection.
- *
- * @example
- * ```tsx
- * // In component
- * const { selectedModelIds, toggleModel } = useModelPreferencesStore();
- *
- * // Toggle model (returns false if would go below minimum)
- * const success = toggleModel('openai/gpt-4');
- * ```
+ * For SSR: parses cookie server-side and returns state
+ * For CSR: returns defaults (hydration fills in persisted data)
  */
-export const useModelPreferencesStore = create<ModelPreferencesStore>()(
-  persist(
-    (set, get) => ({
-      ...DEFAULT_STATE,
+export function initPreferencesStore(
+  serverState?: ModelPreferencesState | null,
+): ModelPreferencesState {
+  if (serverState) {
+    return {
+      ...defaultInitState,
+      ...serverState,
+      _hasHydrated: true, // Server state means already hydrated
+    };
+  }
+  return defaultInitState;
+}
 
-      setSelectedModelIds: (ids: string[]) => {
-        set({ selectedModelIds: ids }, false);
-      },
-
-      toggleModel: (modelId: string): boolean => {
-        const state = get();
-        const isSelected = state.selectedModelIds.includes(modelId);
-
-        if (isSelected) {
-          // Allow removing - user can select 1+ models freely
-          set({
-            selectedModelIds: state.selectedModelIds.filter(id => id !== modelId),
-          }, false);
-        } else {
-          set({
-            selectedModelIds: [...state.selectedModelIds, modelId],
-          }, false);
-        }
-        return true;
-      },
-
-      setModelOrder: (order: string[]) => {
-        set({ modelOrder: order }, false);
-      },
-
-      getInitialModelIds: (accessibleModelIds: string[]): string[] => {
-        const state = get();
-
-        // PRIORITY 1: Use persisted selection if any valid models exist
-        if (state.selectedModelIds.length > 0) {
-          const validPersistedIds = state.selectedModelIds.filter(id =>
-            accessibleModelIds.includes(id),
-          );
-          if (validPersistedIds.length > 0) {
-            return validPersistedIds;
-          }
-        }
-
-        // PRIORITY 2: No valid persisted selection - use first 3 accessible models
-        const defaultIds = accessibleModelIds.slice(0, MIN_MODELS);
-        if (defaultIds.length > 0) {
-          // Persist these defaults for next time
-          set({ selectedModelIds: defaultIds }, false);
-        }
-        return defaultIds;
-      },
-
-      isModelSelected: (modelId: string): boolean => {
-        return get().selectedModelIds.includes(modelId);
-      },
-
-      getSelectedCount: (): number => {
-        return get().selectedModelIds.length;
-      },
-
-      setHasHydrated: (state: boolean) => {
-        set({ _hasHydrated: state }, false);
-      },
-    }),
-    {
-      name: COOKIE_NAME,
-      storage: createJSONStorage(() => cookieStorage),
-      partialize: state => ({
-        selectedModelIds: state.selectedModelIds,
-        modelOrder: state.modelOrder,
-      }),
-      onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
-      },
-    },
-  ),
-);
+// ============================================================================
+// SERVER-SIDE COOKIE PARSER (For SSR Hydration)
+// ============================================================================
 
 /**
- * Hook to wait for hydration before using persisted state
- * Returns true when store has been hydrated from cookies
+ * Parse preferences from raw cookie value (server-side)
+ *
+ * @example
+ * // In Server Component (layout.tsx):
+ * import { cookies } from 'next/headers';
+ * const cookieStore = await cookies();
+ * const prefsCookie = cookieStore.get(PREFERENCES_COOKIE_NAME);
+ * const serverState = parsePreferencesCookie(prefsCookie?.value);
  */
-export function useModelPreferencesHydrated() {
-  return useModelPreferencesStore(state => state._hasHydrated);
+export function parsePreferencesCookie(
+  cookieValue: string | undefined,
+): ModelPreferencesState | null {
+  if (!cookieValue) {
+    return null;
+  }
+
+  try {
+    const decoded = decodeURIComponent(cookieValue);
+    const parsed = JSON.parse(decoded) as {
+      state?: {
+        selectedModelIds?: string[];
+        modelOrder?: string[];
+        selectedMode?: string | null;
+        enableWebSearch?: boolean;
+      };
+    };
+
+    // Zustand persist wraps state in { state: {...}, version: number }
+    if (parsed?.state) {
+      return {
+        selectedModelIds: Array.isArray(parsed.state.selectedModelIds)
+          ? parsed.state.selectedModelIds
+          : [],
+        modelOrder: Array.isArray(parsed.state.modelOrder)
+          ? parsed.state.modelOrder
+          : [],
+        selectedMode: typeof parsed.state.selectedMode === 'string'
+          ? parsed.state.selectedMode
+          : null,
+        enableWebSearch: typeof parsed.state.enableWebSearch === 'boolean'
+          ? parsed.state.enableWebSearch
+          : false,
+        _hasHydrated: true,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
+
+// ============================================================================
+// STORE FACTORY (Official Pattern)
+// Source: nextjs.md - "createCounterStore(initState)"
+// ============================================================================
+
+/**
+ * Factory function to create model preferences store
+ *
+ * Official Zustand v5 + Next.js pattern:
+ * - createStore from zustand/vanilla for SSR isolation
+ * - Factory accepts initial state for server-side hydration
+ * - skipHydration: true prevents automatic client hydration
+ * - onRehydrateStorage tracks hydration completion
+ *
+ * @param initState - Initial state (from server or defaults)
+ */
+export function createModelPreferencesStore(
+  initState: ModelPreferencesState = defaultInitState,
+) {
+  return createStore<ModelPreferencesStore>()(
+    devtools(
+      persist(
+        immer((set, get) => ({
+          ...initState,
+
+          setSelectedModelIds: (ids: string[]) => {
+            // Don't persist empty selection
+            if (ids.length === 0) {
+              return;
+            }
+            set(
+              (draft) => {
+                draft.selectedModelIds = ids;
+              },
+              false,
+              'preferences/setSelectedModelIds',
+            );
+          },
+
+          toggleModel: (modelId: string): boolean => {
+            const state = get();
+            const idx = state.selectedModelIds.indexOf(modelId);
+
+            if (idx !== -1) {
+              // Don't allow removing if it would leave 0 models
+              if (state.selectedModelIds.length <= 1) {
+                return false;
+              }
+              set(
+                (draft) => {
+                  draft.selectedModelIds.splice(idx, 1);
+                },
+                false,
+                'preferences/toggleModel/remove',
+              );
+            } else {
+              set(
+                (draft) => {
+                  draft.selectedModelIds.push(modelId);
+                },
+                false,
+                'preferences/toggleModel/add',
+              );
+            }
+            return true;
+          },
+
+          setModelOrder: (order: string[]) =>
+            set(
+              (draft) => {
+                draft.modelOrder = order;
+              },
+              false,
+              'preferences/setModelOrder',
+            ),
+
+          setSelectedMode: (mode: string | null) =>
+            set(
+              (draft) => {
+                draft.selectedMode = mode;
+              },
+              false,
+              'preferences/setSelectedMode',
+            ),
+
+          setEnableWebSearch: (enabled: boolean) =>
+            set(
+              (draft) => {
+                draft.enableWebSearch = enabled;
+              },
+              false,
+              'preferences/setEnableWebSearch',
+            ),
+
+          getInitialModelIds: (accessibleModelIds: string[]): string[] => {
+            const state = get();
+
+            // PRIORITY 1: Use persisted selection if valid models exist
+            if (state.selectedModelIds.length > 0) {
+              const validPersistedIds = state.selectedModelIds.filter(id =>
+                accessibleModelIds.includes(id),
+              );
+              if (validPersistedIds.length > 0) {
+                // ✅ FIX: Persist cleaned-up selection (removes invalid models)
+                // This ensures stale/invalid models don't stay in persistence
+                if (validPersistedIds.length !== state.selectedModelIds.length) {
+                  set(
+                    (draft) => {
+                      draft.selectedModelIds = validPersistedIds;
+                    },
+                    false,
+                    'preferences/cleanupInvalidModels',
+                  );
+                }
+                return validPersistedIds;
+              }
+            }
+
+            // PRIORITY 2: Use first N accessible models as defaults
+            const defaultIds = accessibleModelIds.slice(0, MIN_MODELS);
+            if (defaultIds.length > 0) {
+              set(
+                (draft) => {
+                  draft.selectedModelIds = defaultIds;
+                },
+                false,
+                'preferences/setDefaultModelIds',
+              );
+            }
+            return defaultIds;
+          },
+
+          syncWithAccessibleModels: (accessibleModelIds: string[]): void => {
+            const state = get();
+            const accessibleSet = new Set(accessibleModelIds);
+
+            // Filter out invalid models from selection
+            const validSelectedIds = state.selectedModelIds.filter(id =>
+              accessibleSet.has(id),
+            );
+
+            // Filter out invalid models from order
+            const validOrder = state.modelOrder.filter(id =>
+              accessibleSet.has(id),
+            );
+
+            // Add any new accessible models not in order
+            const newModels = accessibleModelIds.filter(id =>
+              !validOrder.includes(id),
+            );
+            const updatedOrder = [...validOrder, ...newModels];
+
+            // Only update if something changed
+            const selectionChanged = validSelectedIds.length !== state.selectedModelIds.length;
+            const orderChanged = updatedOrder.length !== state.modelOrder.length
+              || !updatedOrder.every((id, i) => state.modelOrder[i] === id);
+
+            if (selectionChanged || orderChanged) {
+              set(
+                (draft) => {
+                  if (selectionChanged) {
+                    draft.selectedModelIds = validSelectedIds;
+                  }
+                  if (orderChanged) {
+                    draft.modelOrder = updatedOrder;
+                  }
+                },
+                false,
+                'preferences/syncWithAccessibleModels',
+              );
+            }
+          },
+
+          isModelSelected: (modelId: string): boolean => {
+            return get().selectedModelIds.includes(modelId);
+          },
+
+          getSelectedCount: (): number => {
+            return get().selectedModelIds.length;
+          },
+
+          setHasHydrated: (hydrated: boolean) =>
+            set(
+              (draft) => {
+                draft._hasHydrated = hydrated;
+              },
+              false,
+              'preferences/setHasHydrated',
+            ),
+        })),
+        {
+          name: PREFERENCES_COOKIE_NAME,
+          storage: {
+            getItem: (name) => {
+              const value = cookieStorage.getItem(name);
+              return value ? JSON.parse(value) : null;
+            },
+            setItem: (name, value) => {
+              cookieStorage.setItem(name, JSON.stringify(value));
+            },
+            removeItem: (name) => {
+              cookieStorage.removeItem(name);
+            },
+          },
+          partialize: state => ({
+            selectedModelIds: state.selectedModelIds,
+            modelOrder: state.modelOrder,
+            selectedMode: state.selectedMode,
+            enableWebSearch: state.enableWebSearch,
+          }) as unknown as ModelPreferencesStore,
+          // ✅ OFFICIAL PATTERN: skipHydration for SSR
+          // Source: persist.md - prevents automatic hydration
+          skipHydration: true,
+          // ✅ OFFICIAL PATTERN: onRehydrateStorage callback
+          // Source: persist.md - tracks hydration completion
+          onRehydrateStorage: () => (state) => {
+            state?.setHasHydrated(true);
+          },
+        },
+      ),
+      { name: 'ModelPreferencesStore', enabled: process.env.NODE_ENV === 'development' },
+    ),
+  );
+}
+
+// ============================================================================
+// STORE API TYPE (Official Pattern)
+// Source: nextjs.md - "CounterStoreApi = ReturnType<typeof createCounterStore>"
+// ============================================================================
+
+export type ModelPreferencesStoreApi = ReturnType<typeof createModelPreferencesStore>;

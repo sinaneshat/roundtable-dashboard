@@ -19,7 +19,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { EncryptedText } from '@/components/ui/encrypted-text';
 import { FadeIn, PageTransition } from '@/components/ui/motion';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/ui/cn';
@@ -88,24 +87,12 @@ export function LoadingState({
         <div className={cn('flex flex-col items-center justify-center text-center', config.container, className)}>
           <Spinner className={cn(config.spinner, 'text-primary')} />
           <div className="space-y-1">
-            <p className={cn(config.title, 'font-medium')}>
-              <EncryptedText
-                text={defaultTitle}
-                revealDelayMs={25}
-                flipDelayMs={35}
-                encryptedClassName="text-muted-foreground/40"
-                revealedClassName="text-foreground"
-              />
+            <p className={cn(config.title, 'font-medium text-foreground')}>
+              {defaultTitle}
             </p>
             {message && (
               <p className="text-sm text-muted-foreground">
-                <EncryptedText
-                  text={defaultMessage}
-                  revealDelayMs={30}
-                  flipDelayMs={40}
-                  encryptedClassName="text-muted-foreground/40"
-                  revealedClassName="text-muted-foreground"
-                />
+                {defaultMessage}
               </p>
             )}
           </div>

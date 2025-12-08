@@ -744,6 +744,28 @@ const createTrackingSlice: StateCreator<
     set((draft) => {
       draft.triggeredPreSearchRounds.delete(roundNumber);
     }, false, 'tracking/clearPreSearchTracking'),
+  // ✅ ANALYSIS STREAM TRACKING: Two-level deduplication for analysis streams
+  markAnalysisStreamTriggered: (analysisId, roundNumber) =>
+    set((draft) => {
+      draft.triggeredAnalysisIds.add(analysisId);
+      draft.triggeredAnalysisRounds.add(roundNumber);
+    }, false, 'tracking/markAnalysisStreamTriggered'),
+  hasAnalysisStreamBeenTriggered: (analysisId, roundNumber) => {
+    const state = get();
+    return state.triggeredAnalysisIds.has(analysisId) || state.triggeredAnalysisRounds.has(roundNumber);
+  },
+  clearAnalysisStreamTracking: roundNumber =>
+    set((draft) => {
+      // Clear round tracking
+      draft.triggeredAnalysisRounds.delete(roundNumber);
+      // Clear analysis IDs that contain this round number
+      // Analysis IDs often contain round number in their format
+      for (const id of draft.triggeredAnalysisIds) {
+        if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
+          draft.triggeredAnalysisIds.delete(id);
+        }
+      }
+    }, false, 'tracking/clearAnalysisStreamTracking'),
   setHasEarlyOptimisticMessage: value =>
     set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
 });
@@ -863,11 +885,17 @@ const createStreamResumptionSlice: StateCreator<
     const state = get();
     const participantCount = state.participants.length;
     const nextIndex = participantIndex + 1;
+    const hasMoreParticipants = nextIndex < participantCount;
 
-    // Clear resumption state
+    // ✅ RACE CONDITION FIX: Set waitingToStartStreaming when advancing to next participant
+    // Previously only set nextParticipantToTrigger, but the provider effect requires BOTH
+    // nextParticipantToTrigger !== null AND waitingToStartStreaming === true to trigger.
+    // Without setting waitingToStartStreaming, the next participant would never be triggered.
     set({
       streamResumptionState: null,
-      nextParticipantToTrigger: nextIndex < participantCount ? nextIndex : null,
+      nextParticipantToTrigger: hasMoreParticipants ? nextIndex : null,
+      // Set waitingToStartStreaming if there are more participants to trigger
+      waitingToStartStreaming: hasMoreParticipants,
     }, false, 'streamResumption/handleResumedStreamComplete');
   },
 
@@ -1091,6 +1119,8 @@ const createOperationsSlice: StateCreator<
       // Create fresh Set instances
       createdAnalysisRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
+      triggeredAnalysisRounds: new Set<number>(),
+      triggeredAnalysisIds: new Set<string>(),
       resumptionAttempts: new Set<string>(),
       pendingAnimations: new Set<number>(),
       animationResolvers: new Map(),
@@ -1115,6 +1145,8 @@ const createOperationsSlice: StateCreator<
       // ✅ Create fresh Set instances (same as resetToNewChat)
       createdAnalysisRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
+      triggeredAnalysisRounds: new Set(),
+      triggeredAnalysisIds: new Set(),
     }, false, 'operations/resetToOverview');
   },
 
@@ -1170,6 +1202,19 @@ const createOperationsSlice: StateCreator<
 
     // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     const sortedParticipants = sortByPriority(participants);
+
+    // ✅ HYDRATION FIX: Convert thread participants to form selectedParticipants
+    // This must happen atomically with thread initialization to prevent UI flash
+    // where ChatInput shows "Select at least 1 model" before participants sync
+    const enabledParticipants = sortedParticipants.filter(p => p.isEnabled);
+    const formParticipants = enabledParticipants.map((p, index) => ({
+      id: p.id,
+      modelId: p.modelId,
+      role: p.role,
+      customRoleId: p.customRoleId || undefined,
+      priority: index,
+    }));
+
     // ✅ CONSOLIDATED: All thread initialization + reset state in one place
     // Eliminates duplicate useEffects in ChatThreadScreen
     set({
@@ -1189,6 +1234,8 @@ const createOperationsSlice: StateCreator<
       hasSentPendingMessage: false,
       createdAnalysisRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
+      triggeredAnalysisRounds: new Set<number>(),
+      triggeredAnalysisIds: new Set<string>(),
       preSearchActivityTimes: new Map<number, number>(),
       hasEarlyOptimisticMessage: false,
       streamResumptionState: null,
@@ -1205,6 +1252,8 @@ const createOperationsSlice: StateCreator<
       // Form state sync - use Zod parsing for type safety
       enableWebSearch: thread.enableWebSearch,
       selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+      // ✅ HYDRATION FIX: Set selectedParticipants atomically to prevent UI flash
+      selectedParticipants: formParticipants,
       // UI state
       showInitialUI: false,
       hasInitiallyLoaded: true,
@@ -1290,9 +1339,10 @@ const createOperationsSlice: StateCreator<
     }, false, 'operations/completeStreaming'),
 
   startRegeneration: (roundNumber: number) => {
-    const { clearAnalysisTracking, clearPreSearchTracking } = get();
+    const { clearAnalysisTracking, clearPreSearchTracking, clearAnalysisStreamTracking } = get();
     clearAnalysisTracking(roundNumber);
     clearPreSearchTracking(roundNumber);
+    clearAnalysisStreamTracking(roundNumber);
     set({
       // ✅ TYPE-SAFE: Clear all streaming state before starting regeneration
       ...STREAMING_STATE_RESET,
@@ -1345,6 +1395,8 @@ const createOperationsSlice: StateCreator<
       // ✅ CRITICAL: Reset tracking Sets (need new instances)
       createdAnalysisRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
+      triggeredAnalysisRounds: new Set(),
+      triggeredAnalysisIds: new Set(),
     }, false, 'operations/resetToNewChat');
   },
 

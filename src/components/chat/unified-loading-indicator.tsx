@@ -1,19 +1,17 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-
-import { EncryptedText } from '../ui/encrypted-text';
 
 // Default empty array for preSearches prop to avoid unstable default
 const EMPTY_PRESEARCHES: StoredPreSearch[] = [];
 
 /**
  * Animated 3-dot loader that cycles through dot count
+ * Creates a pulsing "..." animation like ChatGPT
  */
 function AnimatedDots() {
   const [dotCount, setDotCount] = useState(1);
@@ -33,39 +31,12 @@ function AnimatedDots() {
 }
 
 /**
- * Inner component that cycles through messages
- * Separated to allow React to reset state when messageSet changes via key prop
+ * Simple thinking text with animated dots
  */
-function CyclingMessage({ messages }: { messages: string[] }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const currentMessage = messages[currentIndex] || 'Processing';
-
-  // Cycle through messages every 2.5 seconds
-  useEffect(() => {
-    if (messages.length <= 1) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setCurrentIndex(prev => (prev + 1) % messages.length);
-    }, 2500);
-
-    return () => clearInterval(interval);
-  }, [messages.length]);
-
-  // Remove trailing dots from message for clean display
-  const baseMessage = currentMessage.replace(/\.+$/, '');
-
+function ThinkingText({ text }: { text: string }) {
   return (
-    <span className="font-sans font-bold text-muted-foreground">
-      <EncryptedText
-        text={baseMessage}
-        continuous
-        revealDelayMs={30}
-        flipDelayMs={80}
-        encryptedClassName="opacity-60"
-        revealedClassName="opacity-100"
-      />
+    <span className="font-sans font-medium text-muted-foreground">
+      {text}
       <AnimatedDots />
     </span>
   );
@@ -88,22 +59,14 @@ export type UnifiedLoadingIndicatorProps = {
 /**
  * Unified loading indicator for chat screens
  *
- * Shows a bottom-left aligned matrix text loading indicator for ALL loading states:
- * - Thread creation
- * - Participant streaming
- * - Analysis streaming
- * - Pre-search operations
- * - Navigation
- *
- * Uses EncryptedText for matrix scramble effect with 3-dot animation
+ * Shows a simple "Thinking..." text with animated dots for all loading states.
+ * Clean, minimal design inspired by ChatGPT.
  */
 export function UnifiedLoadingIndicator({
   showLoader,
   loadingDetails,
   preSearches = EMPTY_PRESEARCHES,
 }: UnifiedLoadingIndicatorProps) {
-  const t = useTranslations('chat.streaming');
-
   // Check for active pre-search
   const hasActivePreSearch = useMemo(() => {
     return preSearches.some(
@@ -111,42 +74,20 @@ export function UnifiedLoadingIndicator({
     );
   }, [preSearches]);
 
-  // Determine which message set to use based on current state
-  const messageSet = useMemo(() => {
+  // Simple text based on current state
+  const loadingText = useMemo(() => {
     if (loadingDetails.isCreatingThread) {
-      return ['Creating conversation...'];
+      return 'Creating conversation';
     }
     if (loadingDetails.isNavigating) {
-      return ['Opening conversation...'];
+      return 'Opening conversation';
     }
     if (hasActivePreSearch) {
-      return [
-        'Searching the web...',
-        'Gathering information...',
-        'Analyzing search results...',
-        'Extracting relevant content...',
-      ];
+      return 'Searching';
     }
-    if (loadingDetails.isStreamingAnalysis) {
-      return t.raw('analyzingMessages') as string[] || [
-        'Analyzing responses...',
-        'Synthesizing insights...',
-        'Preparing analysis...',
-      ];
-    }
-    if (loadingDetails.isStreamingParticipants) {
-      return t.raw('thinkingMessages') as string[] || [
-        'Thinking...',
-        'Processing...',
-        'Generating response...',
-      ];
-    }
-    // Default fallback
-    return ['Processing...'];
-  }, [loadingDetails, hasActivePreSearch, t]);
-
-  // Create a stable key for the message set to detect changes
-  const messageSetKey = useMemo(() => messageSet.join('|'), [messageSet]);
+    // Default for streaming participants or analysis
+    return 'Thinking';
+  }, [loadingDetails, hasActivePreSearch]);
 
   // Determine if we should show the indicator
   const shouldShow = showLoader || hasActivePreSearch;
@@ -164,8 +105,7 @@ export function UnifiedLoadingIndicator({
         className="text-left pointer-events-none"
       >
         <div className="text-base py-2">
-          {/* Key ensures component remounts and resets cycling when message set changes */}
-          <CyclingMessage key={messageSetKey} messages={messageSet} />
+          <ThinkingText text={loadingText} />
         </div>
       </motion.div>
     </AnimatePresence>

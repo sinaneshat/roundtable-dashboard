@@ -50,6 +50,12 @@ export const resumeStreamHandler: RouteHandler<typeof resumeStreamRoute, ApiEnv>
     validateParams: StreamIdParamSchema,
   },
   async (c) => {
+    // ✅ LOCAL DEV FIX: If KV is not available, return 204 immediately
+    // Without KV, stream resumption cannot work properly.
+    if (!c.env?.KV) {
+      return Responses.noContentWithHeaders();
+    }
+
     const { user } = c.auth();
     const { streamId } = c.validated.params;
 
@@ -136,6 +142,14 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     const { user } = c.auth();
     const { threadId } = c.validated.params;
 
+    // ✅ LOCAL DEV FIX: If KV is not available, return 204 immediately
+    // Without KV, stream resumption cannot work properly.
+    // Returning 204 prevents the AI SDK from receiving stale/corrupted data
+    // that causes message ID mismatches and broken streaming state.
+    if (!c.env?.KV) {
+      return Responses.noContentWithHeaders();
+    }
+
     // Verify thread ownership
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
@@ -170,6 +184,30 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     // - If there's an actively streaming participant, return their stream
     // - Otherwise, return the last active stream's buffered data
     const streamIdToResume = activeStream.streamId;
+
+    // ✅ CRITICAL FIX: Validate stream ID matches active stream metadata
+    // The stream ID format is: {threadId}_r{roundNumber}_p{participantIndex}
+    // If the stream ID's round/participant doesn't match activeStream metadata,
+    // the KV data is stale and we should return 204 instead of corrupted data.
+    const streamIdMatch = streamIdToResume.match(/^(.+)_r(\d+)_p(\d+)$/);
+    if (streamIdMatch) {
+      const streamIdRound = Number.parseInt(streamIdMatch[2]!, 10);
+      const streamIdParticipant = Number.parseInt(streamIdMatch[3]!, 10);
+
+      // Check if stream ID round/participant matches activeStream metadata
+      if (streamIdRound !== activeStream.roundNumber) {
+        // Stream ID is from a different round - KV data is stale
+        // Return 204 so frontend triggers fresh streaming instead of using corrupted data
+        return Responses.noContentWithHeaders();
+      }
+
+      // Also validate participant index matches for extra safety
+      if (streamIdParticipant !== activeStream.participantIndex) {
+        // Participant mismatch - this could be a race condition or stale data
+        // Return 204 to be safe
+        return Responses.noContentWithHeaders();
+      }
+    }
 
     // Get stream buffer metadata
     const metadata = await getStreamMetadata(streamIdToResume, c.env);

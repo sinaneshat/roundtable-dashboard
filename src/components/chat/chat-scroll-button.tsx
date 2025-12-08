@@ -1,12 +1,12 @@
 'use client';
 import { ArrowDown } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
 type ChatScrollButtonProps = {
-  variant?: 'floating' | 'header';
+  variant?: 'floating' | 'header' | 'input';
   className?: string;
 };
 
@@ -17,27 +17,31 @@ export function ChatScrollButton({
   const [showButton, setShowButton] = useState(false);
   const rafRef = useRef<number | null>(null);
 
+  // ✅ REACT 19: useEffectEvent for scroll position check - stable handler
+
+  const onCheckScrollPosition = useEffectEvent(() => {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- setState in useEffectEvent is valid React 19 pattern
+    setShowButton(distanceFromBottom > 200);
+  });
+
   useEffect(() => {
     let ticking = false;
-
-    const checkScrollPosition = () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = window.innerHeight;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: updating state based on scroll position
-      setShowButton(distanceFromBottom > 200);
-      ticking = false;
-    };
 
     const handleScroll = () => {
       if (!ticking) {
         ticking = true;
-        requestAnimationFrame(checkScrollPosition);
+        requestAnimationFrame(() => {
+          onCheckScrollPosition();
+          ticking = false;
+        });
       }
     };
 
-    checkScrollPosition();
+    onCheckScrollPosition(); // Initial check
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
@@ -51,23 +55,10 @@ export function ChatScrollButton({
       cancelAnimationFrame(rafRef.current);
     }
 
-    // ✅ BODY-BASED SCROLL: Use anchor position for accurate targeting
+    // Scroll to absolute bottom of the document
     rafRef.current = requestAnimationFrame(() => {
-      const scrollAnchor = document.querySelector('[data-scroll-anchor="chat-bottom"]');
-      let targetScrollTop: number;
-
-      if (scrollAnchor) {
-        // Calculate position based on anchor
-        const anchorRect = scrollAnchor.getBoundingClientRect();
-        const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
-        targetScrollTop = currentScrollTop + anchorRect.bottom - window.innerHeight;
-      } else {
-        // Fallback to document bottom
-        targetScrollTop = document.documentElement.scrollHeight - window.innerHeight;
-      }
-
       window.scrollTo({
-        top: Math.max(0, targetScrollTop),
+        top: document.documentElement.scrollHeight,
         behavior: 'smooth',
       });
       rafRef.current = null;
@@ -76,6 +67,29 @@ export function ChatScrollButton({
 
   if (!showButton)
     return null;
+
+  if (variant === 'input') {
+    return (
+      <div className="flex justify-center mb-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn(
+            'size-9 rounded-full shadow-md',
+            'bg-background/95 backdrop-blur-sm',
+            'border-border/50',
+            'hover:bg-accent hover:text-accent-foreground',
+            'transition-all duration-200',
+            className,
+          )}
+          onClick={scrollToBottom}
+          aria-label="Scroll to bottom"
+        >
+          <ArrowDown className="size-4" />
+        </Button>
+      </div>
+    );
+  }
 
   if (variant === 'header') {
     return (

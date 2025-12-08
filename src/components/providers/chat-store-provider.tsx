@@ -46,7 +46,7 @@ import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { extractFileContextForSearch, getPreSearchTimeout, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import { executePreSearchStreamService, getThreadMessagesService } from '@/services/api';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
-import { AnimationIndices, createChatStore, readPreSearchStreamData } from '@/stores/chat';
+import { AnimationIndices, createChatStore, readPreSearchStreamData, shouldWaitForPreSearch } from '@/stores/chat';
 
 // ============================================================================
 // CONTEXT (Official Pattern)
@@ -402,6 +402,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               const attachments = store.getState().getAttachments();
               const fileContext = await extractFileContextForSearch(attachments);
 
+              // ✅ IMAGE ANALYSIS: Get attachment IDs for server-side image analysis
+              // The backend will analyze images with a vision model to generate relevant search queries
+              const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
               // If placeholder, create DB record first
               if (isPlaceholder) {
                 const createResponse = await createPreSearch.mutateAsync({
@@ -409,7 +413,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                     threadId: threadIdForSearch,
                     roundNumber: currentRound.toString(),
                   },
-                  json: { userQuery, fileContext: fileContext || undefined },
+                  json: { userQuery, fileContext: fileContext || undefined, attachmentIds },
                 });
 
                 if (createResponse?.data) {
@@ -433,6 +437,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 json: {
                   userQuery,
                   fileContext: fileContext || undefined,
+                  attachmentIds,
                 },
               });
 
@@ -670,6 +675,33 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // on page load. It calls continueFromParticipant to trigger the remaining participants.
   const nextParticipantToTrigger = useStore(store, s => s.nextParticipantToTrigger);
 
+  // ✅ RACE CONDITION FIX: Clean up dangling nextParticipantToTrigger
+  // If waitingToStart is false but nextParticipantToTrigger is set, this is inconsistent state
+  // that can occur when stale state detection clears waitingToStart but misses other flags.
+  // Clean up to prevent the system from being stuck with unprocessed trigger.
+  useEffect(() => {
+    // Only clean up if we have dangling state: participant set but not waiting/streaming
+    if (nextParticipantToTrigger === null || waitingToStart || chatIsStreaming) {
+      return; // No cleanup needed
+    }
+
+    // Give a short delay to allow normal resumption to happen first
+    // This prevents clearing during the brief window between setting flags
+    const timeoutId = setTimeout(() => {
+      const latestState = store.getState();
+      // Double-check state hasn't changed - still dangling?
+      if (latestState.nextParticipantToTrigger !== null
+        && !latestState.waitingToStartStreaming
+        && !latestState.isStreaming
+      ) {
+        // Clear the dangling state
+        latestState.setNextParticipantToTrigger(null);
+      }
+    }, 500); // 500ms grace period
+
+    return () => clearTimeout(timeoutId);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, store]);
+
   useEffect(() => {
     // Skip if no participant to trigger or not waiting to resume
     if (nextParticipantToTrigger === null || !waitingToStart) {
@@ -704,13 +736,25 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
+    // ✅ PRE-SEARCH BLOCKING: Wait for pre-search to complete before starting participants
+    // This handles the case where thread is created on overview screen and user navigates
+    // to thread screen before pre-search completes. Without this, participants would start
+    // before search results are available.
+    const currentRound = getCurrentRoundNumber(storeMessages);
+    const webSearchEnabled = storeThread?.enableWebSearch ?? false;
+    const preSearchForRound = storePreSearches.find(ps => ps.roundNumber === currentRound);
+    if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
+      // Effect will re-run when preSearches updates (status changes)
+      return;
+    }
+
     // ✅ CRITICAL: Call continueFromParticipant to resume from the specific participant
     // This triggers streaming for the missing participant, not from the beginning
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
 
     // Clear the trigger flag after calling (let the effect retry if needed)
     // The flag will be cleared when streaming actually begins
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, storePreSearches, storeThread, chat, store]);
 
   // ✅ SAFETY TIMEOUT: Clear stuck waitingToStartStreaming state on thread screen
   // In local dev without KV, stream resumption may fail (GET /stream returns 204)
@@ -1015,10 +1059,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       });
 
       // ✅ INFINITE LOOP FIX: Only sync if messages actually changed
-      // filter() creates a new array reference every time, which would trigger
-      // unnecessary re-renders. Check if filtered messages are actually different.
+      // CRITICAL: structuredClone creates NEW object references, so we CANNOT compare by reference
+      // Instead, compare by message ID and parts length (content proxy)
+      // This prevents infinite loops where cloned objects never === original objects
       const isSameMessages = deduplicatedMessages.length === currentStoreMessages.length
-        && deduplicatedMessages.every((m, i) => m === currentStoreMessages[i]);
+        && deduplicatedMessages.every((m, i) => {
+          const storeMsg = currentStoreMessages[i];
+          // Compare by ID (stable identifier)
+          if (m.id !== storeMsg?.id)
+            return false;
+          // Compare parts count as proxy for content changes during streaming
+          if (m.parts?.length !== storeMsg?.parts?.length)
+            return false;
+          return true;
+        });
 
       if (!isSameMessages) {
         prevMessageCountRef.current = chat.messages.length;
@@ -1289,6 +1343,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const attachments = store.getState().getAttachments();
           const fileContext = await extractFileContextForSearch(attachments);
 
+          // ✅ IMAGE ANALYSIS: Get attachment IDs for server-side image analysis
+          // The backend will analyze images with a vision model to generate relevant search queries
+          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
           createPreSearch.mutateAsync({
             param: {
               threadId: effectiveThreadId,
@@ -1297,6 +1355,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             json: {
               userQuery: pendingMessage,
               fileContext: fileContext || undefined,
+              attachmentIds,
             },
           }).then((createResponse) => {
             // ✅ CRITICAL FIX: Add pre-search to store immediately after creation
@@ -1321,6 +1380,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               json: {
                 userQuery: pendingMessage,
                 fileContext: fileContext || undefined,
+                attachmentIds,
               },
             });
           }).then(async (response) => {
@@ -1397,6 +1457,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const attachments = store.getState().getAttachments();
           const fileContext = await extractFileContextForSearch(attachments);
 
+          // ✅ IMAGE ANALYSIS: Get attachment IDs for server-side image analysis
+          // The backend will analyze images with a vision model to generate relevant search queries
+          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
+
           // ✅ TYPE-SAFE: Use service instead of direct fetch
           const executePreSearch = () => executePreSearchStreamService({
             param: {
@@ -1406,6 +1470,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             json: {
               userQuery: pendingMessage,
               fileContext: fileContext || undefined,
+              attachmentIds,
             },
           });
 
@@ -1452,6 +1517,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
               json: {
                 userQuery: pendingMessage,
                 fileContext: fileContext || undefined,
+                attachmentIds,
               },
             }).then((createResponse) => {
               // Update store with real pre-search data (replace placeholder)

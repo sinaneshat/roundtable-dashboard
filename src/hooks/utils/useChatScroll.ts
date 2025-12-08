@@ -1,5 +1,5 @@
 import type { UIMessage } from 'ai';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
 
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 
@@ -35,6 +35,19 @@ type UseChatScrollParams = {
    * When true, scroll should follow content even before participant streaming starts
    */
   showLoader?: boolean;
+  /**
+   * Scroll to bottom instantly when page first loads with messages
+   * Use this for thread pages where user lands on existing conversation
+   * Default: false
+   */
+  initialScrollToBottom?: boolean;
+  /**
+   * Whether the store has been hydrated with initial data
+   * When true, the scroll can proceed. When false, scroll waits.
+   * This ensures we don't scroll before server data is loaded into store.
+   * Default: true (for backwards compatibility)
+   */
+  isStoreReady?: boolean;
 };
 
 type UseChatScrollResult = {
@@ -58,31 +71,32 @@ type UseChatScrollResult = {
 };
 
 /**
- * ✅ REWRITTEN: ResizeObserver-based auto-scroll for smooth window-level scrolling
+ * Chat scroll management hook
  *
- * KEY PRINCIPLES:
- * 1. Use ResizeObserver on scroll anchor to detect ANY content growth (loader, text, etc)
- * 2. "Sticky" state = whether to auto-scroll (like use-stick-to-bottom's isAtBottom)
- * 3. User scrolling UP = unstick (immediate)
- * 4. User reaching bottom = stick (automatic)
- * 5. When sticky AND content grows, auto-scroll to keep bottom in view
- * 6. Use requestAnimationFrame for smooth animation timing
+ * ✅ AUTO-SCROLL ON SUBMIT: Smooth scroll to bottom when new messages added
+ * ❌ NO streaming auto-scroll: User controls position during AI response
+ * ❌ NO initial scroll: Handled by useVirtualizedTimeline (knows when virtualization ready)
  *
- * This ensures auto-scroll works for ALL content: loader text, streaming messages, etc.
+ * This hook provides:
+ * - isAtBottomRef: Tracks if user is at bottom (for scroll button visibility)
+ * - scrollToBottom: Manual scroll function (used by scroll button)
+ * - resetScrollState: Reset when navigating between threads
  */
 export function useChatScroll({
   messages,
   analyses,
-  isStreaming,
+  isStreaming: _isStreaming,
   scrollContainerId: _scrollContainerId = 'chat-scroll-container',
   enableNearBottomDetection = true,
   autoScrollThreshold = 100,
   currentParticipantIndex: _currentParticipantIndex,
-  bottomOffset = 0,
-  scrollAnchorRef,
-  showLoader = false,
+  bottomOffset: _bottomOffset = 0,
+  scrollAnchorRef: _scrollAnchorRef,
+  showLoader: _showLoader = false,
+  initialScrollToBottom: _initialScrollToBottom = false,
+  isStoreReady: _isStoreReady = true,
 }: UseChatScrollParams): UseChatScrollResult {
-  // ✅ STICKY STATE: Like use-stick-to-bottom's isAtBottom
+  // Track if user is at bottom (for scroll button visibility)
   const isAtBottomRef = useRef(true);
 
   // Track which analyses have been scrolled to
@@ -97,11 +111,8 @@ export function useChatScroll({
   // RAF-based scroll queue for smooth animation
   const scrollRafRef = useRef<number | null>(null);
 
-  // Throttle for content-based scrolling
-  const scrollThrottleRef = useRef<number>(0);
-
-  // Track last anchor position for resize detection
-  const lastAnchorTopRef = useRef<number>(0);
+  // ✅ REACT 19: Track scroll animation reset RAF to avoid setTimeout
+  const animationResetRafRef = useRef<number | null>(null);
 
   /**
    * Reset all scroll state to initial values
@@ -111,10 +122,13 @@ export function useChatScroll({
     scrolledToAnalysesRef.current = new Set();
     lastScrollTopRef.current = 0;
     isProgrammaticScrollRef.current = false;
-    lastAnchorTopRef.current = 0;
     if (scrollRafRef.current) {
       cancelAnimationFrame(scrollRafRef.current);
       scrollRafRef.current = null;
+    }
+    if (animationResetRafRef.current) {
+      cancelAnimationFrame(animationResetRafRef.current);
+      animationResetRafRef.current = null;
     }
   }, []);
 
@@ -126,51 +140,103 @@ export function useChatScroll({
   }, [messages.length, resetScrollState]);
 
   /**
-   * Scroll to bottom using window.scrollTo for consistent body-based scrolling
+   * Scroll to bottom using window.scrollTo with retry pattern
+   * ✅ Retries until actually at bottom (handles virtualization measurement)
+   * ✅ Uses multiple RAFs to ensure DOM has fully updated
    */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
-      // Cancel any pending scroll
+      // Cancel any pending scroll and animation reset
       if (scrollRafRef.current) {
         cancelAnimationFrame(scrollRafRef.current);
       }
+      if (animationResetRafRef.current) {
+        cancelAnimationFrame(animationResetRafRef.current);
+      }
 
       isProgrammaticScrollRef.current = true;
+      isAtBottomRef.current = true;
 
-      // Use RAF for smooth timing
-      scrollRafRef.current = requestAnimationFrame(() => {
-        let targetScrollTop: number;
+      let attempts = 0;
+      const maxAttempts = 15;
+      let timeoutId: NodeJS.Timeout | null = null;
 
-        if (scrollAnchorRef?.current) {
-          const anchorRect = scrollAnchorRef.current.getBoundingClientRect();
-          const currentScrollTop = window.scrollY || document.documentElement.scrollTop;
-          targetScrollTop = currentScrollTop + anchorRect.bottom - window.innerHeight + bottomOffset;
-        } else {
-          targetScrollTop = document.documentElement.scrollHeight - window.innerHeight + bottomOffset;
-        }
+      const doScroll = () => {
+        attempts++;
 
-        window.scrollTo({
-          top: Math.max(0, targetScrollTop),
-          behavior,
+        // Use triple RAF to ensure DOM layout is complete
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Scroll to absolute bottom of document
+            const scrollHeight = Math.max(
+              document.body.scrollHeight,
+              document.documentElement.scrollHeight,
+            );
+            window.scrollTo({
+              top: scrollHeight,
+              behavior: attempts === 1 ? behavior : 'instant', // Only first scroll is smooth
+            });
+
+            // Check if we're actually at the bottom
+            requestAnimationFrame(() => {
+              const finalScrollHeight = Math.max(
+                document.body.scrollHeight,
+                document.documentElement.scrollHeight,
+              );
+              const currentScroll = window.scrollY;
+              const viewportHeight = window.innerHeight;
+              const maxScroll = finalScrollHeight - viewportHeight;
+              const isAtBottom = currentScroll >= maxScroll - 10;
+
+              // Retry if not at bottom - virtualization may still be measuring
+              if (!isAtBottom && attempts < maxAttempts) {
+                timeoutId = setTimeout(doScroll, 50);
+              } else {
+                // Done scrolling - reset programmatic flag
+                isProgrammaticScrollRef.current = false;
+                if (timeoutId)
+                  clearTimeout(timeoutId);
+              }
+            });
+          });
         });
+      };
 
-        isAtBottomRef.current = true;
-
-        // Reset programmatic flag after animation
-        const delay = behavior === 'smooth' ? 300 : 50;
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, delay);
-
-        scrollRafRef.current = null;
-      });
+      scrollRafRef.current = requestAnimationFrame(doScroll);
     },
-    [bottomOffset, scrollAnchorRef],
+    [],
   );
 
   // ============================================================================
-  // EFFECT 1: Track user scroll intent (sticky/unsticky state)
+  // EFFECT 0: Initial scroll - REMOVED
+  // ❌ Initial scroll is handled by useVirtualizedTimeline which knows when virtualization is ready
+  // This prevents scroll happening before content is measured and positioned
   // ============================================================================
+
+  // ============================================================================
+  // EFFECT 1: Track user scroll intent (sticky/unsticky state)
+  // ✅ REACT 19: useEffectEvent for scroll handler - reads autoScrollThreshold without dep
+  // ============================================================================
+  const onScroll = useEffectEvent(() => {
+    if (isProgrammaticScrollRef.current)
+      return;
+
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    const scrollDelta = scrollTop - lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
+
+    // ✅ STICKY LOGIC: scroll up = unstick, reach bottom = stick
+    if (scrollDelta < -10) {
+      isAtBottomRef.current = false;
+    } else if (distanceFromBottom <= autoScrollThreshold) {
+      isAtBottomRef.current = true;
+    }
+  });
+
   useEffect(() => {
     if (!enableNearBottomDetection) {
       isAtBottomRef.current = true;
@@ -180,26 +246,12 @@ export function useChatScroll({
     let ticking = false;
 
     const handleScroll = () => {
-      if (isProgrammaticScrollRef.current || ticking)
+      if (ticking)
         return;
 
       ticking = true;
       requestAnimationFrame(() => {
-        const scrollTop = window.scrollY || document.documentElement.scrollTop;
-        const scrollHeight = document.documentElement.scrollHeight;
-        const clientHeight = window.innerHeight;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-        const scrollDelta = scrollTop - lastScrollTopRef.current;
-        lastScrollTopRef.current = scrollTop;
-
-        // ✅ STICKY LOGIC: scroll up = unstick, reach bottom = stick
-        if (scrollDelta < -10) {
-          isAtBottomRef.current = false;
-        } else if (distanceFromBottom <= autoScrollThreshold) {
-          isAtBottomRef.current = true;
-        }
-
+        onScroll();
         ticking = false;
       });
     };
@@ -210,128 +262,34 @@ export function useChatScroll({
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [enableNearBottomDetection, autoScrollThreshold]);
+  }, [enableNearBottomDetection]); // ✅ autoScrollThreshold removed - accessed via useEffectEvent
 
   // ============================================================================
-  // EFFECT 2: ResizeObserver on scroll anchor to detect ANY content growth
-  // ✅ Auto-scroll DISABLED during streaming (ChatGPT-style behavior)
-  // ✅ Auto-scroll ENABLED for showLoader only (pre-streaming phases)
+  // EFFECT 2: AUTO-SCROLL ON NEW MESSAGES
+  // ✅ Smooth scroll to bottom when new messages are submitted
   // ============================================================================
-  const isActive = isStreaming || showLoader;
+  const prevMessageCountRef = useRef(messages.length);
 
   useEffect(() => {
-    if (!scrollAnchorRef?.current || !isActive) {
-      return;
+    const isNewMessage = messages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = messages.length;
+
+    // Auto-scroll to bottom when new messages arrive
+    if (isNewMessage && messages.length > 0) {
+      scrollToBottom('smooth');
     }
-
-    const anchor = scrollAnchorRef.current;
-
-    // Initialize last position
-    const initialRect = anchor.getBoundingClientRect();
-    lastAnchorTopRef.current = initialRect.top + window.scrollY;
-
-    // ✅ RESIZE OBSERVER: Watches anchor position changes caused by content growth
-    const resizeObserver = new ResizeObserver(() => {
-      if (!isAtBottomRef.current || isProgrammaticScrollRef.current)
-        return;
-
-      const anchorRect = anchor.getBoundingClientRect();
-      const currentAnchorTop = anchorRect.top + window.scrollY;
-
-      // Content grew if anchor moved down
-      const contentGrew = currentAnchorTop > lastAnchorTopRef.current + 5; // 5px threshold
-      lastAnchorTopRef.current = currentAnchorTop;
-
-      if (!contentGrew)
-        return;
-
-      // ✅ DISABLE AUTO-SCROLL DURING STREAMING
-      // Let user read content in place, show scroll button instead
-      if (isStreaming)
-        return;
-
-      // ✅ THROTTLE: Max once per 50ms for smooth but not excessive scrolling
-      const now = Date.now();
-      if (now - scrollThrottleRef.current < 50)
-        return;
-      scrollThrottleRef.current = now;
-
-      // Auto-scroll only for non-streaming content (loader, etc)
-      requestAnimationFrame(() => {
-        if (isAtBottomRef.current && !isProgrammaticScrollRef.current) {
-          scrollToBottom('auto');
-        }
-      });
-    });
-
-    // ✅ MUTATION OBSERVER: Catches DOM changes that don't trigger resize
-    const mutationObserver = new MutationObserver(() => {
-      if (!isAtBottomRef.current || isProgrammaticScrollRef.current)
-        return;
-
-      // ✅ DISABLE AUTO-SCROLL DURING STREAMING
-      if (isStreaming)
-        return;
-
-      // ✅ THROTTLE
-      const now = Date.now();
-      if (now - scrollThrottleRef.current < 50)
-        return;
-      scrollThrottleRef.current = now;
-
-      requestAnimationFrame(() => {
-        if (isAtBottomRef.current && !isProgrammaticScrollRef.current) {
-          // Check if we need to scroll (content might have grown)
-          const scrollTop = window.scrollY || document.documentElement.scrollTop;
-          const scrollHeight = document.documentElement.scrollHeight;
-          const clientHeight = window.innerHeight;
-          const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-          // Only scroll if we're not at actual bottom (content grew)
-          if (distanceFromBottom > 10) {
-            scrollToBottom('auto');
-          }
-        }
-      });
-    });
-
-    // Observe the anchor's parent (content container) for changes
-    const contentContainer = anchor.parentElement;
-    if (contentContainer) {
-      resizeObserver.observe(contentContainer);
-      mutationObserver.observe(contentContainer, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-    };
-  }, [isActive, isStreaming, scrollAnchorRef, scrollToBottom]);
+  }, [messages.length, scrollToBottom]);
 
   // ============================================================================
-  // EFFECT 3: Initial scroll when loading/streaming starts
+  // EFFECT 3: AUTO-SCROLL DURING STREAMING - DISABLED
+  // ❌ AUTO-SCROLL DISABLED: No automatic scrolling during streaming
   // ============================================================================
-  const wasActiveRef = useRef(false);
+  // No-op: User controls scroll position during streaming
 
-  useEffect(() => {
-    const wasActive = wasActiveRef.current;
-    wasActiveRef.current = isActive;
-
-    // When activity STARTS, do initial scroll
-    if (!wasActive && isActive && isAtBottomRef.current) {
-      requestAnimationFrame(() => {
-        if (isAtBottomRef.current) {
-          scrollToBottom('smooth');
-        }
-      });
-    }
-  }, [isActive, scrollToBottom]);
-
-  // Track analyses
+  // ============================================================================
+  // EFFECT 4: Track analyses - consolidated with ref for ID tracking
+  // React 19: Valid effect - updating tracking state on data changes
+  // ============================================================================
   useEffect(() => {
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     if (newAnalyses.length > 0) {
@@ -339,11 +297,14 @@ export function useChatScroll({
     }
   }, [analyses]);
 
-  // Cleanup on unmount
+  // Cleanup RAFs on unmount
   useEffect(() => {
     return () => {
       if (scrollRafRef.current) {
         cancelAnimationFrame(scrollRafRef.current);
+      }
+      if (animationResetRafRef.current) {
+        cancelAnimationFrame(animationResetRafRef.current);
       }
     };
   }, []);

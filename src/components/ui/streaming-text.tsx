@@ -104,9 +104,9 @@ export const StreamingText = memo(function StreamingText({
 // RE-EXPORT SHIMMER - Single source of truth from ai-elements
 // ============================================================================
 
-// Re-export Shimmer from ai-elements as the single source of truth for shimmer effects
-export { Shimmer } from '@/components/ai-elements/shimmer';
-export type { TextShimmerProps as ShimmerProps } from '@/components/ai-elements/shimmer';
+// Re-export TextShimmer from ai-elements as the single source of truth for shimmer effects
+export { TextShimmer } from '@/components/ai-elements/shimmer';
+export type { TextShimmerProps } from '@/components/ai-elements/shimmer';
 
 // ============================================================================
 // STREAMING BLOCK - Wrapper for streaming content blocks

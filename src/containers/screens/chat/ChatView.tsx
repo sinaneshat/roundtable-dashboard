@@ -25,12 +25,11 @@ import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
+import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
-import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { UnifiedLoadingIndicator } from '@/components/chat/unified-loading-indicator';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -39,6 +38,7 @@ import {
   useBoolean,
   useChatScroll,
   useFlowLoading,
+  useOrderedModels,
   useSortedParticipants,
   useThreadTimeline,
   useVisualViewportPosition,
@@ -107,13 +107,14 @@ export function ChatView({
     })),
   );
 
-  const { streamingRoundNumber, isCreatingAnalysis, waitingToStartStreaming, isCreatingThread, pendingMessage } = useChatStore(
+  const { streamingRoundNumber, isCreatingAnalysis, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded } = useChatStore(
     useShallow(s => ({
       streamingRoundNumber: s.streamingRoundNumber,
       isCreatingAnalysis: s.isCreatingAnalysis,
       waitingToStartStreaming: s.waitingToStartStreaming,
       isCreatingThread: s.isCreatingThread,
       pendingMessage: s.pendingMessage,
+      hasInitiallyLoaded: s.hasInitiallyLoaded,
     })),
   );
 
@@ -198,48 +199,11 @@ export function ChatView({
   }, [changelogResponse]);
 
   // Model ordering for modal - stable references for Motion Reorder
-  const orderedModels = useMemo((): OrderedModel[] => {
-    if (allEnabledModels.length === 0)
-      return [];
-
-    const participantMap = new Map(
-      selectedParticipants.map(p => [p.modelId, p]),
-    );
-    const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
-
-    // Build ordered list from modelOrder, deduplicating as we go
-    const seen = new Set<string>();
-    const orderedFromStore: OrderedModel[] = [];
-
-    // First, add models in the stored order
-    for (const modelId of modelOrder) {
-      if (seen.has(modelId))
-        continue;
-      const model = modelMap.get(modelId);
-      if (!model)
-        continue;
-      seen.add(modelId);
-      orderedFromStore.push({
-        model,
-        participant: participantMap.get(modelId) || null,
-        order: orderedFromStore.length,
-      });
-    }
-
-    // Then, append any models not yet in the order (newly available models)
-    for (const model of allEnabledModels) {
-      if (seen.has(model.id))
-        continue;
-      seen.add(model.id);
-      orderedFromStore.push({
-        model,
-        participant: participantMap.get(model.id) || null,
-        order: orderedFromStore.length,
-      });
-    }
-
-    return orderedFromStore;
-  }, [selectedParticipants, allEnabledModels, modelOrder]);
+  const orderedModels = useOrderedModels({
+    selectedParticipants,
+    allEnabledModels,
+    modelOrder,
+  });
 
   // Timeline with messages, analyses, changelog, and pre-searches
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
@@ -304,9 +268,12 @@ export function ChatView({
   const formActions = useChatFormActions();
 
   // Loading state - needed before scroll hook
-  const { showLoader, loadingDetails } = useFlowLoading({ mode });
+  const { showLoader } = useFlowLoading({ mode });
 
   // Scroll management - uses single scroll anchor for smooth auto-scrolling
+  // ✅ HYDRATION: isStoreReady ensures scroll waits for server data to load into store
+  const isStoreReady = mode === 'thread' ? (hasInitiallyLoaded && messages.length > 0) : true;
+
   useChatScroll({
     messages,
     analyses,
@@ -317,6 +284,8 @@ export function ChatView({
     bottomOffset: 180,
     scrollAnchorRef, // ✅ SMOOTH SCROLL: Enables scrollIntoView for smoother mobile scrolling
     showLoader, // ✅ LOADING STATE: Triggers scroll when loader appears
+    initialScrollToBottom: mode === 'thread', // ✅ THREAD MODE: Scroll to bottom on initial load
+    isStoreReady, // ✅ HYDRATION: Wait for store to be hydrated before initial scroll
   });
 
   // Input blocking - unified calculation for both screens
@@ -331,16 +300,11 @@ export function ChatView({
   // Mobile keyboard handling
   const keyboardOffset = useVisualViewportPosition();
 
-  // Stuck analysis cleanup
-  const stuckAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
+  // Stuck analysis cleanup - timer-based cleanup for analyses that get stuck streaming
+  // React 19: Valid effect for timer (external system)
+  // Uses interval to periodically check for stuck analyses
   useEffect(() => {
     const ANALYSIS_TIMEOUT_MS = 90000;
-
-    if (stuckAnalysisIntervalRef.current) {
-      clearInterval(stuckAnalysisIntervalRef.current);
-      stuckAnalysisIntervalRef.current = null;
-    }
 
     const checkStuckAnalyses = () => {
       const stuckAnalyses = analyses.filter((analysis) => {
@@ -360,15 +324,11 @@ export function ChatView({
       }
     };
 
+    // Check immediately and set up interval
     checkStuckAnalyses();
-    stuckAnalysisIntervalRef.current = setInterval(checkStuckAnalyses, 10000);
+    const intervalId = setInterval(checkStuckAnalyses, 10000);
 
-    return () => {
-      if (stuckAnalysisIntervalRef.current) {
-        clearInterval(stuckAnalysisIntervalRef.current);
-        stuckAnalysisIntervalRef.current = null;
-      }
-    };
+    return () => clearInterval(intervalId);
   }, [analyses, updateAnalysisStatus]);
 
   // ============================================================================
@@ -431,7 +391,6 @@ export function ChatView({
 
     let updatedParticipants;
     if (orderedModel.participant) {
-      // Allow deselecting all - validation shown in UI
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
@@ -528,6 +487,7 @@ export function ChatView({
               user={user}
               participants={contextParticipants}
               threadId={effectiveThreadId}
+              threadTitle={thread?.title}
               isStreaming={isStreaming}
               currentParticipantIndex={currentParticipantIndex}
               currentStreamingParticipant={
@@ -546,16 +506,9 @@ export function ChatView({
               onAnalysisStreamComplete={handleAnalysisStreamComplete}
               onActionClick={recommendedActions.handleActionClick}
               preSearches={preSearches}
+              initialScrollToBottom={mode === 'thread'}
+              isDataReady={isStoreReady}
             />
-
-            {/* Loading indicator */}
-            <div className="mt-4 mb-2">
-              <UnifiedLoadingIndicator
-                showLoader={showLoader}
-                loadingDetails={loadingDetails}
-                preSearches={preSearches}
-              />
-            </div>
 
             {/* ✅ SCROLL ANCHOR: Single marker for smooth auto-scroll snapping
                 This element is the ONLY target for scroll behavior
@@ -575,9 +528,12 @@ export function ChatView({
             style={{ bottom: `${keyboardOffset + 16}px` }}
           >
             <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
+              {/* Scroll to bottom button - positioned above input */}
+              <ChatScrollButton variant="input" />
               {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
                   Per AI SDK docs, resume: true is incompatible with abort/stop.
-                  Streams continue in background via waitUntil() and can be resumed. */}
+                  Streams continue in background via waitUntil() and can be resumed.
+                  ✅ HYDRATION FIX: Pass isHydrating to suppress "no models" error flash */}
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
@@ -593,6 +549,7 @@ export function ChatView({
                 enableAttachments={!isInputBlocked}
                 attachmentClickRef={attachmentClickRef}
                 isUploading={chatAttachments.isUploading}
+                isHydrating={mode === 'thread' && !hasInitiallyLoaded}
                 toolbar={(
                   <ChatInputToolbarMenu
                     selectedParticipants={selectedParticipants}

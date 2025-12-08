@@ -1069,7 +1069,8 @@ export function useMultiParticipantChat(
         const hasErrorInMetadata = completeMetadata?.hasError === true;
 
         if (hasErrorInMetadata) {
-          // Error messages don't animate - trigger next participant immediately
+          // Error messages don't animate - trigger next participant after frame
+          // ✅ FIX: Must await to block onFinish from returning before next trigger
           await new Promise(resolve => requestAnimationFrame(resolve));
           triggerNextParticipantWithRefs();
           return;
@@ -1080,22 +1081,11 @@ export function useMultiParticipantChat(
       // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
       // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
       // which has its own timeout mechanism for analysis creation
-      const triggerWithAnimationWait = async () => {
-        try {
-          // Small delay to ensure React has committed any pending state updates
-          await new Promise(resolve => requestAnimationFrame(resolve));
-
-          // Trigger next participant immediately - no animation waiting here
-          // Analysis creation (in handleComplete) will wait for animations separately
-          triggerNextParticipantWithRefs();
-        } catch (error) {
-          console.error('[triggerWithAnimationWait] ERROR:', error);
-          // Still try to trigger next participant on error
-          triggerNextParticipantWithRefs();
-        }
-      };
-
-      triggerWithAnimationWait();
+      // ✅ FIX: Must await to block onFinish from returning before next participant triggers
+      // Without await, onFinish returns immediately and AI SDK status changes,
+      // allowing multiple streams to start concurrently (race condition)
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      triggerNextParticipantWithRefs();
     },
 
     /**
@@ -1398,9 +1388,14 @@ export function useMultiParticipantChat(
         ) || false;
 
         if (hasContent) {
-          // Message already exists with content - skip this participant
-          // The flow controller will detect the next incomplete participant
+          // ✅ RACE CONDITION FIX: Notify store when skipping a completed participant
+          // Previously, this would return early without notifying anyone, leaving
+          // the system stuck with nextParticipantToTrigger set but no streaming starting.
+          // Now we call onResumedStreamComplete which tells the store to advance to next participant.
           isTriggeringRef.current = false;
+          // Notify store that this participant was "completed" (already had content)
+          // Store will then find and trigger the NEXT incomplete participant
+          onResumedStreamComplete?.(roundNumber, fromIndex);
           return;
         }
       }
@@ -1438,7 +1433,7 @@ export function useMultiParticipantChat(
     // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
     // Same fix as triggerNextParticipantWithRefs - prevents race conditions
     isTriggeringRef.current = false;
-  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId]);
+  }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
 
   /**
    * Send a user message and start a new round
@@ -1675,6 +1670,45 @@ export function useMultiParticipantChat(
   // ✅ RESUMABLE STREAMS: Stop functionality removed
   // Stream resumption is incompatible with abort signals
   // Streams now continue until completion and can resume after page reload
+
+  // ✅ CRITICAL FIX: Detect resumed stream from AI SDK status
+  // When AI SDK auto-resumes via `resume: true`, its status becomes 'streaming'
+  // but isExplicitlyStreaming stays false because none of the entry points were called.
+  // This causes the store's isStreaming to be false even though events are being received.
+  // Fix: When AI SDK status is 'streaming' but we haven't set isExplicitlyStreaming,
+  // this indicates a resumed stream - set the flag so UI responds properly.
+  useLayoutEffect(() => {
+    // Only act when AI SDK says it's streaming but we haven't acknowledged it
+    if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
+      // ✅ GUARD: Don't set during form submission (hasEarlyOptimisticMessage check)
+      if (callbackRefs.hasEarlyOptimisticMessage.current) {
+        return;
+      }
+
+      // ✅ GUARD: Only if we have a valid thread ID (not on overview page initial load)
+      if (!callbackRefs.threadId.current || callbackRefs.threadId.current.trim() === '') {
+        return;
+      }
+
+      // ✅ GUARD: Need messages to determine round/participant context
+      if (messagesRef.current.length === 0) {
+        return;
+      }
+
+      // Detected resumed stream - set streaming flag
+      // This ensures store.isStreaming reflects the actual state
+      isStreamingRef.current = true;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: syncing external state (AI SDK status) to internal flag
+      setIsExplicitlyStreaming(true);
+
+      // Also populate roundParticipantsRef if needed for proper orchestration
+      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+        roundParticipantsRef.current = enabled;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
+  }, [status, isExplicitlyStreaming]);
 
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
   // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'

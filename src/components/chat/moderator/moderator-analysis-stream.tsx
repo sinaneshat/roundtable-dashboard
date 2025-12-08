@@ -21,7 +21,8 @@ import {
   RecommendationSchema,
   RoundSummarySchema,
 } from '@/api/routes/chat/schema';
-import { Shimmer } from '@/components/ai-elements/shimmer';
+import { TextShimmer } from '@/components/ai-elements/shimmer';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useBoolean } from '@/hooks/utils';
 import { hasAnalysisData, normalizeAnalysisData } from '@/lib/utils/analysis-utils';
@@ -146,35 +147,8 @@ type ModeratorAnalysisStreamProps = {
   onActionClick?: (action: Recommendation) => void;
 };
 
-// ✅ CRITICAL FIX: Track at TWO levels to prevent duplicate submissions
-// 1. Analysis ID level - prevents same analysis from submitting twice
-// 2. Round number level - prevents different analyses for same round from submitting
-const triggeredAnalysisIds = new Map<string, boolean>();
-const triggeredRounds = new Map<string, Set<number>>(); // threadId -> Set of round numbers
-
-// Export cleanup function for regeneration scenarios
-// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
-export function clearTriggeredAnalysis(analysisId: string) {
-  triggeredAnalysisIds.delete(analysisId);
-}
-
-// Export cleanup function to clear all triggered analyses for a round
-// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
-export function clearTriggeredAnalysesForRound(roundNumber: number) {
-  // Clear analysis IDs
-  const keysToDelete: string[] = [];
-  triggeredAnalysisIds.forEach((_value, key) => {
-    if (key.includes(`-${roundNumber}-`) || key.includes(`round-${roundNumber}`)) {
-      keysToDelete.push(key);
-    }
-  });
-  keysToDelete.forEach(key => triggeredAnalysisIds.delete(key));
-
-  // Clear round tracking
-  triggeredRounds.forEach((roundSet) => {
-    roundSet.delete(roundNumber);
-  });
-}
+// ✅ ZUSTAND PATTERN: Analysis stream tracking now in store
+// See store.ts: markAnalysisStreamTriggered, hasAnalysisStreamBeenTriggered, clearAnalysisStreamTracking
 
 function ModeratorAnalysisStreamComponent({
   threadId,
@@ -184,6 +158,11 @@ function ModeratorAnalysisStreamComponent({
   onActionClick,
 }: ModeratorAnalysisStreamProps) {
   const t = useTranslations('moderator');
+
+  // ✅ ZUSTAND PATTERN: Analysis stream tracking from store (replaces module-level Maps)
+  const markAnalysisStreamTriggered = useChatStore(s => s.markAnalysisStreamTriggered);
+  const hasAnalysisStreamBeenTriggered = useChatStore(s => s.hasAnalysisStreamBeenTriggered);
+
   // ✅ CRITICAL FIX: Store callbacks in refs for stability and to allow calling after unmount
   // This prevents analysis from getting stuck in "streaming" state when component unmounts
   // Follows the same pattern as use-multi-participant-chat.ts callback refs
@@ -485,33 +464,25 @@ function ModeratorAnalysisStreamComponent({
       // Stop any active streaming
       // stop();
 
-      // ✅ CRITICAL FIX: Do NOT delete analysis ID from triggered map on unmount
+      // ✅ ZUSTAND PATTERN: Do NOT clear analysis tracking on unmount
       // This prevents double-calling when component unmounts/remounts (e.g., React Strict Mode, parent re-renders)
-      // The ID is only cleared via clearTriggeredAnalysesForRound() during regeneration
-      // triggeredAnalysisIds.delete(analysis.id); // REMOVED - causes double streaming
+      // Tracking is only cleared via clearAnalysisStreamTracking() during regeneration (called by startRegeneration)
     };
-  }, []); // Removed analysis.id, stop from deps as they are no longer used
+  }, []);
 
   // ✅ CRITICAL FIX: Prevent duplicate submissions at both analysis ID and round number level
   // Use useEffect that only runs when analysis becomes ready (status changes to PENDING/STREAMING)
   // NOTE: participantMessageIds intentionally NOT in dependencies to avoid re-trigger on metadata updates
   useEffect(() => {
-    const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(analysis.roundNumber) ?? false;
+    // ✅ ZUSTAND PATTERN: Use store's hasAnalysisStreamBeenTriggered for two-level check
+    const alreadyTriggered = hasAnalysisStreamBeenTriggered(analysis.id, analysis.roundNumber);
 
     if (
-      !triggeredAnalysisIds.has(analysis.id)
-      && !roundAlreadyTriggered
+      !alreadyTriggered
       && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
     ) {
-      // Mark as triggered at BOTH levels BEFORE scheduling to prevent duplicate calls
-      triggeredAnalysisIds.set(analysis.id, true);
-
-      const roundSet = triggeredRounds.get(threadId);
-      if (roundSet) {
-        roundSet.add(analysis.roundNumber);
-      } else {
-        triggeredRounds.set(threadId, new Set([analysis.roundNumber]));
-      }
+      // ✅ ZUSTAND PATTERN: Mark as triggered at BOTH levels via store action
+      markAnalysisStreamTriggered(analysis.id, analysis.roundNumber);
 
       // =========================================================================
       // ✅ RESUMABLE STREAMS: Try to resume from buffer before starting new stream
@@ -553,27 +524,20 @@ function ModeratorAnalysisStreamComponent({
         submitRef.current?.(body);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis.participantMessageIds intentionally excluded to prevent re-trigger on metadata updates for reasoning models
-  }, [analysis.id, analysis.roundNumber, analysis.status, threadId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis.participantMessageIds intentionally excluded, store actions are stable
+  }, [analysis.id, analysis.roundNumber, analysis.status, threadId, hasAnalysisStreamBeenTriggered, markAnalysisStreamTriggered]);
 
   // Mark completed/failed analyses as triggered to prevent re-triggering on re-renders
   // NOTE: Do NOT mark STREAMING here - that would prevent useEffect from triggering submit()
-  const roundAlreadyMarked = triggeredRounds.get(threadId)?.has(analysis.roundNumber) ?? false;
+  // ✅ ZUSTAND PATTERN: Use store for tracking (replaces module-level Maps)
+  const alreadyMarked = hasAnalysisStreamBeenTriggered(analysis.id, analysis.roundNumber);
 
   if (
-    !triggeredAnalysisIds.has(analysis.id)
-    && !roundAlreadyMarked
+    !alreadyMarked
     && (analysis.status === AnalysisStatuses.COMPLETE
       || analysis.status === AnalysisStatuses.FAILED)
   ) {
-    triggeredAnalysisIds.set(analysis.id, true);
-
-    const roundSet = triggeredRounds.get(threadId);
-    if (roundSet) {
-      roundSet.add(analysis.roundNumber);
-    } else {
-      triggeredRounds.set(threadId, new Set([analysis.roundNumber]));
-    }
+    markAnalysisStreamTriggered(analysis.id, analysis.roundNumber);
   }
 
   // ✅ AI SDK v5 Pattern: Handle streaming state properly
@@ -655,7 +619,7 @@ function ModeratorAnalysisStreamComponent({
               }}
               className="flex items-center justify-center py-8 text-muted-foreground text-sm"
             >
-              <Shimmer>{isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')}</Shimmer>
+              <TextShimmer>{isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')}</TextShimmer>
             </motion.div>
           )
         : (

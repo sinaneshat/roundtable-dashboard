@@ -72,7 +72,13 @@ function ToastClose({ ref, className, ...props }: ComponentPropsWithoutRef<typeo
     <ToastPrimitives.Close
       ref={ref}
       className={cn(
-        'absolute end-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-destructive-foreground/80 group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive group-[.destructive]:focus:ring-offset-destructive',
+        // Base styles
+        'absolute end-2 top-2 rounded-md p-1 text-foreground/50 transition-opacity hover:text-foreground focus:outline-none focus:ring-2',
+        // Mobile: Always visible for touch accessibility
+        // Desktop: Hover to show
+        'md:opacity-0 md:group-hover:opacity-100 focus:opacity-100',
+        // Destructive variant
+        'group-[.destructive]:text-destructive-foreground/80 group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive group-[.destructive]:focus:ring-offset-destructive',
         className,
       )}
       toast-close=""

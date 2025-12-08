@@ -3,7 +3,7 @@
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense } from 'react';
 
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/services/product-logic.service';
@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useCountdownRedirect } from '@/hooks/utils';
 
 function ChangeBadge({ changeType, t }: {
   changeType: SubscriptionChangeType;
@@ -52,7 +53,6 @@ function SubscriptionChangedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations();
-  const [countdown, setCountdown] = useState(10);
 
   const changeType = searchParams.get('changeType') as SubscriptionChangeType | null;
   const oldProductId = searchParams.get('oldProductId');
@@ -70,27 +70,17 @@ function SubscriptionChangedContent() {
 
   const isLoadingData = isSubscriptionsFetching || isCurrentSubscriptionFetching || isUsageStatsFetching;
 
-  useEffect(() => {
-    if (isLoadingData)
-      return;
-
-    if (countdown <= 0) {
-      router.replace('/chat');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setCountdown(prev => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [countdown, isLoadingData, router]);
+  // ✅ React 19: Timer-based redirect extracted to shared hook
+  const { countdown } = useCountdownRedirect({
+    enabled: !isLoadingData,
+    redirectPath: '/chat',
+  });
 
   if (!isLoadingData && !displaySubscription) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+      <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
         <StaggerContainer
-          className="flex flex-col items-center gap-6 text-center max-w-md"
+          className="flex flex-col items-center gap-6 text-center max-w-md mx-auto"
           staggerDelay={0.15}
           delayChildren={0.1}
         >
@@ -164,9 +154,9 @@ function SubscriptionChangedContent() {
     : null;
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+    <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
       <StaggerContainer
-        className="flex flex-col items-center gap-8 text-center max-w-2xl w-full"
+        className="flex flex-col items-center gap-8 text-center max-w-2xl w-full mx-auto"
         staggerDelay={0.15}
         delayChildren={0.1}
       >
@@ -415,8 +405,8 @@ export function SubscriptionChangedClient() {
   return (
     <Suspense
       fallback={(
-        <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
-          <div className="flex flex-col items-center gap-6 text-center max-w-md">
+        <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
+          <div className="flex flex-col items-center gap-6 text-center max-w-md mx-auto">
             <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 md:size-24">
               <CheckCircle className="size-10 text-primary md:size-12 animate-pulse" strokeWidth={2} />
             </div>

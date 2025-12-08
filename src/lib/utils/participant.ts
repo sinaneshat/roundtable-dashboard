@@ -46,6 +46,25 @@ export function sortByPriority<T extends WithPriority>(participants: T[]): T[] {
   return [...participants].sort((a, b) => a.priority - b.priority);
 }
 
+/**
+ * Reindex participant priorities to be contiguous (0, 1, 2, ...)
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use this function everywhere instead of inline mapping.
+ * Eliminates 15+ duplicates of `.map((p, index) => ({ ...p, priority: index }))`
+ *
+ * @param participants - Array of participants to reindex
+ * @returns New array with priority field updated to match array index
+ *
+ * @example
+ * ```typescript
+ * // Instead of: participants.map((p, index) => ({ ...p, priority: index }))
+ * const reindexed = reindexParticipantPriorities(participants);
+ * ```
+ */
+export function reindexParticipantPriorities<T extends WithPriority>(participants: T[]): T[] {
+  return participants.map((p, index) => ({ ...p, priority: index }));
+}
+
 // ============================================================================
 // Type Definitions
 // ============================================================================

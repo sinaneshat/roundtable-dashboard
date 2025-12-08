@@ -49,4 +49,3 @@ function TextShimmerComponent({
 }
 
 export const TextShimmer = memo(TextShimmerComponent);
-export const Shimmer = TextShimmer;
