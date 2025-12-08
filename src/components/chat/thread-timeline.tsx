@@ -143,7 +143,7 @@ export function ThreadTimeline({
   // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
   // ✅ MOBILE OPTIMIZED: Hook automatically increases overscan to 25+ on touch devices
   // ✅ TANSTACK DOCS: Use realistic estimateSize (250px default) to prevent jumpy/overlapping behavior
-  const { virtualItems, totalSize, scrollMargin, measureElement } = useVirtualizedTimeline({
+  const { virtualItems, totalSize, scrollMargin, measureElement, isInitialScrollComplete } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
     estimateSize: 250, // ✅ TANSTACK DOCS: Realistic estimate close to average item height
@@ -164,6 +164,9 @@ export function ThreadTimeline({
         // ✅ SCROLL FIX: Disable browser scroll anchoring to prevent snap-back
         // When virtualized items change position, browser tries to maintain anchor
         overflowAnchor: 'none',
+        // ✅ HIDE UNTIL SCROLL COMPLETE: Prevent flash of content at wrong position
+        opacity: isInitialScrollComplete ? 1 : 0,
+        transition: 'opacity 0.15s ease-in',
       }}
     >
       {virtualItems.map((virtualItem) => {

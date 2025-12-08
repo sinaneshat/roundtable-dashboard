@@ -615,18 +615,20 @@ function PreSearchStreamComponent({
   // 202 triggers the 409 conflict polling mechanism above
 
   // ✅ ZUSTAND PATTERN: Mark completed/failed pre-searches to prevent re-triggering
-  // Use store's synchronous getState() check to avoid unnecessary effect re-runs
+  // ✅ FIX: Wrap in useEffect to avoid setState during render (React 19 strict mode)
   // Do NOT mark STREAMING - that would prevent useEffect from triggering resumption
-  const currentState = store?.getState();
-  const roundAlreadyMarked = currentState?.hasPreSearchBeenTriggered(preSearch.roundNumber) ?? false;
+  useEffect(() => {
+    const currentState = store?.getState();
+    const roundAlreadyMarked = currentState?.hasPreSearchBeenTriggered(preSearch.roundNumber) ?? false;
 
-  if (
-    !roundAlreadyMarked
-    && (preSearch.status === AnalysisStatuses.COMPLETE
-      || preSearch.status === AnalysisStatuses.FAILED)
-  ) {
-    markPreSearchTriggered(preSearch.roundNumber);
-  }
+    if (
+      !roundAlreadyMarked
+      && (preSearch.status === AnalysisStatuses.COMPLETE
+        || preSearch.status === AnalysisStatuses.FAILED)
+    ) {
+      markPreSearchTriggered(preSearch.roundNumber);
+    }
+  }, [store, preSearch.roundNumber, preSearch.status, markPreSearchTriggered]);
 
   // Show error if present (excluding abort and conflict errors)
   const shouldShowError = error && !is409Conflict.value && !(

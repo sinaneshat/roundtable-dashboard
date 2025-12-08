@@ -90,7 +90,7 @@ export function useChatScroll({
   enableNearBottomDetection = true,
   autoScrollThreshold = 100,
   currentParticipantIndex: _currentParticipantIndex,
-  bottomOffset = 0,
+  bottomOffset: _bottomOffset = 0,
   scrollAnchorRef: _scrollAnchorRef,
   showLoader: _showLoader = false,
   initialScrollToBottom: _initialScrollToBottom = false,
@@ -140,8 +140,9 @@ export function useChatScroll({
   }, [messages.length, resetScrollState]);
 
   /**
-   * Scroll to bottom using window.scrollTo for consistent body-based scrolling
-   * ✅ Uses double RAF to ensure DOM has fully updated before calculating scroll position
+   * Scroll to bottom using window.scrollTo with retry pattern
+   * ✅ Retries until actually at bottom (handles virtualization measurement)
+   * ✅ Uses multiple RAFs to ensure DOM has fully updated
    */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
@@ -154,44 +155,56 @@ export function useChatScroll({
       }
 
       isProgrammaticScrollRef.current = true;
+      isAtBottomRef.current = true;
 
-      // Double RAF ensures DOM layout is complete before scrolling
-      scrollRafRef.current = requestAnimationFrame(() => {
+      let attempts = 0;
+      const maxAttempts = 15;
+      let timeoutId: NodeJS.Timeout | null = null;
+
+      const doScroll = () => {
+        attempts++;
+
+        // Use triple RAF to ensure DOM layout is complete
         requestAnimationFrame(() => {
-          // Always scroll to absolute bottom of document
-          const scrollHeight = Math.max(
-            document.body.scrollHeight,
-            document.documentElement.scrollHeight,
-          );
-          const targetScrollTop = scrollHeight - window.innerHeight + bottomOffset;
+          requestAnimationFrame(() => {
+            // Scroll to absolute bottom of document
+            const scrollHeight = Math.max(
+              document.body.scrollHeight,
+              document.documentElement.scrollHeight,
+            );
+            window.scrollTo({
+              top: scrollHeight,
+              behavior: attempts === 1 ? behavior : 'instant', // Only first scroll is smooth
+            });
 
-          window.scrollTo({
-            top: Math.max(0, targetScrollTop),
-            behavior,
+            // Check if we're actually at the bottom
+            requestAnimationFrame(() => {
+              const finalScrollHeight = Math.max(
+                document.body.scrollHeight,
+                document.documentElement.scrollHeight,
+              );
+              const currentScroll = window.scrollY;
+              const viewportHeight = window.innerHeight;
+              const maxScroll = finalScrollHeight - viewportHeight;
+              const isAtBottom = currentScroll >= maxScroll - 10;
+
+              // Retry if not at bottom - virtualization may still be measuring
+              if (!isAtBottom && attempts < maxAttempts) {
+                timeoutId = setTimeout(doScroll, 50);
+              } else {
+                // Done scrolling - reset programmatic flag
+                isProgrammaticScrollRef.current = false;
+                if (timeoutId)
+                  clearTimeout(timeoutId);
+              }
+            });
           });
-
-          isAtBottomRef.current = true;
-
-          // Reset programmatic scroll flag after animation completes
-          const frameCount = behavior === 'smooth' ? 20 : 5;
-          let framesRemaining = frameCount;
-
-          const waitForAnimationEnd = () => {
-            framesRemaining--;
-            if (framesRemaining > 0) {
-              animationResetRafRef.current = requestAnimationFrame(waitForAnimationEnd);
-            } else {
-              isProgrammaticScrollRef.current = false;
-              animationResetRafRef.current = null;
-            }
-          };
-
-          animationResetRafRef.current = requestAnimationFrame(waitForAnimationEnd);
-          scrollRafRef.current = null;
         });
-      });
+      };
+
+      scrollRafRef.current = requestAnimationFrame(doScroll);
     },
-    [bottomOffset],
+    [],
   );
 
   // ============================================================================
