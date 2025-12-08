@@ -98,12 +98,11 @@ function generateModeratorAnalysis(
   });
 
   // ✅ AI SDK v5: streamObject streams progressive JSON as it's generated
-  // Using Claude Sonnet 3.5 with mode:'json' - tested working configuration
+  // Using Claude Sonnet 3.5 - tested working configuration
   const enhancedUserPrompt = buildModeratorAnalysisEnhancedPrompt(userPrompt);
   return streamObject({
     model: client.chat(AIModels.ANALYSIS),
     schema: ModeratorAnalysisPayloadSchema,
-    mode: 'json',
     system: systemPrompt,
     prompt: enhancedUserPrompt,
     temperature: 0.3,

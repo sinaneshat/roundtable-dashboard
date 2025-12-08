@@ -490,7 +490,7 @@ export function ChatView({
     if (mode === 'thread') {
       setHasPendingConfigChanges(true);
     }
-  }, [selectedParticipants.length, removeParticipant, mode, setHasPendingConfigChanges]);
+  }, [removeParticipant, mode, setHasPendingConfigChanges]);
 
   const handleAnalysisStreamStart = useCallback((roundNumber: number) => {
     updateAnalysisStatus(roundNumber, AnalysisStatuses.STREAMING);

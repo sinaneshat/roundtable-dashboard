@@ -225,6 +225,14 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
  */
 export function createEnvironmentValidationMiddleware() {
   return async (_c: { env: CloudflareEnv }, next: () => Promise<void>) => {
+    // Skip validation for local development - don't trigger Cloudflare login
+    const isLocal = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
+    const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
+
+    if (isLocal || isNextDev || process.env.NODE_ENV === 'test') {
+      return next();
+    }
+
     let env: CloudflareEnv;
 
     try {
@@ -233,11 +241,6 @@ export function createEnvironmentValidationMiddleware() {
       env = context.env;
     } catch {
       // Fallback when Cloudflare context is not available - skip validation
-      return next();
-    }
-
-    // Skip validation in test environment
-    if (process.env.NODE_ENV === 'test') {
       return next();
     }
 

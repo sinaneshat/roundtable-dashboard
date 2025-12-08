@@ -61,8 +61,11 @@ export function getEnvironmentVariables(): EnvVars {
   }
 
   // For Cloudflare Workers, try to get the Cloudflare environment
-  // Only attempt this in production or when explicitly in Workers runtime
-  if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'development') {
+  // Only attempt this in production or preview (NOT local development)
+  const isLocal = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
+  const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
+
+  if (typeof process !== 'undefined' && !isLocal && !isNextDev) {
     try {
       const ctx = getCloudflareContext();
       if (ctx && ctx.env) {

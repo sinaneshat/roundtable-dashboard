@@ -1,7 +1,25 @@
-import { getCloudflareContext } from '@opennextjs/cloudflare';
 import type { NextRequest } from 'next/server';
 
 import api from '@/api';
+
+// Check if running in local development mode
+function isLocalDevelopment(): boolean {
+  const isLocal = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
+  const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
+  return isLocal || isNextDev;
+}
+
+// Create local execution context for development
+function createLocalExecutionContext(): ExecutionContext {
+  const pendingPromises: Promise<unknown>[] = [];
+  return {
+    waitUntil: (promise: Promise<unknown>) => {
+      pendingPromises.push(promise);
+    },
+    passThroughOnException: () => {},
+    props: {} as unknown,
+  } as ExecutionContext;
+}
 
 // Factory function that creates a Next.js API route handler
 function createApiHandler() {
@@ -21,35 +39,32 @@ function createApiHandler() {
     } as RequestInit);
 
     // Get Cloudflare context with proper bindings (R2, D1, KV, etc.)
+    // In local dev: use process.env directly (no Cloudflare login needed)
     // In Cloudflare Workers: returns actual bindings from wrangler.jsonc
-    // In local dev with initOpenNextCloudflareForDev: returns simulated bindings
-    // Falls back to process.env if context unavailable
     let env: CloudflareEnv;
     let executionCtx: ExecutionContext;
 
-    try {
-      const cfContext = getCloudflareContext();
-      env = cfContext.env;
-      executionCtx = cfContext.ctx;
-
-      // If executionCtx or waitUntil is missing, use fallback
-      if (!executionCtx || !executionCtx.waitUntil) {
-        throw new Error('Incomplete Cloudflare context');
-      }
-    } catch {
-      // Fallback for environments where Cloudflare context isn't available (local Next.js dev)
+    // For local development, skip Cloudflare context entirely
+    if (isLocalDevelopment()) {
       env = process.env as unknown as CloudflareEnv;
+      executionCtx = createLocalExecutionContext();
+    } else {
+      // Production/preview: try to get Cloudflare context
+      try {
+        const { getCloudflareContext } = await import('@opennextjs/cloudflare');
+        const cfContext = getCloudflareContext();
+        env = cfContext.env;
+        executionCtx = cfContext.ctx;
 
-      // Create waitUntil that tracks promises for background tasks
-      const pendingPromises: Promise<unknown>[] = [];
-
-      executionCtx = {
-        waitUntil: (promise: Promise<unknown>) => {
-          pendingPromises.push(promise);
-        },
-        passThroughOnException: () => {},
-        props: {} as unknown,
-      } as ExecutionContext;
+        // If executionCtx or waitUntil is missing, use fallback
+        if (!executionCtx || !executionCtx.waitUntil) {
+          throw new Error('Incomplete Cloudflare context');
+        }
+      } catch {
+        // Fallback for environments where Cloudflare context isn't available
+        env = process.env as unknown as CloudflareEnv;
+        executionCtx = createLocalExecutionContext();
+      }
     }
 
     // All requests go to the main API (now includes docs)

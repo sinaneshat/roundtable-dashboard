@@ -169,7 +169,6 @@ export function streamSearchQuery(
     return streamObject({
       model: client.chat(modelId),
       schema: MultiQueryGenerationSchema,
-      mode: 'json',
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
@@ -258,7 +257,6 @@ export async function generateSearchQuery(
     const result = await generateObject({
       model: client.chat(modelId),
       schema: MultiQueryGenerationSchema,
-      mode: 'json',
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,

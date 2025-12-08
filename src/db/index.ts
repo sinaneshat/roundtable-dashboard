@@ -113,6 +113,14 @@ function getKVBinding(): KVNamespace | null {
  * @see src/db/cache/cloudflare-kv-cache.ts for cache implementation
  */
 export const getDb = cache(() => {
+  // Check for local environment FIRST to avoid Cloudflare login prompts
+  const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
+  const isLocal = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
+
+  if (isNextDev || isLocal) {
+    return initLocalDb();
+  }
+
   try {
     const { env } = getCloudflareContext();
 
@@ -155,6 +163,14 @@ export const getDb = cache(() => {
  * @see src/db/cache/cloudflare-kv-cache.ts for cache implementation
  */
 export const getDbAsync = cache(async () => {
+  // Check for local environment FIRST to avoid Cloudflare login prompts
+  const isNextDev = process.env.NODE_ENV === 'development' && !process.env.CLOUDFLARE_ENV;
+  const isLocal = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local';
+
+  if (isNextDev || isLocal) {
+    return initLocalDb();
+  }
+
   try {
     const { env } = await getCloudflareContext({ async: true });
 
