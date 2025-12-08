@@ -49,5 +49,13 @@
     "pcss",
     "postcss",
     "github-actions-workflow"
-  ]
+  ],
+  // Terminal Configuration
+  "terminal.integrated.defaultLocation": "editor",
+  "terminal.integrated.tabs.enabled": true,
+  "terminal.integrated.tabs.location": "right",
+  // Auto-open settings on startup (open settings with Cmd+,)
+  "workbench.startupEditor": "none",
+  // Split terminal layout
+  "terminal.integrated.splitCwd": "workspaceRoot"
 }
