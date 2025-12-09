@@ -1286,7 +1286,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
 
       if (needsSync) {
-        console.log('[Streaming Poll Sync] Content changed, syncing...');
         // Deep clone to avoid Immer freeze issues
         store.getState().setMessages(structuredClone(chat.messages));
         lastStreamActivityRef.current = Date.now();
