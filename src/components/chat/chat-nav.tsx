@@ -1,5 +1,5 @@
 'use client';
-import { MessageSquare, Plus, Search, Sparkles, Star } from 'lucide-react';
+import { MessageSquare, PanelLeft, Plus, Search, Sparkles, Star } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -25,6 +25,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -44,8 +45,10 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const pathname = usePathname();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
   const sidebarContentRef = useRef<HTMLDivElement>(null);
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
+  const isCollapsed = state === 'collapsed';
   const handleNavigationReset = useNavigationReset();
   const {
     data: threadsData,
@@ -111,6 +114,24 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     }
   }, [handleNavigationReset, router, isMobile, setOpenMobile]);
 
+  // ChatGPT-style: Logo click expands when collapsed, navigates when expanded
+  const handleLogoClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+
+    // If collapsed, expand instead of navigating
+    if (isCollapsed) {
+      toggleSidebar();
+      return;
+    }
+
+    // Normal navigation behavior when expanded
+    handleNavigationReset();
+    router.push('/chat');
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isCollapsed, toggleSidebar, handleNavigationReset, router, isMobile, setOpenMobile]);
+
   const favorites = useMemo(() =>
     chats.filter(chat => chat.isFavorite), [chats]);
   const nonFavoriteChats = useMemo(() =>
@@ -139,88 +160,59 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
         <Sidebar collapsible="icon" variant="floating" {...props}>
           <SidebarHeader>
             <SidebarMenu className="gap-1">
-              {/* Logo/Brand */}
-              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
-                <SidebarMenuButton size="lg" asChild className="hover:bg-transparent !h-10">
-                  <Link href="/chat" onClick={handleNavLinkClick} className="flex items-center gap-2.5">
-                    {/* ✅ FIX: Use plain img tag to prevent hydration mismatch */}
-                    {/* eslint-disable-next-line next/no-img-element */}
-                    <img
-                      src={BRAND.logos.main}
-                      alt={`${BRAND.name} Logo`}
-                      className="size-7 object-contain shrink-0"
-                      width={28}
-                      height={28}
-                    />
-                    <span
-                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold"
-                      style={{ maxWidth: '11rem' }}
+              {/* Logo row with trigger on right - ChatGPT style */}
+              <SidebarMenuItem className="mb-2">
+                <div className="flex items-center justify-between w-full">
+                  {/* Logo - click expands when collapsed, navigates when expanded */}
+                  <SidebarMenuButton
+                    asChild
+                    className={`hover:bg-transparent ${isCollapsed ? 'cursor-pointer' : ''}`}
+                    tooltip={isCollapsed ? t('navigation.expandSidebar') : undefined}
+                  >
+                    <Link
+                      href="/chat"
+                      onClick={handleLogoClick}
+                      onMouseEnter={() => setIsLogoHovered(true)}
+                      onMouseLeave={() => setIsLogoHovered(false)}
+                      className="flex items-center"
                     >
-                      {BRAND.name}
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
+                      {/* Show sidebar icon on hover when collapsed, otherwise show logo */}
+                      {isCollapsed && isLogoHovered
+                        ? (
+                            <PanelLeft className="size-6 shrink-0 text-sidebar-foreground" />
+                          )
+                        : (
+                            // eslint-disable-next-line next/no-img-element
+                            <img
+                              src={BRAND.logos.main}
+                              alt={`${BRAND.name} Logo`}
+                              className="size-6 object-contain shrink-0"
+                              width={24}
+                              height={24}
+                            />
+                          )}
+                    </Link>
+                  </SidebarMenuButton>
+
+                  {/* Toggle button - right aligned, hidden when collapsed */}
+                  <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
+                </div>
               </SidebarMenuItem>
 
-              {/* Logo - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2 items-center justify-center">
-                <Link href="/chat" onClick={handleNavLinkClick} className="p-0 m-0 block">
-                  {/* ✅ FIX: Use plain img tag to prevent hydration mismatch */}
-                  {/* eslint-disable-next-line next/no-img-element */}
-                  <img
-                    src={BRAND.logos.main}
-                    alt={`${BRAND.name} Logo`}
-                    className="size-8 object-contain shrink-0"
-                    width={32}
-                    height={32}
-                  />
-                </Link>
-              </SidebarMenuItem>
-
-              {/* Action Buttons - Expanded */}
-              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton asChild isActive={pathname === '/chat'}>
+              {/* New Chat - Single item with responsive content */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
                   <Link href="/chat" onClick={handleNavLinkClick}>
-                    <Plus className="size-4 shrink-0" />
-                    <span
-                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                      style={{ maxWidth: '12rem' }}
-                    >
+                    <Plus className="size-6 shrink-0" />
+                    <span className="truncate min-w-0 group-data-[collapsible=icon]:hidden">
                       {t('navigation.newChat')}
                     </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton
-                  onClick={() => {
-                    setIsSearchOpen(true);
-                    if (isMobile) {
-                      setOpenMobile(false);
-                    }
-                  }}
-                >
-                  <Search className="size-4 shrink-0" />
-                  <span
-                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                    style={{ maxWidth: '12rem' }}
-                  >
-                    {t('navigation.searchChats')}
-                  </span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Icon Buttons - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
-                  <Link href="/chat" onClick={handleNavLinkClick}>
-                    <Plus />
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
+              {/* Search - Single item with responsive content */}
+              <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => {
                     setIsSearchOpen(true);
@@ -230,10 +222,12 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   }}
                   tooltip={t('navigation.searchChats')}
                 >
-                  <Search />
+                  <Search className="size-6 shrink-0" />
+                  <span className="truncate min-w-0 group-data-[collapsible=icon]:hidden">
+                    {t('navigation.searchChats')}
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent className="p-0 w-full min-w-0">
@@ -331,33 +325,27 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             </ScrollArea>
           </SidebarContent>
           <SidebarFooter className="gap-2">
-            {/* Plan CTA */}
-            <Link
-              href="/chat/pricing"
-              className="group/upgrade group-data-[collapsible=icon]:hidden flex items-center gap-3 rounded-xl bg-accent px-3 py-2.5 transition-colors duration-200 hover:bg-accent/80"
-            >
-              <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground'}`}>
-                <Sparkles className="size-4" />
-              </div>
-              <div className="flex flex-1 flex-col min-w-0">
-                <span className="text-sm font-medium text-foreground truncate">
-                  {isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
-                </span>
-                <span className="text-xs text-muted-foreground truncate">
-                  {isPaidUser ? t('navigation.managePlan') : t('navigation.upgradeDescription')}
-                </span>
-              </div>
-            </Link>
-            {/* Collapsed icon */}
-            <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
+            {/* Plan CTA - shadcn pattern matching NavUser */}
+            <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  size="lg"
                   asChild
                   tooltip={isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
                   isActive={pathname?.startsWith('/chat/pricing')}
                 >
                   <Link href="/chat/pricing">
-                    <Sparkles className={isPaidUser ? 'text-success' : ''} />
+                    <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground'}`}>
+                      <Sparkles className="size-4" />
+                    </div>
+                    <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                      <span className="truncate font-semibold">
+                        {isPaidUser ? `${SUBSCRIPTION_TIER_NAMES[subscriptionTier]} Plan` : t('navigation.upgrade')}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {isPaidUser ? t('navigation.managePlan') : t('navigation.upgradeDescription')}
+                      </span>
+                    </div>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

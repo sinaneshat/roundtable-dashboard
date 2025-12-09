@@ -16,7 +16,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+// SidebarTrigger moved into sidebar header for ChatGPT-style UX
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
@@ -91,12 +91,7 @@ function NavigationHeaderComponent({
       )}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-          {showSidebarTrigger && (
-            <>
-              <SidebarTrigger className="flex-shrink-0 touch-manipulation" />
-              {!isOverviewPage && <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0 opacity-30" />}
-            </>
-          )}
+          {/* SidebarTrigger moved into sidebar header for ChatGPT-style UX */}
           {showLogo && !isOverviewPage && (
             <>
               <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
@@ -186,9 +181,8 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
         className,
       )}
     >
-      <div className="flex items-center gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16">
-        <SidebarTrigger className="touch-manipulation" />
-      </div>
+      {/* SidebarTrigger moved into sidebar header for ChatGPT-style UX */}
+      <div className="flex items-center gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16" />
     </header>
   );
 }

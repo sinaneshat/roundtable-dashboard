@@ -467,7 +467,8 @@ export function ChatQuickStart({
                 'hover:bg-white/10 hover:backdrop-blur-md',
                 'active:bg-white/[0.15]',
                 'transition-all duration-200 ease-out',
-                // Borderless design - spacing creates visual separation
+                // Subtle divider line beneath each item (except last)
+                index !== suggestions.length - 1 && 'border-b border-border/30',
               )}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">

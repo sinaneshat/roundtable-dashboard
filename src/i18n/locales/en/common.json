@@ -701,6 +701,8 @@
     "copyFailed": "Failed to copy link",
     "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
     "copyLink": "Copy link",
+    "copyLinkSuccess": "Link copied to clipboard",
+    "moreActions": "More actions",
     "deleteChat": "Delete Chat",
     "deleteThread": "Delete Thread",
     "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
@@ -811,6 +813,7 @@
       "streaming": "AI is thinking...",
       "navigating": "Navigating to conversation..."
     },
+    "share": "Share",
     "shareConversation": "Share Conversation",
     "shareThread": "Share Thread",
     "shareThreadDescription": "Share this link with anyone to give them access to this thread",
@@ -884,6 +887,14 @@
       "copySuccessDescription": "Round copied to clipboard as markdown",
       "copyError": "Copy failed",
       "copyErrorDescription": "Failed to copy round to clipboard"
+    },
+    "messageActions": {
+      "copyMessage": "Copy message",
+      "copySuccess": "Copied",
+      "copySuccessDescription": "Message copied to clipboard",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy message to clipboard",
+      "noContentToCopy": "No text content to copy"
     },
     "quota": {
       "messageQuotaExceeded": "Message Quota Reached",
@@ -1284,6 +1295,7 @@
     "chat": "Chat",
     "dashboard": "Dashboard",
     "debates": "Debates",
+    "expandSidebar": "Expand sidebar",
     "features": "Features",
     "messages": "Messages",
     "navigation": "Navigation",

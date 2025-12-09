@@ -32,7 +32,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "18rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+const SIDEBAR_WIDTH_ICON = "4rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {
@@ -168,7 +168,19 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, setOpen } = useSidebar()
+
+  // ChatGPT-style: Click anywhere on collapsed sidebar to expand
+  const handleSidebarClick = useCallback((e: React.MouseEvent) => {
+    // Only expand if collapsed and click target is not a button/link/input
+    if (state === "collapsed" && collapsible === "icon") {
+      const target = e.target as HTMLElement
+      const isInteractive = target.closest('button, a, input, [role="button"], [data-sidebar="menu-button"]')
+      if (!isInteractive) {
+        setOpen(true)
+      }
+    }
+  }, [state, collapsible, setOpen])
 
   if (collapsible === "none") {
     return (
@@ -264,8 +276,12 @@ function Sidebar({
           data-slot="sidebar-inner"
           className={cn(
             "bg-card flex h-full w-full flex-col rounded-2xl p-3",
-            "border border-white/[0.12] shadow-lg"
+            "border border-white/[0.12] shadow-lg",
+            // Show resize cursor when collapsed to indicate click-to-expand
+            // Use !important to override global.css button cursor rules
+            isCollapsed && "[&,&_*]:!cursor-ew-resize [&_button]:!cursor-pointer [&_button_*]:!cursor-pointer [&_a]:!cursor-pointer [&_a_*]:!cursor-pointer [&_[role=button]]:!cursor-pointer [&_[role=button]_*]:!cursor-pointer"
           )}
+          onClick={handleSidebarClick}
         >
           {children}
         </div>
@@ -373,7 +389,7 @@ function SidebarFooter({ className, ...props }: ComponentProps<"div">) {
     <div
       data-slot="sidebar-footer"
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 pt-2 w-full min-w-0", className)}
+      className={cn("flex flex-col gap-2 pt-2 mt-auto w-full min-w-0 group-data-[collapsible=icon]:items-center", className)}
       {...props}
     />
   )
@@ -399,7 +415,8 @@ function SidebarContent({ className, ...props }: ComponentProps<"div">) {
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-0 w-full max-w-full group-data-[collapsible=icon]:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col gap-0 w-full max-w-full",
+        "group-data-[collapsible=icon]:hidden", // Hide in collapsed mode
         className
       )}
       {...props}

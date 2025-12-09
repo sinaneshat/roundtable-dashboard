@@ -1,8 +1,9 @@
 'use client';
 
-import { Check, Share2 } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
+import { IoShareSocial } from 'react-icons/io5';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -68,7 +69,7 @@ export function SocialShareButton({
           >
             {copySuccess
               ? <Check className="size-4 animate-in zoom-in-75 duration-300" />
-              : <Share2 className="size-4" />}
+              : <IoShareSocial className="size-4" />}
             {showTextOnLargeScreens && (
               <span className="hidden md:inline">
                 {copySuccess ? t('linkCopied') : t('copyLink')}

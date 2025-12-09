@@ -11,6 +11,7 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-e
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
+import { MessageCopyAction } from '@/components/chat/message-copy-action';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
@@ -285,6 +286,13 @@ export const ModelMessageCard = memo(({
             {/* Displayed even when AI doesn't cite inline, so users know what files were used */}
             {assistantMetadata?.availableSources && assistantMetadata.availableSources.length > 0 && (
               <MessageSources sources={assistantMetadata.availableSources} />
+            )}
+
+            {/* Copy action for individual message */}
+            {!isPendingWithNoParts && parts.length > 0 && (
+              <div className="flex justify-start mt-4">
+                <MessageCopyAction parts={parts} />
+              </div>
             )}
           </>
         </MessageContent>

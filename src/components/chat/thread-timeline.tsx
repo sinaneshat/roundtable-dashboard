@@ -12,20 +12,14 @@
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, Recommendation, StoredPreSearch } from '@/api/routes/chat/schema';
-import { Actions } from '@/components/ai-elements/actions';
-import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
-import { messageHasError } from '@/lib/schemas/message-metadata';
-import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-schemas';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
 import type { DemoSectionOpenStates } from './moderator/moderator-analysis-panel';
 import { RoundAnalysisCard } from './moderator/round-analysis-card';
 import { PreSearchCard } from './pre-search-card';
-import { RoundCopyAction } from './round-copy-action';
-import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
 // Stable constant for default empty Map to prevent render loop
@@ -84,14 +78,14 @@ export function ThreadTimeline({
   user,
   participants,
   threadId,
-  threadTitle,
+  threadTitle: _threadTitle,
   isStreaming = false,
   currentParticipantIndex = 0,
   currentStreamingParticipant = null,
   streamingRoundNumber = null,
-  feedbackByRound = EMPTY_FEEDBACK_MAP,
-  pendingFeedback = null,
-  getFeedbackHandler,
+  feedbackByRound: _feedbackByRound = EMPTY_FEEDBACK_MAP,
+  pendingFeedback: _pendingFeedback = null,
+  getFeedbackHandler: _getFeedbackHandler,
   onAnalysisStreamStart,
   onAnalysisStreamComplete,
   onActionClick,
@@ -175,17 +169,6 @@ export function ThreadTimeline({
         if (!item)
           return null;
 
-        // ✅ RESUMPTION FIX: Handle all timeline item types including 'pre-search'
-        const roundNumber = item.type === 'messages'
-          ? extractRoundNumber(item.data[0]?.metadata)
-          : item.type === 'analysis'
-            ? item.data.roundNumber
-            : item.type === 'changelog'
-              ? item.data[0]?.roundNumber ?? DEFAULT_ROUND_NUMBER
-              : item.type === 'pre-search'
-                ? item.data.roundNumber
-                : DEFAULT_ROUND_NUMBER;
-
         return (
           <div
             key={virtualItem.key}
@@ -249,60 +232,6 @@ export function ThreadTimeline({
 
                 {/* PreSearchCard now rendered inside ChatMessageList between user and assistant messages */}
 
-                {!isStreaming && !isReadOnly && (() => {
-                  const hasRoundError = item.data.some((msg) => {
-                    const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
-                    return parseResult.success && messageHasError(parseResult.data);
-                  });
-
-                  // ✅ CRITICAL FIX: Only show feedback after the round's analysis is COMPLETE
-                  // This ensures consistent behavior between first round and subsequent rounds
-                  // Previously, feedback appeared immediately when participants finished streaming
-                  // but before the analysis was complete, which was inconsistent with first round behavior
-                  const roundAnalysis = timelineItems.find(
-                    ti => ti.type === 'analysis' && ti.data.roundNumber === roundNumber,
-                  );
-                  const isRoundComplete = roundAnalysis
-                    && roundAnalysis.type === 'analysis'
-                    && roundAnalysis.data.status === AnalysisStatuses.COMPLETE;
-
-                  // Don't show feedback if round is not complete (analysis still pending/streaming)
-                  if (!isRoundComplete) {
-                    return null;
-                  }
-
-                  return (
-                    <Actions className="mt-3 mb-2">
-                      {!hasRoundError && (
-                        <RoundFeedback
-                          key={`feedback-${threadId}-${roundNumber}`}
-                          threadId={threadId}
-                          roundNumber={roundNumber}
-                          currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                          onFeedbackChange={
-                            !getFeedbackHandler
-                              ? () => {}
-                              : getFeedbackHandler(roundNumber)
-                          }
-                          disabled={isStreaming}
-                          isPending={pendingFeedback?.roundNumber === roundNumber}
-                          pendingType={
-                            pendingFeedback?.roundNumber === roundNumber
-                              ? pendingFeedback?.type ?? null
-                              : null
-                          }
-                        />
-                      )}
-                      <RoundCopyAction
-                        key={`copy-${threadId}-${roundNumber}`}
-                        messages={item.data}
-                        participants={participants}
-                        roundNumber={roundNumber}
-                        threadTitle={threadTitle}
-                      />
-                    </Actions>
-                  );
-                })()}
               </div>
             )}
 

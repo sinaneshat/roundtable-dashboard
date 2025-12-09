@@ -2,17 +2,18 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Install Dependencies",
+      "label": "0. Kill Port 3000 and Clear Cache",
       "type": "shell",
-      "command": "pnpm install",
+      "command": "lsof -ti:3000 | xargs kill -9 2>/dev/null || true; rm -rf .next 2>/dev/null || true; echo '✅ Port 3000 killed, .next cache cleared'",
       "presentation": {
         "echo": true,
         "reveal": "always",
         "focus": false,
         "panel": "shared",
         "showReuseMessage": false,
-        "clear": false,
-        "group": "setup"
+        "clear": true,
+        "close": true,
+        "group": "startup"
       },
       "problemMatcher": [],
       "runOptions": {
@@ -20,7 +21,7 @@
       }
     },
     {
-      "label": "Git Sync: Fetch and Merge Preview",
+      "label": "1. Git Sync: Fetch and Merge Preview",
       "type": "shell",
       "command": "git fetch --all && git merge origin/preview --no-edit || echo '⚠️  Merge conflict or no changes - please resolve manually'",
       "presentation": {
@@ -30,38 +31,59 @@
         "panel": "shared",
         "showReuseMessage": false,
         "clear": false,
-        "group": "git"
+        "close": true,
+        "group": "startup"
       },
       "problemMatcher": [],
-      "dependsOn": ["Install Dependencies"],
+      "dependsOn": ["0. Kill Port 3000 and Clear Cache"],
       "runOptions": {
         "runOn": "folderOpen"
       }
     },
     {
-      "label": "Start Claude (Skip Permissions)",
+      "label": "2. Install Dependencies",
       "type": "shell",
-      "command": "claude --dangerously-skip-permissions",
+      "command": "pnpm install",
       "presentation": {
         "echo": true,
         "reveal": "always",
         "focus": false,
-        "panel": "dedicated",
+        "panel": "shared",
         "showReuseMessage": false,
         "clear": false,
-        "group": "claude"
+        "close": true,
+        "group": "startup"
       },
-      "isBackground": true,
       "problemMatcher": [],
-      "dependsOn": ["Git Sync: Fetch and Merge Preview"],
+      "dependsOn": ["1. Git Sync: Fetch and Merge Preview"],
       "runOptions": {
         "runOn": "folderOpen"
       }
     },
     {
-      "label": "Start Development Server",
+      "label": "3. Nuclear DB Reset (Wipe, Migrate, Seed)",
       "type": "shell",
-      "command": "pnpm dev",
+      "command": "pnpm local:nuclear-reset",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false,
+        "close": true,
+        "group": "startup"
+      },
+      "problemMatcher": [],
+      "dependsOn": ["2. Install Dependencies"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "4. Start Development Server",
+      "type": "shell",
+      "command": "lsof -ti:3000 | xargs kill -9 2>/dev/null || true; pnpm dev",
       "presentation": {
         "echo": true,
         "reveal": "always",
@@ -85,7 +107,47 @@
           "endsPattern": "."
         }
       },
-      "dependsOn": ["Git Sync: Fetch and Merge Preview"],
+      "dependsOn": ["3. Nuclear DB Reset (Wipe, Migrate, Seed)"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "5. Open Localhost 3000",
+      "type": "shell",
+      "command": "sleep 8 && open http://localhost:3000",
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false,
+        "close": true,
+        "group": "startup"
+      },
+      "problemMatcher": [],
+      "dependsOn": ["4. Start Development Server"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "6. Start Claude (Skip Permissions)",
+      "type": "shell",
+      "command": "claude --dangerously-skip-permissions",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false,
+        "group": "claude"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "dependsOn": ["5. Open Localhost 3000"],
       "runOptions": {
         "runOn": "folderOpen"
       }
@@ -107,6 +169,19 @@
       "label": "Manual: Stop All Services",
       "type": "shell",
       "command": "lsof -ti:3000 | xargs kill -9 2>/dev/null || echo 'No services running on port 3000'",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Manual: Nuclear Reset Only",
+      "type": "shell",
+      "command": "pnpm local:nuclear-reset",
       "presentation": {
         "echo": true,
         "reveal": "always",

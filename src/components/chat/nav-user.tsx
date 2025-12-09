@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
+import { ChevronUp, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
@@ -131,34 +131,27 @@ export function NavUser({ initialSession }: NavUserProps) {
               <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate font-semibold">
-                {displayName}
-              </span>
-              <span className="truncate text-xs">{displayEmail}</span>
+              <span className="truncate font-semibold">{displayName}</span>
+              <span className="truncate text-xs text-muted-foreground">{displayEmail}</span>
             </div>
-            <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+            <ChevronUp className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-[calc(var(--sidebar-width)-1.5rem)] min-w-56 rounded-lg"
+          className="w-[--radix-popper-anchor-width] min-w-56 rounded-lg"
           side="top"
-          align="start"
-          sideOffset={8}
+          align="end"
+          sideOffset={4}
         >
           <DropdownMenuLabel className="p-0 font-normal">
             <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
               <Avatar className="h-8 w-8 rounded-full">
-                <AvatarImage
-                  src={user?.image || undefined}
-                  alt={displayName}
-                />
+                <AvatarImage src={user?.image || undefined} alt={displayName} />
                 <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">
-                  {displayName}
-                </span>
-                <span className="truncate text-xs">{displayEmail}</span>
+                <span className="truncate font-semibold">{displayName}</span>
+                <span className="truncate text-xs text-muted-foreground">{displayEmail}</span>
               </div>
             </div>
           </DropdownMenuLabel>

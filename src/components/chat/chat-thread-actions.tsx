@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Loader2, MoreVertical, Share2, Star, Trash2 } from 'lucide-react';
+import { Globe, Loader2, MoreVertical, Share, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -110,31 +110,23 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   if (isDesktop) {
     return (
       <TooltipProvider>
-        <div className="flex items-center gap-0.5">
-          {/* Share/Visibility button - opens ShareDialog */}
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={displayIsPublic ? t('shareThread') : t('makePublicAndShare')}
-                onClick={handleOpenShareDialog}
-                disabled={togglePublicMutation.isPending}
-                className="transition-all duration-200"
-              >
-                {togglePublicMutation.isPending
-                  ? <Loader2 className="size-4 animate-spin" />
-                  : displayIsPublic
-                    ? <Globe className="size-4 text-green-500" />
-                    : <Share2 className="size-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p className="text-sm">
-                {displayIsPublic ? t('shareThread') : t('makePublicAndShare')}
-              </p>
-            </TooltipContent>
-          </Tooltip>
+        <div className="flex items-center gap-2">
+          {/* Share button - prominent action */}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={displayIsPublic ? t('shareThread') : t('makePublicAndShare')}
+            onClick={handleOpenShareDialog}
+            disabled={togglePublicMutation.isPending}
+            className="gap-1.5 transition-all duration-200"
+          >
+            {togglePublicMutation.isPending
+              ? <Loader2 className="size-5 animate-spin" />
+              : displayIsPublic
+                ? <Globe className="size-5 text-green-500" />
+                : <Share className="size-5" />}
+            <span>{t('share')}</span>
+          </Button>
 
           {/* Favorite button */}
           <Tooltip delayDuration={300}>
@@ -151,11 +143,11 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 )}
               >
                 {toggleFavoriteMutation.isPending
-                  ? <Loader2 className="size-4 animate-spin" />
+                  ? <Loader2 className="size-5 animate-spin" />
                   : (
                       <Star
                         className={cn(
-                          'size-4',
+                          'size-5',
                           displayIsFavorite && 'fill-current',
                         )}
                       />
@@ -180,7 +172,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                   onClick={onDeleteClick}
                   className="transition-all duration-200 text-muted-foreground hover:text-destructive"
                 >
-                  <Trash2 className="size-4" />
+                  <Trash2 className="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -239,7 +231,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             >
               {displayIsPublic
                 ? <Globe className="size-4 text-green-500" />
-                : <Share2 className="size-4" />}
+                : <Share className="size-4" />}
               <span>{displayIsPublic ? t('shareThread') : t('makePublicAndShare')}</span>
             </DropdownMenuItem>
 

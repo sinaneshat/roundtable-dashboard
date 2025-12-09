@@ -6,7 +6,6 @@ import {
   Copy,
   ExternalLink,
   Lock,
-  Share2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
@@ -19,6 +18,7 @@ import {
   WhatsappShareButton,
 } from 'next-share';
 import { useEffect, useRef, useState } from 'react';
+import { IoShareSocial } from 'react-icons/io5';
 
 import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
 import {
@@ -262,7 +262,7 @@ export function ShareDialog({
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline">
-                      <Share2 className="mr-2 size-4" />
+                      <IoShareSocial className="mr-2 size-4" />
                       {t('shareDialog.shareOn')}
                     </Button>
                   </PopoverTrigger>

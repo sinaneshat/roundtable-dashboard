@@ -71,7 +71,7 @@ export function ModelBadge({
   return (
     <div className={cn(modelBadgeVariants({ size }), className)}>
       <Avatar className={cn('flex-shrink-0', avatarSizeVariants[size || 'sm'])}>
-        <AvatarImage src={icon} alt={modelName} />
+        <AvatarImage src={icon} alt={modelName} className="object-contain p-0.5" />
         <AvatarFallback className="text-[10px]">
           {providerName.slice(0, 2).toUpperCase()}
         </AvatarFallback>

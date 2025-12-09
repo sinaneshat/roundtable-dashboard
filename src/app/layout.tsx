@@ -27,7 +27,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover', // iOS safe area support
-  themeColor: 'black', // Dark theme only
+  themeColor: '#111113', // Blue-tinted zinc dark theme
   interactiveWidget: 'resizes-content', // Mobile keyboard handling
 };
 

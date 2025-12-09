@@ -652,6 +652,9 @@ export default function ChatOverviewScreen() {
     isInitialUIInputBlocked,
   ]);
 
+  // ✅ HYDRATION FIX: Suppress "no models" error until preferences hydrated and participants initialized
+  const isHydrating = !preferencesHydrated || (selectedParticipants.length === 0 && initialParticipants.length > 0);
+
   // ✅ REACT 19: Shared ChatInput props (DRY - prevents duplicate prop lists)
   const sharedChatInputProps = useMemo(() => ({
     value: inputValue,
@@ -668,6 +671,7 @@ export default function ChatOverviewScreen() {
     enableAttachments: !isInitialUIInputBlocked,
     attachmentClickRef,
     toolbar: chatInputToolbar,
+    isHydrating,
   }), [
     inputValue,
     setInputValue,
@@ -681,6 +685,7 @@ export default function ChatOverviewScreen() {
     chatAttachments.removeAttachment,
     attachmentClickRef,
     chatInputToolbar,
+    isHydrating,
   ]);
 
   // ============================================================================

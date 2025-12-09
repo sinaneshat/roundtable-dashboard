@@ -207,7 +207,7 @@ function ParticipantMessageWrapper({
   const hasError = status === MessageStatuses.FAILED || assistantMetadata?.hasError;
 
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start pt-16 first:pt-0">
       <div className="w-full">
         <ParticipantHeader
           avatarSrc={avatarProps.src}
@@ -275,7 +275,7 @@ function AssistantGroupCard({
   return (
     <div
       key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
-      className="flex justify-start"
+      className="flex justify-start pt-16 first:pt-0"
     >
       <div className="w-full">
         <ParticipantHeader
@@ -1021,8 +1021,8 @@ export const ChatMessageList = memo(
                   const currentStreamingParticipantForRound = sortedParticipants[effectiveParticipantIndex];
 
                   return (
-                    // ✅ mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
-                    <div className="mt-8 space-y-8">
+                    // ✅ mt-8 for spacing from user message, space-y-0 since pt-16 handles model separation
+                    <div className="mt-8 space-y-0">
                       {sortedParticipants.map((participant, participantIdx) => {
                         const model = findModel(participant.modelId);
                         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;

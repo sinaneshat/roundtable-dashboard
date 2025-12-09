@@ -77,7 +77,7 @@ export function ModelItem({
       )}
       <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
         <Avatar className="size-10 shrink-0">
-          <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
+          <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} className="object-contain p-1" />
           <AvatarFallback className="text-xs">
             {model.name.slice(0, 2).toUpperCase()}
           </AvatarFallback>
@@ -106,6 +106,7 @@ export function ModelItem({
                   !isSelected && 'invisible',
                 )}
                 onClick={e => e.stopPropagation()}
+                onPointerDownCapture={e => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.stopPropagation();

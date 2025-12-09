@@ -1,11 +1,18 @@
 'use client';
-import { Trash2 } from 'lucide-react';
+import { Link2, MoreHorizontal, Star, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { StaggerItem } from '@/components/ui/motion';
 import {
   SidebarGroup,
@@ -16,7 +23,10 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { StickyHeader } from '@/components/ui/sticky-header';
+import { useToggleFavoriteMutation } from '@/hooks/mutations/chat-mutations';
 import { useCurrentPathname } from '@/hooks/utils';
+import { showApiSuccessToast } from '@/lib/toast';
+import { cn } from '@/lib/ui/cn';
 
 export type Chat = {
   id: string;
@@ -100,17 +110,49 @@ function ChatItem({
   onDeleteClick: (chat: Chat) => void;
   disableAnimation?: boolean;
 }) {
-  const t = useTranslations();
+  const t = useTranslations('chat');
   const chatUrl = `/chat/${chat.slug}`;
+  const toggleFavoriteMutation = useToggleFavoriteMutation();
+
   // Hover-based prefetch: only prefetch when user hovers (Next.js optimization for large lists)
   const [shouldPrefetch, setShouldPrefetch] = useState(false);
   const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
+
+  // Optimistic favorite display
+  const displayIsFavorite = toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables?.threadId === chat.id
+    ? toggleFavoriteMutation.variables.isFavorite
+    : chat.isFavorite;
+
+  const handleToggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavoriteMutation.mutate({
+      threadId: chat.id,
+      isFavorite: !displayIsFavorite,
+      slug: chat.slug,
+    });
+  };
+
+  const handleCopyLink = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fullUrl = `${window.location.origin}${chatUrl}`;
+    navigator.clipboard.writeText(fullUrl);
+    showApiSuccessToast(t('copyLink'), t('copyLinkSuccess'));
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDeleteClick(chat);
+  };
 
   const content = (
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
         isActive={isActive}
+        className="px-3"
       >
         <Link
           href={chatUrl}
@@ -124,24 +166,35 @@ function ChatItem({
         >
           <div
             className="truncate overflow-hidden text-ellipsis whitespace-nowrap"
-            style={{ maxWidth: '11rem' }}
+            style={{ maxWidth: '10rem' }}
           >
             {chat.title}
           </div>
         </Link>
       </SidebarMenuButton>
-      <SidebarMenuAction
-        showOnHover
-        className="text-destructive hover:text-destructive"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onDeleteClick(chat);
-        }}
-      >
-        <Trash2 className="size-3.5" />
-        <span className="sr-only">{t('chat.deleteChat')}</span>
-      </SidebarMenuAction>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuAction showOnHover>
+            <MoreHorizontal className="size-4" />
+            <span className="sr-only">{t('moreActions')}</span>
+          </SidebarMenuAction>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" className="w-48">
+          <DropdownMenuItem onClick={handleToggleFavorite}>
+            <Star className={cn('size-4', displayIsFavorite && 'fill-amber-500 text-amber-500')} />
+            {displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleCopyLink}>
+            <Link2 className="size-4" />
+            {t('copyLink')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={handleDelete}>
+            <Trash2 className="size-4" />
+            {t('deleteChat')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </SidebarMenuItem>
   );
 
