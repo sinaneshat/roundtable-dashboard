@@ -1,6 +1,5 @@
 import Image from 'next/image';
 
-import { RadialGlow } from '@/components/ui/radial-glow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 
@@ -18,19 +17,6 @@ import { BRAND } from '@/constants/brand';
 export default function ChatOverviewLoading() {
   return (
     <div className="flex flex-col relative flex-1 min-h-dvh">
-      {/* Radial glow - matches ChatOverviewScreen */}
-      <div
-        className="fixed pointer-events-none"
-        style={{
-          top: '130px',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 1,
-        }}
-      >
-        <RadialGlow size={280} duration={20} animate intensity={0.25} />
-      </div>
-
       {/* Main content - matches ChatOverviewScreen container */}
       <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-8">
         <div className="w-full">

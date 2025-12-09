@@ -1,11 +1,13 @@
 'use client';
-import { Link2, MoreHorizontal, Star, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Pin, Share, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import { ShareDialog } from '@/components/chat/share-dialog';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,9 +25,8 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { StickyHeader } from '@/components/ui/sticky-header';
-import { useToggleFavoriteMutation } from '@/hooks/mutations/chat-mutations';
+import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations/chat-mutations';
 import { useCurrentPathname } from '@/hooks/utils';
-import { showApiSuccessToast } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
 
 export type Chat = {
@@ -113,32 +114,53 @@ function ChatItem({
   const t = useTranslations('chat');
   const chatUrl = `/chat/${chat.slug}`;
   const toggleFavoriteMutation = useToggleFavoriteMutation();
+  const togglePublicMutation = useTogglePublicMutation();
 
   // Hover-based prefetch: only prefetch when user hovers (Next.js optimization for large lists)
   const [shouldPrefetch, setShouldPrefetch] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const handleMouseEnter = useCallback(() => setShouldPrefetch(true), []);
 
-  // Optimistic favorite display
-  const displayIsFavorite = toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables?.threadId === chat.id
+  // Optimistic public display
+  const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables?.threadId === chat.id
+    ? togglePublicMutation.variables.isPublic
+    : chat.isPublic ?? false;
+
+  // Optimistic pin display (internally still using isFavorite)
+  const displayIsPinned = toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables?.threadId === chat.id
     ? toggleFavoriteMutation.variables.isFavorite
     : chat.isFavorite;
 
-  const handleToggleFavorite = (e: React.MouseEvent) => {
+  const handleTogglePin = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     toggleFavoriteMutation.mutate({
       threadId: chat.id,
-      isFavorite: !displayIsFavorite,
+      isFavorite: !displayIsPinned,
       slug: chat.slug,
     });
   };
 
-  const handleCopyLink = (e: React.MouseEvent) => {
+  const handleShare = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const fullUrl = `${window.location.origin}${chatUrl}`;
-    navigator.clipboard.writeText(fullUrl);
-    showApiSuccessToast(t('copyLink'), t('copyLinkSuccess'));
+    setIsShareDialogOpen(true);
+  };
+
+  const handleMakePublic = () => {
+    togglePublicMutation.mutate({
+      threadId: chat.id,
+      isPublic: true,
+      slug: chat.slug,
+    });
+  };
+
+  const handleMakePrivate = () => {
+    togglePublicMutation.mutate({
+      threadId: chat.id,
+      isPublic: false,
+      slug: chat.slug,
+    });
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -180,13 +202,18 @@ function ChatItem({
           </SidebarMenuAction>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start" className="w-48">
-          <DropdownMenuItem onClick={handleToggleFavorite}>
-            <Star className={cn('size-4', displayIsFavorite && 'fill-amber-500 text-amber-500')} />
-            {displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+          <DropdownMenuItem onClick={handleTogglePin}>
+            <Pin className={cn('size-4', displayIsPinned && 'fill-current')} />
+            {displayIsPinned ? t('unpin') : t('pin')}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleCopyLink}>
-            <Link2 className="size-4" />
-            {t('copyLink')}
+          <DropdownMenuItem onClick={handleShare}>
+            <Share className="size-4" />
+            {t('share')}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled className="opacity-50">
+            <Pencil className="size-4" />
+            {t('rename')}
+            <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">{t('comingSoon')}</Badge>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={handleDelete}>
@@ -195,6 +222,16 @@ function ChatItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ShareDialog
+        open={isShareDialogOpen}
+        onOpenChange={setIsShareDialogOpen}
+        slug={chat.slug}
+        threadTitle={chat.title}
+        isPublic={displayIsPublic}
+        isLoading={togglePublicMutation.isPending}
+        onMakePublic={handleMakePublic}
+        onMakePrivate={handleMakePrivate}
+      />
     </SidebarMenuItem>
   );
 
@@ -243,22 +280,9 @@ export function ChatList({
       setChatToDelete(null);
     }
   };
-  const formatGroupLabel = (label: string) => {
-    if (label.includes(':')) {
-      const [key, value] = label.split(':');
-      if (!key || !value) {
-        return t(label.replace('chat.', 'chat.'));
-      }
-      const translationKey = key.replace('chat.', '');
-      if (translationKey === 'daysAgo') {
-        return `${value} days ago`;
-      }
-      if (translationKey === 'weeksAgo') {
-        const weeks = Number.parseInt(value, 10);
-        return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
-      }
-    }
-    return t(label.replace('chat.', 'chat.'));
+  // Always show "Chats" as section header (no time-based grouping in UI)
+  const formatGroupLabel = (_label: string) => {
+    return t('chat.chats');
   };
   if (searchTerm && chatGroups.length === 0 && favorites.length === 0) {
     return (
@@ -330,37 +354,41 @@ export function ChatList({
       {chatGroups.map((group, groupIndex) => {
         const baseZIndex = favorites.length > 0 ? 11 : 10;
         const sectionZIndex = baseZIndex + groupIndex;
+        // Only show "CHATS" header on first group (not repeated for each time period)
+        const showHeader = groupIndex === 0;
         return (
           <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
-            <StickyHeader zIndex={sectionZIndex} className="pb-1">
-              <SidebarGroupLabel className="h-9 px-2 text-xs uppercase tracking-wider font-medium text-muted-foreground">
-                {shouldAnimate
-                  ? (
-                      <motion.span
-                        className="truncate block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                        style={{ maxWidth: '13rem' }}
-                        initial={{ x: -10, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 500,
-                          damping: 40,
-                          delay: (groupIndex * 0.05) + 0.1,
-                        }}
-                      >
-                        {formatGroupLabel(group.label)}
-                      </motion.span>
-                    )
-                  : (
-                      <span
-                        className="truncate block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                        style={{ maxWidth: '13rem' }}
-                      >
-                        {formatGroupLabel(group.label)}
-                      </span>
-                    )}
-              </SidebarGroupLabel>
-            </StickyHeader>
+            {showHeader && (
+              <StickyHeader zIndex={sectionZIndex} className="pb-1">
+                <SidebarGroupLabel className="h-9 px-2 text-xs uppercase tracking-wider font-medium text-muted-foreground">
+                  {shouldAnimate
+                    ? (
+                        <motion.span
+                          className="truncate block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                          style={{ maxWidth: '13rem' }}
+                          initial={{ x: -10, opacity: 0 }}
+                          animate={{ x: 0, opacity: 1 }}
+                          transition={{
+                            type: 'spring',
+                            stiffness: 500,
+                            damping: 40,
+                            delay: 0.1,
+                          }}
+                        >
+                          {formatGroupLabel(group.label)}
+                        </motion.span>
+                      )
+                    : (
+                        <span
+                          className="truncate block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                          style={{ maxWidth: '13rem' }}
+                        >
+                          {formatGroupLabel(group.label)}
+                        </span>
+                      )}
+                </SidebarGroupLabel>
+              </StickyHeader>
+            )}
             {shouldAnimate
               ? (
                   <motion.div

@@ -603,11 +603,11 @@ function SidebarMenuAction({
       data-slot="sidebar-menu-action"
       data-sidebar="menu-action"
       className={cn(
-        // Base styles - full rounded icon button with destructive hover
-        "absolute end-2 flex size-6 items-center justify-center rounded-full p-0 outline-hidden",
-        "text-sidebar-foreground/60 ring-sidebar-ring",
-        "hover:bg-destructive/15 hover:text-destructive",
-        "focus-visible:ring-2 focus-visible:ring-destructive/50",
+        // Base styles - circular icon button matching ghost button pattern
+        "absolute end-2 flex size-7 items-center justify-center rounded-full p-0 outline-hidden",
+        "text-sidebar-foreground/70 ring-sidebar-ring",
+        "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        "focus-visible:ring-1 focus-visible:ring-ring/40",
         "transition-all duration-150 ease-out",
         "[&>svg]:size-3.5 [&>svg]:shrink-0",
         // Touch target - larger hit area on mobile

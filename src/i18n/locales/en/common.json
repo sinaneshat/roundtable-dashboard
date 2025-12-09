@@ -49,7 +49,7 @@
     "updating": "Updating",
     "toggleSidebar": "Toggle Sidebar"
   },
-  "addToFavorites": "Add To Favorites",
+  "pin": "Pin",
   "apiKeys": {
     "modal": {
       "title": "API Keys",
@@ -694,10 +694,10 @@
         "refreshPage": "Refresh Page"
       }
     },
-    "addToFavorites": "Add to favorites",
-    "addingToFavorites": "Adding to favorites...",
-    "addedToFavorites": "Added to favorites",
-    "addedToFavoritesDescription": "Thread has been added to your favorites",
+    "pin": "Pin",
+    "pinning": "Pinning...",
+    "pinned": "Pinned",
+    "pinnedDescription": "Thread has been pinned",
     "copyFailed": "Failed to copy link",
     "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
     "copyLink": "Copy link",
@@ -725,9 +725,10 @@
       "goHome": "Go Home",
       "experiencePower": "Experience the power of multi-AI collaboration."
     },
-    "favoriteFailed": "Failed to update favorite",
-    "favorites": "Favorites",
-    "favoriteFailedDescription": "Could not update favorite status. Please try again.",
+    "pinFailed": "Failed to update pin",
+    "pinnedChats": "Pinned",
+    "pinFailedDescription": "Could not update pin status. Please try again.",
+    "rename": "Rename",
     "trending": "Trending",
     "comingSoon": "Coming soon",
     "input": {
@@ -799,10 +800,10 @@
         "title": "Solve Problems"
       }
     },
-    "removeFromFavorites": "Remove from favorites",
-    "removingFromFavorites": "Removing from favorites...",
-    "removedFromFavorites": "Removed from favorites",
-    "removedFromFavoritesDescription": "Thread has been removed from your favorites",
+    "unpin": "Unpin",
+    "unpinning": "Unpinning...",
+    "unpinned": "Unpinned",
+    "unpinnedDescription": "Thread has been unpinned",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
     "searchChatsDescription": "Search and navigate through your chat conversations",
@@ -873,7 +874,7 @@
     "threadDeletedDescription": "The chat thread has been successfully deleted",
     "threadNotFound": "Thread not found",
     "threadNotFoundDescription": "The chat thread you're looking for doesn't exist",
-    "today": "Today",
+    "chats": "Chats",
     "updateFailed": "Failed to update thread",
     "updateFailedDescription": "Could not update the thread. Please try again.",
     "yesterday": "Yesterday",
@@ -1437,7 +1438,7 @@
   "products": "Products",
   "refreshPage": "RefreshPage",
   "refreshing": "Refreshing",
-  "removeFromFavorites": "Remove From Favorites",
+  "unpin": "Unpin",
   "retry": "Retry",
   "retrying": "Retrying",
   "sectionDescription": "SectionDescription",

@@ -13,7 +13,7 @@
  * - Post-creation: ChatView handles all rendering (same as thread screen)
  */
 
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -31,7 +31,6 @@ import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -699,33 +698,6 @@ export default function ChatOverviewScreen() {
     <>
       <UnifiedErrorBoundary context="chat">
         <div className="flex flex-col relative flex-1 min-h-dvh">
-          {/* Radial glow - centered behind logo */}
-          <AnimatePresence mode="wait">
-            {showInitialUI && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-                className="fixed pointer-events-none"
-                style={{
-                  // Logo center: header ~56-64px + padding 24-32px + half logo 40-48px ≈ 130px
-                  top: '130px',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  zIndex: 1,
-                }}
-              >
-                <RadialGlow
-                  size={280}
-                  duration={20}
-                  animate={true}
-                  intensity={0.25}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Initial UI - logo, tagline, suggestions */}
           {showInitialUI && (
             <>

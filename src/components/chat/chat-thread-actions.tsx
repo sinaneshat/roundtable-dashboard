@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Loader2, MoreVertical, Share, Star, Trash2 } from 'lucide-react';
+import { Globe, Loader2, MoreVertical, Pin, Share, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -134,7 +134,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+                aria-label={displayIsFavorite ? t('unpin') : t('pin')}
                 onClick={handleToggleFavorite}
                 disabled={toggleFavoriteMutation.isPending}
                 className={cn(
@@ -145,7 +145,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 {toggleFavoriteMutation.isPending
                   ? <Loader2 className="size-5 animate-spin" />
                   : (
-                      <Star
+                      <Pin
                         className={cn(
                           'size-5',
                           displayIsFavorite && 'fill-current',
@@ -156,7 +156,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <p className="text-sm">
-                {displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}
+                {displayIsFavorite ? t('unpin') : t('pin')}
               </p>
             </TooltipContent>
           </Tooltip>
@@ -249,14 +249,14 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               {toggleFavoriteMutation.isPending
                 ? <Loader2 className="size-4 animate-spin" />
                 : (
-                    <Star
+                    <Pin
                       className={cn(
                         'size-4',
                         displayIsFavorite && 'fill-current',
                       )}
                     />
                   )}
-              <span>{displayIsFavorite ? t('removeFromFavorites') : t('addToFavorites')}</span>
+              <span>{displayIsFavorite ? t('unpin') : t('pin')}</span>
             </DropdownMenuItem>
 
             {/* Delete */}

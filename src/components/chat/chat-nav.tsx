@@ -1,5 +1,5 @@
 'use client';
-import { MessageSquare, PanelLeft, Plus, Search, Sparkles, Star } from 'lucide-react';
+import { MessageSquare, PanelLeft, Pin, Plus, Search, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -233,17 +233,17 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
           <SidebarContent className="p-0 w-full min-w-0">
             <ScrollArea ref={sidebarContentRef} className="w-full h-full">
               <div className="flex flex-col w-full">
-                {/* Favorites Section */}
+                {/* Pinned Section */}
                 {!isLoading && !isError && favorites.length > 0 && (
                   <>
                     <div className="flex items-center justify-between px-2 pt-2 pb-1 w-full min-w-0 group-data-[collapsible=icon]:hidden">
                       <div className="flex items-center gap-2 min-w-0 flex-1" style={{ maxWidth: '11rem' }}>
-                        <Star className="size-4 shrink-0 fill-amber-500 text-amber-500" />
+                        <Pin className="size-4 shrink-0 fill-current" />
                         <span
-                          className="text-sm font-medium text-foreground truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                          className="text-sm font-medium text-foreground truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap uppercase text-xs tracking-wider"
                           style={{ maxWidth: '9rem' }}
                         >
-                          {t('chat.favorites')}
+                          {t('chat.pinnedChats')}
                         </span>
                       </div>
                       <span className="text-xs text-muted-foreground tabular-nums shrink-0">
@@ -261,6 +261,8 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                         }
                       }}
                     />
+                    {/* Spacing between Pinned and Chats sections */}
+                    <div className="h-4" />
                   </>
                 )}
 

@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
-import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 
 import { LiveChatDemo } from './live-chat-demo';
@@ -24,19 +23,6 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
 
   return (
     <div className="relative grid min-h-svh lg:grid-cols-2">
-      {/* Radial glow background - spans entire page */}
-      <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center overflow-hidden">
-        <div className="block sm:hidden">
-          <RadialGlow size={1200} duration={18} animate intensity={0.3} />
-        </div>
-        <div className="hidden sm:block lg:hidden">
-          <RadialGlow size={1800} duration={18} animate intensity={0.3} />
-        </div>
-        <div className="hidden lg:block">
-          <RadialGlow size={2400} duration={18} animate intensity={0.3} />
-        </div>
-      </div>
-
       {/* Left Column - Auth Form */}
       <div className="relative flex flex-col gap-4 p-6 md:p-10">
         {/* Centered content wrapper */}
