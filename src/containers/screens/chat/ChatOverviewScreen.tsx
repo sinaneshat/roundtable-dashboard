@@ -447,19 +447,24 @@ export default function ChatOverviewScreen() {
       hasInitializedModelsRef.current = false; // Reset so we can re-initialize
       chatAttachments.clearAttachments();
 
-      if (defaultModelId && initialParticipants.length > 0) {
-        // Use persisted mode if valid, otherwise default
-        const modeResult = ChatModeSchema.safeParse(persistedMode);
-        setSelectedMode(modeResult.success ? modeResult.data : getDefaultChatMode());
-        setSelectedParticipants(initialParticipants);
-        // Use persisted webSearch preference
-        setEnableWebSearch(persistedWebSearch);
-        hasInitializedModelsRef.current = true; // Mark as initialized
-      }
+      // ✅ RACE CONDITION FIX: Reset initialization state to allow re-initialization
+      // When navigating back to /chat, the consolidated init effect needs to run again
+      // Previously, init.participants stayed true which blocked re-initialization
+      initStateRef.current = {
+        persistedDefaults: false,
+        syncedModels: false,
+        modelOrder: false,
+        participants: false,
+        threadActions: false,
+      };
+
+      // ✅ SIMPLIFIED: Don't try to set participants here - let the consolidated useEffect handle it
+      // The useEffect has proper guards for preferencesHydrated and initialParticipants
+      // Setting participants here created a race condition where preferences weren't hydrated yet
     } else {
       lastResetPathRef.current = pathname;
     }
-  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants, chatAttachments, persistedMode, persistedWebSearch, setEnableWebSearch]);
+  }, [pathname, resetToOverview, chatAttachments]);
 
   // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
   // Per AI SDK docs, resume: true is incompatible with abort/stop.

@@ -1822,34 +1822,31 @@ export function getFileTypeLabelFromMime(mimeType: string): string {
 }
 
 // ============================================================================
-// VISION-REQUIRED MIME TYPES (For Model Capability Filtering)
+// VISUAL MIME TYPES (Images and PDFs)
 // ============================================================================
 
 /**
- * MIME types that require vision capability to process
- * ✅ SINGLE SOURCE OF TRUTH for vision capability filtering
- * Used by streaming handlers to filter out visual content for text-only models
- * OpenRouter returns 404 "No endpoints found that support image input" for these
+ * MIME types that are visual/document content (images, PDFs)
+ * NOTE: All models receive all files - no filtering based on vision capability
+ * File content is extracted and exposed via system prompt context for all models
  */
-export const VISION_REQUIRED_MIME_TYPES = [
-  // All image types require vision
+export const VISUAL_MIME_TYPES = [
   ...IMAGE_MIME_TYPES,
-  // PDFs require vision on OpenRouter - they get parsed into visual format
   'application/pdf',
 ] as const;
 
-export type VisionRequiredMimeType = typeof VISION_REQUIRED_MIME_TYPES[number];
+export type VisualMimeType = typeof VISUAL_MIME_TYPES[number];
 
 /** Set for O(1) lookup performance */
-const VISION_REQUIRED_SET = new Set<string>(VISION_REQUIRED_MIME_TYPES);
+const VISUAL_MIME_SET = new Set<string>(VISUAL_MIME_TYPES);
 
 /**
- * Check if a MIME type requires vision capability
+ * Check if a MIME type is visual content (image or PDF)
  * @param mimeType - MIME type to check
- * @returns true if the MIME type requires vision capability
+ * @returns true if the MIME type is visual content
  */
-export function isVisionRequiredMimeType(mimeType: string): boolean {
-  return VISION_REQUIRED_SET.has(mimeType);
+export function isVisualMimeType(mimeType: string): boolean {
+  return VISUAL_MIME_SET.has(mimeType);
 }
 
 // ============================================================================

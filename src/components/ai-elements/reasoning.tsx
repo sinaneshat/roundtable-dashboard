@@ -159,14 +159,11 @@ export function Reasoning({
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
-      // Prevent collapsing while streaming (locked open during stream)
-      if (isStreaming && !newOpen) {
-        return;
-      }
-      // Allow manual toggle when not streaming
+      // ✅ Allow user to expand/collapse at any time, even during streaming
+      // User should be able to view reasoning content as it streams in
       setIsOpen(newOpen);
     },
-    [isStreaming],
+    [],
   );
 
   const contextValue = useMemo(
@@ -257,11 +254,9 @@ export function ReasoningTrigger({
   return (
     <div className="flex w-full">
       <CollapsibleTrigger
-        disabled={isStreaming}
         className={cn(
           'flex flex-1 items-center justify-between gap-2 text-muted-foreground text-sm transition-colors',
-          !isStreaming && 'hover:text-foreground cursor-pointer',
-          isStreaming && 'cursor-default',
+          'hover:text-foreground cursor-pointer',
           className,
         )}
         {...props}

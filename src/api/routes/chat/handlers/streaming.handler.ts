@@ -603,61 +603,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           attachmentIds,
         });
 
-      // ✅ VISION CAPABILITY CHECK: Filter out image parts for non-vision models
-      // Some models (e.g., qwen/qwen3-max, deepseek/deepseek-chat) don't support image input
-      // OpenRouter returns 404 "No endpoints found that support image input" for these models
-      // We filter out image content parts to prevent this error and allow text-only responses
-      const modelSupportsVision = supportsCapability(
-        participant.modelId,
-        'vision',
-      );
-      const modelMessages = modelSupportsVision
-        ? rawModelMessages
-        : rawModelMessages.map((msg) => {
-            // Only filter user messages (assistant messages don't have images)
-            if (msg.role !== 'user')
-              return msg;
-
-            // Filter out image content parts
-            const content = msg.content;
-            if (!Array.isArray(content))
-              return msg;
-
-            const filteredContent = content.filter((part) => {
-              // Keep text parts
-              if (part.type === 'text')
-                return true;
-              // Filter out image parts (type: 'image')
-              if (part.type === 'image')
-                return false;
-              // Filter out file parts with visual MIME types (images AND PDFs)
-              // Uses shared type guard and extractMimeTypeFromPart from enums.ts (single source of truth)
-              // Handles: mimeType (legacy), mediaType (AI SDK v5), data URL extraction
-              if (isFilePartType(part)) {
-                const mimeType = extractMimeTypeFromPart(part);
-                if (mimeType && isVisionRequiredMimeType(mimeType)) {
-                  return false;
-                }
-              }
-              // Keep other parts (documents, etc.)
-              return true;
-            });
-
-            // If all content was filtered, add a placeholder text
-            if (filteredContent.length === 0) {
-              return {
-                ...msg,
-                content: [
-                  {
-                    type: MessagePartTypes.TEXT,
-                    text: '[File attachment not shown - model does not support vision/document input]',
-                  },
-                ],
-              };
-            }
-
-            return { ...msg, content: filteredContent };
-          });
+      // ✅ ALL MODELS RECEIVE ALL FILES: No vision capability filtering
+      // File content is extracted and exposed to all models via system prompt context
+      // Models that can't process visual content will still see extracted text content
+      // Never limit what's exposed to models based on vision flags
+      const modelMessages = rawModelMessages;
 
       // Build system prompt with RAG context and citation support
       const userQuery = extractUserQuery([

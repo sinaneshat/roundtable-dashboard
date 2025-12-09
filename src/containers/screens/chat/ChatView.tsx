@@ -20,7 +20,6 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-// ✅ SCROLL ANCHOR: Used by useChatScroll for smooth auto-scrolling
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -245,8 +244,6 @@ export function ChatView({
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const hasActiveConversation = Boolean(thread || createdThreadId);
 
-  // ✅ SCROLL ANCHOR: Single marker at bottom of chat for smooth auto-scrolling
-  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
   const recommendedActions = useRecommendedActions({
     inputContainerRef,
     enableScroll: mode === 'thread',
@@ -270,22 +267,14 @@ export function ChatView({
   // Loading state - needed before scroll hook
   const { showLoader } = useFlowLoading({ mode });
 
-  // Scroll management - uses single scroll anchor for smooth auto-scrolling
-  // ✅ HYDRATION: isStoreReady ensures scroll waits for server data to load into store
+  // Scroll management - minimal hook for tracking scroll position
+  // Initial scroll and virtualization handled by useVirtualizedTimeline
   const isStoreReady = mode === 'thread' ? (hasInitiallyLoaded && messages.length > 0) : true;
 
   useChatScroll({
     messages,
     analyses,
-    isStreaming,
-    scrollContainerId: 'main-scroll-container',
     enableNearBottomDetection: true,
-    currentParticipantIndex,
-    bottomOffset: 180,
-    scrollAnchorRef, // ✅ SMOOTH SCROLL: Enables scrollIntoView for smoother mobile scrolling
-    showLoader, // ✅ LOADING STATE: Triggers scroll when loader appears
-    initialScrollToBottom: mode === 'thread', // ✅ THREAD MODE: Scroll to bottom on initial load
-    isStoreReady, // ✅ HYDRATION: Wait for store to be hydrated before initial scroll
   });
 
   // Input blocking - unified calculation for both screens
@@ -480,10 +469,9 @@ export function ChatView({
     <>
       <UnifiedErrorBoundary context="chat">
         <div className="flex flex-col relative flex-1 min-h-full">
-          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-6 pb-4">
+          <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-16 pb-4">
             <ThreadTimeline
               timelineItems={timelineItems}
-              scrollContainerId="main-scroll-container"
               user={user}
               participants={contextParticipants}
               threadId={effectiveThreadId}
@@ -506,18 +494,7 @@ export function ChatView({
               onAnalysisStreamComplete={handleAnalysisStreamComplete}
               onActionClick={recommendedActions.handleActionClick}
               preSearches={preSearches}
-              initialScrollToBottom={mode === 'thread'}
               isDataReady={isStoreReady}
-            />
-
-            {/* ✅ SCROLL ANCHOR: Single marker for smooth auto-scroll snapping
-                This element is the ONLY target for scroll behavior
-                Placed at the very bottom of the chat content area */}
-            <div
-              ref={scrollAnchorRef}
-              aria-hidden="true"
-              className="h-px w-full"
-              data-scroll-anchor="chat-bottom"
             />
           </div>
 

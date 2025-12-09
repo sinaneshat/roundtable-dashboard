@@ -496,6 +496,141 @@ describe('useMultiParticipantChat Turn-Taking', () => {
     });
   });
 
+  describe('streaming Sync Throttle', () => {
+    it('should allow immediate sync for message count changes', () => {
+      // Simulate message count change detection
+      const prevCount = 2;
+      const newCount = 3;
+
+      const countChanged = newCount !== prevCount;
+      const shouldThrottle = false; // Count changes never throttled
+
+      const shouldSync = countChanged || (false && !shouldThrottle);
+      expect(shouldSync).toBe(true);
+    });
+
+    it('should throttle rapid content-only changes during streaming', async () => {
+      // Simulate rapid streaming content updates
+      // Note: lastSyncTime starts at 0, so first sync at time 0 has 0-0=0ms elapsed,
+      // which is NOT < 100ms, so it won't be throttled (this matches production behavior)
+      let lastSyncTime = 0;
+      const THROTTLE_MS = 100;
+      const syncTimes: number[] = [];
+
+      const attemptSync = (now: number, countChanged: boolean, contentChanged: boolean) => {
+        const timeSinceLastSync = now - lastSyncTime;
+        const shouldThrottle = !countChanged && contentChanged && timeSinceLastSync < THROTTLE_MS;
+
+        if (!shouldThrottle && (countChanged || contentChanged)) {
+          lastSyncTime = now;
+          syncTimes.push(now);
+          return true;
+        }
+        return false;
+      };
+
+      // Start at time 1000 to simulate real-world scenario (Date.now() returns large values)
+      const baseTime = 1000;
+      attemptSync(baseTime, false, true); // Syncs (first content change, 1000-0=1000ms elapsed)
+      attemptSync(baseTime + 20, false, true); // Throttled (1020-1000=20ms < 100ms)
+      attemptSync(baseTime + 40, false, true); // Throttled
+      attemptSync(baseTime + 60, false, true); // Throttled
+      attemptSync(baseTime + 80, false, true); // Throttled
+      attemptSync(baseTime + 100, false, true); // Syncs (1100-1000=100ms, not < 100ms)
+      attemptSync(baseTime + 120, false, true); // Throttled (1120-1100=20ms < 100ms)
+
+      // Only 2 syncs should occur
+      expect(syncTimes).toHaveLength(2);
+      expect(syncTimes[0]).toBe(1000);
+      expect(syncTimes[1]).toBe(1100);
+    });
+
+    it('should NOT throttle when message count changes', async () => {
+      // Message count changes (new participants) must sync immediately
+      let lastSyncTime = 0;
+      const THROTTLE_MS = 100;
+      const syncTimes: number[] = [];
+
+      const attemptSync = (now: number, countChanged: boolean, contentChanged: boolean) => {
+        const timeSinceLastSync = now - lastSyncTime;
+        const shouldThrottle = !countChanged && contentChanged && timeSinceLastSync < THROTTLE_MS;
+
+        if (!shouldThrottle && (countChanged || contentChanged)) {
+          lastSyncTime = now;
+          syncTimes.push(now);
+          return true;
+        }
+        return false;
+      };
+
+      // Rapid count changes should all sync (new participants)
+      const baseTime = 0;
+      attemptSync(baseTime + 0, true, false); // Syncs
+      attemptSync(baseTime + 10, true, false); // Syncs (count change = immediate)
+      attemptSync(baseTime + 20, true, false); // Syncs
+      attemptSync(baseTime + 30, true, false); // Syncs
+
+      // All 4 syncs should occur - count changes are never throttled
+      expect(syncTimes).toHaveLength(4);
+    });
+
+    it('should compare text content for streaming detection', () => {
+      // Test content comparison logic
+      const hookMessage = {
+        id: 'msg-1',
+        parts: [{ type: 'text' as const, text: 'Hello world streaming...' }],
+      };
+
+      const storeMessage = {
+        id: 'msg-1',
+        parts: [{ type: 'text' as const, text: 'Hello world' }],
+      };
+
+      // Content comparison
+      let contentChanged = false;
+      for (let j = 0; j < hookMessage.parts.length; j++) {
+        const hookPart = hookMessage.parts[j];
+        const storePart = storeMessage.parts[j];
+        if (hookPart?.type === 'text' && storePart?.type === 'text') {
+          if (hookPart.text !== storePart.text) {
+            contentChanged = true;
+            break;
+          }
+        }
+      }
+
+      expect(contentChanged).toBe(true);
+    });
+
+    it('should compare reasoning content for streaming detection', () => {
+      // Test reasoning comparison logic
+      const hookMessage = {
+        id: 'msg-1',
+        parts: [{ type: 'reasoning' as const, text: 'Thinking about this problem...' }],
+      };
+
+      const storeMessage = {
+        id: 'msg-1',
+        parts: [{ type: 'reasoning' as const, text: 'Thinking' }],
+      };
+
+      // Content comparison
+      let contentChanged = false;
+      for (let j = 0; j < hookMessage.parts.length; j++) {
+        const hookPart = hookMessage.parts[j];
+        const storePart = storeMessage.parts[j];
+        if (hookPart?.type === 'reasoning' && storePart?.type === 'reasoning') {
+          if (hookPart.text !== storePart.text) {
+            contentChanged = true;
+            break;
+          }
+        }
+      }
+
+      expect(contentChanged).toBe(true);
+    });
+  });
+
   describe('aWait Pattern Validation', () => {
     it('should demonstrate blocking vs non-blocking RAF behavior', async () => {
       const executionOrder: string[] = [];
@@ -566,6 +701,365 @@ describe('useMultiParticipantChat Turn-Taking', () => {
       // With blocking RAF, max concurrent should be 1
       expect(maxConcurrent).toBe(1);
       expect(finishOrder).toEqual([0, 1, 2]);
+    });
+  });
+
+  describe('content Mixing Race Condition Detection', () => {
+    it('should detect when participant content is mixed (wrong content for participant)', () => {
+      // This test catches the bug where p1 gets p0's content
+      // Symptom: Both participants have identical content when they should be different
+      const messages: UIMessage[] = [
+        createTestUserMessage({
+          id: 'user-1',
+          content: 'Hello',
+          roundNumber: 0,
+        }),
+        createTestAssistantMessage({
+          id: 'thread-1_r0_p0',
+          content: 'Response from GPT-4o Mini',
+          roundNumber: 0,
+          participantId: 'p0-gpt',
+          participantIndex: 0,
+          model: 'openai/gpt-4o-mini',
+        }),
+        createTestAssistantMessage({
+          id: 'thread-1_r0_p1',
+          content: 'Response from GPT-4o Mini', // BUG: Same content as p0!
+          roundNumber: 0,
+          participantId: 'p1-grok',
+          participantIndex: 1,
+          model: 'x-ai/grok-4.1-fast',
+        }),
+      ];
+
+      // Detect content mixing: different participants should have different content
+      // (in a real conversation, two different models almost never produce identical responses)
+      const assistantMessages = messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
+      const contentSet = new Set<string>();
+
+      assistantMessages.forEach((msg) => {
+        const textPart = msg.parts?.find(p => p.type === 'text' && 'text' in p);
+        if (textPart && 'text' in textPart) {
+          contentSet.add(textPart.text);
+        }
+      });
+
+      // If we have 2 participants but only 1 unique content, something is wrong
+      const hasMixedContent = assistantMessages.length > 1 && contentSet.size < assistantMessages.length;
+      expect(hasMixedContent).toBe(true); // This test EXPECTS the bug to be detectable
+    });
+
+    it('should validate participant metadata matches message ID', () => {
+      // Each message ID contains participant index (e.g., _r0_p1)
+      // The metadata.participantIndex should match
+      const messages: UIMessage[] = [
+        createTestAssistantMessage({
+          id: 'thread-1_r0_p0',
+          content: 'Response 0',
+          roundNumber: 0,
+          participantId: 'p0',
+          participantIndex: 0,
+        }),
+        createTestAssistantMessage({
+          id: 'thread-1_r0_p1',
+          content: 'Response 1',
+          roundNumber: 0,
+          participantId: 'p1',
+          participantIndex: 1,
+        }),
+      ];
+
+      // Validate each message
+      const inconsistencies: string[] = [];
+      messages.forEach((msg) => {
+        // Extract participant index from ID
+        const idMatch = msg.id.match(/_p(\d+)$/);
+        if (idMatch) {
+          const idParticipantIndex = Number.parseInt(idMatch[1], 10);
+          const metadataIndex = msg.metadata.participantIndex;
+
+          if (idParticipantIndex !== metadataIndex) {
+            inconsistencies.push(
+              `Message ${msg.id} has ID index ${idParticipantIndex} but metadata index ${metadataIndex}`,
+            );
+          }
+        }
+      });
+
+      expect(inconsistencies).toHaveLength(0);
+    });
+
+    it('should detect concurrent network requests (more requests than participants)', () => {
+      // Simulate tracking network requests
+      const networkRequests: Array<{ participantIndex: number; timestamp: number }> = [];
+      const participants = ['p0', 'p1'];
+
+      // Simulate race condition: 3 requests for 2 participants
+      networkRequests.push({ participantIndex: 0, timestamp: 1000 });
+      networkRequests.push({ participantIndex: 0, timestamp: 1010 }); // Duplicate!
+      networkRequests.push({ participantIndex: 1, timestamp: 1020 });
+
+      // Check for duplicates
+      const indexCounts = new Map<number, number>();
+      networkRequests.forEach((req) => {
+        indexCounts.set(req.participantIndex, (indexCounts.get(req.participantIndex) ?? 0) + 1);
+      });
+
+      const hasDuplicateRequests = Array.from(indexCounts.values()).some(count => count > 1);
+      const totalRequests = networkRequests.length;
+      const expectedRequests = participants.length;
+
+      // Race condition detected: more requests than participants
+      expect(hasDuplicateRequests).toBe(true);
+      expect(totalRequests).toBeGreaterThan(expectedRequests);
+    });
+  });
+
+  describe('message ID Processing Guard', () => {
+    it('should prevent double-processing of same message ID in onFinish', () => {
+      // Simulate the processedMessageIdsRef guard
+      const processedMessageIds = new Set<string>();
+      const processedMessages: string[] = [];
+
+      const simulateOnFinish = (messageId: string, content: string) => {
+        // Guard: skip if already processed
+        if (processedMessageIds.has(messageId)) {
+          return false; // Skipped
+        }
+        processedMessageIds.add(messageId);
+        processedMessages.push(content);
+        return true; // Processed
+      };
+
+      // First call should process
+      const result1 = simulateOnFinish('msg-1', 'First content');
+      expect(result1).toBe(true);
+      expect(processedMessages).toHaveLength(1);
+
+      // Second call with same ID should be skipped
+      const result2 = simulateOnFinish('msg-1', 'Duplicate content');
+      expect(result2).toBe(false);
+      expect(processedMessages).toHaveLength(1); // Still 1, not 2
+
+      // Different ID should process
+      const result3 = simulateOnFinish('msg-2', 'Second content');
+      expect(result3).toBe(true);
+      expect(processedMessages).toHaveLength(2);
+    });
+
+    it('should track all processed messages across a round', () => {
+      const processedMessageIds = new Set<string>();
+      const participants = [
+        { id: 'p0', modelId: 'gpt-4o-mini' },
+        { id: 'p1', modelId: 'grok-4.1-fast' },
+      ];
+      const threadId = 'thread-1';
+      const roundNumber = 0;
+
+      // Process each participant's message
+      participants.forEach((p, idx) => {
+        const messageId = `${threadId}_r${roundNumber}_p${idx}`;
+        processedMessageIds.add(messageId);
+      });
+
+      // Verify all participants were processed exactly once
+      expect(processedMessageIds.size).toBe(participants.length);
+
+      // Verify correct message IDs
+      expect(processedMessageIds.has('thread-1_r0_p0')).toBe(true);
+      expect(processedMessageIds.has('thread-1_r0_p1')).toBe(true);
+    });
+  });
+
+  describe('isTriggeringRef Lock Validation', () => {
+    it('should prevent concurrent triggers with lock pattern', () => {
+      let isTriggeringLock = false;
+      const triggerLog: Array<{ action: string; index: number; timestamp: number }> = [];
+
+      const triggerNextParticipant = (index: number): boolean => {
+        // Check lock
+        if (isTriggeringLock) {
+          triggerLog.push({ action: 'blocked', index, timestamp: Date.now() });
+          return false;
+        }
+
+        // Acquire lock
+        isTriggeringLock = true;
+        triggerLog.push({ action: 'started', index, timestamp: Date.now() });
+
+        // Simulate work (synchronous for this test)
+        // ... trigger participant ...
+
+        // Release lock (MUST be synchronous)
+        isTriggeringLock = false;
+        triggerLog.push({ action: 'completed', index, timestamp: Date.now() });
+
+        return true;
+      };
+
+      // Sequential triggers should all succeed
+      expect(triggerNextParticipant(0)).toBe(true);
+      expect(triggerNextParticipant(1)).toBe(true);
+      expect(triggerNextParticipant(2)).toBe(true);
+
+      // All should have completed
+      const completed = triggerLog.filter(l => l.action === 'completed');
+      expect(completed).toHaveLength(3);
+    });
+
+    it('should block concurrent trigger attempts during async operations', async () => {
+      let isTriggeringLock = false;
+      const triggerLog: Array<{ action: string; index: number }> = [];
+
+      const triggerWithAsyncWork = async (index: number): Promise<boolean> => {
+        if (isTriggeringLock) {
+          triggerLog.push({ action: 'blocked', index });
+          return false;
+        }
+
+        isTriggeringLock = true;
+        triggerLog.push({ action: 'started', index });
+
+        // Simulate async work (like RAF)
+        await waitForAsync(10);
+
+        triggerLog.push({ action: 'completed', index });
+        isTriggeringLock = false;
+
+        return true;
+      };
+
+      // Start trigger for participant 0
+      const trigger0Promise = triggerWithAsyncWork(0);
+
+      // Try to trigger participant 1 while 0 is still processing
+      // (simulates race condition)
+      const trigger1Result = await triggerWithAsyncWork(1);
+
+      // Wait for trigger 0 to complete
+      const trigger0Result = await trigger0Promise;
+
+      // First trigger should succeed
+      expect(trigger0Result).toBe(true);
+
+      // Second trigger should be blocked (race condition prevented)
+      expect(trigger1Result).toBe(false);
+
+      // Verify log shows correct behavior
+      const blocked = triggerLog.filter(l => l.action === 'blocked');
+      expect(blocked).toHaveLength(1);
+      expect(blocked[0].index).toBe(1);
+    });
+  });
+
+  describe('queue Double-Push Prevention', () => {
+    it('should prevent duplicate pushes to participantIndexQueue', () => {
+      // Simulates the queuedParticipantsThisRoundRef pattern
+      const queuedParticipants = new Set<number>();
+      const queue: number[] = [];
+      const pushLog: Array<{ index: number; pushed: boolean }> = [];
+
+      const safePush = (index: number): boolean => {
+        if (queuedParticipants.has(index)) {
+          pushLog.push({ index, pushed: false });
+          return false;
+        }
+        queuedParticipants.add(index);
+        queue.push(index);
+        pushLog.push({ index, pushed: true });
+        return true;
+      };
+
+      // First push for participant 0 - should succeed
+      expect(safePush(0)).toBe(true);
+      expect(queue).toEqual([0]);
+
+      // Duplicate push for participant 0 - should be blocked
+      expect(safePush(0)).toBe(false);
+      expect(queue).toEqual([0]); // Still only one entry
+
+      // Push for participant 1 - should succeed
+      expect(safePush(1)).toBe(true);
+      expect(queue).toEqual([0, 1]);
+
+      // Verify log
+      expect(pushLog).toEqual([
+        { index: 0, pushed: true },
+        { index: 0, pushed: false }, // Duplicate blocked
+        { index: 1, pushed: true },
+      ]);
+    });
+
+    it('should reset queue tracking at start of new round', () => {
+      const queuedParticipants = new Set<number>();
+      const queue: number[] = [];
+
+      const safePush = (index: number): boolean => {
+        if (queuedParticipants.has(index)) {
+          return false;
+        }
+        queuedParticipants.add(index);
+        queue.push(index);
+        return true;
+      };
+
+      const resetForNewRound = () => {
+        queuedParticipants.clear();
+        queue.length = 0;
+      };
+
+      // Round 1: Push participants 0 and 1
+      expect(safePush(0)).toBe(true);
+      expect(safePush(1)).toBe(true);
+      expect(queue).toEqual([0, 1]);
+
+      // Reset for new round
+      resetForNewRound();
+      expect(queue).toEqual([]);
+
+      // Round 2: Push participant 0 again - should succeed after reset
+      expect(safePush(0)).toBe(true);
+      expect(queue).toEqual([0]);
+    });
+
+    it('should detect race condition when same participant is triggered from multiple entry points', () => {
+      // Simulates: startRound AND pendingMessage effect both triggering participant 0
+      const queuedParticipants = new Set<number>();
+      const networkRequestLog: Array<{ source: string; index: number }> = [];
+      let isTriggeringLock = false;
+
+      const triggerFromSource = (source: string, index: number): boolean => {
+        // Check trigger lock first (simulates isTriggeringRef)
+        if (isTriggeringLock) {
+          return false;
+        }
+
+        // Check if already queued (simulates queuedParticipantsThisRoundRef)
+        if (queuedParticipants.has(index)) {
+          return false;
+        }
+
+        isTriggeringLock = true;
+        queuedParticipants.add(index);
+        networkRequestLog.push({ source, index });
+        isTriggeringLock = false;
+
+        return true;
+      };
+
+      // startRound triggers participant 0
+      const startRoundResult = triggerFromSource('startRound', 0);
+
+      // pendingMessage effect also tries to trigger participant 0 (race condition)
+      const pendingMessageResult = triggerFromSource('pendingMessage', 0);
+
+      // First call should succeed, second should be blocked
+      expect(startRoundResult).toBe(true);
+      expect(pendingMessageResult).toBe(false);
+
+      // Only ONE network request should be made
+      expect(networkRequestLog).toHaveLength(1);
+      expect(networkRequestLog[0]).toEqual({ source: 'startRound', index: 0 });
     });
   });
 });

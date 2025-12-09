@@ -162,8 +162,8 @@ function SubscriptionChangedContent() {
       >
         <StaggerItem>
           <ScaleIn duration={0.3} delay={0}>
-            <div className="flex size-20 items-center justify-center rounded-full bg-green-500/10 ring-4 ring-green-500/20 md:size-24">
-              <CheckCircle className="size-10 text-green-500 md:size-12" strokeWidth={2} />
+            <div className="flex size-20 items-center mx-auto justify-center rounded-full bg-green-500/10 ring-4 ring-green-500/20 md:size-24">
+              <CheckCircle className="size-10 text-green-500 mx-auto md:size-12" strokeWidth={2} />
             </div>
           </ScaleIn>
         </StaggerItem>

@@ -259,19 +259,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     },
   });
 
-  // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
+  // ✅ REFS PATTERN: Capture latest chat methods for use in effects
+  // NOTE: useEffectEvent would be ideal but React's rules-of-hooks linter restricts
+  // it to only being called from inside effects. Since we need to call these from
+  // useCallback (which can be called outside effects), we use refs + sync effect.
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
-  const continueFromParticipantRef = useRef(chat.continueFromParticipant);
   const setMessagesRef = useRef(chat.setMessages);
 
   // Keep refs in sync with latest chat methods
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
-    continueFromParticipantRef.current = chat.continueFromParticipant;
     setMessagesRef.current = chat.setMessages;
-  }, [chat.sendMessage, chat.startRound, chat.continueFromParticipant, chat.setMessages]);
+  }, [chat.sendMessage, chat.startRound, chat.setMessages]);
 
   // ✅ CRITICAL FIX: Clear pre-search creation tracking when thread changes
   // BUG FIX: When clicking a recommendation from analysis card on overview screen,
@@ -297,6 +298,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // All subsequent rounds (1+) use the pendingMessage effect via handleUpdateThreadAndSend
   // ✅ PRE-SEARCH BLOCKING: Waits for pre-search completion AND animation before triggering participants
   const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
+
+  // ✅ RACE CONDITION FIX: Track which rounds have had startRound called
+  // Effect re-runs multiple times due to dependency changes (messages, participants)
+  // This prevents calling startRound multiple times for the same round
+  const startRoundCalledForRoundRef = useRef<number | null>(null);
   const storeParticipants = useStore(store, s => s.participants);
   const storeMessages = useStore(store, s => s.messages);
   const storePreSearches = useStore(store, s => s.preSearches);
@@ -306,6 +312,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   useEffect(() => {
     if (!waitingToStart) {
+      // Reset the guard when not waiting (allows next round to trigger)
+      startRoundCalledForRoundRef.current = null;
       return;
     }
 
@@ -514,7 +522,22 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // startRound has internal guards for AI SDK status - it will return early if not ready
     // We keep the flag set so this effect retries until streaming actually begins
     // The flag is only cleared when isStreaming becomes true (see effect below)
-    // NOTE: Don't mark as attempted here - let the effect retry until messages are hydrated
+
+    // ✅ RACE CONDITION FIX: Only call startRound once per round
+    // Effect re-runs multiple times, but we only want to trigger participants once
+    const currentRound = getCurrentRoundNumber(storeMessages);
+    if (startRoundCalledForRoundRef.current === currentRound) {
+      return; // Already called startRound for this round
+    }
+
+    // ✅ RACE CONDITION FIX: Also check hook's triggering state
+    // If the hook is already in the process of triggering, don't call again
+    if (chat.isTriggeringRef.current || chat.isStreamingRef.current) {
+      return;
+    }
+
+    // Mark as called BEFORE calling startRound (synchronous lock)
+    startRoundCalledForRoundRef.current = currentRound;
     chat.startRound(storeParticipants);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only depend on chat.startRound, not entire chat object to avoid unnecessary re-renders
   }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
@@ -843,6 +866,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ SAFETY: Track last stream activity to detect stuck streams
   const lastStreamActivityRef = useRef<number>(Date.now());
 
+  // ✅ STREAMING THROTTLE: Limit how often we sync during streaming to avoid race conditions
+  // Too frequent syncs can interfere with onFinish orchestration between participants
+  const lastStreamSyncRef = useRef<number>(0);
+  const STREAM_SYNC_THROTTLE_MS = 100; // Sync at most every 100ms during streaming
+
   useEffect(() => {
     const currentStoreMessages = store.getState().messages;
     const currentStoreState = store.getState();
@@ -896,33 +924,77 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
     }
 
-    // 1. Count changed → new message added or removed
+    // 1. Count changed → new message added or removed (ALWAYS sync immediately)
     const countChanged = chat.messages.length !== prevMessageCountRef.current;
 
     // 2. During streaming, check if last message content changed (lightweight comparison)
     // ✅ MEMORY LEAK FIX: Replace JSON.stringify with simple ID + parts comparison
     // JSON.stringify on large message objects causes excessive GC pressure
     let contentChanged = false;
+    let shouldThrottle = false;
     if (chat.isStreaming && chat.messages.length > 0) {
       const lastHookMessage = chat.messages[chat.messages.length - 1];
-      const lastStoreMessage = currentStoreMessages[currentStoreMessages.length - 1];
+      if (!lastHookMessage) {
+        return; // Guard against undefined
+      }
 
-      // Check if last message has different parts (content is streaming in)
-      // This handles the case where the ID stays the same but content grows
-      const hookParts = lastHookMessage?.parts;
-      const storeParts = lastStoreMessage?.parts;
+      // ✅ CRITICAL FIX: Find corresponding message in store by ID, not by position
+      // Due to optimistic message ordering, the "last" message in the hook and store
+      // may be different messages (e.g., hook has streaming assistant, store has user).
+      // Match by ID to ensure we're comparing the same message.
+      const correspondingStoreMessage = currentStoreMessages.find(m => m.id === lastHookMessage.id);
 
-      // Simple reference check - if parts array is different, content changed
-      // This is lightweight but catches all streaming updates (parts is a new array each stream chunk)
-      contentChanged = hookParts !== storeParts;
+      // ✅ STREAMING FIX: Compare actual text content, not just reference
+      // AI SDK updates part.text with new tokens while array reference may stay same
+      // Must compare actual text content to detect streaming changes
+      if (lastHookMessage?.parts && correspondingStoreMessage?.parts) {
+        for (let j = 0; j < lastHookMessage.parts.length; j++) {
+          const hookPart = lastHookMessage.parts[j];
+          const storePart = correspondingStoreMessage.parts[j];
+          // Compare text content
+          if (hookPart?.type === 'text' && storePart?.type === 'text') {
+            if ('text' in hookPart && 'text' in storePart) {
+              if (hookPart.text !== storePart.text) {
+                contentChanged = true;
+                break;
+              }
+            }
+          }
+          // Compare reasoning text
+          if (hookPart?.type === 'reasoning' && storePart?.type === 'reasoning') {
+            if ('text' in hookPart && 'text' in storePart) {
+              if (hookPart.text !== storePart.text) {
+                contentChanged = true;
+                break;
+              }
+            }
+          }
+        }
+        // Also check if parts count changed
+        if (lastHookMessage.parts.length !== correspondingStoreMessage.parts.length) {
+          contentChanged = true;
+        }
+      } else if (lastHookMessage?.parts && !correspondingStoreMessage) {
+        // ✅ FIX: If the streaming message doesn't exist in store yet, that's a content change
+        // This handles the case where AI SDK creates a new streaming message
+        contentChanged = true;
+      }
 
       // ✅ SAFETY: Update activity timestamp if content changed
       if (contentChanged) {
         lastStreamActivityRef.current = Date.now();
+        // ✅ THROTTLE: During streaming content updates, throttle to prevent race conditions
+        // Message count changes (new participants) are NOT throttled - they must sync immediately
+        const now = Date.now();
+        if (now - lastStreamSyncRef.current < STREAM_SYNC_THROTTLE_MS) {
+          shouldThrottle = true;
+        }
       }
     }
 
-    const shouldSync = countChanged || contentChanged;
+    // ✅ ORCHESTRATION FIX: Count changes (new participants) always sync immediately
+    // Content changes during streaming are throttled to avoid interfering with onFinish
+    const shouldSync = countChanged || (contentChanged && !shouldThrottle);
 
     if (shouldSync) {
       // ✅ CRITICAL FIX: Skip sync when form submission is in progress
@@ -979,21 +1051,39 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
         // If no real message exists for this round, preserve the optimistic message
         if (!hasRealMessage && optimisticRound !== null) {
-          // Find the correct position to insert (after previous round's messages)
+          // ✅ CRITICAL FIX: Find correct position for user message
+          // User messages must come BEFORE assistant messages of the SAME round
+          // Previously: looked for msgRound > optimisticRound (wrong - placed user after assistants)
+          // Now: for user messages, find first assistant of same round or any message of higher round
           const insertIndex = mergedMessages.findIndex((m) => {
             const msgRound = getRoundNumber(m.metadata);
-            return msgRound !== null && msgRound > optimisticRound;
+            if (msgRound === null) {
+              return false;
+            }
+
+            // Insert before any message from a higher round
+            if (msgRound > optimisticRound) {
+              return true;
+            }
+
+            // Insert before assistant messages of the SAME round
+            // (user message must precede assistant responses)
+            if (msgRound === optimisticRound && m.role === MessageRoles.ASSISTANT) {
+              return true;
+            }
+
+            return false;
           });
 
           if (insertIndex === -1) {
-            // No messages with higher round number - append at end
+            // No messages with higher round or same-round assistants - append at end
             // But check if it's not already there
             const alreadyExists = mergedMessages.some(m => m.id === optimisticMsg.id);
             if (!alreadyExists) {
               mergedMessages.push(optimisticMsg);
             }
           } else {
-            // Insert before messages with higher round number
+            // Insert before the found message (same-round assistant or higher-round message)
             const alreadyExists = mergedMessages.some(m => m.id === optimisticMsg.id);
             if (!alreadyExists) {
               mergedMessages.splice(insertIndex, 0, optimisticMsg);
@@ -1001,6 +1091,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           }
         }
       }
+
+      // =========================================================================
+      // ✅ RACE CONDITION FIX: Deduplicate messages by ID (keep last occurrence)
+      // =========================================================================
+      // During streaming with multiple participants, race conditions can cause:
+      // 1. Same message ID appearing multiple times (participant triggered twice)
+      // 2. Stale versions of messages mixed with current versions
+      //
+      // Fix: Use Map to dedupe by ID, keeping the LAST occurrence (most complete)
+      const messageDedupeMap = new Map<string, typeof mergedMessages[0]>();
+      for (const msg of mergedMessages) {
+        messageDedupeMap.set(msg.id, msg);
+      }
+      const messageDedupedArray = Array.from(messageDedupeMap.values());
 
       // =========================================================================
       // ✅ DUPLICATE PARTS FIX: Deduplicate message parts after stream resume
@@ -1011,7 +1115,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // 3. AI SDK appends resumed parts to hydrated message → duplicates
       //
       // Fix: Deduplicate parts within each message, keeping the most complete version
-      const deduplicatedMessages = mergedMessages.map((msg) => {
+      const deduplicatedMessages = messageDedupedArray.map((msg) => {
         if (msg.role !== MessageRoles.ASSISTANT || !msg.parts || msg.parts.length <= 1) {
           return msg;
         }
@@ -1060,7 +1164,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
       // ✅ INFINITE LOOP FIX: Only sync if messages actually changed
       // CRITICAL: structuredClone creates NEW object references, so we CANNOT compare by reference
-      // Instead, compare by message ID and parts length (content proxy)
+      // Instead, compare by message ID and parts content (for streaming updates)
       // This prevents infinite loops where cloned objects never === original objects
       const isSameMessages = deduplicatedMessages.length === currentStoreMessages.length
         && deduplicatedMessages.every((m, i) => {
@@ -1068,9 +1172,37 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // Compare by ID (stable identifier)
           if (m.id !== storeMsg?.id)
             return false;
-          // Compare parts count as proxy for content changes during streaming
+          // Compare parts count
           if (m.parts?.length !== storeMsg?.parts?.length)
             return false;
+          // ✅ STREAMING FIX: Compare text/reasoning content ONLY for LAST message DURING STREAMING
+          // During streaming, only the last message is actively receiving tokens
+          // Comparing all messages or when not streaming would be wasteful
+          // Note: Reasoning streams first, then text - both can be actively streaming
+          const isLastMessage = i === deduplicatedMessages.length - 1;
+          const shouldCompareContent = isLastMessage && chat.isStreaming;
+          if (shouldCompareContent && m.parts && m.parts.length > 0 && storeMsg?.parts && storeMsg.parts.length > 0) {
+            for (let j = 0; j < m.parts.length; j++) {
+              const hookPart = m.parts[j];
+              const storePart = storeMsg.parts[j];
+              // Compare text content
+              if (hookPart?.type === 'text' && storePart?.type === 'text') {
+                if ('text' in hookPart && 'text' in storePart) {
+                  if (hookPart.text !== storePart.text) {
+                    return false;
+                  }
+                }
+              }
+              // Compare reasoning text
+              if (hookPart?.type === 'reasoning' && storePart?.type === 'reasoning') {
+                if ('text' in hookPart && 'text' in storePart) {
+                  if (hookPart.text !== storePart.text) {
+                    return false;
+                  }
+                }
+              }
+            }
+          }
           return true;
         });
 
@@ -1087,6 +1219,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
         // Update activity on any sync
         lastStreamActivityRef.current = Date.now();
+        // ✅ THROTTLE: Update last sync time to enforce throttle interval
+        lastStreamSyncRef.current = Date.now();
       } else {
         // Still update the ref to prevent re-checking
         prevMessageCountRef.current = chat.messages.length;
@@ -1255,6 +1389,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // Check if we should send pending message
     if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
+      return;
+    }
+
+    // ✅ RACE CONDITION FIX: Check hook's streaming ref as synchronous guard
+    // Store's isStreaming may lag behind hook's actual streaming state
+    // This prevents duplicate triggers when startRound has already initiated streaming
+    if (chat.isStreamingRef.current) {
+      return;
+    }
+
+    // ✅ RACE CONDITION FIX: Check if a trigger is already in progress
+    // isTriggeringRef is set synchronously at the start of startRound/sendMessage
+    // This prevents pendingMessage effect from racing with the startRound effect
+    if (chat.isTriggeringRef.current) {
       return;
     }
 
@@ -1654,11 +1802,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       currentState.setWaitingToStartStreaming(false);
     }
 
-    // ✅ FIX 3: Reset to overview when navigating to /chat
-    // This ensures all state is cleared before the overview screen mounts
-    // Handles: thread → /chat, dashboard → /chat, etc.
+    // ✅ FIX 3: Clear provider-level refs when navigating to /chat
+    // NOTE: Do NOT call resetToOverview() here - it causes a race condition!
+    // ChatOverviewScreen's useLayoutEffect calls resetToOverview() and resets initStateRef,
+    // then its useEffect re-initializes from cookies. If we call resetToOverview() here
+    // (in regular useEffect which runs AFTER layoutEffect), we wipe out the initialized state.
+    // The overview screen handles its own reset - we just need to clear provider-level refs.
     if (isGoingToOverview && (isLeavingThread || isComingFromNonChatPage)) {
-      currentState.resetToOverview();
       // ✅ CRITICAL FIX: Clear provider-level refs that aren't part of store state
       // These refs accumulate across navigations and can cause bugs
       preSearchCreationAttemptedRef.current = new Set();

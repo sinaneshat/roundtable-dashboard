@@ -3,7 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
@@ -128,6 +128,11 @@ type UseMultiParticipantChatReturn = {
    * Avoids race conditions between store state and hook state
    */
   isStreamingRef: React.MutableRefObject<boolean>;
+  /**
+   * Ref to check if a trigger is in progress (for provider guards)
+   * Prevents race conditions between startRound and pendingMessage effects
+   */
+  isTriggeringRef: React.MutableRefObject<boolean>;
   /** The index of the currently active participant */
   currentParticipantIndex: number;
   /** Any error that occurred during the chat */
@@ -233,6 +238,10 @@ export function useMultiParticipantChat(
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
   // Prevents stale closures by keeping refs in sync with latest values
   // Uses useSyncedRefs to reduce boilerplate (replaces 9 separate useLayoutEffect calls)
+  //
+  // NOTE: useEffectEvent would be ideal here but React's rules-of-hooks linter
+  // restricts it to only being called from inside effects, not stored in objects.
+  // useSyncedRefs achieves the same goal: stable references that read latest values.
   const callbackRefs = useSyncedRefs({
     onComplete,
     onRetry,
@@ -260,8 +269,12 @@ export function useMultiParticipantChat(
   const markAsResponded = useCallback((participantKey: string) => {
     respondedParticipantsRef.current.add(participantKey);
   }, []);
+  // ✅ RACE CONDITION FIX: Track processed message IDs to prevent double-processing in onFinish
+  // AI SDK may call onFinish multiple times or the same message may complete while we're awaiting RAF
+  const processedMessageIdsRef = useRef<Set<string>>(new Set());
   const resetErrorTracking = useCallback(() => {
     respondedParticipantsRef.current.clear();
+    processedMessageIdsRef.current.clear();
   }, []);
 
   // Track regenerate round number for backend communication
@@ -299,6 +312,12 @@ export function useMultiParticipantChat(
   // (retries, preflight, etc.), so we track the last used index to avoid shifting
   // multiple times for the same participant
   const lastUsedParticipantIndex = useRef<number | null>(null);
+
+  // ✅ RACE CONDITION FIX: Track which participants have been queued this round
+  // Prevents duplicate network requests when multiple entry points trigger concurrently
+  // Key: participantIndex, Value: true if queued
+  // Reset at start of each round (in startRound/sendMessage)
+  const queuedParticipantsThisRoundRef = useRef<Set<number>>(new Set());
 
   // Refs to hold values needed for triggering (to avoid closure issues in callbacks)
   const messagesRef = useRef<UIMessage[]>([]);
@@ -363,6 +382,13 @@ export function useMultiParticipantChat(
     // More participants to process - trigger next one
     isTriggeringRef.current = true;
 
+    // ✅ RACE CONDITION FIX: Check if this participant is already queued
+    // This prevents duplicate network requests when multiple callbacks trigger concurrently
+    if (queuedParticipantsThisRoundRef.current.has(nextIndex)) {
+      isTriggeringRef.current = false;
+      return;
+    }
+
     // CRITICAL: Update ref BEFORE setting state to avoid race condition
     // The prepareSendMessagesRequest reads from currentIndexRef.current
     // so we must update it synchronously before calling aiSendMessage
@@ -404,6 +430,8 @@ export function useMultiParticipantChat(
     const fileParts = extractValidFileParts(lastUserMessage.parts);
 
     // ✅ CRITICAL FIX: Push participant index to queue BEFORE calling aiSendMessage
+    // Mark as queued to prevent duplicate triggers
+    queuedParticipantsThisRoundRef.current.add(nextIndex);
     participantIndexQueue.current.push(nextIndex);
 
     if (aiSendMessageRef.current) {
@@ -719,6 +747,17 @@ export function useMultiParticipantChat(
 
       if (notOurMessageId && emptyParts && noFinishReason && noActiveRound && notStreaming) {
         return;
+      }
+
+      // ✅ RACE CONDITION FIX: Skip if this message ID was already processed
+      // This prevents double-processing when AI SDK calls onFinish multiple times
+      // or when the same completion arrives while we're awaiting requestAnimationFrame
+      const messageId = data.message?.id;
+      if (messageId && processedMessageIdsRef.current.has(messageId)) {
+        return;
+      }
+      if (messageId) {
+        processedMessageIdsRef.current.add(messageId);
       }
 
       // ✅ RESUMABLE STREAMS: Detect and handle resumed stream completion
@@ -1173,6 +1212,7 @@ export function useMultiParticipantChat(
       lastUsedParticipantIndex.current = null;
       isTriggeringRef.current = false;
       isStreamingRef.current = false;
+      queuedParticipantsThisRoundRef.current = new Set();
 
       // Reset hydration flag to allow re-hydration on next thread
       hasHydratedRef.current = false;
@@ -1265,6 +1305,7 @@ export function useMultiParticipantChat(
     roundParticipantsRef.current = enabled;
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new round
+    queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
 
     // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
     // This prevents race condition where pendingMessage effect checks ref
@@ -1282,7 +1323,11 @@ export function useMultiParticipantChat(
     // State updates will be committed synchronously within this callback
 
     // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
-    participantIndexQueue.current.push(0);
+    // Guard against double-push if startRound is called multiple times
+    if (!queuedParticipantsThisRoundRef.current.has(0)) {
+      queuedParticipantsThisRoundRef.current.add(0);
+      participantIndexQueue.current.push(0);
+    }
 
     // Trigger streaming with the existing user message
     // Use isParticipantTrigger:true to indicate this is triggering the first participant
@@ -1406,6 +1451,7 @@ export function useMultiParticipantChat(
     roundParticipantsRef.current = enabled;
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new continuation
+    queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for continuation
 
     // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
     isStreamingRef.current = true;
@@ -1418,7 +1464,11 @@ export function useMultiParticipantChat(
     clearAnimations?.(); // Clear any pending animations
 
     // ✅ CRITICAL FIX: Push participant index to queue before calling aiSendMessage
-    participantIndexQueue.current.push(fromIndex);
+    // Guard against double-push if continueFromParticipant is called concurrently
+    if (!queuedParticipantsThisRoundRef.current.has(fromIndex)) {
+      queuedParticipantsThisRoundRef.current.add(fromIndex);
+      participantIndexQueue.current.push(fromIndex);
+    }
 
     // Trigger streaming for the specified participant
     aiSendMessage({
@@ -1475,6 +1525,7 @@ export function useMultiParticipantChat(
       currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
       roundParticipantsRef.current = enabled;
       lastUsedParticipantIndex.current = null; // Reset for new round
+      queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
 
       // ✅ CRITICAL FIX: Validate regenerate round matches current round
       // If regenerateRoundNumberRef is set but doesn't match current round,
@@ -1533,7 +1584,11 @@ export function useMultiParticipantChat(
       });
 
       // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
-      participantIndexQueue.current.push(0);
+      // Guard against double-push if sendMessage is called concurrently
+      if (!queuedParticipantsThisRoundRef.current.has(0)) {
+        queuedParticipantsThisRoundRef.current.add(0);
+        participantIndexQueue.current.push(0);
+      }
 
       // ✅ ATTACHMENTS: Get file parts from ref for AI SDK message creation
       // This ensures AI SDK includes file parts in the user message it creates
@@ -1642,6 +1697,7 @@ export function useMultiParticipantChat(
     // CRITICAL: Update ref BEFORE setting state
     currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     lastUsedParticipantIndex.current = null; // Reset for retry
+    queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for retry
 
     // Update participant index synchronously (no flushSync needed)
     setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
@@ -1671,44 +1727,99 @@ export function useMultiParticipantChat(
   // Stream resumption is incompatible with abort signals
   // Streams now continue until completion and can resume after page reload
 
+  // ✅ REACT 19 PATTERN: useEffectEvent for resumed stream handling
+  // This event handler reads latest values (hasEarlyOptimisticMessage, threadId, messages)
+  // without causing the effect to re-run when those values change
+  const handleResumedStreamDetection = useEffectEvent(() => {
+    // ✅ GUARD: Don't set during form submission (hasEarlyOptimisticMessage check)
+    if (hasEarlyOptimisticMessage) {
+      return false;
+    }
+
+    // ✅ GUARD: Only if we have a valid thread ID (not on overview page initial load)
+    if (!threadId || threadId.trim() === '') {
+      return false;
+    }
+
+    // ✅ GUARD: Need messages to determine round/participant context
+    if (messagesRef.current.length === 0) {
+      return false;
+    }
+
+    // ✅ CRITICAL GUARD: Only detect resume on PAGE REFRESH, not normal round transitions
+    // On page refresh: roundParticipantsRef is empty (not populated yet)
+    // On normal round start: roundParticipantsRef is populated from previous round
+    // Without this guard, the phantom timeout would be set on every new round,
+    // causing the first participant to wait 5 seconds before streaming shows in UI
+    if (roundParticipantsRef.current.length > 0) {
+      return false; // Normal round transition, not a page refresh
+    }
+
+    // Detected resumed stream - set streaming flag
+    // This ensures store.isStreaming reflects the actual state
+    isStreamingRef.current = true;
+    setIsExplicitlyStreaming(true);
+
+    // Also populate roundParticipantsRef if needed for proper orchestration
+    if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+      const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+      roundParticipantsRef.current = enabled;
+    }
+
+    return true;
+  });
+
+  // Track whether we've detected a phantom resume (no data flowing)
+  const phantomResumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messagesAtResumeDetectionRef = useRef<number>(0);
+
   // ✅ CRITICAL FIX: Detect resumed stream from AI SDK status
   // When AI SDK auto-resumes via `resume: true`, its status becomes 'streaming'
   // but isExplicitlyStreaming stays false because none of the entry points were called.
-  // This causes the store's isStreaming to be false even though events are being received.
-  // Fix: When AI SDK status is 'streaming' but we haven't set isExplicitlyStreaming,
-  // this indicates a resumed stream - set the flag so UI responds properly.
+  //
+  // ✅ PHANTOM RESUME FIX: After setting isExplicitlyStreaming=true, start a 5-second timeout.
+  // If no new messages arrive in that time, the resume was phantom (204 response or stale stream).
+  // Clear isExplicitlyStreaming to allow incomplete round resumption to take over.
   useLayoutEffect(() => {
     // Only act when AI SDK says it's streaming but we haven't acknowledged it
     if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
-      // ✅ GUARD: Don't set during form submission (hasEarlyOptimisticMessage check)
-      if (callbackRefs.hasEarlyOptimisticMessage.current) {
-        return;
-      }
+      const didSetStreaming = handleResumedStreamDetection();
 
-      // ✅ GUARD: Only if we have a valid thread ID (not on overview page initial load)
-      if (!callbackRefs.threadId.current || callbackRefs.threadId.current.trim() === '') {
-        return;
-      }
+      if (didSetStreaming) {
+        // Record message count at resume detection for phantom detection
+        messagesAtResumeDetectionRef.current = messagesRef.current.length;
 
-      // ✅ GUARD: Need messages to determine round/participant context
-      if (messagesRef.current.length === 0) {
-        return;
-      }
-
-      // Detected resumed stream - set streaming flag
-      // This ensures store.isStreaming reflects the actual state
-      isStreamingRef.current = true;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: syncing external state (AI SDK status) to internal flag
-      setIsExplicitlyStreaming(true);
-
-      // Also populate roundParticipantsRef if needed for proper orchestration
-      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
-        roundParticipantsRef.current = enabled;
+        // ✅ PHANTOM RESUME TIMEOUT: If no new messages in 5 seconds, this was a phantom resume
+        // Clear the streaming flag to allow incomplete round resumption to work
+        phantomResumeTimeoutRef.current = setTimeout(() => {
+          // Check if we're still streaming and no new messages arrived
+          if (isStreamingRef.current && messagesRef.current.length === messagesAtResumeDetectionRef.current) {
+            // Phantom resume detected - no actual data flowing
+            // Clear streaming state to allow incomplete round resumption to trigger
+            isStreamingRef.current = false;
+            setIsExplicitlyStreaming(false);
+          }
+        }, 5000);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
+
+    // Cleanup timeout on unmount or when status changes
+    return () => {
+      if (phantomResumeTimeoutRef.current) {
+        clearTimeout(phantomResumeTimeoutRef.current);
+        phantomResumeTimeoutRef.current = null;
+      }
+    };
   }, [status, isExplicitlyStreaming]);
+
+  // ✅ CLEAR PHANTOM TIMEOUT: When new messages arrive, cancel the phantom detection
+  // This means real data is flowing and the resume was successful
+  useLayoutEffect(() => {
+    if (phantomResumeTimeoutRef.current && messages.length > messagesAtResumeDetectionRef.current) {
+      clearTimeout(phantomResumeTimeoutRef.current);
+      phantomResumeTimeoutRef.current = null;
+    }
+  }, [messages.length]);
 
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
   // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'
@@ -1739,6 +1850,7 @@ export function useMultiParticipantChat(
       continueFromParticipant,
       isStreaming: isActuallyStreaming,
       isStreamingRef,
+      isTriggeringRef, // ✅ RACE CONDITION FIX: Expose for provider guards
       currentParticipantIndex,
       error: chatError || null,
       retry,
@@ -1752,6 +1864,7 @@ export function useMultiParticipantChat(
       continueFromParticipant,
       isActuallyStreaming,
       // isStreamingRef is stable (useRef)
+      // isTriggeringRef is stable (useRef)
       currentParticipantIndex,
       chatError,
       retry,

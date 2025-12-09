@@ -122,6 +122,20 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     vision: true,
     jsonModeQuality: JsonModeQualities.EXCELLENT,
   },
+  'anthropic/claude-3.5-haiku': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'anthropic/claude-haiku-4.5': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
 
   // ========== OPENAI GPT (5) ==========
   'openai/chatgpt-4o-latest': {
@@ -200,7 +214,14 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
     structuredOutput: true,
     streaming: true,
     functionCalling: true,
-    vision: false,
+    vision: true,
+    jsonModeQuality: JsonModeQualities.GOOD,
+  },
+  'google/gemini-2.0-flash-001': {
+    structuredOutput: true,
+    streaming: true,
+    functionCalling: true,
+    vision: true,
     jsonModeQuality: JsonModeQualities.GOOD,
   },
   'google/gemini-2.0-flash-exp': {

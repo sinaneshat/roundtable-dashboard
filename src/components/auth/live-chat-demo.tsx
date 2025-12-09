@@ -326,7 +326,6 @@ export function LiveChatDemo() {
           {stage !== 'idle' && (
             <ThreadTimeline
               timelineItems={timelineItems}
-              scrollContainerId="demo-scroll-container"
               user={DEMO_USER}
               participants={storeParticipants}
               threadId="demo-thread"

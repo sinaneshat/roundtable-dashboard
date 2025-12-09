@@ -72,18 +72,14 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     preSearches,
   });
 
-  // Scroll management for window-level scrolling
-  // ✅ HYDRATION: isStoreReady ensures scroll waits for messages to be loaded
+  // Scroll management - minimal hook for tracking scroll position
+  // Initial scroll and virtualization handled by useVirtualizedTimeline
   const isStoreReady = !isLoadingThread && messages.length > 0;
 
   useChatScroll({
     messages,
     analyses,
-    isStreaming: false, // Public threads are read-only
-    scrollContainerId: 'public-chat-scroll-container',
     enableNearBottomDetection: true,
-    initialScrollToBottom: true, // ✅ PUBLIC THREAD: Scroll to bottom on initial load
-    isStoreReady, // ✅ HYDRATION: Wait for messages to load before initial scroll
   });
 
   if (isLoadingThread) {
@@ -168,7 +164,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                 <>
                   <ThreadTimeline
                     timelineItems={timeline}
-                    scrollContainerId="public-chat-scroll-container"
                     user={user || { name: t('user.defaultName'), image: null }}
                     participants={participants}
                     threadId={thread.id}
@@ -176,7 +171,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     feedbackByRound={feedbackByRound}
                     isReadOnly={true}
                     preSearches={preSearches}
-                    initialScrollToBottom={true}
                     isDataReady={isStoreReady}
                   />
 

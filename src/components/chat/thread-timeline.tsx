@@ -1,10 +1,15 @@
 /**
  * Thread Timeline Component
  *
- * Shared timeline rendering component for thread and public screens.
- * Consolidates duplicate virtualized timeline rendering logic.
+ * Virtualized timeline using TanStack Virtual - following official docs exactly.
+ * Uses useWindowVirtualizer for window-level scrolling.
  *
- * Used by: ChatThreadScreen, PublicChatThreadScreen
+ * Official TanStack Virtual pattern:
+ * - Container with position: relative and height: getTotalSize()
+ * - Items with position: absolute, top: 0, left: 0
+ * - Transform: translateY(item.start - scrollMargin)
+ * - data-index attribute for measurement
+ * - ref={measureElement} for dynamic sizing
  */
 
 'use client';
@@ -28,13 +33,12 @@ import { RoundCopyAction } from './round-copy-action';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
-// Stable constant for default empty Map to prevent render loop
+// Stable constants to prevent render loops
 const EMPTY_FEEDBACK_MAP = new Map<number, FeedbackType>();
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 
 type ThreadTimelineProps = {
   timelineItems: TimelineItem[];
-  scrollContainerId: string;
   user: {
     name: string;
     image: string | null;
@@ -43,44 +47,42 @@ type ThreadTimelineProps = {
   threadId: string;
   threadTitle?: string;
 
-  // Streaming state (optional - null for public view)
+  // Streaming state
   isStreaming?: boolean;
   currentParticipantIndex?: number;
   currentStreamingParticipant?: ChatParticipant | null;
   streamingRoundNumber?: number | null;
 
-  // Feedback handlers (optional - view-only for public)
+  // Feedback handlers
   feedbackByRound?: Map<number, FeedbackType>;
   pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
   getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
 
-  // Analysis handlers (optional - view-only for public)
+  // Analysis handlers
   onAnalysisStreamStart?: (roundNumber: number) => void;
   onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   onActionClick?: (action: Recommendation) => void;
 
-  // Error retry (optional)
+  // Error retry
   onRetry?: () => void;
 
   // View mode
   isReadOnly?: boolean;
 
-  // Pre-search state (from store)
+  // Pre-search state
   preSearches?: StoredPreSearch[];
 
-  // Demo mode controlled accordion states (optional - for LiveChatDemo only)
+  // Demo mode
   demoPreSearchOpen?: boolean;
   demoAnalysisOpen?: boolean;
   demoAnalysisSectionStates?: DemoSectionOpenStates;
 
-  // Initial scroll to bottom (for thread pages)
-  initialScrollToBottom?: boolean;
+  // Data readiness
   isDataReady?: boolean;
 };
 
 export function ThreadTimeline({
   timelineItems,
-  scrollContainerId,
   user,
   participants,
   threadId,
@@ -101,81 +103,39 @@ export function ThreadTimeline({
   demoPreSearchOpen,
   demoAnalysisOpen,
   demoAnalysisSectionStates,
-  initialScrollToBottom = false,
   isDataReady = true,
 }: ThreadTimelineProps) {
-  // ✅ STREAMING SAFETY: Calculate which rounds are currently streaming
-  // Prevents virtualization from removing DOM elements during active streaming
-  const streamingRounds = new Set<number>();
-
-  // Add participant streaming rounds
-  if (isStreaming && streamingRoundNumber !== null) {
-    streamingRounds.add(streamingRoundNumber);
-  }
-
-  // ✅ ENUM PATTERN: Use AnalysisStatuses constants instead of hardcoded strings
-  // Add pre-search active rounds (protect rounds with active web search)
-  preSearches.forEach((ps) => {
-    if (ps.status === AnalysisStatuses.STREAMING || ps.status === AnalysisStatuses.PENDING) {
-      streamingRounds.add(ps.roundNumber);
-    }
-  });
-
-  // Add analysis and pre-search streaming rounds (check for streaming/pending status in timeline items)
-  // Include PENDING state to protect items that are about to stream
-  timelineItems.forEach((item) => {
-    if (
-      item.type === 'analysis'
-      && (item.data.status === AnalysisStatuses.STREAMING || item.data.status === AnalysisStatuses.PENDING)
-    ) {
-      streamingRounds.add(item.data.roundNumber);
-    }
-    // ✅ RESUMPTION FIX: Also protect pre-search timeline items
-    if (
-      item.type === 'pre-search'
-      && (item.data.status === AnalysisStatuses.STREAMING || item.data.status === AnalysisStatuses.PENDING)
-    ) {
-      streamingRounds.add(item.data.roundNumber);
-    }
-  });
-
-  // ✅ VIRTUALIZATION: Window-level virtualization with streaming protection
-  // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
-  // ✅ MOBILE OPTIMIZED: Hook automatically increases overscan to 25+ on touch devices
-  // ✅ TANSTACK DOCS: Use realistic estimateSize (250px default) to prevent jumpy/overlapping behavior
-  const { virtualItems, totalSize, scrollMargin, measureElement, isInitialScrollComplete } = useVirtualizedTimeline({
+  // TanStack Virtual hook - official pattern
+  const {
+    virtualItems,
+    totalSize,
+    scrollMargin,
+    measureElement,
+  } = useVirtualizedTimeline({
     timelineItems,
-    scrollContainerId,
-    estimateSize: 250, // ✅ TANSTACK DOCS: Realistic estimate close to average item height
-    overscan: 15, // Desktop: 15 items | Mobile: 25+ (auto-adjusted by hook)
-    paddingEnd: 0, // Zero padding - content fits exactly
-    streamingRounds, // Pass streaming rounds to prevent unmounting during streams
-    initialScrollToBottom, // ✅ Scroll to bottom once virtualization is ready
-    isDataReady, // ✅ Wait for store hydration before scrolling
+    estimateSize: 200, // Realistic estimate for chat messages
+    overscan: 5, // Official docs recommend 5
+    paddingEnd: 200, // Space for sticky chat input
+    isDataReady,
   });
 
   return (
+    // Container with data attribute for scroll margin measurement
     <div
+      data-virtualized-timeline
       style={{
-        position: 'relative',
-        // ✅ TANSTACK DOCS: getTotalSize() already includes paddingEnd
+        // Official pattern: height = getTotalSize()
         height: `${totalSize}px`,
         width: '100%',
-        // ✅ SCROLL FIX: Disable browser scroll anchoring to prevent snap-back
-        // When virtualized items change position, browser tries to maintain anchor
-        overflowAnchor: 'none',
-        // ✅ HIDE UNTIL SCROLL COMPLETE: Prevent flash of content at wrong position
-        opacity: isInitialScrollComplete ? 1 : 0,
-        transition: 'opacity 0.15s ease-in',
+        position: 'relative',
       }}
     >
       {virtualItems.map((virtualItem) => {
         const item = timelineItems[virtualItem.index];
-        const itemIndex = virtualItem.index;
         if (!item)
           return null;
 
-        // ✅ RESUMPTION FIX: Handle all timeline item types including 'pre-search'
+        // Extract round number for feedback logic
         const roundNumber = item.type === 'messages'
           ? extractRoundNumber(item.data[0]?.metadata)
           : item.type === 'analysis'
@@ -187,6 +147,12 @@ export function ThreadTimeline({
                 : DEFAULT_ROUND_NUMBER;
 
         return (
+          // Official TanStack Virtual pattern:
+          // - key={virtualItem.key}
+          // - data-index={virtualItem.index}
+          // - ref={measureElement}
+          // - position: absolute, top: 0, left: 0
+          // - transform: translateY(item.start - scrollMargin)
           <div
             key={virtualItem.key}
             data-index={virtualItem.index}
@@ -196,9 +162,11 @@ export function ThreadTimeline({
               top: 0,
               left: 0,
               width: '100%',
+              // Official pattern: translateY(item.start - scrollMargin)
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
+            {/* Changelog items */}
             {item.type === 'changelog' && item.data.length > 0 && (
               <div className="mb-6">
                 <UnifiedErrorBoundary context="configuration">
@@ -212,16 +180,14 @@ export function ThreadTimeline({
               </div>
             )}
 
-            {/* ✅ RESUMPTION FIX: Pre-search rendered at timeline level
-                This enables rendering pre-search cards even when user message
-                hasn't been persisted yet (e.g., page refresh during web search phase) */}
+            {/* Pre-search items */}
             {item.type === 'pre-search' && (
               <div className="mb-6">
                 <UnifiedErrorBoundary context="pre-search">
                   <PreSearchCard
                     threadId={threadId}
                     preSearch={item.data}
-                    isLatest={itemIndex === timelineItems.length - 1}
+                    isLatest={virtualItem.index === timelineItems.length - 1}
                     streamingRoundNumber={streamingRoundNumber}
                     demoOpen={demoPreSearchOpen}
                     demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
@@ -230,6 +196,7 @@ export function ThreadTimeline({
               </div>
             )}
 
+            {/* Message items */}
             {item.type === 'messages' && (
               <div className="space-y-3 pb-2">
                 <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
@@ -247,18 +214,14 @@ export function ThreadTimeline({
                   />
                 </UnifiedErrorBoundary>
 
-                {/* PreSearchCard now rendered inside ChatMessageList between user and assistant messages */}
-
+                {/* Round feedback and copy actions */}
                 {!isStreaming && !isReadOnly && (() => {
                   const hasRoundError = item.data.some((msg) => {
                     const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
                     return parseResult.success && messageHasError(parseResult.data);
                   });
 
-                  // ✅ CRITICAL FIX: Only show feedback after the round's analysis is COMPLETE
-                  // This ensures consistent behavior between first round and subsequent rounds
-                  // Previously, feedback appeared immediately when participants finished streaming
-                  // but before the analysis was complete, which was inconsistent with first round behavior
+                  // Only show feedback after analysis is complete
                   const roundAnalysis = timelineItems.find(
                     ti => ti.type === 'analysis' && ti.data.roundNumber === roundNumber,
                   );
@@ -266,10 +229,8 @@ export function ThreadTimeline({
                     && roundAnalysis.type === 'analysis'
                     && roundAnalysis.data.status === AnalysisStatuses.COMPLETE;
 
-                  // Don't show feedback if round is not complete (analysis still pending/streaming)
-                  if (!isRoundComplete) {
+                  if (!isRoundComplete)
                     return null;
-                  }
 
                   return (
                     <Actions className="mt-3 mb-2">
@@ -306,12 +267,13 @@ export function ThreadTimeline({
               </div>
             )}
 
+            {/* Analysis items */}
             {item.type === 'analysis' && (
               <div className="mb-4">
                 <RoundAnalysisCard
                   analysis={item.data}
                   threadId={threadId}
-                  isLatest={itemIndex === timelineItems.length - 1}
+                  isLatest={virtualItem.index === timelineItems.length - 1}
                   streamingRoundNumber={streamingRoundNumber}
                   onStreamStart={() => {
                     onAnalysisStreamStart?.(item.data.roundNumber);
