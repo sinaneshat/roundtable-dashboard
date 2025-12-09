@@ -20,43 +20,19 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         <div className="absolute inset-0 flex items-center justify-center">
           {/* Mobile portrait (<640px wide) */}
           <div className="block sm:hidden">
-            <RadialGlow
-              size={600}
-              offsetY={0}
-              duration={18}
-              animate={true}
-              useLogoColors={true}
-            />
+            <RadialGlow size={600} duration={18} animate intensity={0.3} />
           </div>
           {/* Tablet (640px-1024px) */}
           <div className="hidden sm:block lg:hidden">
-            <RadialGlow
-              size={900}
-              offsetY={0}
-              duration={18}
-              animate={true}
-              useLogoColors={true}
-            />
+            <RadialGlow size={900} duration={18} animate intensity={0.3} />
           </div>
           {/* Desktop (1024px-1920px) */}
           <div className="hidden lg:block 2xl:hidden">
-            <RadialGlow
-              size={1200}
-              offsetY={0}
-              duration={18}
-              animate={true}
-              useLogoColors={true}
-            />
+            <RadialGlow size={1200} duration={18} animate intensity={0.3} />
           </div>
           {/* Large desktop (>1920px) */}
           <div className="hidden 2xl:block">
-            <RadialGlow
-              size={1600}
-              offsetY={0}
-              duration={18}
-              animate={true}
-              useLogoColors={true}
-            />
+            <RadialGlow size={1600} duration={18} animate intensity={0.3} />
           </div>
         </div>
       </div>

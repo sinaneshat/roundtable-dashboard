@@ -300,12 +300,13 @@ export const ChatInput = memo(({
         className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-2xl',
-          'border border-white/[0.12]',
           'bg-card',
-          'shadow-lg',
+          'border border-white/[0.12]',
+          'hover:border-white/20',
+          'focus-within:border-white/20',
           'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
-          (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
+          (isOverLimit || showNoModelsError || isQuotaExceeded) && 'ring-1 ring-destructive',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}

@@ -694,7 +694,7 @@ export default function ChatOverviewScreen() {
     <>
       <UnifiedErrorBoundary context="chat">
         <div className="flex flex-col relative flex-1 min-h-dvh">
-          {/* Radial glow - fixed positioning */}
+          {/* Radial glow - centered behind logo */}
           <AnimatePresence mode="wait">
             {showInitialUI && (
               <motion.div
@@ -702,26 +702,21 @@ export default function ChatOverviewScreen() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
-                className="fixed inset-0 pointer-events-none overflow-hidden"
-                style={{ zIndex: 0, willChange: 'opacity' }}
+                className="fixed pointer-events-none"
+                style={{
+                  // Logo center: header ~56-64px + padding 24-32px + half logo 40-48px ≈ 130px
+                  top: '130px',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 1,
+                }}
               >
-                <div
-                  className="absolute"
-                  style={{
-                    top: '-100px',
-                    left: '63%',
-                    transform: 'translateX(-50%)',
-                    willChange: 'transform',
-                  }}
-                >
-                  <RadialGlow
-                    size={500}
-                    offsetY={0}
-                    duration={18}
-                    animate={true}
-                    useLogoColors={true}
-                  />
-                </div>
+                <RadialGlow
+                  size={280}
+                  duration={20}
+                  animate={true}
+                  intensity={0.25}
+                />
               </motion.div>
             )}
           </AnimatePresence>

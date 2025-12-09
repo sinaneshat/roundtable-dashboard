@@ -20,19 +20,15 @@ export default function ChatOverviewLoading() {
     <div className="flex flex-col relative flex-1 min-h-dvh">
       {/* Radial glow - matches ChatOverviewScreen */}
       <div
-        className="fixed inset-0 pointer-events-none overflow-hidden"
-        style={{ zIndex: 0 }}
+        className="fixed pointer-events-none"
+        style={{
+          top: '130px',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1,
+        }}
       >
-        <div
-          className="absolute"
-          style={{
-            top: '-100px',
-            left: '63%',
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <RadialGlow size={500} offsetY={0} duration={18} animate useLogoColors />
-        </div>
+        <RadialGlow size={280} duration={20} animate intensity={0.25} />
       </div>
 
       {/* Main content - matches ChatOverviewScreen container */}
@@ -63,7 +59,7 @@ export default function ChatOverviewLoading() {
                 {[0, 1, 2].map(i => (
                   <div
                     key={i}
-                    className={`px-4 py-3 ${i < 2 ? 'border-b border-white/[0.06]' : ''}`}
+                    className="px-4 py-3"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
                       {/* Question skeleton */}

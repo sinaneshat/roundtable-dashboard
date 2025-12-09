@@ -27,13 +27,13 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
       {/* Radial glow background - spans entire page */}
       <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center overflow-hidden">
         <div className="block sm:hidden">
-          <RadialGlow size={1200} offsetY={0} duration={18} animate useLogoColors />
+          <RadialGlow size={1200} duration={18} animate intensity={0.3} />
         </div>
         <div className="hidden sm:block lg:hidden">
-          <RadialGlow size={1800} offsetY={0} duration={18} animate useLogoColors />
+          <RadialGlow size={1800} duration={18} animate intensity={0.3} />
         </div>
         <div className="hidden lg:block">
-          <RadialGlow size={2400} offsetY={0} duration={18} animate useLogoColors />
+          <RadialGlow size={2400} duration={18} animate intensity={0.3} />
         </div>
       </div>
 
@@ -72,7 +72,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
 
       {/* Right Column - Chat Showcase (Desktop only) */}
       <div className="relative hidden lg:block p-4">
-        <Card className="h-full overflow-hidden py-0 bg-card backdrop-blur-sm border-border/50">
+        <Card className="h-full overflow-hidden py-0 bg-card backdrop-blur-sm border-0">
           <LiveChatDemo />
         </Card>
       </div>

@@ -440,7 +440,6 @@ export function ChatQuickStart({
       <div className="flex flex-col">
         {suggestions.map((suggestion, index) => {
           const modeConfig = getModeConfig(suggestion.mode);
-          const isLast = index === suggestions.length - 1;
           return (
             <motion.button
               key={suggestion.title}
@@ -468,7 +467,7 @@ export function ChatQuickStart({
                 'hover:bg-white/10 hover:backdrop-blur-md',
                 'active:bg-white/[0.15]',
                 'transition-all duration-200 ease-out',
-                !isLast && 'border-b border-white/[0.06]',
+                // Borderless design - spacing creates visual separation
               )}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
@@ -479,7 +478,7 @@ export function ChatQuickStart({
 
                 {/* Right: Mode and avatars */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.06]">
                     <span
                       className={cn(
                         'text-[11px] font-medium whitespace-nowrap',

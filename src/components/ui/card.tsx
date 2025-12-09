@@ -12,7 +12,7 @@ type CardProps = ComponentProps<"div"> & {
 
 function Card({ className, variant = "default", ...props }: CardProps) {
   const variantClasses = {
-    default: "bg-card text-card-foreground rounded-2xl border py-6 shadow-sm",
+    default: "bg-card text-card-foreground rounded-2xl py-6 shadow-sm",
     glass: cn(glassCard("medium"), "rounded-2xl py-6"),
     "glass-subtle": cn(glassCard("subtle"), "rounded-2xl py-6"),
     "glass-strong": cn(glassCard("strong"), "rounded-2xl py-6"),

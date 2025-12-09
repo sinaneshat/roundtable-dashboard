@@ -28,7 +28,6 @@ export const glassVariants = {
   subtle: cn(
     'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target)
     'bg-background/10', // 10% background + 5% tint layer = 15% total
-    'border-white/20',
     'shadow-md',
   ),
 
@@ -36,7 +35,6 @@ export const glassVariants = {
   medium: cn(
     'backdrop-blur-xl', // Tailwind: 24px (will be overridden by inline 20px)
     'bg-background/15', // 15% background + 8% tint layer = 23% total ≈ 85% transparency
-    'border-white/20',
     'shadow-lg',
   ),
 
@@ -44,7 +42,6 @@ export const glassVariants = {
   strong: cn(
     'backdrop-blur-2xl', // Tailwind: 40px (will be overridden by inline 30px)
     'bg-background/25', // 25% background = 75% transparency
-    'border-white/30',
     'shadow-xl',
   ),
 } as const;
@@ -55,19 +52,16 @@ export const glassVariants = {
 export const glassHoverVariants = {
   subtle: cn(
     'hover:bg-background/10',
-    'hover:border-white/15',
     'transition-all duration-200',
   ),
 
   medium: cn(
     'hover:bg-background/20',
-    'hover:border-white/30',
     'transition-all duration-200',
   ),
 
   strong: cn(
     'hover:bg-background/30',
-    'hover:border-white/40',
     'transition-all duration-200',
   ),
 } as const;
@@ -177,10 +171,8 @@ export const glassOverlayStyles = {
 export const glassInput = cn(
   'backdrop-blur-xl',
   'bg-background/10',
-  'border-white/20',
   'shadow-2xl',
   'focus-visible:bg-background/20',
-  'focus-visible:border-white/30',
   'transition-all duration-200',
 );
 
@@ -191,7 +183,6 @@ export const glassInput = cn(
 export const glassBadge = cn(
   'backdrop-blur-md',
   'bg-white/10',
-  'border border-white/30',
   'shadow-md',
 );
 
@@ -204,24 +195,20 @@ export const glassBadge = cn(
  * @param params - Glass effect configuration
  * @param params.blurAmount - Tailwind blur class (e.g., 'md', 'xl', '2xl')
  * @param params.bgOpacity - Background opacity (0-100)
- * @param params.borderOpacity - Border opacity (0-100)
  * @param params.shadow - Tailwind shadow class
  */
 export function createGlassEffect({
   blurAmount = 'xl',
   bgOpacity = 10,
-  borderOpacity = 20,
   shadow = '2xl',
 }: {
   blurAmount?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   bgOpacity?: number;
-  borderOpacity?: number;
   shadow?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
 } = {}): string {
   return cn(
     `backdrop-blur-${blurAmount}`,
     `bg-background/${bgOpacity}`,
-    `border-white/${borderOpacity}`,
     `shadow-${shadow}`,
   );
 }
@@ -278,13 +265,11 @@ export const dashboardGlass = {
   // Data table headers/panels
   tablePanel: cn(
     glassVariants.subtle,
-    'border-b',
   ),
 
   // Navigation sidebars - glassmorphism design matching chat input
   sidebar: cn(
     'backdrop-blur-xl',
     'bg-white/5',
-    'border border-white/[0.12]',
   ),
 } as const;
