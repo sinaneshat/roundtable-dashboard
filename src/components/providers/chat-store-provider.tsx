@@ -1234,6 +1234,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // The main sync effect depends on `chat` which is memoized - if AI SDK updates
   // message content in place without changing the messages array reference,
   // the effect won't re-run. This interval ensures content syncs during streaming.
+  //
+  // ✅ PERFORMANCE FIX: Only update the streaming message, not the entire array
+  // Replacing all messages causes full re-render and violent UI flashing.
+  // Instead, surgically update only the last message's parts.
   useEffect(() => {
     if (!chat.isStreaming) {
       return;
@@ -1250,15 +1254,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return;
       }
 
-      // Find corresponding message in store
-      const correspondingStoreMessage = currentStoreMessages.find(m => m.id === lastHookMessage.id);
+      // Find corresponding message in store by ID
+      const storeMessageIndex = currentStoreMessages.findIndex(m => m.id === lastHookMessage.id);
+      const correspondingStoreMessage = storeMessageIndex >= 0 ? currentStoreMessages[storeMessageIndex] : null;
 
       // Check if content differs
       let needsSync = false;
       if (!correspondingStoreMessage) {
+        // Message doesn't exist in store - need full sync
         needsSync = true;
       } else if (lastHookMessage.parts && correspondingStoreMessage.parts) {
-        // Compare text content
+        // Compare text/reasoning content
         for (let j = 0; j < lastHookMessage.parts.length; j++) {
           const hookPart = lastHookMessage.parts[j];
           const storePart = correspondingStoreMessage.parts[j];
@@ -1286,9 +1292,22 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
 
       if (needsSync) {
-        // Deep clone to avoid Immer freeze issues
-        store.getState().setMessages(structuredClone(chat.messages));
         lastStreamActivityRef.current = Date.now();
+
+        if (!correspondingStoreMessage) {
+          // Message doesn't exist - need to add it (full sync)
+          store.getState().setMessages(structuredClone(chat.messages));
+        } else {
+          // ✅ SURGICAL UPDATE: Only update the streaming message's parts
+          // This prevents re-rendering the entire message list
+          store.getState().setMessages(
+            currentStoreMessages.map((msg, idx) =>
+              idx === storeMessageIndex
+                ? { ...msg, parts: structuredClone(lastHookMessage.parts) }
+                : msg,
+            ),
+          );
+        }
       }
     }, 100); // Poll every 100ms during streaming
 
