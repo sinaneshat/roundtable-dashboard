@@ -932,6 +932,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // JSON.stringify on large message objects causes excessive GC pressure
     let contentChanged = false;
     let shouldThrottle = false;
+
     if (chat.isStreaming && chat.messages.length > 0) {
       const lastHookMessage = chat.messages[chat.messages.length - 1];
       if (!lastHookMessage) {
@@ -1228,6 +1229,74 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
     }
   }, [chat, store]); // ✅ INFINITE LOOP FIX: chat is now memoized in useMultiParticipantChat
+
+  // ✅ STREAMING CONTENT SYNC: Poll for content updates during streaming
+  // The main sync effect depends on `chat` which is memoized - if AI SDK updates
+  // message content in place without changing the messages array reference,
+  // the effect won't re-run. This interval ensures content syncs during streaming.
+  useEffect(() => {
+    if (!chat.isStreaming) {
+      return;
+    }
+
+    const syncInterval = setInterval(() => {
+      if (!chat.isStreaming || chat.messages.length === 0) {
+        return;
+      }
+
+      const currentStoreMessages = store.getState().messages;
+      const lastHookMessage = chat.messages[chat.messages.length - 1];
+      if (!lastHookMessage) {
+        return;
+      }
+
+      // Find corresponding message in store
+      const correspondingStoreMessage = currentStoreMessages.find(m => m.id === lastHookMessage.id);
+
+      // Check if content differs
+      let needsSync = false;
+      if (!correspondingStoreMessage) {
+        needsSync = true;
+      } else if (lastHookMessage.parts && correspondingStoreMessage.parts) {
+        // Compare text content
+        for (let j = 0; j < lastHookMessage.parts.length; j++) {
+          const hookPart = lastHookMessage.parts[j];
+          const storePart = correspondingStoreMessage.parts[j];
+          if (hookPart?.type === 'text' && storePart?.type === 'text') {
+            if ('text' in hookPart && 'text' in storePart) {
+              if (hookPart.text !== storePart.text) {
+                needsSync = true;
+                break;
+              }
+            }
+          }
+          if (hookPart?.type === 'reasoning' && storePart?.type === 'reasoning') {
+            if ('text' in hookPart && 'text' in storePart) {
+              if (hookPart.text !== storePart.text) {
+                needsSync = true;
+                break;
+              }
+            }
+          }
+        }
+        // Also check parts count
+        if (lastHookMessage.parts.length !== correspondingStoreMessage.parts.length) {
+          needsSync = true;
+        }
+      }
+
+      if (needsSync) {
+        console.log('[Streaming Poll Sync] Content changed, syncing...');
+        // Deep clone to avoid Immer freeze issues
+        store.getState().setMessages(structuredClone(chat.messages));
+        lastStreamActivityRef.current = Date.now();
+      }
+    }, 100); // Poll every 100ms during streaming
+
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, [chat.isStreaming, chat.messages, store]);
 
   // ✅ SAFETY MECHANISM: Auto-stop stuck streams
   // Prevents system from getting stuck in isStreaming=true state if backend hangs

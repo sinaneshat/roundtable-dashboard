@@ -45,6 +45,7 @@ import {
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
+import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
 import {
   useChatFormActions,
   useOverviewActions,
@@ -269,6 +270,23 @@ export default function ChatOverviewScreen() {
   });
 
   // ============================================================================
+  // FILE CAPABILITY: Compute incompatible models based on attachments
+  // Models without vision capability cannot process images/PDFs
+  // ============================================================================
+  const incompatibleModelIds = useMemo(() => {
+    if (chatAttachments.attachments.length === 0) {
+      return new Set<string>();
+    }
+
+    // Convert attachments to file capability check format
+    const files = chatAttachments.attachments.map(att => ({
+      mimeType: att.file.type,
+    }));
+
+    return getIncompatibleModelIds(allEnabledModels, files);
+  }, [chatAttachments.attachments, allEnabledModels]);
+
+  // ============================================================================
   // HOOKS
   // ============================================================================
 
@@ -381,6 +399,37 @@ export default function ChatOverviewScreen() {
     setEnableWebSearch,
     setThreadActions,
   ]);
+
+  // ============================================================================
+  // AUTO-DESELECT INCOMPATIBLE MODELS
+  // When files are uploaded that require vision, auto-deselect models without vision
+  // ============================================================================
+  useEffect(() => {
+    if (incompatibleModelIds.size === 0)
+      return;
+
+    // Find selected participants that are now incompatible
+    const incompatibleSelected = selectedParticipants.filter(
+      p => incompatibleModelIds.has(p.modelId),
+    );
+
+    if (incompatibleSelected.length === 0)
+      return;
+
+    // Remove incompatible participants
+    const compatibleParticipants = selectedParticipants.filter(
+      p => !incompatibleModelIds.has(p.modelId),
+    );
+
+    // Re-index priorities
+    const reindexed = compatibleParticipants.map((p, index) => ({
+      ...p,
+      priority: index,
+    }));
+
+    setSelectedParticipants(reindexed);
+    setPersistedModelIds(reindexed.map(p => p.modelId));
+  }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds]);
 
   // ============================================================================
   // THREAD ACTIONS SYNC (for header when thread is active on overview)
@@ -884,6 +933,7 @@ export default function ChatOverviewScreen() {
           current_tier: userTierConfig.tier,
           can_upgrade: userTierConfig.can_upgrade,
         }}
+        incompatibleModelIds={incompatibleModelIds}
       />
     </>
   );

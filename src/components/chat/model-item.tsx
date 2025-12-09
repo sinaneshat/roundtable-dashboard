@@ -1,5 +1,6 @@
 'use client';
 import {
+  EyeOff,
   GripVertical,
   Lock,
   Plus,
@@ -15,6 +16,11 @@ import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
@@ -44,6 +50,8 @@ export type ModelItemProps = {
   };
   /** Callback to open role assignment panel for this model */
   onOpenRolePanel?: () => void;
+  /** Whether model is incompatible with current file attachments (e.g., no vision for images/PDFs) */
+  isIncompatibleWithFiles?: boolean;
 };
 
 export function ModelItem({
@@ -58,6 +66,7 @@ export function ModelItem({
   enableDrag = true,
   userTierInfo: _userTierInfo,
   onOpenRolePanel,
+  isIncompatibleWithFiles = false,
 }: ModelItemProps) {
   const tModels = useTranslations('chat.models');
   const { model, participant } = orderedModel;
@@ -65,8 +74,10 @@ export function ModelItem({
   const isAccessible = model.is_accessible_to_user ?? isSelected;
   const isDisabledDueToTier = !isSelected && !isAccessible;
   const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels;
+  // Disable selection if model can't handle uploaded files (e.g., no vision for images/PDFs)
+  const isDisabledDueToFileIncompatibility = !isSelected && isIncompatibleWithFiles;
   // Allow deselecting all - validation shown elsewhere
-  const isDisabled = isDisabledDueToTier || isDisabledDueToLimit;
+  const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
   const itemContent = (
     <div className="flex items-center gap-3 w-full min-w-0">
@@ -86,7 +97,7 @@ export function ModelItem({
           <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             <span className="text-sm font-semibold truncate min-w-0">{model.name}</span>
 
-            {/* Tier/Limit badges - show immediately after name */}
+            {/* Tier/Limit/Incompatibility badges - show immediately after name */}
             {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
               <Badge variant="secondary" className="text-[10px] px-2 py-0.5 h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                 {model.required_tier_name || model.required_tier}
@@ -96,6 +107,19 @@ export function ModelItem({
               <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-warning/50 text-warning shrink-0">
                 {tModels('limitReached')}
               </Badge>
+            )}
+            {isDisabledDueToFileIncompatibility && !isDisabledDueToTier && !isDisabledDueToLimit && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-destructive/50 text-destructive shrink-0 gap-1">
+                    <EyeOff className="size-3" />
+                    {tModels('noVision')}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[200px]">
+                  {tModels('noVisionTooltip')}
+                </TooltipContent>
+              </Tooltip>
             )}
 
             {/* Role badges or Add Role button - always rendered to prevent layout shift */}

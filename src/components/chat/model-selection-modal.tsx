@@ -147,6 +147,8 @@ export type ModelSelectionModalProps = {
   children?: ReactNode;
   /** Enable drag-to-reorder (default: true) */
   enableDrag?: boolean;
+  /** Set of model IDs that are incompatible with current file attachments */
+  incompatibleModelIds?: Set<string>;
 };
 
 export function ModelSelectionModal({
@@ -165,6 +167,7 @@ export function ModelSelectionModal({
   className,
   children,
   enableDrag = true,
+  incompatibleModelIds,
 }: ModelSelectionModalProps) {
   const t = useTranslations('chat.models.modal');
   const tModels = useTranslations('chat.models');
@@ -569,6 +572,7 @@ export function ModelSelectionModal({
                                     enableDrag
                                     userTierInfo={userTierInfo}
                                     onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                    isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
                                   />
                                 ))}
                               </Reorder.Group>
@@ -592,6 +596,7 @@ export function ModelSelectionModal({
                                     enableDrag={false}
                                     userTierInfo={userTierInfo}
                                     onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                    isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
                                   />
                                 ))}
                               </div>

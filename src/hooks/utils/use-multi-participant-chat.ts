@@ -1312,15 +1312,20 @@ export function useMultiParticipantChat(
     // before React re-renders with new isExplicitlyStreaming state
     isStreamingRef.current = true;
 
-    // Reset all state for new round
-    setIsExplicitlyStreaming(true);
-    setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-    setCurrentRound(roundNumber);
+    // CRITICAL FIX: Use flushSync to ensure state updates are committed synchronously
+    // before the API call is made. This prevents chat.isStreaming from being false
+    // when the sync effect runs, which would cause streaming content to not update gradually.
+    // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper streaming sync
+    flushSync(() => {
+      // Reset all state for new round - INSIDE flushSync so they commit immediately
+      setIsExplicitlyStreaming(true);
+      setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
+      setCurrentRound(roundNumber);
+    });
+
+    // These don't need to be in flushSync
     resetErrorTracking();
     clearAnimations?.(); // Clear any pending animations from previous round
-
-    // React 18+ automatically batches updates, no need for flushSync here
-    // State updates will be committed synchronously within this callback
 
     // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
     // Guard against double-push if startRound is called multiple times
@@ -1563,25 +1568,25 @@ export function useMultiParticipantChat(
       // before React re-renders with new isExplicitlyStreaming state
       isStreamingRef.current = true;
 
-      // AI SDK v5 Pattern: Synchronization for proper message ordering
-      // Reset all state for new round
-      setIsExplicitlyStreaming(true);
-      setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-      setCurrentRound(newRoundNumber);
+      // CRITICAL FIX: Use flushSync to ensure state updates are committed synchronously
+      // before the API call is made. This prevents:
+      // 1. First participant's response appearing before user message during streaming
+      // 2. chat.isStreaming being false when sync effect runs, causing content updates to be skipped
+      //
+      // Without this, React batches state updates and the sync effect runs before
+      // isExplicitlyStreaming is committed, so streaming content doesn't update gradually.
+      // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper streaming sync
+      flushSync(() => {
+        // AI SDK v5 Pattern: Synchronization for proper message ordering
+        // Reset all state for new round - INSIDE flushSync so they commit immediately
+        setIsExplicitlyStreaming(true);
+        setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
+        setCurrentRound(newRoundNumber);
+      });
+
+      // These don't need to be in flushSync
       resetErrorTracking();
       clearAnimations?.(); // Clear any pending animations from previous round
-
-      // CRITICAL FIX: Use flushSync to ensure state updates are committed synchronously
-      // before the API call is made. This prevents the first participant's response
-      // from appearing before the user message during streaming.
-      //
-      // Without this, React batches state updates and the assistant message
-      // can be added to the DOM before the user message is rendered,
-      // causing messages to appear in the wrong order during streaming.
-      // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper message ordering
-      flushSync(() => {
-        // Force React to commit the state updates immediately
-      });
 
       // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
       // Guard against double-push if sendMessage is called concurrently

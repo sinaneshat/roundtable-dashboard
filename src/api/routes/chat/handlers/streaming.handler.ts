@@ -32,16 +32,12 @@ import {
 } from '@/api/common/error-types';
 import { createHandler } from '@/api/core';
 import {
-  extractMimeTypeFromPart,
-  isFilePartType,
-  isVisionRequiredMimeType,
   MessagePartTypes,
   MessageRoles,
   ParticipantStreamStatuses,
   UIMessageRoles,
 } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
-import { supportsCapability } from '@/api/services/model-capabilities.service';
 import { getModelById } from '@/api/services/models-config.service';
 import {
   initializeOpenRouter,

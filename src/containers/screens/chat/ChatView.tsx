@@ -44,6 +44,7 @@ import {
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
+import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
 import {
   useChatFormActions,
   useFeedbackActions,
@@ -203,6 +204,20 @@ export function ChatView({
     allEnabledModels,
     modelOrder,
   });
+
+  // File capability: Compute incompatible models based on attachments
+  const incompatibleModelIds = useMemo(() => {
+    if (chatAttachments.attachments.length === 0) {
+      return new Set<string>();
+    }
+
+    // Convert attachments to file capability check format
+    const files = chatAttachments.attachments.map(att => ({
+      mimeType: att.file.type,
+    }));
+
+    return getIncompatibleModelIds(allEnabledModels, files);
+  }, [chatAttachments.attachments, allEnabledModels]);
 
   // Timeline with messages, analyses, changelog, and pre-searches
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
@@ -576,6 +591,7 @@ export function ChatView({
           current_tier: userTierConfig.tier,
           can_upgrade: userTierConfig.can_upgrade,
         }}
+        incompatibleModelIds={incompatibleModelIds}
       />
     </>
   );

@@ -328,6 +328,8 @@
       "dragToReorder": "Drag to reorder",
       "dragDisabled": "Drag disabled",
       "limitReached": "Limit Reached",
+      "noVision": "No Vision",
+      "noVisionTooltip": "This model cannot process images or PDFs. Remove visual files to enable selection.",
       "minRequired": "Min 3 required",
       "yourPlan": "Your Plan",
       "mostPopular": "Most Popular",
