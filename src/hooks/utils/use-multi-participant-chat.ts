@@ -1763,6 +1763,7 @@ export function useMultiParticipantChat(
     // Detected resumed stream - set streaming flag
     // This ensures store.isStreaming reflects the actual state
     isStreamingRef.current = true;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Valid React 19 pattern: useEffectEvent callback for stream state sync
     setIsExplicitlyStreaming(true);
 
     // Also populate roundParticipantsRef if needed for proper orchestration

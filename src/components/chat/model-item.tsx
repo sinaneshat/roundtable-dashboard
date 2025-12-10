@@ -130,6 +130,8 @@ export function ModelItem({
                   !isSelected && 'invisible',
                 )}
                 onClick={e => e.stopPropagation()}
+                // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
+                onPointerDownCapture={e => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.stopPropagation();
@@ -201,6 +203,8 @@ export function ModelItem({
               disabled={isDisabled}
               className="shrink-0"
               onClick={e => e.stopPropagation()}
+              // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
+              onPointerDownCapture={e => e.stopPropagation()}
             />
           )}
     </div>

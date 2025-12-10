@@ -30,7 +30,7 @@ import { ConversationModeModal } from '@/components/chat/conversation-mode-modal
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery } from '@/hooks/queries/chat';
@@ -136,16 +136,21 @@ export default function ChatOverviewScreen() {
 
   // Store actions
   // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
-  const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant, setEnableWebSearch } = useChatStore(
+  const { setInputValue, setSelectedMode, setSelectedParticipants, addParticipant, removeParticipant, updateParticipant, setEnableWebSearch } = useChatStore(
     useShallow(s => ({
       setInputValue: s.setInputValue,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
+      addParticipant: s.addParticipant,
       removeParticipant: s.removeParticipant,
+      updateParticipant: s.updateParticipant,
       setEnableWebSearch: s.setEnableWebSearch,
     })),
   );
   const resetToOverview = useChatStore(s => s.resetToOverview);
+
+  // Store API for imperative access (getState)
+  const storeApi = useChatStoreApi();
 
   // ============================================================================
   // LOCAL STATE & REFS
@@ -598,57 +603,42 @@ export default function ChatOverviewScreen() {
   );
 
   // Model modal callbacks
+  // ✅ STALE CLOSURE FIX: Use store actions instead of closure-based state manipulation
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
     if (!orderedModel)
       return;
 
     if (orderedModel.participant) {
-      const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
-      const sortedByVisualOrder = filtered.sort((a, b) => {
-        const aIdx = modelOrder.indexOf(a.modelId);
-        const bIdx = modelOrder.indexOf(b.modelId);
-        return aIdx - bIdx;
-      });
-      const reindexed = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
-      setSelectedParticipants(reindexed);
-
-      // Persist to cookie storage
-      setPersistedModelIds(reindexed.map(p => p.modelId));
+      // Use store action to remove - avoids stale closure
+      removeParticipant(modelId);
+      // Get current state from store API for persistence
+      const currentParticipants = storeApi.getState().selectedParticipants;
+      setPersistedModelIds(currentParticipants.map(p => p.modelId));
     } else {
-      // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
+      // Use store action to add - avoids stale closure
       const newParticipant: ParticipantConfig = {
         id: modelId,
         modelId,
         role: '',
-        priority: selectedParticipants.length,
+        priority: 0, // Will be reindexed by store action
       };
-      const updated = [...selectedParticipants, newParticipant].sort((a, b) => {
-        const aIdx = modelOrder.indexOf(a.modelId);
-        const bIdx = modelOrder.indexOf(b.modelId);
-        return aIdx - bIdx;
-      });
-      const reindexed = updated.map((p, index) => ({ ...p, priority: index }));
-      setSelectedParticipants(reindexed);
-
-      // Persist to cookie storage
-      setPersistedModelIds(reindexed.map(p => p.modelId));
+      addParticipant(newParticipant);
+      // Get current state from store API for persistence
+      const currentParticipants = storeApi.getState().selectedParticipants;
+      setPersistedModelIds(currentParticipants.map(p => p.modelId));
     }
-  }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder, setPersistedModelIds]);
+  }, [orderedModels, removeParticipant, addParticipant, setPersistedModelIds, storeApi]);
 
-  // ✅ REACT 19: Consolidated role handlers (DRY pattern)
-  const updateParticipantRole = useCallback((modelId: string, role: string, customRoleId?: string) => {
-    setSelectedParticipants(
-      selectedParticipants.map(p =>
-        p.modelId === modelId ? { ...p, role, customRoleId } : p,
-      ),
-    );
-  }, [selectedParticipants, setSelectedParticipants]);
+  // ✅ STALE CLOSURE FIX: Use store action instead of closure-based map
+  // The old pattern captured selectedParticipants in closure, causing deselection bugs
+  const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
+    updateParticipant(modelId, { role, customRoleId });
+  }, [updateParticipant]);
 
-  const handleRoleChange = updateParticipantRole;
   const handleClearRole = useCallback(
-    (modelId: string) => updateParticipantRole(modelId, '', undefined),
-    [updateParticipantRole],
+    (modelId: string) => updateParticipant(modelId, { role: '', customRoleId: undefined }),
+    [updateParticipant],
   );
 
   const handleReorderModels = useCallback((newOrder: typeof orderedModels) => {

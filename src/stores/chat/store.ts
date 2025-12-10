@@ -195,7 +195,7 @@ const createFormSlice: StateCreator<
     }, false, 'form/removeParticipant'),
   updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
     set((draft) => {
-      const p = draft.selectedParticipants.find(p => p.id === participantId);
+      const p = draft.selectedParticipants.find(p => p.id === participantId || p.modelId === participantId);
       if (p)
         Object.assign(p, updates);
     }, false, 'form/updateParticipant'),
