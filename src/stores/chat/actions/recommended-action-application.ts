@@ -60,18 +60,16 @@ function createParticipantsFromSuggestions(
     // If suggested models are a subset or match current, just update roles
     const allSuggestedInCurrent = suggestedModels.every(m => currentModelIds.has(m));
 
-    if (allSuggestedInCurrent && suggestedRoles?.length) {
-      // Update roles on existing participants that match suggested models
-      return currentParticipants.map((participant) => {
-        const suggestedIndex = suggestedModels.indexOf(participant.modelId);
-        if (suggestedIndex !== -1 && suggestedRoles[suggestedIndex]) {
-          return {
-            ...participant,
-            role: suggestedRoles[suggestedIndex],
-          };
-        }
-        return participant;
-      });
+    if (allSuggestedInCurrent) {
+      // Filter to ONLY suggested models, preserving existing config + applying roles
+      const suggestedModelSet = new Set(suggestedModels);
+      return currentParticipants
+        .filter(p => suggestedModelSet.has(p.modelId))
+        .map((participant, index) => ({
+          ...participant,
+          role: suggestedRoles?.[suggestedModels.indexOf(participant.modelId)] ?? participant.role,
+          priority: index,
+        }));
     }
 
     // If suggested has models not in current, create new participant list

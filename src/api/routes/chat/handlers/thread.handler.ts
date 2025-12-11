@@ -238,7 +238,6 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       .insert(tables.chatParticipant)
       .values(participantValues)
       .returning();
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     const participants = sortByPriority(insertedParticipants);
     if (participants.length === 0) {
       throw createError.badRequest(

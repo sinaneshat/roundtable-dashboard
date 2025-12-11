@@ -36,7 +36,6 @@ export {
   createModelPreferencesStore,
   defaultInitState,
   initPreferencesStore,
-  MIN_MODELS,
 } from './store';
 
 // ============================================================================

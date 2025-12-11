@@ -28,9 +28,6 @@ import { MIN_MODELS_REQUIRED } from '@/api/services/product-logic.service';
 // CONSTANTS (Official Pattern)
 // ============================================================================
 
-/** Minimum models required (value from backend service) */
-export const MIN_MODELS = MIN_MODELS_REQUIRED;
-
 /** Cookie name for preferences storage */
 export const PREFERENCES_COOKIE_NAME = 'model-preferences';
 
@@ -345,7 +342,7 @@ export function createModelPreferencesStore(
             }
 
             // PRIORITY 2: Use first N accessible models as defaults
-            const defaultIds = accessibleModelIds.slice(0, MIN_MODELS);
+            const defaultIds = accessibleModelIds.slice(0, MIN_MODELS_REQUIRED);
             if (defaultIds.length > 0) {
               set(
                 (draft) => {

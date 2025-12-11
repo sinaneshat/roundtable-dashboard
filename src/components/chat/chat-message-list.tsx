@@ -27,7 +27,7 @@ import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { getMessageStatus } from '@/lib/utils/message-status';
 import { getMessageMetadata, getRoundNumber, getUserMetadata, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
-import { sortByPriority } from '@/lib/utils/participant';
+import { getEnabledParticipants } from '@/lib/utils/participant';
 import {
   allParticipantsHaveVisibleContent,
   buildParticipantMessageMaps,
@@ -423,32 +423,24 @@ function getParticipantInfoForMessage({
       || p.type === MessagePartTypes.REASONING,
   ) ?? false;
 
-  // ✅ CRITICAL FIX: Messages with visible content should show content, not shimmer
-  // Even if model metadata hasn't arrived yet, the content is already there to display.
-  // This ensures the shimmer is replaced with actual text as soon as it arrives.
+  // Messages with visible content should show content, not shimmer
+  // Store guarantees participants are sorted by priority
   if (hasVisibleContent) {
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-    const sortedParticipants = sortByPriority(participants);
-    const fallbackParticipant = sortedParticipants[currentParticipantIndex];
+    const fallbackParticipant = participants[currentParticipantIndex];
     return {
       participantIndex: assistantMetadata?.participantIndex ?? currentParticipantIndex,
       modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
       role: assistantMetadata?.participantRole || fallbackParticipant?.role || null,
-      isStreaming: false, // Has content = not showing shimmer
+      isStreaming: false,
     };
   }
 
   // AI SDK v5 Pattern: Only messages WITHOUT visible content can be considered streaming
-  // This means the message is still waiting for actual text from the AI
   const isLastMessage = messageIndex === totalMessages - 1;
   const isThisMessageStreaming = !hasVisibleContent && isGlobalStreaming && isLastMessage && message.role === MessageRoles.ASSISTANT;
 
   if (isThisMessageStreaming) {
-    // ✅ CRITICAL FIX: Sort participants by priority before indexing
-    // currentParticipantIndex is based on priority-sorted array in use-multi-participant-chat.ts
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-    const sortedParticipants = sortByPriority(participants);
-    const participant = sortedParticipants[currentParticipantIndex] || currentStreamingParticipant;
+    const participant = participants[currentParticipantIndex] || currentStreamingParticipant;
     return {
       participantIndex: currentParticipantIndex,
       modelId: participant?.modelId || assistantMetadata?.model,
@@ -457,12 +449,9 @@ function getParticipantInfoForMessage({
     };
   }
 
-  // Fallback for messages that haven't finished yet but aren't actively streaming
-  // This can happen briefly during state transitions
-  // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-  const sortedParticipants = sortByPriority(participants);
+  // Fallback for messages during state transitions
   const fallbackParticipantIndex = assistantMetadata?.participantIndex ?? currentParticipantIndex;
-  const fallbackParticipant = sortedParticipants[fallbackParticipantIndex];
+  const fallbackParticipant = participants[fallbackParticipantIndex];
 
   return {
     participantIndex: fallbackParticipantIndex,
@@ -703,12 +692,10 @@ export const ChatMessageList = memo(
 
       // ✅ Use reusable utility for multi-strategy participant message lookup
       const participantMaps = buildParticipantMessageMaps(streamingRoundMessages);
-      // ✅ CRITICAL FIX: Filter by isEnabled BEFORE sorting
-      // Only check enabled participants for content completeness
-      const enabledParticipants = participants.filter(p => p.isEnabled);
-      const sortedParticipants = sortByPriority(enabledParticipants);
+      // Filter to enabled only - store guarantees sorted order
+      const enabledParticipants = getEnabledParticipants(participants);
 
-      return allParticipantsHaveVisibleContent(participantMaps, sortedParticipants);
+      return allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
     }, [deduplicatedMessages, isStreaming, _streamingRoundNumber, participants]);
 
     // Group consecutive messages by participant for sticky headers
@@ -990,19 +977,16 @@ export const ChatMessageList = memo(
                     return msgRound === roundNumber;
                   });
 
-                  // ✅ CRITICAL FIX: Filter by isEnabled BEFORE sorting
-                  // Only show enabled participants in pending cards
-                  // Disabled participants from previous configurations should not render
-                  const enabledParticipants = participants.filter(p => p.isEnabled);
-                  const sortedParticipants = sortByPriority(enabledParticipants);
+                  // Filter to enabled participants only (store guarantees sorted order)
+                  const enabledParticipants = getEnabledParticipants(participants);
 
                   // ✅ Use reusable utility for multi-strategy participant message lookup
                   // Handles DB messages, resumed streams with partial metadata, and AI SDK temp IDs
                   const participantMaps = buildParticipantMessageMaps(assistantMessagesForRound);
 
-                  // ✅ Check if ALL participants have complete messages with visible content
+                  // Check if ALL enabled participants have complete messages with visible content
                   // If so, don't show pending cards - the regular AssistantGroupCard rendering will handle it
-                  const allParticipantsHaveContentForRound = allParticipantsHaveVisibleContent(participantMaps, sortedParticipants);
+                  const allParticipantsHaveContentForRound = allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
 
                   // ✅ Show pending cards during these phases ONLY if not all participants have content:
                   // - Pre-search PENDING/STREAMING: Show all participants as pending
@@ -1015,16 +999,15 @@ export const ChatMessageList = memo(
                     return null;
                   }
 
-                  // ✅ UNIFIED RENDERING: Render ALL participants in priority order
+                  // Render ALL enabled participants in priority order (store guarantees sort)
                   // Each participant shows either their actual content or shimmer, maintaining stable positions.
-                  // ✅ FIX: Handle null currentParticipantIndex during stream resumption
                   const effectiveParticipantIndex = currentParticipantIndex ?? 0;
-                  const currentStreamingParticipantForRound = sortedParticipants[effectiveParticipantIndex];
+                  const currentStreamingParticipantForRound = enabledParticipants[effectiveParticipantIndex];
 
                   return (
-                    // ✅ mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
+                    // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
                     <div className="mt-8 space-y-8">
-                      {sortedParticipants.map((participant, participantIdx) => {
+                      {enabledParticipants.map((participant, participantIdx) => {
                         const model = findModel(participant.modelId);
                         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
 
@@ -1081,7 +1064,7 @@ export const ChatMessageList = memo(
                             }
                           } else {
                             // Not their turn yet - show who they're waiting for
-                            const currentSpeaker = sortedParticipants[effectiveCurrentIndex];
+                            const currentSpeaker = enabledParticipants[effectiveCurrentIndex];
                             const currentSpeakerModel = currentSpeaker ? findModel(currentSpeaker.modelId) : null;
                             const currentSpeakerName = currentSpeakerModel?.name || currentSpeaker?.modelId || 'AI';
                             loadingText = tParticipant('waitingNamed', { name: currentSpeakerName });

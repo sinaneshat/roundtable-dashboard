@@ -115,13 +115,6 @@ export const AnimationIndices = {
 } as const;
 
 /**
- * Type for animation indices (union of participant indices and special indices)
- * Participant indices: 0, 1, 2, 3, ... (non-negative integers)
- * Special indices: AnimationIndices.PRE_SEARCH, AnimationIndices.ANALYSIS, etc.
- */
-export type AnimationIndex = number;
-
-/**
  * Type guard to check if an index is a participant animation
  */
 export function isParticipantAnimation(index: number): boolean {

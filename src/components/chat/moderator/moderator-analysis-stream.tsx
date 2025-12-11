@@ -254,16 +254,17 @@ function ModeratorAnalysisStreamComponent({
 
         // ✅ Enum Pattern: Classify error type
         if (isEmptyResponse) {
-          // ✅ CRITICAL FIX: Check if we have valid partial data from streaming
+          // Check if we have valid partial data from streaming
           // AI SDK may report "empty response" due to stream termination issues
-          // even when valid data was successfully streamed and displayed
-          // Use the partial data as fallback instead of failing
+          // Validate with Zod schema to ensure complete data before passing
           const fallbackData = partialAnalysisRef.current;
-          if (fallbackData && hasAnalysisData(fallbackData)) {
-            // We have valid streamed data - treat as success
-            emptyResponseRetryCountRef.current = 0; // Reset on success
-            onStreamCompleteRef.current?.(fallbackData as ModeratorAnalysisPayload);
-            return;
+          if (fallbackData) {
+            const validated = ModeratorAnalysisPayloadSchema.safeParse(fallbackData);
+            if (validated.success) {
+              emptyResponseRetryCountRef.current = 0;
+              onStreamCompleteRef.current?.(validated.data);
+              return;
+            }
           }
 
           // ✅ AUTO-RETRY: Automatically retry empty response errors
@@ -308,24 +309,14 @@ function ModeratorAnalysisStreamComponent({
           if (streamError.name === 'AbortError' || errorMessage.includes('aborted')) {
             errorType = StreamErrorTypes.ABORT;
           } else if (streamError.name === 'TypeValidationError' || errorMessage.includes('validation') || errorMessage.includes('invalid_type')) {
-            // ✅ CRITICAL FIX: For validation errors, try to normalize and use partial data
-            // AI models sometimes return object formats instead of arrays
-            // Normalize the data and check if it's usable
+            // For validation errors, try to normalize and validate partial data
             const fallbackData = partialAnalysisRef.current;
-            if (fallbackData && hasAnalysisData(fallbackData)) {
-              // Normalize the data to fix object-to-array format issues
+            if (fallbackData) {
               const normalizedData = normalizeAnalysisData(fallbackData);
-              // Try to validate normalized data
               const validated = ModeratorAnalysisPayloadSchema.safeParse(normalizedData);
               if (validated.success) {
                 emptyResponseRetryCountRef.current = 0;
                 onStreamCompleteRef.current?.(validated.data);
-                return;
-              }
-              // Even if strict validation fails, use normalized data if it has content
-              if (hasAnalysisData(normalizedData)) {
-                emptyResponseRetryCountRef.current = 0;
-                onStreamCompleteRef.current?.(normalizedData as ModeratorAnalysisPayload);
                 return;
               }
             }

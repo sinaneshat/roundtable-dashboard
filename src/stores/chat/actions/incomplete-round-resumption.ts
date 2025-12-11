@@ -41,6 +41,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
+import { getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantModelIds } from '@/lib/utils/participant';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
@@ -159,7 +160,7 @@ export function useIncompleteRoundResumption(
   const activeStreamCheckCompleteRef = useRef(false);
 
   // Calculate incomplete round state (moved up for use in pending round recovery)
-  const enabledParticipants = participants.filter(p => p.isEnabled);
+  const enabledParticipants = getEnabledParticipants(participants);
 
   // ============================================================================
   // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL
@@ -386,7 +387,7 @@ export function useIncompleteRoundResumption(
   //
   // Detection: Check if ANY responded model is NOT in current enabled participants
   // If there's a mismatch, participants have changed and round is not resumable
-  const currentModelIds = new Set(enabledParticipants.map(p => p.modelId));
+  const currentModelIds = getEnabledParticipantModelIdSet(participants);
   const participantsChangedSinceRound = respondedModelIds.size > 0
     && [...respondedModelIds].some(modelId => !currentModelIds.has(modelId));
 
@@ -570,7 +571,6 @@ export function useIncompleteRoundResumption(
 
     const recoveredQuery = orphanedPreSearch.userQuery;
 
-    // ✅ REFACTORED: Use createOptimisticUserMessage factory for single source of truth
     const optimisticUserMessage = createOptimisticUserMessage({
       roundNumber: orphanedRoundNumber,
       text: recoveredQuery,
@@ -647,7 +647,7 @@ export function useIncompleteRoundResumption(
     actions.setMessages(messagesWithoutOrphanedOptimistic);
 
     // Get enabled participant MODEL IDs for the expected participants
-    const expectedModelIds = enabledParticipants.map(p => p.modelId);
+    const expectedModelIds = getParticipantModelIds(enabledParticipants);
 
     // Set expected participant IDs (required by pendingMessage effect)
     actions.setExpectedParticipantIds(expectedModelIds);

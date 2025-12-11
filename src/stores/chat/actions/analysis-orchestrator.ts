@@ -13,11 +13,6 @@
  * 3. Syncs deduplicated analyses to store via setAnalyses
  * 4. Streaming analysis updates trigger query invalidation
  * 5. Hook refetches and re-syncs to store automatically
- *
- * ✅ REFACTORED: Migrated to orchestrator-factory (130 lines → 9 lines, 93% reduction)
- *
- * Location: /src/stores/chat/actions/analysis-orchestrator.ts
- * Used by: useScreenInitialization (internal composition)
  */
 
 'use client';

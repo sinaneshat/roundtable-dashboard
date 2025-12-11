@@ -15,6 +15,7 @@ import { useStore } from 'zustand';
 import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
+import { getEnabledParticipantModelIds } from '@/lib/utils/participant';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { extractFileContextForSearch } from '@/lib/utils/web-search-utils';
 import { executePreSearchStreamService } from '@/services/api';
@@ -84,11 +85,7 @@ export function usePendingMessage({
     }
 
     // Compare participant model IDs
-    const currentModelIds = participants
-      .filter(p => p.isEnabled)
-      .map(p => p.modelId)
-      .sort()
-      .join(',');
+    const currentModelIds = getEnabledParticipantModelIds(participants).sort().join(',');
     const expectedModelIds = [...expectedParticipantIds].sort().join(',');
 
     if (currentModelIds !== expectedModelIds) {

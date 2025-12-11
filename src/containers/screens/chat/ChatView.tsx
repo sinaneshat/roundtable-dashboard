@@ -38,7 +38,6 @@ import {
   useBoolean,
   useChatScroll,
   useOrderedModels,
-  useSortedParticipants,
   useThreadTimeline,
   useVisualViewportPosition,
 } from '@/hooks/utils';
@@ -142,8 +141,8 @@ export function ChatView({
   // ============================================================================
 
   const effectiveThreadId = thread?.id || createdThreadId || '';
-  const sortedContextParticipants = useSortedParticipants(contextParticipants);
-  const currentStreamingParticipant = sortedContextParticipants[currentParticipantIndex] || null;
+  // Store guarantees participants are sorted by priority
+  const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
   // ============================================================================
   // QUERIES
@@ -463,11 +462,14 @@ export function ChatView({
 
   const handleAnalysisStreamComplete = useCallback((roundNumber: number, completedData?: unknown, error?: unknown) => {
     if (completedData) {
-      // ✅ TYPE-SAFE: Validate with Zod schema instead of unsafe cast
+      // Data already validated by AI SDK's useObject with same schema
+      // This safeParse is defensive - should always pass if stream component worked correctly
       const parseResult = ModeratorAnalysisPayloadSchema.safeParse(completedData);
       if (parseResult.success) {
         updateAnalysisData(roundNumber, parseResult.data);
       } else {
+        // Log validation error for debugging (shouldn't happen if stream validated correctly)
+        console.error('[Analysis] Validation failed:', parseResult.error.flatten());
         updateAnalysisError(roundNumber, 'Invalid analysis data received. Please try again.');
       }
     } else if (error) {
@@ -476,9 +478,6 @@ export function ChatView({
         : 'Analysis failed. Please try again.';
       updateAnalysisError(roundNumber, errorMessage);
     } else {
-      // ✅ CRITICAL FIX: No data and no error is an inconsistent state
-      // This should be treated as a failure, not a success
-      // This can happen if streaming completed but validation failed silently
       updateAnalysisError(roundNumber, 'Analysis completed without data. Please try again.');
     }
   }, [updateAnalysisData, updateAnalysisError]);

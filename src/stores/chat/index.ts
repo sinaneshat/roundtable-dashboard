@@ -61,7 +61,6 @@ export {
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
 // Store Constants
-export type { AnimationIndex } from './store-constants';
 export {
   AnalysisTimeouts,
   AnimationIndices,

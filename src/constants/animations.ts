@@ -31,7 +31,7 @@ export const ANIMATION_TIMINGS = {
   VERY_SLOW: 1.0,
 
   // ========================================
-  // Detailed durations (legacy, use simple ones above)
+  // Detailed durations (more granular control)
   // ========================================
   /** Almost instant (0.15s) - Same as FAST */
   DURATION_INSTANT: 0.15,

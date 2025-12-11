@@ -29,7 +29,7 @@ import { transformChatMessages, transformChatParticipants, transformChatThread }
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
-import { chatParticipantsToConfig, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
+import { chatParticipantsToConfig, getParticipantModelIds, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
 import { createOptimisticUserMessage, createPlaceholderAnalysis, createPlaceholderPreSearch } from '../utils/placeholder-factories';
@@ -163,17 +163,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       const { thread, participants, messages: initialMessages } = response.data;
 
-      //   threadId: thread.id.slice(0, 8),
-      //   messagesFromBackend: initialMessages.map(m => ({ role: m.role, metadata: m.metadata, roundNumber: m.roundNumber })),
-      // });
-
       // ✅ SINGLE SOURCE OF TRUTH: Use date transform utilities
       const threadWithDates = transformChatThread(thread);
       const participantsWithDates = transformChatParticipants(participants);
       const messagesWithDates = transformChatMessages(initialMessages);
-
-      //   messagesWithDates: messagesWithDates.map(m => ({ role: m.role, metadata: m.metadata })),
-      // });
 
       actions.setShowInitialUI(false);
       actions.setCreatedThreadId(thread.id);
@@ -181,9 +174,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ SINGLE SOURCE OF TRUTH: Use utility for type-safe message transformation
       // Replaces unsafe type assertions with validated conversion
       const uiMessages = chatMessagesToUIMessages(messagesWithDates);
-
-      //   uiMessages: uiMessages.map(m => ({ role: m.role, metadata: m.metadata })),
-      // });
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
@@ -294,8 +284,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Now overview page will work correctly with web search enabled
       // ✅ BUG FIX: Use modelId instead of participant record id
       // Provider compares against modelIds, not participant record IDs
-      const participantModelIds = participants.map(p => p.modelId);
-      actions.prepareForNewMessage(prompt, participantModelIds, attachmentIds);
+      actions.prepareForNewMessage(prompt, getParticipantModelIds(participants), attachmentIds);
 
       // ✅ IMMEDIATE UI FEEDBACK: Set streamingRoundNumber IMMEDIATELY for round 0
       // This enables ChatMessageList to show pending participant cards with shimmer animation
@@ -404,7 +393,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           }))
         : [];
 
-      // ✅ REFACTORED: Use createOptimisticUserMessage factory for single source of truth
       const optimisticUserMessage = createOptimisticUserMessage({
         roundNumber: nextRoundNumber,
         text: trimmed,
@@ -480,7 +468,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             const participantsWithDates = transformChatParticipants(response.data.participants);
 
             actions.updateParticipants(participantsWithDates);
-            actions.setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
+            actions.setExpectedParticipantIds(getParticipantModelIds(participantsWithDates));
 
             // ✅ CRITICAL FIX: Sync selectedParticipants with DB IDs after successful update
             // BUG FIX: Without this, selectedParticipants keeps frontend IDs (participant-XXX)
@@ -492,7 +480,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             // ✅ Reset hasPendingConfigChanges since changes are now saved
             actions.setHasPendingConfigChanges(false);
           } else {
-            actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+            actions.setExpectedParticipantIds(getParticipantModelIds(optimisticParticipants));
           }
         } else {
           // ✅ CRITICAL FIX: Rollback optimistic update on failure
@@ -519,11 +507,11 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             showApiErrorToast('Failed to save configuration changes', error);
           });
 
-          actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+          actions.setExpectedParticipantIds(getParticipantModelIds(optimisticParticipants));
         }
       } else {
         // No changes - just use current participants for expected IDs
-        actions.setExpectedParticipantIds(threadState.participants.map(p => p.modelId));
+        actions.setExpectedParticipantIds(getParticipantModelIds(threadState.participants));
       }
 
       // Prepare for new message (sets flags, pending message, attachment IDs, and pendingFileParts)

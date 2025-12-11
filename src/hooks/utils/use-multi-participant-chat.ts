@@ -16,7 +16,7 @@ import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/sch
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
-import { deduplicateParticipants, sortByPriority } from '@/lib/utils/participant';
+import { deduplicateParticipants, getEnabledParticipants } from '@/lib/utils/participant';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { useSyncedRefs } from './use-synced-refs';
@@ -348,10 +348,9 @@ export function useMultiParticipantChat(
     // ✅ CRITICAL GUARD: Prevent premature round completion
     // If roundParticipantsRef is empty but we have participants, populate it first
     // This can happen during resumed streams or race conditions
+    // Store guarantees participants are sorted by priority
     if (totalParticipants === 0 && participantsRef.current.length > 0) {
-      // ✅ FIX: Sort by priority to ensure correct streaming order
-      // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-      const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+      const enabled = getEnabledParticipants(participantsRef.current);
       roundParticipantsRef.current = enabled;
       totalParticipants = enabled.length;
     }
@@ -363,7 +362,8 @@ export function useMultiParticipantChat(
     // - Round completion check uses OLD count, causing system to wait for non-existent participants
     // or triggering onComplete prematurely
     // Solution: Compare IDs and use current count if participants changed
-    const currentEnabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+    // Store guarantees participants are sorted by priority
+    const currentEnabled = getEnabledParticipants(participantsRef.current);
     const roundParticipantIds = new Set(roundParticipantsRef.current.map(p => p.id));
     const currentParticipantIds = new Set(currentEnabled.map(p => p.id));
 
@@ -659,11 +659,10 @@ export function useMultiParticipantChat(
      * Handle participant errors - create error UI and continue to next participant
      */
     onError: (error) => {
-      // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
-      // This prevents premature round completion when totalParticipants is 0
+      // Ensure roundParticipantsRef is populated before any transitions
+      // Store guarantees participants are sorted by priority
       if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+        const enabled = getEnabledParticipants(participantsRef.current);
         roundParticipantsRef.current = enabled;
       }
 
@@ -840,10 +839,9 @@ export function useMultiParticipantChat(
           currentRoundRef.current = metadataRoundNumber;
         }
 
-        // ✅ CRITICAL: Populate roundParticipantsRef from participantsRef
-        // This MUST happen before triggerNextParticipantWithRefs checks totalParticipants
-        // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+        // Populate roundParticipantsRef before triggerNextParticipantWithRefs checks totalParticipants
+        // Store guarantees participants are sorted by priority
+        const enabled = getEnabledParticipants(participantsRef.current);
         roundParticipantsRef.current = enabled;
 
         // Only set streaming state if NOT in the middle of a form submission
@@ -853,11 +851,10 @@ export function useMultiParticipantChat(
         }
       }
 
-      // ✅ GUARD: Ensure roundParticipantsRef is populated before any transitions
-      // This prevents premature round completion when totalParticipants is 0
+      // Ensure roundParticipantsRef is populated before any transitions
+      // Store guarantees participants are sorted by priority
       if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-        const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+        const enabled = getEnabledParticipants(participantsRef.current);
         roundParticipantsRef.current = enabled;
       }
 
@@ -1296,7 +1293,7 @@ export function useMultiParticipantChat(
     isTriggeringRef.current = true;
 
     const uniqueParticipants = deduplicateParticipants(currentParticipants);
-    const enabled = uniqueParticipants.filter(p => p.isEnabled);
+    const enabled = getEnabledParticipants(uniqueParticipants);
 
     if (enabled.length === 0) {
       isTriggeringRef.current = false;
@@ -1414,7 +1411,7 @@ export function useMultiParticipantChat(
     isTriggeringRef.current = true;
 
     const uniqueParticipants = deduplicateParticipants(currentParticipants);
-    const enabled = uniqueParticipants.filter(p => p.isEnabled);
+    const enabled = getEnabledParticipants(uniqueParticipants);
 
     if (enabled.length === 0) {
       isTriggeringRef.current = false;
@@ -1548,7 +1545,7 @@ export function useMultiParticipantChat(
 
       // AI SDK v5 Pattern: Simple, straightforward participant filtering
       const uniqueParticipants = deduplicateParticipants(participants);
-      const enabled = uniqueParticipants.filter(p => p.isEnabled);
+      const enabled = getEnabledParticipants(uniqueParticipants);
 
       if (enabled.length === 0) {
         isTriggeringRef.current = false;
@@ -1805,8 +1802,9 @@ export function useMultiParticipantChat(
     setIsExplicitlyStreaming(true);
 
     // Also populate roundParticipantsRef if needed for proper orchestration
+    // Store guarantees participants are sorted by priority
     if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-      const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+      const enabled = getEnabledParticipants(participantsRef.current);
       roundParticipantsRef.current = enabled;
     }
 

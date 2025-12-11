@@ -59,7 +59,6 @@ export { useModelLookup } from './use-model-lookup';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
 export type { UseOrderedModelsOptions } from './use-ordered-models';
 export { useOrderedModels } from './use-ordered-models';
-export { useSortedParticipants } from './use-sorted-participants';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';

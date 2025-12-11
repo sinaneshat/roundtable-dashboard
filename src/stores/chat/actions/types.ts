@@ -26,7 +26,6 @@ import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
 /**
  * Standard API response wrapper schema
- * ✅ REFACTORED: Uses createCacheResponseSchema from @/api/routes/chat/schema
  */
 export const ApiResponseSchema = createCacheResponseSchema(z.unknown());
 

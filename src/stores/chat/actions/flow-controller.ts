@@ -104,7 +104,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     // 1. Pre-populate thread detail (thread, participants, messages, user)
     // Format matches getThreadBySlugService response
-    // ✅ REFACTORED: Use toISOString/toISOStringOrNull utilities for date serialization
     queryClient.setQueryData(
       queryKeys.threads.detail(threadId),
       {
@@ -138,7 +137,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     // 2. Pre-populate analyses
     // Format matches getThreadAnalysesService response
-    // ✅ REFACTORED: Use toISOString/toISOStringOrNull utilities
     if (currentAnalyses.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.analyses(threadId),
@@ -157,7 +155,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
 
     // 3. Pre-populate pre-searches (if web search enabled)
-    // ✅ REFACTORED: Use toISOString/toISOStringOrNull utilities
     if (currentPreSearches.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.preSearches(threadId),
@@ -176,14 +173,12 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
 
     // 4. Pre-populate empty changelog (we don't have this data yet, but prevents loading)
-    // ✅ REFACTORED: Use createEmptyListCache utility
     queryClient.setQueryData(
       queryKeys.threads.changelog(threadId),
       createEmptyListCache(),
     );
 
     // 5. Pre-populate empty feedback (we don't have this data yet, but prevents loading)
-    // ✅ REFACTORED: Use createEmptyListCache utility
     queryClient.setQueryData(
       queryKeys.threads.feedback(threadId),
       createEmptyListCache(),

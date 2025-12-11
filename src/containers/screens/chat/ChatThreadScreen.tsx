@@ -128,9 +128,6 @@ export default function ChatThreadScreen({
     }
   }, [streamResumptionState, thread?.id, prefillStreamResumptionState]);
 
-  // ✅ SIMPLIFIED: initializeThread now handles all state setup
-  // Removed: resetThreadState, setShowInitialUI, setHasInitiallyLoaded, setSelectedMode, setEnableWebSearch
-
   // ============================================================================
   // MEMOIZED DATA
   // ============================================================================

@@ -17,6 +17,7 @@ import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import { messageHasError } from '@/lib/schemas/message-metadata';
 import { getStatusPriority } from '@/stores/chat';
 
+import { getEnabledParticipants } from './participant';
 import { isObject } from './type-guards';
 
 // ============================================================================
@@ -444,7 +445,7 @@ export function isRoundIncomplete(
     return parsed.success && parsed.data?.roundNumber === roundNumber;
   });
 
-  const enabledParticipants = participants.filter(p => p.isEnabled);
+  const enabledParticipants = getEnabledParticipants(participants);
 
   // Round is incomplete if fewer messages than expected participants
   if (assistantMessagesInRound.length < enabledParticipants.length) {
@@ -518,7 +519,7 @@ export function shouldCreateAnalysis(
     return parsed.data.roundNumber === roundNumber;
   });
 
-  const enabledParticipants = participants.filter(p => p.isEnabled);
+  const enabledParticipants = getEnabledParticipants(participants);
 
   // Check minimum message count FOR THIS ROUND
   if (assistantMessagesInRound.length === 0 || assistantMessagesInRound.length < enabledParticipants.length) {

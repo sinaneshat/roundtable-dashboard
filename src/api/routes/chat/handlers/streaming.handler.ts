@@ -1566,7 +1566,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             });
           }
 
-          // ✅ REFACTORED: Use shared error utility from /src/api/common/error-handling.ts
           const errorMetadata = structureAIProviderError(
             error,
             {

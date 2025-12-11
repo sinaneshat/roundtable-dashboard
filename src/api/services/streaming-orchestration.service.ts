@@ -458,7 +458,6 @@ export async function loadThreadAttachmentContext(params: {
 
 /**
  * Format thread attachments into a prompt section
- * ✅ REFACTORED: Delegates to centralized buildAttachmentCitationPrompt
  *
  * @param attachments - Thread attachments with extracted content
  * @returns Formatted prompt section with citation instructions

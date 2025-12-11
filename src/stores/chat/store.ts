@@ -89,7 +89,7 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
 import { getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
-import { sortByPriority } from '@/lib/utils/participant';
+import { getEnabledSortedParticipants, sortByPriority } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
 
@@ -147,6 +147,17 @@ enableMapSet();
 
 export type { ChatStore } from './store-schemas';
 
+/**
+ * Type alias for slice StateCreator with Zustand middleware chain
+ * Reduces ~45 lines of boilerplate across 15 slices
+ */
+type SliceCreator<S> = StateCreator<
+  ChatStore,
+  [['zustand/devtools', never], ['zustand/immer', never]],
+  [],
+  S
+>;
+
 // ============================================================================
 // SLICE IMPLEMENTATIONS - Using Zustand v5 StateCreator Pattern
 // ============================================================================
@@ -155,12 +166,7 @@ export type { ChatStore } from './store-schemas';
  * Form Slice - Chat form state and actions
  * Handles user input, mode selection, participant management
  */
-const createFormSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  FormSlice
-> = (set, get) => ({
+const createFormSlice: SliceCreator<FormSlice> = (set, get) => ({
   ...FORM_DEFAULTS,
 
   setInputValue: (value: string) =>
@@ -252,12 +258,7 @@ const createFormSlice: StateCreator<
  * Feedback Slice - Round feedback state
  * Manages like/dislike feedback for chat rounds
  */
-const createFeedbackSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  FeedbackSlice
-> = set => ({
+const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
   ...FEEDBACK_DEFAULTS,
 
   setFeedback: (roundNumber, type) =>
@@ -283,12 +284,7 @@ const createFeedbackSlice: StateCreator<
  * UI Slice - UI state flags
  * Controls initial UI display, thread creation, and streaming states
  */
-const createUISlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  UISlice
-> = set => ({
+const createUISlice: SliceCreator<UISlice> = set => ({
   ...UI_DEFAULTS,
 
   setShowInitialUI: (show: boolean) =>
@@ -307,12 +303,7 @@ const createUISlice: StateCreator<
  * Analysis Slice - Moderator analysis state
  * Manages pending, streaming, and completed moderator analyses
  */
-const createAnalysisSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  AnalysisSlice
-> = set => ({
+const createAnalysisSlice: SliceCreator<AnalysisSlice> = set => ({
   ...ANALYSIS_DEFAULTS,
 
   setAnalyses: (analyses: StoredModeratorAnalysis[]) =>
@@ -481,12 +472,7 @@ const createAnalysisSlice: StateCreator<
  * PreSearch Slice - Pre-search state
  * Manages web search results that precede participant responses
  */
-const createPreSearchSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  PreSearchSlice
-> = (set, get) => ({
+const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
   ...PRESEARCH_DEFAULTS,
 
   setPreSearches: (preSearches: StoredPreSearch[]) =>
@@ -612,12 +598,7 @@ const createPreSearchSlice: StateCreator<
  * Thread Slice - Chat thread data
  * Manages thread, participants, messages, and AI SDK method bindings
  */
-const createThreadSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  ThreadSlice
-> = (set, get) => ({
+const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   ...THREAD_DEFAULTS,
 
   setThread: (thread: ChatThread | null) =>
@@ -628,8 +609,6 @@ const createThreadSlice: StateCreator<
       ...(thread ? { enableWebSearch: thread.enableWebSearch } : {}),
     }, false, 'thread/setThread'),
   setParticipants: (participants: ChatParticipant[]) =>
-    // ✅ DEFENSIVE SORT: Always sort participants by priority to ensure correct streaming order
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {
     // Use get() to avoid Draft type issues with function callbacks
@@ -662,12 +641,7 @@ const createThreadSlice: StateCreator<
  * Flags Slice - Loading and processing flags
  * Boolean flags that trigger UI re-renders (loading states, config changes)
  */
-const createFlagsSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  FlagsSlice
-> = set => ({
+const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
   ...FLAGS_DEFAULTS,
 
   setHasInitiallyLoaded: (value: boolean) =>
@@ -686,12 +660,7 @@ const createFlagsSlice: StateCreator<
  * Data Slice - Transient data state
  * Round numbers, pending messages, and expected participant IDs
  */
-const createDataSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  DataSlice
-> = set => ({
+const createDataSlice: SliceCreator<DataSlice> = set => ({
   ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: (value: number | null) =>
@@ -712,12 +681,7 @@ const createDataSlice: StateCreator<
  * Tracking Slice - Deduplication tracking
  * Tracks which rounds have had analyses/pre-searches created to prevent duplicates
  */
-const createTrackingSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  TrackingSlice
-> = (set, get) => ({
+const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
   ...TRACKING_DEFAULTS,
 
   setHasSentPendingMessage: value =>
@@ -772,12 +736,7 @@ const createTrackingSlice: StateCreator<
  * Callbacks Slice - Event callbacks
  * Completion and retry callbacks for streaming events
  */
-const createCallbacksSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  CallbacksSlice
-> = set => ({
+const createCallbacksSlice: SliceCreator<CallbacksSlice> = set => ({
   ...CALLBACKS_DEFAULTS,
 
   setOnComplete: (callback?: () => void) =>
@@ -788,12 +747,7 @@ const createCallbacksSlice: StateCreator<
  * Screen Slice - Screen mode state
  * Tracks current screen mode (overview/thread/public) and read-only state
  */
-const createScreenSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  ScreenSlice
-> = set => ({
+const createScreenSlice: SliceCreator<ScreenSlice> = set => ({
   ...SCREEN_DEFAULTS,
 
   setScreenMode: (mode: ScreenMode | null) =>
@@ -809,12 +763,7 @@ const createScreenSlice: StateCreator<
  * Stream Resumption Slice - Background stream continuation
  * Manages state for resuming streams when user navigates away
  */
-const createStreamResumptionSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  StreamResumptionSlice
-> = (set, get) => ({
+const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, get) => ({
   ...STREAM_RESUMPTION_DEFAULTS,
 
   setStreamResumptionState: state =>
@@ -965,12 +914,7 @@ const createStreamResumptionSlice: StateCreator<
  * Animation Slice - Animation completion tracking
  * Tracks pending animations per participant to ensure sequential completion
  */
-const createAnimationSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  AnimationSlice
-> = (set, get) => ({
+const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
   ...ANIMATION_DEFAULTS,
 
   registerAnimation: participantIndex =>
@@ -1052,12 +996,7 @@ const createAnimationSlice: StateCreator<
  * Attachments Slice - File attachment management
  * Manages pending file attachments for chat input before message submission
  */
-const createAttachmentsSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  AttachmentsSlice
-> = (set, get) => ({
+const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
   ...ATTACHMENTS_DEFAULTS,
 
   // ✅ IMMER: Direct mutations instead of spread patterns
@@ -1104,12 +1043,7 @@ const createAttachmentsSlice: StateCreator<
  * Operations Slice - Composite operations
  * Complex multi-slice operations (reset, initialization, streaming lifecycle)
  */
-const createOperationsSlice: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  OperationsActions
-> = (set, get) => ({
+const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
   resetThreadState: () =>
     set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
 
@@ -1218,17 +1152,12 @@ const createOperationsSlice: StateCreator<
       messagesToSet = newMessages;
     }
 
-    // ✅ UNIFIED PATTERN: Pre-search data is fetched by PreSearchCard component
-    // Components use TanStack Query to fetch completed pre-search from DB
-    // No store hydration needed
-
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     const sortedParticipants = sortByPriority(participants);
 
     // ✅ HYDRATION FIX: Convert thread participants to form selectedParticipants
     // This must happen atomically with thread initialization to prevent UI flash
     // where ChatInput shows "Select at least 1 model" before participants sync
-    const enabledParticipants = sortedParticipants.filter(p => p.isEnabled);
+    const enabledParticipants = getEnabledSortedParticipants(participants);
     const formParticipants = enabledParticipants.map((p, index) => ({
       id: p.id,
       modelId: p.modelId,
@@ -1283,7 +1212,6 @@ const createOperationsSlice: StateCreator<
   },
 
   updateParticipants: (participants: ChatParticipant[]) =>
-    // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
     set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants'),
 
   // ✅ Uses ExtendedFilePart from message-schemas.ts (single source of truth for file parts with uploadId)

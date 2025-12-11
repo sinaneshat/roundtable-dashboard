@@ -2,7 +2,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
-import { sortByPriority } from '@/lib/utils/participant';
 
 type AvatarGroupProps = {
   participants: ParticipantConfig[];
@@ -29,8 +28,8 @@ export function AvatarGroup({
     md: 'text-xs',
   };
 
-  // ✅ REFACTOR: Use sortByPriority (single source of truth for priority sorting)
-  const visibleParticipants = sortByPriority(participants).slice(0, maxVisible);
+  // Store guarantees participants are sorted by priority - just slice
+  const visibleParticipants = participants.slice(0, maxVisible);
 
   const totalCount = participants.length;
   const overlapOffset = size === 'sm' ? -8 : -12;

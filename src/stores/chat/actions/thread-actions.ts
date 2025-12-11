@@ -5,9 +5,6 @@
  * Consolidates thread-specific logic (participant sync, changelog management)
  * Uses TanStack Query for data fetching - no setTimeout/timing patterns
  *
- * ✅ REFACTORED: Uses shared hooks from /src/stores/chat/hooks/
- * - useConfigChangeHandlers: Config change handling (mode, participants, web search)
- *
  * Location: /src/stores/chat/actions/thread-actions.ts
  * Used by: ChatThreadScreen
  */
@@ -19,7 +16,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
-import { sortByPriority } from '@/lib/utils/participant';
+import { getEnabledSortedParticipants } from '@/lib/utils/participant';
 
 import type { UseConfigChangeHandlersReturn } from '../hooks';
 import { useConfigChangeHandlers } from '../hooks';
@@ -92,7 +89,7 @@ export function useThreadActions(options: UseThreadActionsOptions): UseConfigCha
       return;
 
     // Use participant comparison utility (with ID for context tracking)
-    const enabledParticipants = sortByPriority(contextParticipants.filter(p => p.isEnabled));
+    const enabledParticipants = getEnabledSortedParticipants(contextParticipants);
     const contextKey = enabledParticipants.map(p => `${p.id}:${p.modelId}:${p.priority}`).join('|');
 
     if (contextKey === lastSyncedContextRef.current)
@@ -128,6 +125,5 @@ export function useThreadActions(options: UseThreadActionsOptions): UseConfigCha
     return undefined;
   }, [isWaitingForChangelog, isChangelogFetching, actions]);
 
-  // ✅ REFACTORED: Return config handlers from shared hook
   return useMemoizedReturn(configHandlers, [configHandlers]);
 }

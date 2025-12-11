@@ -551,6 +551,13 @@ export const OperationsActionsSchema = z.object({
 // COMPLETE STORE SCHEMA
 // ============================================================================
 
+/**
+ * Combined slice schemas for the complete ChatStore type
+ *
+ * ✅ PATTERN: Direct z.intersection chain instead of reduce
+ * Zod's z.intersection loses type info when used with reduce, causing ChatStore to become unknown.
+ * Using direct chaining preserves full type inference.
+ */
 export const ChatStoreSchema = z.intersection(
   z.intersection(
     z.intersection(
@@ -563,30 +570,36 @@ export const ChatStoreSchema = z.intersection(
                   z.intersection(
                     z.intersection(
                       z.intersection(
-                        z.intersection(FormSliceSchema, FeedbackSliceSchema),
-                        UISliceSchema,
+                        z.intersection(
+                          z.intersection(
+                            FormSliceSchema,
+                            FeedbackSliceSchema,
+                          ),
+                          UISliceSchema,
+                        ),
+                        AnalysisSliceSchema,
                       ),
-                      AnalysisSliceSchema,
+                      PreSearchSliceSchema,
                     ),
-                    PreSearchSliceSchema,
+                    ThreadSliceSchema,
                   ),
-                  ThreadSliceSchema,
+                  FlagsSliceSchema,
                 ),
-                FlagsSliceSchema,
+                DataSliceSchema,
               ),
-              DataSliceSchema,
+              TrackingSliceSchema,
             ),
-            TrackingSliceSchema,
+            CallbacksSliceSchema,
           ),
-          CallbacksSliceSchema,
+          ScreenSliceSchema,
         ),
-        ScreenSliceSchema,
+        StreamResumptionSliceSchema,
       ),
-      StreamResumptionSliceSchema,
+      AnimationSliceSchema,
     ),
-    z.intersection(AnimationSliceSchema, AttachmentsSliceSchema),
+    AttachmentsSliceSchema,
   ),
-  OperationsActionsSchema, // Operations slice has no state, only actions
+  OperationsActionsSchema,
 );
 
 // ============================================================================

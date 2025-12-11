@@ -192,18 +192,136 @@ export function hasParticipantsChanged(
 }
 
 /**
- * Extract model IDs from participants
+ * Extract model IDs from participants as comma-separated string
  *
  * @param participants - Array of participants
  * @returns Sorted, comma-separated model IDs
  */
-export function getParticipantModelIds(
+export function getParticipantModelIdsString(
   participants: ComparableParticipant[],
 ): string {
   return participants
     .map(p => p.modelId)
     .sort()
     .join(',');
+}
+
+// ============================================================================
+// Enabled Participant Utilities (SINGLE SOURCE OF TRUTH)
+// Eliminates 30+ duplicate `.filter(p => p.isEnabled)` patterns
+// ============================================================================
+
+/**
+ * Type for participants with optional isEnabled field
+ */
+export type WithEnabled = { isEnabled?: boolean | null };
+
+/**
+ * Filter to enabled participants only
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use instead of `.filter(p => p.isEnabled)`
+ * Handles both `isEnabled: true` and `isEnabled !== false` (for API compatibility)
+ *
+ * @param participants - Array of participants
+ * @returns Only enabled participants
+ *
+ * @example
+ * ```typescript
+ * // Instead of: participants.filter(p => p.isEnabled)
+ * const enabled = getEnabledParticipants(participants);
+ * ```
+ */
+export function getEnabledParticipants<T extends WithEnabled>(
+  participants: T[],
+): T[] {
+  return participants.filter(p => p.isEnabled !== false);
+}
+
+/**
+ * Filter to enabled participants and sort by priority
+ *
+ * **SINGLE SOURCE OF TRUTH**: Combines the two most common operations.
+ * Eliminates 20+ duplicates of `sortByPriority(participants.filter(p => p.isEnabled))`
+ *
+ * @param participants - Array of participants with priority and isEnabled
+ * @returns Enabled participants sorted by priority
+ *
+ * @example
+ * ```typescript
+ * // Instead of: sortByPriority(participants.filter(p => p.isEnabled))
+ * const enabledSorted = getEnabledSortedParticipants(participants);
+ * ```
+ */
+export function getEnabledSortedParticipants<T extends WithEnabled & WithPriority>(
+  participants: T[],
+): T[] {
+  return sortByPriority(participants.filter(p => p.isEnabled !== false));
+}
+
+/**
+ * Extract model IDs from participants as array
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use instead of `.map(p => p.modelId)`
+ * Eliminates 20+ duplicate modelId extractions
+ *
+ * @param participants - Array of participants
+ * @returns Array of model IDs (preserves order)
+ *
+ * @example
+ * ```typescript
+ * // Instead of: participants.map(p => p.modelId)
+ * const modelIds = getParticipantModelIds(participants);
+ * ```
+ */
+export function getParticipantModelIds<T extends { modelId: string }>(
+  participants: T[],
+): string[] {
+  return participants.map(p => p.modelId);
+}
+
+/**
+ * Extract model IDs from enabled participants
+ *
+ * **SINGLE SOURCE OF TRUTH**: Combined filter + map operation
+ * Eliminates patterns like `participants.filter(p => p.isEnabled).map(p => p.modelId)`
+ *
+ * @param participants - Array of participants
+ * @returns Array of model IDs from enabled participants only
+ *
+ * @example
+ * ```typescript
+ * // Instead of: participants.filter(p => p.isEnabled).map(p => p.modelId)
+ * const enabledModelIds = getEnabledParticipantModelIds(participants);
+ * ```
+ */
+export function getEnabledParticipantModelIds<T extends WithEnabled & { modelId: string }>(
+  participants: T[],
+): string[] {
+  return participants
+    .filter(p => p.isEnabled !== false)
+    .map(p => p.modelId);
+}
+
+/**
+ * Create a Set of model IDs from enabled participants
+ *
+ * **SINGLE SOURCE OF TRUTH**: For O(1) membership checks
+ * Eliminates: `new Set(participants.filter(p => p.isEnabled).map(p => p.modelId))`
+ *
+ * @param participants - Array of participants
+ * @returns Set of model IDs for fast lookup
+ *
+ * @example
+ * ```typescript
+ * // Instead of: new Set(enabledParticipants.map(p => p.modelId))
+ * const modelIdSet = getEnabledParticipantModelIdSet(participants);
+ * if (modelIdSet.has(someModelId)) { ... }
+ * ```
+ */
+export function getEnabledParticipantModelIdSet<T extends WithEnabled & { modelId: string }>(
+  participants: T[],
+): Set<string> {
+  return new Set(getEnabledParticipantModelIds(participants));
 }
 
 // ============================================================================
@@ -281,7 +399,7 @@ export function participantConfigToOptimistic(
 export function chatParticipantsToConfig(
   participants: ChatParticipant[],
 ): ParticipantConfig[] {
-  return sortByPriority(participants.filter(p => p.isEnabled))
+  return getEnabledSortedParticipants(participants)
     .map((p, index) => ({
       id: p.id,
       modelId: p.modelId,

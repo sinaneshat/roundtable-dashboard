@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi';
 
-import { CursorPaginationQuerySchema } from '@/api/core';
 import {
   ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
@@ -20,6 +19,7 @@ import {
   WebSearchTimeRangeSchema,
   WebSearchTopicSchema,
 } from '@/api/core/enums';
+import { CursorPaginationQuerySchema } from '@/api/core/pagination';
 import {
   CoreSchemas,
   createApiResponseSchema,

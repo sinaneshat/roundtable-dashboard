@@ -163,12 +163,6 @@ const { scrollRef, scrollToBottom, isNearBottom } = useChatScroll({
 });
 ```
 
-#### `useStreamingLoaderState.ts` (DEPRECATED - REMOVED)
-Replaced by `useFlowLoading` for simplified streaming state management.
-- **Migration:** Use `useFlowLoading` for all streaming/loading state coordination
-- **Reason:** Consolidation of streaming state logic into single hook
-- **See:** `use-flow-loading.ts` for replacement implementation
-
 ### Form/Input
 
 #### `use-auto-resize-textarea.ts` (50 lines)
@@ -304,7 +298,6 @@ Prefer composing smaller hooks over creating large hooks:
 function useChat() {
   const scroll = useChatScroll();
   const timeline = useThreadTimeline();
-  const streaming = useStreamingLoaderState();
   // ...
 }
 
