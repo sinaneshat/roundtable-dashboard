@@ -10,7 +10,7 @@
  * - useFeedbackActions: Round feedback management
  *
  * INTERNAL (not exported):
- * - useAnalysisDeduplication, useAnalysisOrchestrator, useChatAnalysis
+ * - useAnalysisOrchestrator, usePreSearchOrchestrator
  * These are used internally by useScreenInitialization and other composed hooks
  *
  * STORE SUBSCRIPTIONS (automatic):
@@ -24,10 +24,13 @@ export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './acti
 export { useFeedbackActions } from './actions/feedback-actions';
 export type { UseFlowControllerOptions } from './actions/flow-controller';
 export { useFlowController } from './actions/flow-controller';
+export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './actions/flow-loading';
+export { useFlowLoading } from './actions/flow-loading';
 export type { FlowAction, FlowContext, UseFlowOrchestratorOptions, UseFlowOrchestratorReturn } from './actions/flow-state-machine';
 export { useFlowStateMachine } from './actions/flow-state-machine';
 export type { AttachmentInfo, UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
+export { useNavigationReset } from './actions/navigation-reset';
 export type { UseOverviewActionsReturn } from './actions/overview-actions';
 export { useOverviewActions } from './actions/overview-actions';
 export type { UseRecommendedActionsOptions, UseRecommendedActionsReturn } from './actions/recommended-actions';
@@ -36,12 +39,9 @@ export type { UseScreenInitializationOptions } from './actions/screen-initializa
 export { useScreenInitialization } from './actions/screen-initialization';
 export type { UseThreadActionsOptions } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
-// Cache validation utilities (used by queries/mutations)
 export type {
-  AnalysesCacheData,
   AnalysisDeduplicationOptions,
   InfiniteQueryCache,
-  ThreadCacheData,
   ThreadDetailCacheData,
   ThreadDetailPayloadCache,
   ThreadDetailResponseCache,
@@ -49,8 +49,6 @@ export type {
   UsageStatsData,
 } from './actions/types';
 export {
-  AnalysesCacheDataSchema,
-  ThreadCacheDataSchema,
   validateAnalysesCache,
   validateInfiniteQueryCache,
   validateThreadDetailCache,
@@ -59,22 +57,19 @@ export {
   validateThreadsListPages,
   validateUsageStatsCache,
 } from './actions/types';
-
-// UseThreadActionsReturn is UseConfigChangeHandlersReturn - import from hooks/
 // Store
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
-
 // Store Constants
 export type { AnimationIndex } from './store-constants';
 export {
+  AnalysisTimeouts,
   AnimationIndices,
   getStatusPriority,
   isAnalysisAnimation,
   isParticipantAnimation,
   isPreSearchAnimation,
 } from './store-constants';
-
 // Pre-search utilities
 export type { ExecutePreSearchOptions } from './utils/pre-search-execution';
 export {
@@ -82,3 +77,7 @@ export {
   readPreSearchStreamData,
   shouldWaitForPreSearch,
 } from './utils/pre-search-execution';
+// Cache validation utilities (used by queries/mutations)
+// ✅ Canonical types from @/api/routes/chat/schema
+export type { AnalysesCacheResponse, ChatThreadCache } from '@/api/routes/chat/schema';
+export type { PartialPreSearchData } from '@/api/routes/chat/schema';

@@ -8,17 +8,13 @@
  */
 
 import type { UseMutationResult } from '@tanstack/react-query';
-import type { z } from 'zod';
 
-import { AnalysisStatuses, PreSearchSseEvents } from '@/api/core/enums';
-import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import type { PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 
 import type { ChatStoreApi } from '../store';
-
-/** Type inferred from schema - single source of truth */
-type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
 
 /**
  * Parse and validate pre-search data from SSE stream
@@ -40,11 +36,14 @@ function parsePreSearchData(jsonString: string): PreSearchDataPayload | null {
 
 /**
  * Read SSE stream and extract pre-search data
+ * ✅ PROGRESSIVE UI: Now supports onPartialUpdate for gradual UI updates
  * Calls onActivity callback for each chunk received (timeout tracking)
+ * Calls onPartialUpdate with accumulated partial data as QUERY/RESULT events arrive
  */
 export async function readPreSearchStreamData(
   response: Response,
   onActivity?: () => void,
+  onPartialUpdate?: (partialData: PartialPreSearchData) => void,
 ): Promise<PreSearchDataPayload | null> {
   const reader = response.body?.getReader();
   if (!reader)
@@ -55,6 +54,28 @@ export async function readPreSearchStreamData(
   let currentEvent = '';
   let currentData = '';
   let searchData: PreSearchDataPayload | null = null;
+
+  // ✅ PROGRESSIVE UI: Accumulate partial data using Maps to avoid sparse arrays
+  const queriesMap = new Map<number, PartialPreSearchData['queries'][number]>();
+  const resultsMap = new Map<number, PartialPreSearchData['results'][number]>();
+  let analysisRationale: string | undefined;
+
+  // Helper to build and emit partial update
+  const emitPartialUpdate = () => {
+    if (!onPartialUpdate)
+      return;
+
+    const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
+    const results = Array.from(resultsMap.values()).sort((a, b) => a.index - b.index);
+
+    if (queries.length > 0 || results.length > 0) {
+      onPartialUpdate({
+        queries,
+        results,
+        analysis: analysisRationale,
+      });
+    }
+  };
 
   try {
     while (true) {
@@ -74,8 +95,38 @@ export async function readPreSearchStreamData(
         } else if (line.startsWith('data:')) {
           currentData = line.slice(5).trim();
         } else if (line === '' && currentEvent && currentData) {
-          if (currentEvent === PreSearchSseEvents.DONE) {
-            searchData = parsePreSearchData(currentData);
+          // ✅ PROGRESSIVE UI: Process intermediate events
+          try {
+            if (currentEvent === PreSearchSseEvents.START) {
+              const startData = JSON.parse(currentData);
+              if (startData.analysisRationale) {
+                analysisRationale = startData.analysisRationale;
+              }
+            } else if (currentEvent === PreSearchSseEvents.QUERY) {
+              const queryData = JSON.parse(currentData);
+              queriesMap.set(queryData.index, {
+                query: queryData.query || '',
+                rationale: queryData.rationale || '',
+                searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
+                index: queryData.index,
+                total: queryData.total || 1,
+              });
+              emitPartialUpdate();
+            } else if (currentEvent === PreSearchSseEvents.RESULT) {
+              const resultData = JSON.parse(currentData);
+              resultsMap.set(resultData.index, {
+                query: resultData.query || '',
+                answer: resultData.answer || null,
+                results: resultData.results || [],
+                responseTime: resultData.responseTime || 0,
+                index: resultData.index,
+              });
+              emitPartialUpdate();
+            } else if (currentEvent === PreSearchSseEvents.DONE) {
+              searchData = parsePreSearchData(currentData);
+            }
+          } catch {
+            // Failed to parse event data, continue
           }
           currentEvent = '';
           currentData = '';
@@ -233,10 +284,17 @@ export async function executePreSearch(
       return 'failed';
     }
 
-    // Parse SSE stream and extract data
-    const searchData = await readPreSearchStreamData(response, () => {
-      store.getState().updatePreSearchActivity(roundNumber);
-    });
+    // Parse SSE stream and extract data with progressive UI updates
+    const searchData = await readPreSearchStreamData(
+      response,
+      () => {
+        store.getState().updatePreSearchActivity(roundNumber);
+      },
+      (partialData) => {
+        // ✅ PROGRESSIVE UI: Update store with each query/result as it streams
+        store.getState().updatePartialPreSearchData(roundNumber, partialData);
+      },
+    );
 
     // Update store with results
     if (searchData) {

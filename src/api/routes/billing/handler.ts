@@ -37,7 +37,6 @@ import type {
  * - Call single sync function that fetches fresh data from Stripe API
  * - No event-specific logic needed
  */
-import type { WebhookProcessorContext } from './schema';
 import {
   CancelSubscriptionRequestSchema,
   CheckoutRequestSchema,
@@ -891,7 +890,7 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
       const processAsync = async () => {
         try {
           // Process webhook event using batch.db
-          await processWebhookEvent(event, batch.db, {});
+          await processWebhookEvent(event, batch.db);
 
           // Update webhook event as processed using batch.db
           await batch.db.update(tables.stripeWebhookEvent)
@@ -1042,7 +1041,6 @@ function extractCustomerId(event: Stripe.Event): string | null {
 async function processWebhookEvent(
   event: Stripe.Event,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-  _c: WebhookProcessorContext,
 ): Promise<void> {
   // Skip if event type not tracked
   if (!TRACKED_WEBHOOK_EVENTS.includes(event.type)) {

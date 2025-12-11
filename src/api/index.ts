@@ -92,6 +92,7 @@ import {
   getThreadMessagesHandler,
   getThreadPreSearchesHandler,
   getThreadSlugStatusHandler,
+  getThreadStreamResumptionStateHandler,
   listCustomRolesHandler,
   listThreadsHandler,
   resumeAnalysisStreamHandler,
@@ -124,6 +125,7 @@ import {
   getThreadPreSearchesRoute,
   getThreadRoute,
   getThreadSlugStatusRoute,
+  getThreadStreamResumptionStateRoute,
   listCustomRolesRoute,
   listThreadsRoute,
   resumeAnalysisStreamRoute,
@@ -545,6 +547,7 @@ const appRoutes = app
   .openapi(getStreamStatusRoute, getStreamStatusHandler) // Check participant stream status for resumption
   .openapi(resumeStreamRoute, resumeStreamHandler) // Resume buffered participant stream
   .openapi(resumeThreadStreamRoute, resumeThreadStreamHandler) // Resume active thread stream (AI SDK pattern)
+  .openapi(getThreadStreamResumptionStateRoute, getThreadStreamResumptionStateHandler) // Get stream resumption state for server-side prefetching
   // Participant Management (protected)
   .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings

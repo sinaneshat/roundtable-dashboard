@@ -52,5 +52,8 @@ function Badge({
   )
 }
 
+export type BadgeProps = ComponentProps<"span"> &
+  VariantProps<typeof badgeVariants> & { asChild?: boolean };
+
 export { Badge, badgeVariants }
 

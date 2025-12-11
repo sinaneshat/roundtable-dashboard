@@ -196,15 +196,13 @@ export type UploadWithTicketResponse = InferResponseType<
  *
  * ✅ TYPE-SAFE: Uses parseResponse for proper type inference from Hono client
  */
-export async function requestUploadTicketService(
-  data: RequestUploadTicketRequest,
-): Promise<RequestUploadTicketResponse> {
+export async function requestUploadTicketService(data: RequestUploadTicketRequest) {
   const client = await createApiClient();
-
-  // ✅ TYPE-SAFE: parseResponse infers type from Hono route definition
-  return parseResponse(client.uploads.ticket.$post({
-    json: data.json,
-  }));
+  // Internal fallback: ensure json property exists
+  const params: RequestUploadTicketRequest = {
+    json: data.json ?? {},
+  };
+  return parseResponse(client.uploads.ticket.$post(params));
 }
 
 /**
@@ -228,9 +226,7 @@ export type UploadWithTicketServiceInput = {
  * Note: Uses native fetch because Hono RPC client doesn't properly
  * infer types for multipart/form-data with query parameters.
  */
-export async function uploadWithTicketService(
-  data: UploadWithTicketServiceInput,
-): Promise<UploadWithTicketResponse> {
+export async function uploadWithTicketService(data: UploadWithTicketServiceInput) {
   const url = new URL(`${getApiBaseUrl()}/uploads/ticket/upload`);
   url.searchParams.set('token', data.token);
 
@@ -247,7 +243,7 @@ export async function uploadWithTicketService(
     throw new Error(`Upload failed: ${response.statusText}`);
   }
 
-  return response.json();
+  return response.json() as Promise<UploadWithTicketResponse>;
 }
 
 /**
@@ -255,11 +251,8 @@ export async function uploadWithTicketService(
  * Convenience function that handles the full secure upload flow
  *
  * @param file - File to upload
- * @returns Upload response with file details
  */
-export async function secureUploadService(
-  file: File,
-): Promise<UploadWithTicketResponse> {
+export async function secureUploadService(file: File) {
   // Step 1: Request upload ticket
   const ticketResponse = await requestUploadTicketService({
     json: {
@@ -274,12 +267,10 @@ export async function secureUploadService(
   }
 
   // Step 2: Upload file with token
-  const uploadResponse = await uploadWithTicketService({
+  return uploadWithTicketService({
     token: ticketResponse.data.token,
     form: { file },
   });
-
-  return uploadResponse;
 }
 
 // ============================================================================
@@ -345,9 +336,7 @@ function getApiBaseUrl(): string {
  *
  * @param data - Request with attachment ID, uploadId, partNumber, and binary part data
  */
-export async function uploadPartService(
-  data: UploadPartRequestWithBody,
-): Promise<UploadPartResponse> {
+export async function uploadPartService(data: UploadPartRequestWithBody) {
   const { param, query, body } = data;
 
   const url = new URL(`${getApiBaseUrl()}/uploads/multipart/${param.id}/parts`);
@@ -368,7 +357,7 @@ export async function uploadPartService(
     throw new Error(`Upload part failed: ${response.statusText}`);
   }
 
-  return response.json();
+  return response.json() as Promise<UploadPartResponse>;
 }
 
 /**

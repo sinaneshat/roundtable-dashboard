@@ -1,10 +1,11 @@
 'use client';
 
-import { CheckCircle, MessageSquare, Sparkles } from 'lucide-react';
+import type { DeepPartial } from 'ai';
+import { CheckCircle, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useMemo } from 'react';
 
-import type { Recommendation } from '@/api/routes/chat/schema';
+import type { ArticleNarrative, ArticleRecommendation } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelBadge } from '@/components/chat/model-badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -12,23 +13,28 @@ import { StreamingCursor } from '@/components/ui/streaming-text';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
+/**
+ * Props accept both full types (from panel) and partial types (from streaming)
+ * Following established pattern from analysis-utils.ts
+ */
 type KeyInsightsSectionProps = {
-  summary?: string;
-  recommendations?: Recommendation[];
-  onActionClick?: (action: Recommendation) => void;
+  article?: ArticleNarrative | DeepPartial<ArticleNarrative>;
+  recommendations?: ArticleRecommendation[] | DeepPartial<ArticleRecommendation[]>;
+  onActionClick?: (action: ArticleRecommendation) => void;
   isStreaming?: boolean;
 };
 
 /**
- * KeyInsightsSection - Multi-AI Deliberation Framework
+ * KeyInsightsSection - Article-Style Analysis
  *
- * Displays key insights and actionable recommendations:
- * - Summary text (high-level synthesis)
+ * Displays the article summary and actionable recommendations:
+ * - Article headline and key takeaway
+ * - Narrative text (2-4 paragraph synthesis)
  * - Glass card recommendations with model badges and actionable prompts
  * - ✅ TIER-AWARE: Only shows models accessible to user's subscription tier
  */
 export function KeyInsightsSection({
-  summary,
+  article,
   recommendations,
   onActionClick,
   isStreaming = false,
@@ -51,16 +57,16 @@ export function KeyInsightsSection({
     const validTier = tierResult.data;
 
     return recommendations.map((rec) => {
-      if (!rec.suggestedModels?.length) {
+      if (!rec?.suggestedModels?.length) {
         return rec;
       }
 
       // Filter to only tier-accessible models
       const accessibleModels = rec.suggestedModels.filter((modelId) => {
-        const modelData = allModels.find(m => m.id === modelId);
-        if (!modelData)
+        if (!modelId)
           return false;
-        return canAccessModelByPricing(validTier, modelData);
+        const modelData = allModels.find(m => m.id === modelId);
+        return modelData && canAccessModelByPricing(validTier, modelData);
       });
 
       // Filter roles to match accessible models
@@ -69,9 +75,7 @@ export function KeyInsightsSection({
         if (!modelId)
           return false;
         const modelData = allModels.find(m => m.id === modelId);
-        if (!modelData)
-          return false;
-        return canAccessModelByPricing(validTier, modelData);
+        return modelData && canAccessModelByPricing(validTier, modelData);
       });
 
       return {
@@ -82,7 +86,7 @@ export function KeyInsightsSection({
     });
   }, [recommendations, userTier, allModels]);
 
-  const hasContent = summary || (filteredRecommendations && filteredRecommendations.length > 0);
+  const hasContent = article || (filteredRecommendations && filteredRecommendations.length > 0);
 
   if (!hasContent) {
     return null;
@@ -90,17 +94,38 @@ export function KeyInsightsSection({
 
   // Check if any recommendation has actionable suggestions
   const hasActionableRecs = filteredRecommendations?.some(
-    rec => rec.suggestedModels?.length || rec.suggestedPrompt,
+    rec => rec?.suggestedModels?.length || rec?.suggestedPrompt,
   );
 
   return (
     <div className="space-y-4">
-      {/* Summary with streaming cursor */}
-      {summary && (
-        <p className="text-sm leading-relaxed text-foreground/90">
-          {summary}
-          {isStreaming && <StreamingCursor />}
-        </p>
+      {/* Article Section */}
+      {article && (
+        <div className="space-y-3">
+          {/* Headline */}
+          {article.headline && (
+            <h3 className="text-base font-semibold text-foreground leading-tight">
+              {article.headline}
+            </h3>
+          )}
+
+          {/* Key Takeaway */}
+          {article.keyTakeaway && (
+            <div className="px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
+              <p className="text-sm font-medium text-primary">
+                {article.keyTakeaway}
+              </p>
+            </div>
+          )}
+
+          {/* Narrative */}
+          {article.narrative && (
+            <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line">
+              {article.narrative}
+              {isStreaming && <StreamingCursor />}
+            </p>
+          )}
+        </div>
       )}
 
       {/* Recommendations */}
@@ -113,15 +138,24 @@ export function KeyInsightsSection({
 
           <div className="flex flex-col gap-2">
             {filteredRecommendations.map((rec, recIndex) => {
+              if (!rec?.title)
+                return null;
+
               const hasModels = rec.suggestedModels && rec.suggestedModels.length > 0;
               const hasPrompt = rec.suggestedPrompt;
-              const isClickable = hasModels || hasPrompt || rec.suggestedMode;
+              const isClickable = hasModels || hasPrompt;
 
               return (
                 <motion.button
                   key={rec.title || `insight-${recIndex}`}
                   type="button"
-                  onClick={() => onActionClick?.(rec)}
+                  onClick={() => rec.title && rec.description && onActionClick?.({
+                    title: rec.title,
+                    description: rec.description,
+                    suggestedPrompt: rec.suggestedPrompt,
+                    suggestedModels: rec.suggestedModels?.filter((m): m is string => !!m),
+                    suggestedRoles: rec.suggestedRoles?.filter((r): r is string => !!r),
+                  })}
                   disabled={!onActionClick || !isClickable}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -170,22 +204,15 @@ export function KeyInsightsSection({
                       </div>
                     )}
 
-                    {/* Mode and Models - horizontal scroll on mobile, wrap on desktop */}
-                    {(rec.suggestedMode || hasModels) && (
+                    {/* Models - horizontal scroll on mobile, wrap on desktop */}
+                    {hasModels && (
                       <ScrollArea className="w-full sm:hidden">
                         <div className="flex items-center gap-2 pb-2">
-                          {rec.suggestedMode && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex-shrink-0">
-                              <MessageSquare className="size-3 text-muted-foreground" />
-                              <span className="text-[11px] font-medium text-white/80 whitespace-nowrap">{rec.suggestedMode}</span>
-                            </div>
-                          )}
-                          {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
-                            // eslint-disable-next-line react/no-array-index-key -- modelId can be duplicated in suggestions; index ensures uniqueness
-                            <div key={`${rec.title}-${modelId}-${modelIndex}`} className="flex-shrink-0">
+                          {rec.suggestedModels?.map((modelId, modelIndex) => modelId && (
+                            <div key={`${rec.title}-model-${modelId}-role-${rec.suggestedRoles?.[modelIndex] ?? 'default'}`} className="flex-shrink-0">
                               <ModelBadge
                                 modelId={modelId}
-                                role={rec.suggestedRoles?.[modelIndex]}
+                                role={rec.suggestedRoles?.[modelIndex] ?? undefined}
                                 size="sm"
                               />
                             </div>
@@ -195,20 +222,13 @@ export function KeyInsightsSection({
                       </ScrollArea>
                     )}
                     {/* Desktop: wrap normally */}
-                    {(rec.suggestedMode || hasModels) && (
+                    {hasModels && (
                       <div className="hidden sm:flex items-center gap-2 flex-wrap">
-                        {rec.suggestedMode && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
-                            <MessageSquare className="size-3 text-muted-foreground" />
-                            <span className="text-[11px] font-medium text-white/80">{rec.suggestedMode}</span>
-                          </div>
-                        )}
-                        {hasModels && rec.suggestedModels!.map((modelId, modelIndex) => (
+                        {rec.suggestedModels?.map((modelId, modelIndex) => modelId && (
                           <ModelBadge
-                            // eslint-disable-next-line react/no-array-index-key -- Models may repeat with different roles
-                            key={`${rec.title}-${modelId}-${modelIndex}`}
+                            key={`${rec.title}-model-${modelId}-role-${rec.suggestedRoles?.[modelIndex] ?? 'default'}`}
                             modelId={modelId}
-                            role={rec.suggestedRoles?.[modelIndex]}
+                            role={rec.suggestedRoles?.[modelIndex] ?? undefined}
                             size="sm"
                           />
                         ))}

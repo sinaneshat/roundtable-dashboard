@@ -6,7 +6,7 @@ Custom React hooks for common patterns and features.
 
 Hooks are organized by purpose rather than bundled into large files. Each hook has a single responsibility for better discoverability and maintainability.
 
-**Current Status:** 16 hooks (consolidated)
+**Current Status:** 15 hooks (consolidated)
 
 ## Categories
 
@@ -104,19 +104,6 @@ Find AI models by ID or slug with fallback handling.
 ```typescript
 const { getModelOrDefault } = useModelLookup();
 const model = getModelOrDefault(modelId);
-```
-
-#### `use-selected-participants.ts` (163 lines)
-Participant selection state management for thread configuration.
-- **Usage:** Participant picker, thread configuration forms
-- **Features:** CRUD operations, validation, default selection
-- **API:** `{ selectedParticipants, toggleParticipant, setSelectedParticipants }`
-
-```typescript
-const { selectedParticipants, toggleParticipant } = useSelectedParticipants({
-  initialParticipants: [],
-  availableParticipants: allModels
-});
 ```
 
 ### Timeline/Virtualization
@@ -483,7 +470,7 @@ useEffect(() => {
 |----------|-------|-------------|-------------|
 | Core Utilities | 3 | 257 | Very High |
 | Responsive/Browser | 2 | 196 | High |
-| Message/Chat Processing | 3 | 395 | Medium (domain-specific) |
+| Message/Chat Processing | 2 | 232 | Medium (domain-specific) |
 | Timeline/Virtualization | 4 | 807 | Medium |
 | Form/Input | 2 | 106 | High |
 | Streaming/SSE | 2 | 1,161 | Low (app-specific) |

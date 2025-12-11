@@ -280,6 +280,11 @@
       "tryAgain": "Try Again",
       "returnHome": "Return to Chat"
     },
+    "errors": {
+      "subscribeFailed": "Subscription Failed",
+      "cancelFailed": "Cancellation Failed",
+      "manageBillingFailed": "Failed to Open Billing Portal"
+    },
     "subscriptionChanged": {
       "title": "Subscription Updated!",
       "upgrade": "Upgrade",
@@ -1230,6 +1235,24 @@
       "evidenceHeavy": "Evidence Heavy",
       "consensusHeavy": "Consensus Heavy",
       "expertiseWeighted": "Expertise Weighted"
+    },
+    "modelVoices": {
+      "title": "Model Voices",
+      "contributorCount": "{count} contributors"
+    },
+    "consensusTable": {
+      "title": "Consensus Table",
+      "topicCount": "{count} topics"
+    },
+    "minorityViews": {
+      "title": "Minority Views",
+      "viewCount": "{count} dissenting views"
+    },
+    "convergenceDivergence": {
+      "title": "Convergence & Divergence",
+      "agreed": "Agreed",
+      "split": "Split",
+      "evolved": "Evolved"
     },
     "consensusEvolution": {
       "title": "Consensus Evolution",

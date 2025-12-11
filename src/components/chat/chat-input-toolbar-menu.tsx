@@ -7,7 +7,6 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
 import {
   Drawer,
@@ -24,6 +23,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
 type ChatInputToolbarMenuProps = {

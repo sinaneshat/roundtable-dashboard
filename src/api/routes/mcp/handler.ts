@@ -15,7 +15,7 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
-import { DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import { DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getAllModels, getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -196,7 +196,8 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
 
           // Parse roundtable://thread/{id}
           const match = uri.match(/^roundtable:\/\/thread\/(.+)$/);
-          if (!match) {
+          const threadId = match?.[1];
+          if (!threadId) {
             return jsonRpcResponse(undefined, {
               code: JsonRpcErrorCodes.INVALID_PARAMS,
               message: 'Invalid resource URI',
@@ -206,7 +207,7 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
           const db = await getDbAsync();
           const thread = await db.query.chatThread.findFirst({
             where: and(
-              eq(tables.chatThread.id, match[1] as string),
+              eq(tables.chatThread.id, threadId),
               eq(tables.chatThread.userId, user.id),
             ),
             with: { participants: true },
@@ -774,7 +775,7 @@ async function toolGenerateResponses(
   const roundResult = await calculateRoundNumber({
     threadId: input.threadId,
     participantIndex: DEFAULT_PARTICIPANT_INDEX,
-    message: { role: 'user', parts: [{ type: 'text' as const, text: input.messageContent }] },
+    message: { role: MessageRoles.USER, parts: [{ type: MessagePartTypes.TEXT, text: input.messageContent }] },
     regenerateRound: undefined,
     db,
   });
@@ -784,11 +785,11 @@ async function toolGenerateResponses(
   await db.insert(tables.chatMessage).values({
     id: userMessageId,
     threadId: input.threadId,
-    role: 'user',
-    parts: [{ type: 'text', text: input.messageContent }],
+    role: MessageRoles.USER,
+    parts: [{ type: MessagePartTypes.TEXT, text: input.messageContent }],
     participantId: null,
     roundNumber: roundResult.roundNumber,
-    metadata: { role: 'user', roundNumber: roundResult.roundNumber },
+    metadata: { role: MessageRoles.USER, roundNumber: roundResult.roundNumber },
     createdAt: new Date(),
   });
 
@@ -812,8 +813,8 @@ async function toolGenerateResponses(
 
     const allMessages = [...previousMessages, {
       id: userMessageId,
-      role: 'user' as const,
-      parts: [{ type: 'text' as const, text: input.messageContent }],
+      role: MessageRoles.USER,
+      parts: [{ type: MessagePartTypes.TEXT, text: input.messageContent }],
     }];
 
     const typedMessages = await validateUIMessages({ messages: allMessages });

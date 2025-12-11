@@ -26,9 +26,7 @@ import type { UploadMetadata } from '@/db/validation/upload';
 import { user } from './auth';
 import { chatMessage, chatThread } from './chat';
 
-// Re-export types from centralized sources (single source of truth)
-export type { ChatAttachmentStatus } from '@/api/core/enums';
-export type { UploadMetadata } from '@/db/validation/upload';
+// Types: ChatAttachmentStatus from @/api/core/enums, UploadMetadata from @/db/validation/upload
 
 /**
  * Upload

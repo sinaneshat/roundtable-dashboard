@@ -73,10 +73,14 @@ export {
 
 export {
   type CreatePreSearchRequest,
+  type CreatePreSearchResponse,
   createPreSearchService,
   executePreSearchStreamService,
+  type GetThreadPreSearchesRequest,
+  type GetThreadPreSearchesResponse,
   getThreadPreSearchesService,
   type PreSearchRequest,
+  type PreSearchResponse,
 } from './chat-pre-search';
 
 // ============================================================================
@@ -146,6 +150,9 @@ export {
   type GetThreadSlugStatusRequest,
   type GetThreadSlugStatusResponse,
   getThreadSlugStatusService,
+  type GetThreadStreamResumptionStateRequest,
+  type GetThreadStreamResumptionStateResponse,
+  getThreadStreamResumptionStateService,
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,

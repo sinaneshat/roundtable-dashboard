@@ -1,5 +1,5 @@
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 import { sortByPriority } from '@/lib/utils/participant';

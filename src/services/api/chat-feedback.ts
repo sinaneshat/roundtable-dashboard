@@ -44,19 +44,14 @@ export type GetThreadFeedbackResponse = InferResponseType<
  *
  * @param data - Request with param.threadId, param.roundNumber and json.feedbackType
  */
-export async function setRoundFeedbackService(
-  data: SetRoundFeedbackRequest,
-): Promise<SetRoundFeedbackResponse> {
+export async function setRoundFeedbackService(data: SetRoundFeedbackRequest) {
   const client = await createApiClient();
-
   // Internal fallback: ensure param and json exist
   const params: SetRoundFeedbackRequest = {
     param: data.param ?? { threadId: '', roundNumber: '' },
     json: data.json ?? { feedbackType: null },
   };
-
-  const response = await client.chat.threads[':threadId'].rounds[':roundNumber'].feedback.$put(params);
-  return parseResponse(response);
+  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].feedback.$put(params));
 }
 
 /**
@@ -67,16 +62,11 @@ export async function setRoundFeedbackService(
  *
  * @param data - Request with param.id for thread ID
  */
-export async function getThreadFeedbackService(
-  data: GetThreadFeedbackRequest,
-): Promise<GetThreadFeedbackResponse> {
+export async function getThreadFeedbackService(data: GetThreadFeedbackRequest) {
   const client = await createApiClient();
-
   // Internal fallback: ensure param exists
   const params: GetThreadFeedbackRequest = {
     param: data.param ?? { id: '' },
   };
-
-  const response = await client.chat.threads[':id'].feedback.$get(params);
-  return parseResponse(response);
+  return parseResponse(client.chat.threads[':id'].feedback.$get(params));
 }

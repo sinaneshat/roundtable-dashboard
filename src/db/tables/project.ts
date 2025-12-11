@@ -35,18 +35,8 @@ import { user } from './auth';
 import { chatThread } from './chat';
 import { upload } from './upload';
 
-// Re-export types from centralized sources (single source of truth)
-export type {
-  ProjectColor,
-  ProjectIndexStatus,
-  ProjectMemorySource,
-} from '@/api/core/enums';
-export type {
-  ProjectAttachmentRagMetadata,
-  ProjectMemoryMetadata,
-  ProjectMetadata,
-  ProjectSettings,
-} from '@/db/validation/project';
+// Types: ProjectColor/ProjectIndexStatus/ProjectMemorySource from @/api/core/enums
+// Types: ProjectMetadata/ProjectSettings from @/db/validation/project
 
 /**
  * Chat Projects

@@ -14,7 +14,33 @@ Ask the user which cleanup tasks they want to run. Present these options:
 5. **Dead Code** - Remove legacy/backwards-compatible/duplicate code
 6. **Anti-Patterns** - Fix anti-patterns by comparing to sibling files
 7. **React 19 Patterns** - Fix useEffect anti-patterns, apply callback-based patterns
-8. **Full Cleanup** - Run all of the above
+8. **API Endpoint Cleanup** - Find duplicate/unused endpoints, fix route anti-patterns
+9. **Full Cleanup** - Run all of the above
+
+## Parallel Agent Orchestration Strategy
+
+For comprehensive cleanup, use **parallel agent batches** to maximize efficiency:
+
+### Batch 1: Discovery (Run in Parallel)
+```
+- Agent A (Explore): Scan src/api/routes/ for endpoint inventory
+- Agent B (Explore): Scan src/ for TODO/FIXME/deprecated comments
+- Agent C (Explore): Scan for hardcoded strings violating enum patterns
+```
+
+### Batch 2: Analysis (Run in Parallel After Batch 1)
+```
+- Agent A (backend-pattern-expert): Analyze endpoints vs backend-patterns.md rules
+- Agent B (frontend-ui-expert): Analyze components vs frontend-patterns.md rules
+- Agent C (research-analyst): Cross-reference imports to find unused exports
+```
+
+### Batch 3: Fixes (Run Sequentially by Domain)
+```
+- Fix backend anti-patterns first (affects types)
+- Fix frontend anti-patterns second (depends on backend types)
+- Remove dead code last (after all references updated)
+```
 
 If user provided scope argument: $ARGUMENTS
 
@@ -409,6 +435,102 @@ When auditing components for React 19 compliance:
 8. **Callback props**: useCallback for stable references
 9. **Expensive children**: memo() wrapper
 10. **Strict Mode**: Ensure effects handle double-mount gracefully
+
+## API Endpoint Cleanup
+
+### Endpoint Anti-Patterns to Fix
+
+**1. Next.js Routes That Should Be Hono (CRITICAL)**
+Scan `src/app/api/` for routes that should be in Hono:
+- ❌ Business logic in Next.js routes (move to `src/api/routes/`)
+- ❌ Database operations outside Hono middleware chain
+- ✅ ALLOWED: `/api/auth/[...auth]/` (Better Auth requirement)
+- ✅ ALLOWED: `/api/v1/[[...route]]/` (Hono proxy)
+- ✅ ALLOWED: `/api/og/` (OG image generation)
+
+**2. Duplicate/Overlapping Endpoints**
+Find endpoints that do the same thing:
+```bash
+# Search for similar route paths
+grep -rn "path: '/" src/api/routes/ --include="route.ts"
+```
+Fix by: Consolidating into single endpoint, removing redundant ones
+
+**3. Unused Endpoints**
+Find endpoints not referenced anywhere:
+```bash
+# Cross-reference route paths with frontend usage
+# Check src/services/api/, src/hooks/, and components
+```
+Fix by: Removing unused endpoints and their handlers/schemas
+
+**4. Handler Pattern Violations**
+Check handlers against `createHandler` factory pattern:
+- ❌ Direct `c.req.json()` without validation schema
+- ❌ Missing `operationName` in handler config
+- ❌ Missing structured logging with `c.logger`
+- ❌ Using `db.transaction()` instead of `db.batch()`
+
+**5. Schema Pattern Violations**
+- ❌ Missing `.openapi()` metadata on schemas
+- ❌ Hardcoded types instead of `z.infer<typeof Schema>`
+- ❌ Missing response wrapper `createApiResponseSchema()`
+
+### Endpoint Cleanup Commands
+```bash
+# Find all route definitions
+grep -rn "createRoute" src/api/routes/ --include="*.ts"
+
+# Find handler registrations
+grep -rn "\.route\(" src/api/index.ts
+
+# Find frontend API calls
+grep -rn "api\." src/services/api/ src/hooks/
+```
+
+## TODO/Legacy/Deprecated Code Removal
+
+### Patterns to Search and Remove
+
+**1. TODO/FIXME Comments**
+```bash
+grep -rn "TODO\|FIXME\|XXX\|HACK" src/ --include="*.ts" --include="*.tsx"
+```
+- Evaluate each: complete or remove
+- If blocked, create GitHub issue and remove comment
+
+**2. Deprecated Markers**
+```bash
+grep -rn "@deprecated\|DEPRECATED\|deprecated" src/ --include="*.ts" --include="*.tsx"
+```
+- Update all usages to new API
+- Remove deprecated code entirely
+
+**3. Legacy/Backwards Compatibility Shims**
+```bash
+grep -rn "backwards\|legacy\|compat\|old\|_old\|Old" src/ --include="*.ts" --include="*.tsx"
+```
+Patterns to remove:
+- `export const OldName = NewName; // backwards compatibility`
+- `const _oldVar = newVar; // renamed for compatibility`
+- Re-exports that exist only for backwards compatibility
+
+**4. Commented-Out Code**
+```bash
+# Find multi-line comments that look like code
+grep -rn "// \(const\|let\|function\|export\|import\|return\|if\|for\|while\)" src/
+```
+Remove all commented-out code - use git history instead
+
+**5. Dead Imports/Exports**
+- Run `pnpm lint` to find unused imports
+- Search for exports not imported anywhere
+
+**6. Console.log Statements**
+```bash
+grep -rn "console\.\(log\|debug\|info\|warn\|error\)" src/ --include="*.ts" --include="*.tsx"
+```
+- Replace with structured logging (`c.logger` in API, remove in frontend)
 
 ## Execution
 

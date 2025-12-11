@@ -14,23 +14,15 @@ import { z } from 'zod';
 import { createError } from '@/api/common/error-handling';
 
 // ============================================================================
-// CAPABILITY DEFINITIONS
+// JSON MODE QUALITY
 // ============================================================================
 
-// ============================================================================
-// JSON MODE QUALITY ENUM - 5-Part Pattern
-// ============================================================================
-
-// 1️⃣ ARRAY CONSTANT - Source of truth for values
 export const JSON_MODE_QUALITIES = ['excellent', 'good', 'fair', 'poor'] as const;
 
-// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
 export const JsonModeQualitySchema = z.enum(JSON_MODE_QUALITIES);
 
-// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type JsonModeQuality = z.infer<typeof JsonModeQualitySchema>;
 
-// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const JsonModeQualities = {
   EXCELLENT: 'excellent' as const,
   GOOD: 'good' as const,

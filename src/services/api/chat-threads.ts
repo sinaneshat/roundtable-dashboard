@@ -316,20 +316,55 @@ export async function getThreadAnalysesService(data: GetThreadAnalysesRequest) {
  * - 202: Stream is still active, client should poll
  * - 204: No buffer available
  *
+ * EXCEPTION: Does NOT use parseResponse because custom header handling requires
+ * raw Response object.
+ *
+ * @param data - Request with param.threadId and param.roundNumber
+ */
+export async function getAnalysisResumeService(data: GetAnalysisResumeRequest) {
+  const client = await createApiClient();
+  // Internal fallback: ensure param exists
+  const params: GetAnalysisResumeRequest = {
+    param: data.param ?? { threadId: '', roundNumber: '' },
+  };
+  return client.chat.threads[':threadId'].rounds[':roundNumber'].analyze.resume.$get(params);
+}
+
+// ============================================================================
+// Stream Resumption State Service
+// ============================================================================
+
+/**
+ * Get stream resumption state for server-side prefetching
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * ✅ RESUMABLE STREAMS: Returns metadata for Zustand pre-fill
+ *
+ * Response:
+ * - hasActiveStream: Whether thread has an active stream in KV
+ * - streamId: Active stream ID (if any)
+ * - roundNumber: Round number of the active stream
+ * - totalParticipants: Total participants in the round
+ * - participantStatuses: Status of each participant
+ * - nextParticipantToTrigger: Index of next participant needing generation
+ * - roundComplete: Whether all participants have finished
+ *
  * @param params - Request parameters
  * @param params.threadId - Thread ID
- * @param params.roundNumber - Round number
  */
-export async function getAnalysisResumeService(params: {
-  threadId: string;
-  roundNumber: number;
-}): Promise<Response> {
-  const client = await createApiClient();
+export type GetThreadStreamResumptionStateRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['stream-status']['$get']
+>;
 
-  return client.chat.threads[':threadId'].rounds[':roundNumber'].analyze.resume.$get({
-    param: {
-      threadId: params.threadId,
-      roundNumber: params.roundNumber.toString(),
-    },
-  });
+export type GetThreadStreamResumptionStateResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['stream-status']['$get']
+>;
+
+export async function getThreadStreamResumptionStateService(data: GetThreadStreamResumptionStateRequest) {
+  const client = await createApiClient();
+  // Internal fallback: ensure param exists
+  const params: GetThreadStreamResumptionStateRequest = {
+    param: data.param ?? { threadId: '' },
+  };
+  return parseResponse(client.chat.threads[':threadId']['stream-status'].$get(params));
 }

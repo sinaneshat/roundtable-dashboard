@@ -9,7 +9,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { createRoleSystemPrompt } from '@/api/services/prompts.service';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCreateCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';

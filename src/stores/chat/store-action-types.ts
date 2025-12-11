@@ -38,9 +38,10 @@ import type { UIMessage } from 'ai';
 
 import type { AnalysisStatus, ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
 import type {
+  ArticleRecommendation,
   ModeratorAnalysisPayload,
+  PartialPreSearchData,
   PreSearchDataPayload,
-  Recommendation,
   RoundFeedbackData,
   StoredModeratorAnalysis,
   StoredPreSearch,
@@ -49,9 +50,10 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
-import type { ParticipantConfig, PendingAttachment, StreamResumptionState } from './store-schemas';
+import type { PendingAttachment, StreamResumptionState } from './store-schemas';
 
 // ============================================================================
 // FORM ACTIONS
@@ -70,18 +72,15 @@ export type ResetForm = () => void;
 
 /**
  * Result from store's applyRecommendedAction
- * ✅ NOTE: This is the STORE RETURN type (without `updates` - store already applied them)
- * The pure function in recommended-action-application.ts returns a fuller type including `updates`
+ * ✅ ARTICLE-STYLE: Simplified - no model operations (recommendations are just prompts now)
  */
 export type ApplyRecommendedActionResult = {
   success: boolean;
   error?: string;
-  modelsAdded?: number;
-  modelsSkipped?: number;
 };
 
 export type ApplyRecommendedAction = (
-  action: Recommendation,
+  action: ArticleRecommendation,
   options?: ApplyRecommendedActionOptions,
 ) => ApplyRecommendedActionResult;
 
@@ -134,6 +133,8 @@ export type CreatePendingAnalysis = (params: CreatePendingAnalysisParams) => voi
 export type SetPreSearches = (preSearches: StoredPreSearch[]) => void;
 export type AddPreSearch = (preSearch: StoredPreSearch) => void;
 export type UpdatePreSearchData = (roundNumber: number, data: PreSearchDataPayload) => void;
+/** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
+export type UpdatePartialPreSearchData = (roundNumber: number, partialData: PartialPreSearchData) => void;
 export type UpdatePreSearchStatus = (roundNumber: number, status: AnalysisStatus) => void;
 export type UpdatePreSearchError = (roundNumber: number, errorMessage: string | null) => void;
 export type RemovePreSearch = (roundNumber: number) => void;
@@ -354,6 +355,24 @@ export type NeedsMessageSync = () => boolean;
  */
 export type ClearStreamResumption = () => void;
 
+/**
+ * Pre-fill stream resumption state from server-side KV check
+ * Called during SSR to set up state BEFORE AI SDK resume runs
+ * ✅ RESUMABLE STREAMS: Enables proper coordination between AI SDK and incomplete-round-resumption
+ */
+export type PrefillStreamResumptionState = (
+  threadId: string,
+  serverState: {
+    hasActiveStream: boolean;
+    streamId: string | null;
+    roundNumber: number | null;
+    totalParticipants: number | null;
+    participantStatuses: Record<string, 'active' | 'completed' | 'failed'> | null;
+    nextParticipantToTrigger: number | null;
+    roundComplete: boolean;
+  },
+) => void;
+
 // ============================================================================
 // ANIMATION ACTIONS (Animation completion tracking)
 // ============================================================================
@@ -503,15 +522,33 @@ export type StartRegeneration = (roundNumber: number) => void;
 export type CompleteRegeneration = (roundNumber: number) => void;
 
 /**
+ * Form preferences for reset - read from preferences store cookie
+ * Allows resetting chat state while preserving user's model selections
+ */
+export type ResetFormPreferences = {
+  /** Selected model IDs from preferences cookie */
+  selectedModelIds?: string[];
+  /** Model order from preferences cookie */
+  modelOrder?: string[];
+  /** Selected mode from preferences cookie */
+  selectedMode?: string | null;
+  /** Web search enabled from preferences cookie */
+  enableWebSearch?: boolean;
+};
+
+/**
  * ✅ NAVIGATION CLEANUP: Reset to new chat state
  *
- * Cancels ongoing streams and resets all state to defaults.
+ * Cancels ongoing streams and resets state.
+ * When preferences are provided, initializes form state from user's persisted preferences.
+ * When no preferences, resets to empty defaults (legacy behavior).
+ *
  * Used when navigating to new chat via:
  * - "New Chat" button click
  * - Logo/home link click
  * - Direct navigation to /chat route
  */
-export type ResetToNewChat = () => void;
+export type ResetToNewChat = (preferences?: ResetFormPreferences) => void;
 
 /**
  * Reset local streaming state (backend continues via waitUntil)

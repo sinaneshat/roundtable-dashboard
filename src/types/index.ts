@@ -27,7 +27,6 @@
 
 // General utility types and schemas - UI component-specific with maximum reusability
 export type {
-  AIHistoryStatus,
   CustomFetchConfig,
   FormOption,
   FormOptions,
@@ -39,7 +38,6 @@ export type {
   WithOptionsProps,
 } from './general';
 export {
-  aiHistoryStatusSchema,
   formOptionSchema,
   formOptionsSchema,
   initialDefaultValuesSchema,

@@ -69,17 +69,16 @@
 
 import type { UIMessage } from 'ai';
 import { castDraft, current, enableMapSet } from 'immer';
-import type { z } from 'zod';
 import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
-import type { ScreenMode } from '@/api/core/enums';
+import type { ChatMode, ScreenMode } from '@/api/core/enums';
 import { AnalysisStatuses, ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
+  ArticleRecommendation,
   ModeratorAnalysisPayload,
-  Recommendation,
   StoredModeratorAnalysis,
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
@@ -87,8 +86,9 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
-import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
+import { getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
 import { sortByPriority } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
@@ -130,7 +130,6 @@ import type {
   FlagsSlice,
   FormSlice,
   OperationsActions,
-  ParticipantConfig,
   PreSearchSlice,
   ScreenSlice,
   StreamResumptionSlice,
@@ -139,13 +138,11 @@ import type {
   UISlice,
 } from './store-schemas';
 
-type ChatMode = z.infer<typeof ChatModeSchema>;
-
 // Enable Map/Set support for Immer (required for feedbackByRound, preSearchActivityTimes, etc.)
 enableMapSet();
 
 // ============================================================================
-// RE-EXPORT TYPES FROM SCHEMAS (Single Source of Truth)
+// TYPES FROM SCHEMAS (Single Source of Truth)
 // ============================================================================
 
 export type { ChatStore } from './store-schemas';
@@ -212,14 +209,17 @@ const createFormSlice: StateCreator<
   resetForm: () =>
     set(FORM_DEFAULTS, false, 'form/resetForm'),
 
-  applyRecommendedAction: (action: Recommendation, options?: ApplyRecommendedActionOptions) => {
+  applyRecommendedAction: (action: ArticleRecommendation, options?: ApplyRecommendedActionOptions) => {
     // ✅ EXTRACTED: Business logic moved to actions/recommended-action-application.ts
-    // Thin wrapper applies updates returned from pure function
-    const result = applyRecommendedActionLogic(action, options);
+    // Pass currentParticipants so logic can merge with existing participants
+    const currentState = get();
+    const result = applyRecommendedActionLogic(action, {
+      ...options,
+      currentParticipants: currentState.selectedParticipants,
+    });
 
     // ✅ CRITICAL FIX: Check for active conversation at store level
     // This provides a safety net regardless of what the caller passes for preserveThreadState
-    const currentState = get();
     const hasActiveConversation = currentState.messages.length > 0
       || currentState.thread !== null
       || currentState.createdThreadId !== null;
@@ -235,20 +235,15 @@ const createFormSlice: StateCreator<
       return {
         success: result.success,
         error: result.error,
-        modelsAdded: result.modelsAdded,
-        modelsSkipped: result.modelsSkipped,
       };
     }
 
     // No active conversation - apply form updates for new conversation setup
     set(result.updates, false, 'form/applyRecommendedAction');
 
-    // ✅ Return result metadata (updates already applied via set() above)
     return {
       success: result.success,
       error: result.error,
-      modelsAdded: result.modelsAdded,
-      modelsSkipped: result.modelsSkipped,
     };
   },
 });
@@ -429,47 +424,17 @@ const createAnalysisSlice: StateCreator<
       return;
     }
 
-    // ✅ VALIDATION: Check if message IDs match their metadata
-    // Only flag messages that have deterministic IDs (contain _r{N}_p{M}) but wrong values
-    // Skip temp IDs (like AI SDK's gen-xxxxx) - these will be updated with real IDs
-    // Metadata is the source of truth, not message IDs
-    const messageIdMismatches = participantMessages.filter((msg) => {
-      // Extract round number from message ID pattern: {threadId}_r{roundNumber}_p{participantIndex}
-      const idMatch = msg.id.match(/_r(\d+)_p(\d+)/);
-      if (!idMatch) {
-        // Message ID doesn't follow expected pattern (likely temp ID from AI SDK)
-        // This is NOT a mismatch - temp IDs are expected during streaming
-        // The real ID will be synced when streaming completes
-        return false; // Skip temp IDs, they're fine
-      }
-
-      const roundFromId = Number.parseInt(idMatch[1]!);
-      const participantIndexFromId = Number.parseInt(idMatch[2]!);
-
-      // Verify ID matches metadata
-      const msgRound = getRoundNumber(msg.metadata);
-      const msgParticipantIndex = getParticipantIndex(msg.metadata);
-
-      // Check if round and participant index match
-      // This catches bugs where deterministic IDs have wrong values
-      return roundFromId !== msgRound || participantIndexFromId !== msgParticipantIndex;
-    });
-
-    // ✅ REJECT ANALYSIS: Block analysis creation if deterministic ID/metadata mismatch detected
-    // This prevents bugs where backend generates duplicate IDs or incorrect round numbers
-    // Note: Temp IDs are allowed (filtered out above) - only deterministic ID mismatches block
-    if (messageIdMismatches.length > 0) {
-      console.error('[createPendingAnalysis] Message ID/metadata mismatch detected - rejecting analysis', {
-        roundNumber,
-        threadId,
-        mismatches: messageIdMismatches.map(msg => ({
-          id: msg.id,
-          metadata: msg.metadata,
-        })),
-      });
-      // ✅ RETURN EARLY - Do not create analysis when deterministic IDs don't match metadata
-      return;
-    }
+    // ✅ AI SDK v5 FIX: Removed strict ID/metadata validation that was causing false positives
+    // Previous validation compared message ID patterns (_r{N}_p{M}) to metadata values
+    // This caused issues when:
+    // - Participant configuration changed between rounds
+    // - Messages were in transitional state during streaming
+    // - Zod metadata extraction returned null for valid messages
+    //
+    // The backend is the source of truth for analyses. Frontend should:
+    // - Trust that allMessagesFromCorrectRound check (above) validates round numbers
+    // - Allow analysis creation and let ModeratorAnalysisStream handle streaming
+    // - Fetch backend analyses to merge any that frontend missed
 
     // Generate unique analysis ID
     const analysisId = `analysis_${threadId}_${roundNumber}_${Date.now()}`;
@@ -557,6 +522,39 @@ const createPreSearchSlice: StateCreator<
         }
       });
     }, false, 'preSearch/updatePreSearchData'),
+  /** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
+  updatePartialPreSearchData: (roundNumber, partialData) =>
+    set((draft) => {
+      draft.preSearches.forEach((ps) => {
+        if (ps.roundNumber === roundNumber) {
+          // ✅ PATTERN: Build partial PreSearchDataPayload with defaults for missing fields
+          // Partial data has minimal result structure; full data comes on DONE event
+          const existingAnalysis = ps.searchData?.analysis ?? '';
+          ps.searchData = {
+            queries: partialData.queries,
+            results: partialData.results.map(r => ({
+              query: r.query,
+              answer: r.answer,
+              results: r.results.map(item => ({
+                title: item.title,
+                url: item.url,
+                content: item.content ?? '',
+                excerpt: item.excerpt,
+                score: 0, // Default score for streaming - replaced on completion
+              })),
+              responseTime: r.responseTime,
+              index: r.index,
+            })),
+            analysis: partialData.analysis ?? existingAnalysis,
+            successCount: partialData.results.length,
+            failureCount: 0,
+            totalResults: partialData.totalResults ?? partialData.results.length,
+            totalTime: partialData.totalTime ?? 0,
+          };
+          // Do NOT change status - keep STREAMING until DONE event
+        }
+      });
+    }, false, 'preSearch/updatePartialPreSearchData'),
   updatePreSearchStatus: (roundNumber, status) =>
     set((draft) => {
       draft.preSearches.forEach((ps) => {
@@ -936,7 +934,31 @@ const createStreamResumptionSlice: StateCreator<
       streamResumptionState: null,
       resumptionAttempts: new Set<string>(),
       nextParticipantToTrigger: null,
+      streamResumptionPrefilled: false,
+      prefilledForThreadId: null,
     }, false, 'streamResumption/clearStreamResumption'),
+
+  // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
+  // Called during SSR to set up state BEFORE AI SDK resume runs
+  prefillStreamResumptionState: (threadId, serverState) => {
+    // Only set if we have an active stream with participants that need triggering
+    if (!serverState.hasActiveStream || serverState.roundComplete) {
+      // No active stream or round complete - no prefill needed
+      return;
+    }
+
+    // Set the prefill flag and next participant to trigger
+    // This tells AI SDK phantom resume detection to skip setting isStreaming
+    // and lets incomplete-round-resumption handle the continuation
+    set({
+      streamResumptionPrefilled: true,
+      prefilledForThreadId: threadId,
+      nextParticipantToTrigger: serverState.nextParticipantToTrigger,
+      // If there's a next participant to trigger, set waitingToStartStreaming
+      // This enables the provider effect to trigger the continuation
+      waitingToStartStreaming: serverState.nextParticipantToTrigger !== null,
+    }, false, 'streamResumption/prefillStreamResumptionState');
+  },
 });
 
 /**
@@ -1378,16 +1400,38 @@ const createOperationsSlice: StateCreator<
    * - Resets all state to defaults
    * - Clears tracking Sets
    */
-  resetToNewChat: () => {
+  resetToNewChat: (preferences) => {
     const state = get();
 
     // Clear AI SDK hook's internal messages via chatSetMessages
     // Without this, the AI SDK hook retains old messages that get synced back to store
     state.chatSetMessages?.([]);
 
-    // ✅ RESET: Apply complete reset state
+    // ✅ PREFERENCES RESTORE: Build participants from persisted model IDs
+    const selectedParticipants = preferences?.selectedModelIds?.length
+      ? preferences.selectedModelIds.map((modelId, index) => ({
+          id: modelId,
+          modelId,
+          role: '' as const,
+          priority: index,
+        }))
+      : FORM_DEFAULTS.selectedParticipants;
+
+    // ✅ PREFERENCES RESTORE: Use persisted mode or default
+    const selectedMode = preferences?.selectedMode
+      ? (ChatModeSchema.safeParse(preferences.selectedMode).success
+          ? ChatModeSchema.parse(preferences.selectedMode)
+          : FORM_DEFAULTS.selectedMode)
+      : FORM_DEFAULTS.selectedMode;
+
+    // ✅ RESET: Apply complete reset state WITH preserved preferences
     set({
       ...COMPLETE_RESET_STATE,
+      // ✅ PREFERENCES: Override form defaults with persisted preferences
+      selectedParticipants,
+      selectedMode,
+      enableWebSearch: preferences?.enableWebSearch ?? FORM_DEFAULTS.enableWebSearch,
+      modelOrder: preferences?.modelOrder ?? FORM_DEFAULTS.modelOrder,
       // ✅ CRITICAL FIX: Set screenMode to 'overview' instead of null
       // This prevents race condition where provider effect waits for screenMode='overview'
       // but useScreenInitialization hasn't run yet to set it

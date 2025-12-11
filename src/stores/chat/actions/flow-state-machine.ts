@@ -25,6 +25,7 @@ import type { FlowState, ScreenMode } from '@/api/core/enums';
 import {
   AnalysisStatuses,
   DEFAULT_CHAT_MODE,
+  FinishReasons,
   FlowStates,
   MessagePartTypes,
   MessageRoles,
@@ -32,7 +33,7 @@ import {
 } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getAssistantMetadata, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 // ============================================================================
@@ -334,8 +335,29 @@ export function useFlowStateMachine(
         && getRoundNumber(m.metadata) === currentRound
       );
     });
+
+    // ✅ FIX: Only count messages that have ACTUAL CONTENT or finished with a reason
+    // Empty messages (parts: []) are placeholders created by AI SDK before streaming completes
+    // Don't count them as "responded" or analysis will trigger prematurely
+    const completedMessagesInRound = participantMessagesInRound.filter((m) => {
+      // Check for text content
+      const hasTextContent = m.parts?.some(
+        p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+      );
+      if (hasTextContent)
+        return true;
+
+      // Check for finishReason (streaming complete, even if empty due to error)
+      const metadata = getAssistantMetadata(m.metadata);
+      const finishReason = metadata?.finishReason;
+      if (finishReason && finishReason !== FinishReasons.UNKNOWN)
+        return true;
+
+      return false;
+    });
+
     const allParticipantsResponded
-      = participantMessagesInRound.length >= participants.length
+      = completedMessagesInRound.length >= participants.length
         && participants.length > 0;
 
     return {

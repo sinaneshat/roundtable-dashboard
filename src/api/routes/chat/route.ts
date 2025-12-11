@@ -1,12 +1,13 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
+import { CursorPaginationQuerySchema } from '@/api/core';
 import {
   createMutationRouteResponses,
   createProtectedRouteResponses,
   createPublicRouteResponses,
 } from '@/api/core/response-schemas';
-import { ApiErrorResponseSchema, createApiResponseSchema, CursorPaginationQuerySchema, IdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
+import { ApiErrorResponseSchema, createApiResponseSchema, IdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 
 import {
   AddParticipantRequestSchema,
@@ -31,9 +32,11 @@ import {
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
   ThreadDetailResponseSchema,
+  ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
   ThreadSlugStatusResponseSchema,
+  ThreadStreamResumptionStateResponseSchema,
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
@@ -977,6 +980,53 @@ This is the **preferred endpoint** for stream resumption. The frontend doesn't n
     },
     [HttpStatusCodes.NO_CONTENT]: {
       description: 'No active stream for this thread',
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET /chat/threads/:threadId/stream-status
+ * ✅ RESUMABLE STREAMS: Get stream resumption state for server-side prefetching
+ * Returns metadata only (not the SSE stream itself)
+ */
+export const getThreadStreamResumptionStateRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/stream-status',
+  tags: ['chat'],
+  summary: 'Get thread stream resumption state',
+  description: `Get metadata about active stream for a thread. Used for server-side prefetching to enable Zustand pre-fill before React renders.
+
+**Key Difference from GET /stream**:
+- GET /stream returns the SSE stream itself (used by AI SDK resume)
+- GET /stream-status returns only metadata (used for server-side state check)
+
+**Response Format**:
+Returns \`ThreadStreamResumptionState\` with:
+- hasActiveStream: Whether thread has an active stream in KV
+- streamId: Active stream ID (if any)
+- roundNumber: Round number of the active stream
+- totalParticipants: Total participants in the round
+- participantStatuses: Status of each participant
+- nextParticipantToTrigger: Index of next participant needing generation
+- roundComplete: Whether all participants have finished
+
+**Usage Pattern** (Server Component):
+1. Server component calls GET /stream-status
+2. Passes resumption state as prop to client component
+3. Client pre-fills Zustand store before effects run
+4. AI SDK resume and incomplete-round-resumption coordinate properly
+
+**Example**: GET /chat/threads/thread_123/stream-status`,
+  request: {
+    params: ThreadIdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Stream resumption state retrieved successfully',
+      content: {
+        'application/json': { schema: ThreadStreamResumptionStateResponseSchema },
+      },
     },
     ...createProtectedRouteResponses(),
   },

@@ -26,6 +26,7 @@ import { API } from '@/constants/application';
 import {
   AuthFailureReasonSchema,
   DatabaseOperationSchema,
+  HealthStatusSchema,
   HttpMethodSchema,
   ResourceUnavailableReasonSchema,
   SortDirectionSchema,
@@ -447,10 +448,8 @@ export const PaginationQuerySchema = z.object({
   limit: CoreSchemas.limit(),
 }).openapi('PaginationQuery');
 
-/**
- * Cursor-based pagination query parameters
- */
-export { type CursorPaginationQuery, CursorPaginationQuerySchema } from './pagination';
+// ✅ REMOVED DUPLICATE: CursorPaginationQuerySchema is exported from @/api/core barrel
+// Import from @/api/core instead of @/api/core/schemas
 
 /**
  * Sorting parameters
@@ -746,7 +745,7 @@ export type TextStreamMetadata = z.infer<typeof TextStreamMetadataSchema>;
  * ✅ ZOD-FIRST PATTERN: Uses HealthStatusSchema from enums
  */
 export const HealthDependencySchema = z.object({
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     description: 'Health status of the dependency',
     example: 'healthy',
   }),

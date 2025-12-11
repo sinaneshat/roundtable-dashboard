@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
+import { CursorPaginationQuerySchema } from '@/api/core';
 import {
   ProjectColorSchema,
   ProjectIndexStatusSchema,
@@ -9,7 +10,6 @@ import {
   CoreSchemas,
   createApiResponseSchema,
   createCursorPaginatedResponseSchema,
-  CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
 import {
   chatProjectSelectSchema,
@@ -18,9 +18,6 @@ import {
   projectMemorySelectSchema,
 } from '@/db/validation/project';
 import { uploadSelectSchema } from '@/db/validation/upload';
-
-// Re-export enum schemas from centralized enums for API consumers
-export { ProjectColorSchema, ProjectIndexStatusSchema, ProjectMemorySourceSchema } from '@/api/core/enums';
 
 /**
  * Create Project Request Schema
@@ -228,7 +225,7 @@ export const ListProjectMemoriesQuerySchema = CursorPaginationQuerySchema.extend
     description: 'Filter by memory source',
   }),
   isActive: z.enum(['true', 'false']).optional().openapi({
-    description: 'Filter by active status',
+    description: 'Filter by active status (query param string)',
   }),
 }).openapi('ListProjectMemoriesQuery');
 

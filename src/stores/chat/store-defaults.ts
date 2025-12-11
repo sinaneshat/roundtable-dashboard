@@ -170,6 +170,10 @@ export const STREAM_RESUMPTION_DEFAULTS = {
   streamResumptionState: null,
   resumptionAttempts: new Set<string>(),
   nextParticipantToTrigger: null,
+  /** Flag set when server-side prefilled resumption state - guards AI SDK phantom resume */
+  streamResumptionPrefilled: false,
+  /** Thread ID that the prefilled state is for - ensures state matches current thread */
+  prefilledForThreadId: null,
 } satisfies StreamResumptionSliceState;
 
 // ============================================================================

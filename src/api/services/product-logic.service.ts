@@ -21,19 +21,15 @@ import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
 import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
 
 // ============================================================================
-// SUBSCRIPTION TIER CONSTANTS - SINGLE SOURCE OF TRUTH
+// SUBSCRIPTION TIER
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Source of truth for subscription tier values
 export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
 
-// 2️⃣ DEFAULT VALUE
 export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
 
-// 4️⃣ TYPESCRIPT TYPE - Inferred from array constant
 export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
 
-// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const SubscriptionTiers = {
   FREE: 'free' as const,
   STARTER: 'starter' as const,
@@ -42,12 +38,7 @@ export const SubscriptionTiers = {
 } as const;
 
 /**
- * Re-export SubscriptionChangeType from core enums for convenience
- */
-export type { SubscriptionChangeType } from '@/api/core/enums';
-
-/**
- * ✅ SINGLE SOURCE OF TRUTH: Human-readable tier names
+ * Human-readable tier names
  */
 export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string> = {
   free: 'Free',

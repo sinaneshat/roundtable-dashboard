@@ -7,10 +7,10 @@ import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState
 import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
-import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, UIMessageErrorTypeSchema, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { errorCategoryToUIType, ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
+import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
@@ -95,6 +95,11 @@ type UseMultiParticipantChatOptions = {
    * This avoids a deadlock state where isStreaming=true but pendingMessage=null
    */
   hasEarlyOptimisticMessage?: boolean;
+  /**
+   * ✅ RESUMABLE STREAMS: Flag indicating server prefilled resumption state
+   * When true, skips phantom resume detection to let incomplete-round-resumption handle continuation
+   */
+  streamResumptionPrefilled?: boolean;
   /**
    * ✅ STREAM RESUMPTION: Callback when a resumed stream completes but participants aren't loaded yet
    * This allows the store to queue the next participant trigger for when participants load
@@ -232,6 +237,7 @@ export function useMultiParticipantChat(
     clearAnimations,
     completeAnimation,
     hasEarlyOptimisticMessage = false,
+    streamResumptionPrefilled = false,
     onResumedStreamComplete,
   } = options;
 
@@ -348,6 +354,30 @@ export function useMultiParticipantChat(
       const enabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
       roundParticipantsRef.current = enabled;
       totalParticipants = enabled.length;
+    }
+
+    // ✅ BUG FIX: Detect stale roundParticipantsRef when participant config changed between rounds
+    // When user changes participants (add/remove/enable/disable) between rounds:
+    // - roundParticipantsRef still has OLD participants from previous round
+    // - participantsRef has CURRENT participants
+    // - Round completion check uses OLD count, causing system to wait for non-existent participants
+    // or triggering onComplete prematurely
+    // Solution: Compare IDs and use current count if participants changed
+    const currentEnabled = sortByPriority(participantsRef.current.filter(p => p.isEnabled));
+    const roundParticipantIds = new Set(roundParticipantsRef.current.map(p => p.id));
+    const currentParticipantIds = new Set(currentEnabled.map(p => p.id));
+
+    // Check if participants changed (different IDs or different count)
+    const participantsChanged = roundParticipantIds.size !== currentParticipantIds.size
+      || ![...currentParticipantIds].every(id => roundParticipantIds.has(id));
+
+    if (participantsChanged && currentEnabled.length > 0) {
+      // ✅ BUG FIX: Update BOTH totalParticipants AND roundParticipantsRef
+      // Previously only updated totalParticipants, causing subsequent lookups
+      // (e.g., in onFinish) to use wrong/old participants from stale ref
+      // This caused participant 1 to not be triggered correctly after config changes
+      totalParticipants = currentEnabled.length;
+      roundParticipantsRef.current = currentEnabled;
     }
 
     // ✅ SAFETY CHECK: Don't complete round if we have no participants at all
@@ -1738,6 +1768,14 @@ export function useMultiParticipantChat(
   const handleResumedStreamDetection = useEffectEvent(() => {
     // ✅ GUARD: Don't set during form submission (hasEarlyOptimisticMessage check)
     if (hasEarlyOptimisticMessage) {
+      return false;
+    }
+
+    // ✅ RESUMABLE STREAMS: Skip if server prefilled resumption state
+    // When streamResumptionPrefilled is true, the server already knows about the incomplete round
+    // and has set up nextParticipantToTrigger. Let incomplete-round-resumption handle continuation
+    // instead of setting isStreaming:true here (which would block that hook).
+    if (streamResumptionPrefilled) {
       return false;
     }
 

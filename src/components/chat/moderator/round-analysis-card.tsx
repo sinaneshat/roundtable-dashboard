@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload, Recommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ArticleRecommendation, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -26,7 +26,7 @@ type RoundAnalysisCardProps = {
   onStreamStart?: () => void;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
   streamingRoundNumber?: number | null;
-  onActionClick?: (action: Recommendation) => void;
+  onActionClick?: (action: ArticleRecommendation) => void;
   demoOpen?: boolean; // Demo mode controlled accordion state
   demoShowContent?: boolean; // Demo mode controlled content visibility
   demoSectionStates?: DemoSectionOpenStates; // Demo mode controlled inner section states

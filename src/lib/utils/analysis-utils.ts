@@ -111,50 +111,42 @@ export function hasAnalysisData(
     return false;
   }
 
-  // Type-safe access to properties for NEW SCHEMA: Multi-AI Deliberation Framework
-  // Both ModeratorAnalysisPayload and PartialObject<ModeratorAnalysisPayload> have these properties
-  const {
-    // ✅ CRITICAL FIX: Include first-streamed fields
-    // Backend generates these fields FIRST, but they weren't being checked
-    // causing hasAnalysisData to return false during initial streaming
-    roundConfidence,
-    summary,
-    recommendations,
-    // Later-streamed detail sections
-    contributorPerspectives,
-    consensusAnalysis,
-    evidenceAndReasoning,
-    alternatives,
-    roundSummary,
-  } = data;
+  // Type-safe access to properties for ARTICLE-STYLE SCHEMA
+  // Safely access optional properties (both complete and partial data)
+  const article = 'article' in data ? data.article : undefined;
+  const confidence = 'confidence' in data ? data.confidence : undefined;
+  const recommendations = 'recommendations' in data ? data.recommendations : undefined;
+  const modelVoices = 'modelVoices' in data ? data.modelVoices : undefined;
+  const consensusTable = 'consensusTable' in data ? data.consensusTable : undefined;
+  const minorityViews = 'minorityViews' in data ? data.minorityViews : undefined;
+  const convergenceDivergence = 'convergenceDivergence' in data ? data.convergenceDivergence : undefined;
 
-  // ✅ CRITICAL FIX: Check header/summary fields (generated FIRST by backend)
+  // ✅ Check header/summary fields (generated FIRST by backend)
   // Without these checks, UI shows nothing until later sections stream
-  const hasRoundConfidence = typeof roundConfidence === 'number' && roundConfidence > 0;
-  const hasSummary = typeof summary === 'string' && summary.length > 0;
+  const hasConfidence = isObject(confidence) && typeof confidence.overall === 'number' && confidence.overall > 0;
+  const hasArticle = isObject(article) && (
+    (typeof article.headline === 'string' && article.headline.length > 0)
+    || (typeof article.narrative === 'string' && article.narrative.length > 0)
+    || (typeof article.keyTakeaway === 'string' && article.keyTakeaway.length > 0)
+  );
   const recommendationsArray = recommendations ?? [];
   const hasRecommendations = Array.isArray(recommendationsArray) && recommendationsArray.length > 0;
 
   // Check arrays: handle both complete arrays and partial arrays with undefined elements
-  const contributorPerspectivesArray = contributorPerspectives ?? [];
-  const alternativesArray = alternatives ?? [];
+  const modelVoicesArray = modelVoices ?? [];
+  const consensusTableArray = consensusTable ?? [];
+  const minorityViewsArray = minorityViews ?? [];
 
   // Check if arrays have content (filter undefined elements from PartialObject)
-  const hasContributorPerspectives = Array.isArray(contributorPerspectivesArray)
-    && contributorPerspectivesArray.length > 0;
-
-  const hasAlternatives = Array.isArray(alternativesArray)
-    && alternativesArray.length > 0;
+  const hasModelVoices = Array.isArray(modelVoicesArray) && modelVoicesArray.length > 0;
+  const hasConsensusTable = Array.isArray(consensusTableArray) && consensusTableArray.length > 0;
+  const hasMinorityViews = Array.isArray(minorityViewsArray) && minorityViewsArray.length > 0;
 
   // Check object fields
-  const hasConsensusAnalysis = consensusAnalysis != null;
-  const hasEvidenceAndReasoning = evidenceAndReasoning != null;
+  const hasConvergenceDivergence = convergenceDivergence != null;
 
-  // Check roundSummary fields (all possible sections)
-  const hasRoundSummaryData = hasRoundSummaryContent(roundSummary);
-
-  // ✅ CRITICAL FIX: Include first-streamed fields in OR condition
-  return hasRoundConfidence || hasSummary || hasRecommendations || hasContributorPerspectives || hasConsensusAnalysis || hasEvidenceAndReasoning || hasAlternatives || hasRoundSummaryData;
+  // ✅ ARTICLE-STYLE: Check all displayable fields in OR condition
+  return hasConfidence || hasArticle || hasRecommendations || hasModelVoices || hasConsensusTable || hasMinorityViews || hasConvergenceDivergence;
 }
 
 /**
@@ -361,8 +353,8 @@ export function normalizeAnalysisData<T>(data: T): T {
  * }
  * ```
  */
-// Re-export getStatusPriority from store-constants for use in deduplicateAnalyses()
-// No local implementation - uses centralized ANALYSIS_STATUS_PRIORITY constant
+// getStatusPriority imported from store-constants for use in deduplicateAnalyses()
+// Uses centralized ANALYSIS_STATUS_PRIORITY constant - import from @/stores/chat
 
 // ============================================================================
 // ANALYSIS VALIDATION

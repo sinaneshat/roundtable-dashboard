@@ -10,10 +10,11 @@ import {
   buildCursorWhereWithFilters,
   createHandler,
   createTimestampCursor,
+  CursorPaginationQuerySchema,
   getCursorOrderBy,
   Responses,
 } from '@/api/core';
-import { CursorPaginationQuerySchema, IdParamSchema } from '@/api/core/schemas';
+import { IdParamSchema } from '@/api/core/schemas';
 import {
   enforceCustomRoleQuota,
   incrementCustomRoleUsage,

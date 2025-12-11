@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 
+import { SortDirectionSchema } from '@/api/core/enums';
 import { API } from '@/constants/application';
 
 // ============================================================================
@@ -99,7 +100,7 @@ export const QueryParametersSchema = z.discriminatedUnion('category', [
   z.object({
     category: z.literal('sort'),
     sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'price', 'status']),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    sortOrder: SortDirectionSchema, // ✅ Uses centralized enum (default: 'desc')
   }),
 ]);
 

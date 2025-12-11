@@ -39,5 +39,7 @@ export {
   showApiLoadingToast,
   showApiSuccessToast,
   showApiWarningToast,
-  toastManager,
 } from './api-error-toast';
+
+// ✅ SINGLE SOURCE OF TRUTH: Export toastManager directly from its source
+export { toastManager } from './toast-manager';

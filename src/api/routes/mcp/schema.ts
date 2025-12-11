@@ -10,7 +10,13 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { ChatModeSchema, DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import {
+  ChatModeSchema,
+  DEFAULT_CHAT_MODE,
+  ModelCategoryFilterSchema,
+  ProjectIndexStatusSchema,
+  RoundFeedbackValueSchema,
+} from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
@@ -333,7 +339,7 @@ export const ListProjectThreadsInputSchema = z.object({
  */
 export const ListKnowledgeFilesInputSchema = z.object({
   projectId: CoreSchemas.id(),
-  status: z.enum(['uploaded', 'indexing', 'indexed', 'failed']).optional(),
+  status: ProjectIndexStatusSchema.optional(),
   cursor: z.string().optional(),
   limit: z.number().int().positive().max(50).default(20),
 }).openapi('ListKnowledgeFilesInput');
@@ -388,7 +394,7 @@ export const GetThreadInputSchema = z.object({
  * List Models Input
  */
 export const ListModelsInputSchema = z.object({
-  category: z.enum(['all', 'text', 'vision', 'code', 'function']).default('all'),
+  category: ModelCategoryFilterSchema.default('all'),
   provider: z.string().optional(),
 }).openapi('ListModelsInput');
 
@@ -434,7 +440,7 @@ export const RegenerateRoundInputSchema = z.object({
 export const RoundFeedbackInputSchema = z.object({
   threadId: CoreSchemas.id(),
   roundNumber: RoundNumberSchema,
-  feedback: z.enum(['like', 'dislike', 'none']),
+  feedback: RoundFeedbackValueSchema,
 }).openapi('RoundFeedbackInput');
 
 /**

@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { OrderedModel } from '@/components/chat/model-item';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 export type UseOrderedModelsOptions = {
   selectedParticipants: ParticipantConfig[];

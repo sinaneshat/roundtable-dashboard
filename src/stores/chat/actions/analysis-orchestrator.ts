@@ -22,7 +22,7 @@
 
 'use client';
 
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { AnalysesCacheResponse, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
 import { deduplicateAnalyses } from '@/lib/utils/analysis-utils';
@@ -31,14 +31,14 @@ import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 import { getStatusPriority, MODERATOR_ANALYSIS_COMPARE_KEYS } from '../store-constants';
 import type { OrchestratorOptions } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
-import type { AnalysesCacheData, AnalysisDeduplicationOptions } from './types';
+import type { AnalysisDeduplicationOptions } from './types';
 
 // ✅ TYPE-SAFE: Use cache data type which matches query return (accepts unknown for analysisData)
 // The query merges server data with cache, so response type must accommodate both
-type AnalysesApiResponse = AnalysesCacheData;
+type AnalysesApiResponse = AnalysesCacheResponse;
 
 // ✅ TYPE-SAFE: Raw item type from query response (with unknown analysisData)
-type RawAnalysisItem = AnalysesCacheData['data']['items'][number];
+type RawAnalysisItem = AnalysesCacheResponse['data']['items'][number];
 
 export type UseAnalysisOrchestratorOptions = OrchestratorOptions<readonly [], AnalysisDeduplicationOptions>;
 

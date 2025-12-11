@@ -8,10 +8,11 @@
  * All mappings based on enums from @/api/core/enums
  */
 
-import { AlertTriangle, Check, Flame, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Flame, ThumbsDown, ThumbsUp, X, XCircle } from 'lucide-react';
 
-import type { AgreementStatus, EvidenceStrength, VoteType } from '@/api/core/enums';
-import { AgreementStatuses, EvidenceStrengths, VoteTypes } from '@/api/core/enums';
+import type { AgreementStatus, EvidenceStrength, ResolutionType, StanceType, VoteType } from '@/api/core/enums';
+import { AgreementStatuses, EvidenceStrengths, ResolutionTypes, StanceTypes, VoteTypes } from '@/api/core/enums';
+import type { BadgeProps } from '@/components/ui/badge';
 
 // ============================================================================
 // VOTE TYPE UTILITIES
@@ -214,4 +215,49 @@ export type ContributorColorClass = (typeof CONTRIBUTOR_COLORS)[number];
  */
 export function getContributorColor(index: number): ContributorColorClass {
   return CONTRIBUTOR_COLORS[index % CONTRIBUTOR_COLORS.length] ?? CONTRIBUTOR_COLORS[0];
+}
+
+// ============================================================================
+// RESOLUTION TYPE UTILITIES (Consensus Table)
+// ============================================================================
+
+/**
+ * Get Badge variant for ResolutionType enum
+ * Following established enum pattern with centralized mapping
+ * Used in consensus table to show resolution status
+ */
+export function getResolutionBadgeVariant(resolution: ResolutionType | undefined | null): BadgeProps['variant'] {
+  switch (resolution) {
+    case ResolutionTypes.CONSENSUS:
+      return 'default';
+    case ResolutionTypes.MAJORITY:
+      return 'secondary';
+    case ResolutionTypes.SPLIT:
+      return 'outline';
+    case ResolutionTypes.CONTESTED:
+      return 'destructive';
+    default:
+      return 'outline';
+  }
+}
+
+// ============================================================================
+// STANCE TYPE UTILITIES (Consensus Table Positions)
+// ============================================================================
+
+/**
+ * Get stance icon based on StanceType enum
+ * Following established enum pattern with centralized mapping
+ * Used in consensus table to show model positions
+ */
+export function getStanceIcon(stance: StanceType | undefined | null) {
+  switch (stance) {
+    case StanceTypes.AGREE:
+      return <CheckCircle2 className="size-3 text-green-500" />;
+    case StanceTypes.DISAGREE:
+      return <XCircle className="size-3 text-destructive" />;
+    case StanceTypes.NUANCED:
+    default:
+      return <span className="size-3 rounded-full border border-muted-foreground/50" />;
+  }
 }

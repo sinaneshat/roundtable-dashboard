@@ -6,7 +6,7 @@ import { startTransition, useEffect, useRef, useState } from 'react';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { PlanSummaryCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations/checkout';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
@@ -117,16 +117,17 @@ export function BillingSuccessClient() {
     );
   }
 
+  // ✅ TYPE-SAFE: Use Zod schema validation instead of unsafe casts
   const tierString = displaySubscription?.price?.productId
     ? getTierFromProductId(displaySubscription.price.productId)
     : 'free';
 
-  const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
-  const derivedTier: SubscriptionTier = validTiers.includes(tierString as SubscriptionTier)
-    ? (tierString as SubscriptionTier)
-    : 'free';
+  const derivedTierResult = subscriptionTierSchema.safeParse(tierString);
+  const derivedTier: SubscriptionTier = derivedTierResult.success ? derivedTierResult.data : 'free';
 
-  const currentTier: SubscriptionTier = newTier || derivedTier;
+  // newTier comes from sync mutation data, validate it too
+  const newTierResult = subscriptionTierSchema.safeParse(newTier);
+  const currentTier: SubscriptionTier = newTierResult.success ? newTierResult.data : derivedTier;
   const tierName = SUBSCRIPTION_TIER_NAMES[currentTier];
   const maxModels = getMaxModelsForTier(currentTier);
   const threadsLimit = usageStats?.data?.threads?.limit || 0;

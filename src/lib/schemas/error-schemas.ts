@@ -1,96 +1,16 @@
 /**
- * Error Schemas - Single Source of Truth for Error Types
+ * Error Schemas - Error Utilities and Metadata
  *
- * ✅ SINGLE SOURCE OF TRUTH: All error categories and types
- *
- * Consolidates error-related schemas to replace hardcoded strings and duplicate type definitions.
- * All error categorization and types should be derived from these schemas.
+ * Provides error-specific utilities built on top of @/api/core/enums.
+ * Import error enums/types directly from @/api/core/enums.
  *
  * @see /docs/backend-patterns.md - Zero-casting principle
- * @see ZOD_INFERENCE_REFACTORING_PLAN.md - Phase 2.1
  */
 
 import { z } from 'zod';
 
-// ============================================================================
-// ANALYSIS STATUS ENUM - RE-EXPORT FROM SINGLE SOURCE OF TRUTH
-// ============================================================================
-
-/**
- * ✅ Analysis status enum - Moderator analysis states
- * Single source of truth: @/api/core/enums
- * Uses 'complete' (not 'completed') for consistency with backend
- */
-export {
-  ANALYSIS_STATUSES,
-  type AnalysisStatus,
-  AnalysisStatuses,
-  AnalysisStatusSchema,
-} from '@/api/core/enums';
-
-// ============================================================================
-// ERROR CATEGORIES
-// ============================================================================
-
-/**
- * ✅ Error category enum - All possible error categories
- * Replaces hardcoded strings like 'model_not_found', 'content_filter', etc.
- *
- * Used by:
- * - Backend: Error categorization in helpers.ts
- * - Frontend: Error display and handling
- * - Streaming: Error extraction and metadata
- *
- * NOTE: Backend uses AIProviderErrorCategory which includes provider-specific
- * categories like 'provider_rate_limit', 'provider_network', 'model_content_filter'
- * These map to our categories via errorCategoryToUIType()
- */
-export const ErrorCategorySchema = z.enum([
-  'model_not_found',
-  'content_filter',
-  'rate_limit',
-  'network',
-  'provider_error',
-  'validation',
-  'authentication',
-  'silent_failure',
-  'empty_response',
-  'unknown',
-  // Backend-specific categories (from AIProviderErrorCategory)
-  'provider_rate_limit',
-  'provider_network',
-  'model_content_filter',
-]);
-
-export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
-
-// ============================================================================
-// UI MESSAGE ERROR TYPES
-// ============================================================================
-
-/**
- * ✅ UI Message error types - Frontend error display types
- * Replaces the hardcoded UIMessageErrorType in message-transforms.ts
- *
- * Used by:
- * - Frontend: message-transforms.ts for error UI messages
- * - Backend: Error categorization for UI display
- */
-export const UIMessageErrorTypeSchema = z.enum([
-  'provider_rate_limit',
-  'provider_network',
-  'model_not_found',
-  'model_content_filter',
-  'authentication',
-  'validation',
-  'silent_failure',
-  'empty_response',
-  'backend_inconsistency', // Backend ID/metadata mismatch errors
-  'failed',
-  'unknown',
-]);
-
-export type UIMessageErrorType = z.infer<typeof UIMessageErrorTypeSchema>;
+import type { ErrorCategory, UIMessageErrorType } from '@/api/core/enums';
+import { ErrorCategorySchema, UIMessageErrorTypeSchema } from '@/api/core/enums';
 
 // ============================================================================
 // ERROR METADATA

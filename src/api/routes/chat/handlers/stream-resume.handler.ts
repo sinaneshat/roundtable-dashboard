@@ -27,7 +27,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
-import type { resumeStreamRoute, resumeThreadStreamRoute } from '../route';
+import type { getThreadStreamResumptionStateRoute, resumeStreamRoute, resumeThreadStreamRoute } from '../route';
 import { StreamIdParamSchema, ThreadIdParamSchema } from '../schema';
 
 // ============================================================================
@@ -244,6 +244,95 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       roundComplete,
       resumedFromBuffer: true,
       ...(nextParticipant ? { nextParticipantIndex: nextParticipant.participantIndex } : {}),
+    });
+  },
+);
+
+// ============================================================================
+// Thread Stream Resumption State Handler (Metadata Only)
+// ============================================================================
+
+/**
+ * GET /chat/threads/:threadId/stream-status
+ *
+ * Get stream resumption state metadata for server-side prefetching.
+ * Returns JSON metadata only (not the SSE stream itself).
+ *
+ * This enables:
+ * 1. Server component to check for active streams during page load
+ * 2. Zustand pre-fill with resumption state before React renders
+ * 3. Proper coordination between AI SDK resume and incomplete-round-resumption
+ *
+ * @pattern Following AI SDK Chatbot Resume Streams documentation
+ */
+export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThreadStreamResumptionStateRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    operationName: 'getThreadStreamResumptionState',
+    validateParams: ThreadIdParamSchema,
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId } = c.validated.params;
+
+    // Verify thread ownership
+    const db = await getDbAsync();
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, threadId),
+      columns: { id: true, userId: true },
+    });
+
+    if (!thread) {
+      throw createError.notFound('Thread not found');
+    }
+
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized('Not authorized to access this thread');
+    }
+
+    // Default response when no KV or no active stream
+    const noActiveStreamResponse = {
+      hasActiveStream: false,
+      streamId: null,
+      roundNumber: null,
+      totalParticipants: null,
+      participantStatuses: null,
+      nextParticipantToTrigger: null,
+      roundComplete: true,
+    };
+
+    // ✅ LOCAL DEV FIX: If KV is not available, return no active stream
+    if (!c.env?.KV) {
+      return Responses.ok(c, noActiveStreamResponse);
+    }
+
+    // Get thread-level active stream state from KV
+    const activeStream = await getThreadActiveStream(threadId, c.env);
+
+    // No active stream - return clean state
+    if (!activeStream) {
+      return Responses.ok(c, noActiveStreamResponse);
+    }
+
+    // Get next participant that needs triggering
+    const nextParticipant = await getNextParticipantToStream(threadId, c.env);
+    const roundComplete = !nextParticipant;
+
+    // Convert participantStatuses Record<number, string> to Record<string, string> for JSON
+    const participantStatusesStringKeyed = activeStream.participantStatuses
+      ? Object.fromEntries(
+          Object.entries(activeStream.participantStatuses).map(([k, v]) => [String(k), v]),
+        )
+      : null;
+
+    return Responses.ok(c, {
+      hasActiveStream: true,
+      streamId: activeStream.streamId,
+      roundNumber: activeStream.roundNumber,
+      totalParticipants: activeStream.totalParticipants,
+      participantStatuses: participantStatusesStringKeyed,
+      nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
+      roundComplete,
     });
   },
 );

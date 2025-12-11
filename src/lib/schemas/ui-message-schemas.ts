@@ -12,8 +12,8 @@
 import { z } from 'zod';
 
 import { UIMessageRoleSchema } from '@/api/core/enums';
+import { DbMessageMetadataSchema as MessageMetadataSchema } from '@/db/schemas/chat-metadata';
 
-import { MessageMetadataSchema } from './message-metadata';
 import { MessagePartSchema } from './message-schemas';
 
 // ============================================================================
@@ -163,18 +163,4 @@ export function partsToContent(parts: unknown[]): string {
     .join(' ');
 }
 
-// ============================================================================
-// RE-EXPORTS FROM API SCHEMA
-// ============================================================================
-
-/**
- * ✅ RE-EXPORTS: API response types for testing and components
- *
- * These types are defined in /src/api/routes/chat/schema.ts but re-exported
- * here for convenience in tests and components.
- */
-export type {
-  MessagesListResponse,
-  ModeratorAnalysisListResponse,
-  ThreadDetailResponse,
-} from '@/api/routes/chat/schema';
+// API response types: MessagesListResponse, ThreadDetailResponse from @/api/routes/chat/schema

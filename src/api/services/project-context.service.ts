@@ -345,9 +345,9 @@ export async function getProjectAnalysisContext(
       threadTitle: threadTitleMap.get(analysis.threadId) || 'Unknown',
       roundNumber: analysis.roundNumber,
       userQuestion: analysis.userQuestion,
-      summary: data?.summary || '',
+      summary: data?.article?.narrative || '',
       recommendations: data?.recommendations?.map(r => r.title) || [],
-      keyThemes: data?.roundSummary?.keyThemes || null,
+      keyThemes: data?.article?.headline || null,
     };
   });
 

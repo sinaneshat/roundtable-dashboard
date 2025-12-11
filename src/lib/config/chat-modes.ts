@@ -150,7 +150,7 @@ export function getChatModeIcon(modeId: ChatMode): LucideIcon | undefined {
 
 /**
  * Default chat mode constant
- * ✅ SINGLE SOURCE: Re-export from /src/api/core/enums.ts
+ * Value from @/api/core/enums.ts (single source of truth)
  */
 export const DEFAULT_CHAT_MODE: ChatMode = DEFAULT_MODE_FROM_ENUM;
 

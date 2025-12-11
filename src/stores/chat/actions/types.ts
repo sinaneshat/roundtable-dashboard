@@ -11,21 +11,24 @@
 
 import { z } from 'zod';
 
-import { AnalysisStatusSchema, ChatModeSchema } from '@/api/core/enums';
+import { Environments } from '@/api/core/enums';
+import type { AnalysesCacheResponse } from '@/api/routes/chat/schema';
+import {
+  AnalysesCacheResponseSchema,
+  ChatThreadCacheSchema,
+  createCacheResponseSchema,
+} from '@/api/routes/chat/schema';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
 // ============================================================================
-// API RESPONSE SCHEMAS - Single Source of Truth
+// API RESPONSE SCHEMAS - Uses Backend Single Source of Truth
 // ============================================================================
 
 /**
  * Standard API response wrapper schema
- * Validates the common API response structure across all endpoints
+ * ✅ REFACTORED: Uses createCacheResponseSchema from @/api/routes/chat/schema
  */
-export const ApiResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.unknown(),
-});
+export const ApiResponseSchema = createCacheResponseSchema(z.unknown());
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 
@@ -74,7 +77,7 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 
   const response = ApiResponseSchema.safeParse(data);
   if (!response.success || !response.data.success) {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       console.error('Invalid API response structure for usage stats:', response.error);
     }
     return null;
@@ -82,7 +85,7 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 
   const usageData = UsageStatsDataSchema.safeParse(response.data.data);
   if (!usageData.success) {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       console.error('Invalid usage stats data structure:', usageData.error);
     }
     return null;
@@ -92,36 +95,8 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 }
 
 // ============================================================================
-// THREAD CACHE SCHEMAS
+// THREAD CACHE VALIDATION HELPERS
 // ============================================================================
-
-/**
- * Thread data schema for cache operations
- * Validates thread object structure for optimistic updates
- *
- * ✅ FIX: Include all fields needed for sidebar display
- * Missing date fields caused NaN in groupChatsByPeriod when Zod stripped unknown keys
- */
-export const ThreadCacheDataSchema = z.object({
-  id: z.string(),
-  title: z.string().optional(),
-  slug: z.string().optional(),
-  previousSlug: z.string().nullable().optional(),
-  mode: z.string().optional(),
-  status: z.string().optional(),
-  isFavorite: z.boolean().optional(),
-  isPublic: z.boolean().optional(),
-  isAiGeneratedTitle: z.boolean().optional(),
-  enableWebSearch: z.boolean().optional(),
-  metadata: z.unknown().optional(),
-  // ✅ FIX: Date fields required for sidebar grouping (createdAt, updatedAt)
-  // Accept both string (from JSON API) and Date (from optimistic updates)
-  createdAt: z.union([z.string(), z.date()]).optional(),
-  updatedAt: z.union([z.string(), z.date()]).optional(),
-  lastMessageAt: z.union([z.string(), z.date()]).nullable().optional(),
-});
-
-export type ThreadCacheData = z.infer<typeof ThreadCacheDataSchema>;
 
 /**
  * Thread detail payload schema for cache operations
@@ -151,7 +126,7 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
 
   const response = ApiResponseSchema.safeParse(data);
   if (!response.success || !response.data.success) {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       console.error('Invalid API response structure for thread detail:', response.error);
     }
     return null;
@@ -159,7 +134,7 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
 
   const threadData = ThreadDetailPayloadCacheSchema.safeParse(response.data.data);
   if (!threadData.success) {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       console.error('Invalid thread detail data structure:', threadData.error);
     }
     return null;
@@ -176,7 +151,7 @@ export const PaginatedPageCacheSchema = z.object({
   success: z.boolean(),
   data: z
     .object({
-      items: z.array(ThreadCacheDataSchema).optional(),
+      items: z.array(ChatThreadCacheSchema).optional(),
     })
     .optional(),
 });
@@ -208,7 +183,7 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
 
   const queryData = InfiniteQueryCacheSchema.safeParse(data);
   if (!queryData.success) {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       console.error('Invalid infinite query data structure:', queryData.error);
     }
     return null;
@@ -242,43 +217,6 @@ export const AnalysisDeduplicationOptionsSchema = z.object({
 export type AnalysisDeduplicationOptions = z.infer<typeof AnalysisDeduplicationOptionsSchema>;
 
 /**
- * Schema for analyses cache data structure
- *
- * **SINGLE SOURCE OF TRUTH**: Validates React Query cache structure for analyses.
- * Replaces unsafe type assertions in chat-analysis.ts (lines 204-208, 270-273, etc.)
- *
- * Used when reading/writing analyses cache in React Query.
- */
-export const AnalysesCacheDataSchema = z.object({
-  success: z.boolean(),
-  data: z.object({
-    items: z.array(
-      z.object({
-        id: z.string(),
-        threadId: z.string(),
-        roundNumber: z.number(),
-        status: AnalysisStatusSchema,
-        // ✅ TYPE-SAFE: Match server schema - optional and nullable with proper type
-        analysisData: z.unknown().nullable().optional(),
-        participantMessageIds: z.array(z.string()),
-        // ✅ ENUM PATTERN: Use ChatModeSchema for type-safe enum literals
-        mode: ChatModeSchema,
-        userQuestion: z.string(),
-        createdAt: z.union([z.date(), z.string()]),
-        // Match server response type: nullable but not optional
-        completedAt: z.union([z.date(), z.string()]).nullable(),
-        errorMessage: z.string().nullable(),
-      }),
-    ),
-  }),
-});
-
-/**
- * Type for analyses cache data (inferred from schema)
- */
-export type AnalysesCacheData = z.infer<typeof AnalysesCacheDataSchema>;
-
-/**
  * Helper function to safely cast cache data with validation
  *
  * **USE THIS INSTEAD OF**: `oldData as { success: boolean; data: { items: ... } }`
@@ -298,8 +236,8 @@ export type AnalysesCacheData = z.infer<typeof AnalysesCacheDataSchema>;
  * });
  * ```
  */
-export function validateAnalysesCache(data: unknown): AnalysesCacheData | undefined {
-  const result = AnalysesCacheDataSchema.safeParse(data);
+export function validateAnalysesCache(data: unknown): AnalysesCacheResponse | undefined {
+  const result = AnalysesCacheResponseSchema.safeParse(data);
   return result.success ? result.data : undefined;
 }
 

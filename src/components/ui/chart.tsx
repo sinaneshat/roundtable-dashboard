@@ -85,8 +85,11 @@ function ChartContainer({
   const uniqueId = useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
 
+  // ✅ React 19: Memoize context value to prevent cascading re-renders
+  const contextValue = useMemo(() => ({ config }), [config])
+
   return (
-    <ChartContext.Provider value={{ config }}>
+    <ChartContext.Provider value={contextValue}>
       <div
         data-slot="chart"
         data-chart={chartId}

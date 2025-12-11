@@ -2,6 +2,7 @@ import { z } from '@hono/zod-openapi';
 import type Stripe from 'stripe';
 
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 import {
   stripePriceSelectSchema,
   stripeProductSelectSchema,
@@ -276,11 +277,11 @@ export const SyncedSubscriptionStateSchema = z.object({
 }).openapi('SyncedSubscriptionState');
 
 const TierChangeSchema = z.object({
-  previousTier: z.enum(['free', 'starter', 'pro', 'power']).openapi({
+  previousTier: subscriptionTierSchemaOpenAPI.openapi({
     description: 'Previous subscription tier before sync',
     example: 'free',
   }),
-  newTier: z.enum(['free', 'starter', 'pro', 'power']).openapi({
+  newTier: subscriptionTierSchemaOpenAPI.openapi({
     description: 'New subscription tier after sync',
     example: 'starter',
   }),
@@ -343,15 +344,3 @@ export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequest
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
 export type SyncAfterCheckoutPayload = z.infer<typeof SyncAfterCheckoutPayloadSchema>;
 export type WebhookHeaders = z.infer<typeof WebhookHeadersSchema>;
-
-// ============================================================================
-// INTERNAL HANDLER TYPES - Single Source of Truth
-// ============================================================================
-
-/**
- * Webhook processor context type
- *
- * SINGLE SOURCE OF TRUTH for webhook processor context
- * Empty placeholder type - webhook processing doesn't need additional context
- */
-export type WebhookProcessorContext = Record<string, never>;

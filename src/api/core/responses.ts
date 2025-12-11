@@ -1088,15 +1088,3 @@ export const Responses = {
 // ============================================================================
 
 export type ResponseBuilders = typeof Responses;
-
-// Re-export response types from schemas.ts for convenience
-// ✅ ZOD-FIRST PATTERN: All types are inferred from Zod schemas in schemas.ts
-export type {
-  ApiResponse,
-  ErrorContext,
-  HealthDependency,
-  HealthSummary,
-  PaginatedResponse,
-  SSEStreamMetadata,
-  TextStreamMetadata,
-};

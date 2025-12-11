@@ -19,6 +19,7 @@ import { z } from 'zod';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
+  PreSearchQueryStateStatusSchema,
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
 } from '@/api/core/enums';
@@ -34,29 +35,7 @@ import {
 // - UsageSchema → @/db/schemas/chat-metadata
 // ============================================================================
 
-// ============================================================================
-// Re-export Database Message Metadata Schemas (Single Source of Truth)
-// ============================================================================
-
-export type {
-  DbAssistantMessageMetadata as AssistantMessageMetadata,
-  DbMessageMetadata as MessageMetadata,
-  DbPreSearchMessageMetadata as PreSearchMessageMetadata,
-  DbUserMessageMetadata as UserMessageMetadata,
-} from '@/db/schemas/chat-metadata';
-export {
-  DbAssistantMessageMetadataSchema as AssistantMessageMetadataSchema,
-  DbMessageMetadataSchema as MessageMetadataSchema,
-  DbPreSearchMessageMetadataSchema as PreSearchMessageMetadataSchema,
-  DbUserMessageMetadataSchema as UserMessageMetadataSchema,
-} from '@/db/schemas/chat-metadata';
-
-// ============================================================================
-// Pre-Search Metadata Schema (for web search results)
-// ============================================================================
-
-export type { DbPreSearchData as PreSearchMetadata } from '@/db/schemas/chat-metadata';
-export { DbPreSearchDataSchema as PreSearchMetadataSchema } from '@/db/schemas/chat-metadata';
+// Message metadata schemas: Import from @/db/schemas/chat-metadata (single source of truth)
 
 /**
  * Pre-search query metadata
@@ -133,7 +112,7 @@ export const PreSearchQueryStateSchema = z.object({
   query: z.string(),
   rationale: z.string(),
   searchDepth: WebSearchDepthSchema,
-  status: z.enum(['pending', 'searching', 'complete', 'failed']),
+  status: PreSearchQueryStateStatusSchema, // ✅ Uses centralized enum
   result: z
     .object({
       answer: z.string().nullable().optional(),
@@ -205,19 +184,6 @@ export type PreSearchCompleteEvent = z.infer<
 >;
 export type PreSearchErrorEvent = z.infer<typeof PreSearchErrorEventSchema>;
 export type PreSearchStreamEvent = z.infer<typeof PreSearchStreamEventSchema>;
-
-// ============================================================================
-// Type Guards - Re-export from Database Schemas
-// ============================================================================
-
-export {
-  isAssistantMessageMetadata as isAssistantMetadata,
-  isParticipantMessageMetadata as isParticipantMetadata,
-  isPreSearchMessageMetadata as isPreSearchMetadata,
-  isUserMessageMetadata as isUserMetadata,
-  safeParseMessageMetadata,
-  validateMessageMetadata,
-} from '@/db/schemas/chat-metadata';
 
 // ============================================================================
 // Backward Compatibility Helpers

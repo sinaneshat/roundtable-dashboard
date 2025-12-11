@@ -1,6 +1,7 @@
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 
 /**
@@ -53,6 +54,9 @@ export function useChatScroll({
   // Track which analyses have been scrolled to
   const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
 
+  // Track which pending analyses have triggered auto-scroll
+  const triggeredPendingAnalysesRef = useRef<Set<string>>(new Set());
+
   // Track if we're in a programmatic scroll
   const isProgrammaticScrollRef = useRef(false);
 
@@ -65,6 +69,7 @@ export function useChatScroll({
   const resetScrollState = useCallback(() => {
     isAtBottomRef.current = true;
     scrolledToAnalysesRef.current = new Set();
+    triggeredPendingAnalysesRef.current = new Set();
     lastScrollTopRef.current = 0;
     isProgrammaticScrollRef.current = false;
   }, []);
@@ -157,6 +162,39 @@ export function useChatScroll({
       newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
     }
   }, [analyses]);
+
+  // ============================================================================
+  // ✅ AUTO-SCROLL FIX: Scroll to bottom when new PENDING analysis is ready
+  // ============================================================================
+  // When a new PENDING analysis is created with participantMessageIds populated,
+  // the round is complete and analysis streaming should start. We need to ensure
+  // the analysis component is rendered (within virtualization viewport) so it
+  // can trigger the streaming. Scrolling to bottom guarantees this.
+  //
+  // This fixes the bug where analysis stays stuck at PENDING when user hasn't
+  // scrolled to the bottom of the timeline after a round completes.
+  useEffect(() => {
+    // Find PENDING analyses that have participantMessageIds (round is complete)
+    const pendingAnalysesWithMessages = analyses.filter(
+      a => a.status === AnalysisStatuses.PENDING
+        && a.participantMessageIds
+        && a.participantMessageIds.length > 0,
+    );
+
+    // Check for new pending analyses we haven't triggered scroll for
+    const newPendingAnalyses = pendingAnalysesWithMessages.filter(
+      a => !triggeredPendingAnalysesRef.current.has(a.id),
+    );
+
+    if (newPendingAnalyses.length > 0) {
+      // Mark as triggered to prevent repeated scrolling
+      newPendingAnalyses.forEach(a => triggeredPendingAnalysesRef.current.add(a.id));
+
+      // Scroll to bottom so the analysis component renders and triggers streaming
+      // Use instant scroll for better UX (user expects immediate feedback)
+      scrollToBottom('instant');
+    }
+  }, [analyses, scrollToBottom]);
 
   return {
     isAtBottomRef,

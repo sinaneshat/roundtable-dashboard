@@ -32,6 +32,7 @@ export {
   updateCustomRoleHandler,
 } from './handlers/role.handler';
 export {
+  getThreadStreamResumptionStateHandler,
   resumeStreamHandler,
   resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';

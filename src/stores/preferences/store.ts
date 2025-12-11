@@ -28,7 +28,7 @@ import { MIN_MODELS_REQUIRED } from '@/api/services/product-logic.service';
 // CONSTANTS (Official Pattern)
 // ============================================================================
 
-/** Minimum models required - re-export from backend */
+/** Minimum models required (value from backend service) */
 export const MIN_MODELS = MIN_MODELS_REQUIRED;
 
 /** Cookie name for preferences storage */

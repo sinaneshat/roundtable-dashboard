@@ -1,11 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import type {
-  AgreementStatus,
-  EvidenceStrength,
-  VoteType,
-} from '@/api/core/enums';
 import {
   ANALYSIS_STATUSES,
   CHANGELOG_TYPES,
@@ -322,97 +317,55 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   status: text('status', { enum: ANALYSIS_STATUSES })
     .notNull()
     .default('pending'), // pending -> streaming -> complete/failed
-  // Store the full analysis as JSON - Multi-AI Deliberation Framework
-  // ✅ NULLABLE: Only populated once streaming completes successfully
-  // ✅ BREAKING CHANGE: Complete redesign for collaborative AI analysis
   analysisData: text('analysis_data', { mode: 'json' }).$type<{
-    // Key Insights & Recommendations
-    summary: string;
+    confidence: {
+      overall: number;
+      reasoning: string;
+    };
+    modelVoices: Array<{
+      modelName: string;
+      modelId: string;
+      participantIndex: number;
+      role: string | null;
+      position: string | null;
+      keyContribution: string | null;
+      notableQuote?: string | null;
+    }>;
+    article: {
+      headline: string;
+      narrative: string;
+      keyTakeaway: string;
+    };
     recommendations: Array<{
       title: string;
       description: string;
+      suggestedPrompt?: string;
       suggestedModels?: string[];
       suggestedRoles?: string[];
-      suggestedMode?: string;
     }>;
-
-    // Contributor Perspectives
-    contributorPerspectives: Array<{
-      participantIndex: number;
-      role: string | null; // ✅ FIX: Participants can have no custom role
-      modelId: string;
-      modelName: string;
-      scorecard: {
-        logic: number;
-        riskAwareness: number;
-        creativity: number;
-        evidence: number;
-        consensus?: number;
-      };
-      stance: string;
-      evidence: string[];
-      vote: VoteType | null; // ✅ FIX: Allow null vote for insufficient content (AI may return null when vote can't be determined)
-    }>;
-
-    // Consensus Analysis
-    consensusAnalysis: {
-      alignmentSummary: {
-        totalClaims: number;
-        majorAlignment: number;
-        contestedClaims: number;
-        contestedClaimsList: Array<{
-          claim: string;
-          status: 'contested';
-        }>;
-      };
-      // ✅ FIX: Changed from Record to array for Anthropic compatibility
-      agreementHeatmap: Array<{
-        claim: string;
-        perspectives: Array<{
-          modelName: string;
-          status: AgreementStatus;
-        }>;
-      }>;
-      // ✅ FIX: Changed from Record to array for Anthropic compatibility
-      argumentStrengthProfile: Array<{
+    consensusTable: Array<{
+      topic: string;
+      positions: Array<{
         modelName: string;
-        logic: number;
-        evidence: number;
-        riskAwareness: number;
-        consensus: number;
-        creativity: number;
+        stance: 'agree' | 'disagree' | 'nuanced';
+        brief: string;
       }>;
-    };
-
-    // Evidence & Reasoning
-    evidenceAndReasoning: {
-      reasoningThreads: Array<{
-        claim: string;
-        synthesis: string;
-      }>;
-      evidenceCoverage: Array<{
-        claim: string;
-        strength: EvidenceStrength;
-        percentage: number;
-      }>;
-    };
-
-    // Explore Alternatives
-    alternatives: Array<{
-      scenario: string;
-      confidence: number;
+      resolution: 'consensus' | 'majority' | 'split' | 'contested';
     }>;
-
-    // Round Summary
-    roundSummary: {
-      participation: {
-        approved: number;
-        cautioned: number;
-        rejected: number;
-      };
-      keyThemes: string;
-      unresolvedQuestions: string[];
-      generated: string;
+    minorityViews: Array<{
+      modelName: string;
+      view: string;
+      reasoning?: string | null;
+      worthConsidering?: boolean;
+    }>;
+    convergenceDivergence: {
+      convergedOn: string[];
+      divergedOn: string[];
+      evolved: Array<{
+        point: string;
+        initialState: string;
+        finalState: string;
+      }>;
     };
   }>(),
   // Store participant message IDs that were analyzed

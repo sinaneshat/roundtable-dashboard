@@ -1,30 +1,20 @@
 /**
  * Recommended Action Application Logic
  *
- * Extracted from store.ts applyRecommendedAction to reduce store file size.
- * Contains business logic for applying moderator-suggested actions to form state.
- *
- * ✅ PATTERN: Extract large functions from store to action modules
- * ✅ MAINTAINS: All validation, tier checks, and error handling
- * ✅ TYPE-SAFE: Full type inference with Zod validation
+ * Applies recommended actions from moderator analysis to form state.
+ * Updates input value, selected participants (models), and roles.
  *
  * Location: /src/stores/chat/actions/recommended-action-application.ts
  * Used by: store.ts applyRecommendedAction (thin wrapper)
  */
 
-import type { ChatMode } from '@/api/core/enums';
-import { ChatModeSchema } from '@/api/core/enums';
-import type { Recommendation } from '@/api/routes/chat/schema';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing } from '@/api/services/product-logic.service';
+import type { ArticleRecommendation } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
+/**
+ * Options for applying a recommended action
+ */
 export type ApplyRecommendedActionOptions = {
-  maxModels?: number;
-  tierName?: string;
-  userTier?: SubscriptionTier;
-  allModels?: BaseModelResponse[];
   /**
    * When true, preserve thread state (stay on thread screen, keep messages)
    * Used when clicking recommendations from thread screen to update chatbox
@@ -32,168 +22,127 @@ export type ApplyRecommendedActionOptions = {
    * Default: false (resets thread state for new conversation)
    */
   preserveThreadState?: boolean;
+
+  /**
+   * Current selected participants - used to preserve existing config when updating
+   * If provided, will merge with suggested models/roles
+   */
+  currentParticipants?: ParticipantConfig[];
 };
 
 /**
  * Internal result type for applyRecommendedAction logic
  * Includes `updates` object for store to apply via set()
- *
- * NOTE: This differs from ApplyRecommendedActionResult in store-action-types.ts
- * which is the PUBLIC return type (without updates - they're applied internally)
  */
 export type ApplyRecommendedActionInternalResult = {
   success: boolean;
   error?: string;
-  modelsAdded?: number;
-  modelsSkipped?: number;
   updates: {
     inputValue?: string;
-    selectedMode?: ChatMode;
     selectedParticipants?: ParticipantConfig[];
   };
 };
 
 /**
+ * Creates participant configs from suggested models and roles
+ * Matches models with roles by index (first model gets first role, etc.)
+ */
+function createParticipantsFromSuggestions(
+  suggestedModels: string[],
+  suggestedRoles?: string[],
+  currentParticipants?: ParticipantConfig[],
+): ParticipantConfig[] {
+  // If we have current participants and suggested models match by modelId,
+  // preserve the existing config and just update roles
+  if (currentParticipants?.length) {
+    const currentModelIds = new Set(currentParticipants.map(p => p.modelId));
+
+    // If suggested models are a subset or match current, just update roles
+    const allSuggestedInCurrent = suggestedModels.every(m => currentModelIds.has(m));
+
+    if (allSuggestedInCurrent && suggestedRoles?.length) {
+      // Update roles on existing participants that match suggested models
+      return currentParticipants.map((participant) => {
+        const suggestedIndex = suggestedModels.indexOf(participant.modelId);
+        if (suggestedIndex !== -1 && suggestedRoles[suggestedIndex]) {
+          return {
+            ...participant,
+            role: suggestedRoles[suggestedIndex],
+          };
+        }
+        return participant;
+      });
+    }
+
+    // If suggested has models not in current, create new participant list
+    if (!allSuggestedInCurrent) {
+      return suggestedModels.map((modelId, index) => {
+        // Try to find existing participant with this model
+        const existing = currentParticipants.find(p => p.modelId === modelId);
+        if (existing) {
+          return {
+            ...existing,
+            role: suggestedRoles?.[index] ?? existing.role,
+            priority: index,
+          };
+        }
+        // Create new participant
+        return {
+          id: crypto.randomUUID(),
+          modelId,
+          role: suggestedRoles?.[index] ?? null,
+          priority: index,
+        };
+      });
+    }
+  }
+
+  // No current participants or no overlap - create fresh
+  return suggestedModels.map((modelId, index) => ({
+    id: crypto.randomUUID(),
+    modelId,
+    role: suggestedRoles?.[index] ?? null,
+    priority: index,
+  }));
+}
+
+/**
  * Applies a recommended action from moderator analysis to form state
  *
- * Handles:
- * - Input value update from suggestion
- * - Mode validation and application
- * - Participant model updates with tier restrictions
- * - Model access validation based on subscription tier
- * - Model count limits enforcement
+ * Updates:
+ * - inputValue: from suggestedPrompt (fallback to title)
+ * - selectedParticipants: from suggestedModels + suggestedRoles
  *
- * @param action - Recommended action from moderator analysis
- * @param options - User tier info and available models
- * @returns Result with success status, updates object, and validation feedback
+ * @param action - Recommended action from moderator analysis (ArticleRecommendation)
+ * @param options - Options including currentParticipants for merging
+ * @returns Result with success status and updates object
  */
 export function applyRecommendedAction(
-  action: Recommendation,
+  action: ArticleRecommendation,
   options: ApplyRecommendedActionOptions = {},
 ): ApplyRecommendedActionInternalResult {
-  const { maxModels, tierName, userTier, allModels } = options;
-
-  // Track results for validation feedback
-  let modelsAdded = 0;
-  let modelsSkipped = 0;
-  let error: string | undefined;
-
-  // Build updates object
   const updates: ApplyRecommendedActionInternalResult['updates'] = {};
 
-  // 1. Set input from suggestion (use suggestedPrompt if available, fallback to title)
+  // Use suggestedPrompt if available, otherwise fall back to title
   updates.inputValue = action.suggestedPrompt || action.title;
 
-  // 2. Apply mode suggestion if provided (validate with schema)
-  if (action.suggestedMode) {
-    const modeResult = ChatModeSchema.safeParse(action.suggestedMode);
-    if (modeResult.success) {
-      updates.selectedMode = modeResult.data;
-    }
-  }
-
-  // 3. Apply participant suggestions if provided - ONLY reset participants if models are suggested
-  if (action.suggestedModels && action.suggestedModels.length > 0) {
-    // Reset participants when new models are suggested
-    updates.selectedParticipants = [];
-
-    // Filter to only valid model IDs (format: provider/model)
-    const validModelIds = action.suggestedModels.filter(modelId =>
-      modelId.includes('/'),
+  // Apply suggested models and roles if provided
+  if (action.suggestedModels?.length) {
+    updates.selectedParticipants = createParticipantsFromSuggestions(
+      action.suggestedModels,
+      action.suggestedRoles,
+      options.currentParticipants,
     );
-
-    // Filter by tier access if tier and models data provided
-    let accessibleModels = validModelIds;
-    if (userTier && allModels && allModels.length > 0) {
-      accessibleModels = validModelIds.filter((modelId) => {
-        const modelData = allModels.find(m => m.id === modelId);
-        if (!modelData) {
-          // Model not found in available models list, skip it
-          return false;
-        }
-        // Check if user can access this model based on their tier
-        return canAccessModelByPricing(userTier, modelData);
-      });
-
-      // Track skipped models due to tier restrictions
-      const tierRestrictedCount
-        = validModelIds.length - accessibleModels.length;
-      if (tierRestrictedCount > 0) {
-        modelsSkipped += tierRestrictedCount;
-      }
-    }
-
-    // Check tier limits if provided
-    if (maxModels !== undefined) {
-      const availableSlots = maxModels; // All slots available when replacing participants
-
-      if (availableSlots === 0) {
-        error = `Your ${tierName || 'current'} plan allows up to ${maxModels} models per conversation. Remove a model to add another, or upgrade your plan.`;
-        modelsSkipped = accessibleModels.length;
-      } else if (accessibleModels.length > availableSlots) {
-        // Partial add: only add models that fit
-        const modelsToAdd = accessibleModels.slice(0, availableSlots);
-        modelsSkipped += accessibleModels.length - availableSlots;
-
-        // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
-        const newParticipants = modelsToAdd.map((modelId, index) => {
-          const originalIndex = action.suggestedModels!.indexOf(modelId);
-          return {
-            id: modelId,
-            modelId,
-            role: action.suggestedRoles?.[originalIndex] || null,
-            customRoleId: undefined,
-            priority: index,
-          } satisfies ParticipantConfig;
-        });
-
-        updates.selectedParticipants = newParticipants;
-        modelsAdded = modelsToAdd.length;
-        error = `Only ${modelsAdded} of ${accessibleModels.length} suggested models were added. Your ${tierName || 'current'} plan allows up to ${maxModels} models. Upgrade to add more.`;
-      } else {
-        // All accessible models fit within limit
-        // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
-        const newParticipants = accessibleModels.map((modelId, index) => {
-          const originalIndex = action.suggestedModels!.indexOf(modelId);
-          return {
-            id: modelId,
-            modelId,
-            role: action.suggestedRoles?.[originalIndex] || null,
-            customRoleId: undefined,
-            priority: index,
-          } satisfies ParticipantConfig;
-        });
-
-        updates.selectedParticipants = newParticipants;
-        modelsAdded = accessibleModels.length;
-      }
-    } else {
-      // No tier limit provided, add all accessible models
-      if (accessibleModels.length > 0) {
-        // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
-        const newParticipants = accessibleModels.map((modelId, index) => {
-          const originalIndex = action.suggestedModels!.indexOf(modelId);
-          return {
-            id: modelId,
-            modelId,
-            role: action.suggestedRoles?.[originalIndex] || null,
-            customRoleId: undefined,
-            priority: index,
-          } satisfies ParticipantConfig;
-        });
-
-        updates.selectedParticipants = newParticipants;
-        modelsAdded = accessibleModels.length;
-      }
-    }
+  } else if (action.suggestedRoles?.length && options.currentParticipants?.length) {
+    // Only roles suggested (no models) - apply roles to current participants
+    updates.selectedParticipants = options.currentParticipants.map((participant, index) => ({
+      ...participant,
+      role: action.suggestedRoles?.[index] ?? participant.role,
+    }));
   }
 
-  // Return result object
   return {
-    success: error === undefined || modelsAdded > 0,
-    error,
-    modelsAdded,
-    modelsSkipped,
+    success: true,
     updates,
   };
 }

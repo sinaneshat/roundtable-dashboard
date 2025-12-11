@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 
+import type { MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
@@ -23,7 +24,7 @@ import { StreamingCursor } from '@/components/ui/streaming-text';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
-import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
+import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { hasCitations } from '@/lib/utils/citation-parser';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 

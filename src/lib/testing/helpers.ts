@@ -2,7 +2,7 @@ import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
 import type { AnalysisStatus, WebSearchDepth } from '@/api/core/enums';
-import { AnalysisStatuses, MessageRoles, UIMessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles, UIMessageRoles, WebSearchDepths } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 
 /**
@@ -351,7 +351,7 @@ export function createMockPreSearch(data: {
 /**
  * Creates mock search data payload for testing
  * ✅ ZOD-FIRST: Matches PreSearchDataPayloadSchema structure
- * ✅ TYPE-SAFE: No hardcoded return types, uses const inference
+ * ✅ TYPE-SAFE: Uses WebSearchDepth type from enums - schema drift causes compile error
  *
  * @param options - Configuration for number of queries and results
  * @param options.numQueries - Number of search queries to generate
@@ -365,7 +365,7 @@ export function createMockSearchData(options?: {
   queries: Array<{
     query: string;
     rationale: string;
-    searchDepth: 'basic' | 'advanced';
+    searchDepth: WebSearchDepth; // ✅ TYPE-SAFE: Uses enum type
     index: number;
     total: number;
   }>;
@@ -392,7 +392,8 @@ export function createMockSearchData(options?: {
   const queries = Array.from({ length: numQueries }, (_, i) => ({
     query: `Test query ${i + 1}`,
     rationale: `Rationale for query ${i + 1}`,
-    searchDepth: (i % 2 === 0 ? 'basic' : 'advanced') as 'basic' | 'advanced',
+    // ✅ TYPE-SAFE: Uses WebSearchDepths enum values - no hardcoded strings
+    searchDepth: i % 2 === 0 ? WebSearchDepths.BASIC : WebSearchDepths.ADVANCED,
     index: i,
     total: numQueries,
   }));

@@ -18,9 +18,8 @@
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { Recommendation } from '@/api/routes/chat/schema';
+import type { ArticleRecommendation } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { useModelsQuery } from '@/hooks/queries/models';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
@@ -42,7 +41,7 @@ export type UseRecommendedActionsOptions = {
 
 export type UseRecommendedActionsReturn = {
   /** Handle recommended action click - delegates to store action + handles UI concerns */
-  handleActionClick: (action: Recommendation) => void;
+  handleActionClick: (action: ArticleRecommendation) => void;
 };
 
 /**
@@ -84,23 +83,14 @@ export function useRecommendedActions(
     setHasPendingConfigChanges: s.setHasPendingConfigChanges,
   })));
 
-  // Get tier config and models data for filtering by tier access
-  const { data: modelsData } = useModelsQuery();
-  const userTierConfig = modelsData?.data?.user_tier_config;
-  const allModels = modelsData?.data?.items;
-
   /**
    * Handle recommended action click
-   * Delegates to store action, then handles UI concerns
+   * ✅ ARTICLE-STYLE: Simplified - just sets input value from recommendation title
    */
-  const handleActionClick = useCallback((action: Recommendation) => {
+  const handleActionClick = useCallback((action: ArticleRecommendation) => {
     // ✅ BUSINESS LOGIC: Delegate to store action (single source of truth)
-    // This handles: full state reset, setting input, applying mode, filtering models by tier, adding participants
+    // This handles: setting input value from recommendation title
     actions.applyRecommendedAction(action, {
-      maxModels: userTierConfig?.max_models,
-      tierName: userTierConfig?.tier_name,
-      userTier: userTierConfig?.tier,
-      allModels,
       // ✅ PRESERVE THREAD STATE: When on thread screen, don't reset navigation
       preserveThreadState,
     });
@@ -123,8 +113,6 @@ export function useRecommendedActions(
     markConfigChanged,
     enableScroll,
     inputContainerRef,
-    userTierConfig,
-    allModels,
     preserveThreadState,
   ]);
 

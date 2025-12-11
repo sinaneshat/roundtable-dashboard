@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
+import { HealthStatusSchema } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 // ============================================================================
 // INTERNAL HANDLER SCHEMAS - Single Source of Truth
@@ -11,7 +12,7 @@ const HealthPayloadSchema = z.object({
     example: true,
     description: 'Health check status indicator',
   }),
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     example: 'healthy',
     description: 'System health status',
   }),
@@ -24,7 +25,7 @@ const HealthPayloadSchema = z.object({
 export const HealthResponseSchema = createApiResponseSchema(HealthPayloadSchema).openapi('HealthResponse');
 
 const HealthCheckResultSchema = z.object({
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     example: 'healthy',
     description: 'Health status of the checked component',
   }),
@@ -47,7 +48,7 @@ const DetailedHealthPayloadSchema = z.object({
     example: true,
     description: 'Overall system health indicator',
   }),
-  status: z.enum(['healthy', 'degraded', 'unhealthy']).openapi({
+  status: HealthStatusSchema.openapi({
     example: 'healthy',
     description: 'Overall system health status',
   }),

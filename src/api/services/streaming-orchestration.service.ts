@@ -23,6 +23,7 @@ import {
   CitationSourcePrefixes,
   CitationSourceTypes,
   MAX_TEXT_CONTENT_SIZE,
+  MessageRoles,
   TEXT_EXTRACTABLE_MIME_TYPES,
   UIMessageRoles,
 } from '@/api/core/enums';
@@ -1345,7 +1346,7 @@ export async function prepareValidatedMessages(
         .filter((msg) => {
           // Always check user messages - they might have attachments in junction table
           // even if the message parts don't include file parts (e.g., round 0 thread creation)
-          if (msg.role === 'user') {
+          if (msg.role === MessageRoles.USER) {
             return true;
           }
 
@@ -1372,7 +1373,7 @@ export async function prepareValidatedMessages(
         messageIdsToCheck,
         totalPreviousMessages: previousMessages.length,
         userMessages: previousMessages
-          .filter(m => m.role === 'user')
+          .filter(m => m.role === MessageRoles.USER)
           .map(m => ({
             id: m.id,
             hasFileParts:

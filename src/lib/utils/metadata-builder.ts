@@ -43,6 +43,7 @@ export type ParticipantMetadataParams = {
     | 'length'
     | 'content-filter'
     | 'tool-calls'
+    | 'error'
     | 'failed'
     | 'other'
     | 'unknown';

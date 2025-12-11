@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
+import type { MessageStatus } from '@/api/core/enums';
 import { AnalysisStatuses, MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -19,7 +20,7 @@ import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
-import type { FilePart, MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
+import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';

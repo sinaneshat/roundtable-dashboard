@@ -15,9 +15,94 @@
  * @see /src/api/types/citations.ts for citation type definitions
  */
 
-import type { ChatMode, QueryAnalysisResult } from '@/api/core/enums';
-import { ChatModes, QueryAnalysisComplexities, WebSearchDepths } from '@/api/core/enums';
+import type { z } from '@hono/zod-openapi';
+
+import type { ChatMode, PlaceholderPrefix, QueryAnalysisResult } from '@/api/core/enums';
+import { ChatModes, PlaceholderPrefixes, QueryAnalysisComplexities, WebSearchDepths } from '@/api/core/enums';
+import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import type { AttachmentCitationInfo } from '@/api/types/citations';
+
+// ============================================================================
+// PROMPT PLACEHOLDER TYPES (Type-Safe Template System)
+// ============================================================================
+
+/**
+ * Recursive type that converts a schema type into a "placeholder" version
+ * where all primitive values become strings (for AI prompt placeholders)
+ *
+ * - Primitives (string, number, boolean) -> string placeholder
+ * - Arrays -> array with single placeholder element
+ * - Objects -> recursively converted
+ * - Nullable -> placeholder string
+ * - Optional -> placeholder string | undefined
+ */
+export type PromptPlaceholder<T>
+  = T extends (infer U)[]
+    ? [PromptPlaceholder<U>]
+    : T extends object
+      ? { [K in keyof T]: PromptPlaceholder<T[K]> }
+      : string;
+
+/**
+ * Type-safe prompt template definition
+ * Ensures the template structure exactly matches the schema type
+ */
+export type TypedPromptTemplate<TSchema extends z.ZodTypeAny> = PromptPlaceholder<z.infer<TSchema>>;
+
+/**
+ * Validates that a plain object satisfies the schema structure.
+ * Used with `satisfies` operator for existing inline templates.
+ *
+ * @example
+ * const MY_TEMPLATE = {
+ *   field: '<COMPUTE: ...>',
+ * } satisfies ValidatePromptTemplate<MyType>;
+ */
+export type ValidatePromptTemplate<T> = PromptPlaceholder<T>;
+
+// ============================================================================
+// PLACEHOLDER FACTORY UTILITIES
+// ============================================================================
+
+/**
+ * Creates a placeholder string with consistent formatting
+ *
+ * @param prefix - Type of placeholder (FROM_CONTEXT, COMPUTE, EXTRACT, OPTIONAL)
+ * @param description - Description of what value should be
+ * @returns Formatted placeholder string like '<COMPUTE: description>'
+ */
+export function placeholder(prefix: PlaceholderPrefix, description: string): string {
+  return `<${prefix}: ${description}>`;
+}
+
+/**
+ * Shorthand placeholder creators
+ */
+export const p = {
+  context: (desc: string) => placeholder(PlaceholderPrefixes.FROM_CONTEXT, desc),
+  compute: (desc: string) => placeholder(PlaceholderPrefixes.COMPUTE, desc),
+  extract: (desc: string) => placeholder(PlaceholderPrefixes.EXTRACT, desc),
+  optional: (desc: string) => placeholder(PlaceholderPrefixes.OPTIONAL, desc),
+} as const;
+
+/**
+ * Type guard that validates a template matches the schema structure at compile time.
+ *
+ * Usage:
+ * ```typescript
+ * const template = createPromptTemplate<typeof MySchema>({
+ *   field1: '<COMPUTE: ...>',
+ *   field2: '<FROM_CONTEXT: ...>',
+ * });
+ * ```
+ *
+ * This will error at compile time if the structure doesn't match.
+ */
+export function createPromptTemplate<TSchema extends z.ZodTypeAny>(
+  template: TypedPromptTemplate<TSchema>,
+): TypedPromptTemplate<TSchema> {
+  return template;
+}
 
 // ============================================================================
 // Application-Specific Prompts - Single Source of Truth
@@ -627,108 +712,80 @@ ${basePrompt}`;
  * @returns JSON structure template matching ModeratorAnalysisPayloadSchema
  */
 /**
- * Multi-AI Deliberation Framework - New Schema
- * ✅ BREAKING CHANGE: Replaced leaderboard/participantAnalyses with contributorPerspectives + consensusAnalysis
+ * Article-Style Analysis Schema - TYPE-SAFE PROMPT TEMPLATE
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Structure validated against ModeratorAnalysisPayload type
+ * ✅ TYPE-SAFE: `satisfies ValidatePromptTemplate<...>` causes compile error if structure drifts
+ * ✅ ARTICLE FORMAT: Coherent narrative summary with transparent attribution
  * ✅ ALL VALUES ARE PLACEHOLDERS - AI must compute actual values from conversation
+ *
+ * If you change ModeratorAnalysisPayloadSchema in schema.ts, TypeScript will error here
+ * until this template is updated to match - preventing silent schema drift.
+ */
+/**
+ * ✅ STREAMING ORDER: Fields ordered to match UI display from top to bottom
+ * This ensures content streams in visual order for better UX:
+ * 1. Confidence header (top)
+ * 2. Model badges
+ * 3. Key Insights (article + recommendations)
+ * 4. Consensus Table
+ * 5. Minority Views
+ * 6. Convergence & Divergence (bottom)
  */
 export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
-  roundNumber: '<FROM_CONTEXT: 0-based round number>',
-  mode: '<FROM_CONTEXT: analyzing|brainstorming|debating|solving>',
-  userQuestion: '<FROM_CONTEXT: actual user question>',
-
-  // Round Confidence Header - Overall confidence metrics
-  roundConfidence: '<COMPUTE: 0-100 based on vote distribution and evidence strength>',
-  confidenceWeighting: '<COMPUTE: balanced|evidence_heavy|consensus_heavy|expertise_weighted>',
-
-  // Consensus Evolution - Timeline showing how consensus evolved through debate phases
-  // ✅ CRITICAL: Percentages must be CALCULATED based on actual agreement in discussion
-  consensusEvolution: [
-    { phase: 'opening', percentage: '<COMPUTE: initial consensus %>', label: 'Opening' },
-    { phase: 'rebuttal', percentage: '<COMPUTE: after rebuttals %>', label: 'Rebuttal' },
-    { phase: 'cross_exam', percentage: '<COMPUTE: after examination %>', label: 'Cross-Exam' },
-    { phase: 'synthesis', percentage: '<COMPUTE: after synthesis %>', label: 'Synthesis' },
-    { phase: 'final_vote', percentage: '<MUST_MATCH: roundConfidence>', label: 'Final Vote' },
-  ],
-
-  summary: '<COMPUTE: synthesis of key findings from discussion>',
+  roundNumber: p.context('0-based round number'),
+  mode: p.context('analyzing|brainstorming|debating|solving'),
+  userQuestion: p.context('actual user question'),
+  confidence: {
+    overall: p.compute('0-100 based on consensus level and evidence quality'),
+    reasoning: p.compute('1-2 sentence explanation of confidence score'),
+  },
+  modelVoices: [{
+    modelName: p.context('model display name'),
+    modelId: p.context('model ID'),
+    participantIndex: p.context('0-based index'),
+    role: p.context('participant role or null'),
+    position: p.compute('summarize their stance in 1-2 sentences'),
+    keyContribution: p.compute('their most valuable insight'),
+    notableQuote: p.extract('impactful quote from their response'),
+  }],
+  article: {
+    headline: p.compute('1-line summary of outcome'),
+    narrative: p.compute('2-4 paragraph synthesis of all perspectives into coherent story'),
+    keyTakeaway: p.compute('1-2 sentence actionable conclusion'),
+  },
   recommendations: [{
-    title: '<COMPUTE: actionable title from gaps identified>',
-    description: '<COMPUTE: why this matters based on analysis>',
-    suggestedPrompt: '<COMPUTE: follow-up question to address gaps>',
-    suggestedModels: ['<FROM_AVAILABLE_MODELS: model ID>'],
-    suggestedRoles: ['<FROM_AVAILABLE_ROLES: role name>'],
-    suggestedMode: '<COMPUTE: appropriate chat mode>',
+    title: p.compute('short action title'),
+    description: p.compute('why this matters'),
+    suggestedPrompt: p.optional('follow-up question user could ask'),
+    suggestedModels: [p.optional('model IDs from available list')],
+    suggestedRoles: [p.optional('matching roles for models')],
   }],
-  contributorPerspectives: [{
-    participantIndex: '<FROM_CONTEXT: participant index>',
-    role: '<FROM_CONTEXT: participant role>',
-    modelId: '<FROM_CONTEXT: model ID>',
-    modelName: '<FROM_CONTEXT: model name>',
-    scorecard: {
-      logic: '<COMPUTE: 0-100 based on response quality>',
-      riskAwareness: '<COMPUTE: 0-100 based on response>',
-      creativity: '<COMPUTE: 0-100 based on response>',
-      evidence: '<COMPUTE: 0-100 based on response>',
-      consensus: '<COMPUTE: 0-100 based on response>',
-    },
-    stance: '<COMPUTE: summarize their actual position>',
-    evidence: ['<EXTRACT: key points from their response>'],
-    vote: '<COMPUTE: approve|caution|reject based on stance>',
-  }],
-  consensusAnalysis: {
-    alignmentSummary: {
-      totalClaims: '<COUNT: claims identified in discussion>',
-      majorAlignment: '<COUNT: claims where majority agrees>',
-      contestedClaims: '<COUNT: disputed claims>',
-      contestedClaimsList: [{
-        claim: '<EXTRACT: actual contested claim>',
-        status: 'contested',
-      }],
-    },
-    // ✅ Array-based format for Anthropic compatibility
-    agreementHeatmap: [{
-      claim: '<EXTRACT: key claim from discussion>',
-      perspectives: [{
-        modelName: '<PARTICIPANT_ROLE>',
-        status: '<COMPUTE: agree|disagree|neutral|caution>',
-      }],
+  consensusTable: [{
+    topic: p.compute('key topic of discussion'),
+    positions: [{
+      modelName: p.context('model display name'),
+      stance: p.compute('agree|disagree|nuanced'),
+      brief: p.compute('1-line reason for stance'),
     }],
-    // ✅ Array-based format for Anthropic compatibility
-    argumentStrengthProfile: [{
-      modelName: '<PARTICIPANT_ROLE>',
-      logic: '<COMPUTE: 0-100>',
-      evidence: '<COMPUTE: 0-100>',
-      riskAwareness: '<COMPUTE: 0-100>',
-      consensus: '<COMPUTE: 0-100>',
-      creativity: '<COMPUTE: 0-100>',
+    resolution: p.compute('consensus|majority|split|contested'),
+  }],
+  minorityViews: [{
+    modelName: p.context('model display name'),
+    view: p.extract('their dissenting opinion'),
+    reasoning: p.compute('why they disagree'),
+    worthConsidering: p.compute('true if view has merit despite being minority'),
+  }],
+  convergenceDivergence: {
+    convergedOn: [p.compute('points where all/most agreed')],
+    divergedOn: [p.compute('points of ongoing disagreement')],
+    evolved: [{
+      point: p.compute('topic where views changed'),
+      initialState: p.compute('where discussion started'),
+      finalState: p.compute('where discussion ended'),
     }],
   },
-  evidenceAndReasoning: {
-    reasoningThreads: [{
-      claim: '<EXTRACT: key claim>',
-      synthesis: '<COMPUTE: how participants reasoned about this>',
-    }],
-    evidenceCoverage: [{
-      claim: '<EXTRACT: claim from discussion>',
-      strength: '<COMPUTE: strong|moderate|weak based on support>',
-      percentage: '<COMPUTE: 0-100 evidence strength>',
-    }],
-  },
-  alternatives: [{
-    scenario: '<EXTRACT: alternative approach mentioned>',
-    confidence: '<COMPUTE: 0-100 viability>',
-  }],
-  roundSummary: {
-    participation: {
-      approved: '<COUNT: approve votes>',
-      cautioned: '<COUNT: caution votes>',
-      rejected: '<COUNT: reject votes>',
-    },
-    keyThemes: '<COMPUTE: main discussion outcomes>',
-    unresolvedQuestions: ['<EXTRACT: questions needing further discussion>'],
-    generated: '<CURRENT_TIMESTAMP>',
-  },
-};
+} satisfies ValidatePromptTemplate<ModeratorAnalysisPayload>;
 
 /**
  * Build moderator analysis enhanced user prompt
@@ -745,18 +802,28 @@ export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
 export function buildModeratorAnalysisEnhancedPrompt(userPrompt: string): string {
   return `${userPrompt}
 
-CRITICAL REQUIREMENTS FOR YOUR RESPONSE:
-1. Respond with a valid JSON object matching the structure below
-2. ALL values marked with <COMPUTE:...> MUST be calculated from the ACTUAL conversation above
-3. ALL values marked with <FROM_CONTEXT:...> MUST come from the participant data provided
-4. ALL values marked with <EXTRACT:...> MUST be extracted from actual responses
-5. ALL values marked with <COUNT:...> MUST be counted from actual data
-6. NEVER use template/example values - every number must reflect real analysis
-7. consensusEvolution percentages must show ACTUAL progression based on discussion flow
-8. final_vote percentage MUST equal roundConfidence
-9. Use null for missing values
+OUTPUT STYLE: Brief polished "summary article" - like a journalist's concise synthesis
+USER GOAL: Quick at-a-glance understanding of what the panel concluded
 
-JSON STRUCTURE (replace all <...> placeholders with computed values):
+CRITICAL REQUIREMENTS:
+1. Respond with valid JSON matching the structure below IN EXACT FIELD ORDER
+2. BE CONCISE - users want quick insights, not lengthy reports
+3. FIELD ORDER MATTERS: Generate fields in exact order shown (confidence first, then modelVoices, etc.)
+4. confidence: 0-100 score with 1-2 sentence reasoning
+5. modelVoices: Just core position (1 sentence each), skip verbose quotes
+6. article.headline: 1 powerful sentence (max 15 words)
+7. article.keyTakeaway: 1 actionable sentence (the bottom line)
+8. article.narrative: 1-2 SHORT paragraphs max (be brief!)
+9. recommendations: Max 2-3 actionable next steps
+10. consensusTable: Only 2-3 most important topics, not exhaustive
+11. minorityViews: Only include if genuinely worth noting (empty array if unanimous)
+12. All placeholders MUST be computed from actual conversation data
+
+STANCE/RESOLUTION TYPES:
+- stance: agree | disagree | nuanced
+- resolution: consensus | majority | split | contested
+
+JSON STRUCTURE (GENERATE IN THIS EXACT ORDER):
 ${JSON.stringify(MODERATOR_ANALYSIS_JSON_STRUCTURE, null, 2)}`;
 }
 

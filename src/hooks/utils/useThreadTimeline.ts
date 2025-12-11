@@ -183,14 +183,25 @@ export function useThreadTimeline({
         return;
       }
 
+      // ✅ FIX: Don't show changelog for rounds that have no messages and no pre-search
+      // These are "future" rounds where config was changed but round hasn't started yet
+      // Only show changelog when the round is actually starting (has messages or pre-search)
+      const shouldShowChangelog = hasChangelog && (hasMessages || hasPreSearch);
+
       // Add changelog first (shows configuration changes before messages)
-      if (hasChangelog) {
+      if (shouldShowChangelog) {
         timeline.push({
           type: 'changelog',
           data: roundChangelog,
           key: `round-${roundNumber}-changelog`,
           roundNumber,
         });
+      }
+
+      // Skip entire round if it only has changelog (no messages, no pre-search)
+      // This prevents showing orphaned changelog at the bottom
+      if (!hasMessages && !hasPreSearch) {
+        return;
       }
 
       // ✅ RESUMPTION FIX: Pre-search renders at timeline level ONLY for orphaned rounds
@@ -221,15 +232,41 @@ export function useThreadTimeline({
       }
 
       // Add analysis after messages (if exists and should be shown)
-      // ✅ REVISED: Only filter out PENDING placeholder analyses (empty participantMessageIds)
-      // STREAMING/COMPLETE/FAILED analyses should ALWAYS show for proper stream resumption
-      // Placeholder states (PENDING + empty participantMessageIds) are handled by participant cards instead
+      // ✅ REVISED: Only show analysis when:
+      // 1. Status is NOT pending (streaming/complete/failed always show)
+      // 2. Status IS pending but all referenced messages have actual content
+      // This prevents analysis card from showing before participants finish streaming
       if (roundAnalysis) {
-        const isPendingPlaceholder = roundAnalysis.status === AnalysisStatuses.PENDING
-          && (!roundAnalysis.participantMessageIds || roundAnalysis.participantMessageIds.length === 0);
+        const isPending = roundAnalysis.status === AnalysisStatuses.PENDING;
+        const hasMessageIds = roundAnalysis.participantMessageIds && roundAnalysis.participantMessageIds.length > 0;
 
-        // Show analysis if it's NOT a pending placeholder
-        if (!isPendingPlaceholder) {
+        let shouldShowAnalysis = false;
+
+        if (!isPending) {
+          // Non-pending (streaming/complete/failed) always show
+          shouldShowAnalysis = true;
+        } else if (hasMessageIds && roundMessages && roundMessages.length > 0) {
+          // Pending with messageIds - only show if ALL referenced messages have content
+          const allMessagesHaveContent = roundAnalysis.participantMessageIds!.every((msgId) => {
+            const msg = roundMessages.find(m => m.id === msgId);
+            if (!msg)
+              return false;
+            // Check for text content
+            const hasText = msg.parts?.some(
+              p => p.type === 'text' && 'text' in p && p.text,
+            );
+            if (hasText)
+              return true;
+            // Check for valid finishReason (completed even if no text)
+            const metadata = msg.metadata as Record<string, unknown> | undefined;
+            const finishReason = metadata?.finishReason;
+            return finishReason && finishReason !== 'unknown';
+          });
+          shouldShowAnalysis = allMessagesHaveContent;
+        }
+        // Pending with no messageIds = placeholder, don't show
+
+        if (shouldShowAnalysis) {
           timeline.push({
             type: 'analysis',
             data: roundAnalysis,

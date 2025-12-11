@@ -139,7 +139,7 @@ export function useProjectAttachmentsQuery(
  *
  * @param projectId - Project ID
  * @param source - Optional filter by memory source
- * @param isActive - Optional filter by active status
+ * @param isActive - Optional filter by active status ('true' | 'false' string for query param)
  * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
  */
 export function useProjectMemoriesQuery(

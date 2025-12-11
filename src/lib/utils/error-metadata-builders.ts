@@ -22,8 +22,7 @@
  * - product-logic.service.ts:745-776 (isTransientError)
  */
 
-import { FinishReasonSchema } from '@/api/core/enums';
-import { ErrorCategorySchema } from '@/lib/schemas/error-schemas';
+import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { isObject } from '@/lib/utils/type-guards';
 
 // ============================================================================

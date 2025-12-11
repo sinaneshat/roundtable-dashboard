@@ -1,43 +1,42 @@
 'use client';
 
 import {
-  FileText,
-  GitBranch,
+  AlertTriangle,
+  CheckCircle2,
+  GitMerge,
   Info,
   Lightbulb,
-  TrendingUp,
   Users,
+  XCircle,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { Recommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ArticleRecommendation, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { extractModelName, getModelIconInfo } from '@/lib/utils/ai-display';
 import { hasAnalysisData } from '@/lib/utils/analysis-utils';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
-import { AboutFrameworkSection } from './about-framework-section';
-import { AlternativesSection } from './alternatives-section';
 import { CollapsibleSection } from './collapsible-section';
-import { ConsensusAnalysisSection } from './consensus-analysis-section';
-import { ContributorPerspectivesSection } from './contributor-perspectives-section';
-import { EvidenceReasoningSection } from './evidence-reasoning-section';
 import { KeyInsightsSection } from './key-insights-section';
+import { getResolutionBadgeVariant, getStanceIcon } from './moderator-ui-utils';
 import { RoundOutcomeHeader } from './round-outcome-header';
-import { RoundSummarySection } from './round-summary-section';
 
 /** Section open states for demo mode control */
 export type DemoSectionOpenStates = {
   keyInsights?: boolean;
-  contributorPerspectives?: boolean;
-  consensusAnalysis?: boolean;
-  evidenceReasoning?: boolean;
-  alternatives?: boolean;
-  roundSummary?: boolean;
+  modelVoices?: boolean;
+  consensusTable?: boolean;
+  minorityViews?: boolean;
+  convergenceDivergence?: boolean;
   aboutFramework?: boolean;
 };
 
 type ModeratorAnalysisPanelProps = {
   analysis: StoredModeratorAnalysis;
-  onActionClick?: (action: Recommendation) => void;
+  onActionClick?: (action: ArticleRecommendation) => void;
   /** Demo mode controlled section open states */
   demoSectionStates?: DemoSectionOpenStates;
 };
@@ -57,9 +56,6 @@ export function ModeratorAnalysisPanel({
     return (
       <div className="flex items-center gap-2 py-2 text-sm text-destructive">
         <span className="size-1.5 rounded-full bg-destructive/80" />
-        {/* ✅ FIX: Always show user-friendly message for FAILED analyses
-            Technical errorMessage (e.g., "Stream timeout after 25s") is not helpful
-            for end-users - it's stored for debugging purposes only */}
         <span>{t('errorAnalyzing')}</span>
       </div>
     );
@@ -77,24 +73,22 @@ export function ModeratorAnalysisPanel({
 
   // Calculate counts for subtitles
   const recommendationCount = data.recommendations?.length ?? 0;
-  const claimsInfo = data.consensusAnalysis?.alignmentSummary;
-  const evidenceCount = data.evidenceAndReasoning?.evidenceCoverage?.length ?? 0;
-  const alternativeCount = data.alternatives?.length ?? 0;
+  const modelVoicesCount = data.modelVoices?.length ?? 0;
+  const consensusTopicCount = data.consensusTable?.length ?? 0;
+  const minorityViewCount = data.minorityViews?.length ?? 0;
 
   return (
     <div className="space-y-4">
-      {/* Round Outcome Header */}
+      {/* Round Outcome Header - Updated for new schema */}
       <RoundOutcomeHeader
-        roundConfidence={data.roundConfidence}
-        confidenceWeighting={data.confidenceWeighting}
-        consensusEvolution={data.consensusEvolution}
-        contributors={data.contributorPerspectives}
+        confidence={data.confidence}
+        modelVoices={data.modelVoices}
       />
 
       {/* Collapsible Sections */}
       <div className="space-y-2">
-        {/* Key Insights & Recommendations */}
-        {(data.summary || (data.recommendations && data.recommendations.length > 0)) && (
+        {/* Key Insights & Recommendations (Article Summary) */}
+        {(data.article || (data.recommendations && data.recommendations.length > 0)) && (
           <CollapsibleSection
             icon={<Lightbulb className="size-4" />}
             title={t('keyInsights.title')}
@@ -103,70 +97,164 @@ export function ModeratorAnalysisPanel({
             demoOpen={demoSectionStates?.keyInsights}
           >
             <KeyInsightsSection
-              summary={data.summary}
+              article={data.article}
               recommendations={data.recommendations}
               onActionClick={onActionClick}
             />
           </CollapsibleSection>
         )}
 
-        {/* Contributor Perspectives */}
-        {data.contributorPerspectives && data.contributorPerspectives.length > 0 && (
+        {/* Model Voices - Chat-style with avatar */}
+        {data.modelVoices && data.modelVoices.length > 0 && (
           <CollapsibleSection
             icon={<Users className="size-4" />}
-            title={t('contributorPerspectives.title')}
-            subtitle={data.roundConfidence ? t('contributorPerspectives.subtitle', { convergence: data.roundConfidence }) : undefined}
-            demoOpen={demoSectionStates?.contributorPerspectives}
+            title={t('modelVoices.title')}
+            subtitle={t('modelVoices.contributorCount', { count: modelVoicesCount })}
+            demoOpen={demoSectionStates?.modelVoices}
           >
-            <ContributorPerspectivesSection perspectives={data.contributorPerspectives} />
+            <div className="space-y-3">
+              {data.modelVoices.map((voice) => {
+                const { icon, providerName } = getModelIconInfo(voice.modelId);
+                const modelName = extractModelName(voice.modelId);
+                return (
+                  <div key={`voice-${voice.modelId}-${voice.participantIndex}`} className="flex items-start gap-3">
+                    <Avatar className="size-8 flex-shrink-0">
+                      <AvatarImage src={icon} alt={modelName} />
+                      <AvatarFallback className="text-xs">{providerName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{modelName}</span>
+                        {voice.role && (
+                          <Badge
+                            className="text-[10px] px-1.5 py-0"
+                            style={getRoleBadgeStyle(voice.role)}
+                          >
+                            {voice.role}
+                          </Badge>
+                        )}
+                      </div>
+                      {voice.position && (
+                        <p className="text-sm text-muted-foreground">{voice.position}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </CollapsibleSection>
         )}
 
-        {/* Consensus Analysis */}
-        {data.consensusAnalysis && (
+        {/* Consensus Table - Compact */}
+        {data.consensusTable && data.consensusTable.length > 0 && (
           <CollapsibleSection
-            icon={<TrendingUp className="size-4" />}
-            title={t('consensusAnalysis.title')}
-            subtitle={claimsInfo ? t('consensusAnalysis.subtitle', { alignment: claimsInfo.majorAlignment, total: claimsInfo.totalClaims }) : undefined}
-            demoOpen={demoSectionStates?.consensusAnalysis}
+            icon={<CheckCircle2 className="size-4" />}
+            title={t('consensusTable.title')}
+            subtitle={t('consensusTable.topicCount', { count: consensusTopicCount })}
+            demoOpen={demoSectionStates?.consensusTable}
           >
-            <ConsensusAnalysisSection analysis={data.consensusAnalysis} />
+            <div className="space-y-3">
+              {data.consensusTable.map(entry => (
+                <div key={`consensus-${entry.topic}`} className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{entry.topic}</span>
+                    <Badge
+                      variant={getResolutionBadgeVariant(entry.resolution)}
+                      className="text-xs"
+                    >
+                      {entry.resolution}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {entry.positions.map(pos => (
+                      <span key={`pos-${entry.topic}-${pos.modelName}`} className="flex items-center gap-1">
+                        {getStanceIcon(pos.stance)}
+                        <span className="font-medium">{pos.modelName}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </CollapsibleSection>
         )}
 
-        {/* Evidence & Reasoning */}
-        {data.evidenceAndReasoning && (
+        {/* Minority Views - Compact */}
+        {data.minorityViews && data.minorityViews.length > 0 && (
           <CollapsibleSection
-            icon={<FileText className="size-4" />}
-            title={t('evidenceReasoning.title')}
-            subtitle={evidenceCount > 0 ? t('evidenceReasoning.subtitle', { count: evidenceCount }) : undefined}
-            demoOpen={demoSectionStates?.evidenceReasoning}
+            icon={<AlertTriangle className="size-4" />}
+            title={t('minorityViews.title')}
+            subtitle={t('minorityViews.viewCount', { count: minorityViewCount })}
+            demoOpen={demoSectionStates?.minorityViews}
           >
-            <EvidenceReasoningSection evidenceAndReasoning={data.evidenceAndReasoning} />
+            <div className="space-y-2">
+              {data.minorityViews.map(view => (
+                <div key={`minority-${view.modelName}`} className="flex items-start gap-2 text-sm">
+                  <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <span>
+                    <span className="font-medium">
+                      {view.modelName}
+                      :
+                    </span>
+                    {' '}
+                    <span className="text-muted-foreground">{view.view}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </CollapsibleSection>
         )}
 
-        {/* Explore Alternatives */}
-        {data.alternatives && data.alternatives.length > 0 && (
+        {/* Convergence/Divergence - Compact */}
+        {/* ✅ FIX: Check for actual content, not just truthy object (empty {} would render accordion) */}
+        {data.convergenceDivergence && (data.convergenceDivergence.convergedOn?.length || data.convergenceDivergence.divergedOn?.length || data.convergenceDivergence.evolved?.length) && (
           <CollapsibleSection
-            icon={<GitBranch className="size-4" />}
-            title={t('alternatives.title')}
-            subtitle={t('alternatives.subtitle', { count: alternativeCount })}
-            demoOpen={demoSectionStates?.alternatives}
+            icon={<GitMerge className="size-4" />}
+            title={t('convergenceDivergence.title')}
+            demoOpen={demoSectionStates?.convergenceDivergence}
           >
-            <AlternativesSection alternatives={data.alternatives} />
-          </CollapsibleSection>
-        )}
-
-        {/* Round Summary */}
-        {data.roundSummary && (
-          <CollapsibleSection
-            icon={<FileText className="size-4" />}
-            title={t('roundSummary.title')}
-            subtitle={t('roundSummary.closingSynthesis')}
-            demoOpen={demoSectionStates?.roundSummary}
-          >
-            <RoundSummarySection roundSummary={data.roundSummary} onActionClick={onActionClick} />
+            <div className="space-y-3 text-sm">
+              {data.convergenceDivergence.convergedOn?.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                  <CheckCircle2 className="size-3.5 text-green-500 flex-shrink-0" />
+                  <span className="font-medium text-green-600 dark:text-green-400 mr-1">
+                    {t('convergenceDivergence.agreed')}
+                    :
+                  </span>
+                  <span className="text-muted-foreground">
+                    {data.convergenceDivergence.convergedOn.join(' • ')}
+                  </span>
+                </div>
+              )}
+              {data.convergenceDivergence.divergedOn?.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                  <XCircle className="size-3.5 text-orange-500 flex-shrink-0" />
+                  <span className="font-medium text-orange-600 dark:text-orange-400 mr-1">
+                    {t('convergenceDivergence.split')}
+                    :
+                  </span>
+                  <span className="text-muted-foreground">
+                    {data.convergenceDivergence.divergedOn.join(' • ')}
+                  </span>
+                </div>
+              )}
+              {data.convergenceDivergence.evolved?.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">{t('convergenceDivergence.evolved')}</span>
+                  {data.convergenceDivergence.evolved.map(evolution => (
+                    <div key={`evolved-${evolution.point}`} className="flex items-center gap-1.5 text-xs">
+                      <span className="font-medium">
+                        {evolution.point}
+                        :
+                      </span>
+                      <span className="text-orange-500">{evolution.initialState}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="text-green-500">{evolution.finalState}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CollapsibleSection>
         )}
 
@@ -176,7 +264,18 @@ export function ModeratorAnalysisPanel({
           title={t('aboutFramework.title')}
           demoOpen={demoSectionStates?.aboutFramework}
         >
-          <AboutFrameworkSection contributors={data.contributorPerspectives} />
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p>
+              This analysis synthesizes perspectives from
+              {modelVoicesCount}
+              {' '}
+              AI models participating in a collaborative
+              {analysis.mode}
+              {' '}
+              discussion.
+            </p>
+            <p>The consensus table shows where models agreed and disagreed, while minority views highlight important dissenting opinions that may warrant further consideration.</p>
+          </div>
         </CollapsibleSection>
       </div>
     </div>

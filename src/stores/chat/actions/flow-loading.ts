@@ -1,24 +1,28 @@
 /**
  * Flow Loading State Hook
  *
- * REPLACES: useStreamingLoaderState
+ * Zustand v5 Pattern: Store-specific action hook co-located with store
  * Unified loading indicator logic based on flow orchestrator
  *
  * SINGLE SOURCE OF TRUTH for what loading indicators to show
  * No more scattered loading state checks
  *
- * Location: /src/hooks/utils/use-flow-loading.ts
+ * Location: /src/stores/chat/actions/flow-loading.ts
+ * Used by: ChatView
  */
 
 'use client';
 
 import { useMemo } from 'react';
 
-import { useFlowStateMachine } from '@/stores/chat/actions/flow-state-machine';
+import type { FlowState, ScreenMode } from '@/api/core/enums';
+import { FlowStates } from '@/api/core/enums';
+
+import { useFlowStateMachine } from './flow-state-machine';
 
 export type UseFlowLoadingOptions = {
   /** Screen mode */
-  mode: 'overview' | 'thread' | 'public';
+  mode: ScreenMode;
 };
 
 export type UseFlowLoadingReturn = {
@@ -27,7 +31,7 @@ export type UseFlowLoadingReturn = {
   /** User-facing loading message */
   loadingMessage: string;
   /** Current flow state for debugging */
-  flowState: string;
+  flowState: FlowState;
   /** Detailed loading state for specific UI elements */
   loadingDetails: {
     isCreatingThread: boolean;
@@ -44,7 +48,7 @@ export type UseFlowLoadingReturn = {
  * Replaces scattered loading logic across components
  *
  * @example
- * const { showLoader, loadingMessage } = useFlowLoading({ mode: 'overview' })
+ * const { showLoader, loadingMessage } = useFlowLoading({ mode: ScreenModes.OVERVIEW })
  */
 export function useFlowLoading(options: UseFlowLoadingOptions): UseFlowLoadingReturn {
   const { mode } = options;
@@ -53,10 +57,10 @@ export function useFlowLoading(options: UseFlowLoadingOptions): UseFlowLoadingRe
 
   const loadingDetails = useMemo(
     () => ({
-      isCreatingThread: flowState === 'creating_thread',
-      isStreamingParticipants: flowState === 'streaming_participants',
-      isStreamingAnalysis: flowState === 'streaming_analysis',
-      isNavigating: flowState === 'navigating',
+      isCreatingThread: flowState === FlowStates.CREATING_THREAD,
+      isStreamingParticipants: flowState === FlowStates.STREAMING_PARTICIPANTS,
+      isStreamingAnalysis: flowState === FlowStates.STREAMING_ANALYSIS,
+      isNavigating: flowState === FlowStates.NAVIGATING,
     }),
     [flowState],
   );

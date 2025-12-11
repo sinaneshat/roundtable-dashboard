@@ -141,3 +141,30 @@ export function isPreSearchAnimation(index: number): boolean {
 export function isAnalysisAnimation(index: number): boolean {
   return index === AnimationIndices.ANALYSIS;
 }
+
+// ============================================================================
+// ANALYSIS TIMEOUT CONFIGURATION
+// ============================================================================
+
+/**
+ * Analysis timeout constants for stuck analysis detection and cleanup
+ *
+ * ✅ PATTERN: Centralized timeout configuration
+ * ✅ SINGLE SOURCE OF TRUTH: Used by ChatView stuck analysis cleanup
+ *
+ * Usage:
+ * - ChatView.tsx: Periodic check for stuck streaming analyses
+ */
+export const AnalysisTimeouts = {
+  /**
+   * Maximum time (ms) an analysis can be in streaming state before considered stuck
+   * Default: 90 seconds
+   */
+  STUCK_THRESHOLD_MS: 90_000,
+
+  /**
+   * Interval (ms) between stuck analysis checks
+   * Default: 10 seconds
+   */
+  CHECK_INTERVAL_MS: 10_000,
+} as const;

@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
-import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
-import type { SubscriptionChangeType, SubscriptionTier } from '@/api/services/product-logic.service';
-import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+import type { SubscriptionChangeType } from '@/api/core/enums';
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema } from '@/api/core/enums';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,7 +55,10 @@ function SubscriptionChangedContent() {
   const searchParams = useSearchParams();
   const t = useTranslations();
 
-  const changeType = searchParams.get('changeType') as SubscriptionChangeType | null;
+  // ✅ TYPE-SAFE: Use Zod schema validation instead of unsafe cast
+  const changeTypeRaw = searchParams.get('changeType');
+  const changeTypeResult = SubscriptionChangeTypeSchema.safeParse(changeTypeRaw);
+  const changeType = changeTypeResult.success ? changeTypeResult.data : null;
   const oldProductId = searchParams.get('oldProductId');
 
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
@@ -115,19 +119,17 @@ function SubscriptionChangedContent() {
     );
   }
 
+  // ✅ TYPE-SAFE: Use Zod schema validation instead of unsafe casts
   const newTierString = displaySubscription?.price?.productId
     ? getTierFromProductId(displaySubscription.price.productId)
     : 'free';
 
-  const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
-  const newTier: SubscriptionTier = validTiers.includes(newTierString as SubscriptionTier)
-    ? (newTierString as SubscriptionTier)
-    : 'free';
+  const newTierResult = subscriptionTierSchema.safeParse(newTierString);
+  const newTier: SubscriptionTier = newTierResult.success ? newTierResult.data : 'free';
 
   const oldTierString = oldProductId ? getTierFromProductId(oldProductId) : null;
-  const oldTier: SubscriptionTier | null = oldTierString && validTiers.includes(oldTierString as SubscriptionTier)
-    ? (oldTierString as SubscriptionTier)
-    : null;
+  const oldTierResult = oldTierString ? subscriptionTierSchema.safeParse(oldTierString) : null;
+  const oldTier: SubscriptionTier | null = oldTierResult?.success ? oldTierResult.data : null;
 
   const isUpgrade = changeType === SubscriptionChangeTypes.UPGRADE;
   const isDowngrade = changeType === SubscriptionChangeTypes.DOWNGRADE;

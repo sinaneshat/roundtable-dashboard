@@ -15,6 +15,8 @@ import {
   useSubscriptionsQuery,
   useSwitchSubscriptionMutation,
 } from '@/hooks';
+import { toastManager } from '@/lib/toast';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 export default function PricingScreen() {
   const t = useTranslations();
@@ -72,7 +74,9 @@ export default function PricingScreen() {
           window.location.href = result.data.url;
         }
       }
-    } catch { } finally {
+    } catch (error) {
+      toastManager.error(t('billing.errors.subscribeFailed'), getApiErrorMessage(error));
+    } finally {
       setProcessingPriceId(null);
     }
   };
@@ -84,7 +88,9 @@ export default function PricingScreen() {
         param: { id: subscriptionId },
         json: { immediately: false },
       });
-    } catch { } finally {
+    } catch (error) {
+      toastManager.error(t('billing.errors.cancelFailed'), getApiErrorMessage(error));
+    } finally {
       setCancelingSubscriptionId(null);
     }
   };
@@ -101,7 +107,9 @@ export default function PricingScreen() {
       if (result.success && result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
-    } catch { } finally {
+    } catch (error) {
+      toastManager.error(t('billing.errors.manageBillingFailed'), getApiErrorMessage(error));
+    } finally {
       setIsManagingBilling(false);
     }
   };

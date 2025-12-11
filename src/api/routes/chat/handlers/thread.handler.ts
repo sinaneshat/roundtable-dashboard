@@ -1153,7 +1153,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 
     // ✅ ATTACHMENT SUPPORT: Load message attachments for user messages
     const userMessageIds = rawMessages
-      .filter(m => m.role === 'user')
+      .filter(m => m.role === MessageRoles.USER)
       .map(m => m.id);
 
     // Define type for attachment results

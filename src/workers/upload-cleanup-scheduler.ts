@@ -193,7 +193,6 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
           newAlarmTime,
           uploadId,
         );
-        console.error(`[UploadCleanup] [INFO] Rescheduled ${uploadId} with grace period to ${new Date(newAlarmTime).toISOString()}`);
         continue;
       }
 
@@ -209,7 +208,6 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
             retryTime,
             uploadId,
           );
-          console.error(`[UploadCleanup] D1 query failed for ${uploadId}, rescheduled for retry`);
           continue;
         }
 
@@ -219,10 +217,6 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
           // Delete from database
           await this.deleteFromDatabase(uploadId);
-
-          console.error(`[UploadCleanup] [INFO] Deleted orphaned upload: ${uploadId}`);
-        } else {
-          console.error(`[UploadCleanup] [INFO] Upload ${uploadId} is attached, skipping cleanup`);
         }
 
         // Remove from cleanup state only on successful check

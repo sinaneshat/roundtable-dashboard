@@ -21,7 +21,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
@@ -44,6 +43,7 @@ import {
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
 import {

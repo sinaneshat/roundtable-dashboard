@@ -18,12 +18,9 @@
  * @see /src/lib/schemas/message-metadata.ts - Finish reason schemas
  */
 
-import { FinishReasonSchema } from '@/api/core/enums';
-import type { ErrorCategory } from '@/lib/schemas/error-schemas';
-import {
-  categorizeErrorMessage,
-  ErrorCategorySchema,
-} from '@/lib/schemas/error-schemas';
+import type { ErrorCategory } from '@/api/core/enums';
+import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
+import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isObject } from '@/lib/utils/type-guards';
 
 // ============================================================================

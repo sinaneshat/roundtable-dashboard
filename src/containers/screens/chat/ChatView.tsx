@@ -21,7 +21,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
+import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
@@ -36,7 +37,6 @@ import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
   useBoolean,
   useChatScroll,
-  useFlowLoading,
   useOrderedModels,
   useSortedParticipants,
   useThreadTimeline,
@@ -46,8 +46,10 @@ import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
 import {
+  AnalysisTimeouts,
   useChatFormActions,
   useFeedbackActions,
+  useFlowLoading,
   useRecommendedActions,
   useThreadActions,
 } from '@/stores/chat';
@@ -190,12 +192,13 @@ export function ChatView({
       return [];
     const items = changelogResponse.data.items || [];
     const seen = new Set<string>();
-    return items.filter((item) => {
+    const filtered = items.filter((item) => {
       if (seen.has(item.id))
         return false;
       seen.add(item.id);
       return true;
     });
+    return filtered;
   }, [changelogResponse]);
 
   // Model ordering for modal - stable references for Motion Reorder
@@ -308,8 +311,6 @@ export function ChatView({
   // React 19: Valid effect for timer (external system)
   // Uses interval to periodically check for stuck analyses
   useEffect(() => {
-    const ANALYSIS_TIMEOUT_MS = 90000;
-
     const checkStuckAnalyses = () => {
       const stuckAnalyses = analyses.filter((analysis) => {
         if (analysis.status !== AnalysisStatuses.STREAMING)
@@ -318,7 +319,7 @@ export function ChatView({
           ? analysis.createdAt.getTime()
           : new Date(analysis.createdAt).getTime();
         const elapsed = Date.now() - createdTime;
-        return elapsed > ANALYSIS_TIMEOUT_MS;
+        return elapsed > AnalysisTimeouts.STUCK_THRESHOLD_MS;
       });
 
       if (stuckAnalyses.length > 0) {
@@ -330,7 +331,7 @@ export function ChatView({
 
     // Check immediately and set up interval
     checkStuckAnalyses();
-    const intervalId = setInterval(checkStuckAnalyses, 10000);
+    const intervalId = setInterval(checkStuckAnalyses, AnalysisTimeouts.CHECK_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
   }, [analyses, updateAnalysisStatus]);
@@ -462,7 +463,13 @@ export function ChatView({
 
   const handleAnalysisStreamComplete = useCallback((roundNumber: number, completedData?: unknown, error?: unknown) => {
     if (completedData) {
-      updateAnalysisData(roundNumber, completedData as Parameters<typeof updateAnalysisData>[1]);
+      // ✅ TYPE-SAFE: Validate with Zod schema instead of unsafe cast
+      const parseResult = ModeratorAnalysisPayloadSchema.safeParse(completedData);
+      if (parseResult.success) {
+        updateAnalysisData(roundNumber, parseResult.data);
+      } else {
+        updateAnalysisError(roundNumber, 'Invalid analysis data received. Please try again.');
+      }
     } else if (error) {
       const errorMessage = error instanceof Error
         ? error.message
@@ -547,7 +554,7 @@ export function ChatView({
                     selectedParticipants={selectedParticipants}
                     allModels={allEnabledModels}
                     onOpenModelModal={isModelModalOpen.onTrue}
-                    selectedMode={selectedMode || (thread?.mode as ChatMode) || getDefaultChatMode()}
+                    selectedMode={selectedMode || ChatModeSchema.catch(getDefaultChatMode()).parse(thread?.mode)}
                     onOpenModeModal={isModeModalOpen.onTrue}
                     enableWebSearch={enableWebSearch}
                     onWebSearchToggle={handleWebSearchToggle}
@@ -569,7 +576,7 @@ export function ChatView({
       <ConversationModeModal
         open={isModeModalOpen.value}
         onOpenChange={isModeModalOpen.setValue}
-        selectedMode={selectedMode || (thread?.mode as ChatMode) || getDefaultChatMode()}
+        selectedMode={selectedMode || ChatModeSchema.catch(getDefaultChatMode()).parse(thread?.mode)}
         onModeSelect={handleModeSelect}
       />
 

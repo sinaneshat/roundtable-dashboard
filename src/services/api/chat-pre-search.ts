@@ -8,7 +8,8 @@
  * ✅ SINGLE SOURCE OF TRUTH: Imports from shared schemas and enums
  */
 
-import type { InferRequestType } from 'hono/client';
+import type { InferRequestType, InferResponseType } from 'hono/client';
+import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
 import { createApiClient } from '@/api/client';
@@ -21,8 +22,24 @@ export type PreSearchRequest = InferRequestType<
   ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post']
 >;
 
+export type PreSearchResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post']
+>;
+
 export type CreatePreSearchRequest = InferRequestType<
   ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['create']['$post']
+>;
+
+export type CreatePreSearchResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['create']['$post']
+>;
+
+export type GetThreadPreSearchesRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':id']['pre-searches']['$get']
+>;
+
+export type GetThreadPreSearchesResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':id']['pre-searches']['$get']
 >;
 
 // ============================================================================
@@ -37,18 +54,11 @@ export type CreatePreSearchRequest = InferRequestType<
  * ✅ USED BY: useCreatePreSearch mutation hook
  * ✅ TYPE-SAFE: Uses CreatePreSearchRequest inferred from backend schema
  *
- * @param params - Request parameters inferred from backend route
+ * @param data - Request parameters inferred from backend route
  */
-export async function createPreSearchService(params: CreatePreSearchRequest) {
+export async function createPreSearchService(data: CreatePreSearchRequest) {
   const client = await createApiClient();
-
-  const response = await client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].create.$post(params);
-
-  if (!response.ok) {
-    throw new Error(`Failed to create pre-search: ${response.statusText}`);
-  }
-
-  return response.json();
+  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].create.$post(data));
 }
 
 /**
@@ -57,28 +67,15 @@ export async function createPreSearchService(params: CreatePreSearchRequest) {
  * ✅ FOLLOWS: getThreadAnalysesService pattern exactly
  * ✅ USED BY: useThreadPreSearchesQuery hook (orchestrator)
  *
- * @param params - Request parameters
- * @param params.param - Route parameters
- * @param params.param.id - Thread ID
+ * @param data - Request with param.id for thread ID
  */
-export async function getThreadPreSearchesService(params: {
-  param: {
-    id: string;
-  };
-}) {
+export async function getThreadPreSearchesService(data: GetThreadPreSearchesRequest) {
   const client = await createApiClient();
-
-  const response = await client.chat.threads[':id']['pre-searches'].$get({
-    param: {
-      id: params.param.id,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch thread pre-searches: ${response.statusText}`);
-  }
-
-  return response.json();
+  // Internal fallback: ensure param exists
+  const params: GetThreadPreSearchesRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id']['pre-searches'].$get(params));
 }
 
 /**
@@ -91,9 +88,9 @@ export async function getThreadPreSearchesService(params: {
  * EXCEPTION: Does NOT parse response because SSE streams must return raw Response
  * object for EventSource/ReadableStream processing.
  *
- * @param params - Request parameters inferred from RPC type
+ * @param data - Request parameters inferred from RPC type
  */
-export async function executePreSearchStreamService(params: PreSearchRequest) {
+export async function executePreSearchStreamService(data: PreSearchRequest) {
   const client = await createApiClient();
-  return await client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(params);
+  return client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(data);
 }

@@ -19,12 +19,13 @@
 
 import type { UIMessage } from 'ai';
 
-import type { ErrorType, FinishReason } from '@/api/core/enums';
+import type { ErrorType, FinishReason, UIMessageErrorType } from '@/api/core/enums';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
   MessagePartTypes,
   MessageRoles,
+  UIMessageErrorTypeSchema,
   UIMessageRoles,
 } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
@@ -39,14 +40,8 @@ import {
   DbPreSearchMessageMetadataSchema,
   UsageSchema,
 } from '@/db/schemas/chat-metadata';
-import type {
-  ErrorMetadata,
-  UIMessageErrorType,
-} from '@/lib/schemas/error-schemas';
-import {
-  ErrorMetadataSchema,
-  UIMessageErrorTypeSchema,
-} from '@/lib/schemas/error-schemas';
+import type { ErrorMetadata } from '@/lib/schemas/error-schemas';
+import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
 
 import {
@@ -728,6 +723,16 @@ export function mergeParticipantMetadata(
     ? errorTypeResult.data
     : 'unknown';
 
+  // ✅ BUG FIX: Prefer backend's participantId over frontend's temp UUID
+  // When user applies recommended action, frontend creates participants with temp UUIDs.
+  // Backend creates real ULID IDs and includes them in stream metadata.
+  // Previously, this function overwrote backend's real ID with frontend's temp UUID.
+  // Now we check if backend sent a participantId and prefer it.
+  const backendParticipantId = validatedMetadata?.participantId;
+  const effectiveParticipantId = (typeof backendParticipantId === 'string' && backendParticipantId.length > 0)
+    ? backendParticipantId
+    : participant.id;
+
   return buildAssistantMetadata(
     {
       finishReason: safeFinishReason,
@@ -740,7 +745,7 @@ export function mergeParticipantMetadata(
       }),
     },
     {
-      participantId: participant.id,
+      participantId: effectiveParticipantId,
       participantIndex: currentIndex,
       participantRole: participant.role,
       model: participant.modelId,

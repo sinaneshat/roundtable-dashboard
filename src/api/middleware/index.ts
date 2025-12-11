@@ -9,7 +9,7 @@ export {
 } from './environment-validation';
 export { errorLogger } from './error-logger';
 export { ensureOpenRouterInitialized } from './openrouter';
-export { RateLimiterFactory as createRateLimitMiddleware } from './rate-limiter-factory';
+export { RateLimiterFactory } from './rate-limiter-factory';
 export {
   createApiSizeLimitMiddleware,
   createFileUploadSizeLimitMiddleware,

@@ -742,3 +742,20 @@ research-analyst findings → backend-pattern-expert implementation → frontend
 - Rate limiting on authentication endpoints
 - No secrets in environment files (use wrangler secrets)
 - Audit trail for all operations via event logging system
+
+**Export Patterns (GROUND RULE)**:
+- **NO RE-EXPORTS except barrel exports (index.ts)**: Code must be exported once from its source file OR re-exported from a barrel (index.ts) file only
+- **Barrel exports are the ONLY valid re-export pattern**: `export { X } from './x'` is only valid in index.ts files
+- **Non-barrel files must NOT re-export**: Don't use `export { X } from './other'` in non-index files
+- **Single source of truth**: Each export should have ONE canonical source - consumers import from there or from the barrel
+- **No aliased re-exports**: Don't rename exports across files (`export { X as Y } from ...`) - use the original name
+- **Migration required**: If you find re-exports, migrate all consumers to import from the single source of truth
+
+**Code Comments (GROUND RULE)**:
+- **Minimal comments**: Code should be self-documenting; only add comments when logic isn't self-evident
+- **No stale/deprecated comments**: Remove outdated comments immediately - stale comments are worse than no comments
+- **No "LEGACY" or "TODO: migrate" comments**: Fix the issue instead of leaving warning comments for later
+- **No redundant comments**: Don't comment what the code already says (e.g., `// Import X` above an import statement)
+- **No backwards-compatibility comments**: Don't leave comments like `// removed`, `// deprecated`, `// available from X` - just delete the code
+- **Update or delete**: When changing code, update related comments or delete them entirely - never leave them stale
+- **JSDoc for public APIs only**: Use JSDoc for exported functions/types that need documentation, not for internal implementation

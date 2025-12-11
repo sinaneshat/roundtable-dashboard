@@ -19,8 +19,8 @@
 
 import type { UIMessage } from 'ai';
 
+import type { MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
-import type { MessageStatus } from '@/lib/schemas/message-schemas';
 
 import { getAssistantMetadata } from './metadata';
 

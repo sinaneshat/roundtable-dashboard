@@ -17,6 +17,8 @@ type CollapsibleSectionProps = {
   className?: string;
   /** Controlled open state - when provided, overrides internal state */
   demoOpen?: boolean;
+  /** Force section to stay open (e.g., during streaming) */
+  forceOpen?: boolean;
 };
 
 /**
@@ -39,11 +41,14 @@ export function CollapsibleSection({
   defaultOpen = false,
   className,
   demoOpen,
+  forceOpen,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
-  // Demo mode: use controlled state when provided
-  const effectiveOpen = demoOpen !== undefined ? demoOpen : isOpen;
+  // Priority: forceOpen > demoOpen > internal state
+  // forceOpen: Used during streaming to keep sections expanded
+  // demoOpen: Used for demo mode controlled state
+  const effectiveOpen = forceOpen || (demoOpen !== undefined ? demoOpen : isOpen);
 
   return (
     <Collapsible

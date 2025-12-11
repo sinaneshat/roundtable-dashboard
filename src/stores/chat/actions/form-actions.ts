@@ -202,8 +202,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           queryKey: queryKeys.threads.all,
           predicate: (query) => {
             // Only update infinite queries (thread lists)
-            const key = query.queryKey as string[];
-            return key.length >= 2 && key[1] === 'list';
+            return query.queryKey.length >= 2 && query.queryKey[1] === 'list';
           },
         },
         (old: unknown) => {

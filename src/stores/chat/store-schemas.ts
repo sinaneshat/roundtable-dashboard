@@ -78,6 +78,7 @@ import type {
   NeedsMessageSync,
   NeedsStreamResumption,
   OnComplete,
+  PrefillStreamResumptionState,
   PrepareForNewMessage,
   RegisterAnimation,
   RemoveAnalysis,
@@ -137,6 +138,7 @@ import type {
   UpdateAnalysisStatus,
   UpdateAttachmentPreview,
   UpdateAttachmentUpload,
+  UpdatePartialPreSearchData,
   UpdateParticipant,
   UpdateParticipants,
   UpdatePreSearchActivity,
@@ -145,11 +147,7 @@ import type {
   WaitForAnimation,
 } from './store-action-types';
 
-// Re-export ParticipantConfig from single source of truth
-export { ParticipantConfigSchema };
-export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
-
-// ScreenModeSchema is imported from @/api/core/enums (single source of truth)
+// ParticipantConfigSchema imported from @/lib/schemas/participant-schemas (single source of truth)
 
 // ============================================================================
 // AI SDK FUNCTION SCHEMAS (for type safety)
@@ -266,6 +264,8 @@ export const PreSearchActionsSchema = z.object({
   setPreSearches: z.custom<SetPreSearches>(),
   addPreSearch: z.custom<AddPreSearch>(),
   updatePreSearchData: z.custom<UpdatePreSearchData>(),
+  /** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
+  updatePartialPreSearchData: z.custom<UpdatePartialPreSearchData>(),
   updatePreSearchStatus: z.custom<UpdatePreSearchStatus>(),
   removePreSearch: z.custom<RemovePreSearch>(),
   clearAllPreSearches: z.custom<ClearAllPreSearches>(),
@@ -450,6 +450,10 @@ export const StreamResumptionSliceStateSchema = z.object({
   streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
   resumptionAttempts: z.custom<Set<string>>(),
   nextParticipantToTrigger: z.number().nullable(),
+  /** Flag set when server-side prefilled resumption state - guards AI SDK phantom resume */
+  streamResumptionPrefilled: z.boolean(),
+  /** Thread ID that the prefilled state is for - ensures state matches current thread */
+  prefilledForThreadId: z.string().nullable(),
 });
 
 export const StreamResumptionActionsSchema = z.object({
@@ -465,6 +469,7 @@ export const StreamResumptionActionsSchema = z.object({
   markResumptionAttempted: z.custom<MarkResumptionAttempted>(),
   needsMessageSync: z.custom<NeedsMessageSync>(),
   clearStreamResumption: z.custom<ClearStreamResumption>(),
+  prefillStreamResumptionState: z.custom<PrefillStreamResumptionState>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);
@@ -598,7 +603,7 @@ export const ChatStoreSchema = z.intersection(
  */
 export type ChatStore = z.infer<typeof ChatStoreSchema>;
 
-// Re-export individual slice types for convenience
+// Slice types inferred from schemas above
 export type FormState = z.infer<typeof FormStateSchema>;
 export type FormActions = z.infer<typeof FormActionsSchema>;
 export type FormSlice = z.infer<typeof FormSliceSchema>;

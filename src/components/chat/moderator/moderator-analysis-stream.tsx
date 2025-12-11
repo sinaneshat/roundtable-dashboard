@@ -1,5 +1,6 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
+import { AlertTriangle, CheckCircle2, GitMerge, Info, Lightbulb, Users, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useEffect, useRef } from 'react';
@@ -7,36 +8,26 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import type { StreamErrorType } from '@/api/core/enums';
 import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type {
+  ArticleRecommendation,
   ModeratorAnalysisPayload,
-  Recommendation,
   StoredModeratorAnalysis,
 } from '@/api/routes/chat/schema';
-import {
-  AlternativeScenarioSchema,
-  ConsensusAnalysisSchema,
-  ConsensusEvolutionPhaseSchema,
-  ContributorPerspectiveSchema,
-  EvidenceAndReasoningSchema,
-  ModeratorAnalysisPayloadSchema,
-  RecommendationSchema,
-  RoundSummarySchema,
-} from '@/api/routes/chat/schema';
+import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { AnimatedStreamingItem, AnimatedStreamingList, ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useBoolean } from '@/hooks/utils';
+import { extractModelName, getModelIconInfo } from '@/lib/utils/ai-display';
 import { hasAnalysisData, normalizeAnalysisData } from '@/lib/utils/analysis-utils';
-import { filterArrayWithSchema, safeParse } from '@/lib/utils/type-guards';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 import { getAnalysisResumeService } from '@/services/api';
 
-// ✅ NEW COMPONENTS: Multi-AI Deliberation Framework
-import { AlternativesSection } from './alternatives-section';
-import { ConsensusAnalysisSection } from './consensus-analysis-section';
-import { ContributorPerspectivesSection } from './contributor-perspectives-section';
-import { EvidenceReasoningSection } from './evidence-reasoning-section';
+import { CollapsibleSection } from './collapsible-section';
 import { KeyInsightsSection } from './key-insights-section';
+import { getResolutionBadgeVariant, getStanceIcon } from './moderator-ui-utils';
 import { RoundOutcomeHeader } from './round-outcome-header';
-import { RoundSummarySection } from './round-summary-section';
 
 // ============================================================================
 // RESUMABLE STREAMS: Attempt to resume analysis from buffer on page reload
@@ -50,26 +41,22 @@ import { RoundSummarySection } from './round-summary-section';
  *
  * Response handling:
  * - 204 No Content: No buffer available
- * - 202 Accepted: Stream is still active, should poll for completion
  * - 200 OK with X-Stream-Status: completed: Complete data available
  * - 200 OK without header: Legacy/fallback, try to parse
  */
 async function attemptAnalysisResume(
   threadId: string,
   roundNumber: number,
-): Promise<{ success: true; data: ModeratorAnalysisPayload } | { success: false; reason: 'no-buffer' | 'incomplete' | 'streaming' | 'error' }> {
+): Promise<{ success: true; data: ModeratorAnalysisPayload } | { success: false; reason: 'no-buffer' | 'incomplete' | 'error' }> {
   try {
-    // ✅ TYPE-SAFE: Use service instead of direct fetch
-    const response = await getAnalysisResumeService({ threadId, roundNumber });
+    // ✅ TYPE-SAFE: Use service with RPC-compliant structure
+    const response = await getAnalysisResumeService({
+      param: { threadId, roundNumber: roundNumber.toString() },
+    });
 
     // 204 No Content = no buffer available
     if (response.status === 204) {
       return { success: false, reason: 'no-buffer' };
-    }
-
-    // 202 Accepted = stream is still active, poll for completion
-    if (response.status === 202) {
-      return { success: false, reason: 'streaming' };
     }
 
     // Non-200 = error
@@ -144,7 +131,7 @@ type ModeratorAnalysisStreamProps = {
   analysis: StoredModeratorAnalysis;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
   onStreamStart?: () => void;
-  onActionClick?: (action: Recommendation) => void;
+  onActionClick?: (action: ArticleRecommendation) => void;
 };
 
 // ✅ ZUSTAND PATTERN: Analysis stream tracking now in store
@@ -184,7 +171,7 @@ function ModeratorAnalysisStreamComponent({
 
   // ✅ Create stable wrapper for onActionClick that can be safely passed to child components
   // This prevents ref access during render
-  const stableOnActionClick = useCallback((_action: Recommendation) => {
+  const stableOnActionClick = useCallback((_action: ArticleRecommendation) => {
     // Disabled for demo mode - no action clicks allowed
     // onActionClickRef.current?.(action);
   }, []);
@@ -470,17 +457,79 @@ function ModeratorAnalysisStreamComponent({
     };
   }, []);
 
+  // ✅ BUG FIX: Track pending trigger to handle race condition with submit availability
+  // When analysis becomes pending but submit isn't ready yet, we need to retry
+  const pendingTriggerRef = useRef<{ analysisId: string; roundNumber: number } | null>(null);
+  const triggerCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ BUG FIX: Separate effect to poll for submit availability when trigger is pending
+  // This handles the race condition where submit isn't available when the analysis becomes pending
+  useEffect(() => {
+    const pending = pendingTriggerRef.current;
+    const alreadyTriggered = hasAnalysisStreamBeenTriggered(analysis.id, analysis.roundNumber);
+
+    // If we have a pending trigger and submit is now available, trigger immediately
+    if (pending && submit && !alreadyTriggered
+      && pending.analysisId === analysis.id
+      && pending.roundNumber === analysis.roundNumber
+      && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
+    ) {
+      // Clear pending state
+      pendingTriggerRef.current = null;
+      if (triggerCheckIntervalRef.current) {
+        clearInterval(triggerCheckIntervalRef.current);
+        triggerCheckIntervalRef.current = null;
+      }
+
+      // Trigger now
+      markAnalysisStreamTriggered(analysis.id, analysis.roundNumber);
+
+      const messageIds = analysis.participantMessageIds;
+      const roundNumber = analysis.roundNumber;
+      const submitFn = submit;
+
+      queueMicrotask(async () => {
+        onStreamStartRef.current?.();
+
+        if (analysis.status === AnalysisStatuses.STREAMING) {
+          const resumeResult = await attemptAnalysisResume(threadId, roundNumber);
+          if (resumeResult.success) {
+            onStreamCompleteRef.current?.(resumeResult.data);
+            return;
+          }
+        }
+
+        const body = { participantMessageIds: messageIds };
+        submitFn(body);
+      });
+    }
+  }, [submit, analysis.id, analysis.roundNumber, analysis.status, analysis.participantMessageIds, threadId, hasAnalysisStreamBeenTriggered, markAnalysisStreamTriggered]);
+
   // ✅ CRITICAL FIX: Prevent duplicate submissions at both analysis ID and round number level
   // Use useEffect that only runs when analysis becomes ready (status changes to PENDING/STREAMING)
   // NOTE: participantMessageIds intentionally NOT in dependencies to avoid re-trigger on metadata updates
+  // ✅ AI SDK v5 FIX: Include `submit` in dependencies to re-trigger when submit becomes available
   useEffect(() => {
     // ✅ ZUSTAND PATTERN: Use store's hasAnalysisStreamBeenTriggered for two-level check
     const alreadyTriggered = hasAnalysisStreamBeenTriggered(analysis.id, analysis.roundNumber);
 
-    if (
-      !alreadyTriggered
-      && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
-    ) {
+    const shouldTrigger = !alreadyTriggered
+      && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING);
+
+    // ✅ BUG FIX: If should trigger but submit isn't available, mark as pending for retry
+    if (shouldTrigger && !submit) {
+      // Track that we need to trigger for this analysis
+      pendingTriggerRef.current = { analysisId: analysis.id, roundNumber: analysis.roundNumber };
+      return;
+    }
+
+    // ✅ AI SDK v5 FIX: Ensure submit is available before triggering
+    // useObject's submit may not be immediately available on first render
+    if (!submit) {
+      return; // Wait for submit to be available
+    }
+
+    if (shouldTrigger) {
       // ✅ ZUSTAND PATTERN: Mark as triggered at BOTH levels via store action
       markAnalysisStreamTriggered(analysis.id, analysis.roundNumber);
 
@@ -491,6 +540,9 @@ function ModeratorAnalysisStreamComponent({
       // Try to resume from KV buffer first before starting a new POST request
       const messageIds = analysis.participantMessageIds;
       const roundNumber = analysis.roundNumber;
+
+      // ✅ AI SDK v5 FIX: Capture submit in closure to ensure it's available when microtask runs
+      const submitFn = submit;
 
       queueMicrotask(async () => {
         onStreamStartRef.current?.();
@@ -520,12 +572,23 @@ function ModeratorAnalysisStreamComponent({
         }
 
         // Normal flow: start new stream (or retry after failed resume)
+        // ✅ AI SDK v5 FIX: Use captured submitFn instead of ref to avoid race condition
         const body = { participantMessageIds: messageIds };
-        submitRef.current?.(body);
+        submitFn(body);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis.participantMessageIds intentionally excluded, store actions are stable
-  }, [analysis.id, analysis.roundNumber, analysis.status, threadId, hasAnalysisStreamBeenTriggered, markAnalysisStreamTriggered]);
+    // ✅ AI SDK v5 FIX: Include submit in dependencies to ensure effect re-runs when submit becomes available
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis.participantMessageIds intentionally excluded to avoid re-trigger on metadata updates
+  }, [analysis.id, analysis.roundNumber, analysis.status, threadId, hasAnalysisStreamBeenTriggered, markAnalysisStreamTriggered, submit]);
+
+  // ✅ BUG FIX: Cleanup retry interval on unmount
+  useEffect(() => {
+    return () => {
+      if (triggerCheckIntervalRef.current) {
+        clearInterval(triggerCheckIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Mark completed/failed analyses as triggered to prevent re-triggering on re-renders
   // NOTE: Do NOT mark STREAMING here - that would prevent useEffect from triggering submit()
@@ -558,51 +621,34 @@ function ModeratorAnalysisStreamComponent({
     return null;
   }
 
-  // ✅ TYPE-SAFE DISPLAY DATA: Define union type for streaming + completed data
-  // Uses optional chaining to safely access properties from either:
-  // 1. StoredModeratorAnalysis['analysisData'] - omits roundNumber, mode, userQuestion
-  // 2. DeepPartial<ModeratorAnalysisPayload> - streaming partial data from AI SDK
-  // ✅ NEW SCHEMA: Multi-AI Deliberation Framework
-  // Sections ordered to match visual top-to-bottom flow AND backend generation order
-  const roundConfidence = displayData?.roundConfidence;
-  const confidenceWeighting = displayData?.confidenceWeighting;
-  const consensusEvolution = displayData?.consensusEvolution;
-  const summary = displayData?.summary;
+  // ✅ AI SDK v5 PATTERN: Extract partial data WITHOUT mid-stream validation
+  // According to AI SDK v5 docs: Display partial data as-is during streaming
+  // Use optional chaining in JSX to handle undefined values gracefully
+  // Only validate on stream completion in onFinish callback
+  // UI Order: confidence → modelVoices → article → recommendations → consensusTable → minorityViews → convergenceDivergence
+  const confidence = displayData?.confidence;
+  const modelVoices = displayData?.modelVoices;
+  const article = displayData?.article;
   const recommendations = displayData?.recommendations;
-  const contributorPerspectives = displayData?.contributorPerspectives;
-  const consensusAnalysis = displayData?.consensusAnalysis;
-  const evidenceAndReasoning = displayData?.evidenceAndReasoning;
-  const alternatives = displayData?.alternatives;
-  const roundSummary = displayData?.roundSummary;
-
-  // ✅ ZOD-BASED ARRAY VALIDATION: Use filterArrayWithSchema for streaming data
-  // Type inference flows from schema - no inline type definitions needed
-  const validContributorPerspectives = filterArrayWithSchema(contributorPerspectives, ContributorPerspectiveSchema);
-  const validAlternatives = filterArrayWithSchema(alternatives, AlternativeScenarioSchema);
-  const validConsensusEvolution = filterArrayWithSchema(consensusEvolution, ConsensusEvolutionPhaseSchema);
-  const validRecommendations = filterArrayWithSchema(recommendations, RecommendationSchema);
-
-  // ✅ ZOD-BASED OBJECT VALIDATION: Use safeParse for single object validation
-  const validConsensusAnalysis = safeParse(ConsensusAnalysisSchema, consensusAnalysis) ?? null;
-  const validEvidenceAndReasoning = safeParse(EvidenceAndReasoningSchema, evidenceAndReasoning) ?? null;
-  const validRoundSummary = safeParse(RoundSummarySchema, roundSummary) ?? null;
+  const consensusTable = displayData?.consensusTable;
+  const minorityViews = displayData?.minorityViews;
+  const convergenceDivergence = displayData?.convergenceDivergence;
 
   // Content checking
   const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING;
 
-  // ✅ ANIMATION ALIGNMENT: Skip animations for already-complete content
-  // When analysis is COMPLETE (loaded from DB), render instantly without animation
-  // When STREAMING, animate sections as they appear
-  const skipAnimation = analysis.status === AnalysisStatuses.COMPLETE;
+  // ✅ AI SDK v5: Stream data is valid - just display it directly
+  // No validation during streaming, no excessive checks
+  const safeModelVoices = modelVoices ?? [];
+  const safeRecommendations = recommendations ?? [];
+  const safeConsensusTable = consensusTable ?? [];
+  const safeMinorityViews = minorityViews ?? [];
 
-  // ✅ Check for header data availability
-  const hasHeaderData = roundConfidence !== undefined && roundConfidence > 0;
-
-  // ✅ Check for key insights availability (use validated recommendations)
-  const hasKeyInsights = summary || validRecommendations.length > 0;
-
-  // Track section indices for staggered animations - sections appear top-to-bottom
-  let sectionIndex = 0;
+  // Calculate counts for subtitles
+  const recommendationCount = safeRecommendations.length;
+  const modelVoicesCount = safeModelVoices.length;
+  const consensusTopicCount = safeConsensusTable.length;
+  const minorityViewCount = safeMinorityViews.length;
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -613,10 +659,7 @@ function ModeratorAnalysisStreamComponent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{
-                duration: ANIMATION_DURATION.fast,
-                ease: ANIMATION_EASE.standard,
-              }}
+              transition={{ duration: ANIMATION_DURATION.fast, ease: ANIMATION_EASE.standard }}
               className="flex items-center justify-center py-8 text-muted-foreground text-sm"
             >
               <TextShimmer>{isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')}</TextShimmer>
@@ -627,123 +670,258 @@ function ModeratorAnalysisStreamComponent({
               key="analysis-content"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{
-                duration: ANIMATION_DURATION.normal,
-                ease: ANIMATION_EASE.enter,
-              }}
+              transition={{ duration: ANIMATION_DURATION.normal, ease: ANIMATION_EASE.enter }}
+              className="space-y-4"
             >
-              <AnimatedStreamingList groupId={`analysis-stream-${analysis.id}`} className="space-y-6">
-                {/* 1. Round Outcome Header - Generated FIRST by backend, shown at TOP */}
-                {hasHeaderData && (
-                  <AnimatedStreamingItem
-                    key="round-outcome-header"
-                    itemKey="round-outcome-header"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
-                  >
-                    <RoundOutcomeHeader
-                      roundConfidence={roundConfidence}
-                      confidenceWeighting={confidenceWeighting}
-                      consensusEvolution={validConsensusEvolution.length > 0 ? validConsensusEvolution : undefined}
-                      contributors={validContributorPerspectives}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </AnimatedStreamingItem>
-                )}
+              {/* ═══════════════════════════════════════════════════════════════════
+                  1. ROUND OUTCOME HEADER - Confidence + Model Badges (TOP)
+                  ✅ AI SDK v5 Pattern: Pass raw partial data, component handles undefined
+              ═══════════════════════════════════════════════════════════════════ */}
+              <RoundOutcomeHeader
+                confidence={confidence}
+                modelVoices={safeModelVoices}
+                isStreaming={isCurrentlyStreaming}
+              />
 
-                {/* 2. Key Insights - Generated SECOND by backend */}
-                {hasKeyInsights && (
-                  <AnimatedStreamingItem
-                    key="key-insights"
-                    itemKey="key-insights"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
+              {/* Collapsible Sections - Match panel structure exactly */}
+              <div className="space-y-2">
+                {/* ═══════════════════════════════════════════════════════════════════
+                    2. KEY INSIGHTS & RECOMMENDATIONS - Article + Recommendations
+                    ✅ AI SDK v5 Pattern: forceOpen during streaming, show partial data
+                ═══════════════════════════════════════════════════════════════════ */}
+                {(article || safeRecommendations.length > 0) && (
+                  <CollapsibleSection
+                    icon={<Lightbulb className="size-4" />}
+                    title={t('keyInsights.title')}
+                    subtitle={recommendationCount > 0 ? t('keyInsights.insightsIdentified', { count: recommendationCount }) : undefined}
+                    defaultOpen
+                    forceOpen={isCurrentlyStreaming}
                   >
                     <KeyInsightsSection
-                      summary={summary}
-                      recommendations={validRecommendations.length > 0 ? validRecommendations : undefined}
+                      article={article}
+                      recommendations={safeRecommendations}
                       onActionClick={stableOnActionClick}
                       isStreaming={isCurrentlyStreaming}
                     />
-                  </AnimatedStreamingItem>
+                  </CollapsibleSection>
                 )}
 
-                {/* 3. Contributor Perspectives */}
-                {validContributorPerspectives.length > 0 && (
-                  <AnimatedStreamingItem
-                    key="contributor-perspectives"
-                    itemKey="contributor-perspectives"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
+                {/* ═══════════════════════════════════════════════════════════════════
+                    3. MODEL VOICES - Detailed contributor info with avatars
+                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial voice data
+                ═══════════════════════════════════════════════════════════════════ */}
+                {safeModelVoices.length > 0 && (
+                  <CollapsibleSection
+                    icon={<Users className="size-4" />}
+                    title={t('modelVoices.title')}
+                    subtitle={t('modelVoices.contributorCount', { count: modelVoicesCount })}
+                    forceOpen={isCurrentlyStreaming}
                   >
-                    <ContributorPerspectivesSection
-                      perspectives={validContributorPerspectives}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </AnimatedStreamingItem>
+                    <div className="space-y-3">
+                      {safeModelVoices.map((voice, idx) => {
+                        // ✅ AI SDK v5 Pattern: Handle partial data with optional chaining
+                        if (!voice?.modelId)
+                          return null;
+                        const { icon, providerName } = getModelIconInfo(voice.modelId);
+                        const modelName = extractModelName(voice.modelId);
+                        return (
+                          <div key={`voice-${voice.modelId}-${voice.participantIndex ?? idx}`} className="flex items-start gap-3">
+                            <Avatar className="size-8 flex-shrink-0">
+                              <AvatarImage src={icon} alt={modelName} />
+                              <AvatarFallback className="text-xs">{providerName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm">{modelName}</span>
+                                {voice.role && (
+                                  <Badge
+                                    className="text-[10px] px-1.5 py-0"
+                                    style={getRoleBadgeStyle(voice.role)}
+                                  >
+                                    {voice.role}
+                                  </Badge>
+                                )}
+                              </div>
+                              {voice.position && (
+                                <p className="text-sm text-muted-foreground">{voice.position}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleSection>
                 )}
 
-                {/* 4. Consensus Analysis */}
-                {validConsensusAnalysis && (
-                  <AnimatedStreamingItem
-                    key="consensus-analysis"
-                    itemKey="consensus-analysis"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
+                {/* ═══════════════════════════════════════════════════════════════════
+                    4. CONSENSUS TABLE - Agreement/disagreement grid
+                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial data
+                ═══════════════════════════════════════════════════════════════════ */}
+                {safeConsensusTable.length > 0 && (
+                  <CollapsibleSection
+                    icon={<CheckCircle2 className="size-4" />}
+                    title={t('consensusTable.title')}
+                    subtitle={t('consensusTable.topicCount', { count: consensusTopicCount })}
+                    forceOpen={isCurrentlyStreaming}
                   >
-                    <ConsensusAnalysisSection
-                      analysis={validConsensusAnalysis}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </AnimatedStreamingItem>
+                    <div className="space-y-3">
+                      {safeConsensusTable.map((entry) => {
+                        // ✅ AI SDK v5 Pattern: Skip incomplete entries during streaming
+                        if (!entry?.topic)
+                          return null;
+                        return (
+                          <div key={`consensus-${entry.topic}`} className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{entry.topic}</span>
+                              {entry.resolution && (
+                                <Badge
+                                  variant={getResolutionBadgeVariant(entry.resolution)}
+                                  className="text-xs"
+                                >
+                                  {entry.resolution}
+                                </Badge>
+                              )}
+                            </div>
+                            {entry.positions && (
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                {entry.positions.map((pos) => {
+                                  if (!pos?.modelName)
+                                    return null;
+                                  return (
+                                    <span key={`pos-${entry.topic}-${pos.modelName}`} className="flex items-center gap-1">
+                                      {getStanceIcon(pos.stance)}
+                                      <span className="font-medium">{pos.modelName}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleSection>
                 )}
 
-                {/* 5. Evidence & Reasoning */}
-                {validEvidenceAndReasoning && (
-                  <AnimatedStreamingItem
-                    key="evidence-reasoning"
-                    itemKey="evidence-reasoning"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
+                {/* ═══════════════════════════════════════════════════════════════════
+                    5. MINORITY VIEWS - Dissenting opinions
+                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial data
+                ═══════════════════════════════════════════════════════════════════ */}
+                {safeMinorityViews.length > 0 && (
+                  <CollapsibleSection
+                    icon={<AlertTriangle className="size-4" />}
+                    title={t('minorityViews.title')}
+                    subtitle={t('minorityViews.viewCount', { count: minorityViewCount })}
+                    forceOpen={isCurrentlyStreaming}
                   >
-                    <EvidenceReasoningSection
-                      evidenceAndReasoning={validEvidenceAndReasoning}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </AnimatedStreamingItem>
+                    <div className="space-y-2">
+                      {safeMinorityViews.map((view) => {
+                        // ✅ AI SDK v5 Pattern: Skip incomplete entries
+                        if (!view?.modelName)
+                          return null;
+                        return (
+                          <div key={`minority-${view.modelName}`} className="flex items-start gap-2 text-sm">
+                            <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              <span className="font-medium">
+                                {view.modelName}
+                                :
+                              </span>
+                              {' '}
+                              <span className="text-muted-foreground">{view.view ?? ''}</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleSection>
                 )}
 
-                {/* 6. Alternative Scenarios */}
-                {validAlternatives.length > 0 && (
-                  <AnimatedStreamingItem
-                    key="alternatives"
-                    itemKey="alternatives"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
+                {/* ═══════════════════════════════════════════════════════════════════
+                    6. CONVERGENCE & DIVERGENCE - Where views met or parted
+                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial data
+                    ✅ FIX: Check for actual content, not just truthy object (empty {} would render accordion)
+                ═══════════════════════════════════════════════════════════════════ */}
+                {convergenceDivergence && (convergenceDivergence.convergedOn?.length || convergenceDivergence.divergedOn?.length || convergenceDivergence.evolved?.length) && (
+                  <CollapsibleSection
+                    icon={<GitMerge className="size-4" />}
+                    title={t('convergenceDivergence.title')}
+                    forceOpen={isCurrentlyStreaming}
                   >
-                    <AlternativesSection
-                      alternatives={validAlternatives}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </AnimatedStreamingItem>
+                    <div className="space-y-3 text-sm">
+                      {/* ✅ AI SDK v5 Pattern: Extra null checks for partial data */}
+                      {convergenceDivergence.convergedOn && convergenceDivergence.convergedOn.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                          <CheckCircle2 className="size-3.5 text-green-500 flex-shrink-0" />
+                          <span className="font-medium text-green-600 dark:text-green-400 mr-1">
+                            {t('convergenceDivergence.agreed')}
+                            :
+                          </span>
+                          <span className="text-muted-foreground">
+                            {convergenceDivergence.convergedOn.join(' • ')}
+                          </span>
+                        </div>
+                      )}
+                      {convergenceDivergence.divergedOn && convergenceDivergence.divergedOn.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                          <XCircle className="size-3.5 text-orange-500 flex-shrink-0" />
+                          <span className="font-medium text-orange-600 dark:text-orange-400 mr-1">
+                            {t('convergenceDivergence.split')}
+                            :
+                          </span>
+                          <span className="text-muted-foreground">
+                            {convergenceDivergence.divergedOn.join(' • ')}
+                          </span>
+                        </div>
+                      )}
+                      {convergenceDivergence.evolved && convergenceDivergence.evolved.length > 0 && (
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">{t('convergenceDivergence.evolved')}</span>
+                          {convergenceDivergence.evolved.map((evolution) => {
+                            if (!evolution?.point)
+                              return null;
+                            return (
+                              <div key={`evolved-${evolution.point}-${evolution.initialState ?? ''}-${evolution.finalState ?? ''}`} className="flex items-center gap-1.5 text-xs">
+                                <span className="font-medium">
+                                  {evolution.point}
+                                  :
+                                </span>
+                                <span className="text-orange-500">{evolution.initialState ?? ''}</span>
+                                <span className="text-muted-foreground">→</span>
+                                <span className="text-green-500">{evolution.finalState ?? ''}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </CollapsibleSection>
                 )}
 
-                {/* 7. Round Summary - Generated LAST by backend, shown at BOTTOM */}
-                {validRoundSummary && (
-                  <AnimatedStreamingItem
-                    key="round-summary"
-                    itemKey="round-summary"
-                    index={sectionIndex++}
-                    skipAnimation={skipAnimation}
-                  >
-                    <RoundSummarySection
-                      roundSummary={validRoundSummary}
-                      onActionClick={stableOnActionClick}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </AnimatedStreamingItem>
-                )}
-              </AnimatedStreamingList>
+                {/* ═══════════════════════════════════════════════════════════════════
+                    7. ABOUT THIS FRAMEWORK - Static explanation (BOTTOM)
+                    ✅ Matches panel structure exactly
+                ═══════════════════════════════════════════════════════════════════ */}
+                <CollapsibleSection
+                  icon={<Info className="size-4" />}
+                  title={t('aboutFramework.title')}
+                >
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>
+                      This analysis synthesizes perspectives from
+                      {' '}
+                      {modelVoicesCount}
+                      {' '}
+                      AI models participating in a collaborative
+                      {' '}
+                      {analysis.mode}
+                      {' '}
+                      discussion.
+                    </p>
+                    <p>The consensus table shows where models agreed and disagreed, while minority views highlight important dissenting opinions that may warrant further consideration.</p>
+                  </div>
+                </CollapsibleSection>
+              </div>
             </motion.div>
           )}
     </AnimatePresence>

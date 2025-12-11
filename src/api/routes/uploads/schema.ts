@@ -7,8 +7,9 @@
 
 import { z } from '@hono/zod-openapi';
 
+import { CursorPaginationQuerySchema } from '@/api/core';
 import { ChatAttachmentStatusSchema } from '@/api/core/enums';
-import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema, CursorPaginationQuerySchema } from '@/api/core/schemas';
+import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/api/core/schemas';
 import { uploadSelectSchema } from '@/db/validation/upload';
 
 // ============================================================================

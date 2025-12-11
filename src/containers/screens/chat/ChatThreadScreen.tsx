@@ -18,7 +18,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -41,6 +41,8 @@ type ChatThreadScreenProps = {
     name: string;
     image: string | null;
   };
+  /** Stream resumption state from server-side KV check (for Zustand pre-fill) */
+  streamResumptionState?: ThreadStreamResumptionState | null;
 };
 
 /**
@@ -83,6 +85,7 @@ export default function ChatThreadScreen({
   initialMessages,
   slug,
   user,
+  streamResumptionState,
 }: ChatThreadScreenProps) {
   // Delete dialog
   const isDeleteDialogOpen = useBoolean(false);
@@ -113,6 +116,17 @@ export default function ChatThreadScreen({
   const selectedMode = useChatStore(s => s.selectedMode);
   const inputValue = useChatStore(s => s.inputValue);
   const selectedParticipants = useChatStore(s => s.selectedParticipants);
+
+  // ✅ RESUMABLE STREAMS: Pre-fill store with server-side resumption state
+  // This runs FIRST (before other effects) to ensure store has correct state
+  // before AI SDK resume and incomplete-round-resumption hooks run
+  const prefillStreamResumptionState = useChatStore(s => s.prefillStreamResumptionState);
+
+  useEffect(() => {
+    if (streamResumptionState && thread?.id) {
+      prefillStreamResumptionState(thread.id, streamResumptionState);
+    }
+  }, [streamResumptionState, thread?.id, prefillStreamResumptionState]);
 
   // ✅ SIMPLIFIED: initializeThread now handles all state setup
   // Removed: resetThreadState, setShowInitialUI, setHasInitiallyLoaded, setSelectedMode, setEnableWebSearch

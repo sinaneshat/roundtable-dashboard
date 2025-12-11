@@ -1,15 +1,17 @@
 import { z } from '@hono/zod-openapi';
 
+import { CursorPaginationQuerySchema } from '@/api/core';
 import {
-  AgreementStatusSchema,
+  ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
   ChatModeSchema,
-  ConfidenceWeightingSchema,
-  DEBATE_PHASES,
   DEFAULT_CHAT_MODE,
-  EVIDENCE_STRENGTHS,
+  ParticipantStreamStatusSchema,
   PreSearchQueryStatusSchema,
-  VOTE_TYPES,
+  ResolutionTypeSchema,
+  SearchResultStatusSchema,
+  StanceTypeSchema,
+  UIMessageRoleSchema,
   WebSearchAnswerModeSchema,
   WebSearchComplexitySchema,
   WebSearchContentTypeSchema,
@@ -22,7 +24,6 @@ import {
   CoreSchemas,
   createApiResponseSchema,
   createCursorPaginatedResponseSchema,
-  CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
 import { STRING_LIMITS } from '@/constants/validation';
 import {
@@ -414,7 +415,7 @@ const UIMessageSchema = z.object({
     description: 'Unique message identifier',
     example: 'msg_user1',
   }),
-  role: z.enum(['user', 'assistant', 'system']).openapi({
+  role: UIMessageRoleSchema.openapi({
     description: 'Message role',
     example: 'user',
   }),
@@ -707,6 +708,44 @@ export const PreSearchDataPayloadSchema = z.object({
 export type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
 
 /**
+ * Partial pre-search result item schema for streaming UI updates
+ * ✅ ZOD-FIRST: Minimal result structure for progressive display
+ */
+export const PartialPreSearchResultItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  content: z.string().optional(),
+  excerpt: z.string().optional(),
+}).openapi('PartialPreSearchResultItem');
+
+/**
+ * Partial pre-search data schema for progressive UI updates
+ * ✅ ZOD-FIRST: Built incrementally as QUERY and RESULT events arrive
+ * ✅ PATTERN: Uses WebSearchDepthSchema for type safety
+ */
+export const PartialPreSearchDataSchema = z.object({
+  queries: z.array(z.object({
+    query: z.string(),
+    rationale: z.string(),
+    searchDepth: WebSearchDepthSchema,
+    index: z.number(),
+    total: z.number(),
+  })),
+  results: z.array(z.object({
+    query: z.string(),
+    answer: z.string().nullable(),
+    results: z.array(PartialPreSearchResultItemSchema),
+    responseTime: z.number(),
+    index: z.number(),
+  })),
+  analysis: z.string().optional(),
+  totalResults: z.number().optional(),
+  totalTime: z.number().optional(),
+}).openapi('PartialPreSearchData');
+
+export type PartialPreSearchData = z.infer<typeof PartialPreSearchDataSchema>;
+
+/**
  * Stored pre-search schema (from database)
  * ✅ FOLLOWS: StoredModeratorAnalysisSchema pattern
  * ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
@@ -873,258 +912,112 @@ export const ModeratorAnalysisRequestSchema = z.object({
   }),
 }).openapi('ModeratorAnalysisRequest');
 // ============================================================================
-// MULTI-AI DELIBERATION SCHEMAS - New Framework
+// ARTICLE-STYLE ANALYSIS SCHEMAS
 // ============================================================================
+// StanceType and ResolutionType enums: import from @/api/core/enums
 
 /**
- * AI Model Scorecard - Measures cognitive strengths
- * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ * Article narrative section - the main summary story
  */
-export const AIScorecardSchema = z.object({
-  logic: z.coerce.number(),
-  riskAwareness: z.coerce.number(),
-  creativity: z.coerce.number(),
-  evidence: z.coerce.number(),
-  consensus: z.coerce.number().optional(),
-}).openapi('AIScorecard');
+export const ArticleNarrativeSchema = z.object({
+  headline: z.string().describe('Clear overall conclusion in 1 compelling line'),
+  narrative: z.string().describe('2-4 paragraph coherent summary synthesizing all perspectives'),
+  keyTakeaway: z.string().describe('One-liner bottom line for quick scanning'),
+}).openapi('ArticleNarrative');
 
 /**
- * Contributor Perspective - Single AI participant's viewpoint
+ * Model voice - attribution of who said what
+ * ✅ FIX: Made keyContribution and notableQuote nullable to handle AI-generated null values
  */
-export const ContributorPerspectiveSchema = z.object({
-  participantIndex: RoundNumberSchema,
-  role: z.string().nullable().optional().default(null), // ✅ FIX: Allow undefined (AI may omit field)
-  modelId: z.string(),
+export const ModelVoiceSchema = z.object({
   modelName: z.string(),
-  scorecard: AIScorecardSchema,
-  stance: z.string(),
-  evidence: z.array(z.string()),
-  vote: z.enum(VOTE_TYPES).nullable(), // ✅ FIX: Allow null for insufficient content (AI may return null when vote can't be determined)
-}).openapi('ContributorPerspective');
+  modelId: z.string(),
+  participantIndex: RoundNumberSchema,
+  role: z.string().nullable(),
+  position: z.string().nullable().describe('Brief summary of their stance (1-2 sentences)'),
+  keyContribution: z.string().nullable().describe('What they uniquely brought to discussion'),
+  notableQuote: z.string().nullable().optional().describe('Paraphrased notable point they made'),
+}).openapi('ModelVoice');
 
 /**
- * Contested claim in consensus analysis
+ * Consensus table entry - shows agreement/disagreement on specific topics
  */
-export const ContestedClaimSchema = z.object({
-  claim: z.string(),
-  status: z.literal('contested'),
-}).openapi('ContestedClaim');
+export const ConsensusTableEntrySchema = z.object({
+  topic: z.string().describe('The claim or point being evaluated'),
+  positions: z.array(z.object({
+    modelName: z.string(),
+    stance: StanceTypeSchema,
+    brief: z.string().describe('1-line reason for their stance'),
+  })),
+  resolution: ResolutionTypeSchema.describe('consensus=all agree, majority=most agree, split=50-50, contested=strong disagreement'),
+}).openapi('ConsensusTableEntry');
 
 /**
- * Perspective entry for agreement heatmap - Model's stance on a claim
- * ✅ FIX: Replaced z.record() with explicit object to avoid Anthropic "additionalProperties" error
+ * Minority view - explicitly highlighted dissenting opinions
+ * ✅ FIX: Made reasoning and worthConsidering nullable/optional for AI-generated null values
  */
-export const ModelPerspectiveSchema = z.object({
-  modelName: z.string().describe('The AI model name'),
-  status: AgreementStatusSchema,
-}).openapi('ModelPerspective');
+export const MinorityViewSchema = z.object({
+  modelName: z.string(),
+  view: z.string().describe('The minority position'),
+  reasoning: z.string().nullable().optional().describe('Why they hold this view'),
+  worthConsidering: z.boolean().optional().describe('Whether this view raises valid concerns'),
+}).openapi('MinorityView');
 
 /**
- * Preprocess perspectives to handle AI returning object instead of array
- * AI sometimes returns: { "Claude 4.5 Opus": "agree", "o3 Mini": "agree" }
- * Schema expects: [{ modelName: "Claude 4.5 Opus", status: "agree" }, ...]
+ * Point evolution - how a specific point evolved during discussion
  */
-function preprocessPerspectives(val: unknown): unknown {
-  if (Array.isArray(val))
-    return val;
-  if (val && typeof val === 'object' && !Array.isArray(val)) {
-    // Convert object { modelName: status } to array [{ modelName, status }]
-    return Object.entries(val as Record<string, string>).map(([modelName, status]) => ({
-      modelName,
-      status,
-    }));
-  }
-  return val;
-}
+export const PointEvolutionSchema = z.object({
+  point: z.string(),
+  initialState: z.string().describe('Where discussion started on this point'),
+  finalState: z.string().describe('Where discussion ended on this point'),
+}).openapi('PointEvolution');
 
 /**
- * Agreement heatmap entry - Shows which models agree/disagree on claims
- * ✅ FIX: Changed perspectives from z.record() to array for Anthropic compatibility
- * ✅ DEFENSIVE: Uses preprocess to handle AI returning object format
+ * Convergence/Divergence analysis
  */
-export const AgreementHeatmapEntrySchema = z.object({
-  claim: z.string(),
-  perspectives: z.preprocess(
-    preprocessPerspectives,
-    z.array(ModelPerspectiveSchema),
-  ).describe('Array of model perspectives on this claim'),
-}).openapi('AgreementHeatmapEntry');
+export const ConvergenceDivergenceSchema = z.object({
+  convergedOn: z.array(z.string()).describe('Points all models agreed on'),
+  divergedOn: z.array(z.string()).describe('Points with persistent disagreement'),
+  evolved: z.array(PointEvolutionSchema).describe('How positions shifted during discussion'),
+}).openapi('ConvergenceDivergence');
 
 /**
- * Model strength entry - Radar chart data for a single model
- * ✅ FIX: Explicit object instead of z.record() for Anthropic compatibility
+ * Recommendation with actionable prompts
  */
-export const ModelStrengthEntrySchema = z.object({
-  modelName: z.string().describe('The AI model name'),
-  logic: z.coerce.number().describe('Logic score (0-10)'),
-  evidence: z.coerce.number().describe('Evidence score (0-10)'),
-  riskAwareness: z.coerce.number().describe('Risk awareness score (0-10)'),
-  consensus: z.coerce.number().describe('Consensus score (0-10)'),
-  creativity: z.coerce.number().describe('Creativity score (0-10)'),
-}).openapi('ModelStrengthEntry');
-
-/**
- * Preprocess argument strength profile to handle AI returning object instead of array
- * AI sometimes returns: { "Claude 4.5 Opus": { logic: 85, ... }, "o3 Mini": { logic: 50, ... } }
- * Schema expects: [{ modelName: "Claude 4.5 Opus", logic: 85, ... }, ...]
- */
-function preprocessArgumentStrengthProfile(val: unknown): unknown {
-  if (Array.isArray(val))
-    return val;
-  if (val && typeof val === 'object' && !Array.isArray(val)) {
-    // Convert object { modelName: { scores } } to array [{ modelName, ...scores }]
-    return Object.entries(val as Record<string, Record<string, unknown>>).map(([modelName, scores]) => ({
-      modelName,
-      ...scores,
-    }));
-  }
-  return val;
-}
-
-/**
- * Argument strength profile - Radar chart data per model
- * ✅ FIX: Changed from z.record() to array for Anthropic compatibility
- * ✅ DEFENSIVE: Uses preprocess to handle AI returning object format
- * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
- */
-export const ArgumentStrengthProfileSchema = z.preprocess(
-  preprocessArgumentStrengthProfile,
-  z.array(ModelStrengthEntrySchema),
-)
-  .describe('Array of strength profiles per model')
-  .openapi('ArgumentStrengthProfile');
-
-/**
- * Consensus Analysis - Agreement patterns across contributors
- * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
- */
-export const ConsensusAnalysisSchema = z.object({
-  alignmentSummary: z.object({
-    totalClaims: z.coerce.number(),
-    majorAlignment: z.coerce.number(),
-    contestedClaims: z.coerce.number(),
-    contestedClaimsList: z.array(ContestedClaimSchema),
-  }),
-  agreementHeatmap: z.array(AgreementHeatmapEntrySchema),
-  argumentStrengthProfile: ArgumentStrengthProfileSchema,
-}).openapi('ConsensusAnalysis');
-
-/**
- * Reasoning thread - Claim with supporting synthesis
- */
-export const ReasoningThreadSchema = z.object({
-  claim: z.string(),
-  synthesis: z.string(),
-}).openapi('ReasoningThread');
-
-/**
- * Evidence coverage for a claim
- * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
- */
-export const EvidenceCoverageSchema = z.object({
-  claim: z.string(),
-  strength: z.enum(EVIDENCE_STRENGTHS),
-  percentage: z.coerce.number(),
-}).openapi('EvidenceCoverage');
-
-/**
- * Evidence & Reasoning - Supporting data and logic
- */
-export const EvidenceAndReasoningSchema = z.object({
-  reasoningThreads: z.array(ReasoningThreadSchema),
-  evidenceCoverage: z.array(EvidenceCoverageSchema),
-}).openapi('EvidenceAndReasoning');
-
-/**
- * Alternative scenario with confidence
- * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
- */
-export const AlternativeScenarioSchema = z.object({
-  scenario: z.string(),
-  confidence: z.coerce.number(),
-}).openapi('AlternativeScenario');
-
-/**
- * Recommendation item with optional interactive suggestions
- */
-export const RecommendationSchema = z.object({
+export const ArticleRecommendationSchema = z.object({
   title: z.string(),
   description: z.string(),
-  // Actionable user prompt to continue the conversation
-  suggestedPrompt: z.string().optional(),
-  // Optional interactive fields for applying suggestions to form
+  suggestedPrompt: z.string().optional().describe('Follow-up question user could ask'),
   suggestedModels: z.array(z.string()).optional(),
   suggestedRoles: z.array(z.string()).optional(),
-  suggestedMode: z.string().optional(),
-}).openapi('Recommendation');
+}).openapi('ArticleRecommendation');
 
 /**
- * Round summary - Progress and key themes
- * Uses z.coerce.number() to automatically convert AI-generated string numbers to actual numbers
+ * Confidence assessment
  */
-export const RoundSummarySchema = z.object({
-  participation: z.object({
-    approved: z.coerce.number(),
-    cautioned: z.coerce.number(),
-    rejected: z.coerce.number(),
-  }),
-  keyThemes: z.string(),
-  unresolvedQuestions: z.array(z.string()),
-  generated: z.string(),
-}).openapi('RoundSummary');
+export const ConfidenceAssessmentSchema = z.object({
+  overall: z.coerce.number().describe('Overall confidence 0-100'),
+  reasoning: z.string().describe('Why this confidence level'),
+}).openapi('ConfidenceAssessment');
 
 /**
- * Consensus Evolution Phase - Shows consensus percentage at each debate phase
- * Used for timeline visualization showing how consensus evolved through deliberation
- */
-export const ConsensusEvolutionPhaseSchema = z.object({
-  phase: z.enum(DEBATE_PHASES),
-  // ✅ FIX: Removed .min(0).max(100) - Anthropic doesn't support these in structured output
-  // AI is guided by description instead
-  percentage: z.coerce.number().describe('Consensus percentage (0-100)'),
-  label: z.string().optional(), // Optional human-readable label like "Opening", "Final Vote"
-}).openapi('ConsensusEvolutionPhase');
-
-/**
- * Consensus Evolution - Timeline of consensus through debate phases
- * Shows how agreement evolved from Opening (low) to Final Vote (high)
- */
-export const ConsensusEvolutionSchema = z.array(ConsensusEvolutionPhaseSchema).openapi('ConsensusEvolution');
-
-/**
- * Complete Moderator Analysis Payload - Multi-AI Deliberation Framework
+ * Complete Article-Style Analysis Payload
+ * Designed to read like a brief, polished summary article
+ *
+ * ✅ STREAMING ORDER: Fields ordered to match UI display from top to bottom
+ * This ensures content streams in visual order for better UX
  */
 export const ModeratorAnalysisPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
   mode: z.string(),
   userQuestion: z.string(),
-
-  // Round Confidence Header - Overall confidence metrics
-  // ✅ FIX: Removed .min(0).max(100) - Anthropic doesn't support these in structured output
-  roundConfidence: z.coerce.number().optional().describe('Overall confidence percentage (0-100)'),
-  confidenceWeighting: ConfidenceWeightingSchema.optional(), // Weighting method (default: balanced)
-
-  // Consensus Evolution - Timeline showing consensus at each debate phase
-  consensusEvolution: ConsensusEvolutionSchema.optional(), // Array of phases with percentages
-
-  // Key Insights & Recommendations
-  summary: z.string(),
-  recommendations: z.array(RecommendationSchema),
-
-  // Contributor Perspectives
-  contributorPerspectives: z.array(ContributorPerspectiveSchema),
-
-  // Consensus Analysis
-  consensusAnalysis: ConsensusAnalysisSchema,
-
-  // Evidence & Reasoning
-  evidenceAndReasoning: EvidenceAndReasoningSchema,
-
-  // Explore Alternatives
-  alternatives: z.array(AlternativeScenarioSchema),
-
-  // Round Summary
-  roundSummary: RoundSummarySchema,
+  confidence: ConfidenceAssessmentSchema,
+  modelVoices: z.array(ModelVoiceSchema),
+  article: ArticleNarrativeSchema,
+  recommendations: z.array(ArticleRecommendationSchema),
+  consensusTable: z.array(ConsensusTableEntrySchema),
+  minorityViews: z.array(MinorityViewSchema),
+  convergenceDivergence: ConvergenceDivergenceSchema,
 }).openapi('ModeratorAnalysisPayload');
 export const ModeratorAnalysisResponseSchema = createApiResponseSchema(ModeratorAnalysisPayloadSchema).openapi('ModeratorAnalysisResponse');
 export const AnalysisAcceptedPayloadSchema = z.object({
@@ -1146,12 +1039,72 @@ export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
   })
   .openapi('StoredModeratorAnalysis');
 
-const ModeratorAnalysisListPayloadSchema = z.object({
+// ✅ EXPORTED: For store cache validation in actions/types.ts
+export const ModeratorAnalysisListPayloadSchema = z.object({
   items: z.array(StoredModeratorAnalysisSchema),
   count: z.number().int().nonnegative(),
 }).openapi('ModeratorAnalysisListPayload');
 export const ModeratorAnalysisListResponseSchema = createApiResponseSchema(ModeratorAnalysisListPayloadSchema).openapi('ModeratorAnalysisListResponse');
 export type ModeratorAnalysisListResponse = z.infer<typeof ModeratorAnalysisListResponseSchema>;
+export type ModeratorAnalysisListPayload = z.infer<typeof ModeratorAnalysisListPayloadSchema>;
+
+// ============================================================================
+// CACHE VALIDATION SCHEMAS (Frontend React Query)
+// ============================================================================
+// Flexible schemas for validating React Query cache data
+// Uses z.boolean() for success (cache may have failed responses)
+// Uses .optional() on fields (cache may have partial data)
+
+/**
+ * Generic API cache response wrapper
+ * Unlike createApiResponseSchema which uses z.literal(true),
+ * this accepts z.boolean() since cache may contain failed responses
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Used in stores/chat/actions/types.ts
+ */
+export function createCacheResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
+  return z.object({
+    success: z.boolean(),
+    data: dataSchema,
+  });
+}
+
+/**
+ * Flexible ChatThread schema for cache validation
+ * Accepts both string and Date for timestamps (API returns strings, optimistic updates may have Dates)
+ * Most fields optional since cache may have partial data
+ */
+export const ChatThreadCacheSchema = z.object({
+  id: z.string(),
+  title: z.string().optional(),
+  slug: z.string().optional(),
+  previousSlug: z.string().nullable().optional(),
+  mode: z.string().optional(),
+  status: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  isAiGeneratedTitle: z.boolean().optional(),
+  enableWebSearch: z.boolean().optional(),
+  metadata: z.unknown().optional(),
+  // Date fields accept both string (from JSON API) and Date (from optimistic updates)
+  createdAt: z.union([z.string(), z.date()]).optional(),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+  lastMessageAt: z.union([z.string(), z.date()]).nullable().optional(),
+}).openapi('ChatThreadCache');
+
+export type ChatThreadCache = z.infer<typeof ChatThreadCacheSchema>;
+
+/**
+ * Analyses cache response schema
+ * Wraps ModeratorAnalysisListPayloadSchema with cache response wrapper
+ */
+export const AnalysesCacheResponseSchema = createCacheResponseSchema(
+  z.object({
+    items: z.array(StoredModeratorAnalysisSchema),
+  }),
+);
+
+export type AnalysesCacheResponse = z.infer<typeof AnalysesCacheResponseSchema>;
 
 // Export schemas for store usage
 export { ChatParticipantSchema, ChatThreadSchema };
@@ -1168,14 +1121,14 @@ export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
 export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
 export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
-export type RoundSummary = z.infer<typeof RoundSummarySchema>;
-export type Recommendation = z.infer<typeof RecommendationSchema>;
-export type ContributorPerspective = z.infer<typeof ContributorPerspectiveSchema>;
-export type ConsensusAnalysis = z.infer<typeof ConsensusAnalysisSchema>;
-export type EvidenceAndReasoning = z.infer<typeof EvidenceAndReasoningSchema>;
-export type AlternativeScenario = z.infer<typeof AlternativeScenarioSchema>;
-export type ConsensusEvolutionPhase = z.infer<typeof ConsensusEvolutionPhaseSchema>;
-export type ConsensusEvolution = z.infer<typeof ConsensusEvolutionSchema>;
+export type ArticleNarrative = z.infer<typeof ArticleNarrativeSchema>;
+export type ModelVoice = z.infer<typeof ModelVoiceSchema>;
+export type ConsensusTableEntry = z.infer<typeof ConsensusTableEntrySchema>;
+export type MinorityView = z.infer<typeof MinorityViewSchema>;
+export type PointEvolution = z.infer<typeof PointEvolutionSchema>;
+export type ConvergenceDivergence = z.infer<typeof ConvergenceDivergenceSchema>;
+export type ArticleRecommendation = z.infer<typeof ArticleRecommendationSchema>;
+export type ConfidenceAssessment = z.infer<typeof ConfidenceAssessmentSchema>;
 // ============================================================================
 // SIMPLIFIED CHANGELOG DATA SCHEMAS
 // ============================================================================
@@ -1183,7 +1136,7 @@ export type ConsensusEvolution = z.infer<typeof ConsensusEvolutionSchema>;
 // Each changeData includes a 'type' field for discrimination
 
 const BaseChangeDataSchema = z.object({
-  type: z.enum(['participant', 'participant_role', 'mode_change']),
+  type: ChangelogChangeTypeSchema,
 });
 
 export const ParticipantChangeDataSchema = BaseChangeDataSchema.extend({
@@ -1312,7 +1265,7 @@ export const StreamStateSchema = z.object({
   threadId: z.string(),
   roundNumber: RoundNumberSchema,
   participantIndex: RoundNumberSchema,
-  status: z.enum(['active', 'completed', 'failed']),
+  status: ParticipantStreamStatusSchema,
   messageId: z.string().nullable(),
   createdAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
@@ -1324,6 +1277,50 @@ export type StreamState = z.infer<typeof StreamStateSchema>;
 export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
 
 export type StreamStatusResponse = z.infer<typeof StreamStatusResponseSchema>;
+
+/**
+ * Thread stream resumption state schema
+ * Returns metadata about active stream for server-side prefetching
+ * ✅ RESUMABLE STREAMS: Enables Zustand pre-fill before React renders
+ */
+export const ThreadStreamResumptionStateSchema = z.object({
+  hasActiveStream: z.boolean().openapi({
+    description: 'Whether thread has an active stream in KV',
+    example: true,
+  }),
+  streamId: z.string().nullable().openapi({
+    description: 'Active stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
+    example: 'thread_abc123_r0_p1',
+  }),
+  roundNumber: RoundNumberSchema.nullable().openapi({
+    description: 'Round number of the active stream',
+    example: 0,
+  }),
+  totalParticipants: RoundNumberSchema.nullable().openapi({
+    description: 'Total number of participants in the round',
+    example: 3,
+  }),
+  participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema).nullable().openapi({
+    description: 'Status of each participant (keyed by index)',
+    example: { 0: 'completed', 1: 'active', 2: 'active' },
+  }),
+  nextParticipantToTrigger: RoundNumberSchema.nullable().openapi({
+    description: 'Index of next participant that needs to be triggered (not started or empty interrupted)',
+    example: 2,
+  }),
+  roundComplete: z.boolean().openapi({
+    description: 'Whether all participants have finished (completed or failed)',
+    example: false,
+  }),
+}).openapi('ThreadStreamResumptionState');
+
+export type ThreadStreamResumptionState = z.infer<typeof ThreadStreamResumptionStateSchema>;
+
+export const ThreadStreamResumptionStateResponseSchema = createApiResponseSchema(
+  ThreadStreamResumptionStateSchema,
+).openapi('ThreadStreamResumptionStateResponse');
+
+export type ThreadStreamResumptionStateResponse = z.infer<typeof ThreadStreamResumptionStateResponseSchema>;
 
 // ============================================================================
 // PRE-SEARCH STREAMING DATA SCHEMAS
@@ -1518,7 +1515,7 @@ export const PreSearchResultEventSchema = z.object({
     resultCount: z.number(),
     responseTime: z.number(),
     index: z.number(),
-    status: z.enum(['searching', 'processing', 'complete', 'error']).optional(),
+    status: SearchResultStatusSchema.optional(),
     error: z.string().optional(),
   }),
 }).openapi('PreSearchResultEvent');

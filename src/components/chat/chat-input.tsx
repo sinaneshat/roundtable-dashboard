@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import {
   ChatInputAttachments,
   ChatInputDropzoneOverlay,
@@ -28,6 +27,7 @@ import {
   useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 

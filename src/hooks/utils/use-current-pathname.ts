@@ -51,9 +51,16 @@ function patchHistoryMethods() {
 
 /**
  * Notify all subscribers that the URL has changed
+ *
+ * ✅ BUG FIX: Defer notification to next microtask to avoid triggering
+ * React state updates during useInsertionEffect. Next.js uses insertion
+ * effects for some routing operations, and synchronous updates during
+ * those cause the error: "useInsertionEffect must not schedule updates"
  */
 function notifySubscribers() {
-  subscribers.forEach(callback => callback());
+  queueMicrotask(() => {
+    subscribers.forEach(callback => callback());
+  });
 }
 
 /**

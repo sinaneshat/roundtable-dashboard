@@ -15,12 +15,8 @@
 
 import { z } from '@hono/zod-openapi';
 
-import {
-  MESSAGE_PART_TYPES,
-  MESSAGE_STATUSES,
-  MessagePartTypes,
-  MessageStatusSchema,
-} from '@/api/core/enums';
+import type { MessageStatus } from '@/api/core/enums';
+import { MESSAGE_STATUSES, MessagePartTypes, ReasoningPartTypeSchema } from '@/api/core/enums';
 
 // ============================================================================
 // FILE PART SCHEMA (extracted for reuse)
@@ -353,34 +349,6 @@ export const MessagePartSchema = z
  * ✅ ZOD INFERENCE: Type automatically derived from schema
  */
 export type MessagePart = z.infer<typeof MessagePartSchema>;
-
-// ============================================================================
-// MESSAGE STATUS (re-export from enums for convenience)
-// ============================================================================
-
-/**
- * ✅ RE-EXPORT: Message status for UI rendering states
- * Represents the current state of a message during streaming
- *
- * Possible values:
- * - `thinking`: AI is processing the request
- * - `streaming`: Actively streaming response tokens
- * - `completed`: Response fully streamed and saved
- * - `error`: An error occurred during generation
- *
- * Used by:
- * - Frontend: Message UI components (loading states, error display)
- * - Backend: Streaming event emission
- *
- * @see /src/api/core/enums.ts - MessageStatusSchema definition
- */
-export { MESSAGE_PART_TYPES, MESSAGE_STATUSES, MessageStatusSchema };
-
-/**
- * Message status TypeScript type
- * ✅ RE-EXPORT: From centralized enums
- */
-export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -929,7 +897,8 @@ export type StreamingUsage = z.infer<typeof StreamingUsageSchema>;
  */
 export const ReasoningPartSchema = z.object({
   // AI SDK uses 'reasoning' type; Claude models also use 'thinking' and 'redacted'
-  type: z.enum(['reasoning', 'thinking', 'redacted', 'text']).optional(),
+  // ✅ Uses centralized ReasoningPartTypeSchema from @/api/core/enums
+  type: ReasoningPartTypeSchema.optional(),
   text: z.string(),
 });
 

@@ -38,13 +38,13 @@
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
-import { shouldWaitForPreSearch } from './pending-message-sender';
+import { shouldWaitForPreSearch } from '../utils/pre-search-execution';
 
 // ============================================================================
 // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL NEEDED
@@ -142,6 +142,7 @@ export function useIncompleteRoundResumption(
     setStreamingRoundNumber: s.setStreamingRoundNumber,
     setCurrentParticipantIndex: s.setCurrentParticipantIndex,
     setWaitingToStartStreaming: s.setWaitingToStartStreaming,
+    setIsStreaming: s.setIsStreaming,
     prepareForNewMessage: s.prepareForNewMessage,
     setExpectedParticipantIds: s.setExpectedParticipantIds,
     setMessages: s.setMessages,
@@ -216,6 +217,51 @@ export function useIncompleteRoundResumption(
     }
   }, [waitingToStartStreaming, pendingMessage, isStreaming, actions]);
 
+  // ============================================================================
+  // ✅ STALE isStreaming FIX: Clear stale isStreaming on page refresh
+  // ============================================================================
+  // When user refreshes during streaming:
+  // 1. isStreaming: true persists from previous session
+  // 2. AI SDK's resume attempt briefly sets status='streaming' during GET /stream fetch
+  // 3. handleResumedStreamDetection sets isExplicitlyStreaming=true
+  // 4. GET /stream may return some buffered chunks then end without finish event
+  // 5. But isStreaming=true blocks incomplete round resumption
+  //
+  // Detection: isStreaming: true AND round is incomplete AND no submission in progress
+  // Fix: After 2s of no progress, clear isStreaming to allow resumption
+  //
+  // ✅ FIX: Don't use "checked once" ref - timeout should reset when deps change
+  // If resumed stream sends data then stops, deps change → timeout resets → 2s later clears
+  // This handles the case where stream resumes partially then dies without finish event
+  // ============================================================================
+  useEffect(() => {
+    // Skip if not streaming (nothing to clear)
+    if (!isStreaming) {
+      return;
+    }
+
+    // Skip if resumption already in progress (streaming will be handled)
+    if (waitingToStartStreaming) {
+      return;
+    }
+
+    // Skip if submission in progress
+    if (pendingMessage !== null || hasEarlyOptimisticMessage) {
+      return;
+    }
+
+    // ✅ FIX: Set timeout that resets each time deps change
+    // If streaming continues for 2s without any activity (no dep changes),
+    // it's stale and should be cleared to allow incomplete round resumption
+    const timeoutId = setTimeout(() => {
+      // Clear isStreaming to unblock incomplete round resumption
+      // The resumption effect will re-run and trigger remaining participants
+      actions.setIsStreaming(false);
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
+  }, [isStreaming, waitingToStartStreaming, pendingMessage, hasEarlyOptimisticMessage, actions]);
+
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 
   // ✅ ORPHANED PRE-SEARCH DETECTION
@@ -270,6 +316,10 @@ export function useIncompleteRoundResumption(
   // Also track their model IDs to detect participant config changes
   const respondedParticipantIndices = new Set<number>();
   const respondedModelIds = new Set<string>();
+  // ✅ AI SDK RESUME FIX: Track participants with streaming parts separately
+  // These are "in progress" from AI SDK resume - we should NOT try to trigger them
+  // because `continueFromParticipant` will skip them (they have content) anyway
+  const inProgressParticipantIndices = new Set<number>();
 
   if (currentRoundNumber !== null) {
     messages.forEach((msg) => {
@@ -304,12 +354,19 @@ export function useIncompleteRoundResumption(
             p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
           ) || false;
 
-          const isEmptyInterruptedResponse = assistantMetadata?.finishReason === 'unknown'
+          const isEmptyInterruptedResponse = assistantMetadata?.finishReason === FinishReasons.UNKNOWN
             && assistantMetadata?.usage?.totalTokens === 0
             && !hasTextContent;
 
+          // ✅ AI SDK RESUME FIX: Track participants with streaming parts
+          // These have partial content from AI SDK resume - accept as-is, don't regenerate
+          if (isStillStreaming && hasTextContent) {
+            inProgressParticipantIndices.add(participantIndex);
+            if (modelId) {
+              respondedModelIds.add(modelId);
+            }
           // Only count as responded if message is complete (no streaming parts, not empty interrupted)
-          if (!isStillStreaming && !isEmptyInterruptedResponse) {
+          } else if (!isStillStreaming && !isEmptyInterruptedResponse) {
             respondedParticipantIndices.add(participantIndex);
             if (modelId) {
               respondedModelIds.add(modelId);
@@ -344,6 +401,10 @@ export function useIncompleteRoundResumption(
   // Check if round is incomplete
   // ✅ FIX: Also check that participants haven't changed since round started
   // ✅ INFINITE LOOP FIX: Don't treat round as incomplete during active submission
+  // ✅ AI SDK RESUME FIX: Account for in-progress participants (from AI SDK resume)
+  // A round is incomplete only if there are participants that need triggering:
+  // Total - Responded - InProgress > 0
+  const accountedParticipants = respondedParticipantIndices.size + inProgressParticipantIndices.size;
   const isIncomplete
     = enabled
       && !isStreaming
@@ -351,20 +412,80 @@ export function useIncompleteRoundResumption(
       && !isSubmissionInProgress // ← NEW: Don't interfere with normal submissions
       && currentRoundNumber !== null
       && enabledParticipants.length > 0
-      && respondedParticipantIndices.size < enabledParticipants.length
+      && accountedParticipants < enabledParticipants.length
       && !participantsChangedSinceRound;
 
   // Find the first missing participant index
+  // ✅ AI SDK RESUME FIX: Skip BOTH responded AND in-progress participants
+  // In-progress participants have partial content from AI SDK resume - accept as-is
   let nextParticipantIndex: number | null = null;
 
   if (isIncomplete) {
     for (let i = 0; i < enabledParticipants.length; i++) {
-      if (!respondedParticipantIndices.has(i)) {
-        nextParticipantIndex = i;
-        break;
+      // Skip responded (complete) participants
+      if (respondedParticipantIndices.has(i)) {
+        continue;
       }
+      // Skip in-progress participants (AI SDK resume with partial content)
+      if (inProgressParticipantIndices.has(i)) {
+        continue;
+      }
+      // Found a participant that needs triggering
+      nextParticipantIndex = i;
+      break;
     }
   }
+
+  // ============================================================================
+  // ✅ REACT 19 PATTERN: Consolidated ref reset effect
+  // All refs that need to reset when threadId changes are handled in one effect
+  // This follows React best practice of consolidating related side effects
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: Track round state signature for re-check detection
+  const lastCheckedSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeStreamCheckRef.current = null;
+    activeStreamCheckCompleteRef.current = false;
+    orphanedPreSearchUIRecoveryRef.current = null;
+    orphanedPreSearchRecoveryAttemptedRef.current = null;
+    resumptionAttemptedRef.current = null;
+    staleWaitingStateRef.current = false; // Reset so stale state detection works on navigation
+    lastCheckedSignatureRef.current = null; // Reset signature to allow fresh check
+  }, [threadId]);
+
+  // ============================================================================
+  // ✅ EFFECT ORDERING FIX: Signature reset MUST run BEFORE immediate placeholder
+  // When isStreaming changes from true to false (e.g., stale streaming cleared):
+  // 1. isIncomplete changes from false to true
+  // 2. Effects run in declaration order
+  // 3. Signature reset runs FIRST, clears refs if signature changed
+  // 4. Immediate placeholder runs SECOND, sees cleared refs, proceeds to set state
+  // 5. Main resumption effect runs THIRD, sees activeStreamCheckCompleteRef=true, proceeds
+  //
+  // Previously: immediate placeholder ran first, returned early, signature reset ran second
+  // and cleared refs, but by then immediate placeholder already returned early!
+  // ============================================================================
+  useEffect(() => {
+    const currentSignature = `${threadId}_${isIncomplete}_${currentRoundNumber}`;
+
+    // If signature changed and we previously checked as "complete", reset refs
+    // This allows re-checking when round becomes incomplete
+    if (lastCheckedSignatureRef.current !== null
+      && lastCheckedSignatureRef.current !== currentSignature
+      && activeStreamCheckRef.current === threadId
+    ) {
+      // Round state changed - need to re-check
+      // But only reset if we're not currently in the middle of resumption
+      if (!waitingToStartStreaming && !isStreaming) {
+        activeStreamCheckRef.current = null;
+        activeStreamCheckCompleteRef.current = false;
+        resumptionAttemptedRef.current = null;
+      }
+    }
+
+    lastCheckedSignatureRef.current = currentSignature;
+  }, [threadId, isIncomplete, currentRoundNumber, waitingToStartStreaming, isStreaming]);
 
   // ✅ OPTIMIZED: Set streamingRoundNumber immediately when incomplete round detected
   // This enables placeholder rendering WITHOUT waiting for backend check
@@ -400,54 +521,6 @@ export function useIncompleteRoundResumption(
     activeStreamCheckRef.current = threadId;
     activeStreamCheckCompleteRef.current = true;
   }, [enabled, threadId, isIncomplete, currentRoundNumber, nextParticipantIndex, actions]);
-
-  // ============================================================================
-  // ✅ REACT 19 PATTERN: Consolidated ref reset effect
-  // All refs that need to reset when threadId changes are handled in one effect
-  // This follows React best practice of consolidating related side effects
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: Track round state signature for re-check detection
-  const lastCheckedSignatureRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    activeStreamCheckRef.current = null;
-    activeStreamCheckCompleteRef.current = false;
-    orphanedPreSearchUIRecoveryRef.current = null;
-    orphanedPreSearchRecoveryAttemptedRef.current = null;
-    resumptionAttemptedRef.current = null;
-    staleWaitingStateRef.current = false; // Reset so stale state detection works on navigation
-    lastCheckedSignatureRef.current = null; // Reset signature to allow fresh check
-  }, [threadId]);
-
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: Reset check refs when round state fundamentally changes
-  // The activeStreamCheckRef prevents re-checking for the same threadId, but if
-  // a round becomes incomplete AFTER the initial check (e.g., message deleted,
-  // participant config changed), we need to re-check.
-  //
-  // Track the "signature" of the state we checked: threadId + isIncomplete + currentRoundNumber
-  // If any of these change, reset the refs to allow re-checking.
-  // ============================================================================
-  useEffect(() => {
-    const currentSignature = `${threadId}_${isIncomplete}_${currentRoundNumber}`;
-
-    // If signature changed and we previously checked as "complete", reset refs
-    // This allows re-checking when round becomes incomplete
-    if (lastCheckedSignatureRef.current !== null
-      && lastCheckedSignatureRef.current !== currentSignature
-      && activeStreamCheckRef.current === threadId
-    ) {
-      // Round state changed - need to re-check
-      // But only reset if we're not currently in the middle of resumption
-      if (!waitingToStartStreaming && !isStreaming) {
-        activeStreamCheckRef.current = null;
-        activeStreamCheckCompleteRef.current = false;
-        resumptionAttemptedRef.current = null;
-      }
-    }
-
-    lastCheckedSignatureRef.current = currentSignature;
-  }, [threadId, isIncomplete, currentRoundNumber, waitingToStartStreaming, isStreaming]);
 
   // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT
   // When a user refreshes during pre-search/changelog phase, the pre-search may be
@@ -667,11 +740,8 @@ export function useIncompleteRoundResumption(
     // Store's enableWebSearch defaults to false and may not be synced from thread yet on page load
     // The thread is loaded before the store form state is synced, so it's the source of truth
     const effectiveWebSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
-    if (shouldWaitForPreSearch({
-      webSearchEnabled: effectiveWebSearchEnabled,
-      preSearches,
-      roundNumber: currentRoundNumber,
-    })) {
+    const preSearchForRound = preSearches.find(ps => ps.roundNumber === currentRoundNumber);
+    if (shouldWaitForPreSearch(effectiveWebSearchEnabled, preSearchForRound)) {
       return;
     }
 
@@ -695,7 +765,7 @@ export function useIncompleteRoundResumption(
       const hasContent = existingMessage.parts?.some(
         p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
       ) || false;
-      const isComplete = hasContent && existingMetadata?.finishReason !== 'unknown';
+      const isComplete = hasContent && existingMetadata?.finishReason !== FinishReasons.UNKNOWN;
 
       if (isComplete) {
         // Message already exists and is complete - skip this participant

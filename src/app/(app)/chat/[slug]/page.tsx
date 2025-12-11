@@ -7,7 +7,7 @@ import { ChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadAnalysesService, getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService } from '@/services/api';
+import { getThreadAnalysesService, getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadStreamResumptionStateService } from '@/services/api';
 import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
 import { createMetadata } from '@/utils/metadata';
 
@@ -133,6 +133,22 @@ export default async function ChatThreadPage({
   // ✅ MODELS: Already pre-fetched at layout level (chat-layout.tsx)
   // No need to duplicate the pre-fetch here
 
+  // ✅ RESUMABLE STREAMS: Fetch stream resumption state for Zustand pre-fill
+  // This enables the client to know about active streams BEFORE React renders
+  // Allowing proper coordination between AI SDK resume and incomplete-round-resumption
+  let streamResumptionState = null;
+  try {
+    const streamStateResult = await getThreadStreamResumptionStateService({
+      param: { threadId: thread.id },
+    });
+    if (streamStateResult?.success && streamStateResult.data) {
+      streamResumptionState = streamStateResult.data;
+    }
+  } catch {
+    // Graceful degradation - if KV unavailable, continue without resumption state
+    // Frontend will handle resumption detection via effects
+  }
+
   // OFFICIAL PATTERN: Pass raw data as props to Client Component
   // Client Component will use useChat with initialMessages
   // Changelog is prefetched and accessed via useThreadChangelogQuery hook
@@ -165,6 +181,7 @@ export default async function ChatThreadPage({
         initialMessages={messagesWithDates}
         slug={slug}
         user={user}
+        streamResumptionState={streamResumptionState}
       />
     </HydrationBoundary>
   );

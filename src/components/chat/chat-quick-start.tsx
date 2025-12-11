@@ -11,9 +11,9 @@ import {
   SubscriptionTiers,
 } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
 type QuickStartSuggestion = {

@@ -17,7 +17,7 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadAnalysesService } from '@/services/api';
-import type { AnalysesCacheData } from '@/stores/chat';
+import type { AnalysesCacheResponse } from '@/stores/chat';
 import { validateAnalysesCache } from '@/stores/chat';
 
 /**
@@ -104,7 +104,7 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
         // 1. Use server data for rounds that exist on server (authoritative/persisted)
         // 2. Use cached analyses (any status) for rounds not yet on server
         // ✅ TYPE-SAFE: Use cache data item type (accepts both string/Date for timestamps)
-        const mergedItems: AnalysesCacheData['data']['items'] = [];
+        const mergedItems: AnalysesCacheResponse['data']['items'] = [];
         const processedRounds = new Set<number>();
 
         // ✅ CRITICAL: Add all server analyses first (these are authoritative/completed)

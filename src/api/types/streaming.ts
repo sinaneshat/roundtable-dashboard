@@ -16,7 +16,7 @@
 import type { ExecutionContext } from 'hono';
 import { z } from 'zod';
 
-import { StreamStatusSchema } from '@/api/core/enums';
+import { ParticipantStreamStatusSchema, StreamStatusSchema } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 
@@ -386,9 +386,9 @@ export const ThreadActiveStreamSchema = z.object({
   createdAt: z.string(),
   // Track round-level completion for proper resumption
   totalParticipants: z.number(),
-  // Uses ParticipantStreamStatus enum from core enums
+  // ✅ Uses ParticipantStreamStatusSchema from core enums
   // Note: Zod records require string keys, number indices are stored as string keys in JSON
-  participantStatuses: z.record(z.string(), z.enum(['active', 'completed', 'failed'])),
+  participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema),
 });
 
 /** Thread active stream type */

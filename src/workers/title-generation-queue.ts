@@ -42,14 +42,11 @@ async function processMessage(
   message: TitleGenerationQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, firstMessage, messageId } = message;
-  console.error(`[TitleQueue] Processing ${messageId} for thread ${threadId}`);
+  const { threadId, firstMessage } = message;
 
   // Use existing service functions
   const title = await generateTitleFromMessage(firstMessage, env);
   await updateThreadTitleAndSlug(threadId, title);
-
-  console.error(`[TitleQueue] ✅ Updated thread ${threadId}: "${title}"`);
 }
 
 // ============================================================================
@@ -66,17 +63,9 @@ export async function handleTitleGenerationQueue(
   batch: MessageBatch<TitleGenerationQueueMessage>,
   env: CloudflareEnv,
 ): Promise<void> {
-  const startTime = Date.now();
-  console.error(
-    `[TitleQueue] 📥 Processing ${batch.messages.length} messages`,
-  );
-
   for (const msg of batch.messages) {
     await processQueueMessage(msg, env);
   }
-
-  const elapsedMs = Date.now() - startTime;
-  console.error(`[TitleQueue] ⏱️ Batch completed in ${elapsedMs}ms`);
 }
 
 /**

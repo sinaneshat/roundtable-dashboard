@@ -11,6 +11,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { ChatThreadCacheSchema } from '@/api/routes/chat/schema';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
@@ -26,8 +27,7 @@ import {
   updateThreadService,
 } from '@/services/api';
 import {
-  // Cache validation schemas (single source of truth)
-  ThreadCacheDataSchema,
+  // Cache validation utilities
   validateInfiniteQueryCache,
   validateThreadDetailCache,
   validateThreadDetailPayloadCache,
@@ -143,7 +143,7 @@ export function useUpdateThreadMutation() {
             return old;
 
           // Validate update payload before merging
-          const updatePayload = ThreadCacheDataSchema.partial().safeParse(variables.json);
+          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
           if (!updatePayload.success)
             return old;
 
@@ -180,7 +180,7 @@ export function useUpdateThreadMutation() {
             return old;
 
           // Validate update payload
-          const updatePayload = ThreadCacheDataSchema.partial().safeParse(variables.json);
+          const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
           if (!updatePayload.success)
             return old;
 
@@ -196,7 +196,7 @@ export function useUpdateThreadMutation() {
                   ...page.data,
                   items: page.data.items.map((thread) => {
                     // Validate thread data before updating
-                    const threadData = ThreadCacheDataSchema.safeParse(thread);
+                    const threadData = ChatThreadCacheSchema.safeParse(thread);
                     if (!threadData.success)
                       return thread;
 
@@ -223,7 +223,7 @@ export function useUpdateThreadMutation() {
                 return old;
 
               // Validate update payload
-              const updatePayload = ThreadCacheDataSchema.partial().safeParse(variables.json);
+              const updatePayload = ChatThreadCacheSchema.partial().safeParse(variables.json);
               if (!updatePayload.success)
                 return old;
 
@@ -323,7 +323,7 @@ export function useDeleteThreadMutation() {
                 data: {
                   ...page.data,
                   items: page.data.items.filter((thread) => {
-                    const threadData = ThreadCacheDataSchema.safeParse(thread);
+                    const threadData = ChatThreadCacheSchema.safeParse(thread);
                     return threadData.success && threadData.data.id !== variables.param.id;
                   }),
                 },

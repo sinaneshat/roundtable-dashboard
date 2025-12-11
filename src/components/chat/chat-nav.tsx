@@ -31,8 +31,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { useNavigationReset } from '@/hooks/utils';
 import type { Session, User } from '@/lib/auth/types';
+import { useNavigationReset } from '@/stores/chat';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */

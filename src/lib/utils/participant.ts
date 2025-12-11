@@ -16,7 +16,7 @@
 import { z } from 'zod';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 // ============================================================================
 // Priority Sorting (SINGLE SOURCE OF TRUTH)
@@ -81,22 +81,17 @@ export type ComparableParticipant = Pick<
 };
 
 // ============================================================================
-// PARTICIPANT COMPARISON MODE (5-Part Enum Pattern)
+// PARTICIPANT COMPARISON MODE
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT
 export const PARTICIPANT_COMPARISON_MODES = ['modelIds', 'strict'] as const;
 
-// 2️⃣ DEFAULT VALUE
 export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 'strict';
 
-// 3️⃣ ZOD SCHEMA
 export const ParticipantComparisonModeSchema = z.enum(PARTICIPANT_COMPARISON_MODES);
 
-// 4️⃣ TYPESCRIPT TYPE
 export type ParticipantComparisonMode = z.infer<typeof ParticipantComparisonModeSchema>;
 
-// 5️⃣ CONSTANT OBJECT
 export const ParticipantComparisonModes = {
   MODEL_IDS: 'modelIds' as const,
   STRICT: 'strict' as const,

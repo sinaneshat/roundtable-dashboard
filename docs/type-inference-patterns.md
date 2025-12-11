@@ -1864,6 +1864,72 @@ await db.batch([
 ]);
 ```
 
+### ❌ Untyped AI Prompt Templates
+
+**WRONG**:
+```typescript
+// Plain object with no type connection to schema
+export const MY_JSON_STRUCTURE = {
+  field1: '<COMPUTE: something>',
+  field2: '<FROM_CONTEXT: data>',
+  nestedObject: {
+    child: '<EXTRACT: value>',
+  },
+};
+
+// Used in prompt without validation - can silently drift from schema
+const prompt = `Output JSON:\n${JSON.stringify(MY_JSON_STRUCTURE)}`;
+```
+
+**CORRECT**:
+```typescript
+import type { MyPayload } from '@/api/routes/my-route/schema';
+import { type ValidatePromptTemplate, p } from '@/api/utils/prompt-template';
+
+// Type-safe template - TypeScript errors if structure doesn't match schema
+export const MY_JSON_STRUCTURE = {
+  field1: p.compute('description of what to compute'),
+  field2: p.context('description of context data'),
+  nestedObject: {
+    child: p.extract('what to extract from responses'),
+  },
+} satisfies ValidatePromptTemplate<MyPayload>;
+
+// Now if MyPayload schema changes, this will cause a compile error
+// until the template is updated to match - no silent drift
+```
+
+**Pattern Details**:
+- Use `satisfies ValidatePromptTemplate<SchemaType>` to ensure template matches schema
+- Import `p.compute`, `p.context`, `p.extract`, `p.optional` helpers for consistent placeholders
+- Location: `/src/api/utils/prompt-template.ts` provides the type utilities
+- Example: See `MODERATOR_ANALYSIS_JSON_STRUCTURE` in `/src/api/services/prompts.service.ts`
+
+### ❌ Hardcoded Mock Data Without Type Validation
+
+**WRONG**:
+```typescript
+// Mock data can drift from schema without warning
+const mockAnalysis = {
+  article: { headline: 'Test', narrative: 'Content' },
+  // Missing required fields? No error until runtime
+};
+```
+
+**CORRECT**:
+```typescript
+import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
+
+// Type-safe mock factory - compile error if schema changes
+const createTypeSafeMockData = (
+  overrides?: Partial<ModeratorAnalysisPayload>
+): ModeratorAnalysisPayload => ({
+  article: { headline: 'Test', narrative: 'Content', keyTakeaway: 'Action' },
+  // All required fields enforced by TypeScript
+  ...overrides,
+});
+```
+
 ---
 
 ## Conclusion

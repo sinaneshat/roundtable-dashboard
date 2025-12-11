@@ -305,9 +305,3 @@ export function dismissToast(toastId: string): void {
 export function clearAllToasts(): void {
   toastManager.clear();
 }
-
-/**
- * Re-export toastManager for advanced use cases
- * (but prefer using the unified functions above)
- */
-export { toastManager } from './toast-manager';

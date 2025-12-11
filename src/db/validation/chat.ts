@@ -9,8 +9,9 @@
  */
 
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 
+import { FeedbackTypeSchema, MessageRoleSchema } from '@/api/core/enums';
 import {
   DbChangelogDataSchema,
   DbCustomRoleMetadataSchema,
@@ -74,7 +75,7 @@ export const chatMessageSelectSchema = createSelectSchema(chatMessage).extend({
   metadata: DbMessageMetadataSchema.nullable(),
 });
 export const chatMessageInsertSchema = createInsertSchema(chatMessage, {
-  role: () => z.enum(['user', 'assistant']),
+  role: () => MessageRoleSchema, // ✅ Uses centralized enum from @/api/core/enums
   // parts array is validated by database schema type
   // metadata validated by DbMessageMetadataSchema
 });
@@ -145,10 +146,10 @@ export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
 export const chatRoundFeedbackSelectSchema = createSelectSchema(chatRoundFeedback);
 export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback, {
   roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
-  feedbackType: () => z.enum(['like', 'dislike']).nullable(),
+  feedbackType: () => FeedbackTypeSchema.nullable(),
 });
 export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback, {
-  feedbackType: () => z.enum(['like', 'dislike']).nullable().optional(),
+  feedbackType: () => FeedbackTypeSchema.nullable().optional(),
 });
 
 /**
