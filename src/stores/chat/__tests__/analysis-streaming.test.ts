@@ -18,7 +18,7 @@ import type { DeepPartial } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
-import { hasAnalysisData, hasParticipantContent, hasRoundSummaryContent } from '@/lib/utils/analysis-utils';
+import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 
 // ============================================================================
 // TEST HELPERS - Simulate progressive streaming states
@@ -408,65 +408,6 @@ describe('hasAnalysisData - Progressive Detection', () => {
       // Only convergenceDivergence
       expect(hasAnalysisData({ convergenceDivergence: {} })).toBe(true);
     });
-  });
-});
-
-describe('hasRoundSummaryContent - Deprecated Schema Check', () => {
-  it('returns false for null/undefined', () => {
-    expect(hasRoundSummaryContent(null)).toBe(false);
-    expect(hasRoundSummaryContent(undefined)).toBe(false);
-  });
-
-  it('returns false for empty object', () => {
-    expect(hasRoundSummaryContent({})).toBe(false);
-  });
-
-  it('returns true for keyInsights with content', () => {
-    expect(hasRoundSummaryContent({ keyInsights: ['Insight 1'] })).toBe(true);
-  });
-
-  it('returns true for consensusPoints with content', () => {
-    expect(hasRoundSummaryContent({ consensusPoints: ['Point 1'] })).toBe(true);
-  });
-
-  it('returns false for empty arrays', () => {
-    expect(hasRoundSummaryContent({ keyInsights: [], consensusPoints: [] })).toBe(false);
-  });
-});
-
-describe('hasParticipantContent - Partial Participant Detection', () => {
-  it('returns false for null/undefined', () => {
-    expect(hasParticipantContent(null)).toBe(false);
-    expect(hasParticipantContent(undefined)).toBe(false);
-  });
-
-  it('returns false without participantIndex', () => {
-    expect(hasParticipantContent({ summary: 'Test summary' })).toBe(false);
-  });
-
-  it('returns false with only participantIndex (no content)', () => {
-    expect(hasParticipantContent({ participantIndex: 0 })).toBe(false);
-  });
-
-  it('returns true with participantIndex and summary', () => {
-    expect(hasParticipantContent({
-      participantIndex: 0,
-      summary: 'Test summary',
-    })).toBe(true);
-  });
-
-  it('returns true with participantIndex and pros', () => {
-    expect(hasParticipantContent({
-      participantIndex: 0,
-      pros: ['Pro 1'],
-    })).toBe(true);
-  });
-
-  it('returns true with participantIndex and overallRating', () => {
-    expect(hasParticipantContent({
-      participantIndex: 0,
-      overallRating: 85,
-    })).toBe(true);
   });
 });
 
