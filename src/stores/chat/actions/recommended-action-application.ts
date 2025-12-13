@@ -85,8 +85,9 @@ function createParticipantsFromSuggestions(
           };
         }
         // Create new participant
+        // ✅ FIX: Use modelId as ID (see comment at line 99)
         return {
-          id: crypto.randomUUID(),
+          id: modelId,
           modelId,
           role: suggestedRoles?.[index] ?? null,
           priority: index,
@@ -96,8 +97,12 @@ function createParticipantsFromSuggestions(
   }
 
   // No current participants or no overlap - create fresh
+  // ✅ FIX: Use modelId as ID for new participants
+  // This matches the convention in participantConfigToUpdatePayload which detects
+  // new participants by checking id === modelId, then sends empty string to backend
+  // for participant creation. Using crypto.randomUUID() breaks this detection.
   return suggestedModels.map((modelId, index) => ({
-    id: crypto.randomUUID(),
+    id: modelId,
     modelId,
     role: suggestedRoles?.[index] ?? null,
     priority: index,

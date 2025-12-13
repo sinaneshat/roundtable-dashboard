@@ -17,6 +17,7 @@ import type {
   ModeratorAnalysisPayload,
   ParticipantDetailResponse,
   PreSearchListResponse,
+  StoredPreSearch,
   ThreadDetailResponse,
   ThreadListResponse,
 } from '@/api/routes/chat/schema';
@@ -361,6 +362,57 @@ export function createMockAnalysesListResponse(
       ],
       count: 1,
     },
+  };
+}
+
+/**
+ * Creates a single mock StoredPreSearch for testing
+ * ✅ FOLLOWS: StoredPreSearchSchema
+ */
+export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): StoredPreSearch {
+  const now = new Date();
+
+  return {
+    id: 'presearch_test_123',
+    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
+    roundNumber: 0,
+    userQuery: 'Test search query',
+    status: PreSearchStatuses.COMPLETE,
+    searchData: {
+      queries: [
+        {
+          query: 'test query',
+          rationale: 'Test rationale',
+          searchDepth: 'basic' as const,
+          index: 0,
+          total: 1,
+        },
+      ],
+      results: [
+        {
+          query: 'test query',
+          answer: 'Test answer',
+          results: [
+            {
+              title: 'Test Result',
+              url: 'https://example.com',
+              content: 'Test content',
+              score: 0.9,
+            },
+          ],
+          responseTime: 100,
+        },
+      ],
+      analysis: 'Test analysis summary',
+      successCount: 1,
+      failureCount: 0,
+      totalResults: 1,
+      totalTime: 100,
+    },
+    errorMessage: null,
+    createdAt: now,
+    completedAt: now,
+    ...overrides,
   };
 }
 

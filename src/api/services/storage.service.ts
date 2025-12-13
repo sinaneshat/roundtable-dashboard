@@ -26,10 +26,24 @@ function isWorkersRuntime(): boolean {
 }
 
 /**
+ * Check if should use local filesystem storage
+ * Forces local storage in local dev to avoid R2 proxy issues
+ */
+function shouldUseLocalStorage(r2Bucket: R2Bucket | undefined): boolean {
+  // Force local storage in local development environment
+  // This avoids issues with R2 mock bindings from initOpenNextCloudflareForDev
+  if (process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' && !isWorkersRuntime()) {
+    return true;
+  }
+  // No R2 bucket and not Workers = local fallback
+  return !r2Bucket && !isWorkersRuntime();
+}
+
+/**
  * Check if in local development mode (no R2, not Workers)
  */
 export function isLocalDevelopment(r2Bucket: R2Bucket | undefined): boolean {
-  return !r2Bucket && !isWorkersRuntime();
+  return shouldUseLocalStorage(r2Bucket);
 }
 
 // ============================================================================
@@ -52,6 +66,11 @@ export async function putFile(
   data: ArrayBuffer | ReadableStream | string | Uint8Array,
   metadata?: StorageMetadata,
 ): Promise<StorageResult> {
+  // Local development: use filesystem fallback (check first to avoid R2 proxy issues)
+  if (shouldUseLocalStorage(r2Bucket)) {
+    return putFileLocal(key, data, metadata);
+  }
+
   // R2 available - use it (production/preview)
   if (r2Bucket) {
     try {
@@ -74,7 +93,7 @@ export async function putFile(
     return { success: false, error };
   }
 
-  // Local development: filesystem fallback
+  // Fallback (shouldn't reach here, but just in case)
   return putFileLocal(key, data, metadata);
 }
 
@@ -107,6 +126,11 @@ export async function getFileStream(
     httpEtag: '',
     size: 0,
   };
+
+  // Local development: use filesystem fallback (check first to avoid R2 proxy issues)
+  if (shouldUseLocalStorage(r2Bucket)) {
+    return getFileStreamLocal(key);
+  }
 
   // R2 available - use official pattern
   if (r2Bucket) {
@@ -165,6 +189,11 @@ export async function getFile(
   r2Bucket: R2Bucket | undefined,
   key: string,
 ): Promise<{ data: ArrayBuffer | null; metadata?: StorageMetadata }> {
+  // Local development: use filesystem fallback (check first)
+  if (shouldUseLocalStorage(r2Bucket)) {
+    return getFileLocal(key);
+  }
+
   // R2 available
   if (r2Bucket) {
     try {
@@ -190,7 +219,7 @@ export async function getFile(
     return { data: null };
   }
 
-  // Local fallback
+  // Fallback
   return getFileLocal(key);
 }
 
@@ -206,6 +235,11 @@ export async function deleteFile(
   r2Bucket: R2Bucket | undefined,
   key: string,
 ): Promise<StorageResult> {
+  // Local development: use filesystem fallback (check first)
+  if (shouldUseLocalStorage(r2Bucket)) {
+    return deleteFileLocal(key);
+  }
+
   if (r2Bucket) {
     try {
       await r2Bucket.delete(key);
@@ -239,6 +273,11 @@ export async function fileExists(
   r2Bucket: R2Bucket | undefined,
   key: string,
 ): Promise<boolean> {
+  // Local development: use filesystem fallback (check first)
+  if (shouldUseLocalStorage(r2Bucket)) {
+    return fileExistsLocal(key);
+  }
+
   if (r2Bucket) {
     try {
       const object = await r2Bucket.head(key);

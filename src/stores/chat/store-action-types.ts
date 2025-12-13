@@ -216,6 +216,13 @@ export type MarkAnalysisCreated = (roundNumber: number) => void;
 export type HasAnalysisBeenCreated = (roundNumber: number) => boolean;
 
 /**
+ * Atomic check-and-mark for analysis creation (prevents race conditions)
+ * Returns true if successfully marked (was not already created)
+ * Returns false if already created (another component got there first)
+ */
+export type TryMarkAnalysisCreated = (roundNumber: number) => boolean;
+
+/**
  * Clear analysis tracking for a round (used during regeneration)
  */
 export type ClearAnalysisTracking = (roundNumber: number) => void;

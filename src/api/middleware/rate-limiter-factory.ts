@@ -32,10 +32,10 @@ export const RATE_LIMIT_PRESETS = {
     message: 'Too many upload requests. Please try again later.',
   },
 
-  // File download operations (stricter for abuse prevention)
+  // File download operations (generous for pages with many images/files)
   download: {
     windowMs: 60 * 1000, // 1 minute
-    maxRequests: 30, // 30 downloads per minute per user
+    maxRequests: 200, // 200 downloads per minute per user (supports page refreshes with many attachments)
     message: 'Too many download requests. Please slow down.',
   },
 

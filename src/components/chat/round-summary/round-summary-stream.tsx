@@ -418,11 +418,70 @@ function RoundSummaryStreamComponent({
   // AI SDK's onFinish may receive object=undefined due to stream termination issues
   // even when valid data was successfully streamed. This effect captures the latest
   // streamed data so we can use it as fallback in onFinish callback.
+  const lastStreamDataTimeRef = useRef<number>(0);
   useEffect(() => {
     if (partialAnalysis) {
       partialAnalysisRef.current = partialAnalysis;
+      lastStreamDataTimeRef.current = Date.now(); // Track when we last received data
     }
   }, [partialAnalysis]);
+
+  // =========================================================================
+  // ✅ STREAM INACTIVITY TIMEOUT: Detect stuck streams that stop sending data
+  // =========================================================================
+  // If streaming is active but no new data arrives for 20 seconds, the stream
+  // is likely stuck (truncated JSON, network issue, model died). Trigger error
+  // handling so user can retry instead of waiting for the 45-second server timeout.
+  const STREAM_INACTIVITY_TIMEOUT_MS = 20_000;
+  const streamInactivityIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Only run when stream is loading and we've received some data
+    if (isStreamLoading && lastStreamDataTimeRef.current > 0) {
+      streamInactivityIntervalRef.current = setInterval(() => {
+        const timeSinceLastData = Date.now() - lastStreamDataTimeRef.current;
+        if (timeSinceLastData > STREAM_INACTIVITY_TIMEOUT_MS) {
+          // Stream is stuck - no new data for 20 seconds
+          // eslint-disable-next-line no-console -- legitimate warning for debug purposes
+          console.warn('[Analysis] Stream inactivity detected:', timeSinceLastData, 'ms since last data');
+
+          // Clear the interval
+          if (streamInactivityIntervalRef.current) {
+            clearInterval(streamInactivityIntervalRef.current);
+            streamInactivityIntervalRef.current = null;
+          }
+
+          // Try to use partial data if valid, otherwise report error
+          const fallbackData = partialAnalysisRef.current;
+          if (fallbackData) {
+            const validated = ModeratorAnalysisPayloadSchema.safeParse(fallbackData);
+            if (validated.success) {
+              onStreamCompleteRef.current?.(validated.data);
+              return;
+            }
+          }
+
+          // Report stream timeout error
+          onStreamCompleteRef.current?.(null, new Error(t('errors.streamTimeout')));
+        }
+      }, 5000); // Check every 5 seconds
+
+      return () => {
+        if (streamInactivityIntervalRef.current) {
+          clearInterval(streamInactivityIntervalRef.current);
+          streamInactivityIntervalRef.current = null;
+        }
+      };
+    }
+
+    // Cleanup when streaming stops
+    return () => {
+      if (streamInactivityIntervalRef.current) {
+        clearInterval(streamInactivityIntervalRef.current);
+        streamInactivityIntervalRef.current = null;
+      }
+    };
+  }, [isStreamLoading, t]);
 
   // =========================================================================
   // ✅ UNIFIED STREAM RESUMPTION: Use object stream endpoint, not list polling
@@ -669,256 +728,298 @@ function RoundSummaryStreamComponent({
               transition={{ duration: ANIMATION_DURATION.normal, ease: ANIMATION_EASE.enter }}
               className="space-y-4"
             >
-              {/* Collapsible Sections - Match schema streaming order */}
-              <div className="space-y-2">
-                {/* ═══════════════════════════════════════════════════════════════════
-                    1. KEY INSIGHTS & RECOMMENDATIONS - Article + Recommendations (TOP)
-                    ✅ STREAMING FIRST: Streams before all other sections
-                    ✅ AI SDK v5 Pattern: forceOpen during streaming, show partial data
-                ═══════════════════════════════════════════════════════════════════ */}
-                {(article || safeRecommendations.length > 0) && (
-                  <CollapsibleSection
-                    icon={<Lightbulb className="size-4" />}
-                    title={t('keyInsights.title')}
-                    subtitle={recommendationCount > 0 ? t('keyInsights.insightsIdentified', { count: recommendationCount }) : undefined}
-                    defaultOpen
-                    forceOpen={isCurrentlyStreaming}
-                  >
-                    <KeyInsightsSection
-                      article={article}
-                      recommendations={safeRecommendations}
-                      onActionClick={stableOnActionClick}
-                      isStreaming={isCurrentlyStreaming}
-                    />
-                  </CollapsibleSection>
-                )}
+              {/* ═══════════════════════════════════════════════════════════════════
+                  STREAMING ORDER: Matches backend schema field order exactly
+                  1. Confidence + Model Badges (header - always visible)
+                  2. Key Insights (accordion - closed during stream)
+                  3. Model Voices (accordion - closed during stream)
+                  4. Consensus/Minority/Convergence (accordions - closed during stream)
 
-                {/* ═══════════════════════════════════════════════════════════════════
-                    2. ROUND OUTCOME HEADER - Confidence + Model Badges
-                    ✅ STREAMING: After key insights, before detailed breakdown
-                    ✅ AI SDK v5 Pattern: Pass raw partial data, component handles undefined
-                ═══════════════════════════════════════════════════════════════════ */}
+                  ✅ BEHAVIOR: Accordions stay CLOSED during streaming
+                  Content fills in while closed, users can expand/collapse freely
+              ═══════════════════════════════════════════════════════════════════ */}
+
+              {/* ═══════════════════════════════════════════════════════════════════
+                  1. ROUND OUTCOME HEADER - Confidence + Model Badges (TOP)
+                  ✅ STREAMING FIRST: Streams before all other sections
+                  ✅ Always visible (not in accordion)
+              ═══════════════════════════════════════════════════════════════════ */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: ANIMATION_DURATION.normal, delay: 0, ease: ANIMATION_EASE.enter }}
+              >
                 <RoundOutcomeHeader
                   confidence={confidence}
                   modelVoices={safeModelVoices}
                   isStreaming={isCurrentlyStreaming}
                 />
+              </motion.div>
+
+              {/* Collapsible Sections - All closed during streaming */}
+              <div className="space-y-2">
+                {/* ═══════════════════════════════════════════════════════════════════
+                    2. KEY INSIGHTS & RECOMMENDATIONS - Article + Recommendations
+                    ✅ Streams after confidence header
+                    ✅ Accordion closed during streaming, content fills in background
+                ═══════════════════════════════════════════════════════════════════ */}
+                {(article || safeRecommendations.length > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.05, ease: ANIMATION_EASE.enter }}
+                  >
+                    <CollapsibleSection
+                      icon={<Lightbulb className="size-4" />}
+                      title={t('keyInsights.title')}
+                      subtitle={recommendationCount > 0 ? t('keyInsights.insightsIdentified', { count: recommendationCount }) : undefined}
+                      defaultOpen={!isCurrentlyStreaming}
+                    >
+                      <KeyInsightsSection
+                        article={article}
+                        recommendations={safeRecommendations}
+                        onActionClick={stableOnActionClick}
+                        isStreaming={isCurrentlyStreaming}
+                      />
+                    </CollapsibleSection>
+                  </motion.div>
+                )}
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     3. MODEL VOICES - Detailed contributor info with avatars
-                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial voice data
+                    ✅ Accordion closed during streaming
                 ═══════════════════════════════════════════════════════════════════ */}
                 {safeModelVoices.length > 0 && (
-                  <CollapsibleSection
-                    icon={<Users className="size-4" />}
-                    title={t('modelVoices.title')}
-                    subtitle={t('modelVoices.contributorCount', { count: modelVoicesCount })}
-                    forceOpen={isCurrentlyStreaming}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.1, ease: ANIMATION_EASE.enter }}
                   >
-                    <div className="space-y-3">
-                      {safeModelVoices.map((voice, idx) => {
-                        // ✅ AI SDK v5 Pattern: Handle partial data with optional chaining
-                        if (!voice?.modelId)
-                          return null;
-                        const { icon, providerName } = getModelIconInfo(voice.modelId);
-                        const modelName = extractModelName(voice.modelId);
-                        return (
-                          <div key={`voice-${voice.modelId}-${voice.participantIndex ?? idx}`} className="flex items-start gap-3">
-                            <Avatar className="size-8 flex-shrink-0">
-                              <AvatarImage src={icon} alt={modelName} />
-                              <AvatarFallback className="text-xs">{providerName.slice(0, 2).toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0 space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-sm">{modelName}</span>
-                                {voice.role && (
-                                  <Badge
-                                    className="text-[10px] px-1.5 py-0"
-                                    style={getRoleBadgeStyle(voice.role)}
-                                  >
-                                    {voice.role}
-                                  </Badge>
+                    <CollapsibleSection
+                      icon={<Users className="size-4" />}
+                      title={t('modelVoices.title')}
+                      subtitle={t('modelVoices.contributorCount', { count: modelVoicesCount })}
+                    >
+                      <div className="space-y-3">
+                        {safeModelVoices.map((voice, idx) => {
+                          if (!voice?.modelId)
+                            return null;
+                          const { icon, providerName } = getModelIconInfo(voice.modelId);
+                          const modelName = extractModelName(voice.modelId);
+                          return (
+                            <div key={`voice-${voice.modelId}-${voice.participantIndex ?? idx}`} className="flex items-start gap-3">
+                              <Avatar className="size-8 flex-shrink-0">
+                                <AvatarImage src={icon} alt={modelName} />
+                                <AvatarFallback className="text-xs">{providerName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-sm">{modelName}</span>
+                                  {voice.role && (
+                                    <Badge
+                                      className="text-[10px] px-1.5 py-0"
+                                      style={getRoleBadgeStyle(voice.role)}
+                                    >
+                                      {voice.role}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {voice.position && (
+                                  <p className="text-sm text-muted-foreground">{voice.position}</p>
                                 )}
                               </div>
-                              {voice.position && (
-                                <p className="text-sm text-muted-foreground">{voice.position}</p>
-                              )}
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CollapsibleSection>
+                          );
+                        })}
+                      </div>
+                    </CollapsibleSection>
+                  </motion.div>
                 )}
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     4. CONSENSUS TABLE - Agreement/disagreement grid
-                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial data
+                    ✅ Accordion closed during streaming
                 ═══════════════════════════════════════════════════════════════════ */}
                 {safeConsensusTable.length > 0 && (
-                  <CollapsibleSection
-                    icon={<CheckCircle2 className="size-4" />}
-                    title={t('consensusTable.title')}
-                    subtitle={t('consensusTable.topicCount', { count: consensusTopicCount })}
-                    forceOpen={isCurrentlyStreaming}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.15, ease: ANIMATION_EASE.enter }}
                   >
-                    <div className="space-y-3">
-                      {safeConsensusTable.map((entry) => {
-                        // ✅ AI SDK v5 Pattern: Skip incomplete entries during streaming
-                        if (!entry?.topic)
-                          return null;
-                        return (
-                          <div key={`consensus-${entry.topic}`} className="space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{entry.topic}</span>
-                              {entry.resolution && (
-                                <Badge
-                                  variant={getResolutionBadgeVariant(entry.resolution)}
-                                  className="text-xs"
-                                >
-                                  {entry.resolution}
-                                </Badge>
+                    <CollapsibleSection
+                      icon={<CheckCircle2 className="size-4" />}
+                      title={t('consensusTable.title')}
+                      subtitle={t('consensusTable.topicCount', { count: consensusTopicCount })}
+                    >
+                      <div className="space-y-3">
+                        {safeConsensusTable.map((entry) => {
+                          if (!entry?.topic)
+                            return null;
+                          return (
+                            <div key={`consensus-${entry.topic}`} className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{entry.topic}</span>
+                                {entry.resolution && (
+                                  <Badge
+                                    variant={getResolutionBadgeVariant(entry.resolution)}
+                                    className="text-xs"
+                                  >
+                                    {entry.resolution}
+                                  </Badge>
+                                )}
+                              </div>
+                              {entry.positions && (
+                                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                  {entry.positions.map((pos) => {
+                                    if (!pos?.modelName)
+                                      return null;
+                                    return (
+                                      <span key={`pos-${entry.topic}-${pos.modelName}`} className="flex items-center gap-1">
+                                        {getStanceIcon(pos.stance)}
+                                        <span className="font-medium">{pos.modelName}</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
                               )}
                             </div>
-                            {entry.positions && (
-                              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                {entry.positions.map((pos) => {
-                                  if (!pos?.modelName)
-                                    return null;
-                                  return (
-                                    <span key={`pos-${entry.topic}-${pos.modelName}`} className="flex items-center gap-1">
-                                      {getStanceIcon(pos.stance)}
-                                      <span className="font-medium">{pos.modelName}</span>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CollapsibleSection>
+                          );
+                        })}
+                      </div>
+                    </CollapsibleSection>
+                  </motion.div>
                 )}
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     5. MINORITY VIEWS - Dissenting opinions
-                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial data
+                    ✅ Accordion closed during streaming
                 ═══════════════════════════════════════════════════════════════════ */}
                 {safeMinorityViews.length > 0 && (
-                  <CollapsibleSection
-                    icon={<AlertTriangle className="size-4" />}
-                    title={t('minorityViews.title')}
-                    subtitle={t('minorityViews.viewCount', { count: minorityViewCount })}
-                    forceOpen={isCurrentlyStreaming}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.2, ease: ANIMATION_EASE.enter }}
                   >
-                    <div className="space-y-2">
-                      {safeMinorityViews.map((view) => {
-                        // ✅ AI SDK v5 Pattern: Skip incomplete entries
-                        if (!view?.modelName)
-                          return null;
-                        return (
-                          <div key={`minority-${view.modelName}`} className="flex items-start gap-2 text-sm">
-                            <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                            <span>
-                              <span className="font-medium">
-                                {view.modelName}
-                                :
+                    <CollapsibleSection
+                      icon={<AlertTriangle className="size-4" />}
+                      title={t('minorityViews.title')}
+                      subtitle={t('minorityViews.viewCount', { count: minorityViewCount })}
+                    >
+                      <div className="space-y-2">
+                        {safeMinorityViews.map((view) => {
+                          if (!view?.modelName)
+                            return null;
+                          return (
+                            <div key={`minority-${view.modelName}`} className="flex items-start gap-2 text-sm">
+                              <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                              <span>
+                                <span className="font-medium">
+                                  {view.modelName}
+                                  :
+                                </span>
+                                {' '}
+                                <span className="text-muted-foreground">{view.view ?? ''}</span>
                               </span>
-                              {' '}
-                              <span className="text-muted-foreground">{view.view ?? ''}</span>
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CollapsibleSection>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CollapsibleSection>
+                  </motion.div>
                 )}
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     6. CONVERGENCE & DIVERGENCE - Where views met or parted
-                    ✅ AI SDK v5 Pattern: forceOpen during streaming, handle partial data
-                    ✅ FIX: Check for actual content, not just truthy object (empty {} would render accordion)
+                    ✅ Accordion closed during streaming
                 ═══════════════════════════════════════════════════════════════════ */}
                 {convergenceDivergence && (convergenceDivergence.convergedOn?.length || convergenceDivergence.divergedOn?.length || convergenceDivergence.evolved?.length) && (
-                  <CollapsibleSection
-                    icon={<GitMerge className="size-4" />}
-                    title={t('convergenceDivergence.title')}
-                    forceOpen={isCurrentlyStreaming}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.25, ease: ANIMATION_EASE.enter }}
                   >
-                    <div className="space-y-3 text-sm">
-                      {/* ✅ AI SDK v5 Pattern: Extra null checks for partial data */}
-                      {convergenceDivergence.convergedOn && convergenceDivergence.convergedOn.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                          <CheckCircle2 className="size-3.5 text-green-500 flex-shrink-0" />
-                          <span className="font-medium text-green-600 dark:text-green-400 mr-1">
-                            {t('convergenceDivergence.agreed')}
-                            :
-                          </span>
-                          <span className="text-muted-foreground">
-                            {convergenceDivergence.convergedOn.join(' • ')}
-                          </span>
-                        </div>
-                      )}
-                      {convergenceDivergence.divergedOn && convergenceDivergence.divergedOn.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                          <XCircle className="size-3.5 text-orange-500 flex-shrink-0" />
-                          <span className="font-medium text-orange-600 dark:text-orange-400 mr-1">
-                            {t('convergenceDivergence.split')}
-                            :
-                          </span>
-                          <span className="text-muted-foreground">
-                            {convergenceDivergence.divergedOn.join(' • ')}
-                          </span>
-                        </div>
-                      )}
-                      {convergenceDivergence.evolved && convergenceDivergence.evolved.length > 0 && (
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">{t('convergenceDivergence.evolved')}</span>
-                          {convergenceDivergence.evolved.map((evolution) => {
-                            if (!evolution?.point)
-                              return null;
-                            return (
-                              <div key={`evolved-${evolution.point}-${evolution.initialState ?? ''}-${evolution.finalState ?? ''}`} className="flex items-center gap-1.5 text-xs">
-                                <span className="font-medium">
-                                  {evolution.point}
-                                  :
-                                </span>
-                                <span className="text-orange-500">{evolution.initialState ?? ''}</span>
-                                <span className="text-muted-foreground">→</span>
-                                <span className="text-green-500">{evolution.finalState ?? ''}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </CollapsibleSection>
+                    <CollapsibleSection
+                      icon={<GitMerge className="size-4" />}
+                      title={t('convergenceDivergence.title')}
+                    >
+                      <div className="space-y-3 text-sm">
+                        {convergenceDivergence.convergedOn && convergenceDivergence.convergedOn.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                            <CheckCircle2 className="size-3.5 text-green-500 flex-shrink-0" />
+                            <span className="font-medium text-green-600 dark:text-green-400 mr-1">
+                              {t('convergenceDivergence.agreed')}
+                              :
+                            </span>
+                            <span className="text-muted-foreground">
+                              {convergenceDivergence.convergedOn.join(' • ')}
+                            </span>
+                          </div>
+                        )}
+                        {convergenceDivergence.divergedOn && convergenceDivergence.divergedOn.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                            <XCircle className="size-3.5 text-orange-500 flex-shrink-0" />
+                            <span className="font-medium text-orange-600 dark:text-orange-400 mr-1">
+                              {t('convergenceDivergence.split')}
+                              :
+                            </span>
+                            <span className="text-muted-foreground">
+                              {convergenceDivergence.divergedOn.join(' • ')}
+                            </span>
+                          </div>
+                        )}
+                        {convergenceDivergence.evolved && convergenceDivergence.evolved.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">{t('convergenceDivergence.evolved')}</span>
+                            {convergenceDivergence.evolved.map((evolution) => {
+                              if (!evolution?.point)
+                                return null;
+                              return (
+                                <div key={`evolved-${evolution.point}-${evolution.initialState ?? ''}-${evolution.finalState ?? ''}`} className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-medium">
+                                    {evolution.point}
+                                    :
+                                  </span>
+                                  <span className="text-orange-500">{evolution.initialState ?? ''}</span>
+                                  <span className="text-muted-foreground">→</span>
+                                  <span className="text-green-500">{evolution.finalState ?? ''}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleSection>
+                  </motion.div>
                 )}
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     7. ABOUT THIS FRAMEWORK - Static explanation (BOTTOM)
-                    ✅ Matches panel structure exactly
                 ═══════════════════════════════════════════════════════════════════ */}
-                <CollapsibleSection
-                  icon={<Info className="size-4" />}
-                  title={t('aboutFramework.title')}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: ANIMATION_DURATION.normal, delay: 0.3, ease: ANIMATION_EASE.enter }}
                 >
-                  <div className="text-sm text-muted-foreground space-y-2">
-                    <p>
-                      This analysis synthesizes perspectives from
-                      {' '}
-                      {modelVoicesCount}
-                      {' '}
-                      AI models participating in a collaborative
-                      {' '}
-                      {analysis.mode}
-                      {' '}
-                      discussion.
-                    </p>
-                    <p>The consensus table shows where models agreed and disagreed, while minority views highlight important dissenting opinions that may warrant further consideration.</p>
-                  </div>
-                </CollapsibleSection>
+                  <CollapsibleSection
+                    icon={<Info className="size-4" />}
+                    title={t('aboutFramework.title')}
+                  >
+                    <div className="text-sm text-muted-foreground space-y-2">
+                      <p>
+                        This analysis synthesizes perspectives from
+                        {' '}
+                        {modelVoicesCount}
+                        {' '}
+                        AI models participating in a collaborative
+                        {' '}
+                        {analysis.mode}
+                        {' '}
+                        discussion.
+                      </p>
+                      <p>The consensus table shows where models agreed and disagreed, while minority views highlight important dissenting opinions that may warrant further consideration.</p>
+                    </div>
+                  </CollapsibleSection>
+                </motion.div>
               </div>
             </motion.div>
           )}

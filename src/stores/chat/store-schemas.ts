@@ -130,6 +130,7 @@ import type {
   SetThread,
   SetWaitingToStartStreaming,
   StartRegeneration,
+  TryMarkAnalysisCreated,
   UpdateAnalysisData,
   UpdateAnalysisError,
   UpdateAnalysisStatus,
@@ -372,6 +373,8 @@ export const TrackingActionsSchema = z.object({
   setHasSentPendingMessage: z.custom<SetHasSentPendingMessage>(),
   markAnalysisCreated: z.custom<MarkAnalysisCreated>(),
   hasAnalysisBeenCreated: z.custom<HasAnalysisBeenCreated>(),
+  /** Atomic check-and-mark to prevent race conditions in analysis creation */
+  tryMarkAnalysisCreated: z.custom<TryMarkAnalysisCreated>(),
   clearAnalysisTracking: z.custom<ClearAnalysisTracking>(),
   markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
@@ -425,6 +428,7 @@ export const ScreenSliceSchema = z.intersection(ScreenStateSchema, ScreenActions
 /**
  * Stream resumption state entity - Zod-first pattern
  * Uses StreamStatusSchema from enums for type safety
+ * ✅ FIX: Accepts Date or ISO string for dates (API returns strings, runtime uses Date)
  */
 export const StreamResumptionStateEntitySchema = z.object({
   streamId: z.string().min(1),
@@ -432,8 +436,8 @@ export const StreamResumptionStateEntitySchema = z.object({
   roundNumber: z.number().int().nonnegative(),
   participantIndex: z.number().int().nonnegative(),
   state: StreamStatusSchema,
-  createdAt: z.date(),
-  updatedAt: z.date().optional(),
+  createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()]).optional(),
 });
 
 /**

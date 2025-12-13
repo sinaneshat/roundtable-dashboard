@@ -1,6 +1,6 @@
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
 import type { TimelineItem } from './useThreadTimeline';
 
@@ -125,12 +125,11 @@ export function useVirtualizedTimeline({
     enabled: shouldEnable,
   });
 
-  // Memoize virtual items
-  const virtualItems = useMemo(
-    () => virtualizer.getVirtualItems(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- virtualizer updates trigger re-render
-    [virtualizer, virtualizer.getVirtualItems()],
-  );
+  // Get virtual items directly from virtualizer
+  // NOTE: Do NOT call getVirtualItems() in useMemo dependency array
+  // as it triggers flushSync during render causing React warnings
+  // TanStack Virtual handles its own memoization internally
+  const virtualItems = virtualizer.getVirtualItems();
 
   const totalSize = virtualizer.getTotalSize();
   const measureElement = virtualizer.measureElement;

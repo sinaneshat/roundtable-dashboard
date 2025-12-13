@@ -19,8 +19,35 @@
 
 // ============================================================================
 // API Response Mocks for E2E Testing
+// Re-export everything EXCEPT createMockThread, createMockParticipant, createMockAnalysis
+// Those are re-exported from chat-test-factories with test-friendly defaults
 // ============================================================================
-export * from './api-mocks';
+export {
+  createMockAnalysesListResponse,
+  createMockAssistantMessage,
+  createMockChangelogListResponse,
+  createMockFetchError,
+  createMockFetchResponse,
+  createMockMessage,
+  createMockMessagesListResponse,
+  createMockParticipantDetailResponse,
+  createMockPreSearch,
+  createMockPreSearchesListResponse,
+  createMockThreadDetailResponse,
+  createMockThreadListResponse,
+} from './api-mocks';
+
+// ============================================================================
+// Chat Store Test Helpers
+// ============================================================================
+export * from './chat-store-helpers';
+
+// ============================================================================
+// Chat Test Factories (Mock data creators)
+// These export test-friendly versions of createMockThread, createMockParticipant, createMockAnalysis
+// with defaults like id: 'thread-123', indexed participants
+// ============================================================================
+export * from './chat-test-factories';
 
 // ============================================================================
 // Test Helper Utilities

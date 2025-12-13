@@ -32,6 +32,7 @@ import {
   useMessageSync,
   useNavigationCleanup,
   usePendingMessage,
+  usePreSearchResumption,
   useRoundResumption,
   useStateSync,
   useStreamingTrigger,
@@ -54,7 +55,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     storeRef.current = createChatStore();
   }
 
-  // eslint-disable-next-line react-hooks/refs -- Official Zustand v5 pattern for SSR-safe store initialization
   const store = storeRef.current;
 
   // Subscribe to store state for AI SDK hook initialization
@@ -221,7 +221,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   }, [createdThreadId]);
 
   // State sync (refs, reactive values, callbacks)
-  // eslint-disable-next-line react-hooks/refs -- Passing ref objects to hooks, not accessing .current during render
+
   useStateSync({
     store,
     chat,
@@ -236,7 +236,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const { lastStreamActivityRef } = useMessageSync({ store, chat });
 
   // Streaming trigger for round 0
-  // eslint-disable-next-line react-hooks/refs -- Passing ref objects to hooks, not accessing .current during render
+
   useStreamingTrigger({
     store,
     chat,
@@ -248,8 +248,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // Round resumption for incomplete rounds
   useRoundResumption({ store, chat });
 
+  // Pre-search resumption after page refresh
+  usePreSearchResumption({
+    store,
+    effectiveThreadId,
+    queryClientRef,
+  });
+
   // Pending message sender
-  // eslint-disable-next-line react-hooks/refs -- Passing ref objects to hooks, not accessing .current during render
+
   usePendingMessage({
     store,
     chat,
@@ -266,7 +273,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   });
 
   // Navigation cleanup
-  // eslint-disable-next-line react-hooks/refs -- Passing ref objects to hooks, not accessing .current during render
+
   useNavigationCleanup({
     store,
     prevPathnameRef,

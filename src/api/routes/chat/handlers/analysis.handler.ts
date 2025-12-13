@@ -114,7 +114,6 @@ function generateModeratorAnalysis(
   return streamObject({
     model: client.chat(AIModels.ANALYSIS),
     schema: ModeratorAnalysisPayloadSchema,
-    mode: 'auto',
     system: systemPrompt,
     prompt: enhancedUserPrompt,
     temperature: 0.3,

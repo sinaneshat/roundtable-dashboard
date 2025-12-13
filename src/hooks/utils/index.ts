@@ -62,6 +62,7 @@ export { useOrderedModels } from './use-ordered-models';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';
+export { useIsFirstRender, useTimelineAnimations } from './use-timeline-animations';
 export { toast, useToast } from './use-toast';
 export { useTouchDevice } from './use-touch-device';
 export { useVisualViewportPosition } from './use-visual-viewport-position';

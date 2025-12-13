@@ -305,8 +305,8 @@ export function useFlowStateMachine(
 
   // Actions (stable references - no need for useShallow)
   const createPendingAnalysis = useChatStore(s => s.createPendingAnalysis);
-  const markAnalysisCreated = useChatStore(s => s.markAnalysisCreated);
-  const hasAnalysisBeenCreated = useChatStore(s => s.hasAnalysisBeenCreated);
+  // 🚨 ATOMIC: Use tryMarkAnalysisCreated to prevent race conditions
+  const tryMarkAnalysisCreated = useChatStore(s => s.tryMarkAnalysisCreated);
   const completeStreaming = useChatStore(s => s.completeStreaming);
 
   // Track navigation state
@@ -414,11 +414,11 @@ export function useFlowStateMachine(
           const { threadId, currentRound } = context;
 
           if (threadId && messages.length > 0) {
-            // ✅ CRITICAL FIX: Check if analysis already created before proceeding
-            // Prevents duplicate analysis creation when both provider and flow-state-machine trigger
-            if (hasAnalysisBeenCreated(currentRound)) {
+            // 🚨 ATOMIC: tryMarkAnalysisCreated returns false if already created
+            // This prevents race condition where multiple components try to create analysis simultaneously
+            if (!tryMarkAnalysisCreated(currentRound)) {
               completeStreaming();
-              break; // Analysis already created, skip
+              break; // Analysis already created by another component, skip
             }
 
             // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
@@ -439,7 +439,6 @@ export function useFlowStateMachine(
                 );
               })?.text || '';
 
-            markAnalysisCreated(currentRound);
             createPendingAnalysis({
               roundNumber: currentRound,
               messages,
@@ -511,8 +510,7 @@ export function useFlowStateMachine(
     participants,
     thread,
     queryClient,
-    markAnalysisCreated,
-    hasAnalysisBeenCreated,
+    tryMarkAnalysisCreated,
     createPendingAnalysis,
     completeStreaming,
   ]);

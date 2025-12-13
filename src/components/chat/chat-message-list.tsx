@@ -1,7 +1,7 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
@@ -16,6 +16,7 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ParticipantEntrance, UserMessageEntrance } from '@/components/ui/motion';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
@@ -517,6 +518,27 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
+    // ✅ ANIMATION: Track animated messages to prevent re-animation
+    const animatedMessagesRef = useRef<Set<string>>(new Set());
+    const isInitialLoadRef = useRef(true);
+
+    // Mark initial messages as "already animated" on first render
+    if (isInitialLoadRef.current && messages.length > 0) {
+      isInitialLoadRef.current = false;
+      messages.forEach((msg) => {
+        animatedMessagesRef.current.add(msg.id);
+      });
+    }
+
+    // Helper to check if message should animate
+    const shouldAnimateMessage = (messageId: string): boolean => {
+      if (animatedMessagesRef.current.has(messageId)) {
+        return false; // Already animated
+      }
+      animatedMessagesRef.current.add(messageId);
+      return true;
+    };
+
     // ✅ SCROLL MANAGEMENT: Handled by useChatScroll in parent (ChatThreadScreen)
     // Removed redundant useAutoScroll to prevent dual scroll systems fighting
     // when changelogs cause virtualization remeasurement
@@ -894,39 +916,43 @@ export const ChatMessageList = memo(
                     );
 
                     return (
-                      <div
+                      <UserMessageEntrance
                         key={messageKey}
-                        className={cn(
-                          'max-w-[85%]',
-                          'bg-secondary text-secondary-foreground',
-                          'rounded-2xl rounded-br-md px-4 py-3',
-                          'text-base leading-relaxed',
-                        )}
+                        skipAnimation={!shouldAnimateMessage(message.id)}
                       >
-                        {/* Attachments displayed above text */}
-                        {fileAttachments.length > 0 && (
-                          <MessageAttachmentPreview
-                            attachments={fileAttachments}
-                            messageId={message.id}
-                          />
-                        )}
+                        <div
+                          className={cn(
+                            'max-w-[85%]',
+                            'bg-secondary text-secondary-foreground',
+                            'rounded-2xl rounded-br-md px-4 py-3',
+                            'text-base leading-relaxed',
+                          )}
+                        >
+                          {/* Attachments displayed above text */}
+                          {fileAttachments.length > 0 && (
+                            <MessageAttachmentPreview
+                              attachments={fileAttachments}
+                              messageId={message.id}
+                            />
+                          )}
 
-                        {/* Text content */}
-                        {textParts.map((part) => {
-                          if (part.type === MessagePartTypes.TEXT) {
-                            return (
-                              <Streamdown
-                                key={`${message.id}-text-${part.text.substring(0, 20)}`}
-                                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                                components={streamdownComponents}
-                              >
-                                {part.text}
-                              </Streamdown>
-                            );
-                          }
-                          return null;
-                        })}
-                      </div>
+                          {/* Text content */}
+                          {textParts.map((part) => {
+                            if (part.type === MessagePartTypes.TEXT) {
+                              return (
+                                <Streamdown
+                                  key={`${message.id}-text-${part.text.substring(0, 20)}`}
+                                  className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                  components={streamdownComponents}
+                                >
+                                  {part.text}
+                                </Streamdown>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+                      </UserMessageEntrance>
                     );
                   })}
                 </div>
@@ -1082,19 +1108,25 @@ export const ChatMessageList = memo(
                         }
 
                         // ✅ Use ParticipantMessageWrapper for consistent header rendering
+                        // ✅ ANIMATION: Staggered entrance for participant cards
                         return (
-                          <ParticipantMessageWrapper
+                          <ParticipantEntrance
                             key={`participant-${participant.id}`}
-                            participant={participant}
-                            participantIndex={participantIdx}
-                            model={model}
-                            status={status}
-                            parts={parts}
-                            isAccessible={isAccessible}
-                            messageId={participantMessage?.id}
-                            loadingText={loadingText}
-                            maxContentHeight={maxContentHeight}
-                          />
+                            index={participantIdx}
+                            skipAnimation={!shouldAnimateMessage(`participant-${participant.id}-${roundNumber}`)}
+                          >
+                            <ParticipantMessageWrapper
+                              participant={participant}
+                              participantIndex={participantIdx}
+                              model={model}
+                              status={status}
+                              parts={parts}
+                              isAccessible={isAccessible}
+                              messageId={participantMessage?.id}
+                              loadingText={loadingText}
+                              maxContentHeight={maxContentHeight}
+                            />
+                          </ParticipantEntrance>
                         );
                       })}
                     </div>

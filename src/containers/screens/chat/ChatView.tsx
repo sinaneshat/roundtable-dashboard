@@ -324,7 +324,8 @@ export function ChatView({
 
       if (stuckAnalyses.length > 0) {
         stuckAnalyses.forEach((analysis) => {
-          updateAnalysisStatus(analysis.roundNumber, AnalysisStatuses.COMPLETE);
+          // Mark as FAILED with error message (not COMPLETE - that's incorrect for stuck streams)
+          updateAnalysisError(analysis.roundNumber, 'Analysis timed out. The stream was interrupted. Please try again.');
         });
       }
     };
@@ -334,7 +335,7 @@ export function ChatView({
     const intervalId = setInterval(checkStuckAnalyses, AnalysisTimeouts.CHECK_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [analyses, updateAnalysisStatus]);
+  }, [analyses, updateAnalysisError]);
 
   // ============================================================================
   // CALLBACKS

@@ -110,8 +110,13 @@ export async function getUploadCleanupState(
 /**
  * Helper to check if cleanup scheduler is available
  *
- * In local development without proper DO support, this may return false.
+ * Returns false in local development to avoid DO migration issues.
+ * DOs require migration state that doesn't auto-sync in local dev.
  */
 export function isCleanupSchedulerAvailable(env: CloudflareEnv): boolean {
+  // Skip in local development - DOs require migration state
+  if (env.NEXT_PUBLIC_WEBAPP_ENV === 'local') {
+    return false;
+  }
   return env.UPLOAD_CLEANUP_SCHEDULER !== undefined;
 }

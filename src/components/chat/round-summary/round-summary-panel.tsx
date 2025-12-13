@@ -79,7 +79,16 @@ export function RoundSummaryPanel({
 
   return (
     <div className="space-y-4">
-      {/* Round Outcome Header - Updated for new schema */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          DISPLAY ORDER: Matches backend schema and streaming component
+          1. Round Outcome Header (confidence + model badges) - FIRST
+          2. Key Insights - defaultOpen for completed analyses
+          3. Model Voices
+          4. Consensus/Minority/Convergence sections
+          5. About Framework
+      ═══════════════════════════════════════════════════════════════════ */}
+
+      {/* 1. Round Outcome Header - Confidence + Model Badges (TOP) */}
       <RoundOutcomeHeader
         confidence={data.confidence}
         modelVoices={data.modelVoices}
@@ -87,7 +96,7 @@ export function RoundSummaryPanel({
 
       {/* Collapsible Sections */}
       <div className="space-y-2">
-        {/* Key Insights & Recommendations (Article Summary) */}
+        {/* 2. Key Insights & Recommendations */}
         {(data.article || (data.recommendations && data.recommendations.length > 0)) && (
           <CollapsibleSection
             icon={<Lightbulb className="size-4" />}
@@ -104,7 +113,7 @@ export function RoundSummaryPanel({
           </CollapsibleSection>
         )}
 
-        {/* Model Voices - Chat-style with avatar */}
+        {/* 3. Model Voices */}
         {data.modelVoices && data.modelVoices.length > 0 && (
           <CollapsibleSection
             icon={<Users className="size-4" />}
@@ -145,7 +154,7 @@ export function RoundSummaryPanel({
           </CollapsibleSection>
         )}
 
-        {/* Consensus Table - Compact */}
+        {/* 4. Consensus Table */}
         {data.consensusTable && data.consensusTable.length > 0 && (
           <CollapsibleSection
             icon={<CheckCircle2 className="size-4" />}
@@ -179,7 +188,7 @@ export function RoundSummaryPanel({
           </CollapsibleSection>
         )}
 
-        {/* Minority Views - Compact */}
+        {/* 5. Minority Views */}
         {data.minorityViews && data.minorityViews.length > 0 && (
           <CollapsibleSection
             icon={<AlertTriangle className="size-4" />}
@@ -205,8 +214,7 @@ export function RoundSummaryPanel({
           </CollapsibleSection>
         )}
 
-        {/* Convergence/Divergence - Compact */}
-        {/* ✅ FIX: Check for actual content, not just truthy object (empty {} would render accordion) */}
+        {/* 6. Convergence/Divergence */}
         {data.convergenceDivergence && (data.convergenceDivergence.convergedOn?.length || data.convergenceDivergence.divergedOn?.length || data.convergenceDivergence.evolved?.length) && (
           <CollapsibleSection
             icon={<GitMerge className="size-4" />}
@@ -258,7 +266,7 @@ export function RoundSummaryPanel({
           </CollapsibleSection>
         )}
 
-        {/* About This Framework */}
+        {/* 7. About This Framework */}
         <CollapsibleSection
           icon={<Info className="size-4" />}
           title={t('aboutFramework.title')}
@@ -267,9 +275,11 @@ export function RoundSummaryPanel({
           <div className="text-sm text-muted-foreground space-y-2">
             <p>
               This analysis synthesizes perspectives from
+              {' '}
               {modelVoicesCount}
               {' '}
               AI models participating in a collaborative
+              {' '}
               {analysis.mode}
               {' '}
               discussion.

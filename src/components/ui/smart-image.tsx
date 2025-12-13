@@ -120,24 +120,25 @@ export function SmartImage({
         )
       )}
 
-      {/* Next.js Image */}
-      <Image
-        src={src}
-        alt={alt}
-        fill={useFill}
-        width={!useFill ? width : undefined}
-        height={!useFill ? height : undefined}
-        className={cn(
-          'object-cover transition-opacity duration-300',
-          imageState === 'loading' && 'opacity-0',
-          imageState === 'loaded' && 'opacity-100',
-          imageState === 'error' && 'hidden',
-          className
-        )}
-        onLoad={handleLoad}
-        onError={handleError}
-        {...imageProps}
-      />
+      {/* Next.js Image - Don't render at all on error to prevent browser retry loops */}
+      {imageState !== 'error' && (
+        <Image
+          src={src}
+          alt={alt}
+          fill={useFill}
+          width={!useFill ? width : undefined}
+          height={!useFill ? height : undefined}
+          className={cn(
+            'object-cover transition-opacity duration-300',
+            imageState === 'loading' && 'opacity-0',
+            imageState === 'loaded' && 'opacity-100',
+            className
+          )}
+          onLoad={handleLoad}
+          onError={handleError}
+          {...imageProps}
+        />
+      )}
     </div>
   );
 }

@@ -97,7 +97,91 @@ export function useStreamingTrigger({
         return;
       }
 
+      // ✅ FIX: Handle both STREAMING and PENDING pre-searches that need resumption
+      // After page refresh, triggeredPreSearchRounds is empty (Set not persisted)
+      // If pre-search has STREAMING status but not tracked locally = refreshed during stream
       if (currentRoundPreSearch.status === AnalysisStatuses.STREAMING) {
+        const currentState = store.getState();
+        if (currentState.hasPreSearchBeenTriggered(currentRound)) {
+          // Already triggered locally, wait for it to complete
+          return;
+        }
+
+        // ✅ RESUMPTION: Pre-search is streaming but not tracked locally = page refresh
+        // Need to attempt resumption by re-executing (backend handles resume logic via KV buffer)
+        currentState.markPreSearchTriggered(currentRound);
+
+        const pendingMsg = currentState.pendingMessage;
+        const userMessageForRound = storeMessages.find((msg) => {
+          if (msg.role !== MessageRoles.USER)
+            return false;
+          const msgRound = getRoundNumber(msg.metadata);
+          return msgRound === currentRound;
+        });
+        // Fall back to pre-search's stored userQuery if no message available
+        const userQuery = pendingMsg || (userMessageForRound ? extractTextFromMessage(userMessageForRound) : '') || currentRoundPreSearch.userQuery || '';
+
+        if (!userQuery) {
+          return;
+        }
+
+        const threadIdForSearch = storeThread?.id || effectiveThreadId;
+
+        queueMicrotask(() => {
+          const resumeSearch = async () => {
+            try {
+              // Call execute endpoint - backend handles resume from KV buffer or re-execution
+              // Backend returns: live stream (buffer exists), 202 (stream active), or re-executes
+              const response = await executePreSearchStreamService({
+                param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
+                json: { userQuery },
+              });
+
+              // 202 means stream is active but buffer unavailable, poll for completion
+              if (response.status === 202) {
+                // checkStuckPreSearches interval will handle completion detection
+                return;
+              }
+
+              // 409 means another stream already active
+              if (response.status === 409) {
+                return;
+              }
+
+              if (!response.ok) {
+                console.error('[useStreamingTrigger] Pre-search resumption failed:', response.status);
+                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.FAILED);
+                store.getState().clearPreSearchActivity(currentRound);
+                return;
+              }
+
+              // Read the resumed/re-executed stream
+              const searchData = await readPreSearchStreamData(
+                response,
+                () => store.getState().updatePreSearchActivity(currentRound),
+                partialData => store.getState().updatePartialPreSearchData(currentRound, partialData),
+              );
+
+              if (searchData) {
+                store.getState().updatePreSearchData(currentRound, searchData);
+              } else {
+                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.COMPLETE);
+              }
+
+              store.getState().clearPreSearchActivity(currentRound);
+              queryClientRef.current.invalidateQueries({
+                queryKey: queryKeys.threads.preSearches(threadIdForSearch),
+              });
+            } catch (error) {
+              console.error('[useStreamingTrigger] Pre-search resumption error:', error);
+              store.getState().clearPreSearchActivity(currentRound);
+              store.getState().clearPreSearchTracking(currentRound);
+            }
+          };
+
+          resumeSearch();
+        });
+
         return;
       }
 
@@ -318,10 +402,17 @@ export function useStreamingTrigger({
   }, [waitingToStart, store, router]);
 
   // Auto-complete stuck pre-searches
+  // ✅ RESUMPTION FIX: Run immediately on mount, then every 5 seconds
+  // This ensures stale STREAMING pre-searches from before page refresh
+  // are marked complete quickly, unblocking participant resumption
   useEffect(() => {
     const checkStuckPreSearches = () => {
       store.getState().checkStuckPreSearches();
     };
+
+    // ✅ RESUMPTION FIX: Check immediately on mount to catch stale pre-searches
+    // Without this, resumption would wait up to 5 seconds for the interval
+    checkStuckPreSearches();
 
     const interval = setInterval(checkStuckPreSearches, 5000);
     return () => clearInterval(interval);

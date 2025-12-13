@@ -34,12 +34,46 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
   const prevMessageCountRef = useRef<number>(0);
 
   // Track last stream activity to detect stuck streams
-  // eslint-disable-next-line react-hooks/purity -- Initial timestamp for activity tracking, intentional impure call
+
   const lastStreamActivityRef = useRef<number>(Date.now());
 
   // Streaming throttle to avoid race conditions
   const lastStreamSyncRef = useRef<number>(0);
   const STREAM_SYNC_THROTTLE_MS = 100;
+
+  // Track hydration to prevent duplicate hydration attempts
+  const hasHydratedRef = useRef<string | null>(null);
+
+  // ============================================================================
+  // HYDRATION EFFECT: Store → AI SDK (on initial load/navigation)
+  // ============================================================================
+  // When AI SDK has 0 messages but store has messages, hydrate AI SDK from store.
+  // This enables resumption by making chat.isReady = true.
+  useEffect(() => {
+    const currentStoreState = store.getState();
+    const currentStoreMessages = currentStoreState.messages;
+    const currentThreadId = currentStoreState.thread?.id || currentStoreState.createdThreadId;
+
+    // Only hydrate if:
+    // 1. AI SDK has 0 messages
+    // 2. Store has messages
+    // 3. We have a thread ID
+    // 4. We haven't already hydrated for this thread
+    if (
+      chat.messages.length === 0
+      && currentStoreMessages.length > 0
+      && currentThreadId
+      && hasHydratedRef.current !== currentThreadId
+    ) {
+      hasHydratedRef.current = currentThreadId;
+      chat.setMessages?.(structuredClone(currentStoreMessages));
+    }
+
+    // Reset hydration tracking when thread changes
+    if (currentThreadId && hasHydratedRef.current && hasHydratedRef.current !== currentThreadId) {
+      hasHydratedRef.current = null;
+    }
+  }, [chat, store, chat.messages.length]);
 
   // Main sync effect
   useEffect(() => {

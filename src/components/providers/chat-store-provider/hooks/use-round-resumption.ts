@@ -5,6 +5,13 @@
  *
  * Handles continuing from a specific participant when a round is incomplete.
  * Triggered by useIncompleteRoundResumption hook on page load.
+ *
+ * ✅ RACE CONDITION FIX: Uses explicit chat.isReady dependency and retry mechanism
+ * Problem: After page refresh, AI SDK hydration happens async, so chat.isReady
+ * is false when the effect first runs. Even though chat changes when isReady
+ * becomes true, the effect might miss the transition due to batched React updates.
+ *
+ * Solution: Extract isReady explicitly, add retry mechanism with small delay
  */
 
 import { useEffect, useRef } from 'react';
@@ -34,7 +41,14 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
   const storePreSearches = useStore(store, s => s.preSearches);
   const storeThread = useStore(store, s => s.thread);
 
+  // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
+  // chat object changes frequently (messages, streaming state), but we specifically
+  // need to react when isReady transitions from false to true
+  const chatIsReady = chat.isReady;
+
   const resumptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // ✅ RACE CONDITION FIX: Track if resumption has been triggered to prevent double-triggers
+  const resumptionTriggeredRef = useRef<string | null>(null);
 
   // Clean up dangling nextParticipantToTrigger state
   useEffect(() => {
@@ -55,15 +69,37 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     return () => clearTimeout(timeoutId);
   }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, store]);
 
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: Retry mechanism for delayed AI SDK readiness
+  // ============================================================================
+  // Problem: After page refresh, the effect runs before AI SDK finishes hydration.
+  // setMessages() in hydration schedules a state update, but the current render
+  // still sees stale chat.isReady=false. The effect re-runs when dependencies
+  // change, but React may batch updates causing the isReady=true transition to
+  // be missed.
+  //
+  // Solution: When conditions are met except isReady, schedule a retry.
+  // This ensures resumption happens even if we miss the exact transition moment.
+  // ============================================================================
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Main resumption effect
   useEffect(() => {
+    // Clear any pending retry when effect re-runs
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
     if (nextParticipantToTrigger === null || !waitingToStart) {
+      resumptionTriggeredRef.current = null; // Reset tracking when conditions not met
       return;
     }
 
     if (chatIsStreaming) {
       store.getState().setWaitingToStartStreaming(false);
       store.getState().setNextParticipantToTrigger(null);
+      resumptionTriggeredRef.current = null;
       return;
     }
 
@@ -71,14 +107,79 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // ✅ FIX: Don't clear waitingToStartStreaming when messages are empty
+    // During new thread creation, messages haven't populated yet.
+    // Just return early - use-streaming-trigger.ts handles new thread initialization.
+    // This hook is only for RESUMPTION (continuing from specific participant after refresh).
     if (storeMessages.length === 0) {
-      store.getState().setWaitingToStartStreaming(false);
-      store.getState().setNextParticipantToTrigger(null);
+      return;
+    }
+
+    // Generate unique key for this resumption attempt
+    const threadId = storeThread?.id || 'unknown';
+    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${nextParticipantToTrigger}`;
+
+    // Prevent duplicate triggers for the same resumption
+    if (resumptionTriggeredRef.current === resumptionKey) {
       return;
     }
 
     // Wait for AI SDK to be ready
-    if (!chat.isReady) {
+    if (!chatIsReady) {
+      // ✅ RACE CONDITION FIX: Schedule retry with direct execution
+      // AI SDK hydration is async - isReady will become true after setMessages completes
+      // Schedule a retry that directly checks and executes continuation
+      // NOTE: Setting same value in Zustand doesn't notify subscribers, so we can't
+      // rely on re-triggering the effect - we must execute directly in the retry
+      retryTimeoutRef.current = setTimeout(() => {
+        const latestState = store.getState();
+        const latestParticipants = latestState.participants;
+        const latestMessages = latestState.messages;
+        const latestThread = latestState.thread;
+        const latestPreSearches = latestState.preSearches;
+        const latestNextParticipant = latestState.nextParticipantToTrigger;
+
+        // Verify conditions still hold
+        if (!latestState.waitingToStartStreaming
+          || latestNextParticipant === null
+          || latestState.isStreaming
+          || latestParticipants.length === 0
+          || latestMessages.length === 0
+        ) {
+          return;
+        }
+
+        // Check if AI SDK is now ready
+        if (!chat.isReady) {
+          // Still not ready - schedule another retry with toggle pattern
+          // Toggle waitingToStartStreaming to force effect re-run since setting same value doesn't notify
+          retryTimeoutRef.current = setTimeout(() => {
+            latestState.setWaitingToStartStreaming(false);
+            // Use queueMicrotask to ensure the false is processed before setting true
+            queueMicrotask(() => latestState.setWaitingToStartStreaming(true));
+          }, 200);
+          return;
+        }
+
+        // Check pre-search blocking
+        const currentRound = getCurrentRoundNumber(latestMessages);
+        const webSearchEnabled = latestThread?.enableWebSearch ?? false;
+        const preSearchForRound = latestPreSearches.find(ps => ps.roundNumber === currentRound);
+        if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
+          return;
+        }
+
+        // Generate resumption key and check for duplicates
+        const threadId = latestThread?.id || 'unknown';
+        const retryResumptionKey = `${threadId}-r${currentRound}-p${latestNextParticipant}`;
+        if (resumptionTriggeredRef.current === retryResumptionKey) {
+          return;
+        }
+
+        // Mark as triggered and execute
+        resumptionTriggeredRef.current = retryResumptionKey;
+        chat.continueFromParticipant(latestNextParticipant, latestParticipants);
+      }, 100); // Small delay for AI SDK hydration to complete
       return;
     }
 
@@ -90,9 +191,20 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // ✅ Mark as triggered before calling to prevent race condition double-triggers
+    resumptionTriggeredRef.current = resumptionKey;
+
     // Resume from specific participant
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, storeParticipants, storeMessages, storePreSearches, storeThread, chat, store]);
+
+    // Cleanup
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, chat, store]);
 
   // Safety timeout for thread screen resumption
   useEffect(() => {
@@ -113,13 +225,14 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // ✅ TIMEOUT FIX: Reduced from 10s to 5s for faster recovery from stuck states
     resumptionTimeoutRef.current = setTimeout(() => {
       const latestState = store.getState();
       if (latestState.waitingToStartStreaming && !latestState.isStreaming) {
         latestState.setWaitingToStartStreaming(false);
         latestState.setNextParticipantToTrigger(null);
       }
-    }, 10000);
+    }, 5000);
 
     return () => {
       if (resumptionTimeoutRef.current) {

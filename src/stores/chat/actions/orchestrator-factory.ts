@@ -307,6 +307,9 @@ export function createOrchestrator<
         prevItemsRef.current = mergedItems;
         setItems(mergedItems);
       }
+      // Deps intentionally exclude factory config functions (getItemKey, getItemPriority, compareKeys)
+      // which are stable references from createOrchestrator config, and setItems which is stable
+      // from Zustand store. Including them would cause ESLint false positive without benefit.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, processedItems, currentItems]);
 

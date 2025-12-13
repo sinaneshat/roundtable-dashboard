@@ -1403,6 +1403,7 @@ export function useMultiParticipantChat(
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
     const canSendMessage = status === AiSdkStatuses.READY;
+
     if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
       return;
     }

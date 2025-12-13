@@ -5,6 +5,24 @@ argument-hint: [scope]
 
 # Cleanup Command
 
+## Step 1: Ask for Target Path
+
+First, ask the user where they want to run the cleanup. Use the AskUserQuestion tool with these options:
+
+**Question**: "Which path should I target for cleanup?"
+
+**Options**:
+1. **Entire codebase (src/)** - Scan all source files
+2. **Frontend only (src/components/, src/app/, src/containers/)** - UI components, pages, containers
+3. **Backend only (src/api/, src/db/)** - API routes, handlers, database
+4. **Stores only (src/stores/)** - Zustand stores and state management
+5. **Hooks only (src/hooks/)** - React hooks and data fetching
+6. **Specific path** - Let user provide custom path
+
+If user provided scope argument, use that: $ARGUMENTS
+
+## Step 2: Ask for Cleanup Tasks
+
 Ask the user which cleanup tasks they want to run. Present these options:
 
 1. **TypeScript Violations** - Fix type safety issues
@@ -19,30 +37,30 @@ Ask the user which cleanup tasks they want to run. Present these options:
 
 ## Parallel Agent Orchestration Strategy
 
-For comprehensive cleanup, use **parallel agent batches** to maximize efficiency:
+For comprehensive cleanup, use **parallel agent batches** to maximize efficiency.
+
+**IMPORTANT**: Use the path selected in Step 1 for all scans. Replace `{TARGET_PATH}` with the user's selection.
 
 ### Batch 1: Discovery (Run in Parallel)
 ```
-- Agent A (Explore): Scan src/api/routes/ for endpoint inventory
-- Agent B (Explore): Scan src/ for TODO/FIXME/deprecated comments
-- Agent C (Explore): Scan for hardcoded strings violating enum patterns
+- Agent A (Explore): Scan {TARGET_PATH} for endpoint inventory (if includes api/)
+- Agent B (Explore): Scan {TARGET_PATH} for TODO/FIXME/deprecated comments
+- Agent C (Explore): Scan {TARGET_PATH} for hardcoded strings violating enum patterns
 ```
 
 ### Batch 2: Analysis (Run in Parallel After Batch 1)
 ```
-- Agent A (backend-pattern-expert): Analyze endpoints vs backend-patterns.md rules
-- Agent B (frontend-ui-expert): Analyze components vs frontend-patterns.md rules
-- Agent C (research-analyst): Cross-reference imports to find unused exports
+- Agent A (backend-pattern-expert): Analyze {TARGET_PATH} endpoints vs backend-patterns.md rules (if includes api/)
+- Agent B (frontend-ui-expert): Analyze {TARGET_PATH} components vs frontend-patterns.md rules (if includes components/)
+- Agent C (research-analyst): Cross-reference imports in {TARGET_PATH} to find unused exports
 ```
 
-### Batch 3: Fixes (Run Sequentially by Domain)
+### Batch 3: Fixes (Run Sequentially by Domain within {TARGET_PATH})
 ```
-- Fix backend anti-patterns first (affects types)
-- Fix frontend anti-patterns second (depends on backend types)
+- Fix backend anti-patterns first (affects types) - if in scope
+- Fix frontend anti-patterns second (depends on backend types) - if in scope
 - Remove dead code last (after all references updated)
 ```
-
-If user provided scope argument: $ARGUMENTS
 
 ## TypeScript Violations Checklist
 
@@ -490,25 +508,25 @@ grep -rn "api\." src/services/api/ src/hooks/
 
 ## TODO/Legacy/Deprecated Code Removal
 
-### Patterns to Search and Remove
+### Patterns to Search and Remove (within `{TARGET_PATH}`)
 
 **1. TODO/FIXME Comments**
 ```bash
-grep -rn "TODO\|FIXME\|XXX\|HACK" src/ --include="*.ts" --include="*.tsx"
+grep -rn "TODO\|FIXME\|XXX\|HACK" {TARGET_PATH} --include="*.ts" --include="*.tsx"
 ```
 - Evaluate each: complete or remove
 - If blocked, create GitHub issue and remove comment
 
 **2. Deprecated Markers**
 ```bash
-grep -rn "@deprecated\|DEPRECATED\|deprecated" src/ --include="*.ts" --include="*.tsx"
+grep -rn "@deprecated\|DEPRECATED\|deprecated" {TARGET_PATH} --include="*.ts" --include="*.tsx"
 ```
 - Update all usages to new API
 - Remove deprecated code entirely
 
 **3. Legacy/Backwards Compatibility Shims**
 ```bash
-grep -rn "backwards\|legacy\|compat\|old\|_old\|Old" src/ --include="*.ts" --include="*.tsx"
+grep -rn "backwards\|legacy\|compat\|old\|_old\|Old" {TARGET_PATH} --include="*.ts" --include="*.tsx"
 ```
 Patterns to remove:
 - `export const OldName = NewName; // backwards compatibility`
@@ -518,49 +536,50 @@ Patterns to remove:
 **4. Commented-Out Code**
 ```bash
 # Find multi-line comments that look like code
-grep -rn "// \(const\|let\|function\|export\|import\|return\|if\|for\|while\)" src/
+grep -rn "// \(const\|let\|function\|export\|import\|return\|if\|for\|while\)" {TARGET_PATH}
 ```
 Remove all commented-out code - use git history instead
 
 **5. Dead Imports/Exports**
-- Run `pnpm lint` to find unused imports
-- Search for exports not imported anywhere
+- Run `pnpm lint` to find unused imports (filter to target path)
+- Search for exports not imported anywhere in `{TARGET_PATH}`
 
 **6. Console.log Statements**
 ```bash
-grep -rn "console\.\(log\|debug\|info\|warn\|error\)" src/ --include="*.ts" --include="*.tsx"
+grep -rn "console\.\(log\|debug\|info\|warn\|error\)" {TARGET_PATH} --include="*.ts" --include="*.tsx"
 ```
 - Replace with structured logging (`c.logger` in API, remove in frontend)
 
 ## Execution
 
-After user selects options:
-1. Run `pnpm lint` to identify ESLint issues
-2. Run `pnpm check-types` to identify TypeScript issues
-3. Search for forbidden patterns in affected files
-4. Fix issues following established patterns in `/docs/type-inference-patterns.md`
-5. Run `pnpm test` to verify fixes don't break tests
-6. Report summary of changes made
+After user selects path and cleanup options:
+1. Confirm the target path: `{TARGET_PATH}`
+2. Run `pnpm lint` to identify ESLint issues (filter to target path)
+3. Run `pnpm check-types` to identify TypeScript issues (filter to target path)
+4. Search for forbidden patterns in `{TARGET_PATH}` only
+5. Fix issues following established patterns in `/docs/type-inference-patterns.md`
+6. Run `pnpm test` to verify fixes don't break tests
+7. Report summary of changes made with file paths
 
 ### React 19 Pattern Search Commands
 
-When running React 19 cleanup, search for these patterns:
+When running React 19 cleanup, search for these patterns in `{TARGET_PATH}`:
 
 ```bash
 # Find useEffect with setState (potential anti-pattern)
-grep -rn "useEffect.*setState\|useEffect.*set[A-Z]" src/
+grep -rn "useEffect.*setState\|useEffect.*set[A-Z]" {TARGET_PATH}
 
 # Find ref callbacks without cleanup
-grep -rn "ref={(node)\|ref={node =>" src/ | grep -v "return"
+grep -rn "ref={(node)\|ref={node =>" {TARGET_PATH} | grep -v "return"
 
 # Find inline functions in JSX props
-grep -rn "onClick={() =>\|onSubmit={() =>\|onChange={() =>" src/
+grep -rn "onClick={() =>\|onSubmit={() =>\|onChange={() =>" {TARGET_PATH}
 
 # Find effects without cleanup return
-grep -rn "useEffect(() => {" src/ -A 10 | grep -v "return"
+grep -rn "useEffect(() => {" {TARGET_PATH} -A 10 | grep -v "return"
 
 # Find context providers without useMemo
-grep -rn "Context.Provider value={{" src/
+grep -rn "Context.Provider value={{" {TARGET_PATH}
 ```
 
 ### Context7 MCP Reference

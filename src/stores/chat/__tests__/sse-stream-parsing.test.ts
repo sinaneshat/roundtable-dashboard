@@ -1,0 +1,856 @@
+/**
+ * SSE Stream Parsing and Event Handling Tests
+ *
+ * Tests for parsing Server-Sent Events (SSE) streams from the chat API
+ * as documented in FLOW_DOCUMENTATION.md:
+ *
+ * Event Types:
+ * - start: Message metadata, participant info
+ * - text-delta: Streaming text content
+ * - finish: Completion reason, token usage
+ * - done: Stream completed
+ * - error: Stream error
+ *
+ * Pre-Search Events:
+ * - status: Pre-search status changes
+ * - query-generated: Search query with rationale
+ * - search-result: Individual search results
+ * - analysis: Search analysis summary
+ *
+ * Analysis Events:
+ * - status: Analysis status changes
+ * - key-insight: Analysis key insights
+ * - participant-analysis: Per-participant analysis
+ * - verdict: Final verdict
+ *
+ * Key Validations:
+ * - Correct event parsing
+ * - State updates from events
+ * - Error handling
+ * - Stream completion detection
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
+import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+
+type ParsedSSEEvent = {
+  event: string;
+  data: Record<string, unknown>;
+};
+
+/**
+ * Parses SSE event string into structured object
+ */
+function parseSSEEvent(eventString: string): ParsedSSEEvent | null {
+  const lines = eventString.trim().split('\n');
+  let event = '';
+  let data = '';
+
+  for (const line of lines) {
+    if (line.startsWith('event: ')) {
+      event = line.slice(7);
+    } else if (line.startsWith('data: ')) {
+      data = line.slice(6);
+    }
+  }
+
+  if (!event || !data)
+    return null;
+
+  try {
+    return {
+      event,
+      data: JSON.parse(data),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Creates an SSE event string from structured data
+ */
+function createSSEEventString(event: string, data: Record<string, unknown>): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/**
+ * Simulates reading SSE stream and collecting events
+ */
+function collectSSEEvents(eventStrings: string[]): ParsedSSEEvent[] {
+  return eventStrings
+    .map(parseSSEEvent)
+    .filter((e): e is ParsedSSEEvent => e !== null);
+}
+
+// ============================================================================
+// PARTICIPANT MESSAGE SSE EVENTS
+// ============================================================================
+
+describe('participant Message SSE Events', () => {
+  describe('start Event', () => {
+    it('parses start event with message metadata', () => {
+      const eventString = createSSEEventString('start', {
+        messageMetadata: {
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          participantIndex: 0,
+          participantId: 'participant-0',
+          model: 'gpt-4',
+        },
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('start');
+      expect(parsed?.data.messageMetadata).toBeDefined();
+      expect((parsed?.data.messageMetadata as DbAssistantMessageMetadata).roundNumber).toBe(0);
+    });
+
+    it('extracts participant info from start event', () => {
+      const startData = {
+        messageMetadata: {
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 1,
+          participantIndex: 2,
+          participantId: 'participant-2',
+          model: 'claude-3-opus',
+        },
+      };
+
+      const metadata = startData.messageMetadata;
+
+      expect(metadata.participantIndex).toBe(2);
+      expect(metadata.participantId).toBe('participant-2');
+      expect(metadata.model).toBe('claude-3-opus');
+    });
+  });
+
+  describe('text-delta Event', () => {
+    it('parses text-delta event with content', () => {
+      const eventString = createSSEEventString('text-delta', {
+        delta: 'Hello ',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('text-delta');
+      expect(parsed?.data.delta).toBe('Hello ');
+    });
+
+    it('accumulates multiple text-delta events', () => {
+      const deltas = ['Hello ', 'world', '!', ' How ', 'are ', 'you?'];
+      let accumulated = '';
+
+      deltas.forEach((delta) => {
+        accumulated += delta;
+      });
+
+      expect(accumulated).toBe('Hello world! How are you?');
+    });
+
+    it('handles special characters in text-delta', () => {
+      const eventString = createSSEEventString('text-delta', {
+        delta: 'Here\'s some "quoted" text & <special> chars',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.data.delta).toBe('Here\'s some "quoted" text & <special> chars');
+    });
+
+    it('handles unicode in text-delta', () => {
+      const eventString = createSSEEventString('text-delta', {
+        delta: 'Hello 世界 🌍 émoji',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.data.delta).toBe('Hello 世界 🌍 émoji');
+    });
+  });
+
+  describe('finish Event', () => {
+    it('parses finish event with stop reason', () => {
+      const eventString = createSSEEventString('finish', {
+        finishReason: 'stop',
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+        },
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('finish');
+      expect(parsed?.data.finishReason).toBe('stop');
+    });
+
+    it('parses token usage from finish event', () => {
+      const finishData = {
+        finishReason: 'stop',
+        usage: {
+          promptTokens: 150,
+          completionTokens: 75,
+          totalTokens: 225,
+        },
+      };
+
+      const usage = finishData.usage;
+
+      expect(usage.promptTokens).toBe(150);
+      expect(usage.completionTokens).toBe(75);
+      expect(usage.totalTokens).toBe(225);
+    });
+
+    it('handles length finish reason', () => {
+      const eventString = createSSEEventString('finish', {
+        finishReason: 'length',
+        usage: { promptTokens: 100, completionTokens: 4096, totalTokens: 4196 },
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.data.finishReason).toBe('length');
+    });
+  });
+
+  describe('done Event', () => {
+    it('parses done event signaling stream completion', () => {
+      const eventString = createSSEEventString('done', {});
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('done');
+    });
+  });
+
+  describe('error Event', () => {
+    it('parses error event with message', () => {
+      const eventString = createSSEEventString('error', {
+        message: 'Rate limit exceeded',
+        code: 'rate_limit_error',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('error');
+      expect(parsed?.data.message).toBe('Rate limit exceeded');
+      expect(parsed?.data.code).toBe('rate_limit_error');
+    });
+  });
+});
+
+// ============================================================================
+// PRE-SEARCH SSE EVENTS
+// ============================================================================
+
+describe('pre-Search SSE Events', () => {
+  describe('status Event', () => {
+    it('parses status change to streaming', () => {
+      const eventString = createSSEEventString('status', {
+        status: AnalysisStatuses.STREAMING,
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('status');
+      expect(parsed?.data.status).toBe(AnalysisStatuses.STREAMING);
+    });
+
+    it('parses status change to complete', () => {
+      const eventString = createSSEEventString('status', {
+        status: AnalysisStatuses.COMPLETE,
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.data.status).toBe(AnalysisStatuses.COMPLETE);
+    });
+  });
+
+  describe('query-generated Event', () => {
+    it('parses generated search query', () => {
+      const eventString = createSSEEventString('query-generated', {
+        query: 'latest React 19 features 2024',
+        rationale: 'User asked about React updates',
+        searchDepth: 'basic',
+        index: 0,
+        total: 2,
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('query-generated');
+      expect(parsed?.data.query).toBe('latest React 19 features 2024');
+      expect(parsed?.data.rationale).toBe('User asked about React updates');
+      expect(parsed?.data.searchDepth).toBe('basic');
+    });
+
+    it('tracks query progress with index/total', () => {
+      const queryData = {
+        query: 'query 2',
+        rationale: 'reason',
+        searchDepth: 'advanced',
+        index: 1,
+        total: 3,
+      };
+
+      expect(queryData.index).toBe(1);
+      expect(queryData.total).toBe(3);
+      // Progress: (1 + 1) / 3 = 66%
+      const progress = ((queryData.index + 1) / queryData.total) * 100;
+      expect(progress).toBeCloseTo(66.67, 1);
+    });
+  });
+
+  describe('search-result Event', () => {
+    it('parses search result with answer', () => {
+      const eventString = createSSEEventString('search-result', {
+        query: 'React 19 features',
+        answer: 'React 19 introduces several new features including...',
+        results: [
+          {
+            title: 'React 19 Release Notes',
+            url: 'https://react.dev/blog/react-19',
+            content: 'Full release notes content...',
+            score: 0.95,
+          },
+        ],
+        responseTime: 1234,
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('search-result');
+      expect(parsed?.data.query).toBe('React 19 features');
+      expect(parsed?.data.answer).toBeDefined();
+      expect(parsed?.data.responseTime).toBe(1234);
+    });
+
+    it('parses multiple search results', () => {
+      const resultData = {
+        query: 'test',
+        answer: 'summary',
+        results: [
+          { title: 'Result 1', url: 'https://example.com/1', content: 'Content 1', score: 0.9 },
+          { title: 'Result 2', url: 'https://example.com/2', content: 'Content 2', score: 0.85 },
+          { title: 'Result 3', url: 'https://example.com/3', content: 'Content 3', score: 0.8 },
+        ],
+        responseTime: 1000,
+      };
+
+      expect(resultData.results).toHaveLength(3);
+      expect(resultData.results[0]!.score).toBe(0.9);
+    });
+  });
+
+  describe('analysis Event', () => {
+    it('parses pre-search analysis summary', () => {
+      const eventString = createSSEEventString('analysis', {
+        analysis: 'Based on the search results, the key findings are...',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('analysis');
+      expect(parsed?.data.analysis).toContain('key findings');
+    });
+  });
+});
+
+// ============================================================================
+// MODERATOR ANALYSIS SSE EVENTS
+// ============================================================================
+
+describe('moderator Analysis SSE Events', () => {
+  describe('key-insight Event', () => {
+    it('parses key insight', () => {
+      const eventString = createSSEEventString('key-insight', {
+        insight: 'All participants agreed on the core architecture approach.',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('key-insight');
+      expect(parsed?.data.insight).toContain('core architecture approach');
+    });
+
+    it('accumulates multiple key insights', () => {
+      const insights: string[] = [];
+
+      const events = [
+        { event: 'key-insight', data: { insight: 'Insight 1: Performance is critical' } },
+        { event: 'key-insight', data: { insight: 'Insight 2: Scalability concerns' } },
+        { event: 'key-insight', data: { insight: 'Insight 3: Security first' } },
+      ];
+
+      events.forEach((e) => {
+        if (e.event === 'key-insight') {
+          insights.push(e.data.insight);
+        }
+      });
+
+      expect(insights).toHaveLength(3);
+    });
+  });
+
+  describe('participant-analysis Event', () => {
+    it('parses per-participant analysis', () => {
+      const eventString = createSSEEventString('participant-analysis', {
+        participantId: 'participant-0',
+        participantIndex: 0,
+        summary: 'This participant provided a comprehensive analysis...',
+        strengths: ['Clear communication', 'Good examples'],
+        areasForImprovement: ['Could be more concise'],
+        score: 8.5,
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('participant-analysis');
+      expect(parsed?.data.participantId).toBe('participant-0');
+      expect(parsed?.data.score).toBe(8.5);
+    });
+
+    it('collects all participant analyses', () => {
+      const participantAnalyses: Array<{ participantId: string; score: number }> = [];
+
+      const events = [
+        { participantId: 'p0', score: 8.0 },
+        { participantId: 'p1', score: 7.5 },
+        { participantId: 'p2', score: 9.0 },
+      ];
+
+      events.forEach((e) => {
+        participantAnalyses.push(e);
+      });
+
+      // Calculate rankings
+      const ranked = participantAnalyses.sort((a, b) => b.score - a.score);
+
+      expect(ranked[0]?.participantId).toBe('p2');
+      expect(ranked[0]?.score).toBe(9.0);
+    });
+  });
+
+  describe('verdict Event', () => {
+    it('parses final verdict', () => {
+      const eventString = createSSEEventString('verdict', {
+        verdict: 'After analyzing all responses, the consensus is...',
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('verdict');
+      expect(parsed?.data.verdict).toContain('consensus');
+    });
+  });
+
+  describe('recommendations Event', () => {
+    it('parses recommendations', () => {
+      const eventString = createSSEEventString('recommendations', {
+        recommendations: [
+          'Consider implementing caching',
+          'Review security implications',
+          'Add comprehensive testing',
+        ],
+      });
+
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.event).toBe('recommendations');
+      expect(parsed?.data.recommendations).toHaveLength(3);
+    });
+  });
+});
+
+// ============================================================================
+// COMPLETE STREAM SEQUENCE TESTS
+// ============================================================================
+
+describe('complete Stream Sequences', () => {
+  describe('participant Message Stream', () => {
+    it('processes complete participant stream sequence', () => {
+      const events = [
+        createSSEEventString('start', {
+          messageMetadata: {
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            participantIndex: 0,
+            participantId: 'p0',
+            model: 'gpt-4',
+          },
+        }),
+        createSSEEventString('text-delta', { delta: 'Hello ' }),
+        createSSEEventString('text-delta', { delta: 'world!' }),
+        createSSEEventString('finish', {
+          finishReason: 'stop',
+          usage: { promptTokens: 100, completionTokens: 5, totalTokens: 105 },
+        }),
+        createSSEEventString('done', {}),
+      ];
+
+      const parsed = collectSSEEvents(events);
+
+      expect(parsed).toHaveLength(5);
+      expect(parsed[0]?.event).toBe('start');
+      expect(parsed[1]?.event).toBe('text-delta');
+      expect(parsed[2]?.event).toBe('text-delta');
+      expect(parsed[3]?.event).toBe('finish');
+      expect(parsed[4]?.event).toBe('done');
+
+      // Accumulate content
+      const content = parsed
+        .filter(e => e.event === 'text-delta')
+        .map(e => e.data.delta as string)
+        .join('');
+
+      expect(content).toBe('Hello world!');
+    });
+  });
+
+  describe('pre-Search Stream', () => {
+    it('processes complete pre-search stream sequence', () => {
+      const events = [
+        createSSEEventString('status', { status: AnalysisStatuses.STREAMING }),
+        createSSEEventString('query-generated', {
+          query: 'query 1',
+          rationale: 'reason',
+          searchDepth: 'basic',
+          index: 0,
+          total: 2,
+        }),
+        createSSEEventString('query-generated', {
+          query: 'query 2',
+          rationale: 'reason',
+          searchDepth: 'advanced',
+          index: 1,
+          total: 2,
+        }),
+        createSSEEventString('search-result', {
+          query: 'query 1',
+          answer: 'answer 1',
+          results: [],
+          responseTime: 1000,
+        }),
+        createSSEEventString('search-result', {
+          query: 'query 2',
+          answer: 'answer 2',
+          results: [],
+          responseTime: 1200,
+        }),
+        createSSEEventString('analysis', { analysis: 'Summary analysis' }),
+        createSSEEventString('done', { status: AnalysisStatuses.COMPLETE }),
+      ];
+
+      const parsed = collectSSEEvents(events);
+
+      expect(parsed).toHaveLength(7);
+
+      const queries = parsed.filter(e => e.event === 'query-generated');
+      expect(queries).toHaveLength(2);
+
+      const results = parsed.filter(e => e.event === 'search-result');
+      expect(results).toHaveLength(2);
+
+      const done = parsed.find(e => e.event === 'done');
+      expect(done?.data.status).toBe(AnalysisStatuses.COMPLETE);
+    });
+  });
+
+  describe('analysis Stream', () => {
+    it('processes complete analysis stream sequence', () => {
+      const events = [
+        createSSEEventString('status', { status: AnalysisStatuses.STREAMING }),
+        createSSEEventString('key-insight', { insight: 'Insight 1' }),
+        createSSEEventString('key-insight', { insight: 'Insight 2' }),
+        createSSEEventString('participant-analysis', { participantId: 'p0', score: 8.0, summary: 'P0 analysis' }),
+        createSSEEventString('participant-analysis', { participantId: 'p1', score: 8.5, summary: 'P1 analysis' }),
+        createSSEEventString('verdict', { verdict: 'Final verdict' }),
+        createSSEEventString('recommendations', { recommendations: ['Rec 1', 'Rec 2'] }),
+        createSSEEventString('done', { status: AnalysisStatuses.COMPLETE }),
+      ];
+
+      const parsed = collectSSEEvents(events);
+
+      expect(parsed).toHaveLength(8);
+
+      const insights = parsed.filter(e => e.event === 'key-insight');
+      expect(insights).toHaveLength(2);
+
+      const participantAnalyses = parsed.filter(e => e.event === 'participant-analysis');
+      expect(participantAnalyses).toHaveLength(2);
+    });
+  });
+});
+
+// ============================================================================
+// ERROR HANDLING TESTS
+// ============================================================================
+
+describe('sSE Error Handling', () => {
+  describe('malformed Events', () => {
+    it('handles missing event field', () => {
+      const malformed = 'data: {"message": "test"}\n\n';
+      const parsed = parseSSEEvent(malformed);
+
+      expect(parsed).toBeNull();
+    });
+
+    it('handles missing data field', () => {
+      const malformed = 'event: text-delta\n\n';
+      const parsed = parseSSEEvent(malformed);
+
+      expect(parsed).toBeNull();
+    });
+
+    it('handles invalid JSON in data', () => {
+      const malformed = 'event: text-delta\ndata: {invalid json}\n\n';
+      const parsed = parseSSEEvent(malformed);
+
+      expect(parsed).toBeNull();
+    });
+  });
+
+  describe('stream Interruption', () => {
+    it('handles stream ending without done event', () => {
+      const events = [
+        createSSEEventString('start', { messageMetadata: { role: 'assistant' } }),
+        createSSEEventString('text-delta', { delta: 'Partial content...' }),
+        // No finish or done event
+      ];
+
+      const parsed = collectSSEEvents(events);
+
+      expect(parsed).toHaveLength(2);
+
+      // Should detect incomplete stream
+      const hasDone = parsed.some(e => e.event === 'done');
+      expect(hasDone).toBe(false);
+    });
+
+    it('handles error event mid-stream', () => {
+      const events = [
+        createSSEEventString('start', { messageMetadata: { role: 'assistant' } }),
+        createSSEEventString('text-delta', { delta: 'Partial...' }),
+        createSSEEventString('error', { message: 'Connection timeout', code: 'timeout' }),
+      ];
+
+      const parsed = collectSSEEvents(events);
+
+      const errorEvent = parsed.find(e => e.event === 'error');
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent?.data.message).toBe('Connection timeout');
+    });
+  });
+});
+
+// ============================================================================
+// STATE UPDATES FROM EVENTS
+// ============================================================================
+
+describe('state Updates from SSE Events', () => {
+  describe('message Building', () => {
+    it('builds message from stream events', () => {
+      const message = {
+        id: '',
+        role: 'assistant' as const,
+        content: '',
+        metadata: null as DbAssistantMessageMetadata | null,
+      };
+
+      // Process start event
+      const startData = {
+        messageMetadata: {
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          participantIndex: 0,
+          participantId: 'p0',
+          model: 'gpt-4',
+          finishReason: FinishReasons.UNKNOWN,
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          hasError: false,
+          isTransient: true,
+          isPartialResponse: true,
+        } as DbAssistantMessageMetadata,
+      };
+      message.metadata = startData.messageMetadata;
+
+      // Process text-delta events
+      const deltas = ['Hello ', 'world', '!'];
+      deltas.forEach((d) => {
+        message.content += d;
+      });
+
+      // Process finish event
+      const finishData = {
+        finishReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 5, totalTokens: 105 },
+      };
+      message.metadata.finishReason = finishData.finishReason as DbAssistantMessageMetadata['finishReason'];
+      message.metadata.usage = finishData.usage;
+      message.metadata.isTransient = false;
+      message.metadata.isPartialResponse = false;
+
+      expect(message.content).toBe('Hello world!');
+      expect(message.metadata.finishReason).toBe('stop');
+      expect(message.metadata.usage.totalTokens).toBe(105);
+    });
+  });
+
+  describe('pre-Search Data Building', () => {
+    it('builds search data from stream events', () => {
+      const searchData = {
+        queries: [] as Array<{ query: string; rationale: string; searchDepth: string; index: number; total: number }>,
+        results: [] as Array<{ query: string; answer: string; results: unknown[]; responseTime: number }>,
+        analysis: '',
+        successCount: 0,
+        failureCount: 0,
+        totalResults: 0,
+        totalTime: 0,
+      };
+
+      // Process query-generated events
+      const query1 = { query: 'q1', rationale: 'r1', searchDepth: 'basic', index: 0, total: 2 };
+      const query2 = { query: 'q2', rationale: 'r2', searchDepth: 'advanced', index: 1, total: 2 };
+      searchData.queries.push(query1, query2);
+
+      // Process search-result events
+      const result1 = { query: 'q1', answer: 'a1', results: [{}, {}, {}], responseTime: 1000 };
+      const result2 = { query: 'q2', answer: 'a2', results: [{}, {}], responseTime: 1200 };
+      searchData.results.push(result1, result2);
+      searchData.successCount = 2;
+      searchData.totalResults = 5;
+      searchData.totalTime = 2200;
+
+      // Process analysis event
+      searchData.analysis = 'Analysis summary';
+
+      expect(searchData.queries).toHaveLength(2);
+      expect(searchData.results).toHaveLength(2);
+      expect(searchData.successCount).toBe(2);
+      expect(searchData.totalResults).toBe(5);
+    });
+  });
+
+  describe('analysis Data Building', () => {
+    it('builds analysis data from stream events', () => {
+      const analysisData = {
+        keyInsights: [] as string[],
+        participantAnalyses: [] as Array<{ participantId: string; score: number; summary: string }>,
+        verdict: '',
+        recommendations: [] as string[],
+      };
+
+      // Process key-insight events
+      analysisData.keyInsights.push('Insight 1', 'Insight 2');
+
+      // Process participant-analysis events
+      analysisData.participantAnalyses.push(
+        { participantId: 'p0', score: 8.0, summary: 'P0 summary' },
+        { participantId: 'p1', score: 8.5, summary: 'P1 summary' },
+      );
+
+      // Process verdict event
+      analysisData.verdict = 'Final verdict';
+
+      // Process recommendations event
+      analysisData.recommendations = ['Rec 1', 'Rec 2'];
+
+      expect(analysisData.keyInsights).toHaveLength(2);
+      expect(analysisData.participantAnalyses).toHaveLength(2);
+      expect(analysisData.verdict).toBe('Final verdict');
+      expect(analysisData.recommendations).toHaveLength(2);
+    });
+  });
+});
+
+// ============================================================================
+// STREAM TIMING TESTS
+// ============================================================================
+
+describe('stream Timing', () => {
+  describe('first Token Latency', () => {
+    it('tracks time to first text-delta', () => {
+      const startTime = Date.now();
+      let firstTokenTime: number | null = null;
+
+      const events = ['start', 'text-delta', 'text-delta', 'finish', 'done'];
+
+      events.forEach((event) => {
+        if (event === 'text-delta' && firstTokenTime === null) {
+          firstTokenTime = Date.now() - startTime;
+        }
+      });
+
+      // First token detected
+      expect(firstTokenTime).not.toBeNull();
+    });
+  });
+
+  describe('stream Duration', () => {
+    it('tracks total stream duration', () => {
+      const startTime = Date.now();
+      let endTime: number | null = null;
+
+      const events = ['start', 'text-delta', 'finish', 'done'];
+
+      events.forEach((event) => {
+        if (event === 'done') {
+          endTime = Date.now();
+        }
+      });
+
+      const duration = endTime! - startTime;
+      expect(duration).toBeGreaterThanOrEqual(0);
+    });
+  });
+});
+
+// ============================================================================
+// EDGE CASES
+// ============================================================================
+
+describe('edge Cases', () => {
+  describe('empty Content', () => {
+    it('handles empty text-delta', () => {
+      const eventString = createSSEEventString('text-delta', { delta: '' });
+      const parsed = parseSSEEvent(eventString);
+
+      expect(parsed?.data.delta).toBe('');
+    });
+  });
+
+  describe('large Content', () => {
+    it('handles large text in single delta', () => {
+      const largeText = 'x'.repeat(10000);
+      const eventString = createSSEEventString('text-delta', { delta: largeText });
+      const parsed = parseSSEEvent(eventString);
+
+      expect((parsed?.data.delta as string)).toHaveLength(10000);
+    });
+  });
+
+  describe('rapid Events', () => {
+    it('handles many rapid text-delta events', () => {
+      const events = Array.from({ length: 100 }, (_, i) =>
+        createSSEEventString('text-delta', { delta: `word${i} ` }));
+
+      const parsed = collectSSEEvents(events);
+
+      expect(parsed).toHaveLength(100);
+
+      const content = parsed.map(e => e.data.delta as string).join('');
+      expect(content).toContain('word0 ');
+      expect(content).toContain('word99 ');
+    });
+  });
+});

@@ -642,9 +642,6 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // Mark as attempted to prevent duplicate triggers
-    orphanedPreSearchRecoveryAttemptedRef.current = orphanedPreSearchId;
-
     const recoveredQuery = orphanedPreSearch.userQuery;
     const orphanedRoundNumber = orphanedPreSearch.roundNumber;
 
@@ -675,7 +672,18 @@ export function useIncompleteRoundResumption(
     actions.prepareForNewMessage(recoveredQuery, expectedModelIds);
 
     // ✅ CRITICAL FIX: Clear isWaitingForChangelog immediately after prepareForNewMessage
+    // This MUST happen BEFORE marking as attempted, so pendingMessage effect can run
     actions.setIsWaitingForChangelog(false);
+
+    // ✅ ROBUSTNESS FIX: Set streamingRoundNumber and waitingToStartStreaming
+    // to trigger the round resumption flow instead of relying solely on pendingMessage effect
+    // This ensures participants start even if pendingMessage effect has timing issues
+    actions.setStreamingRoundNumber(orphanedRoundNumber);
+    actions.setNextParticipantToTrigger(0);
+    actions.setWaitingToStartStreaming(true);
+
+    // ✅ FIX: Mark as attempted AFTER setting all state, so if something fails we can retry
+    orphanedPreSearchRecoveryAttemptedRef.current = orphanedPreSearchId;
   }, [
     enabled,
     isStreaming,
@@ -744,12 +752,6 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // If the user message is optimistic, this is a new submission, not a resumption
-    const metadata = userMessageForRound.metadata;
-    if (metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true) {
-      return;
-    }
-
     // ✅ PRE-SEARCH BLOCKING FIX: Don't resume participants if pre-search is still in progress
     // When user refreshes during pre-search streaming, we must wait for pre-search to complete
     // before triggering participants. This reuses the same blocking logic as pendingMessage sender.
@@ -761,6 +763,24 @@ export function useIncompleteRoundResumption(
     const effectiveWebSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === currentRoundNumber);
     if (shouldWaitForPreSearch(effectiveWebSearchEnabled, preSearchForRound)) {
+      return;
+    }
+
+    // ✅ RESUMPTION FIX: Check optimistic message AFTER pre-search check
+    // If user message is optimistic AND pre-search is NOT complete, this is a new submission in progress.
+    // BUT if pre-search is COMPLETE, the backend processed the request, so the optimistic message
+    // is effectively valid - we should proceed with participant resumption.
+    //
+    // Scenario this fixes:
+    // 1. User sends message → optimistic message added → pre-search starts
+    // 2. Page refresh during/after pre-search
+    // 3. On reload: optimistic message persisted, pre-search complete, no participant responses
+    // 4. Previously: blocked on "optimistic = new submission", participants never started
+    // 5. Now: pre-search complete means backend processed it, allow resumption
+    const metadata = userMessageForRound.metadata;
+    const isOptimistic = metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true;
+    const preSearchIsComplete = preSearchForRound?.status === AnalysisStatuses.COMPLETE;
+    if (isOptimistic && !preSearchIsComplete) {
       return;
     }
 

@@ -25,12 +25,9 @@ type PreSearchStreamProps = {
   preSearch: StoredPreSearch;
   onStreamComplete?: (completedSearchData?: PreSearchDataPayload) => void;
   onStreamStart?: () => void;
-  /**
-   * ✅ CRITICAL FIX: If true, the provider has already triggered this pre-search
-   * PreSearchStream should NOT execute if provider is handling it
-   * This prevents race condition during navigation (overview → thread screen)
-   */
-  providerTriggered?: boolean;
+  // ✅ PROGRESSIVE UI FIX: Removed providerTriggered prop
+  // Component now always handles its own stream for progressive UI updates
+  // Deduplication handled internally via store's hasPreSearchBeenTriggered
 };
 
 // ✅ ZUSTAND PATTERN: Pre-search deduplication moved to store
@@ -45,7 +42,6 @@ function PreSearchStreamComponent({
   preSearch,
   onStreamComplete,
   onStreamStart,
-  providerTriggered = false,
 }: PreSearchStreamProps) {
   const t = useTranslations('chat.preSearch');
   const is409Conflict = useBoolean(false);
@@ -137,22 +133,31 @@ function PreSearchStreamComponent({
   // Custom SSE handler for backend's custom event format (POST with fetch)
   // ✅ RESUMABLE STREAMS: Now also triggers for STREAMING status to attempt resumption
   useEffect(() => {
-    // ✅ CRITICAL FIX: Skip if provider is already handling this pre-search
-    // The provider marks rounds as triggered in the store before executing
-    // This prevents race condition during navigation (overview → thread screen)
-    // where provider starts fetch, navigation aborts it, then PreSearchStream tries to start
-    if (providerTriggered) {
-      return;
-    }
+    // ✅ PROGRESSIVE UI FIX: Removed providerTriggered early return
+    // Previously, when provider handled the stream (rounds 1+), this component would skip
+    // its own stream handling and rely on store subscriptions for updates.
+    // This caused progressive updates to not show because:
+    // 1. Provider calls updatePartialPreSearchData in store
+    // 2. React 18 batches the subscription re-renders
+    // 3. User only sees final state, not progressive updates
+    //
+    // Now the component ALWAYS tries to execute the stream:
+    // - If provider already started: API returns 202/409, component falls back to polling
+    // - Polling uses flushSync for immediate UI updates
+    // - This ensures progressive updates regardless of who triggered the stream
 
-    // ✅ CRITICAL FIX: Check store SYNCHRONOUSLY at effect execution time
-    // The render-time hasStoreTriggered value can be stale when effects run concurrently
-    // This ensures we check the actual current state right before marking/executing
-    // If provider already marked this round, we skip to prevent duplicate fetch
-    const currentStoreState = store?.getState();
-    if (currentStoreState?.hasPreSearchBeenTriggered(preSearch.roundNumber)) {
-      return;
-    }
+    // ✅ PROGRESSIVE UI FIX: REMOVED early return for hasPreSearchBeenTriggered
+    // Previously this returned early if provider had already marked the round.
+    // This caused progressive updates to NOT show because:
+    // 1. Provider in usePendingMessage marks triggered first
+    // 2. PreSearchStream returns early, never makes own request
+    // 3. Provider uses store updates (batched) instead of flushSync
+    // 4. User only sees final state, not progressive updates
+    //
+    // Now: Component ALWAYS attempts to make the stream request.
+    // - If no stream exists: Creates new stream with progressive flushSync updates
+    // - If stream already active: API returns 202, falls back to polling with flushSync
+    // - Deduplication happens at API level, not here
 
     // ✅ RESUMABLE STREAMS: Trigger for both PENDING and STREAMING status
     // PENDING: Start new stream
@@ -494,8 +499,9 @@ function PreSearchStreamComponent({
     // The effect should only run once per unique search (id + roundNumber)
     // Status changes (pending→streaming→completed) should NOT re-trigger the effect
     // ✅ FIX: Added forceRetryCount to re-trigger effect when stuck stream detection fires
+    // ✅ FIX: Removed providerTriggered - component now always attempts stream for progressive UI
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, markPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
 
   // ✅ POLLING DEDUPLICATION: Prevent multiple concurrent polling loops
   const isPollingRef = useRef(false);
@@ -839,6 +845,7 @@ function PreSearchStreamComponent({
 export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextProps) => {
   // ✅ Memo optimization: Prevent re-renders when props haven't changed
   // Callbacks are stored in refs internally, so callback equality checks prevent unnecessary work
+  // ✅ FIX: Removed providerTriggered - no longer used for stream execution decisions
   return (
     prevProps.preSearch.id === nextProps.preSearch.id
     && prevProps.preSearch.status === nextProps.preSearch.status
@@ -846,6 +853,5 @@ export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextPr
     && prevProps.threadId === nextProps.threadId
     && prevProps.onStreamComplete === nextProps.onStreamComplete
     && prevProps.onStreamStart === nextProps.onStreamStart
-    && prevProps.providerTriggered === nextProps.providerTriggered
   );
 });

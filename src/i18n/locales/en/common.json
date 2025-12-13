@@ -1137,7 +1137,8 @@
       "invalidData": "Invalid summary data received. Please regenerate.",
       "networkError": "Network error occurred. Please check your connection and try again.",
       "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists.",
-      "emptyResponseError": "Summary generation failed. The AI model did not return a response. Please try again."
+      "emptyResponseError": "Summary generation failed. The AI model did not return a response. Please try again.",
+      "streamTimeout": "Summary stream timed out. The connection was interrupted. Please try again."
     },
     "mode": {
       "analyzing": "Analyzing",

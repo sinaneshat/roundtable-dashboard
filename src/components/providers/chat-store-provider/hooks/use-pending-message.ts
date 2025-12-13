@@ -13,14 +13,11 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
 import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
-import { queryKeys } from '@/lib/data/query-keys';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { getEnabledParticipantModelIds } from '@/lib/utils/participant';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { extractFileContextForSearch } from '@/lib/utils/web-search-utils';
-import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
-import { readPreSearchStreamData } from '@/stores/chat';
 
 import type { ChatHook, CreatePreSearchMutation } from '../types';
 
@@ -119,7 +116,10 @@ export function usePendingMessage({
       if (alreadyAttempted) {
         // Fall through to send without pre-search
       } else {
-        currentState.markPreSearchTriggered(newRoundNumber);
+        // ✅ PROGRESSIVE UI FIX: Provider only creates pre-search record, does NOT execute stream
+        // PreSearchStream component handles execution with flushSync for progressive updates
+        // Previously provider executed stream and used store updates (batched by React 18)
+        // which caused users to see only final state, not progressive updates
 
         const effectiveThreadId = thread?.id || '';
         queueMicrotask(async () => {
@@ -133,41 +133,17 @@ export function usePendingMessage({
           }).then((createResponse) => {
             if (createResponse && createResponse.data) {
               const preSearchWithDates = transformPreSearch(createResponse.data);
+              // ✅ PROGRESSIVE UI FIX: Set status to PENDING, not STREAMING
+              // PreSearchStream will set STREAMING when it starts execution
               store.getState().addPreSearch({
                 ...preSearchWithDates,
-                status: AnalysisStatuses.STREAMING,
+                status: AnalysisStatuses.PENDING,
               });
             }
-
-            return executePreSearchStreamService({
-              param: { threadId: effectiveThreadId, roundNumber: String(newRoundNumber) },
-              json: { userQuery: pendingMessage, fileContext: fileContext || undefined, attachmentIds },
-            });
-          }).then(async (response) => {
-            if (!response.ok && response.status !== 409) {
-              console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
-            }
-
-            const searchData = await readPreSearchStreamData(
-              response,
-              () => store.getState().updatePreSearchActivity(newRoundNumber),
-              partialData => store.getState().updatePartialPreSearchData(newRoundNumber, partialData),
-            );
-
-            if (searchData) {
-              store.getState().updatePreSearchData(newRoundNumber, searchData);
-            } else {
-              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
-            }
-
-            store.getState().clearPreSearchActivity(newRoundNumber);
-            queryClientRef.current.invalidateQueries({
-              queryKey: queryKeys.threads.preSearches(effectiveThreadId),
-            });
+            // ✅ PROGRESSIVE UI FIX: DO NOT execute stream here
+            // Let PreSearchStream handle execution with flushSync for immediate UI updates
           }).catch((error) => {
-            console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
-            store.getState().clearPreSearchActivity(newRoundNumber);
-            store.getState().clearPreSearchTracking(newRoundNumber);
+            console.error('[ChatStoreProvider] Failed to create pre-search record:', error);
           });
         });
         return;
@@ -175,89 +151,13 @@ export function usePendingMessage({
     }
 
     // Handle pre-search execution state
+    // ✅ PROGRESSIVE UI FIX: Provider does NOT execute pre-search streams
+    // PreSearchStream component handles all execution with flushSync for progressive updates
+    // Provider only waits for pre-search to complete before sending participant messages
     if (webSearchEnabled && preSearchForRound) {
-      if (preSearchForRound.status === AnalysisStatuses.STREAMING) {
-        return;
-      }
-
-      if (preSearchForRound.status === AnalysisStatuses.PENDING) {
-        if (preSearchCreationAttemptedRef.current.has(newRoundNumber)) {
-          return;
-        }
-        preSearchCreationAttemptedRef.current.add(newRoundNumber);
-
-        const currentState = store.getState();
-        if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
-          return;
-        }
-
-        currentState.markPreSearchTriggered(newRoundNumber);
-
-        const effectiveThreadId = thread?.id || '';
-        const isPlaceholder = preSearchForRound.id.startsWith('placeholder-');
-
-        queueMicrotask(async () => {
-          const attachments = store.getState().getAttachments();
-          const fileContext = await extractFileContextForSearch(attachments);
-          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
-
-          const executePreSearch = () => executePreSearchStreamService({
-            param: { threadId: effectiveThreadId, roundNumber: String(newRoundNumber) },
-            json: { userQuery: pendingMessage, fileContext: fileContext || undefined, attachmentIds },
-          });
-
-          const handleResponse = async (response: Response) => {
-            if (!response.ok && response.status !== 409) {
-              console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
-              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.FAILED);
-              store.getState().clearPreSearchActivity(newRoundNumber);
-              return;
-            }
-
-            const searchData = await readPreSearchStreamData(
-              response,
-              () => store.getState().updatePreSearchActivity(newRoundNumber),
-              partialData => store.getState().updatePartialPreSearchData(newRoundNumber, partialData),
-            );
-
-            if (searchData) {
-              store.getState().updatePreSearchData(newRoundNumber, searchData);
-            } else {
-              store.getState().updatePreSearchStatus(newRoundNumber, AnalysisStatuses.COMPLETE);
-            }
-
-            store.getState().clearPreSearchActivity(newRoundNumber);
-            queryClientRef.current.invalidateQueries({
-              queryKey: queryKeys.threads.preSearches(effectiveThreadId),
-            });
-          };
-
-          if (isPlaceholder) {
-            createPreSearch.mutateAsync({
-              param: { threadId: effectiveThreadId, roundNumber: newRoundNumber.toString() },
-              json: { userQuery: pendingMessage, fileContext: fileContext || undefined, attachmentIds },
-            }).then((createResponse) => {
-              if (createResponse && createResponse.data) {
-                const preSearchWithDates = transformPreSearch(createResponse.data);
-                store.getState().addPreSearch({
-                  ...preSearchWithDates,
-                  status: AnalysisStatuses.STREAMING,
-                });
-              }
-              return executePreSearch();
-            }).then(handleResponse).catch((error) => {
-              console.error('[ChatStoreProvider] Failed to create/execute placeholder pre-search:', error);
-              store.getState().clearPreSearchActivity(newRoundNumber);
-              store.getState().clearPreSearchTracking(newRoundNumber);
-            });
-          } else {
-            executePreSearch().then(handleResponse).catch((error) => {
-              console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
-              store.getState().clearPreSearchActivity(newRoundNumber);
-              store.getState().clearPreSearchTracking(newRoundNumber);
-            });
-          }
-        });
+      // Still streaming or pending - wait for PreSearchStream to complete it
+      if (preSearchForRound.status === AnalysisStatuses.STREAMING
+        || preSearchForRound.status === AnalysisStatuses.PENDING) {
         return;
       }
     }

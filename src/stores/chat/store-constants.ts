@@ -114,9 +114,9 @@ export const AnimationIndices = {
 export const AnalysisTimeouts = {
   /**
    * Maximum time (ms) an analysis can be in streaming state before considered stuck
-   * Default: 90 seconds
+   * Default: 45 seconds (reduced from 90s for faster recovery from truncated streams)
    */
-  STUCK_THRESHOLD_MS: 90_000,
+  STUCK_THRESHOLD_MS: 45_000,
 
   /**
    * Interval (ms) between stuck analysis checks

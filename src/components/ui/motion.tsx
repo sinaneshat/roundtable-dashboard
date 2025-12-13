@@ -553,11 +553,245 @@ export function SimpleMotion({
 // Page transition wrapper
 export function PageTransition({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <FadeIn 
+    <FadeIn
       className={cn('h-full', className)}
       duration={0.2}
     >
       {children}
     </FadeIn>
+  );
+}
+
+// =============================================================================
+// TIMELINE ENTRANCE ANIMATIONS - Subtle, one-time animations for chat elements
+// =============================================================================
+
+/**
+ * Timeline entrance animation variants
+ * Subtle slide-up + fade for chat timeline elements
+ * Designed to run once on initial appearance
+ */
+export const timelineEntranceVariants: Variants = {
+  initial: {
+    opacity: 0,
+    y: 12,
+  },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.3,
+      ease: ANIMATION_EASE.enter,
+    },
+  },
+};
+
+/**
+ * User message entrance - slides from right
+ * More subtle than assistant messages
+ */
+export const userMessageVariants: Variants = {
+  initial: {
+    opacity: 0,
+    x: 8,
+    scale: 0.98,
+  },
+  animate: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    transition: {
+      duration: 0.25,
+      ease: ANIMATION_EASE.enter,
+    },
+  },
+};
+
+/**
+ * Participant message entrance - subtle slide up
+ */
+export const participantMessageVariants: Variants = {
+  initial: {
+    opacity: 0,
+    y: 8,
+  },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.3,
+      ease: ANIMATION_EASE.enter,
+    },
+  },
+};
+
+/**
+ * Accordion card entrance (PreSearch, RoundSummary)
+ */
+export const accordionCardVariants: Variants = {
+  initial: {
+    opacity: 0,
+    y: 6,
+    scale: 0.99,
+  },
+  animate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.25,
+      ease: ANIMATION_EASE.enter,
+    },
+  },
+};
+
+/**
+ * Stagger container for timeline items
+ * Each child animates with a slight delay
+ */
+export const timelineStaggerVariants: Variants = {
+  initial: {},
+  animate: {
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+type TimelineEntranceProps = {
+  children: ReactNode;
+  className?: string;
+  /** Index for staggered delay (optional) */
+  index?: number;
+  /** Skip animation entirely */
+  skipAnimation?: boolean;
+};
+
+/**
+ * Timeline entrance wrapper - animates once on mount
+ * Use for timeline items that should slide in subtly
+ */
+export function TimelineEntrance({
+  children,
+  className,
+  index = 0,
+  skipAnimation = false,
+}: TimelineEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial="initial"
+      animate="animate"
+      variants={timelineEntranceVariants}
+      transition={{
+        delay: index * 0.03, // Subtle stagger
+      }}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+type UserMessageEntranceProps = {
+  children: ReactNode;
+  className?: string;
+  /** Skip animation (for already-loaded messages) */
+  skipAnimation?: boolean;
+};
+
+/**
+ * User message entrance - slides from right with subtle scale
+ */
+export function UserMessageEntrance({
+  children,
+  className,
+  skipAnimation = false,
+}: UserMessageEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial="initial"
+      animate="animate"
+      variants={userMessageVariants}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+type ParticipantEntranceProps = {
+  children: ReactNode;
+  className?: string;
+  /** Index for staggered animation */
+  index?: number;
+  /** Skip animation */
+  skipAnimation?: boolean;
+};
+
+/**
+ * Participant message entrance - subtle slide up with stagger support
+ */
+export function ParticipantEntrance({
+  children,
+  className,
+  index = 0,
+  skipAnimation = false,
+}: ParticipantEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial="initial"
+      animate="animate"
+      variants={participantMessageVariants}
+      transition={{
+        delay: index * 0.08, // Stagger between participants
+      }}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+type AccordionEntranceProps = {
+  children: ReactNode;
+  className?: string;
+  /** Skip animation */
+  skipAnimation?: boolean;
+};
+
+/**
+ * Accordion card entrance - for PreSearch and RoundSummary cards
+ */
+export function AccordionEntrance({
+  children,
+  className,
+  skipAnimation = false,
+}: AccordionEntranceProps) {
+  if (skipAnimation) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      initial="initial"
+      animate="animate"
+      variants={accordionCardVariants}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
   );
 }

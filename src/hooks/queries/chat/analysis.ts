@@ -10,10 +10,9 @@
 
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
-import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadAnalysesService } from '@/services/api';
@@ -57,6 +56,10 @@ import { validateAnalysesCache } from '@/stores/chat';
 export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
+  // ✅ FIX: Use useQueryClient() hook instead of getQueryClient()
+  // Ensures we use the same QueryClient instance from React context
+  // The queryClient is accessed via closure in queryFn
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: queryKeys.threads.analyses(threadId),
@@ -68,8 +71,6 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
       // 3. Thread page query fetches from server (returns empty - analysis not persisted yet)
       // 4. Without merge, server's empty array would overwrite pending analysis
       // 5. Solution: Check cache BEFORE fetch, merge server data with cached pending analyses
-
-      const queryClient = getQueryClient();
 
       // Get existing cache to check for pending/streaming analyses
       const cachedData = validateAnalysesCache(queryClient.getQueryData(queryKey));

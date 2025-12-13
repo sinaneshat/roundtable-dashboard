@@ -219,9 +219,10 @@ export type ChatThreadChangelogFlexible = z.infer<typeof ChatThreadChangelogFlex
 /**
  * Configuration changes group schema for UI components
  * Single source of truth for changelog grouping props
+ * ✅ FIX: Accepts Date or ISO string for timestamp (JSON serialization uses strings)
  */
 export const ConfigurationChangesGroupSchema = z.object({
-  timestamp: z.date(),
+  timestamp: z.union([z.date(), z.string()]),
   changes: z.array(ChatThreadChangelogFlexibleSchema),
 }).openapi('ConfigurationChangesGroup');
 
@@ -1005,13 +1006,13 @@ export const ConfidenceAssessmentSchema = z.object({
  * Designed to read like a brief, polished summary article
  *
  * ✅ STREAMING ORDER: Fields ordered to match UI display from top to bottom
- * Key insights & recommendations stream FIRST for immediate user value
+ * Confidence streams FIRST for immediate visual feedback (progress bar)
  *
  * UI Order (top to bottom):
- * 1. article (headline + narrative + keyTakeaway) - MAIN INSIGHTS
- * 2. recommendations - ACTIONABLE NEXT STEPS
- * 3. confidence - HOW CONFIDENT WE ARE
- * 4. modelVoices - WHO SAID WHAT
+ * 1. confidence - ROUND CONFIDENCE (progress bar + percentage)
+ * 2. modelVoices - PARTICIPANT BADGES (who participated)
+ * 3. article - KEY INSIGHTS (headline + narrative + takeaway)
+ * 4. recommendations - ACTIONABLE NEXT STEPS
  * 5. consensusTable - AGREEMENT/DISAGREEMENT
  * 6. minorityViews - DISSENTING OPINIONS
  * 7. convergenceDivergence - HOW DISCUSSION EVOLVED
@@ -1021,13 +1022,13 @@ export const ModeratorAnalysisPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
   mode: z.string(),
   userQuestion: z.string(),
-  // === KEY INSIGHTS (stream first for immediate value) ===
+  // === CONFIDENCE HEADER (stream first for visual feedback) ===
+  confidence: ConfidenceAssessmentSchema,
+  modelVoices: z.array(ModelVoiceSchema),
+  // === KEY INSIGHTS (stream after confidence) ===
   article: ArticleNarrativeSchema,
   recommendations: z.array(ArticleRecommendationSchema),
-  // === CONFIDENCE ===
-  confidence: ConfidenceAssessmentSchema,
   // === DETAILED BREAKDOWN (stream last) ===
-  modelVoices: z.array(ModelVoiceSchema),
   consensusTable: z.array(ConsensusTableEntrySchema),
   minorityViews: z.array(MinorityViewSchema),
   convergenceDivergence: ConvergenceDivergenceSchema,

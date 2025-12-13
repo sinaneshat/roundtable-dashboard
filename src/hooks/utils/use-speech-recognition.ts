@@ -83,7 +83,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   // Set mounted flag after hydration to avoid hydration mismatch
   // Legitimate pattern for client-side-only features (Next.js recommended)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks-extra/no-direct-set-state-in-use-effect
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
     setIsMounted(true);
   }, []);
 

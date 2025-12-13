@@ -260,8 +260,8 @@ export const COMPLETE_RESET_STATE = {
   selectedParticipants: FORM_DEFAULTS.selectedParticipants,
   enableWebSearch: FORM_DEFAULTS.enableWebSearch,
   modelOrder: FORM_DEFAULTS.modelOrder,
-  // Feedback state
-  feedbackByRound: FEEDBACK_DEFAULTS.feedbackByRound,
+  // Feedback state - 🚨 BUG FIX: Create fresh Map instance to prevent state pollution
+  feedbackByRound: new Map(),
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
   // UI state
@@ -395,4 +395,8 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   // 🚨 CRITICAL: Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
+  // 🚨 BUG FIX: Clear feedback state on thread navigation (thread-specific data)
+  feedbackByRound: new Map(),
+  pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
+  hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
 };

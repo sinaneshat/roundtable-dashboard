@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -13,7 +14,6 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
-import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { cn } from '@/lib/ui/cn';
 import { AnimationIndices } from '@/stores/chat';
@@ -40,16 +40,18 @@ export function PreSearchCard({
   demoShowContent,
 }: PreSearchCardProps) {
   const t = useTranslations();
+  // ✅ FIX: Use useQueryClient() hook instead of getQueryClient()
+  // Ensures we use the same QueryClient instance from React context
+  const queryClient = useQueryClient();
 
   // Store actions (moved from child to parent callbacks)
   const updatePreSearchStatus = useChatStore(s => s.updatePreSearchStatus);
   const updatePreSearchData = useChatStore(s => s.updatePreSearchData);
 
-  // ✅ CRITICAL FIX: Check if provider has already triggered this pre-search
-  // The provider marks rounds as triggered in the store before executing
-  // PreSearchStream should NOT execute if provider is handling it
-  // This prevents race condition where both provider and PreSearchStream try to execute
-  const providerTriggered = useChatStore(s => s.hasPreSearchBeenTriggered(preSearch.roundNumber));
+  // ✅ PROGRESSIVE UI FIX: Removed providerTriggered check
+  // PreSearchStream now always handles its own stream for progressive UI updates
+  // The store's hasPreSearchBeenTriggered is used internally by PreSearchStream
+  // for deduplication, not passed as a prop
 
   // ✅ ANIMATION COORDINATION: Track animation lifecycle (pattern from ModelMessageCard)
   const registerAnimation = useChatStore(s => s.registerAnimation);
@@ -124,8 +126,6 @@ export function PreSearchCard({
   // Pattern from round-analysis-card.tsx:37-47 (onStreamComplete prop)
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
     if (completedData) {
-      const queryClient = getQueryClient();
-
       // Update store with completed data
       updatePreSearchData(preSearch.roundNumber, completedData);
       updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.COMPLETE);
@@ -135,7 +135,7 @@ export function PreSearchCard({
         queryKey: queryKeys.threads.preSearches(threadId),
       });
     }
-  }, [threadId, preSearch.roundNumber, updatePreSearchData, updatePreSearchStatus]);
+  }, [threadId, preSearch.roundNumber, updatePreSearchData, updatePreSearchStatus, queryClient]);
 
   const isStreamingOrPending = preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING;
   const hasError = preSearch.status === AnalysisStatuses.FAILED;
@@ -210,7 +210,6 @@ export function PreSearchCard({
                   preSearch={preSearch}
                   onStreamStart={handleStreamStart}
                   onStreamComplete={handleStreamComplete}
-                  providerTriggered={providerTriggered}
                 />
               )}
 

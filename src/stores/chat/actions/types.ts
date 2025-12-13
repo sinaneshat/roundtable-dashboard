@@ -11,14 +11,14 @@
 
 import { z } from 'zod';
 
-import { Environments } from '@/api/core/enums';
+import { Environments, UsageStatusSchema } from '@/api/core/enums';
 import type { AnalysesCacheResponse } from '@/api/routes/chat/schema';
 import {
   AnalysesCacheResponseSchema,
   ChatThreadCacheSchema,
   createCacheResponseSchema,
 } from '@/api/routes/chat/schema';
-import { chatParticipantSelectSchema } from '@/db/validation/chat';
+import { chatThreadChangelogSelectSchema } from '@/db/validation/chat';
 
 // ============================================================================
 // API RESPONSE SCHEMAS - Uses Backend Single Source of Truth
@@ -36,26 +36,50 @@ export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 // ============================================================================
 
 /**
+ * Usage resource stats sub-schema (messages, threads, etc.)
+ * ✅ TYPE-SAFE: Proper schema instead of inline object
+ */
+const UsageResourceStatsSchema = z.object({
+  used: z.number(),
+  limit: z.number(),
+  remaining: z.number(),
+  percentage: z.number(),
+  status: UsageStatusSchema.optional(),
+});
+
+/**
+ * Usage period schema for cache validation
+ * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.period
+ */
+const UsagePeriodCacheSchema = z.object({
+  start: z.coerce.date(),
+  end: z.coerce.date(),
+  daysRemaining: z.number(),
+});
+
+/**
+ * Usage subscription schema for cache validation
+ * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.subscription
+ */
+const UsageSubscriptionCacheSchema = z.object({
+  tier: z.string(),
+  isAnnual: z.boolean(),
+  pendingTierChange: z.string().nullable().optional(),
+  pendingTierIsAnnual: z.boolean().nullable().optional(),
+});
+
+/**
  * Usage stats data structure schema
  * Validates optimistic cache updates for thread/message counts
  *
  * SINGLE SOURCE OF TRUTH for usage stats cache validation in mutations
+ * ✅ TYPE-SAFE: Uses proper sub-schemas instead of z.unknown()
  */
 export const UsageStatsDataSchema = z.object({
-  messages: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  threads: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  subscription: z.unknown(),
-  period: z.unknown(),
+  messages: UsageResourceStatsSchema,
+  threads: UsageResourceStatsSchema,
+  subscription: UsageSubscriptionCacheSchema,
+  period: UsagePeriodCacheSchema,
 });
 
 export type UsageStatsData = z.infer<typeof UsageStatsDataSchema>;
@@ -98,15 +122,82 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 // ============================================================================
 
 /**
+ * User schema for cache validation (minimal fields needed)
+ * ✅ BACKEND-ALIGNED: Uses userSelectSchema.pick() pattern from ThreadDetailPayloadSchema
+ * ✅ FIX: Made optional for cache operations where user may not be present
+ */
+const UserCacheSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().nullable().optional(),
+  image: z.string().nullable().optional(),
+});
+
+/**
+ * ✅ CACHE-SPECIFIC: Thread schema that accepts ISO strings OR Date objects for dates
+ * Used for optimistic updates where toISOString() converts dates to strings
+ */
+const ChatThreadCacheCompatSchema = z.object({
+  id: z.string(),
+  userId: z.string().optional(),
+  projectId: z.string().nullable().optional(),
+  title: z.string(),
+  slug: z.string(),
+  previousSlug: z.string().nullable().optional(),
+  mode: z.string(),
+  status: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  isAiGeneratedTitle: z.boolean().optional(),
+  enableWebSearch: z.boolean().optional(),
+  metadata: z.unknown().nullable().optional(),
+  version: z.number().optional(),
+  createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()]),
+  lastMessageAt: z.union([z.date(), z.string()]).nullable().optional(),
+});
+
+/**
+ * ✅ CACHE-SPECIFIC: Participant schema that accepts ISO strings OR Date objects
+ */
+const ChatParticipantCacheCompatSchema = z.object({
+  id: z.string(),
+  threadId: z.string(),
+  modelId: z.string(),
+  customRoleId: z.string().nullable().optional(),
+  role: z.string().nullable().optional(),
+  priority: z.number().optional(),
+  isEnabled: z.boolean().optional(),
+  settings: z.unknown().nullable().optional(),
+  createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()]),
+});
+
+/**
+ * ✅ CACHE-SPECIFIC: Message schema for UI messages (from AI SDK)
+ * UI messages have different structure than DB messages
+ */
+const UIMessageCacheCompatSchema = z.object({
+  id: z.string(),
+  role: z.string(),
+  parts: z.array(z.unknown()).optional(),
+  content: z.string().optional(),
+  metadata: z.unknown().optional(),
+  createdAt: z.union([z.date(), z.string()]).optional(),
+});
+
+/**
  * Thread detail payload schema for cache operations
  * Validates thread detail payload structure
+ *
+ * ✅ TYPE-SAFE: Uses cache-compatible schemas that accept Date OR string
+ * ✅ FIX: Handles optimistic updates where toISOString() converts dates to strings
  */
 export const ThreadDetailPayloadCacheSchema = z.object({
-  thread: z.unknown(),
-  participants: z.array(z.unknown()).optional(),
-  messages: z.array(z.unknown()).optional(),
-  changelog: z.array(z.unknown()).optional(),
-  user: z.unknown().optional(),
+  thread: ChatThreadCacheCompatSchema,
+  participants: z.array(ChatParticipantCacheCompatSchema).optional(),
+  messages: z.array(UIMessageCacheCompatSchema).optional(),
+  changelog: z.array(chatThreadChangelogSelectSchema).optional(),
+  user: UserCacheSchema.optional(),
 });
 
 export type ThreadDetailPayloadCache = z.infer<typeof ThreadDetailPayloadCacheSchema>;
@@ -134,7 +225,15 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
   const threadData = ThreadDetailPayloadCacheSchema.safeParse(response.data.data);
   if (!threadData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
-      console.error('Invalid thread detail data structure:', threadData.error);
+      // 🔍 DEBUG LOG 2: Thread detail validation failure - check message structure
+      const rawData = response.data.data as { messages?: unknown[]; participants?: unknown[] };
+      console.error('[DEBUG-2] validateThreadDetailPayloadCache failed:', {
+        messageCount: rawData?.messages?.length,
+        firstMessageKeys: rawData?.messages?.[0] ? Object.keys(rawData.messages[0] as object) : [],
+        participantCount: rawData?.participants?.length,
+        firstParticipantId: (rawData?.participants?.[0] as { id?: string })?.id,
+        errorIssues: threadData.error.issues.slice(0, 5),
+      });
     }
     return null;
   }
@@ -160,10 +259,13 @@ export type PaginatedPageCache = z.infer<typeof PaginatedPageCacheSchema>;
 /**
  * Infinite query data schema
  * Validates the complete infinite query structure
+ *
+ * ✅ TYPE-SAFE: pageParams are cursor strings (or null/undefined for first page)
+ * ✅ FIX: TanStack Query uses undefined for initial page cursor, not null
  */
 export const InfiniteQueryCacheSchema = z.object({
   pages: z.array(PaginatedPageCacheSchema),
-  pageParams: z.array(z.unknown()).optional(),
+  pageParams: z.array(z.string().nullable().optional()).optional(),
 });
 
 export type InfiniteQueryCache = z.infer<typeof InfiniteQueryCacheSchema>;
@@ -183,7 +285,12 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
   const queryData = InfiniteQueryCacheSchema.safeParse(data);
   if (!queryData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
-      console.error('Invalid infinite query data structure:', queryData.error);
+      // 🔍 DEBUG LOG 1: Infinite query validation failure
+      console.error('[DEBUG-1] validateInfiniteQueryCache failed:', {
+        pageParams: (data as { pageParams?: unknown })?.pageParams,
+        pagesCount: Array.isArray((data as { pages?: unknown[] })?.pages) ? (data as { pages: unknown[] }).pages.length : 0,
+        error: queryData.error.issues.slice(0, 3),
+      });
     }
     return null;
   }
@@ -247,9 +354,10 @@ export function validateAnalysesCache(data: unknown): AnalysesCacheResponse | un
  * Replaces unsafe type assertions in chat-mutations.ts (lines 731, 788, 852, 925)
  *
  * Used when reading/writing thread detail cache in React Query.
+ * ✅ FIX: Uses cache-compatible schema that accepts Date OR string for dates
  */
 export const ThreadDetailCacheDataSchema = z.object({
-  participants: z.array(chatParticipantSelectSchema),
+  participants: z.array(ChatParticipantCacheCompatSchema),
 });
 
 /**
@@ -277,11 +385,12 @@ export function validateThreadDetailCache(data: unknown): ThreadDetailCacheData 
  * Replaces unsafe type assertions like `old.data as { participants: Array<Record<string, unknown>> }`
  *
  * Used when reading/writing thread detail cache in React Query setQueryData callbacks.
+ * ✅ FIX: Uses cache-compatible schema that accepts Date OR string for dates
  */
 export const ThreadDetailResponseCacheSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    participants: z.array(chatParticipantSelectSchema),
+    participants: z.array(ChatParticipantCacheCompatSchema),
   }).passthrough(), // Allow additional properties in data object
 });
 

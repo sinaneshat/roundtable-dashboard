@@ -85,7 +85,7 @@ export const ChatInputToolbarMenu = memo(({
 
   // Prevent hydration mismatch by only showing responsive behavior after mount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
     setMounted(true);
   }, []);
 

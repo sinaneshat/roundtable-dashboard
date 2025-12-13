@@ -83,10 +83,15 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // ✅ FIX: Check if form-actions already set up streaming state
   // If these are set, form-actions.handleSubmit already called initializeThread
   // and set up streaming - we must NOT call initializeThread again or it resets state
+  //
+  // ✅ RESUMPTION FIX: Also check streamResumptionPrefilled to distinguish:
+  // - Prefill sets waitingToStartStreaming=true for RESUMPTION → should still initialize
+  // - Form-actions sets waitingToStartStreaming=true for NEW submission → should skip
   const streamingStateSet = useChatStore(useShallow(s => ({
     waitingToStartStreaming: s.waitingToStartStreaming,
     pendingMessage: s.pendingMessage,
     streamingRoundNumber: s.streamingRoundNumber,
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
   })));
 
   // Track which thread we've initialized to prevent duplicate calls
@@ -107,18 +112,22 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
     // ✅ FIX: Skip if form-actions already initialized and set up streaming
     // This prevents race condition where we reset streaming state set by handleSubmit
-    const formActionsAlreadyInitialized
-      = streamingStateSet.waitingToStartStreaming
-        || streamingStateSet.pendingMessage !== null
-        || streamingStateSet.streamingRoundNumber !== null;
+    //
+    // ✅ RESUMPTION FIX: Don't skip when prefill set waitingToStartStreaming!
+    // Prefill is for stream RESUMPTION - we still need to initialize thread data.
+    // Only skip when form-actions set it (new submission in progress).
+    // Detection: streamResumptionPrefilled=true means prefill set the flags, not form-actions.
+    const isFormActionsSubmission
+      = (streamingStateSet.pendingMessage !== null || streamingStateSet.streamingRoundNumber !== null)
+        || (streamingStateSet.waitingToStartStreaming && !streamingStateSet.streamResumptionPrefilled);
 
-    if (isReady && !alreadyInitialized && !formActionsAlreadyInitialized) {
+    if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
       initializedThreadIdRef.current = threadId;
       actions.initializeThread(thread, participants, initialMessages);
     }
 
     // Also mark as initialized if form-actions set it up
-    if (isReady && formActionsAlreadyInitialized && !alreadyInitialized) {
+    if (isReady && isFormActionsSubmission && !alreadyInitialized) {
       initializedThreadIdRef.current = threadId;
     }
 

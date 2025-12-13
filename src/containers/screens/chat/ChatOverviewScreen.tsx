@@ -496,6 +496,25 @@ export default function ChatOverviewScreen() {
   useLayoutEffect(() => {
     // Only reset when navigating TO /chat from elsewhere (or on initial mount at /chat)
     if (pathname === '/chat' && lastResetPathRef.current !== '/chat') {
+      // ✅ FIX: Check for active conversation/streaming state before resetting
+      // This prevents wiping state when user clicks recommended models from round summary
+      // and submits - the ref check can fail due to re-renders but state should be preserved
+      const currentState = storeApi.getState();
+      const hasActiveConversation = currentState.messages.length > 0
+        || currentState.thread !== null
+        || currentState.createdThreadId !== null;
+      const isFormSubmitting = currentState.pendingMessage !== null && !currentState.hasSentPendingMessage;
+      const isStreamingActive = currentState.isStreaming || currentState.streamingRoundNumber !== null;
+      const hasActivePreSearch = currentState.preSearches.some(
+        ps => ps.status === 'pending' || ps.status === 'streaming',
+      );
+
+      if (hasActiveConversation || isFormSubmitting || isStreamingActive || hasActivePreSearch) {
+        // Update ref but don't reset - preserve active conversation state
+        lastResetPathRef.current = '/chat';
+        return;
+      }
+
       lastResetPathRef.current = '/chat';
       resetToOverview();
       hasSentInitialPromptRef.current = false;
@@ -519,7 +538,7 @@ export default function ChatOverviewScreen() {
     } else {
       lastResetPathRef.current = pathname;
     }
-  }, [pathname, resetToOverview, chatAttachments]);
+  }, [pathname, resetToOverview, chatAttachments, storeApi]);
 
   // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
   // Per AI SDK docs, resume: true is incompatible with abort/stop.

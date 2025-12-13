@@ -31,7 +31,7 @@ import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { createEmptyListCache, createPrefetchMeta } from '@/lib/utils/cache-helpers';
 import { toISOString, toISOStringOrNull } from '@/lib/utils/date-transforms';
-import { getCreatedAt } from '@/lib/utils/metadata';
+import { getCreatedAt, getRoundNumber } from '@/lib/utils/metadata';
 
 import { validateInfiniteQueryCache } from './types';
 
@@ -101,6 +101,21 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     if (!thread)
       return;
+
+    // 🔍 DEBUG LOG 4: Track what's being set in prepopulateQueryCache
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG-4] prepopulateQueryCache:', {
+      threadId,
+      participantCount: currentParticipants.length,
+      participantIds: currentParticipants.map(p => ({ id: p.id, model: p.modelId })),
+      messageCount: currentMessages.length,
+      messagesByRound: currentMessages.reduce((acc, m) => {
+        const round = getRoundNumber(m.metadata) ?? 'unknown';
+        acc[round] = (acc[round] || 0) + 1;
+        return acc;
+      }, {} as Record<string | number, number>),
+      firstMessageKeys: currentMessages[0] ? Object.keys(currentMessages[0]) : [],
+    });
 
     // 1. Pre-populate thread detail (thread, participants, messages, user)
     // Format matches getThreadBySlugService response
@@ -393,6 +408,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         clearTimeout(invalidationTimeoutId);
       }
     };
+    // Deps intentionally exclude threadState.currentThread to read current value at effect time
+    // without re-running when thread updates. This is the "read without subscribing" pattern.
+    // Re-running on every thread update would cause unnecessary URL replacements.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isActive,

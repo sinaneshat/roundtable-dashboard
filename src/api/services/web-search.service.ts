@@ -107,7 +107,7 @@ function htmlToMarkdown(html: string): string {
       .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
       // Code
       .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
-      .replace(/<pre[^>]*>(.*?)<\/pre>/gis, '```\n$1\n```\n')
+      .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, '```\n$1\n```\n')
       // Lists
       .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
       .replace(/<ul[^>]*>/gi, '\n')
@@ -172,7 +172,6 @@ export function streamSearchQuery(
     return streamObject({
       model: client.chat(modelId),
       schema: MultiQueryGenerationSchema,
-      mode: 'json',
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
@@ -261,7 +260,6 @@ export async function generateSearchQuery(
     const result = await generateObject({
       model: client.chat(modelId),
       schema: MultiQueryGenerationSchema,
-      mode: 'json',
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,

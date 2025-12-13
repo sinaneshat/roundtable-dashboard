@@ -56,8 +56,16 @@ export function useNavigationCleanup({
     const isFromOverviewToThread = prevPath === '/chat' && isGoingToThread;
     const isComingFromNonChatPage = prevPath && !prevPath.startsWith('/chat') && isGoingToOverview;
 
-    // Clear waitingToStartStreaming on navigation
-    if (currentState.waitingToStartStreaming) {
+    // ✅ FIX: Only clear waitingToStartStreaming when NOT navigating from overview to thread
+    // When user creates a new thread from overview, we navigate to /chat/{slug} and need
+    // to PRESERVE waitingToStartStreaming so the streaming trigger effect can start participants
+    // after pre-search completes. Clearing it here was causing the stream to get stuck.
+    // Only clear when navigating AWAY from chat or between different threads.
+    const shouldClearWaiting = currentState.waitingToStartStreaming
+      && !isFromOverviewToThread
+      && (isGoingToOverview || isNavigatingBetweenThreads || isComingFromNonChatPage);
+
+    if (shouldClearWaiting) {
       currentState.setWaitingToStartStreaming(false);
     }
 

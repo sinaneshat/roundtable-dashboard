@@ -417,12 +417,15 @@ export function createModelPreferencesStore(
               cookieStorage.removeItem(name);
             },
           },
+          // ✅ TYPE WORKAROUND: Zustand persist expects partialize to return full store type,
+          // but semantically it returns a subset. Cast to PersistedModelPreferences for clarity,
+          // then to full store type to satisfy the middleware's type constraints.
           partialize: state => ({
             selectedModelIds: state.selectedModelIds,
             modelOrder: state.modelOrder,
             selectedMode: state.selectedMode,
             enableWebSearch: state.enableWebSearch,
-          }) as unknown as ModelPreferencesStore,
+          } satisfies PersistedModelPreferences as ModelPreferencesStore),
           // ✅ OFFICIAL PATTERN: skipHydration for SSR
           // Source: persist.md - prevents automatic hydration
           skipHydration: true,

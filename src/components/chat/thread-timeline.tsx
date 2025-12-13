@@ -14,10 +14,13 @@
 
 'use client';
 
+import { useRef } from 'react';
+
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ArticleRecommendation, ChatParticipant, ModeratorAnalysisPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
+import { AccordionEntrance, TimelineEntrance } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
@@ -123,6 +126,31 @@ export function ThreadTimeline({
     isDataReady,
   });
 
+  // ✅ ANIMATION: Track items already animated to prevent re-animation on scroll
+  // Items that existed on initial load should NOT animate (skipInitialAnimation)
+  const animatedItemsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef(true);
+
+  // Mark initial items as "already animated" on first render
+  if (isInitialLoadRef.current && virtualItems.length > 0) {
+    isInitialLoadRef.current = false;
+    // Skip animation for items present on initial load
+    virtualItems.forEach((vi) => {
+      animatedItemsRef.current.add(String(vi.key));
+    });
+  }
+
+  // Helper to check if item should animate
+  const shouldAnimate = (itemKey: React.Key): boolean => {
+    const key = String(itemKey);
+    if (animatedItemsRef.current.has(key)) {
+      return false; // Already animated
+    }
+    // Mark as animated and return true (should animate)
+    animatedItemsRef.current.add(key);
+    return true;
+  };
+
   return (
     // Container with data attribute for scroll margin measurement
     <div
@@ -172,126 +200,140 @@ export function ThreadTimeline({
           >
             {/* Changelog items */}
             {item.type === 'changelog' && item.data.length > 0 && (
-              <div className="mb-6">
-                <UnifiedErrorBoundary context="configuration">
-                  <ConfigurationChangesGroup
-                    group={{
-                      timestamp: new Date(item.data[0]!.createdAt),
-                      changes: item.data,
-                    }}
-                  />
-                </UnifiedErrorBoundary>
-              </div>
+              <TimelineEntrance
+                index={virtualItem.index}
+                skipAnimation={!shouldAnimate(virtualItem.key)}
+              >
+                <div className="mb-6">
+                  <UnifiedErrorBoundary context="configuration">
+                    <ConfigurationChangesGroup
+                      group={{
+                        timestamp: new Date(item.data[0]!.createdAt),
+                        changes: item.data,
+                      }}
+                    />
+                  </UnifiedErrorBoundary>
+                </div>
+              </TimelineEntrance>
             )}
 
             {/* Pre-search items */}
             {item.type === 'pre-search' && (
-              <div className="mb-6">
-                <UnifiedErrorBoundary context="pre-search">
-                  <PreSearchCard
-                    threadId={threadId}
-                    preSearch={item.data}
-                    isLatest={virtualItem.index === timelineItems.length - 1}
-                    streamingRoundNumber={streamingRoundNumber}
-                    demoOpen={demoPreSearchOpen}
-                    demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
-                  />
-                </UnifiedErrorBoundary>
-              </div>
+              <AccordionEntrance skipAnimation={!shouldAnimate(virtualItem.key)}>
+                <div className="mb-6">
+                  <UnifiedErrorBoundary context="pre-search">
+                    <PreSearchCard
+                      threadId={threadId}
+                      preSearch={item.data}
+                      isLatest={virtualItem.index === timelineItems.length - 1}
+                      streamingRoundNumber={streamingRoundNumber}
+                      demoOpen={demoPreSearchOpen}
+                      demoShowContent={demoPreSearchOpen ? item.data.searchData !== undefined : undefined}
+                    />
+                  </UnifiedErrorBoundary>
+                </div>
+              </AccordionEntrance>
             )}
 
             {/* Message items */}
             {item.type === 'messages' && (
-              <div className="space-y-3 pb-2">
-                <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
-                  <ChatMessageList
-                    messages={item.data}
-                    user={user}
-                    participants={participants}
-                    isStreaming={isStreaming}
-                    currentParticipantIndex={currentParticipantIndex}
-                    currentStreamingParticipant={currentStreamingParticipant}
-                    threadId={threadId}
-                    preSearches={preSearches}
-                    streamingRoundNumber={streamingRoundNumber}
-                    demoPreSearchOpen={demoPreSearchOpen}
-                    maxContentHeight={maxContentHeight}
-                  />
-                </UnifiedErrorBoundary>
+              <TimelineEntrance
+                index={virtualItem.index}
+                skipAnimation={!shouldAnimate(virtualItem.key)}
+              >
+                <div className="space-y-3 pb-2">
+                  <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
+                    <ChatMessageList
+                      messages={item.data}
+                      user={user}
+                      participants={participants}
+                      isStreaming={isStreaming}
+                      currentParticipantIndex={currentParticipantIndex}
+                      currentStreamingParticipant={currentStreamingParticipant}
+                      threadId={threadId}
+                      preSearches={preSearches}
+                      streamingRoundNumber={streamingRoundNumber}
+                      demoPreSearchOpen={demoPreSearchOpen}
+                      maxContentHeight={maxContentHeight}
+                    />
+                  </UnifiedErrorBoundary>
 
-                {/* Round feedback and copy actions */}
-                {!isStreaming && !isReadOnly && (() => {
-                  const hasRoundError = item.data.some((msg) => {
-                    const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
-                    return parseResult.success && messageHasError(parseResult.data);
-                  });
+                  {/* Round feedback and copy actions */}
+                  {!isStreaming && !isReadOnly && (() => {
+                    const hasRoundError = item.data.some((msg) => {
+                      const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
+                      return parseResult.success && messageHasError(parseResult.data);
+                    });
 
-                  // Only show feedback after analysis is complete
-                  const roundAnalysis = timelineItems.find(
-                    ti => ti.type === 'analysis' && ti.data.roundNumber === roundNumber,
-                  );
-                  const isRoundComplete = roundAnalysis
-                    && roundAnalysis.type === 'analysis'
-                    && roundAnalysis.data.status === AnalysisStatuses.COMPLETE;
+                    // Only show feedback after analysis is complete
+                    const roundAnalysis = timelineItems.find(
+                      ti => ti.type === 'analysis' && ti.data.roundNumber === roundNumber,
+                    );
+                    const isRoundComplete = roundAnalysis
+                      && roundAnalysis.type === 'analysis'
+                      && roundAnalysis.data.status === AnalysisStatuses.COMPLETE;
 
-                  if (!isRoundComplete)
-                    return null;
+                    if (!isRoundComplete)
+                      return null;
 
-                  return (
-                    <Actions className="mt-3 mb-2">
-                      {!hasRoundError && (
-                        <RoundFeedback
-                          key={`feedback-${threadId}-${roundNumber}`}
-                          threadId={threadId}
+                    return (
+                      <Actions className="mt-3 mb-2">
+                        {!hasRoundError && (
+                          <RoundFeedback
+                            key={`feedback-${threadId}-${roundNumber}`}
+                            threadId={threadId}
+                            roundNumber={roundNumber}
+                            currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                            onFeedbackChange={
+                              !getFeedbackHandler
+                                ? () => {}
+                                : getFeedbackHandler(roundNumber)
+                            }
+                            disabled={isStreaming}
+                            isPending={pendingFeedback?.roundNumber === roundNumber}
+                            pendingType={
+                              pendingFeedback?.roundNumber === roundNumber
+                                ? pendingFeedback?.type ?? null
+                                : null
+                            }
+                          />
+                        )}
+                        <RoundCopyAction
+                          key={`copy-${threadId}-${roundNumber}`}
+                          messages={item.data}
+                          participants={participants}
                           roundNumber={roundNumber}
-                          currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                          onFeedbackChange={
-                            !getFeedbackHandler
-                              ? () => {}
-                              : getFeedbackHandler(roundNumber)
-                          }
-                          disabled={isStreaming}
-                          isPending={pendingFeedback?.roundNumber === roundNumber}
-                          pendingType={
-                            pendingFeedback?.roundNumber === roundNumber
-                              ? pendingFeedback?.type ?? null
-                              : null
-                          }
+                          threadTitle={threadTitle}
                         />
-                      )}
-                      <RoundCopyAction
-                        key={`copy-${threadId}-${roundNumber}`}
-                        messages={item.data}
-                        participants={participants}
-                        roundNumber={roundNumber}
-                        threadTitle={threadTitle}
-                      />
-                    </Actions>
-                  );
-                })()}
-              </div>
+                      </Actions>
+                    );
+                  })()}
+                </div>
+              </TimelineEntrance>
             )}
 
             {/* Round Summary items */}
             {item.type === 'analysis' && (
-              <div className="mb-4">
-                <RoundSummaryCard
-                  analysis={item.data}
-                  threadId={threadId}
-                  isLatest={virtualItem.index === timelineItems.length - 1}
-                  streamingRoundNumber={streamingRoundNumber}
-                  onStreamStart={() => {
-                    onAnalysisStreamStart?.(item.data.roundNumber);
-                  }}
-                  onStreamComplete={(completedData, error) => {
-                    onAnalysisStreamComplete?.(item.data.roundNumber, completedData, error);
-                  }}
-                  onActionClick={isReadOnly ? undefined : onActionClick}
-                  demoOpen={demoAnalysisOpen}
-                  demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
-                  demoSectionStates={demoAnalysisSectionStates}
-                />
-              </div>
+              <AccordionEntrance skipAnimation={!shouldAnimate(virtualItem.key)}>
+                <div className="mb-4">
+                  <RoundSummaryCard
+                    analysis={item.data}
+                    threadId={threadId}
+                    isLatest={virtualItem.index === timelineItems.length - 1}
+                    streamingRoundNumber={streamingRoundNumber}
+                    onStreamStart={() => {
+                      onAnalysisStreamStart?.(item.data.roundNumber);
+                    }}
+                    onStreamComplete={(completedData, error) => {
+                      onAnalysisStreamComplete?.(item.data.roundNumber, completedData, error);
+                    }}
+                    onActionClick={isReadOnly ? undefined : onActionClick}
+                    demoOpen={demoAnalysisOpen}
+                    demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
+                    demoSectionStates={demoAnalysisSectionStates}
+                  />
+                </div>
+              </AccordionEntrance>
             )}
           </div>
         );

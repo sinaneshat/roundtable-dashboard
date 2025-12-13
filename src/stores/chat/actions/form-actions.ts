@@ -16,6 +16,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
 import { MessageRoles } from '@/api/core/enums';
+import { getModelCapabilities } from '@/api/services/model-capabilities.service';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import {
@@ -24,8 +25,9 @@ import {
 } from '@/hooks/mutations/chat-mutations';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { showApiErrorToast } from '@/lib/toast';
+import { showApiErrorToast, showErrorToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
+import { isVisionRequiredMimeType } from '@/lib/utils/file-capability';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -410,6 +412,17 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         formState.selectedParticipants,
         threadId,
       );
+
+      // 🔍 DEBUG LOG 3: Track participant changes between rounds
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG-3] handleUpdateThreadAndSend:', {
+        round: nextRoundNumber,
+        currentParticipantIds: threadState.participants.map(p => ({ id: p.id, model: p.modelId })),
+        selectedParticipantIds: formState.selectedParticipants.map(p => ({ id: p.id, model: p.modelId })),
+        optimisticParticipantIds: optimisticParticipants.map(p => ({ id: p.id, model: p.modelId })),
+        updateResult,
+        existingMessageRounds: [...new Set(threadState.messages.map(m => getRoundNumber(m.metadata)))],
+      });
 
       // Check for non-participant changes
       const currentModeId = threadState.thread?.mode || null;

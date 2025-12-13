@@ -472,12 +472,24 @@ app.use('/projects/:id/knowledge', csrfProtection, requireSession);
 app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
 
 // Upload routes (protected - file attachments for chat)
-// Apply dedicated upload rate limit (100/hour per user) to prevent abuse
-app.use('/uploads', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
+// NOTE: Download routes have separate rate limiting - don't apply upload rate limiter to them
+app.use('/uploads', async (c, next) => {
+  // Skip rate limiting for download routes - they have their own rate limiter
+  if (c.req.path.includes('/download')) {
+    return next();
+  }
+  return RateLimiterFactory.create('upload')(c, next);
+}, csrfProtection, async (c, next) => {
+  // Skip session requirement for download routes - they use signed URLs
+  if (c.req.path.includes('/download')) {
+    return next();
+  }
+  return requireSession(c, next);
+});
 app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
 app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
 app.use('/uploads/:id', protectMutations);
-app.use('/uploads/:id/download', RateLimiterFactory.create('download')); // Download has session-optional auth
+app.use('/uploads/:id/download', RateLimiterFactory.create('download')); // Download has its own rate limit + session-optional auth
 app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'), requireSession);
 app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection, requireSession);
 app.use('/uploads/multipart/:id', protectMutations);

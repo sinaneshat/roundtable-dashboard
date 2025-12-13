@@ -9,7 +9,7 @@
 
 import type { UseMutationResult } from '@tanstack/react-query';
 
-import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, Environments, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import { transformPreSearch } from '@/lib/utils/date-transforms';
@@ -277,7 +277,9 @@ export async function executePreSearch(
     }
 
     if (!response.ok) {
-      console.error('[executePreSearch] Pre-search execution failed:', response.status);
+      if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+        console.error('[executePreSearch] Pre-search execution failed:', response.status);
+      }
       store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.FAILED);
       store.getState().clearPreSearchActivity(roundNumber);
       store.getState().clearPreSearchTracking(roundNumber);
@@ -311,7 +313,9 @@ export async function executePreSearch(
 
     return 'complete';
   } catch (error) {
-    console.error('[executePreSearch] Failed:', error);
+    if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
+      console.error('[executePreSearch] Failed:', error);
+    }
     store.getState().clearPreSearchActivity(roundNumber);
     store.getState().clearPreSearchTracking(roundNumber);
     return 'failed';
@@ -319,7 +323,20 @@ export async function executePreSearch(
 }
 
 /**
+ * ✅ RESUMPTION FIX: Maximum time to wait for a STREAMING pre-search after page refresh
+ * After this duration from createdAt, consider the pre-search "effectively complete" for
+ * resumption purposes. This prevents indefinite blocking when pre-search stream was
+ * interrupted by page refresh.
+ */
+const STALE_STREAMING_TIMEOUT_MS = 15_000; // 15 seconds
+
+/**
  * Check if pre-search should block message sending
+ *
+ * ✅ RESUMPTION FIX: Added timeout-based fallback for stale STREAMING status.
+ * After page refresh, a pre-search might be stuck in STREAMING status if the stream
+ * was interrupted. We now check the age of STREAMING pre-searches and allow proceeding
+ * if they've been in that state too long (likely stale from before refresh).
  *
  * @returns true if message sending should wait for pre-search
  */
@@ -336,11 +353,27 @@ export function shouldWaitForPreSearch(
     return true;
   }
 
-  // Pre-search in progress - wait
+  // Pre-search in progress - check if stale
   if (
     preSearchForRound.status === AnalysisStatuses.PENDING
     || preSearchForRound.status === AnalysisStatuses.STREAMING
   ) {
+    // ✅ RESUMPTION FIX: Check if STREAMING status is stale (from before page refresh)
+    // If pre-search has been "streaming" for too long, it's likely stale and we should
+    // not block resumption. The actual pre-search resumption/retry logic will handle it.
+    if (preSearchForRound.status === AnalysisStatuses.STREAMING) {
+      const createdTime = preSearchForRound.createdAt instanceof Date
+        ? preSearchForRound.createdAt.getTime()
+        : new Date(preSearchForRound.createdAt).getTime();
+      const elapsed = Date.now() - createdTime;
+
+      // If streaming for too long, treat as "don't block" - let resumption proceed
+      // The pre-search resumption hook will handle re-executing or completing it
+      if (elapsed > STALE_STREAMING_TIMEOUT_MS) {
+        return false;
+      }
+    }
+
     return true;
   }
 

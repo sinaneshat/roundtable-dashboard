@@ -677,6 +677,19 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     }, false, 'tracking/markAnalysisCreated'),
   hasAnalysisBeenCreated: roundNumber =>
     get().createdAnalysisRounds.has(roundNumber),
+  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasAnalysisBeenCreated and markAnalysisCreated
+  // Returns true if successfully marked (was not already created), false if already created
+  tryMarkAnalysisCreated: (roundNumber) => {
+    const state = get();
+    if (state.createdAnalysisRounds.has(roundNumber)) {
+      return false; // Already created by another component
+    }
+    // Add to set atomically - JavaScript is single-threaded so this is safe
+    set((draft) => {
+      draft.createdAnalysisRounds.add(roundNumber);
+    }, false, 'tracking/tryMarkAnalysisCreated');
+    return true; // Successfully marked
+  },
   clearAnalysisTracking: roundNumber =>
     set((draft) => {
       draft.createdAnalysisRounds.delete(roundNumber);
@@ -788,7 +801,11 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       return false;
 
     const ONE_HOUR_MS = 60 * 60 * 1000;
-    const age = Date.now() - resumptionState.createdAt.getTime();
+    // ✅ FIX: Handle both Date and string (API returns strings, runtime may use Date)
+    const createdAtTime = resumptionState.createdAt instanceof Date
+      ? resumptionState.createdAt.getTime()
+      : new Date(resumptionState.createdAt).getTime();
+    const age = Date.now() - createdAtTime;
     return age > ONE_HOUR_MS;
   },
 
@@ -1192,8 +1209,20 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     }, false, 'operations/initializeThread');
   },
 
-  updateParticipants: (participants: ChatParticipant[]) =>
-    set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants'),
+  updateParticipants: (participants: ChatParticipant[]) => {
+    // 🔍 DEBUG LOG 5: Track participant updates
+    const currentState = get();
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG-5] updateParticipants:', {
+      previousParticipantIds: currentState.participants.map(p => ({ id: p.id, model: p.modelId })),
+      newParticipantIds: participants.map(p => ({ id: p.id, model: p.modelId })),
+      messagesInStore: currentState.messages.length,
+      messagesParticipantIds: [...new Set(currentState.messages
+        .filter(m => m.metadata && typeof m.metadata === 'object' && 'participantId' in m.metadata)
+        .map(m => (m.metadata as { participantId?: string }).participantId))],
+    });
+    set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
+  },
 
   // ✅ Uses ExtendedFilePart from message-schemas.ts (single source of truth for file parts with uploadId)
   prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) =>

@@ -18,24 +18,25 @@ import { describe, expect, it } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { createMockPreSearch as createMockPreSearchBase } from '@/lib/testing/helpers';
 
 import { shouldWaitForPreSearch } from '../utils/pre-search-execution';
 
 // ============================================================================
-// TEST HELPERS
+// TEST HELPERS - Thin wrapper with test-specific defaults
 // ============================================================================
 
 function createMockPreSearch(overrides?: Partial<StoredPreSearch>): StoredPreSearch {
-  return {
-    id: 'presearch-123',
-    threadId: 'thread-123',
-    roundNumber: 0,
-    status: AnalysisStatuses.PENDING,
-    userQuery: 'Test query',
-    createdAt: new Date(),
-    completedAt: null,
+  return createMockPreSearchBase({
+    id: overrides?.id ?? 'presearch-123',
+    threadId: overrides?.threadId ?? 'thread-123',
+    roundNumber: overrides?.roundNumber ?? 0,
+    status: overrides?.status ?? AnalysisStatuses.PENDING,
+    userQuery: overrides?.userQuery ?? 'Test query',
+    createdAt: overrides?.createdAt ?? new Date(),
+    completedAt: overrides?.completedAt ?? null,
     ...overrides,
-  } as StoredPreSearch;
+  }) as StoredPreSearch;
 }
 
 // ============================================================================

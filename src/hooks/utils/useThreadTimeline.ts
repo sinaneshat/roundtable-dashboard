@@ -126,6 +126,30 @@ export function useThreadTimeline({
       messagesByRound.get(roundNumber)!.push(message);
     });
 
+    // STEP 1.5: Sort messages within each round
+    // ✅ FIX: User messages first, then assistant messages sorted by participantIndex
+    // This ensures consistent ordering regardless of message arrival order
+    messagesByRound.forEach((roundMessages, _roundNumber) => {
+      roundMessages.sort((a, b) => {
+        // User messages come first
+        if (a.role === 'user' && b.role !== 'user')
+          return -1;
+        if (a.role !== 'user' && b.role === 'user')
+          return 1;
+
+        // For assistant messages, sort by participantIndex
+        if (a.role === 'assistant' && b.role === 'assistant') {
+          const metaA = a.metadata as { participantIndex?: number } | undefined;
+          const metaB = b.metadata as { participantIndex?: number } | undefined;
+          const indexA = metaA?.participantIndex ?? 0;
+          const indexB = metaB?.participantIndex ?? 0;
+          return indexA - indexB;
+        }
+
+        return 0;
+      });
+    });
+
     // STEP 2: Group changelog by round number
     // ✅ 0-BASED: Default round is 0
     const changelogByRound = new Map<number, ChangelogItem[]>();
