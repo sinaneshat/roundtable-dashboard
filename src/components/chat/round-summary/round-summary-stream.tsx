@@ -1,33 +1,24 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { AlertTriangle, CheckCircle2, GitMerge, Info, Lightbulb, Users, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 
 import type { StreamErrorType } from '@/api/core/enums';
 import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type {
-  ArticleRecommendation,
   ModeratorAnalysisPayload,
   StoredModeratorAnalysis,
 } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useBoolean } from '@/hooks/utils';
-import { extractModelName, getModelIconInfo } from '@/lib/utils/ai-display';
 import { hasAnalysisData, normalizeAnalysisData } from '@/lib/utils/analysis-utils';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 import { getAnalysisResumeService } from '@/services/api';
 
-import { CollapsibleSection } from './collapsible-section';
-import { KeyInsightsSection } from './key-insights-section';
-import { RoundOutcomeHeader } from './round-outcome-header';
-import { getResolutionBadgeVariant, getStanceIcon } from './round-summary-utils';
+import { RoundSummaryText } from './round-summary-text';
 
 // ============================================================================
 // RESUMABLE STREAMS: Attempt to resume analysis from buffer on page reload
@@ -131,7 +122,6 @@ type RoundSummaryStreamProps = {
   analysis: StoredModeratorAnalysis;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
   onStreamStart?: () => void;
-  onActionClick?: (action: ArticleRecommendation) => void;
 };
 
 // ✅ ZUSTAND PATTERN: Analysis stream tracking now in store
@@ -142,7 +132,6 @@ function RoundSummaryStreamComponent({
   analysis,
   onStreamComplete,
   onStreamStart,
-  onActionClick,
 }: RoundSummaryStreamProps) {
   const t = useTranslations('moderator');
 
@@ -155,7 +144,6 @@ function RoundSummaryStreamComponent({
   // Follows the same pattern as use-multi-participant-chat.ts callback refs
   const onStreamCompleteRef = useRef(onStreamComplete);
   const onStreamStartRef = useRef(onStreamStart);
-  const onActionClickRef = useRef(onActionClick);
 
   useEffect(() => {
     onStreamCompleteRef.current = onStreamComplete;
@@ -164,17 +152,6 @@ function RoundSummaryStreamComponent({
   useEffect(() => {
     onStreamStartRef.current = onStreamStart;
   }, [onStreamStart]);
-
-  useEffect(() => {
-    onActionClickRef.current = onActionClick;
-  }, [onActionClick]);
-
-  // ✅ Create stable wrapper for onActionClick that can be safely passed to child components
-  // This prevents ref access during render
-  const stableOnActionClick = useCallback((_action: ArticleRecommendation) => {
-    // Disabled for demo mode - no action clicks allowed
-    // onActionClickRef.current?.(action);
-  }, []);
 
   // ✅ Error handling state for UI display
   const streamErrorTypeRef = useRef<StreamErrorType>(StreamErrorTypes.UNKNOWN);
@@ -673,37 +650,11 @@ function RoundSummaryStreamComponent({
     return null;
   }
 
-  // ✅ AI SDK v5 PATTERN: Extract partial data WITHOUT mid-stream validation
-  // According to AI SDK v5 docs: Display partial data as-is during streaming
-  // Use optional chaining in JSX to handle undefined values gracefully
-  // Only validate on stream completion in onFinish callback
-  // UI Order: confidence → modelVoices → article → recommendations → consensusTable → minorityViews → convergenceDivergence
-  const confidence = displayData?.confidence;
-  const modelVoices = displayData?.modelVoices;
+  // Extract article for simple summary display
   const article = displayData?.article;
-  const recommendations = displayData?.recommendations;
-  const consensusTable = displayData?.consensusTable;
-  const minorityViews = displayData?.minorityViews;
-  const convergenceDivergence = displayData?.convergenceDivergence;
 
-  // Content checking
   // ✅ Use both DB status AND useObject's isLoading for accurate streaming state
-  // isStreamLoading is true when submit() is called but stream hasn't finished
-  // This provides earlier feedback than waiting for DB status change
   const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING || isStreamLoading;
-
-  // ✅ AI SDK v5: Stream data is valid - just display it directly
-  // No validation during streaming, no excessive checks
-  const safeModelVoices = modelVoices ?? [];
-  const safeRecommendations = recommendations ?? [];
-  const safeConsensusTable = consensusTable ?? [];
-  const safeMinorityViews = minorityViews ?? [];
-
-  // Calculate counts for subtitles
-  const recommendationCount = safeRecommendations.length;
-  const modelVoicesCount = safeModelVoices.length;
-  const consensusTopicCount = safeConsensusTable.length;
-  const minorityViewCount = safeMinorityViews.length;
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -715,7 +666,7 @@ function RoundSummaryStreamComponent({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: ANIMATION_DURATION.fast, ease: ANIMATION_EASE.standard }}
-              className="flex items-center justify-center py-8 text-muted-foreground text-sm"
+              className="flex items-center justify-center py-4 text-muted-foreground text-sm"
             >
               <TextShimmer>{isAutoRetrying.value ? t('autoRetryingAnalysis') : t('pendingAnalysis')}</TextShimmer>
             </motion.div>
@@ -726,309 +677,17 @@ function RoundSummaryStreamComponent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: ANIMATION_DURATION.normal, ease: ANIMATION_EASE.enter }}
-              className="space-y-4"
             >
-              {/* ═══════════════════════════════════════════════════════════════════
-                  STREAMING ORDER: Matches backend schema field order exactly
-                  1. Confidence + Model Badges (header - always visible)
-                  2. Key Insights (accordion - closed during stream)
-                  3. Model Voices (accordion - closed during stream)
-                  4. Consensus/Minority/Convergence (accordions - closed during stream)
-
-                  ✅ BEHAVIOR: Accordions stay CLOSED during streaming
-                  Content fills in while closed, users can expand/collapse freely
-              ═══════════════════════════════════════════════════════════════════ */}
-
-              {/* ═══════════════════════════════════════════════════════════════════
-                  1. ROUND OUTCOME HEADER - Confidence + Model Badges (TOP)
-                  ✅ STREAMING FIRST: Streams before all other sections
-                  ✅ Always visible (not in accordion)
-              ═══════════════════════════════════════════════════════════════════ */}
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: ANIMATION_DURATION.normal, delay: 0, ease: ANIMATION_EASE.enter }}
-              >
-                <RoundOutcomeHeader
-                  confidence={confidence}
-                  modelVoices={safeModelVoices}
-                  isStreaming={isCurrentlyStreaming}
-                />
-              </motion.div>
-
-              {/* Collapsible Sections - All closed during streaming */}
-              <div className="space-y-2">
-                {/* ═══════════════════════════════════════════════════════════════════
-                    2. KEY INSIGHTS & RECOMMENDATIONS - Article + Recommendations
-                    ✅ Streams after confidence header
-                    ✅ Accordion closed during streaming, content fills in background
-                ═══════════════════════════════════════════════════════════════════ */}
-                {(article || safeRecommendations.length > 0) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.05, ease: ANIMATION_EASE.enter }}
-                  >
-                    <CollapsibleSection
-                      icon={<Lightbulb className="size-4" />}
-                      title={t('keyInsights.title')}
-                      subtitle={recommendationCount > 0 ? t('keyInsights.insightsIdentified', { count: recommendationCount }) : undefined}
-                      defaultOpen={!isCurrentlyStreaming}
-                    >
-                      <KeyInsightsSection
-                        article={article}
-                        recommendations={safeRecommendations}
-                        onActionClick={stableOnActionClick}
-                        isStreaming={isCurrentlyStreaming}
-                      />
-                    </CollapsibleSection>
-                  </motion.div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════════════════════
-                    3. MODEL VOICES - Detailed contributor info with avatars
-                    ✅ Accordion closed during streaming
-                ═══════════════════════════════════════════════════════════════════ */}
-                {safeModelVoices.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.1, ease: ANIMATION_EASE.enter }}
-                  >
-                    <CollapsibleSection
-                      icon={<Users className="size-4" />}
-                      title={t('modelVoices.title')}
-                      subtitle={t('modelVoices.contributorCount', { count: modelVoicesCount })}
-                    >
-                      <div className="space-y-3">
-                        {safeModelVoices.map((voice, idx) => {
-                          if (!voice?.modelId)
-                            return null;
-                          const { icon, providerName } = getModelIconInfo(voice.modelId);
-                          const modelName = extractModelName(voice.modelId);
-                          return (
-                            <div key={`voice-${voice.modelId}-${voice.participantIndex ?? idx}`} className="flex items-start gap-3">
-                              <Avatar className="size-8 flex-shrink-0">
-                                <AvatarImage src={icon} alt={modelName} />
-                                <AvatarFallback className="text-xs">{providerName.slice(0, 2).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0 space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-sm">{modelName}</span>
-                                  {voice.role && (
-                                    <Badge
-                                      className="text-[10px] px-1.5 py-0"
-                                      style={getRoleBadgeStyle(voice.role)}
-                                    >
-                                      {voice.role}
-                                    </Badge>
-                                  )}
-                                </div>
-                                {voice.position && (
-                                  <p className="text-sm text-muted-foreground">{voice.position}</p>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CollapsibleSection>
-                  </motion.div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════════════════════
-                    4. CONSENSUS TABLE - Agreement/disagreement grid
-                    ✅ Accordion closed during streaming
-                ═══════════════════════════════════════════════════════════════════ */}
-                {safeConsensusTable.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.15, ease: ANIMATION_EASE.enter }}
-                  >
-                    <CollapsibleSection
-                      icon={<CheckCircle2 className="size-4" />}
-                      title={t('consensusTable.title')}
-                      subtitle={t('consensusTable.topicCount', { count: consensusTopicCount })}
-                    >
-                      <div className="space-y-3">
-                        {safeConsensusTable.map((entry) => {
-                          if (!entry?.topic)
-                            return null;
-                          return (
-                            <div key={`consensus-${entry.topic}`} className="space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{entry.topic}</span>
-                                {entry.resolution && (
-                                  <Badge
-                                    variant={getResolutionBadgeVariant(entry.resolution)}
-                                    className="text-xs"
-                                  >
-                                    {entry.resolution}
-                                  </Badge>
-                                )}
-                              </div>
-                              {entry.positions && (
-                                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                  {entry.positions.map((pos) => {
-                                    if (!pos?.modelName)
-                                      return null;
-                                    return (
-                                      <span key={`pos-${entry.topic}-${pos.modelName}`} className="flex items-center gap-1">
-                                        {getStanceIcon(pos.stance)}
-                                        <span className="font-medium">{pos.modelName}</span>
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CollapsibleSection>
-                  </motion.div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════════════════════
-                    5. MINORITY VIEWS - Dissenting opinions
-                    ✅ Accordion closed during streaming
-                ═══════════════════════════════════════════════════════════════════ */}
-                {safeMinorityViews.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.2, ease: ANIMATION_EASE.enter }}
-                  >
-                    <CollapsibleSection
-                      icon={<AlertTriangle className="size-4" />}
-                      title={t('minorityViews.title')}
-                      subtitle={t('minorityViews.viewCount', { count: minorityViewCount })}
-                    >
-                      <div className="space-y-2">
-                        {safeMinorityViews.map((view) => {
-                          if (!view?.modelName)
-                            return null;
-                          return (
-                            <div key={`minority-${view.modelName}`} className="flex items-start gap-2 text-sm">
-                              <AlertTriangle className="size-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                              <span>
-                                <span className="font-medium">
-                                  {view.modelName}
-                                  :
-                                </span>
-                                {' '}
-                                <span className="text-muted-foreground">{view.view ?? ''}</span>
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CollapsibleSection>
-                  </motion.div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════════════════════
-                    6. CONVERGENCE & DIVERGENCE - Where views met or parted
-                    ✅ Accordion closed during streaming
-                ═══════════════════════════════════════════════════════════════════ */}
-                {convergenceDivergence && (convergenceDivergence.convergedOn?.length || convergenceDivergence.divergedOn?.length || convergenceDivergence.evolved?.length) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: ANIMATION_DURATION.normal, delay: 0.25, ease: ANIMATION_EASE.enter }}
-                  >
-                    <CollapsibleSection
-                      icon={<GitMerge className="size-4" />}
-                      title={t('convergenceDivergence.title')}
-                    >
-                      <div className="space-y-3 text-sm">
-                        {convergenceDivergence.convergedOn && convergenceDivergence.convergedOn.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                            <CheckCircle2 className="size-3.5 text-green-500 flex-shrink-0" />
-                            <span className="font-medium text-green-600 dark:text-green-400 mr-1">
-                              {t('convergenceDivergence.agreed')}
-                              :
-                            </span>
-                            <span className="text-muted-foreground">
-                              {convergenceDivergence.convergedOn.join(' • ')}
-                            </span>
-                          </div>
-                        )}
-                        {convergenceDivergence.divergedOn && convergenceDivergence.divergedOn.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                            <XCircle className="size-3.5 text-orange-500 flex-shrink-0" />
-                            <span className="font-medium text-orange-600 dark:text-orange-400 mr-1">
-                              {t('convergenceDivergence.split')}
-                              :
-                            </span>
-                            <span className="text-muted-foreground">
-                              {convergenceDivergence.divergedOn.join(' • ')}
-                            </span>
-                          </div>
-                        )}
-                        {convergenceDivergence.evolved && convergenceDivergence.evolved.length > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">{t('convergenceDivergence.evolved')}</span>
-                            {convergenceDivergence.evolved.map((evolution) => {
-                              if (!evolution?.point)
-                                return null;
-                              return (
-                                <div key={`evolved-${evolution.point}-${evolution.initialState ?? ''}-${evolution.finalState ?? ''}`} className="flex items-center gap-1.5 text-xs">
-                                  <span className="font-medium">
-                                    {evolution.point}
-                                    :
-                                  </span>
-                                  <span className="text-orange-500">{evolution.initialState ?? ''}</span>
-                                  <span className="text-muted-foreground">→</span>
-                                  <span className="text-green-500">{evolution.finalState ?? ''}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </CollapsibleSection>
-                  </motion.div>
-                )}
-
-                {/* ═══════════════════════════════════════════════════════════════════
-                    7. ABOUT THIS FRAMEWORK - Static explanation (BOTTOM)
-                ═══════════════════════════════════════════════════════════════════ */}
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: ANIMATION_DURATION.normal, delay: 0.3, ease: ANIMATION_EASE.enter }}
-                >
-                  <CollapsibleSection
-                    icon={<Info className="size-4" />}
-                    title={t('aboutFramework.title')}
-                  >
-                    <div className="text-sm text-muted-foreground space-y-2">
-                      <p>
-                        This analysis synthesizes perspectives from
-                        {' '}
-                        {modelVoicesCount}
-                        {' '}
-                        AI models participating in a collaborative
-                        {' '}
-                        {analysis.mode}
-                        {' '}
-                        discussion.
-                      </p>
-                      <p>The consensus table shows where models agreed and disagreed, while minority views highlight important dissenting opinions that may warrant further consideration.</p>
-                    </div>
-                  </CollapsibleSection>
-                </motion.div>
-              </div>
+              <RoundSummaryText
+                article={article}
+                isStreaming={isCurrentlyStreaming}
+              />
             </motion.div>
           )}
     </AnimatePresence>
   );
 }
 export const RoundSummaryStream = memo(RoundSummaryStreamComponent, (prevProps, nextProps) => {
-  // ✅ Memo optimization: Prevent re-renders when props haven't changed
-  // Callbacks are stored in refs internally, so callback equality checks prevent unnecessary work
   return (
     prevProps.analysis.id === nextProps.analysis.id
     && prevProps.analysis.status === nextProps.analysis.status
@@ -1036,6 +695,5 @@ export const RoundSummaryStream = memo(RoundSummaryStreamComponent, (prevProps, 
     && prevProps.threadId === nextProps.threadId
     && prevProps.onStreamComplete === nextProps.onStreamComplete
     && prevProps.onStreamStart === nextProps.onStreamStart
-    && prevProps.onActionClick === nextProps.onActionClick
   );
 });

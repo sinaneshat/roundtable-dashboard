@@ -325,10 +325,11 @@ describe('chat Mode Changes', () => {
   it('tracks mode changes in form state', () => {
     const state = getStoreState(store);
 
-    expect(getStoreState(store).selectedMode).toBe(ChatModes.ANALYZING);
-
-    state.setSelectedMode(ChatModes.DEBATING);
+    // Default mode is 'debating' (from DEFAULT_CHAT_MODE)
     expect(getStoreState(store).selectedMode).toBe(ChatModes.DEBATING);
+
+    state.setSelectedMode(ChatModes.ANALYZING);
+    expect(getStoreState(store).selectedMode).toBe(ChatModes.ANALYZING);
 
     state.setSelectedMode(ChatModes.BRAINSTORMING);
     expect(getStoreState(store).selectedMode).toBe(ChatModes.BRAINSTORMING);

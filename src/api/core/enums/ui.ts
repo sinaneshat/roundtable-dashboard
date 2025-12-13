@@ -82,3 +82,19 @@ export const ToastVariants = {
   INFO: 'info' as const,
   LOADING: 'loading' as const,
 } as const;
+
+// ============================================================================
+// REASONING STATE
+// ============================================================================
+
+export const REASONING_STATES = ['idle', 'thinking', 'complete'] as const;
+
+export const ReasoningStateSchema = z.enum(REASONING_STATES);
+
+export type ReasoningState = z.infer<typeof ReasoningStateSchema>;
+
+export const ReasoningStates = {
+  IDLE: 'idle' as const,
+  THINKING: 'thinking' as const,
+  COMPLETE: 'complete' as const,
+} as const;

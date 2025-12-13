@@ -29,16 +29,6 @@ type UseMessageSyncParams = {
  * because it reads from store.messages, not from the hook's messages.
  */
 export function useMessageSync({ store, chat }: UseMessageSyncParams) {
-  // 🔍 DEBUG: Log on mount to track hook initialization
-  useEffect(() => {
-    console.log('[DEBUG:useMessageSync] Hook mounted/updated', {
-      chatMessagesCount: chat.messages.length,
-      chatIsStreaming: chat.isStreaming,
-      storeMessagesCount: store.getState().messages.length,
-      storeIsStreaming: store.getState().isStreaming,
-      streamingRoundNumber: store.getState().streamingRoundNumber,
-    });
-  }, [chat.messages.length, chat.isStreaming, store]);
   // Track previous messages for change detection
   const prevChatMessagesRef = useRef<UIMessage[]>([]);
   const prevMessageCountRef = useRef<number>(0);
@@ -91,27 +81,12 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     const currentStoreState = store.getState();
     const currentThreadId = currentStoreState.thread?.id || currentStoreState.createdThreadId;
 
-    // 🔍 DEBUG: Track main sync effect execution
-    const streamingRound = currentStoreState.streamingRoundNumber;
-    console.log('[DEBUG:useMessageSync:mainEffect] Running', {
-      round: streamingRound,
-      chatMsgCount: chat.messages.length,
-      storeMsgCount: currentStoreMessages.length,
-      chatIsStreaming: chat.isStreaming,
-      storeIsStreaming: currentStoreState.isStreaming,
-    });
-
     // Prevent circular updates - only sync when ACTUAL CONTENT changes
     // AI SDK returns new array reference on every render
 
     // Never sync if AI SDK has FEWER messages than store
     // Prevents message loss during navigation/initialization
     if (chat.messages.length < currentStoreMessages.length) {
-      console.log('[DEBUG:useMessageSync:mainEffect] Skipping - AI SDK has fewer messages', {
-        round: streamingRound,
-        chatMsgCount: chat.messages.length,
-        storeMsgCount: currentStoreMessages.length,
-      });
       return;
     }
 
@@ -133,6 +108,9 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
     // Detect changes
     const countChanged = chat.messages.length !== prevMessageCountRef.current;
+    // 🐛 BUG FIX: Also detect when chat has more messages than store
+    // Previously only compared against ref, missing cases where store falls behind
+    const chatAheadOfStore = chat.messages.length > currentStoreMessages.length;
     let contentChanged = false;
     let shouldThrottle = false;
 
@@ -176,17 +154,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       }
     }
 
-    const shouldSync = countChanged || (contentChanged && !shouldThrottle);
-
-    // 🔍 DEBUG: Log sync decision
-    console.log('[DEBUG:useMessageSync:mainEffect] Sync decision', {
-      round: streamingRound,
-      countChanged,
-      contentChanged,
-      shouldThrottle,
-      shouldSync,
-      chatIsStreaming: chat.isStreaming,
-    });
+    // 🐛 BUG FIX: Include chatAheadOfStore in sync decision
+    const shouldSync = countChanged || chatAheadOfStore || (contentChanged && !shouldThrottle);
 
     if (shouldSync) {
       const state = store.getState();
@@ -420,21 +389,12 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         });
 
       if (!isSameMessages) {
-        // 🔍 DEBUG: Log actual store update
-        console.log('[DEBUG:useMessageSync:mainEffect] Updating store with messages', {
-          round: streamingRound,
-          messageCount: deduplicatedMessages.length,
-          lastMsgId: deduplicatedMessages[deduplicatedMessages.length - 1]?.id,
-          lastMsgPartsCount: deduplicatedMessages[deduplicatedMessages.length - 1]?.parts?.length,
-          chatIsStreaming: chat.isStreaming,
-        });
         prevMessageCountRef.current = chat.messages.length;
         prevChatMessagesRef.current = chat.messages;
         store.getState().setMessages(structuredClone(deduplicatedMessages));
         lastStreamActivityRef.current = Date.now();
         lastStreamSyncRef.current = Date.now();
       } else {
-        console.log('[DEBUG:useMessageSync:mainEffect] Skipping - messages same', { round: streamingRound });
         prevMessageCountRef.current = chat.messages.length;
         prevChatMessagesRef.current = chat.messages;
       }
@@ -443,14 +403,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
   // Polling for content updates during streaming
   useEffect(() => {
-    const streamingRound = store.getState().streamingRoundNumber;
-    console.log('[DEBUG:useMessageSync:pollingEffect] Setup', {
-      round: streamingRound,
-      chatIsStreaming: chat.isStreaming,
-    });
-
     if (!chat.isStreaming) {
-      console.log('[DEBUG:useMessageSync:pollingEffect] Skipping - not streaming', { round: streamingRound });
       return;
     }
 

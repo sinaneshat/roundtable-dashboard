@@ -1,14 +1,16 @@
 'use client';
 
-import { Lock } from 'lucide-react';
+import { EyeOff, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import type { BaseModelResponse, EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { canAccessPreset, getModelsForPreset } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -20,6 +22,8 @@ type ModelPresetCardProps = {
   userTier: SubscriptionTier;
   onSelect: (models: BaseModelResponse[]) => void;
   className?: string;
+  /** Set of model IDs incompatible with current file attachments (no vision) */
+  incompatibleModelIds?: Set<string>;
 };
 
 /**
@@ -34,6 +38,7 @@ export const ModelPresetCard = memo(({
   userTier,
   onSelect,
   className,
+  incompatibleModelIds,
 }: ModelPresetCardProps) => {
   const router = useRouter();
   const isLocked = !canAccessPreset(preset, userTier);
@@ -45,6 +50,20 @@ export const ModelPresetCard = memo(({
     allModels,
     isLocked ? 'power' : userTier,
   );
+
+  // Check if any models in this preset are incompatible with vision files
+  const hasIncompatibleModels = useMemo(() => {
+    if (!incompatibleModelIds || incompatibleModelIds.size === 0)
+      return false;
+    return presetModels.some(model => incompatibleModelIds.has(model.id));
+  }, [presetModels, incompatibleModelIds]);
+
+  // Count how many models will be available after filtering incompatible ones
+  const compatibleModelCount = useMemo(() => {
+    if (!incompatibleModelIds || incompatibleModelIds.size === 0)
+      return presetModels.length;
+    return presetModels.filter(m => !incompatibleModelIds.has(m.id)).length;
+  }, [presetModels, incompatibleModelIds]);
 
   // Convert models to participant config format for AvatarGroup
   const participants: ParticipantConfig[] = presetModels.map((model, index) => ({
@@ -59,21 +78,29 @@ export const ModelPresetCard = memo(({
       router.push('/chat/pricing');
       return;
     }
+    // Don't select if all models are incompatible
+    if (compatibleModelCount === 0) {
+      return;
+    }
     onSelect(presetModels);
   };
+
+  // Fully disabled if all models are incompatible
+  const isFullyDisabled = compatibleModelCount === 0;
 
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={false}
+      disabled={isFullyDisabled}
       className={cn(
         'relative flex flex-col h-full p-4 rounded-xl text-left w-full',
         'border border-white/[0.08] bg-card/50 backdrop-blur-sm',
         'transition-all duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
-        !isLocked && 'hover:bg-white/5 hover:border-white/[0.15] hover:backdrop-blur-md cursor-pointer',
+        !isLocked && !isFullyDisabled && 'hover:bg-white/5 hover:border-white/[0.15] hover:backdrop-blur-md cursor-pointer',
         isLocked && 'opacity-70 cursor-pointer hover:opacity-80',
+        isFullyDisabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
     >
@@ -85,6 +112,30 @@ export const ModelPresetCard = memo(({
             {SUBSCRIPTION_TIER_NAMES[preset.requiredTier]}
           </span>
         </div>
+      )}
+
+      {/* Vision incompatibility warning badge */}
+      {!isLocked && hasIncompatibleModels && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="absolute top-3 right-3">
+              <Badge
+                variant="outline"
+                className="text-[10px] px-2 py-0.5 h-5 border-destructive/50 text-destructive gap-1"
+              >
+                <EyeOff className="size-3" />
+                {compatibleModelCount === 0
+                  ? 'No Vision'
+                  : `${compatibleModelCount}/${presetModels.length}`}
+              </Badge>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[220px]">
+            {compatibleModelCount === 0
+              ? 'All models in this preset cannot process images/PDFs. Remove visual files to use this preset.'
+              : `${presetModels.length - compatibleModelCount} model(s) cannot process images/PDFs and will be excluded.`}
+          </TooltipContent>
+        </Tooltip>
       )}
 
       {/* Content wrapper - grows to fill space */}

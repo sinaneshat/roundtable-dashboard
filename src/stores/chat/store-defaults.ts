@@ -12,7 +12,7 @@
  * Reference pattern: /src/api/core/enums.ts, /src/stores/chat/store-schemas.ts
  */
 
-import { ChatModes, ScreenModes } from '@/api/core/enums';
+import { DEFAULT_CHAT_MODE, ScreenModes } from '@/api/core/enums';
 
 import type {
   AnalysisState,
@@ -37,7 +37,7 @@ import type {
 
 export const FORM_DEFAULTS = {
   inputValue: '',
-  selectedMode: ChatModes.ANALYZING, // Default to 'analyzing' mode
+  selectedMode: DEFAULT_CHAT_MODE, // 'debating' - single source of truth from enums
   selectedParticipants: [],
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
   modelOrder: [], // Visual order of models for drag-and-drop

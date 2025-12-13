@@ -33,8 +33,6 @@ export { useChatFormActions } from './actions/form-actions';
 export { useNavigationReset } from './actions/navigation-reset';
 export type { UseOverviewActionsReturn } from './actions/overview-actions';
 export { useOverviewActions } from './actions/overview-actions';
-export type { UseRecommendedActionsOptions, UseRecommendedActionsReturn } from './actions/recommended-actions';
-export { useRecommendedActions } from './actions/recommended-actions';
 export type { UseScreenInitializationOptions } from './actions/screen-initialization';
 export { useScreenInitialization } from './actions/screen-initialization';
 export type { UseThreadActionsOptions } from './actions/thread-actions';

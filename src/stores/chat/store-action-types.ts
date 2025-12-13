@@ -38,7 +38,6 @@ import type { UIMessage } from 'ai';
 
 import type { AnalysisStatus, ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
 import type {
-  ArticleRecommendation,
   ModeratorAnalysisPayload,
   PartialPreSearchData,
   PreSearchDataPayload,
@@ -52,7 +51,6 @@ import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
-import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import type { PendingAttachment, StreamResumptionState } from './store-schemas';
 
 // ============================================================================
@@ -69,20 +67,6 @@ export type RemoveParticipant = (participantId: string) => void;
 export type UpdateParticipant = (participantId: string, updates: Partial<ParticipantConfig>) => void;
 export type ReorderParticipants = (fromIndex: number, toIndex: number) => void;
 export type ResetForm = () => void;
-
-/**
- * Result from store's applyRecommendedAction
- * ✅ ARTICLE-STYLE: Simplified - no model operations (recommendations are just prompts now)
- */
-export type ApplyRecommendedActionResult = {
-  success: boolean;
-  error?: string;
-};
-
-export type ApplyRecommendedAction = (
-  action: ArticleRecommendation,
-  options?: ApplyRecommendedActionOptions,
-) => ApplyRecommendedActionResult;
 
 // ============================================================================
 // FEEDBACK ACTIONS

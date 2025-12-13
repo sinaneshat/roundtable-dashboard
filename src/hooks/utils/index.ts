@@ -20,6 +20,7 @@ export { useDebouncedValue } from './use-debounced-value';
 // Drag and drop utilities
 export type { UseDragDropReturn } from './use-drag-drop';
 export { useDragDrop } from './use-drag-drop';
+export { useElapsedTime } from './use-elapsed-time';
 // File Upload Utilities
 export type { FilePreview, UseFilePreviewOptions, UseFilePreviewReturn } from './use-file-preview';
 export { FilePreviewSchema, getFileIconName, getFileTypeLabel, supportsInlinePreview, useFilePreview, UseFilePreviewOptionsSchema } from './use-file-preview';

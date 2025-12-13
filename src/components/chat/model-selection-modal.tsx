@@ -294,13 +294,18 @@ export function ModelSelectionModal({
     }
   }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles, customRoleLimit]);
 
-  // Handle preset selection
+  // Handle preset selection - filter out incompatible models before selecting
   const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
-    if (onPresetSelect) {
-      onPresetSelect(models);
+    // Filter out models incompatible with vision files
+    const compatibleModels = incompatibleModelIds && incompatibleModelIds.size > 0
+      ? models.filter(m => !incompatibleModelIds.has(m.id))
+      : models;
+
+    if (onPresetSelect && compatibleModels.length > 0) {
+      onPresetSelect(compatibleModels);
       onOpenChange(false); // Close modal after selection
     }
-  }, [onPresetSelect, onOpenChange]);
+  }, [onPresetSelect, onOpenChange, incompatibleModelIds]);
 
   // Get all models for preset cards
   const allModels = useMemo(() => {
@@ -553,6 +558,7 @@ export function ModelSelectionModal({
                                 allModels={allModels}
                                 userTier={userTier}
                                 onSelect={handlePresetSelect}
+                                incompatibleModelIds={incompatibleModelIds}
                               />
                             ))}
                           </div>

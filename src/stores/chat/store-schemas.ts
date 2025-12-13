@@ -40,7 +40,6 @@ import type {
   AddParticipant,
   AddPreSearch,
   AnimationResolver,
-  ApplyRecommendedAction,
   ChatSetMessages,
   CheckStuckPreSearches,
   CheckStuckStreams,
@@ -178,7 +177,6 @@ export const FormActionsSchema = z.object({
   updateParticipant: z.custom<UpdateParticipant>(),
   reorderParticipants: z.custom<ReorderParticipants>(),
   resetForm: z.custom<ResetForm>(),
-  applyRecommendedAction: z.custom<ApplyRecommendedAction>(),
 });
 
 export const FormSliceSchema = z.intersection(FormStateSchema, FormActionsSchema);

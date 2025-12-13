@@ -77,7 +77,6 @@ import { createStore } from 'zustand/vanilla';
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
 import { AnalysisStatuses, ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
-  ArticleRecommendation,
   ModeratorAnalysisPayload,
   StoredModeratorAnalysis,
   StoredPreSearch,
@@ -93,8 +92,6 @@ import { getEnabledSortedParticipants, sortByPriority } from '@/lib/utils/partic
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
 
-import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
-import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
 import type { SendMessage, StartRound } from './store-action-types';
 import {
   ANALYSIS_DEFAULTS,
@@ -166,7 +163,7 @@ type SliceCreator<S> = StateCreator<
  * Form Slice - Chat form state and actions
  * Handles user input, mode selection, participant management
  */
-const createFormSlice: SliceCreator<FormSlice> = (set, get) => ({
+const createFormSlice: SliceCreator<FormSlice> = (set, _get) => ({
   ...FORM_DEFAULTS,
 
   setInputValue: (value: string) =>
@@ -214,44 +211,6 @@ const createFormSlice: SliceCreator<FormSlice> = (set, get) => ({
     }, false, 'form/reorderParticipants'),
   resetForm: () =>
     set(FORM_DEFAULTS, false, 'form/resetForm'),
-
-  applyRecommendedAction: (action: ArticleRecommendation, options?: ApplyRecommendedActionOptions) => {
-    // ✅ EXTRACTED: Business logic moved to actions/recommended-action-application.ts
-    // Pass currentParticipants so logic can merge with existing participants
-    const currentState = get();
-    const result = applyRecommendedActionLogic(action, {
-      ...options,
-      currentParticipants: currentState.selectedParticipants,
-    });
-
-    // ✅ CRITICAL FIX: Check for active conversation at store level
-    // This provides a safety net regardless of what the caller passes for preserveThreadState
-    const hasActiveConversation = currentState.messages.length > 0
-      || currentState.thread !== null
-      || currentState.createdThreadId !== null;
-
-    // ✅ PRESERVE THREAD STATE: Don't reset when:
-    // 1. Caller explicitly requests preservation (preserveThreadState: true)
-    // 2. There's an active conversation (messages, thread, or createdThreadId exists)
-    // This ensures clicking recommendations updates the chatbox without losing conversation state
-    if (options?.preserveThreadState || hasActiveConversation) {
-      // Just apply form updates, don't reset thread state
-      set(result.updates, false, 'form/applyRecommendedAction/preserveThread');
-
-      return {
-        success: result.success,
-        error: result.error,
-      };
-    }
-
-    // No active conversation - apply form updates for new conversation setup
-    set(result.updates, false, 'form/applyRecommendedAction');
-
-    return {
-      success: result.success,
-      error: result.error,
-    };
-  },
 });
 
 /**
@@ -599,41 +558,12 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     // Use get() to avoid Draft type issues with function callbacks
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
-    const streamingRound = get().streamingRoundNumber;
-    // 🔍 DEBUG: Track setMessages calls
-    console.log('[DEBUG:store:setMessages]', {
-      round: streamingRound,
-      prevCount: prevMessages.length,
-      newCount: newMessages.length,
-      lastMsgId: newMessages[newMessages.length - 1]?.id,
-      lastMsgPartsCount: newMessages[newMessages.length - 1]?.parts?.length,
-      isStreaming: get().isStreaming,
-    });
     set({ messages: newMessages }, false, 'thread/setMessages');
   },
-  setIsStreaming: (isStreaming: boolean) => {
-    // 🔍 DEBUG: Track isStreaming changes
-    const prevIsStreaming = get().isStreaming;
-    const streamingRound = get().streamingRoundNumber;
-    console.log('[DEBUG:store:setIsStreaming]', {
-      round: streamingRound,
-      prev: prevIsStreaming,
-      next: isStreaming,
-    });
-    set({ isStreaming }, false, 'thread/setIsStreaming');
-  },
-  setCurrentParticipantIndex: (currentParticipantIndex: number) => {
-    // 🔍 DEBUG: Track participant index changes
-    const prevIndex = get().currentParticipantIndex;
-    const streamingRound = get().streamingRoundNumber;
-    console.log('[DEBUG:store:setCurrentParticipantIndex]', {
-      round: streamingRound,
-      prev: prevIndex,
-      next: currentParticipantIndex,
-      isStreaming: get().isStreaming,
-    });
-    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex');
-  },
+  setIsStreaming: (isStreaming: boolean) =>
+    set({ isStreaming }, false, 'thread/setIsStreaming'),
+  setCurrentParticipantIndex: (currentParticipantIndex: number) =>
+    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex'),
   setError: (error: Error | null) =>
     set({ error }, false, 'thread/setError'),
   setSendMessage: (fn?: SendMessage) =>
@@ -674,7 +604,7 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
  * Data Slice - Transient data state
  * Round numbers, pending messages, and expected participant IDs
  */
-const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
+const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
   ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: (value: number | null) =>
@@ -685,16 +615,8 @@ const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  setStreamingRoundNumber: (value: number | null) => {
-    // 🔍 DEBUG: Track streaming round number changes
-    const prevValue = get().streamingRoundNumber;
-    console.log('[DEBUG:store:setStreamingRoundNumber]', {
-      prev: prevValue,
-      next: value,
-      isStreaming: get().isStreaming,
-    });
-    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber');
-  },
+  setStreamingRoundNumber: (value: number | null) =>
+    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
   setCurrentRoundNumber: (value: number | null) =>
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
 });

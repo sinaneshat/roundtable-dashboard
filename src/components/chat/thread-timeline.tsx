@@ -18,7 +18,7 @@ import { useRef } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ArticleRecommendation, ChatParticipant, ModeratorAnalysisPayload, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { ChatParticipant, ModeratorAnalysisPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import { AccordionEntrance, TimelineEntrance } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
@@ -33,7 +33,6 @@ import { PreSearchCard } from './pre-search-card';
 import { RoundCopyAction } from './round-copy-action';
 import { RoundFeedback } from './round-feedback';
 import { RoundSummaryCard } from './round-summary/round-summary-card';
-import type { DemoSectionOpenStates } from './round-summary/round-summary-panel';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
 // Stable constants to prevent render loops
@@ -64,7 +63,6 @@ type ThreadTimelineProps = {
   // Analysis handlers
   onAnalysisStreamStart?: (roundNumber: number) => void;
   onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: unknown) => void;
-  onActionClick?: (action: ArticleRecommendation) => void;
 
   // Error retry
   onRetry?: () => void;
@@ -78,7 +76,6 @@ type ThreadTimelineProps = {
   // Demo mode
   demoPreSearchOpen?: boolean;
   demoAnalysisOpen?: boolean;
-  demoAnalysisSectionStates?: DemoSectionOpenStates;
 
   // Data readiness
   isDataReady?: boolean;
@@ -102,13 +99,11 @@ export function ThreadTimeline({
   getFeedbackHandler,
   onAnalysisStreamStart,
   onAnalysisStreamComplete,
-  onActionClick,
   onRetry,
   isReadOnly = false,
   preSearches = EMPTY_PRE_SEARCHES,
   demoPreSearchOpen,
   demoAnalysisOpen,
-  demoAnalysisSectionStates,
   isDataReady = true,
   maxContentHeight,
 }: ThreadTimelineProps) {
@@ -327,10 +322,8 @@ export function ThreadTimeline({
                     onStreamComplete={(completedData, error) => {
                       onAnalysisStreamComplete?.(item.data.roundNumber, completedData, error);
                     }}
-                    onActionClick={isReadOnly ? undefined : onActionClick}
                     demoOpen={demoAnalysisOpen}
                     demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
-                    demoSectionStates={demoAnalysisSectionStates}
                   />
                 </div>
               </AccordionEntrance>

@@ -44,13 +44,12 @@ import {
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
-import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
+import { getIncompatibleModelIds, isVisionRequiredMimeType } from '@/lib/utils/file-capability';
 import {
   AnalysisTimeouts,
   useChatFormActions,
   useFeedbackActions,
   useFlowLoading,
-  useRecommendedActions,
   useThreadActions,
 } from '@/stores/chat';
 
@@ -208,19 +207,36 @@ export function ChatView({
     modelOrder,
   });
 
-  // File capability: Compute incompatible models based on attachments
+  // File capability: Compute incompatible models based on attachments AND existing thread files
+  // Models without vision cannot process images/PDFs - disable them proactively
   const incompatibleModelIds = useMemo(() => {
-    if (chatAttachments.attachments.length === 0) {
+    // Check existing messages for vision-required files (images/PDFs from previous rounds)
+    const existingVisionFiles = messages.some((msg) => {
+      if (!msg.parts)
+        return false;
+      return msg.parts.some((part) => {
+        if (part.type !== 'file' || !('mediaType' in part))
+          return false;
+        return isVisionRequiredMimeType(part.mediaType as string);
+      });
+    });
+
+    // Check new attachments for vision-required files
+    const newVisionFiles = chatAttachments.attachments.some(att =>
+      isVisionRequiredMimeType(att.file.type),
+    );
+
+    // If no vision files anywhere, no models are incompatible
+    if (!existingVisionFiles && !newVisionFiles) {
       return new Set<string>();
     }
 
-    // Convert attachments to file capability check format
-    const files = chatAttachments.attachments.map(att => ({
-      mimeType: att.file.type,
-    }));
+    // Build file list for capability check (we just need to know vision is required)
+    // Using a single placeholder since we already know vision is needed
+    const files = [{ mimeType: 'image/png' }];
 
     return getIncompatibleModelIds(allEnabledModels, files);
-  }, [chatAttachments.attachments, allEnabledModels]);
+  }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   // Timeline with messages, analyses, changelog, and pre-searches
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
@@ -258,19 +274,8 @@ export function ChatView({
     }
   }, [feedbackData, feedbackSuccess, feedbackActions]);
 
-  // Recommended actions
+  // Input container ref for scrolling behavior
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
-  const hasActiveConversation = Boolean(thread || createdThreadId);
-
-  const recommendedActions = useRecommendedActions({
-    inputContainerRef,
-    enableScroll: mode === 'thread',
-    markConfigChanged: mode === 'thread',
-    // ✅ PRESERVE THREAD STATE: Don't reset state when there's an active conversation
-    // On thread screen: always preserve (stay on thread)
-    // On overview screen with active thread: preserve (stay in conversation view)
-    preserveThreadState: mode === 'thread' || hasActiveConversation,
-  });
 
   // Thread actions (for both screens - manages changelog waiting flag)
   const threadActions = useThreadActions({
@@ -278,6 +283,37 @@ export function ChatView({
     isRoundInProgress: isStreaming || isCreatingAnalysis,
     isChangelogFetching,
   });
+
+  // Auto-deselect incompatible models when vision files are detected
+  // For thread mode: always check
+  // For overview mode: only when there are existing messages (continuing conversation)
+  // Initial overview (no messages) is handled by ChatOverviewScreen's own effect
+  useEffect(() => {
+    // Skip initial overview state - ChatOverviewScreen handles that
+    if (mode === 'overview' && messages.length === 0)
+      return;
+    if (incompatibleModelIds.size === 0)
+      return;
+
+    // Find selected participants that are now incompatible
+    const incompatibleSelected = selectedParticipants.filter(
+      p => incompatibleModelIds.has(p.modelId),
+    );
+
+    if (incompatibleSelected.length === 0)
+      return;
+
+    // Remove incompatible participants and re-index priorities
+    const compatibleParticipants = selectedParticipants
+      .filter(p => !incompatibleModelIds.has(p.modelId))
+      .map((p, index) => ({ ...p, priority: index }));
+
+    if (mode === 'thread') {
+      threadActions.handleParticipantsChange(compatibleParticipants);
+    } else {
+      setSelectedParticipants(compatibleParticipants);
+    }
+  }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants]);
 
   // Form actions
   const formActions = useChatFormActions();
@@ -537,7 +573,6 @@ export function ChatView({
               getFeedbackHandler={feedbackActions.getFeedbackHandler}
               onAnalysisStreamStart={handleAnalysisStreamStart}
               onAnalysisStreamComplete={handleAnalysisStreamComplete}
-              onActionClick={recommendedActions.handleActionClick}
               preSearches={preSearches}
               isDataReady={isStoreReady}
             />

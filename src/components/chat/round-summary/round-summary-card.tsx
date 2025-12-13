@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ArticleRecommendation, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -14,7 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 import { cn } from '@/lib/ui/cn';
 
-import type { DemoSectionOpenStates } from './round-summary-panel';
 import { RoundSummaryPanel } from './round-summary-panel';
 import { RoundSummaryStream } from './round-summary-stream';
 
@@ -26,22 +25,14 @@ type RoundSummaryCardProps = {
   onStreamStart?: () => void;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
   streamingRoundNumber?: number | null;
-  onActionClick?: (action: ArticleRecommendation) => void;
-  demoOpen?: boolean; // Demo mode controlled accordion state
-  demoShowContent?: boolean; // Demo mode controlled content visibility
-  demoSectionStates?: DemoSectionOpenStates; // Demo mode controlled inner section states
+  demoOpen?: boolean;
+  demoShowContent?: boolean;
 };
 
 /**
  * RoundSummaryCard - Accordion component for round summary
  *
- * ✅ REVISED: This component should ONLY be rendered when analysis has participant responses
- * (participantMessageIds.length > 0). Placeholder states with closed/locked accordions are
- * NOT shown - placeholder states are ONLY for participant cards.
- *
- * Filtering is done upstream in:
- * - ChatOverviewScreen.tsx: checks participantMessageIds before rendering
- * - useThreadTimeline.ts: filters out placeholder analyses from timeline
+ * Displays a simple summary of what happened in each round.
  */
 export function RoundSummaryCard({
   analysis,
@@ -51,10 +42,8 @@ export function RoundSummaryCard({
   onStreamStart,
   onStreamComplete,
   streamingRoundNumber,
-  onActionClick,
   demoOpen,
   demoShowContent,
-  demoSectionStates,
 }: RoundSummaryCardProps) {
   const t = useTranslations('moderator');
 
@@ -79,16 +68,13 @@ export function RoundSummaryCard({
   } as const;
   const config = statusConfig[analysis.status];
 
-  // ✅ REACT 19: Manual control state with round tracking (derived state pattern)
-  // Track the round number when user took manual control - allows auto-invalidation
+  // Manual control state with round tracking
   const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
 
-  // ✅ REACT 19: Derive if manual control is still valid (no useEffect needed)
-  // Manual control is invalidated when a newer round starts streaming
+  // Derive if manual control is still valid
   const isManualControlValid = useMemo(() => {
     if (!manualControl)
       return false;
-    // If streaming a newer round, manual control is no longer valid
     if (streamingRoundNumber != null && streamingRoundNumber > manualControl.round) {
       return false;
     }
@@ -99,18 +85,13 @@ export function RoundSummaryCard({
   const isStreamingOrPending = analysis.status === AnalysisStatuses.STREAMING
     || analysis.status === AnalysisStatuses.PENDING;
 
-  // ✅ REACT 19: Event handler (not useEffect) for user interaction
   const handleOpenChange = useCallback((open: boolean) => {
-    // Prevent interaction during streaming
     if (isStreamingOrPending)
       return;
-
-    // Store manual control with current round number for invalidation tracking
     setManualControl({ round: analysis.roundNumber, open });
   }, [isStreamingOrPending, analysis.roundNumber]);
 
-  // ✅ REACT 19: Fully derived accordion state (no useEffect needed)
-  // Priority: demoOpen > valid manual control > isLatest
+  // Derived accordion state: demoOpen > valid manual control > isLatest
   const isOpen = useMemo(() => {
     if (demoOpen !== undefined)
       return demoOpen;
@@ -118,11 +99,6 @@ export function RoundSummaryCard({
       return manualControl.open;
     return isLatest;
   }, [demoOpen, isManualControlValid, manualControl, isLatest]);
-
-  // ✅ SCROLL FIX: Removed independent scrollIntoView - scroll is managed centrally by useChatScroll
-  // Having each RoundAnalysisCard call scrollIntoView caused multiple scroll anchors to conflict,
-  // resulting in excessive jumping/snapping behavior. The useChatScroll hook handles all auto-scroll
-  // during streaming via ResizeObserver on document.body.
 
   return (
     <div className={cn('py-1.5', className)}>
@@ -134,10 +110,8 @@ export function RoundSummaryCard({
       >
         <div className="relative">
           <ChainOfThoughtHeader>
-            {/* Mobile-optimized header layout - inline title and badge */}
             <div className="flex items-center gap-2 w-full min-w-0">
               <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-              {/* Title and badge - always inline, no wrap */}
               <span className="text-sm font-medium whitespace-nowrap">
                 {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
               </span>
@@ -150,7 +124,6 @@ export function RoundSummaryCard({
               >
                 {config.label}
               </Badge>
-              {/* Mode indicator - hidden on mobile */}
               <div className="hidden sm:flex items-center gap-2 flex-shrink-0 ml-auto">
                 <span className="text-sm text-muted-foreground">•</span>
                 <span className="text-xs text-muted-foreground capitalize">
@@ -161,10 +134,8 @@ export function RoundSummaryCard({
           </ChainOfThoughtHeader>
         </div>
         <ChainOfThoughtContent>
-          {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
             <>
-              {/* Render appropriate content based on analysis status */}
               {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
                 ? (
                     <RoundSummaryStream
@@ -172,23 +143,16 @@ export function RoundSummaryCard({
                       analysis={analysis}
                       onStreamStart={onStreamStart}
                       onStreamComplete={onStreamComplete}
-                      onActionClick={onActionClick}
                     />
                   )
                 : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
                   ? (
-                      <RoundSummaryPanel
-                        analysis={analysis}
-                        onActionClick={onActionClick}
-                        demoSectionStates={demoSectionStates}
-                      />
+                      <RoundSummaryPanel analysis={analysis} />
                     )
                   : (analysis.status === AnalysisStatuses.FAILED || (analysis.status === AnalysisStatuses.COMPLETE && !analysis.analysisData))
                       ? (
                           <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
                             <span className="size-1.5 rounded-full bg-destructive/80" />
-                            {/* ✅ FIX: Show error for FAILED or inconsistent COMPLETE-without-data states
-                              The latter can happen if streaming completed but validation failed */}
                             <span>{t('errorAnalyzing')}</span>
                           </div>
                         )
