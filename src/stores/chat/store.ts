@@ -267,17 +267,11 @@ const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
     }, false, 'feedback/setFeedback'),
   setPendingFeedback: feedback =>
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-  clearFeedback: roundNumber =>
-    set((draft) => {
-      draft.feedbackByRound.delete(roundNumber);
-    }, false, 'feedback/clearFeedback'),
   loadFeedbackFromServer: data =>
     set({
       feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
       hasLoadedFeedback: true,
     }, false, 'feedback/loadFeedbackFromServer'),
-  resetFeedback: () =>
-    set(FEEDBACK_DEFAULTS, false, 'feedback/resetFeedback'),
 });
 
 /**
@@ -548,15 +542,6 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
           ps.status = status;
       });
     }, false, 'preSearch/updatePreSearchStatus'),
-  updatePreSearchError: (roundNumber: number, errorMessage: string | null) =>
-    set((draft) => {
-      draft.preSearches.forEach((ps) => {
-        if (ps.roundNumber === roundNumber) {
-          ps.status = AnalysisStatuses.FAILED;
-          ps.errorMessage = errorMessage;
-        }
-      });
-    }, false, 'preSearch/updatePreSearchError'),
   removePreSearch: roundNumber =>
     set((draft) => {
       const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
@@ -769,8 +754,6 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
   setStreamResumptionState: state =>
     set({ streamResumptionState: state }, false, 'streamResumption/setStreamResumptionState'),
 
-  getStreamResumptionState: () => get().streamResumptionState,
-
   needsStreamResumption: () => {
     const state = get();
     const resumptionState = state.streamResumptionState;
@@ -853,8 +836,6 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       resumptionAttempts: new Set<string>(),
     }, false, 'streamResumption/handleStreamResumptionFailure');
   },
-
-  getNextParticipantToTrigger: () => get().nextParticipantToTrigger,
 
   setNextParticipantToTrigger: (index: number | null) =>
     set({ nextParticipantToTrigger: index }, false, 'streamResumption/setNextParticipantToTrigger'),
@@ -1372,26 +1353,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     }, false, 'operations/resetToNewChat');
   },
 
-  /**
-   * Reset local streaming state (backend continues via waitUntil)
-   * Used on navigation - streams complete in background for data integrity
-   */
-  stopStreaming: () => {
-    set({
-      isStreaming: false,
-      currentParticipantIndex: 0,
-    }, false, 'operations/stopStreaming');
-  },
-
-  /**
-   * ✅ SIMPLE RESET: Alias for resetToOverview
-   *
-   * Convenience function for resetting to overview state.
-   * Used in tests and simple reset scenarios.
-   */
-  reset: () => {
-    get().resetToOverview();
-  },
 });
 
 // ============================================================================

@@ -8,9 +8,18 @@
 -- Order: Drop children first, then parents
 -- ============================================================================
 
--- Chat-related tables (children first)
+-- Upload/Attachment tables (children first - reference threads/messages)
+DROP TABLE IF EXISTS message_upload;
+DROP TABLE IF EXISTS thread_upload;
+DROP TABLE IF EXISTS project_attachment;
+DROP TABLE IF EXISTS upload;
+
+-- Project tables (reference threads)
+DROP TABLE IF EXISTS project_memory;
 DROP TABLE IF EXISTS project_knowledge_file;
 DROP TABLE IF EXISTS chat_project;
+
+-- Chat-related tables (children first)
 DROP TABLE IF EXISTS chat_moderator_analysis;
 DROP TABLE IF EXISTS chat_round_feedback;
 DROP TABLE IF EXISTS chat_message;

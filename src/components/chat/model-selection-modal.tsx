@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import type { BaseModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { createRoleSystemPrompt } from '@/api/services/prompts.service';
 import { Button } from '@/components/ui/button';
@@ -20,8 +21,10 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCreateCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
@@ -31,6 +34,7 @@ import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import type { OrderedModel } from './model-item';
 import { ModelItem } from './model-item';
+import { ModelPresetCard } from './model-preset-card';
 
 /**
  * ModelSelectionModal Component
@@ -130,6 +134,8 @@ export type ModelSelectionModalProps = {
   onRoleChange: (modelId: string, role: string, customRoleId?: string) => void;
   /** Callback when role is cleared for a model */
   onClearRole: (modelId: string) => void;
+  /** Callback when a preset is selected - replaces current selection with preset models */
+  onPresetSelect?: (models: BaseModelResponse[]) => void;
   /** Number of currently selected models */
   selectedCount: number;
   /** Maximum models allowed by user's plan */
@@ -161,6 +167,7 @@ export function ModelSelectionModal({
   onToggle,
   onRoleChange,
   onClearRole,
+  onPresetSelect,
   selectedCount,
   maxModels,
   userTierInfo,
@@ -174,6 +181,9 @@ export function ModelSelectionModal({
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Tab state - default to presets to encourage usage
+  const [activeTab, setActiveTab] = useState<'presets' | 'custom'>('presets');
 
   // Role selection state
   const [selectedModelForRole, setSelectedModelForRole] = useState<string | null>(null);
@@ -283,6 +293,22 @@ export function ModelSelectionModal({
       toastManager.error('Failed to create role', errorMessage);
     }
   }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles, customRoleLimit]);
+
+  // Handle preset selection
+  const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
+    if (onPresetSelect) {
+      onPresetSelect(models);
+      onOpenChange(false); // Close modal after selection
+    }
+  }, [onPresetSelect, onOpenChange]);
+
+  // Get all models for preset cards
+  const allModels = useMemo(() => {
+    return orderedModels.map(om => om.model);
+  }, [orderedModels]);
+
+  // Get user tier for preset access checks
+  const userTier = userTierInfo?.current_tier ?? 'free';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -497,111 +523,147 @@ export function ModelSelectionModal({
                   </motion.div>
                 )
               : (
-                  /* Model List View - NO motion.div wrapper to avoid layout interference with Reorder drag */
+                  /* Model Selection View with Tabs */
                   <div
                     key="model-list"
-                    className="flex flex-col gap-4 pt-4 pb-0"
+                    className="flex flex-col pt-4 pb-0 min-h-0"
                   >
-                    {/* Search Input */}
-                    <div className="shrink-0 mb-4">
-                      <Input
-                        ref={searchInputRef}
-                        type="text"
-                        placeholder={t('searchPlaceholder')}
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        startIcon={<Search />}
-                        endIcon={searchQuery
-                          ? (
-                              <X
-                                className="cursor-pointer"
-                                onClick={() => {
-                                  setSearchQuery('');
-                                  searchInputRef.current?.focus();
-                                }}
+                    <Tabs
+                      value={activeTab}
+                      onValueChange={v => setActiveTab(v as 'presets' | 'custom')}
+                      className="w-full"
+                    >
+                      <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsTrigger value="presets">
+                          {tModels('presets.title')}
+                        </TabsTrigger>
+                        <TabsTrigger value="custom">
+                          {tModels('buildCustom.title')}
+                        </TabsTrigger>
+                      </TabsList>
+
+                      {/* Presets Tab Content */}
+                      <TabsContent value="presets" className="mt-0">
+                        <ScrollArea className="h-[400px] pr-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 auto-rows-fr">
+                            {MODEL_PRESETS.map(preset => (
+                              <ModelPresetCard
+                                key={preset.id}
+                                preset={preset}
+                                allModels={allModels}
+                                userTier={userTier}
+                                onSelect={handlePresetSelect}
                               />
-                            )
-                          : undefined}
-                        endIconClickable={!!searchQuery}
-                      />
-                    </div>
-
-                    {/* Error: No models selected */}
-                    {selectedCount === 0 && (
-                      <div
-                        className={cn(
-                          'flex items-center gap-2 px-3 py-2 rounded-xl -mt-2 mb-2',
-                          'bg-destructive/10 border border-destructive/20',
-                          'text-xs text-destructive',
-                        )}
-                      >
-                        <AlertCircle className="size-3.5 shrink-0" />
-                        <span>{tModels('minimumRequired.description', { count: 1 })}</span>
-                      </div>
-                    )}
-
-                    {/* Model List */}
-                    {filteredModels.length === 0
-                      ? (
-                          <div className="flex flex-col items-center justify-center py-12 h-[400px]">
-                            <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
+                            ))}
                           </div>
-                        )
-                      : enableDrag && !isFiltering
-                        ? (
-                            <ScrollArea className="h-[400px]">
-                              <Reorder.Group
-                                axis="y"
-                                values={filteredModels}
-                                onReorder={handleReorder}
-                                layoutScroll
-                                className="flex flex-col gap-2"
-                              >
-                                {filteredModels.map(orderedModel => (
-                                  <ModelItem
-                                    key={orderedModel.model.id}
-                                    orderedModel={orderedModel}
-                                    allParticipants={allParticipants}
-                                    customRoles={customRoles}
-                                    onToggle={() => onToggle(orderedModel.model.id)}
-                                    onRoleChange={(role, customRoleId) =>
-                                      onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                    onClearRole={() => onClearRole(orderedModel.model.id)}
-                                    selectedCount={selectedCount}
-                                    maxModels={maxModels}
-                                    enableDrag
-                                    userTierInfo={userTierInfo}
-                                    onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
-                                    isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
+                        </ScrollArea>
+                      </TabsContent>
+
+                      {/* Build Custom Tab Content */}
+                      <TabsContent value="custom" className="mt-0">
+                        {/* Search Input */}
+                        <div className="shrink-0 mb-4">
+                          <Input
+                            ref={searchInputRef}
+                            type="text"
+                            placeholder={t('searchPlaceholder')}
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            startIcon={<Search />}
+                            endIcon={searchQuery
+                              ? (
+                                  <X
+                                    className="cursor-pointer"
+                                    onClick={() => {
+                                      setSearchQuery('');
+                                      searchInputRef.current?.focus();
+                                    }}
                                   />
-                                ))}
-                              </Reorder.Group>
-                            </ScrollArea>
-                          )
-                        : (
-                            <ScrollArea className="h-[400px]">
-                              <div className="flex flex-col gap-2">
-                                {filteredModels.map(orderedModel => (
-                                  <ModelItem
-                                    key={orderedModel.model.id}
-                                    orderedModel={orderedModel}
-                                    allParticipants={allParticipants}
-                                    customRoles={customRoles}
-                                    onToggle={() => onToggle(orderedModel.model.id)}
-                                    onRoleChange={(role, customRoleId) =>
-                                      onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                    onClearRole={() => onClearRole(orderedModel.model.id)}
-                                    selectedCount={selectedCount}
-                                    maxModels={maxModels}
-                                    enableDrag={false}
-                                    userTierInfo={userTierInfo}
-                                    onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
-                                    isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
-                                  />
-                                ))}
+                                )
+                              : undefined}
+                            endIconClickable={!!searchQuery}
+                          />
+                        </div>
+
+                        {/* Error: No models selected */}
+                        {selectedCount === 0 && (
+                          <div
+                            className={cn(
+                              'flex items-center gap-2 px-3 py-2 rounded-xl -mt-2 mb-2',
+                              'bg-destructive/10 border border-destructive/20',
+                              'text-xs text-destructive',
+                            )}
+                          >
+                            <AlertCircle className="size-3.5 shrink-0" />
+                            <span>{tModels('minimumRequired.description', { count: 1 })}</span>
+                          </div>
+                        )}
+
+                        {/* Model List */}
+                        {filteredModels.length === 0
+                          ? (
+                              <div className="flex flex-col items-center justify-center py-12 h-[400px]">
+                                <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
                               </div>
-                            </ScrollArea>
-                          )}
+                            )
+                          : enableDrag && !isFiltering
+                            ? (
+                                <ScrollArea className="h-[400px] pr-3">
+                                  <Reorder.Group
+                                    axis="y"
+                                    values={filteredModels}
+                                    onReorder={handleReorder}
+                                    layoutScroll
+                                    className="flex flex-col gap-2"
+                                  >
+                                    {filteredModels.map(orderedModel => (
+                                      <ModelItem
+                                        key={orderedModel.model.id}
+                                        orderedModel={orderedModel}
+                                        allParticipants={allParticipants}
+                                        customRoles={customRoles}
+                                        onToggle={() => onToggle(orderedModel.model.id)}
+                                        onRoleChange={(role, customRoleId) =>
+                                          onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                        onClearRole={() => onClearRole(orderedModel.model.id)}
+                                        selectedCount={selectedCount}
+                                        maxModels={maxModels}
+                                        enableDrag
+                                        userTierInfo={userTierInfo}
+                                        onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                        isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
+                                      />
+                                    ))}
+                                  </Reorder.Group>
+                                </ScrollArea>
+                              )
+                            : (
+                                /* Non-drag list (filtering active or mobile): Use ScrollArea */
+                                <ScrollArea className="h-[400px] pr-3">
+                                  <div className="flex flex-col gap-2">
+                                    {filteredModels.map(orderedModel => (
+                                      <ModelItem
+                                        key={orderedModel.model.id}
+                                        orderedModel={orderedModel}
+                                        allParticipants={allParticipants}
+                                        customRoles={customRoles}
+                                        onToggle={() => onToggle(orderedModel.model.id)}
+                                        onRoleChange={(role, customRoleId) =>
+                                          onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                        onClearRole={() => onClearRole(orderedModel.model.id)}
+                                        selectedCount={selectedCount}
+                                        maxModels={maxModels}
+                                        enableDrag={false}
+                                        userTierInfo={userTierInfo}
+                                        onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                        isIncompatibleWithFiles={incompatibleModelIds?.has(orderedModel.model.id)}
+                                      />
+                                    ))}
+                                  </div>
+                                </ScrollArea>
+                              )}
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 )}
           </AnimatePresence>

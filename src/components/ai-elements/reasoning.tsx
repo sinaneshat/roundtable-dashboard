@@ -7,6 +7,8 @@ import { createContext, use, useCallback, useEffect, useMemo, useRef, useState }
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/ui/cn';
 
+import { TextShimmer } from './shimmer';
+
 /**
  * Reasoning - AI reasoning visualization component
  *
@@ -60,10 +62,8 @@ function useReasoning() {
 
 type ReasoningProps = ComponentProps<typeof Collapsible> & {
   /**
-   * Whether the reasoning is currently being streamed
-   * Component stays collapsed during streaming with shimmer animation.
-   * User can manually toggle to see reasoning content at any time.
-   * Shows "Thought for X seconds" when streaming completes.
+   * Whether the reasoning is currently being streamed (from parent message status)
+   * Used as a fallback when content-based detection hasn't triggered yet.
    */
   isStreaming?: boolean;
   /**
@@ -71,26 +71,34 @@ type ReasoningProps = ComponentProps<typeof Collapsible> & {
    * This prevents false "growth" detection on mount
    */
   initialContentLength?: number;
+  /**
+   * Stored duration from metadata - for historical messages that were previously streamed
+   * Pass this to show "Thought for X seconds" on page refresh
+   */
+  storedDuration?: number;
 };
 
 export function Reasoning({
-  isStreaming: _isStreamingProp = false,
+  isStreaming: isStreamingProp = false,
   initialContentLength = 0,
+  storedDuration,
   className,
   children,
   ...props
 }: ReasoningProps) {
-  // ✅ CONTENT-BASED STREAMING: Track thinking state based on content growth, not message status
-  // This works for ALL models (DeepSeek, GPT, Grok) regardless of how they send reasoning
+  // ✅ CONTENT-BASED STREAMING: Track thinking state based on content growth
   const startTimeRef = useRef<number | undefined>(undefined);
   const hasEverGrownRef = useRef(false);
-  const [duration, setDuration] = useState<number | undefined>(undefined);
+  const [calculatedDuration, setCalculatedDuration] = useState<number | undefined>(undefined);
   const [isThinking, setIsThinking] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
   // Timeout for detecting when content stops growing
   const contentGrowthTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ DURATION: Use stored duration from metadata, or calculated duration from this session
+  const duration = storedDuration ?? calculatedDuration;
 
   // Callback for ReasoningContent to report content growth
   const reportContentGrowth = useCallback(() => {
@@ -100,8 +108,7 @@ export function Reasoning({
       startTimeRef.current = Date.now();
     }
 
-    // Set thinking state (but do NOT auto-expand - keep collapsed during streaming)
-    // This ensures the shimmer animation plays while content streams
+    // Set thinking state
     setIsThinking(true);
     setIsComplete(false);
 
@@ -120,10 +127,9 @@ export function Reasoning({
       if (startTimeRef.current) {
         const endTime = Date.now();
         const durationInSeconds = Math.round((endTime - startTimeRef.current) / 1000);
-        setDuration(durationInSeconds);
+        setCalculatedDuration(durationInSeconds);
       }
 
-      // Do NOT auto-collapse - user controls open/close state manually
       contentGrowthTimeoutRef.current = null;
     }, 800); // 800ms of no growth = thinking is done
   }, []);
@@ -154,20 +160,28 @@ export function Reasoning({
     return undefined;
   }, []);
 
-  // ✅ STREAMING STATE: Based purely on content growth, not parent's message status
-  const isStreaming = isThinking;
+  // ✅ STREAMING STATE: Use content-based detection OR parent prop as fallback
+  // This ensures shimmer shows even before first content arrives
+  const isStreaming = isThinking || (isStreamingProp && !isComplete);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
-      // ✅ Allow user to expand/collapse at any time, even during streaming
-      // User should be able to view reasoning content as it streams in
+      // Allow user to expand/collapse at any time
       setIsOpen(newOpen);
     },
     [],
   );
 
   const contextValue = useMemo(
-    () => ({ open: isOpen, setOpen: handleOpenChange, isStreaming, isComplete, duration, reportContentGrowth, initialContentLength }),
+    () => ({
+      open: isOpen,
+      setOpen: handleOpenChange,
+      isStreaming,
+      isComplete,
+      duration,
+      reportContentGrowth,
+      initialContentLength,
+    }),
     [isOpen, handleOpenChange, isStreaming, isComplete, duration, reportContentGrowth, initialContentLength],
   );
 
@@ -178,7 +192,7 @@ export function Reasoning({
         onOpenChange={handleOpenChange}
         className={cn(
           'not-prose w-full mb-3',
-          // ✅ Visual differentiation: subtle bg + border to distinguish from main content
+          // Visual differentiation: subtle bg + border
           'rounded-lg bg-muted/30 border border-border/50 px-4 py-3',
           className,
         )}
@@ -202,28 +216,6 @@ type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
   title?: string;
 };
 
-/**
- * Shimmer text component for thinking state
- * Creates a smooth, character-by-character shimmer animation
- * Uses CSS-based animations for better caching reliability in deployed environments
- */
-/* eslint-disable react/no-array-index-key -- Character animation requires position-based keys; chars aren't unique */
-function ShimmerText({ text }: { text: string }) {
-  return (
-    <span className="font-medium">
-      {text.split('').map((char, i) => (
-        <span
-          key={`char-${i}`}
-          className={`animate-shimmer-char shimmer-delay-${i % 16}`}
-        >
-          {char === ' ' ? '\u00A0' : char}
-        </span>
-      ))}
-    </span>
-  );
-}
-/* eslint-enable react/no-array-index-key */
-
 export function ReasoningTrigger({
   title,
   className,
@@ -231,18 +223,58 @@ export function ReasoningTrigger({
 }: ReasoningTriggerProps) {
   const { open, isStreaming, isComplete, duration } = useReasoning();
 
+  // Live elapsed time counter during streaming
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const streamingStartRef = useRef<number | null>(null);
+  const hasResetRef = useRef(false);
+
+  // Track elapsed time during streaming with a live counter
+  useEffect(() => {
+    if (!isStreaming) {
+      // Mark for reset on next streaming start
+      streamingStartRef.current = null;
+      hasResetRef.current = false;
+      return undefined;
+    }
+
+    // Start tracking when streaming begins
+    if (streamingStartRef.current === null) {
+      streamingStartRef.current = Date.now();
+    }
+
+    // Update counter every second (also handles initial reset)
+    const interval = setInterval(() => {
+      if (streamingStartRef.current) {
+        const elapsed = Math.floor((Date.now() - streamingStartRef.current) / 1000);
+        // Reset to 0 on first tick if needed, then update normally
+        if (!hasResetRef.current) {
+          hasResetRef.current = true;
+          setElapsedSeconds(0);
+        } else {
+          setElapsedSeconds(elapsed);
+        }
+      }
+    }, 100); // Check more frequently for smoother updates
+
+    return () => clearInterval(interval);
+  }, [isStreaming]);
+
   // Dynamic message based on state
-  // ✅ Shows: "Thinking..." (streaming) → "Thought for X seconds" (streamed) → "Thought" (loaded from history)
-  const getMessage = () => {
+  const getMessage = (): string => {
     if (title) {
       return title;
     }
     if (isStreaming) {
-      return 'Thinking...';
+      // Show live elapsed time counter: "Thinking... 5s"
+      return elapsedSeconds > 0 ? `Thinking... ${elapsedSeconds}s` : 'Thinking...';
     }
     // Streamed and completed with measured duration
-    if (duration !== undefined) {
-      return duration > 0 ? `Thought for ${duration} seconds` : 'Thought for a moment';
+    if (duration !== undefined && duration > 0) {
+      return `Thought for ${duration} second${duration === 1 ? '' : 's'}`;
+    }
+    // Very quick thinking (< 1 second)
+    if (duration === 0) {
+      return 'Thought for a moment';
     }
     // Loaded from history (never saw streaming, but has content)
     if (isComplete) {
@@ -263,10 +295,9 @@ export function ReasoningTrigger({
       >
         <div className="flex items-center gap-2">
           <Brain className={cn('size-4 shrink-0', isStreaming && 'animate-pulse')} />
-          {/* ✅ SHIMMER: Use shimmer animation during thinking state */}
           {isStreaming
-            ? <ShimmerText text={getMessage()} />
-            : <span>{getMessage()}</span>}
+            ? <TextShimmer className="font-medium text-sm">{getMessage()}</TextShimmer>
+            : <span className="font-medium">{getMessage()}</span>}
         </div>
         <ChevronDown
           className={cn(
@@ -293,9 +324,7 @@ export function ReasoningContent({
 }: ReasoningContentProps) {
   const { reportContentGrowth, initialContentLength } = useReasoning();
 
-  // ✅ FIX: Initialize with actual content length to prevent false growth detection on refresh
-  // On first mount with historical data, initialContentLength should match children length
-  // This prevents showing "Thinking..." shimmer for completed reasoning blocks
+  // Track content length to detect growth
   const lastContentLengthRef = useRef<number>(initialContentLength);
   const isInitializedRef = useRef(false);
 
@@ -304,19 +333,18 @@ export function ReasoningContent({
     const childText = typeof children === 'string' ? children : '';
     const currentLength = childText.length;
 
-    // ✅ FIX: On first render, just sync the ref without triggering growth
-    // This handles page refresh where content already exists
+    // On first render, just sync the ref without triggering growth
     if (!isInitializedRef.current) {
       isInitializedRef.current = true;
-      // If initial content length wasn't provided, set it now
+      // If initial content length wasn't provided but content exists, set it now
       if (lastContentLengthRef.current === 0 && currentLength > 0) {
         lastContentLengthRef.current = currentLength;
-        return; // Don't report growth on initial mount
+        return; // Don't report growth on initial mount with existing content
       }
     }
 
+    // Report growth when content increases
     if (currentLength > lastContentLengthRef.current) {
-      // Content grew - report it to parent
       lastContentLengthRef.current = currentLength;
       reportContentGrowth();
     }
@@ -335,4 +363,28 @@ export function ReasoningContent({
       </div>
     </CollapsibleContent>
   );
+}
+
+// ============================================================================
+// Utility: Get duration from reasoning for storage
+// ============================================================================
+
+/**
+ * Hook to track reasoning duration for external storage
+ * Call this in the parent component to get the duration after streaming completes
+ *
+ * @example
+ * ```tsx
+ * const reasoningRef = useRef<{ getDuration: () => number | undefined }>(null);
+ *
+ * // After streaming completes, store the duration
+ * const duration = reasoningRef.current?.getDuration();
+ * if (duration !== undefined) {
+ *   updateMessageMetadata({ reasoningDuration: duration });
+ * }
+ * ```
+ */
+export function useReasoningDuration() {
+  const context = use(ReasoningContext);
+  return context?.duration;
 }

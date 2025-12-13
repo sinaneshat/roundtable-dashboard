@@ -60,73 +60,26 @@ export function useNavigationReset() {
     enableWebSearch: s.enableWebSearch,
   })));
 
-  // Reset store when navigating FROM thread screen TO /chat
-  // This handles:
-  // 1. Logo clicks from thread screen
-  // 2. "New Chat" button from thread screen
-  // 3. Browser back/forward to /chat
-  useEffect(() => {
-    const isNavigatingToChat = pathname === '/chat' && previousPathnameRef.current !== '/chat';
-
-    if (isNavigatingToChat) {
-      // Invalidate thread-specific queries before reset
-      const effectiveThreadId = thread?.id || createdThreadId;
-      if (effectiveThreadId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.messages(effectiveThreadId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.analyses(effectiveThreadId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.preSearches(effectiveThreadId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.feedback(effectiveThreadId),
-        });
-      }
-
-      // User navigated to /chat route - reset store WITH persisted preferences
-      resetToNewChat(preferences);
-    }
-
-    // Update previous pathname for next comparison
-    previousPathnameRef.current = pathname;
-  }, [pathname, resetToNewChat, thread, createdThreadId, queryClient, preferences]);
-
-  // Return callback for manual reset (when clicking links)
-  // This provides immediate reset before navigation completes
-  const handleNavigationReset = useCallback(() => {
-    // Invalidate thread-specific queries BEFORE resetting store
-    // This ensures cached data is cleared and prevents:
-    // - Memory leaks from stale cached queries
-    // - Stale data appearing in new threads
-    // - Incorrect UI state from residual cache
+  // Shared reset logic - invalidate queries and reset store
+  const doReset = useCallback(() => {
     const effectiveThreadId = thread?.id || createdThreadId;
     if (effectiveThreadId) {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.messages(effectiveThreadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.analyses(effectiveThreadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.preSearches(effectiveThreadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.feedback(effectiveThreadId),
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.messages(effectiveThreadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(effectiveThreadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.preSearches(effectiveThreadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.feedback(effectiveThreadId) });
     }
-
-    // ALWAYS reset state WITH preserved preferences
-    // User wants clicking "New Chat" or logo to ALWAYS:
-    // 1. Invalidate cached thread data (above)
-    // 2. Stop any ongoing streams
-    // 3. Reset store state to defaults with persisted preferences
-    // 4. Navigate to /chat immediately
-    // Even if already on /chat, this ensures a fresh start with user's preferences
     resetToNewChat(preferences);
-  }, [resetToNewChat, thread, createdThreadId, queryClient, preferences]);
+  }, [thread, createdThreadId, queryClient, resetToNewChat, preferences]);
 
-  return handleNavigationReset;
+  // Reset store when navigating FROM thread screen TO /chat
+  useEffect(() => {
+    const isNavigatingToChat = pathname === '/chat' && previousPathnameRef.current !== '/chat';
+    if (isNavigatingToChat) {
+      doReset();
+    }
+    previousPathnameRef.current = pathname;
+  }, [pathname, doReset]);
+
+  return doReset;
 }

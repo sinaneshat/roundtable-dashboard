@@ -124,29 +124,6 @@ export function useModelPreferencesStore<T>(
 }
 
 // ============================================================================
-// STORE API HOOK (For imperative access)
-// ============================================================================
-
-/**
- * Get the store API for imperative access (getState)
- *
- * REACT BEST PRACTICE: Use this for reading current state inside callbacks/effects
- * without causing re-renders or infinite loops from dependency arrays.
- */
-// eslint-disable-next-line react-refresh/only-export-components -- Store API hook export
-export function useModelPreferencesStoreApi(): ModelPreferencesStoreApi {
-  const storeContext = use(PreferencesStoreContext);
-
-  if (!storeContext) {
-    throw new Error(
-      'useModelPreferencesStoreApi must be used within PreferencesStoreProvider',
-    );
-  }
-
-  return storeContext;
-}
-
-// ============================================================================
 // HYDRATION HOOK (Official Zustand v5 Pattern)
 // Source: https://github.com/pmndrs/zustand/blob/main/docs/integrations/persisting-store-data.md
 // ============================================================================

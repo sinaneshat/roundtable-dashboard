@@ -111,8 +111,6 @@ export type ModelPreferencesActions = {
    * Call this when accessible models change (tier change, models disabled)
    */
   syncWithAccessibleModels: (accessibleModelIds: string[]) => void;
-  isModelSelected: (modelId: string) => boolean;
-  getSelectedCount: () => number;
   setHasHydrated: (state: boolean) => void;
 };
 
@@ -394,14 +392,6 @@ export function createModelPreferencesStore(
                 'preferences/syncWithAccessibleModels',
               );
             }
-          },
-
-          isModelSelected: (modelId: string): boolean => {
-            return get().selectedModelIds.includes(modelId);
-          },
-
-          getSelectedCount: (): number => {
-            return get().selectedModelIds.length;
           },
 
           setHasHydrated: (hydrated: boolean) =>

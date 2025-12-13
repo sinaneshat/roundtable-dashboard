@@ -162,6 +162,9 @@ export const DbAssistantMessageMetadataSchema = z.object({
   // RAG citation references (when AI cites project context)
   citations: z.array(DbCitationSchema).optional(),
 
+  // Reasoning duration tracking (for "Thought for X seconds" display on page refresh)
+  reasoningDuration: z.number().int().nonnegative().optional(),
+
   // Available sources - files/context that were available to AI (shown even without inline citations)
   // This enables "Sources" UI to display what files the AI had access to
   availableSources: z.array(z.object({

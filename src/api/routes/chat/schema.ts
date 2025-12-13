@@ -1001,20 +1001,33 @@ export const ConfidenceAssessmentSchema = z.object({
 }).openapi('ConfidenceAssessment');
 
 /**
- * Complete Article-Style Analysis Payload
+ * Round Summary Payload (formerly ModeratorAnalysis)
  * Designed to read like a brief, polished summary article
  *
  * ✅ STREAMING ORDER: Fields ordered to match UI display from top to bottom
- * This ensures content streams in visual order for better UX
+ * Key insights & recommendations stream FIRST for immediate user value
+ *
+ * UI Order (top to bottom):
+ * 1. article (headline + narrative + keyTakeaway) - MAIN INSIGHTS
+ * 2. recommendations - ACTIONABLE NEXT STEPS
+ * 3. confidence - HOW CONFIDENT WE ARE
+ * 4. modelVoices - WHO SAID WHAT
+ * 5. consensusTable - AGREEMENT/DISAGREEMENT
+ * 6. minorityViews - DISSENTING OPINIONS
+ * 7. convergenceDivergence - HOW DISCUSSION EVOLVED
  */
 export const ModeratorAnalysisPayloadSchema = z.object({
+  // === METADATA (always first for routing) ===
   roundNumber: RoundNumberSchema,
   mode: z.string(),
   userQuestion: z.string(),
-  confidence: ConfidenceAssessmentSchema,
-  modelVoices: z.array(ModelVoiceSchema),
+  // === KEY INSIGHTS (stream first for immediate value) ===
   article: ArticleNarrativeSchema,
   recommendations: z.array(ArticleRecommendationSchema),
+  // === CONFIDENCE ===
+  confidence: ConfidenceAssessmentSchema,
+  // === DETAILED BREAKDOWN (stream last) ===
+  modelVoices: z.array(ModelVoiceSchema),
   consensusTable: z.array(ConsensusTableEntrySchema),
   minorityViews: z.array(MinorityViewSchema),
   convergenceDivergence: ConvergenceDivergenceSchema,

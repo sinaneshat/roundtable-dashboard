@@ -26,11 +26,11 @@ import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-sc
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
-import type { DemoSectionOpenStates } from './moderator/moderator-analysis-panel';
-import { RoundAnalysisCard } from './moderator/round-analysis-card';
 import { PreSearchCard } from './pre-search-card';
 import { RoundCopyAction } from './round-copy-action';
 import { RoundFeedback } from './round-feedback';
+import { RoundSummaryCard } from './round-summary/round-summary-card';
+import type { DemoSectionOpenStates } from './round-summary/round-summary-panel';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
 // Stable constants to prevent render loops
@@ -79,6 +79,9 @@ type ThreadTimelineProps = {
 
   // Data readiness
   isDataReady?: boolean;
+
+  // Message content scrolling (demo mode)
+  maxContentHeight?: number;
 };
 
 export function ThreadTimeline({
@@ -104,6 +107,7 @@ export function ThreadTimeline({
   demoAnalysisOpen,
   demoAnalysisSectionStates,
   isDataReady = true,
+  maxContentHeight,
 }: ThreadTimelineProps) {
   // TanStack Virtual hook - official pattern
   const {
@@ -211,6 +215,7 @@ export function ThreadTimeline({
                     preSearches={preSearches}
                     streamingRoundNumber={streamingRoundNumber}
                     demoPreSearchOpen={demoPreSearchOpen}
+                    maxContentHeight={maxContentHeight}
                   />
                 </UnifiedErrorBoundary>
 
@@ -267,10 +272,10 @@ export function ThreadTimeline({
               </div>
             )}
 
-            {/* Analysis items */}
+            {/* Round Summary items */}
             {item.type === 'analysis' && (
               <div className="mb-4">
-                <RoundAnalysisCard
+                <RoundSummaryCard
                   analysis={item.data}
                   threadId={threadId}
                   isLatest={virtualItem.index === timelineItems.length - 1}

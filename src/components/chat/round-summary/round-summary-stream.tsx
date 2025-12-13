@@ -26,8 +26,8 @@ import { getAnalysisResumeService } from '@/services/api';
 
 import { CollapsibleSection } from './collapsible-section';
 import { KeyInsightsSection } from './key-insights-section';
-import { getResolutionBadgeVariant, getStanceIcon } from './moderator-ui-utils';
 import { RoundOutcomeHeader } from './round-outcome-header';
+import { getResolutionBadgeVariant, getStanceIcon } from './round-summary-utils';
 
 // ============================================================================
 // RESUMABLE STREAMS: Attempt to resume analysis from buffer on page reload
@@ -126,7 +126,7 @@ async function attemptAnalysisResume(
   }
 }
 
-type ModeratorAnalysisStreamProps = {
+type RoundSummaryStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
@@ -137,13 +137,13 @@ type ModeratorAnalysisStreamProps = {
 // ✅ ZUSTAND PATTERN: Analysis stream tracking now in store
 // See store.ts: markAnalysisStreamTriggered, hasAnalysisStreamBeenTriggered, clearAnalysisStreamTracking
 
-function ModeratorAnalysisStreamComponent({
+function RoundSummaryStreamComponent({
   threadId,
   analysis,
   onStreamComplete,
   onStreamStart,
   onActionClick,
-}: ModeratorAnalysisStreamProps) {
+}: RoundSummaryStreamProps) {
   const t = useTranslations('moderator');
 
   // ✅ ZUSTAND PATTERN: Analysis stream tracking from store (replaces module-level Maps)
@@ -230,7 +230,9 @@ function ModeratorAnalysisStreamComponent({
   }, []);
 
   // AI SDK v5 Pattern: useObject hook for streaming structured data
-  const { object: partialAnalysis, error: _error, submit } = useObject({
+  // ✅ isLoading: true when stream is active (submit called but not finished)
+  // This allows us to show streaming state even before partialAnalysis has data
+  const { object: partialAnalysis, error: _error, submit, isLoading: isStreamLoading } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
     // ✅ AI SDK v5 Pattern: onFinish callback for handling completion and errors
@@ -626,7 +628,10 @@ function ModeratorAnalysisStreamComponent({
   const convergenceDivergence = displayData?.convergenceDivergence;
 
   // Content checking
-  const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING;
+  // ✅ Use both DB status AND useObject's isLoading for accurate streaming state
+  // isStreamLoading is true when submit() is called but stream hasn't finished
+  // This provides earlier feedback than waiting for DB status change
+  const isCurrentlyStreaming = analysis.status === AnalysisStatuses.STREAMING || isStreamLoading;
 
   // ✅ AI SDK v5: Stream data is valid - just display it directly
   // No validation during streaming, no excessive checks
@@ -664,20 +669,11 @@ function ModeratorAnalysisStreamComponent({
               transition={{ duration: ANIMATION_DURATION.normal, ease: ANIMATION_EASE.enter }}
               className="space-y-4"
             >
-              {/* ═══════════════════════════════════════════════════════════════════
-                  1. ROUND OUTCOME HEADER - Confidence + Model Badges (TOP)
-                  ✅ AI SDK v5 Pattern: Pass raw partial data, component handles undefined
-              ═══════════════════════════════════════════════════════════════════ */}
-              <RoundOutcomeHeader
-                confidence={confidence}
-                modelVoices={safeModelVoices}
-                isStreaming={isCurrentlyStreaming}
-              />
-
-              {/* Collapsible Sections - Match panel structure exactly */}
+              {/* Collapsible Sections - Match schema streaming order */}
               <div className="space-y-2">
                 {/* ═══════════════════════════════════════════════════════════════════
-                    2. KEY INSIGHTS & RECOMMENDATIONS - Article + Recommendations
+                    1. KEY INSIGHTS & RECOMMENDATIONS - Article + Recommendations (TOP)
+                    ✅ STREAMING FIRST: Streams before all other sections
                     ✅ AI SDK v5 Pattern: forceOpen during streaming, show partial data
                 ═══════════════════════════════════════════════════════════════════ */}
                 {(article || safeRecommendations.length > 0) && (
@@ -696,6 +692,17 @@ function ModeratorAnalysisStreamComponent({
                     />
                   </CollapsibleSection>
                 )}
+
+                {/* ═══════════════════════════════════════════════════════════════════
+                    2. ROUND OUTCOME HEADER - Confidence + Model Badges
+                    ✅ STREAMING: After key insights, before detailed breakdown
+                    ✅ AI SDK v5 Pattern: Pass raw partial data, component handles undefined
+                ═══════════════════════════════════════════════════════════════════ */}
+                <RoundOutcomeHeader
+                  confidence={confidence}
+                  modelVoices={safeModelVoices}
+                  isStreaming={isCurrentlyStreaming}
+                />
 
                 {/* ═══════════════════════════════════════════════════════════════════
                     3. MODEL VOICES - Detailed contributor info with avatars
@@ -918,7 +925,7 @@ function ModeratorAnalysisStreamComponent({
     </AnimatePresence>
   );
 }
-export const ModeratorAnalysisStream = memo(ModeratorAnalysisStreamComponent, (prevProps, nextProps) => {
+export const RoundSummaryStream = memo(RoundSummaryStreamComponent, (prevProps, nextProps) => {
   // ✅ Memo optimization: Prevent re-renders when props haven't changed
   // Callbacks are stored in refs internally, so callback equality checks prevent unnecessary work
   return (

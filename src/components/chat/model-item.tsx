@@ -6,7 +6,7 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import { Reorder } from 'motion/react';
+import { Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
@@ -69,6 +69,7 @@ export function ModelItem({
   isIncompatibleWithFiles = false,
 }: ModelItemProps) {
   const tModels = useTranslations('chat.models');
+  const dragControls = useDragControls();
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
   const isAccessible = model.is_accessible_to_user ?? isSelected;
@@ -80,39 +81,46 @@ export function ModelItem({
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
   const itemContent = (
-    <div className="flex items-center gap-3 w-full min-w-0">
+    <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
       {enableDrag && (
-        <div className="shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing">
-          <GripVertical className="size-5" />
+        <div
+          className="shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing select-none p-1 -m-1"
+          style={{ touchAction: 'none' }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            dragControls.start(e);
+          }}
+        >
+          <GripVertical className="size-4 sm:size-5" />
         </div>
       )}
-      <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
-        <Avatar className="size-10 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
+        <Avatar className="size-8 sm:size-10 shrink-0">
           <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
-          <AvatarFallback className="text-xs">
+          <AvatarFallback className="text-[10px] sm:text-xs">
             {model.name.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1 min-w-0 overflow-hidden space-y-1">
-          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-            <span className="text-sm font-semibold truncate min-w-0">{model.name}</span>
+        <div className="flex-1 min-w-0 overflow-hidden space-y-0.5 sm:space-y-1">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
+            <span className="text-xs sm:text-sm font-semibold truncate min-w-0">{model.name}</span>
 
             {/* Tier/Limit/Incompatibility badges - show immediately after name */}
             {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
-              <Badge variant="secondary" className="text-[10px] px-2 py-0.5 h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
+              <Badge variant="secondary" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                 {model.required_tier_name || model.required_tier}
               </Badge>
             )}
             {isDisabledDueToLimit && !isDisabledDueToTier && (
-              <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-warning/50 text-warning shrink-0">
+              <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-warning/50 text-warning shrink-0">
                 {tModels('limitReached')}
               </Badge>
             )}
             {isDisabledDueToFileIncompatibility && !isDisabledDueToTier && !isDisabledDueToLimit && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-destructive/50 text-destructive shrink-0 gap-1">
-                    <EyeOff className="size-3" />
+                  <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1">
+                    <EyeOff className="size-2.5 sm:size-3" />
                     {tModels('noVision')}
                   </Badge>
                 </TooltipTrigger>
@@ -126,7 +134,7 @@ export function ModelItem({
             {!isDisabledDueToTier && (
               <div
                 className={cn(
-                  'shrink-0 flex items-center gap-1',
+                  'shrink-0 flex items-center gap-0.5 sm:gap-1',
                   !isSelected && 'invisible',
                 )}
                 onClick={e => e.stopPropagation()}
@@ -141,9 +149,9 @@ export function ModelItem({
               >
                 {participant?.role
                   ? (
-                      <div className="inline-flex items-center gap-1">
+                      <div className="inline-flex items-center gap-0.5 sm:gap-1">
                         <Badge
-                          className="text-[10px] px-2 py-0.5 h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full"
+                          className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full"
                           style={getRoleBadgeStyle(participant.role)}
                           onClick={() => onOpenRolePanel?.()}
                         >
@@ -158,27 +166,27 @@ export function ModelItem({
                           className="shrink-0 p-0.5 rounded-sm hover:bg-white/10 transition-colors"
                           aria-label="Clear role"
                         >
-                          <X className="h-3 w-3 text-muted-foreground" />
+                          <X className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground" />
                         </button>
                       </div>
                     )
                   : (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
+                        className="inline-flex items-center gap-0.5 sm:gap-1 h-5 sm:h-6 px-1.5 sm:px-2.5 rounded-full text-[9px] sm:text-[11px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           onOpenRolePanel?.();
                         }}
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
                         {tModels('addRole')}
                       </button>
                     )}
               </div>
             )}
           </div>
-          <div className="text-xs text-muted-foreground truncate w-full min-w-0">
+          <div className="text-[10px] sm:text-xs text-muted-foreground truncate w-full min-w-0">
             {model.description}
           </div>
         </div>
@@ -189,11 +197,11 @@ export function ModelItem({
         ? (
             <Link
               href="/chat/pricing"
-              className="shrink-0 p-1.5 rounded-md touch-manipulation"
+              className="shrink-0 p-1 sm:p-1.5 rounded-md touch-manipulation"
               onClick={e => e.stopPropagation()}
               aria-label="Upgrade to unlock this model"
             >
-              <Lock className="size-5 text-amber-400" />
+              <Lock className="size-4 sm:size-5 text-amber-400" />
             </Link>
           )
         : (
@@ -201,7 +209,7 @@ export function ModelItem({
               checked={isSelected}
               onCheckedChange={isDisabled ? undefined : onToggle}
               disabled={isDisabled}
-              className="shrink-0"
+              className="shrink-0 scale-90 sm:scale-100"
               onClick={e => e.stopPropagation()}
               // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
               onPointerDownCapture={e => e.stopPropagation()}
@@ -214,15 +222,17 @@ export function ModelItem({
     return (
       <Reorder.Item
         value={orderedModel}
+        dragControls={dragControls}
+        dragListener={false}
         layout
         style={{ position: 'relative' }}
         className={cn(
-          'p-4 w-full rounded-xl block',
+          'p-3 sm:p-4 w-full rounded-xl block touch-manipulation',
           'cursor-pointer transition-colors duration-200',
-          !isDisabled && 'hover:bg-white/5',
+          !isDisabled && 'hover:bg-white/5 active:bg-white/10',
           isDisabled && 'opacity-50 cursor-not-allowed',
         )}
-        onTap={isDisabled ? undefined : onToggle}
+        onClick={isDisabled ? undefined : onToggle}
       >
         {itemContent}
       </Reorder.Item>
@@ -234,9 +244,9 @@ export function ModelItem({
       role="button"
       tabIndex={isDisabled ? -1 : 0}
       className={cn(
-        'p-4 w-full rounded-xl block',
+        'p-3 sm:p-4 w-full rounded-xl block touch-manipulation',
         'cursor-pointer transition-colors duration-200',
-        !isDisabled && 'hover:bg-white/5',
+        !isDisabled && 'hover:bg-white/5 active:bg-white/10',
         isDisabled && 'opacity-50 cursor-not-allowed',
       )}
       onClick={isDisabled ? undefined : onToggle}

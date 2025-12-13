@@ -43,16 +43,6 @@ export function getStatusPriority(status: AnalysisStatus): number {
   return ANALYSIS_STATUS_PRIORITY[status] ?? 0;
 }
 
-/**
- * Compare two statuses and return the one with higher priority
- */
-export function getHigherPriorityStatus(
-  status1: AnalysisStatus,
-  status2: AnalysisStatus,
-): AnalysisStatus {
-  return getStatusPriority(status1) >= getStatusPriority(status2) ? status1 : status2;
-}
-
 // ============================================================================
 // ORCHESTRATOR COMPARE KEYS - Type-safe field lists for state change detection
 // ============================================================================
@@ -106,34 +96,7 @@ export const AnimationIndices = {
    * Used by PreSearchCard to register/complete animations
    */
   PRE_SEARCH: -1,
-
-  /**
-   * Analysis animation index (-2)
-   * Reserved for future analysis animation tracking
-   */
-  ANALYSIS: -2,
 } as const;
-
-/**
- * Type guard to check if an index is a participant animation
- */
-export function isParticipantAnimation(index: number): boolean {
-  return index >= 0;
-}
-
-/**
- * Type guard to check if an index is a pre-search animation
- */
-export function isPreSearchAnimation(index: number): boolean {
-  return index === AnimationIndices.PRE_SEARCH;
-}
-
-/**
- * Type guard to check if an index is an analysis animation
- */
-export function isAnalysisAnimation(index: number): boolean {
-  return index === AnimationIndices.ANALYSIS;
-}
 
 // ============================================================================
 // ANALYSIS TIMEOUT CONFIGURATION

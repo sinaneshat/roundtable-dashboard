@@ -21,8 +21,8 @@ import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
 import { CollapsibleSection } from './collapsible-section';
 import { KeyInsightsSection } from './key-insights-section';
-import { getResolutionBadgeVariant, getStanceIcon } from './moderator-ui-utils';
 import { RoundOutcomeHeader } from './round-outcome-header';
+import { getResolutionBadgeVariant, getStanceIcon } from './round-summary-utils';
 
 /** Section open states for demo mode control */
 export type DemoSectionOpenStates = {
@@ -34,18 +34,18 @@ export type DemoSectionOpenStates = {
   aboutFramework?: boolean;
 };
 
-type ModeratorAnalysisPanelProps = {
+type RoundSummaryPanelProps = {
   analysis: StoredModeratorAnalysis;
   onActionClick?: (action: ArticleRecommendation) => void;
   /** Demo mode controlled section open states */
   demoSectionStates?: DemoSectionOpenStates;
 };
 
-export function ModeratorAnalysisPanel({
+export function RoundSummaryPanel({
   analysis,
   onActionClick,
   demoSectionStates,
-}: ModeratorAnalysisPanelProps) {
+}: RoundSummaryPanelProps) {
   const t = useTranslations('moderator');
 
   if (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) {

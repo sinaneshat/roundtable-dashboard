@@ -1768,14 +1768,6 @@ export function useMultiParticipantChat(
       return false;
     }
 
-    // ✅ RESUMABLE STREAMS: Skip if server prefilled resumption state
-    // When streamResumptionPrefilled is true, the server already knows about the incomplete round
-    // and has set up nextParticipantToTrigger. Let incomplete-round-resumption handle continuation
-    // instead of setting isStreaming:true here (which would block that hook).
-    if (streamResumptionPrefilled) {
-      return false;
-    }
-
     // ✅ GUARD: Only if we have a valid thread ID (not on overview page initial load)
     if (!threadId || threadId.trim() === '') {
       return false;
@@ -1808,6 +1800,14 @@ export function useMultiParticipantChat(
       roundParticipantsRef.current = enabled;
     }
 
+    // ✅ FIX: Return 'prefilled' to indicate server already knows about stream
+    // When streamResumptionPrefilled=true, the AI SDK successfully resumed the stream
+    // We MUST set isExplicitlyStreaming=true for message sync to work
+    // BUT we skip the phantom timeout since server already has stream state
+    if (streamResumptionPrefilled) {
+      return 'prefilled'; // Stream acknowledged, skip phantom timeout
+    }
+
     return true;
   });
 
@@ -1822,12 +1822,24 @@ export function useMultiParticipantChat(
   // ✅ PHANTOM RESUME FIX: After setting isExplicitlyStreaming=true, start a 5-second timeout.
   // If no new messages arrive in that time, the resume was phantom (204 response or stale stream).
   // Clear isExplicitlyStreaming to allow incomplete round resumption to take over.
+  //
+  // ✅ PREFILLED FIX: When streamResumptionPrefilled=true, server has buffered stream data.
+  // Skip phantom timeout since data WILL flow - the server already knows about the stream.
   useLayoutEffect(() => {
     // Only act when AI SDK says it's streaming but we haven't acknowledged it
     if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
-      const didSetStreaming = handleResumedStreamDetection();
+      const streamResult = handleResumedStreamDetection();
 
-      if (didSetStreaming) {
+      // ✅ FIX: Handle 'prefilled' - server has stream, skip phantom timeout
+      // When streamResumptionPrefilled=true, server already has buffered data
+      // Data will flow, no need for phantom detection
+      if (streamResult === 'prefilled') {
+        // Stream acknowledged, no phantom timeout needed
+        // The streaming flag is already set by handleResumedStreamDetection
+        return;
+      }
+
+      if (streamResult === true) {
         // Record message count at resume detection for phantom detection
         messagesAtResumeDetectionRef.current = messagesRef.current.length;
 
@@ -1862,6 +1874,68 @@ export function useMultiParticipantChat(
       phantomResumeTimeoutRef.current = null;
     }
   }, [messages.length]);
+
+  // Track previous status for transition detection
+  const previousStatusRef = useRef<typeof status>(status);
+
+  // ✅ DEAD STREAM DETECTION: Detect when resumed stream dies without completing
+  // When AI SDK status transitions streaming → ready AND we have isExplicitlyStreaming=true,
+  // check if current participant completed. If not, clear streaming state so
+  // incomplete-round-resumption can retry.
+  //
+  // This fixes the bug where:
+  // 1. User refreshes mid-stream
+  // 2. AI SDK resumes and receives buffered data
+  // 3. Original worker is dead, so stream ends with partial data
+  // 4. AI SDK status goes to 'ready'
+  // 5. But isExplicitlyStreaming stays true, blocking retry
+  useLayoutEffect(() => {
+    const prevStatus = previousStatusRef.current;
+    previousStatusRef.current = status;
+
+    // Only check on streaming → ready transition
+    if (prevStatus !== AiSdkStatuses.STREAMING || status !== AiSdkStatuses.READY) {
+      return;
+    }
+
+    // Only relevant when we think we're streaming
+    if (!isExplicitlyStreaming) {
+      return;
+    }
+
+    // Check if the last assistant message completed properly
+    const assistantMessages = messagesRef.current.filter(m => m.role === 'assistant');
+    const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+
+    if (!lastAssistantMessage) {
+      return;
+    }
+
+    // Extract finishReason from metadata
+    const metadata = lastAssistantMessage.metadata as Record<string, unknown> | undefined;
+    const finishReason = metadata?.finishReason as string | undefined;
+    const isComplete = finishReason === 'stop' || finishReason === 'length';
+
+    // If participant completed, normal orchestration will handle next steps
+    if (isComplete) {
+      return;
+    }
+
+    // ✅ DEAD STREAM DETECTED: Stream ended but participant didn't complete
+    // Clear streaming state so incomplete-round-resumption can retry
+    // Use a short timeout to avoid race with legitimate stream continuation
+    const deadStreamTimeoutId = setTimeout(() => {
+      // Double-check we're still in the same state
+      if (isStreamingRef.current) {
+        isStreamingRef.current = false;
+        setIsExplicitlyStreaming(false);
+      }
+    }, 500); // Short delay to allow for legitimate reconnections
+
+    return () => {
+      clearTimeout(deadStreamTimeoutId);
+    };
+  }, [status, isExplicitlyStreaming]);
 
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
   // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'

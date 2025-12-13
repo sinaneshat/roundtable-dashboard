@@ -113,12 +113,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
           currentState.completeStreaming();
 
+          // ✅ RATE LIMIT FIX: Use staleTime to prevent redundant fetches during rapid re-renders
+          // These fetches happen after participant streaming completes but before analysis streaming starts.
+          // Without staleTime, rapid component updates can trigger multiple fetches causing 429 errors.
+          const FETCH_STALE_TIME = 5 * 1000; // 5 seconds - prevents redundant fetches during transition
+
           // Fetch fresh messages for attachment URLs
           try {
             const result = await queryClientRef.current.fetchQuery({
               queryKey: queryKeys.threads.messages(threadId),
               queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
-              staleTime: 0,
+              staleTime: FETCH_STALE_TIME,
             });
             if (result.success && result.data?.messages) {
               const uiMessages = chatMessagesToUIMessages(result.data.messages, storeParticipants);
@@ -136,7 +141,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             const analysesResult = await queryClientRef.current.fetchQuery({
               queryKey: queryKeys.threads.analyses(threadId),
               queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
-              staleTime: 0,
+              staleTime: FETCH_STALE_TIME,
             });
             if (analysesResult.success && analysesResult.data?.items) {
               // Get current frontend analyses

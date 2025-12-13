@@ -23,6 +23,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
@@ -447,6 +448,28 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
+  // Preset selection - replaces all selected models with preset's models
+  const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
+    // Convert models to participant configs
+    const newParticipants = models.map((model, index) => ({
+      id: model.id,
+      modelId: model.id,
+      role: '',
+      priority: index,
+    }));
+
+    // Update store based on mode
+    if (mode === 'thread') {
+      threadActions.handleParticipantsChange(newParticipants);
+    } else {
+      setSelectedParticipants(newParticipants);
+    }
+
+    // Update model order
+    const modelIds = newParticipants.map(p => p.modelId);
+    setModelOrder(modelIds);
+  }, [mode, threadActions, setSelectedParticipants, setModelOrder]);
+
   const handleRemoveParticipant = useCallback((participantId: string) => {
     // Allow removing all - validation shown in UI
     removeParticipant(participantId);
@@ -589,6 +612,7 @@ export function ChatView({
         onToggle={handleModelToggle}
         onRoleChange={handleModelRoleChange}
         onClearRole={handleModelRoleClear}
+        onPresetSelect={handlePresetSelect}
         selectedCount={selectedParticipants.length}
         maxModels={userTierConfig.max_models}
         userTierInfo={{

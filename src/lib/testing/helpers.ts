@@ -121,7 +121,8 @@ export function createTestUserMessage(data: {
     metadata: {
       role: MessageRoles.USER, // ✅ Database metadata role enum
       roundNumber: data.roundNumber,
-      createdAt: data.createdAt,
+      // ✅ FIX: Only include createdAt if provided (Zod optional expects absent key, not undefined)
+      ...(data.createdAt !== undefined && { createdAt: data.createdAt }),
     },
   };
 }
@@ -167,7 +168,8 @@ export function createTestAssistantMessage(data: {
       hasError: data.hasError ?? false,
       isTransient: false,
       isPartialResponse: false,
-      createdAt: data.createdAt,
+      // ✅ FIX: Only include createdAt if provided (Zod optional expects absent key, not undefined)
+      ...(data.createdAt !== undefined && { createdAt: data.createdAt }),
     },
   };
 }

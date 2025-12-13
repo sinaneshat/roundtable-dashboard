@@ -9,7 +9,7 @@ import type { ArticleNarrative, ArticleRecommendation } from '@/api/routes/chat/
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { ModelBadge } from '@/components/chat/model-badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { StreamingCursor } from '@/components/ui/streaming-text';
+import { StreamingCursor, StreamingText } from '@/components/ui/streaming-text';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
@@ -105,7 +105,9 @@ export function KeyInsightsSection({
           {/* Headline */}
           {article.headline && (
             <h3 className="text-base font-semibold text-foreground leading-tight">
-              {article.headline}
+              <StreamingText isStreaming={isStreaming}>
+                {article.headline}
+              </StreamingText>
             </h3>
           )}
 
@@ -113,7 +115,9 @@ export function KeyInsightsSection({
           {article.keyTakeaway && (
             <div className="px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
               <p className="text-sm font-medium text-primary">
-                {article.keyTakeaway}
+                <StreamingText isStreaming={isStreaming}>
+                  {article.keyTakeaway}
+                </StreamingText>
               </p>
             </div>
           )}
@@ -121,7 +125,9 @@ export function KeyInsightsSection({
           {/* Narrative */}
           {article.narrative && (
             <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line">
-              {article.narrative}
+              <StreamingText isStreaming={isStreaming}>
+                {article.narrative}
+              </StreamingText>
               {isStreaming && <StreamingCursor />}
             </p>
           )}
@@ -183,11 +189,15 @@ export function KeyInsightsSection({
                     {/* Title and description */}
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-normal text-white leading-snug">
-                        {rec.title}
+                        <StreamingText isStreaming={isStreaming}>
+                          {rec.title}
+                        </StreamingText>
                       </h3>
                       {rec.description && (
                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                          {rec.description}
+                          <StreamingText isStreaming={isStreaming}>
+                            {rec.description}
+                          </StreamingText>
                         </p>
                       )}
                     </div>

@@ -98,12 +98,23 @@ function generateModeratorAnalysis(
   });
 
   // ✅ AI SDK v5: streamObject streams progressive JSON as it's generated
-  // Using Claude Sonnet 3.5 with mode:'json' - tested working configuration
+  // ✅ mode:'auto' lets AI SDK choose optimal streaming mode for the provider
+  // - 'json': Raw JSON output (may generate in large chunks)
+  // - 'tool': Function calling (streams parameters progressively)
+  // - 'auto': AI SDK picks based on model/provider support
+  //
+  // Progressive streaming depends on:
+  // 1. Model behavior (Claude may generate JSON quickly in ~1-2 seconds)
+  // 2. Provider support for streaming partial objects
+  // 3. Schema field order (confidence is first for early display)
+  //
+  // Frontend debug logging tracks when partial updates occur:
+  // See moderator-analysis-stream.tsx for "[Analysis Stream] Progressive update" logs
   const enhancedUserPrompt = buildModeratorAnalysisEnhancedPrompt(userPrompt);
   return streamObject({
     model: client.chat(AIModels.ANALYSIS),
     schema: ModeratorAnalysisPayloadSchema,
-    mode: 'json',
+    mode: 'auto',
     system: systemPrompt,
     prompt: enhancedUserPrompt,
     temperature: 0.3,
@@ -360,19 +371,43 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
           if (existingStreamId) {
             // =========================================================================
-            // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+            // ✅ STALE CHUNK DETECTION: Check if stream has received data recently
             // =========================================================================
-            // This creates a stream that:
-            // 1. Returns all buffered chunks immediately
-            // 2. Continues polling KV for new chunks as they arrive
-            // 3. Streams new chunks to client in real-time
-            // 4. Completes when the original stream finishes
-            // ✅ PATTERN: Uses Responses.textStream() builder for consistent headers
-            const liveStream = createLiveAnalysisResumeStream(existingStreamId, c.env);
-            return Responses.textStream(liveStream, {
-              streamId: existingStreamId,
-              resumedFromBuffer: true,
-            });
+            // If no new chunks in last 15 seconds, the original worker likely died
+            // (user refreshed page mid-stream). Mark as failed and start fresh.
+            const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
+            const chunks = await getAnalysisStreamChunks(existingStreamId, c.env);
+            const lastChunkTime = chunks && chunks.length > 0
+              ? Math.max(...chunks.map(chunk => chunk.timestamp))
+              : 0;
+            const isStaleStream = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+
+            if (isStaleStream) {
+              // Stream is stale - clear it and create a new one
+              await clearActiveAnalysisStream(threadId, roundNum, c.env);
+              await db.update(tables.chatModeratorAnalysis)
+                .set({
+                  status: AnalysisStatuses.FAILED,
+                  errorMessage: `Stream stale - no new data in ${Math.round((Date.now() - lastChunkTime) / 1000)}s (page likely refreshed mid-stream)`,
+                })
+                .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+              // Continue to create new analysis below (fall through)
+            } else {
+              // =========================================================================
+              // ✅ LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
+              // =========================================================================
+              // This creates a stream that:
+              // 1. Returns all buffered chunks immediately
+              // 2. Continues polling KV for new chunks as they arrive
+              // 3. Streams new chunks to client in real-time
+              // 4. Completes when the original stream finishes (or times out if dead)
+              // ✅ PATTERN: Uses Responses.textStream() builder for consistent headers
+              const liveStream = createLiveAnalysisResumeStream(existingStreamId, c.env);
+              return Responses.textStream(liveStream, {
+                streamId: existingStreamId,
+                resumedFromBuffer: true,
+              });
+            }
           }
 
           // =========================================================================

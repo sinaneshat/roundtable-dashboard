@@ -344,20 +344,26 @@ export function useIncompleteRoundResumption(
           // When a stream is interrupted (e.g., page refresh), the backend sends a synthetic
           // finish event with finishReason: 'unknown' and 0 tokens.
           //
-          // Two cases to handle:
-          // 1. Response has actual content but finishReason: 'unknown' → COUNT as responded
-          //    (the content was generated, just metadata is incomplete - don't retry)
-          // 2. Response is empty with finishReason: 'unknown' → DON'T count as responded
-          //    (stream was interrupted before any content was generated - retry this participant)
+          // Cases to handle:
+          // 1. Response has actual content → COUNT as responded (don't retry)
+          // 2. Response is empty with finishReason: 'unknown' → DON'T count (retry)
+          // 3. Response is empty with NO finishReason → DON'T count (retry)
+          //    This happens when page refresh occurs before ANY finish event is received
           //
           // Check if message has actual text content (not just empty or only whitespace)
           const hasTextContent = msg.parts?.some(
             p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
           ) || false;
 
-          const isEmptyInterruptedResponse = assistantMetadata?.finishReason === FinishReasons.UNKNOWN
-            && assistantMetadata?.usage?.totalTokens === 0
-            && !hasTextContent;
+          // ✅ FIX: Also check for messages with empty parts (no content generated at all)
+          // This handles the case where page refresh occurred during streaming setup
+          // before any text-delta events were processed into message parts
+          const isEmptyResponse = !hasTextContent && (!msg.parts || msg.parts.length === 0);
+
+          const isEmptyInterruptedResponse = isEmptyResponse
+            || (assistantMetadata?.finishReason === FinishReasons.UNKNOWN
+              && assistantMetadata?.usage?.totalTokens === 0
+              && !hasTextContent);
 
           // ✅ AI SDK RESUME FIX: Track participants with streaming parts
           // These have partial content from AI SDK resume - accept as-is, don't regenerate
@@ -366,8 +372,8 @@ export function useIncompleteRoundResumption(
             if (modelId) {
               respondedModelIds.add(modelId);
             }
-          // Only count as responded if message is complete (no streaming parts, not empty interrupted)
-          } else if (!isStillStreaming && !isEmptyInterruptedResponse) {
+          // Only count as responded if message has content (no empty interrupted responses)
+          } else if (!isStillStreaming && !isEmptyInterruptedResponse && hasTextContent) {
             respondedParticipantIndices.add(participantIndex);
             if (modelId) {
               respondedModelIds.add(modelId);
@@ -399,10 +405,22 @@ export function useIncompleteRoundResumption(
   // If any of these indicate a submission is active, we should NOT try to resume
   const isSubmissionInProgress = hasEarlyOptimisticMessage || (pendingMessage !== null && !hasSentPendingMessage);
 
+  // ✅ OPTIMISTIC MESSAGE FIX: Detect if last user message is optimistic
+  // When user submits a new message, an optimistic message is added to the store.
+  // If page refreshes before the submission flags are persisted, the optimistic
+  // message might exist without hasEarlyOptimisticMessage being set.
+  // In this case, we should NOT try to resume - it's a new submission in progress.
+  const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
+  const lastUserMessageIsOptimistic = lastUserMessage?.metadata
+    && typeof lastUserMessage.metadata === 'object'
+    && 'isOptimistic' in lastUserMessage.metadata
+    && lastUserMessage.metadata.isOptimistic === true;
+
   // Check if round is incomplete
   // ✅ FIX: Also check that participants haven't changed since round started
   // ✅ INFINITE LOOP FIX: Don't treat round as incomplete during active submission
   // ✅ AI SDK RESUME FIX: Account for in-progress participants (from AI SDK resume)
+  // ✅ OPTIMISTIC MESSAGE FIX: Don't resume if last user message is optimistic
   // A round is incomplete only if there are participants that need triggering:
   // Total - Responded - InProgress > 0
   const accountedParticipants = respondedParticipantIndices.size + inProgressParticipantIndices.size;
@@ -410,7 +428,8 @@ export function useIncompleteRoundResumption(
     = enabled
       && !isStreaming
       && !waitingToStartStreaming
-      && !isSubmissionInProgress // ← NEW: Don't interfere with normal submissions
+      && !isSubmissionInProgress // Don't interfere with normal submissions
+      && !lastUserMessageIsOptimistic // Don't resume optimistic submissions
       && currentRoundNumber !== null
       && enabledParticipants.length > 0
       && accountedParticipants < enabledParticipants.length

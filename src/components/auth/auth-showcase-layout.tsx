@@ -23,7 +23,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
   const t = useTranslations();
 
   return (
-    <div className="relative grid min-h-svh lg:grid-cols-2">
+    <div className="relative grid h-svh lg:grid-cols-2 overflow-hidden">
       {/* Radial glow background - spans entire page */}
       <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center overflow-hidden">
         <div className="block sm:hidden">
@@ -38,7 +38,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
       </div>
 
       {/* Left Column - Auth Form */}
-      <div className="relative flex flex-col gap-4 p-6 md:p-10">
+      <div className="relative flex flex-col gap-4 p-6 md:p-10 overflow-y-auto">
         {/* Centered content wrapper */}
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm flex flex-col gap-6">
@@ -50,7 +50,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
             />
 
             {/* Welcome Header - Dual font system: Display (Space Grotesk) + Body (Geist) */}
-            <div className="flex flex-col gap-3 text-center sm:text-left">
+            <div className="flex flex-col gap-3 text-left">
               <div className="space-y-1">
                 <span className="text-xs font-normal tracking-[0.2em] uppercase text-muted-foreground/50">
                   Welcome to
@@ -71,8 +71,8 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
       </div>
 
       {/* Right Column - Chat Showcase (Desktop only) */}
-      <div className="relative hidden lg:block p-4">
-        <Card className="h-full overflow-hidden py-0 bg-card backdrop-blur-sm border-border/50">
+      <div className="relative hidden lg:flex lg:flex-col p-4 max-h-svh">
+        <Card className="flex-1 min-h-0 overflow-hidden py-0 bg-card backdrop-blur-sm border-border/50">
           <LiveChatDemo />
         </Card>
       </div>

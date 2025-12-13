@@ -76,6 +76,11 @@ function PreSearchStreamComponent({
   const [error, setError] = useState<Error | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // ✅ FIX: Force retry counter to re-trigger main SSE effect when stuck stream detection fires
+  // The main SSE effect needs to re-run after stuck detection clears tracking flags
+  // Without this, the effect's dependencies don't change and it won't restart
+  const [forceRetryCount, setForceRetryCount] = useState(0);
+
   // ✅ DEBUG: Track component renders
   const renderCountRef = useRef(0);
   renderCountRef.current++;
@@ -373,6 +378,21 @@ function PreSearchStreamComponent({
               await new Promise(resolve => requestAnimationFrame(resolve));
             } else if (event === PreSearchSseEvents.DONE) {
               const finalData = JSON.parse(data);
+
+              // ✅ FIX: Handle interrupted synthetic done event from KV resume stream
+              // When original stream dies, KV sends: {"interrupted":true,"reason":"stream_timeout"}
+              // This is NOT a successful completion - don't call onStreamComplete
+              // The store should NOT be updated to 'complete' status
+              if (finalData?.interrupted) {
+                // Treat as failure - clear streaming state, don't update status
+                // This allows incomplete-round-resumption to retry the pre-search
+                // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
+                flushSync(() => {
+                  setError(new Error('Pre-search stream interrupted - will retry'));
+                });
+                return;
+              }
+
               // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
               flushSync(() => {
                 setPartialSearchData(finalData);
@@ -473,8 +493,9 @@ function PreSearchStreamComponent({
     // ✅ FIX: Removed preSearch.status from dependencies to prevent effect re-run when backend updates status
     // The effect should only run once per unique search (id + roundNumber)
     // Status changes (pending→streaming→completed) should NOT re-trigger the effect
+    // ✅ FIX: Added forceRetryCount to re-trigger effect when stuck stream detection fires
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered, clearPreSearchTracking]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, providerTriggered, store, markPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
 
   // ✅ POLLING DEDUPLICATION: Prevent multiple concurrent polling loops
   const isPollingRef = useRef(false);
@@ -499,7 +520,7 @@ function PreSearchStreamComponent({
     let timeoutId: NodeJS.Timeout;
     let isMounted = true;
     const pollingStartTime = Date.now();
-    const POLLING_TIMEOUT_MS = 30_000; // 30 seconds - if still STREAMING after this, restart
+    const POLLING_TIMEOUT_MS = 10_000; // 10 seconds - if still STREAMING after this, restart
 
     // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
     // Use flushSync to force immediate re-render so user sees "Auto-retrying..." text
@@ -569,8 +590,16 @@ function PreSearchStreamComponent({
               // ✅ ZUSTAND PATTERN: Use store to clear tracking for fresh POST request
               clearPreSearchTracking(preSearch.roundNumber);
 
+              // ✅ FIX: Increment forceRetryCount to re-trigger main SSE effect
+              // Just clearing the tracking flag wasn't enough - the effect's dependencies
+              // didn't change, so it never re-ran. This counter forces a re-run.
+              // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate effect re-trigger
+              flushSync(() => {
+                setForceRetryCount(c => c + 1);
+              });
+
               // Clear conflict state - this will stop this polling effect
-              // and the main SSE effect will re-trigger due to status still being STREAMING
+              // The main SSE effect will re-trigger due to forceRetryCount change
               if (isMounted) {
                 isPollingRef.current = false;
                 is409ConflictOnFalseRef.current();

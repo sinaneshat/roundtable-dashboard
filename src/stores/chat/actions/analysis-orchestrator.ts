@@ -50,17 +50,6 @@ export type UseAnalysisOrchestratorOptions = OrchestratorOptions<readonly [], An
  *   enabled: hasInitiallyLoaded && !isStreaming
  * })
  */
-/**
- * Deduplication wrapper that uses regeneratingRoundNumber from options
- * The regeneratingRoundNumber is passed from the React component context
- *
- * ✅ TYPE-SAFE: Uses AnalysisDeduplicationOptions instead of Record<string, unknown>
- */
-function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?: AnalysisDeduplicationOptions) {
-  // The regeneratingRoundNumber is passed as an option from the component context
-  return deduplicateAnalyses(items, options);
-}
-
 export const useAnalysisOrchestrator = createOrchestrator<
   RawAnalysisItem,
   StoredModeratorAnalysis,
@@ -84,5 +73,5 @@ export const useAnalysisOrchestrator = createOrchestrator<
   getItemPriority: item => getStatusPriority(item.status),
   // ✅ TYPE-SAFE: Use shared constant from store-constants.ts
   compareKeys: [...MODERATOR_ANALYSIS_COMPARE_KEYS],
-  deduplicationHook: deduplicateWithStoreContext,
+  deduplicationHook: deduplicateAnalyses,
 });

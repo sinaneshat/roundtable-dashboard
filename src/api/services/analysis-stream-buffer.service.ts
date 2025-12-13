@@ -539,10 +539,12 @@ export function createLiveAnalysisResumeStream(
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
   maxPollDurationMs = 5 * 60 * 1000,
+  noNewDataTimeoutMs = 10 * 1000, // ✅ NEW: Timeout if no new chunks arrive
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let lastChunkIndex = 0;
   const startTime = Date.now();
+  let lastNewDataTime = Date.now(); // ✅ Track when we last received new data
   let isClosed = false;
 
   // Helper to safely close controller (handles already-closed state)
@@ -585,6 +587,7 @@ export function createLiveAnalysisResumeStream(
             }
           }
           lastChunkIndex = initialChunks.length;
+          lastNewDataTime = Date.now(); // ✅ Reset timer when we get initial data
         }
 
         // Check if already complete
@@ -603,8 +606,18 @@ export function createLiveAnalysisResumeStream(
       }
 
       try {
-        // Check timeout
+        // Check max duration timeout
         if (Date.now() - startTime > maxPollDurationMs) {
+          safeClose(controller);
+          return;
+        }
+
+        // ✅ NEW: Check no-new-data timeout
+        // If no new chunks arrive within noNewDataTimeoutMs, assume original stream is dead
+        // This prevents infinite polling when page was refreshed mid-stream
+        if (Date.now() - lastNewDataTime > noNewDataTimeoutMs) {
+          // Stream appears dead - close with whatever data we have
+          // Frontend will detect incomplete data and can trigger a new stream
           safeClose(controller);
           return;
         }
@@ -624,6 +637,7 @@ export function createLiveAnalysisResumeStream(
             }
           }
           lastChunkIndex = chunks.length;
+          lastNewDataTime = Date.now(); // ✅ Reset timer when we receive new data
         }
 
         // Check if stream is complete

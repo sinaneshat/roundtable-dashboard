@@ -21,6 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
+import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
@@ -664,6 +665,24 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled); // Persist to cookie
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
+  // Preset selection - replaces all selected models with preset's models
+  const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
+    // Convert models to participant configs
+    const newParticipants: ParticipantConfig[] = models.map((model, index) => ({
+      id: model.id,
+      modelId: model.id,
+      role: '',
+      priority: index,
+    }));
+
+    // Update store and persist
+    setSelectedParticipants(newParticipants);
+    const modelIds = newParticipants.map(p => p.modelId);
+    setPersistedModelIds(modelIds);
+    setModelOrder(modelIds);
+    setPersistedModelOrder(modelIds);
+  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder]);
+
   // ============================================================================
   // MEMOIZED CHAT INPUT PROPS (DRY - shared between desktop and mobile)
   // ============================================================================
@@ -915,6 +934,7 @@ export default function ChatOverviewScreen() {
         onToggle={handleToggleModel}
         onRoleChange={handleRoleChange}
         onClearRole={handleClearRole}
+        onPresetSelect={handlePresetSelect}
         selectedCount={selectedParticipants.length}
         maxModels={userTierConfig.max_models}
         userTierInfo={{

@@ -10,7 +10,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
-import { CONFIDENCE_THRESHOLDS } from './moderator-ui-utils';
+import { CONFIDENCE_THRESHOLDS } from './round-summary-utils';
 
 /**
  * Props accept both full types (from panel) and partial types (from streaming)

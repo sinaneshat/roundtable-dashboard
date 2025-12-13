@@ -21,8 +21,8 @@ import { eq } from 'drizzle-orm';
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
 import { StreamStatuses } from '@/api/core/enums';
-import { getNextParticipantToStream, getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
-import { createLiveParticipantResumeStream, getStreamMetadata } from '@/api/services/stream-buffer.service';
+import { clearThreadActiveStream, getNextParticipantToStream, getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
+import { createLiveParticipantResumeStream, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -215,6 +215,36 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     // No buffer exists - return 204 with round info so frontend can trigger remaining participants
     if (!metadata) {
       // ✅ FIX: Even without buffer, return round info so frontend knows what to do
+      if (nextParticipant && !roundComplete) {
+        return Responses.noContentWithHeaders({
+          roundNumber: activeStream.roundNumber,
+          totalParticipants: activeStream.totalParticipants,
+          nextParticipantIndex: nextParticipant.participantIndex,
+          participantStatuses: activeStream.participantStatuses,
+          roundComplete: false,
+        });
+      }
+      return Responses.noContentWithHeaders();
+    }
+
+    // ✅ STALE CHUNK DETECTION: Check if stream has received data recently
+    // When user refreshes mid-stream, the original worker dies but KV still has chunks.
+    // Without this check, the live resume stream polls forever waiting for more chunks.
+    // If the last chunk is older than threshold, the stream is stale and we should
+    // return 204 so frontend can trigger incomplete round resumption (fresh stream).
+    const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
+    const chunks = await getStreamChunks(streamIdToResume, c.env);
+    const lastChunkTime = chunks && chunks.length > 0
+      ? Math.max(...chunks.map(chunk => chunk.timestamp))
+      : 0;
+    const isStaleStream = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+
+    if (isStaleStream) {
+      // Stream is stale - clear KV state and return 204
+      // Frontend's incomplete round resumption will trigger fresh participant stream
+      await clearThreadActiveStream(threadId, c.env);
+
+      // Return 204 with round info so frontend knows what participant to trigger
       if (nextParticipant && !roundComplete) {
         return Responses.noContentWithHeaders({
           roundNumber: activeStream.roundNumber,

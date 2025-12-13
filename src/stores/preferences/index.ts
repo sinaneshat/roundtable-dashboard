@@ -55,5 +55,4 @@ export {
   PreferencesStoreProvider,
   useModelPreferencesHydrated,
   useModelPreferencesStore,
-  useModelPreferencesStoreApi,
 } from '@/components/providers/preferences-store-provider';

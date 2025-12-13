@@ -355,6 +355,12 @@
         "searchPlaceholder": "Search AI models...",
         "premium": "Premium",
         "locked": "Locked"
+      },
+      "presets": {
+        "title": "Presets"
+      },
+      "buildCustom": {
+        "title": "Build Custom"
       }
     },
     "roles": {
@@ -1078,12 +1084,12 @@
   "makePublic": "Make Public",
   "manageBilling": "Manage Billing",
   "moderator": {
-    "analyzeRound": "Analyze Round",
-    "analyzing": "Analyzing",
-    "pendingAnalysis": "Analyzing participant responses...",
-    "autoRetryingAnalysis": "Analysis in progress, auto-retrying...",
+    "analyzeRound": "Generate Summary",
+    "analyzing": "Generating",
+    "pendingAnalysis": "Generating round summary...",
+    "autoRetryingAnalysis": "Summary in progress, auto-retrying...",
     "waitingForParticipants": "Waiting for participants to finish",
-    "roundAnalysis": "Round {number} Analysis",
+    "roundAnalysis": "Round {number} Summary",
     "overallRating": "Overall Rating",
     "rating": "Rating",
     "outOfTen": "out of 10",
@@ -1109,29 +1115,29 @@
     "participantNumber": "Participant #{number}",
     "participants": "Participants",
     "noParticipants": "No participants to display",
-    "noAnalysis": "Click 'Analyze Round' to get AI-powered insights on participant responses",
-    "errorAnalyzing": "Failed to analyze round. Please try again.",
+    "noAnalysis": "Click 'Generate Summary' to get AI-powered insights on participant responses",
+    "errorAnalyzing": "Failed to generate summary. Please try again.",
     "stop": "Stop",
-    "stopAnalysis": "Stop Analysis",
+    "stopAnalysis": "Stop",
     "retry": "Retry",
-    "viewFullAnalysis": "View Full Analysis",
-    "participantAnalysis": "Participant Analysis",
+    "viewFullAnalysis": "View Details",
+    "participantAnalysis": "Participant Details",
     "completed": "Completed",
     "failed": "Failed",
     "pending": "Pending",
     "errors": {
-      "analysisError": "Analysis Error",
-      "analysisErrorDescription": "Something went wrong while displaying the analysis. The data may be corrupted or incomplete.",
+      "analysisError": "Summary Error",
+      "analysisErrorDescription": "Something went wrong while displaying the summary. The data may be corrupted or incomplete.",
       "streamError": "Stream Error",
-      "streamErrorDescription": "Failed to stream analysis data. Please try again.",
+      "streamErrorDescription": "Failed to stream summary data. Please try again.",
       "dismissError": "Dismiss",
       "showDetails": "Show Details",
       "hideDetails": "Hide Details",
-      "corruptedState": "The analysis state appears to be corrupted. Please retry the analysis.",
-      "invalidData": "Invalid analysis data received. Please regenerate the analysis.",
+      "corruptedState": "The summary state appears to be corrupted. Please retry.",
+      "invalidData": "Invalid summary data received. Please regenerate.",
       "networkError": "Network error occurred. Please check your connection and try again.",
       "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists.",
-      "emptyResponseError": "Analysis generation failed. The AI model did not return a response. Please try again."
+      "emptyResponseError": "Summary generation failed. The AI model did not return a response. Please try again."
     },
     "mode": {
       "analyzing": "Analyzing",

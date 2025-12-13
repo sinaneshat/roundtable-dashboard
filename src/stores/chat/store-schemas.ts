@@ -50,7 +50,6 @@ import type {
   ClearAnalysisTracking,
   ClearAnimations,
   ClearAttachments,
-  ClearFeedback,
   ClearPreSearchActivity,
   ClearPreSearchTracking,
   ClearStreamResumption,
@@ -59,7 +58,6 @@ import type {
   CompleteStreaming,
   CreatePendingAnalysis,
   GetAttachments,
-  GetNextParticipantToTrigger,
   GetPreSearchActivityTime,
   HandleResumedStreamComplete,
   HandleStreamResumptionFailure,
@@ -86,7 +84,6 @@ import type {
   RemoveParticipant,
   RemovePreSearch,
   ReorderParticipants,
-  ResetFeedback,
   ResetForm,
   ResetForThreadNavigation,
   ResetScreenMode,
@@ -201,9 +198,7 @@ export const FeedbackStateSchema = z.object({
 export const FeedbackActionsSchema = z.object({
   setFeedback: z.custom<SetFeedback>(),
   setPendingFeedback: z.custom<SetPendingFeedback>(),
-  clearFeedback: z.custom<ClearFeedback>(),
   loadFeedbackFromServer: z.custom<LoadFeedbackFromServer>(),
-  resetFeedback: z.custom<ResetFeedback>(),
 });
 
 export const FeedbackSliceSchema = z.intersection(FeedbackStateSchema, FeedbackActionsSchema);
@@ -458,13 +453,11 @@ export const StreamResumptionSliceStateSchema = z.object({
 
 export const StreamResumptionActionsSchema = z.object({
   setStreamResumptionState: z.custom<(state: StreamResumptionState | null) => void>(),
-  getStreamResumptionState: z.custom<() => StreamResumptionState | null>(),
   needsStreamResumption: z.custom<NeedsStreamResumption>(),
   isStreamResumptionStale: z.custom<IsStreamResumptionStale>(),
   isStreamResumptionValid: z.custom<IsStreamResumptionValid>(),
   handleResumedStreamComplete: z.custom<HandleResumedStreamComplete>(),
   handleStreamResumptionFailure: z.custom<HandleStreamResumptionFailure>(),
-  getNextParticipantToTrigger: z.custom<GetNextParticipantToTrigger>(),
   setNextParticipantToTrigger: z.custom<SetNextParticipantToTrigger>(),
   markResumptionAttempted: z.custom<MarkResumptionAttempted>(),
   needsMessageSync: z.custom<NeedsMessageSync>(),

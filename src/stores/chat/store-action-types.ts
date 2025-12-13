@@ -90,9 +90,7 @@ export type ApplyRecommendedAction = (
 
 export type SetFeedback = (roundNumber: number, type: FeedbackType | null) => void;
 export type SetPendingFeedback = (feedback: { roundNumber: number; type: FeedbackType } | null) => void;
-export type ClearFeedback = (roundNumber: number) => void;
 export type LoadFeedbackFromServer = (data: RoundFeedbackData[]) => void;
-export type ResetFeedback = () => void;
 
 // ============================================================================
 // UI ACTIONS
@@ -136,7 +134,6 @@ export type UpdatePreSearchData = (roundNumber: number, data: PreSearchDataPaylo
 /** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
 export type UpdatePartialPreSearchData = (roundNumber: number, partialData: PartialPreSearchData) => void;
 export type UpdatePreSearchStatus = (roundNumber: number, status: AnalysisStatus) => void;
-export type UpdatePreSearchError = (roundNumber: number, errorMessage: string | null) => void;
 export type RemovePreSearch = (roundNumber: number) => void;
 export type ClearAllPreSearches = () => void;
 export type CheckStuckPreSearches = () => void;
@@ -295,11 +292,6 @@ export type ResetScreenMode = () => void;
 export type SetStreamResumptionState = (state: StreamResumptionState | null) => void;
 
 /**
- * Get the current stream resumption state
- */
-export type GetStreamResumptionState = () => StreamResumptionState | null;
-
-/**
  * Check if stream resumption is needed (active stream exists for current thread)
  */
 export type NeedsStreamResumption = () => boolean;
@@ -325,12 +317,6 @@ export type HandleResumedStreamComplete = (roundNumber: number, participantIndex
  * Clears resumption state and allows normal flow
  */
 export type HandleStreamResumptionFailure = (error: Error) => void;
-
-/**
- * Get the next participant index to trigger after resumption
- * Returns null if round is complete
- */
-export type GetNextParticipantToTrigger = () => number | null;
 
 /**
  * Set the next participant index to trigger for incomplete round resumption
@@ -549,13 +535,3 @@ export type ResetFormPreferences = {
  * - Direct navigation to /chat route
  */
 export type ResetToNewChat = (preferences?: ResetFormPreferences) => void;
-
-/**
- * Reset local streaming state (backend continues via waitUntil)
- */
-export type StopStreaming = () => void;
-
-/**
- * Alias for resetToOverview - used in tests
- */
-export type Reset = () => void;

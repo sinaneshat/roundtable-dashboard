@@ -179,6 +179,8 @@ type ParticipantMessageWrapperProps = {
   metadata?: DbMessageMetadata | null;
   /** Custom loading text for pending state */
   loadingText?: string;
+  /** Max height for scrollable content */
+  maxContentHeight?: number;
 };
 
 /**
@@ -195,6 +197,7 @@ function ParticipantMessageWrapper({
   messageId,
   metadata,
   loadingText,
+  maxContentHeight,
 }: ParticipantMessageWrapperProps) {
   const avatarProps = getAvatarPropsFromModelId(
     MessageRoles.ASSISTANT,
@@ -234,6 +237,7 @@ function ParticipantMessageWrapper({
           hideInlineHeader
           hideAvatar
           loadingText={loadingText}
+          maxContentHeight={maxContentHeight}
         />
       </div>
     </div>
@@ -256,6 +260,7 @@ function AssistantGroupCard({
   hideMetadata,
   t,
   keyForMessage,
+  maxContentHeight,
 }: {
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
@@ -264,6 +269,7 @@ function AssistantGroupCard({
   hideMetadata: boolean;
   t: (key: string) => string;
   keyForMessage: (message: UIMessage, index: number) => string;
+  maxContentHeight?: number;
 }) {
   // Determine if any message in group is streaming or has error
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
@@ -334,6 +340,7 @@ function AssistantGroupCard({
                   isAccessible={isAccessible}
                   hideInlineHeader
                   hideAvatar
+                  maxContentHeight={maxContentHeight}
                 />
                 {sourceParts.length > 0 && (
                   <div className="mt-2 ml-12 space-y-1">
@@ -478,6 +485,8 @@ type ChatMessageListProps = {
   preSearches?: StoredPreSearch[]; // Pre-searches from store
   streamingRoundNumber?: number | null; // Pass through from ThreadTimeline
   demoPreSearchOpen?: boolean; // Demo mode controlled accordion state
+  /** Max height for scrollable content in message cards. Used in demo mode. */
+  maxContentHeight?: number;
 };
 export const ChatMessageList = memo(
   ({
@@ -494,6 +503,7 @@ export const ChatMessageList = memo(
     preSearches: _preSearches = EMPTY_PRE_SEARCHES,
     streamingRoundNumber: _streamingRoundNumber = null,
     demoPreSearchOpen,
+    maxContentHeight,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const tParticipant = useTranslations('chat.participant');
@@ -1083,6 +1093,7 @@ export const ChatMessageList = memo(
                             isAccessible={isAccessible}
                             messageId={participantMessage?.id}
                             loadingText={loadingText}
+                            maxContentHeight={maxContentHeight}
                           />
                         );
                       })}
@@ -1105,6 +1116,7 @@ export const ChatMessageList = memo(
                 hideMetadata={hideMetadata}
                 t={t}
                 keyForMessage={keyForMessage}
+                maxContentHeight={maxContentHeight}
               />
             );
           }

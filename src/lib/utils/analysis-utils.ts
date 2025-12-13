@@ -122,9 +122,8 @@ export function hasAnalysisData(
   const minorityViews = 'minorityViews' in data ? data.minorityViews : undefined;
   const convergenceDivergence = 'convergenceDivergence' in data ? data.convergenceDivergence : undefined;
 
-  // ✅ Check header/summary fields (generated FIRST by backend)
-  // Without these checks, UI shows nothing until later sections stream
-  const hasConfidence = isObject(confidence) && typeof confidence.overall === 'number' && confidence.overall > 0;
+  // ✅ KEY INSIGHTS (generated FIRST by backend - highest priority)
+  // Check article and recommendations first since they stream before other fields
   const hasArticle = isObject(article) && (
     (typeof article.headline === 'string' && article.headline.length > 0)
     || (typeof article.narrative === 'string' && article.narrative.length > 0)
@@ -132,6 +131,9 @@ export function hasAnalysisData(
   );
   const recommendationsArray = recommendations ?? [];
   const hasRecommendations = Array.isArray(recommendationsArray) && recommendationsArray.length > 0;
+
+  // ✅ CONFIDENCE (generated after key insights)
+  const hasConfidence = isObject(confidence) && typeof confidence.overall === 'number' && confidence.overall > 0;
 
   // Check arrays: handle both complete arrays and partial arrays with undefined elements
   const modelVoicesArray = modelVoices ?? [];
@@ -146,8 +148,9 @@ export function hasAnalysisData(
   // Check object fields
   const hasConvergenceDivergence = convergenceDivergence != null;
 
-  // ✅ ARTICLE-STYLE: Check all displayable fields in OR condition
-  return hasConfidence || hasArticle || hasRecommendations || hasModelVoices || hasConsensusTable || hasMinorityViews || hasConvergenceDivergence;
+  // ✅ STREAMING ORDER: article → recommendations → confidence → rest
+  // Returns true as soon as ANY displayable field has content
+  return hasArticle || hasRecommendations || hasConfidence || hasModelVoices || hasConsensusTable || hasMinorityViews || hasConvergenceDivergence;
 }
 
 /**

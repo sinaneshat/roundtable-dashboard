@@ -28,8 +28,6 @@ export type UseFeedbackActionsReturn = {
   getFeedbackHandler: (roundNumber: number) => (feedbackType: FeedbackType | null) => void;
   /** Load feedback from server (called once on mount) */
   loadFeedback: (data: RoundFeedbackData[]) => void;
-  /** Clear feedback for a round (used during regeneration) */
-  clearRoundFeedback: (roundNumber: number) => void;
 };
 
 /**
@@ -55,7 +53,6 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
   const actions = useChatStore(useShallow(s => ({
     setFeedback: s.setFeedback,
     setPendingFeedback: s.setPendingFeedback,
-    clearFeedback: s.clearFeedback,
     loadFeedbackFromServer: s.loadFeedbackFromServer,
   })));
 
@@ -101,18 +98,8 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
     actions.loadFeedbackFromServer(data);
   }, [actions]);
 
-  /**
-   * Clear feedback for a round
-   * Used during regeneration to reset feedback state
-   */
-  const clearRoundFeedback = useCallback((roundNumber: number) => {
-    actions.clearFeedback(roundNumber);
-  }, [actions]);
-
-  // Memoize return object to prevent unnecessary re-renders
   return useMemoizedReturn({
     getFeedbackHandler,
     loadFeedback,
-    clearRoundFeedback,
-  }, [getFeedbackHandler, loadFeedback, clearRoundFeedback]);
+  }, [getFeedbackHandler, loadFeedback]);
 }

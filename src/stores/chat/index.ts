@@ -65,9 +65,6 @@ export {
   AnalysisTimeouts,
   AnimationIndices,
   getStatusPriority,
-  isAnalysisAnimation,
-  isParticipantAnimation,
-  isPreSearchAnimation,
 } from './store-constants';
 // Pre-search utilities
 export type { ExecutePreSearchOptions } from './utils/pre-search-execution';

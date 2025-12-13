@@ -14,11 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 import { cn } from '@/lib/ui/cn';
 
-import type { DemoSectionOpenStates } from './moderator-analysis-panel';
-import { ModeratorAnalysisPanel } from './moderator-analysis-panel';
-import { ModeratorAnalysisStream } from './moderator-analysis-stream';
+import type { DemoSectionOpenStates } from './round-summary-panel';
+import { RoundSummaryPanel } from './round-summary-panel';
+import { RoundSummaryStream } from './round-summary-stream';
 
-type RoundAnalysisCardProps = {
+type RoundSummaryCardProps = {
   analysis: StoredModeratorAnalysis;
   threadId: string;
   isLatest?: boolean;
@@ -33,7 +33,7 @@ type RoundAnalysisCardProps = {
 };
 
 /**
- * RoundAnalysisCard - Accordion component for moderator analysis
+ * RoundSummaryCard - Accordion component for round summary
  *
  * ✅ REVISED: This component should ONLY be rendered when analysis has participant responses
  * (participantMessageIds.length > 0). Placeholder states with closed/locked accordions are
@@ -43,7 +43,7 @@ type RoundAnalysisCardProps = {
  * - ChatOverviewScreen.tsx: checks participantMessageIds before rendering
  * - useThreadTimeline.ts: filters out placeholder analyses from timeline
  */
-export function RoundAnalysisCard({
+export function RoundSummaryCard({
   analysis,
   threadId,
   isLatest = false,
@@ -55,7 +55,7 @@ export function RoundAnalysisCard({
   demoOpen,
   demoShowContent,
   demoSectionStates,
-}: RoundAnalysisCardProps) {
+}: RoundSummaryCardProps) {
   const t = useTranslations('moderator');
 
   // Status configuration for badge styling
@@ -167,7 +167,7 @@ export function RoundAnalysisCard({
               {/* Render appropriate content based on analysis status */}
               {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
                 ? (
-                    <ModeratorAnalysisStream
+                    <RoundSummaryStream
                       threadId={threadId}
                       analysis={analysis}
                       onStreamStart={onStreamStart}
@@ -177,7 +177,7 @@ export function RoundAnalysisCard({
                   )
                 : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
                   ? (
-                      <ModeratorAnalysisPanel
+                      <RoundSummaryPanel
                         analysis={analysis}
                         onActionClick={onActionClick}
                         demoSectionStates={demoSectionStates}

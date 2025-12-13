@@ -1,46 +1,14 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { TextShimmer } from '@/components/ai-elements/shimmer';
 
 // Default empty array for preSearches prop to avoid unstable default
 const EMPTY_PRESEARCHES: StoredPreSearch[] = [];
-
-/**
- * Animated 3-dot loader that cycles through dot count
- * Creates a pulsing "..." animation like ChatGPT
- */
-function AnimatedDots() {
-  const [dotCount, setDotCount] = useState(1);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDotCount(prev => (prev % 3) + 1);
-    }, 400);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <span className="inline-block w-[1.5ch] text-left">
-      {'.'.repeat(dotCount)}
-    </span>
-  );
-}
-
-/**
- * Simple thinking text with animated dots
- */
-function ThinkingText({ text }: { text: string }) {
-  return (
-    <span className="font-sans font-medium text-muted-foreground">
-      {text}
-      <AnimatedDots />
-    </span>
-  );
-}
 
 export type UnifiedLoadingIndicatorProps = {
   /** Whether to show the loading indicator */
@@ -59,8 +27,8 @@ export type UnifiedLoadingIndicatorProps = {
 /**
  * Unified loading indicator for chat screens
  *
- * Shows a simple "Thinking..." text with animated dots for all loading states.
- * Clean, minimal design inspired by ChatGPT.
+ * Shows loading text with TextShimmer animation for all loading states.
+ * Uses the same shimmer effect as all other loading indicators in the app.
  */
 export function UnifiedLoadingIndicator({
   showLoader,
@@ -104,8 +72,8 @@ export function UnifiedLoadingIndicator({
         exit={{ opacity: 0, y: -10 }}
         className="text-left pointer-events-none"
       >
-        <div className="text-base py-2">
-          <ThinkingText text={loadingText} />
+        <div className="text-base py-2 text-muted-foreground">
+          <TextShimmer>{`${loadingText}...`}</TextShimmer>
         </div>
       </motion.div>
     </AnimatePresence>

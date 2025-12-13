@@ -15,6 +15,7 @@ import {
   ChainOfThoughtSearchResults,
   ChainOfThoughtStep,
 } from '@/components/ai-elements/chain-of-thought';
+import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -56,7 +57,7 @@ export function WebSearchDisplay({
           <ChainOfThoughtHeader disabled>
             <div className="flex items-center gap-2">
               <Globe className="size-4 animate-pulse" />
-              <span>{query ? `Searching for "${query}"` : t('title')}</span>
+              <TextShimmer className="text-sm">{query ? `Searching for "${query}"` : t('title')}</TextShimmer>
             </div>
           </ChainOfThoughtHeader>
           <ChainOfThoughtContent>
