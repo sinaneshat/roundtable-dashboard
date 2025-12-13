@@ -379,17 +379,17 @@ describe('bug #2: Timeline Element Ordering', () => {
       const messagesItem = timeline.find(item => item.type === 'messages');
 
       expect(messagesItem).toBeDefined();
-      if (messagesItem?.type === 'messages') {
-        const assistantMessages = messagesItem.data.filter(m => m.role === 'assistant');
+      expect(messagesItem?.type).toBe('messages');
 
-        // Should be sorted by participantIndex
-        const indices = assistantMessages.map(m =>
-          (m.metadata as { participantIndex?: number })?.participantIndex,
-        );
+      // Type assertion after expect assertion
+      const typedMessagesItem = messagesItem as { type: 'messages'; data: Array<{ role: string; metadata?: { participantIndex?: number } }> };
+      const assistantMessages = typedMessagesItem.data.filter(m => m.role === 'assistant');
 
-        // This will likely FAIL because useThreadTimeline doesn't sort messages
-        expect(indices).toEqual([0, 1, 2]);
-      }
+      // Should be sorted by participantIndex
+      const indices = assistantMessages.map(m => m.metadata?.participantIndex);
+
+      // This will likely FAIL because useThreadTimeline doesn't sort messages
+      expect(indices).toEqual([0, 1, 2]);
     });
   });
 });

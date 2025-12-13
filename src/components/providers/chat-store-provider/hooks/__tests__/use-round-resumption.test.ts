@@ -161,7 +161,7 @@ describe('useRoundResumption', () => {
         messages: [createMockUserMessage(0)],
       });
 
-      const chat = createMockChatHook({
+      createMockChatHook({
         isReady: true,
         continueFromParticipant,
       });
@@ -252,7 +252,7 @@ describe('useRoundResumption', () => {
         messages: [createMockUserMessage(0)],
       });
 
-      const chat = createMockChatHook({
+      createMockChatHook({
         isReady: true,
         continueFromParticipant,
       });
@@ -279,7 +279,7 @@ describe('useRoundResumption', () => {
         preSearches: [createMockPreSearch(0, AnalysisStatuses.STREAMING)], // Still streaming
       });
 
-      const chat = createMockChatHook({
+      createMockChatHook({
         isReady: true,
         continueFromParticipant,
       });
@@ -383,7 +383,7 @@ describe('useRoundResumption', () => {
   describe('race condition handling', () => {
     it('should handle AI SDK isReady transition from false to true', async () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      createMockStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
@@ -395,7 +395,7 @@ describe('useRoundResumption', () => {
       // Use a mutable object to track readiness state
       const readyState = { isReady: false };
 
-      const chat = createMockChatHook({
+      createMockChatHook({
         isReady: readyState.isReady,
         continueFromParticipant,
       });
@@ -488,7 +488,7 @@ describe('useRoundResumption', () => {
 
   describe('safety timeout', () => {
     it('should clear stuck state after 5 second timeout on thread screen', async () => {
-      const store = createMockStore({
+      createMockStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,

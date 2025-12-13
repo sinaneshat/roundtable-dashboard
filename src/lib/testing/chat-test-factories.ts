@@ -22,11 +22,6 @@ import {
   createMockThread as _createMockThread,
 } from './api-mocks';
 
-// Re-export commonly used factories from api-mocks for convenience
-// NOTE: createMockParticipant, createMockThread, createMockAnalysis are NOT re-exported
-// - use the indexed/test-friendly versions below
-export { createMockMessage } from './api-mocks';
-
 // ============================================================================
 // THREAD FACTORIES
 // ============================================================================

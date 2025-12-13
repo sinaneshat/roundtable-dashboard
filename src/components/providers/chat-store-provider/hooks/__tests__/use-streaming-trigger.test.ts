@@ -72,7 +72,7 @@ type MockStoreState = {
 function createMockStore(initial?: Partial<MockStoreState>) {
   const triggeredPreSearchRounds = new Set<number>();
 
-  return createStore<MockStoreState>((set, get) => ({
+  return createStore<MockStoreState>(set => ({
     waitingToStartStreaming: false,
     isStreaming: false,
     participants: [],
@@ -252,7 +252,6 @@ describe('useStreamingTrigger', () => {
     });
 
     it('should start participants after pre-search completes', () => {
-      const startRound = vi.fn();
       const store = createMockStore({
         waitingToStartStreaming: true,
         isStreaming: false,
@@ -414,7 +413,7 @@ describe('useStreamingTrigger', () => {
       const startRound = vi.fn();
       let startRoundCalledForRound: number | null = null;
 
-      const store = createMockStore({
+      createMockStore({
         waitingToStartStreaming: true,
         isStreaming: false,
         screenMode: ScreenModes.OVERVIEW,
@@ -441,7 +440,7 @@ describe('useStreamingTrigger', () => {
     });
 
     it('should check chat.isTriggeringRef before starting', () => {
-      const store = createMockStore({
+      createMockStore({
         waitingToStartStreaming: true,
         isStreaming: false,
         screenMode: ScreenModes.OVERVIEW,
@@ -532,10 +531,7 @@ describe('streaming trigger edge cases', () => {
     const now = Date.now();
     const completedAt = new Date(now - 10); // Completed 10ms ago
 
-    const preSearch = {
-      ...createMockPreSearch(0, AnalysisStatuses.COMPLETE),
-      completedAt,
-    };
+    createMockPreSearch(0, AnalysisStatuses.COMPLETE);
 
     // Timing guard: wait at least 50ms after completion
     const timeSinceComplete = now - completedAt.getTime();

@@ -25,7 +25,7 @@ import {
 } from '@/hooks/mutations/chat-mutations';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { showApiErrorToast, showErrorToast } from '@/lib/toast';
+import { showApiErrorToast, showApiWarningToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
 import { isVisionRequiredMimeType } from '@/lib/utils/file-capability';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
@@ -142,11 +142,34 @@ export function useChatFormActions(): UseChatFormActionsReturn {
    * @param attachmentIds - Optional upload IDs to attach to the first message
    * @param _attachmentInfos - Optional attachment metadata (unused - server provides file parts in response)
    */
-  const handleCreateThread = useCallback(async (attachmentIds?: string[], _attachmentInfos?: AttachmentInfo[]) => {
+  const handleCreateThread = useCallback(async (attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {
     const prompt = formState.inputValue.trim();
 
     if (!prompt || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
       return;
+    }
+
+    // ============================================================================
+    // ✅ MODEL CAPABILITY VALIDATION: Check vision support for image/PDF attachments
+    // ============================================================================
+    const hasVisionFiles = attachmentInfos?.some(
+      info => isVisionRequiredMimeType(info.mimeType),
+    ) ?? false;
+
+    if (hasVisionFiles) {
+      const nonVisionModels = formState.selectedParticipants.filter((participant) => {
+        const capabilities = getModelCapabilities(participant.modelId);
+        return !capabilities.vision;
+      });
+
+      if (nonVisionModels.length > 0) {
+        const modelNames = nonVisionModels.map(p => p.modelId.split('/').pop()).join(', ');
+        showApiWarningToast(
+          'Model incompatibility',
+          `${modelNames} cannot process images/PDFs. Select vision-capable models or remove image attachments.`,
+        );
+        return;
+      }
     }
 
     try {
@@ -335,6 +358,49 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return;
     }
 
+    // ============================================================================
+    // ✅ MODEL CAPABILITY VALIDATION: Check vision support for image/PDF attachments
+    // ============================================================================
+    // Check if any messages (including new attachments) have vision-required files
+    // and validate that ALL selected participants support vision.
+    // This prevents "No endpoints found that support image input" errors from OpenRouter.
+
+    // Collect MIME types from:
+    // 1. Existing messages (file parts from previous rounds)
+    // 2. New attachments being added this round
+    const existingVisionFiles = threadState.messages.some((msg) => {
+      if (!msg.parts)
+        return false;
+      return msg.parts.some((part) => {
+        if (part.type !== 'file' || !('mediaType' in part))
+          return false;
+        return isVisionRequiredMimeType(part.mediaType as string);
+      });
+    });
+
+    const newVisionFiles = attachmentInfos?.some(
+      info => isVisionRequiredMimeType(info.mimeType),
+    ) ?? false;
+
+    const hasVisionFiles = existingVisionFiles || newVisionFiles;
+
+    if (hasVisionFiles) {
+      // Check if all selected participants support vision
+      const nonVisionModels = formState.selectedParticipants.filter((participant) => {
+        const capabilities = getModelCapabilities(participant.modelId);
+        return !capabilities.vision;
+      });
+
+      if (nonVisionModels.length > 0) {
+        const modelNames = nonVisionModels.map(p => p.modelId.split('/').pop()).join(', ');
+        showApiWarningToast(
+          'Model incompatibility',
+          `${modelNames} cannot process images/PDFs. Select vision-capable models or remove image attachments.`,
+        );
+        return;
+      }
+    }
+
     // ✅ Calculate round number BEFORE try block so it's accessible in catch for cleanup
     let pendingRoundNumber = calculateNextRoundNumber(threadState.messages);
     // Defensive validation
@@ -412,17 +478,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         formState.selectedParticipants,
         threadId,
       );
-
-      // 🔍 DEBUG LOG 3: Track participant changes between rounds
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG-3] handleUpdateThreadAndSend:', {
-        round: nextRoundNumber,
-        currentParticipantIds: threadState.participants.map(p => ({ id: p.id, model: p.modelId })),
-        selectedParticipantIds: formState.selectedParticipants.map(p => ({ id: p.id, model: p.modelId })),
-        optimisticParticipantIds: optimisticParticipants.map(p => ({ id: p.id, model: p.modelId })),
-        updateResult,
-        existingMessageRounds: [...new Set(threadState.messages.map(m => getRoundNumber(m.metadata)))],
-      });
 
       // Check for non-participant changes
       const currentModeId = threadState.thread?.mode || null;

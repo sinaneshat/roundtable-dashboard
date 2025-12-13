@@ -261,7 +261,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     store,
     chat,
     sendMessageRef,
-    queryClientRef,
     preSearchCreationAttemptedRef,
     createPreSearch,
   });

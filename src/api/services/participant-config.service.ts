@@ -163,6 +163,7 @@ export function detectParticipantChanges(
   });
 
   return {
+    allDbParticipants,
     enabledDbParticipants,
     providedEnabledParticipants,
     removedParticipants,
@@ -262,9 +263,11 @@ export function buildParticipantOperations(
   // =========================================================================
   // RE-ENABLE OPERATIONS - Previously disabled participants
   // =========================================================================
-  const allDbParticipants = [...enabledDbParticipants, ...changes.removedParticipants];
+  // ✅ FIX: Use allDbParticipants from changes (includes disabled participants)
+  // Previously this created a local variable that only had enabled + removed,
+  // missing disabled participants from previous rounds which broke re-enable detection
   const reenableOps = reenabledParticipants.map((provided) => {
-    const dbP = allDbParticipants.find(db => db.modelId === provided.modelId);
+    const dbP = changes.allDbParticipants.find(db => db.modelId === provided.modelId);
     if (!dbP) {
       return null; // Should never happen due to filter logic, but safety check
     }
@@ -362,7 +365,8 @@ export function buildParticipantOperations(
     reenabledParticipants.forEach((reenabled) => {
       const modelName = extractModelName(reenabled.modelId);
       const displayName = reenabled.role || modelName;
-      const dbP = allDbParticipants.find(db => db.modelId === reenabled.modelId);
+      // ✅ FIX: Use changes.allDbParticipants to find disabled participants from previous rounds
+      const dbP = changes.allDbParticipants.find(db => db.modelId === reenabled.modelId);
       changelogEntries.push({
         id: ulid(),
         changeType: ChangelogTypes.ADDED, // Treat as "added" for user-facing message

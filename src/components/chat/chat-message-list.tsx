@@ -876,7 +876,7 @@ export const ChatMessageList = memo(
     });
 
     return (
-      <div className="touch-pan-y space-y-8">
+      <div className="touch-pan-y space-y-4">
         {messageGroups.map((group, groupIndex) => {
           const roundNumber = group.type === 'user-group'
             ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
@@ -894,7 +894,7 @@ export const ChatMessageList = memo(
           // User message group with header inside message box
           if (group.type === 'user-group') {
             return (
-              <div key={`user-group-wrapper-${group.messages[0]?.index}`} className="mb-8">
+              <div key={`user-group-wrapper-${group.messages[0]?.index}`} className="mb-4">
                 {/* User messages - right-aligned bubbles, no avatar/name */}
                 <div className="flex flex-col items-end gap-2">
                   {group.messages.map(({ message, index }) => {
@@ -919,10 +919,11 @@ export const ChatMessageList = memo(
                       <UserMessageEntrance
                         key={messageKey}
                         skipAnimation={!shouldAnimateMessage(message.id)}
+                        className="w-full"
                       >
                         <div
                           className={cn(
-                            'max-w-[85%]',
+                            'max-w-[85%] ml-auto w-fit',
                             'bg-secondary text-secondary-foreground',
                             'rounded-2xl rounded-br-md px-4 py-3',
                             'text-base leading-relaxed',
@@ -1161,8 +1162,20 @@ export const ChatMessageList = memo(
   // Custom comparison function to optimize re-renders
   // Only re-render if critical props actually change
   (prevProps, nextProps) => {
+    // 🔍 DEBUG: Track memo comparison
+    const streamingRound = nextProps.streamingRoundNumber;
+    console.log('[DEBUG:ChatMessageList:memo] Comparing', {
+      round: streamingRound,
+      prevIsStreaming: prevProps.isStreaming,
+      nextIsStreaming: nextProps.isStreaming,
+      prevMsgCount: prevProps.messages.length,
+      nextMsgCount: nextProps.messages.length,
+      prevMsgsRef: prevProps.messages === nextProps.messages ? 'same' : 'different',
+    });
+
     // Always re-render if streaming state changes
     if (prevProps.isStreaming !== nextProps.isStreaming) {
+      console.log('[DEBUG:ChatMessageList:memo] Re-render: isStreaming changed', { round: streamingRound });
       return false;
     }
 
@@ -1171,6 +1184,11 @@ export const ChatMessageList = memo(
       prevProps.messages !== nextProps.messages
       || prevProps.messages.length !== nextProps.messages.length
     ) {
+      console.log('[DEBUG:ChatMessageList:memo] Re-render: messages changed', {
+        round: streamingRound,
+        refChanged: prevProps.messages !== nextProps.messages,
+        countChanged: prevProps.messages.length !== nextProps.messages.length,
+      });
       return false;
     }
 
@@ -1182,8 +1200,18 @@ export const ChatMessageList = memo(
       const prevLast = prevProps.messages[prevProps.messages.length - 1];
       const nextLast = nextProps.messages[nextProps.messages.length - 1];
 
+      console.log('[DEBUG:ChatMessageList:memo] Streaming content check', {
+        round: streamingRound,
+        prevLastId: prevLast?.id,
+        nextLastId: nextLast?.id,
+        partsRefSame: prevLast?.parts === nextLast?.parts,
+        prevPartsCount: prevLast?.parts?.length,
+        nextPartsCount: nextLast?.parts?.length,
+      });
+
       // Check if parts array reference changed (indicates content update)
       if (prevLast?.parts !== nextLast?.parts) {
+        console.log('[DEBUG:ChatMessageList:memo] Re-render: parts ref changed', { round: streamingRound });
         return false;
       }
 
@@ -1233,15 +1261,21 @@ export const ChatMessageList = memo(
 
     // Re-render if preSearches change (for pending participant cards and PreSearchCard)
     if (prevProps.preSearches !== nextProps.preSearches) {
+      console.log('[DEBUG:ChatMessageList:memo] Re-render: preSearches changed', { round: streamingRound });
       return false;
     }
 
     // Re-render if streamingRoundNumber changes
     if (prevProps.streamingRoundNumber !== nextProps.streamingRoundNumber) {
+      console.log('[DEBUG:ChatMessageList:memo] Re-render: streamingRoundNumber changed', {
+        prev: prevProps.streamingRoundNumber,
+        next: nextProps.streamingRoundNumber,
+      });
       return false;
     }
 
     // Skip re-render - no meaningful changes
+    console.log('[DEBUG:ChatMessageList:memo] ⏭️ SKIPPING re-render', { round: streamingRound });
     return true;
   },
 );

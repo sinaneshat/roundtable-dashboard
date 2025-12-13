@@ -7,7 +7,6 @@
  * Handles pre-search creation before participant streaming.
  */
 
-import type { QueryClient } from '@tanstack/react-query';
 import type { MutableRefObject } from 'react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
@@ -25,7 +24,6 @@ type UsePendingMessageParams = {
   store: ChatStoreApi;
   chat: ChatHook;
   sendMessageRef: MutableRefObject<ChatHook['sendMessage']>;
-  queryClientRef: MutableRefObject<QueryClient>;
   preSearchCreationAttemptedRef: MutableRefObject<Set<number>>;
   createPreSearch: CreatePreSearchMutation;
 };
@@ -37,7 +35,6 @@ export function usePendingMessage({
   store,
   chat,
   sendMessageRef,
-  queryClientRef,
   preSearchCreationAttemptedRef,
   createPreSearch,
 }: UsePendingMessageParams) {
@@ -56,28 +53,56 @@ export function usePendingMessage({
   const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
 
   useEffect(() => {
+    const newRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
+
+    // 🔍 DEBUG: Track pending message effect
+    console.log('[DEBUG:usePendingMessage] Effect running', {
+      round: newRoundNumber,
+      pendingMessage: pendingMessage?.slice(0, 30),
+      hasSentPendingMessage,
+      isStreaming,
+      screenMode,
+      waitingToStart,
+      hasExpectedParticipantIds: !!expectedParticipantIds,
+    });
+
     // Guard: Only send on overview/thread screens (not public)
     if (screenMode === ScreenModes.PUBLIC) {
+      console.log('[DEBUG:usePendingMessage] Skipping - public screen', { round: newRoundNumber });
       return;
     }
 
     // Check if we should send pending message
     if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
+      console.log('[DEBUG:usePendingMessage] Skipping - guards failed', {
+        round: newRoundNumber,
+        hasPendingMsg: !!pendingMessage,
+        hasExpectedIds: !!expectedParticipantIds,
+        hasSent: hasSentPendingMessage,
+        isStreaming,
+      });
       return;
     }
 
     // Race condition guards
     if (chat.isStreamingRef.current || chat.isTriggeringRef.current) {
+      console.log('[DEBUG:usePendingMessage] Skipping - race condition guard', {
+        round: newRoundNumber,
+        chatIsStreaming: chat.isStreamingRef.current,
+        chatIsTriggering: chat.isTriggeringRef.current,
+      });
       return;
     }
 
     // Round 0 guard - skip when waitingToStartStreaming is true on overview
     if (waitingToStart && screenMode === ScreenModes.OVERVIEW) {
+      console.log('[DEBUG:usePendingMessage] Skipping - round 0 guard', { round: newRoundNumber });
       return;
     }
 
     // Guard: Wait for sendMessage to be available
     if (!sendMessageRef.current) {
+      console.log('[DEBUG:usePendingMessage] Skipping - no sendMessage ref', { round: newRoundNumber });
       return;
     }
 
@@ -95,7 +120,7 @@ export function usePendingMessage({
       return;
     }
 
-    const newRoundNumber = getCurrentRoundNumber(messages);
+    // newRoundNumber already calculated at top of effect
     const webSearchEnabled = enableWebSearch;
     const preSearchForRound = Array.isArray(preSearches)
       ? preSearches.find(ps => ps.roundNumber === newRoundNumber)
@@ -158,12 +183,26 @@ export function usePendingMessage({
       // Still streaming or pending - wait for PreSearchStream to complete it
       if (preSearchForRound.status === AnalysisStatuses.STREAMING
         || preSearchForRound.status === AnalysisStatuses.PENDING) {
+        console.log('[DEBUG:usePendingMessage] Waiting for pre-search to complete', {
+          round: newRoundNumber,
+          preSearchStatus: preSearchForRound.status,
+        });
         return;
       }
+      console.log('[DEBUG:usePendingMessage] Pre-search complete, proceeding', {
+        round: newRoundNumber,
+        preSearchStatus: preSearchForRound.status,
+      });
     }
 
     // Send message
     const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges } = store.getState();
+
+    console.log('[DEBUG:usePendingMessage] 🚀 Sending message!', {
+      round: newRoundNumber,
+      pendingMessage: pendingMessage.slice(0, 30),
+      isRound0: newRoundNumber === 0,
+    });
 
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);

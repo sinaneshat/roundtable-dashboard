@@ -599,12 +599,41 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     // Use get() to avoid Draft type issues with function callbacks
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
+    const streamingRound = get().streamingRoundNumber;
+    // 🔍 DEBUG: Track setMessages calls
+    console.log('[DEBUG:store:setMessages]', {
+      round: streamingRound,
+      prevCount: prevMessages.length,
+      newCount: newMessages.length,
+      lastMsgId: newMessages[newMessages.length - 1]?.id,
+      lastMsgPartsCount: newMessages[newMessages.length - 1]?.parts?.length,
+      isStreaming: get().isStreaming,
+    });
     set({ messages: newMessages }, false, 'thread/setMessages');
   },
-  setIsStreaming: (isStreaming: boolean) =>
-    set({ isStreaming }, false, 'thread/setIsStreaming'),
-  setCurrentParticipantIndex: (currentParticipantIndex: number) =>
-    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex'),
+  setIsStreaming: (isStreaming: boolean) => {
+    // 🔍 DEBUG: Track isStreaming changes
+    const prevIsStreaming = get().isStreaming;
+    const streamingRound = get().streamingRoundNumber;
+    console.log('[DEBUG:store:setIsStreaming]', {
+      round: streamingRound,
+      prev: prevIsStreaming,
+      next: isStreaming,
+    });
+    set({ isStreaming }, false, 'thread/setIsStreaming');
+  },
+  setCurrentParticipantIndex: (currentParticipantIndex: number) => {
+    // 🔍 DEBUG: Track participant index changes
+    const prevIndex = get().currentParticipantIndex;
+    const streamingRound = get().streamingRoundNumber;
+    console.log('[DEBUG:store:setCurrentParticipantIndex]', {
+      round: streamingRound,
+      prev: prevIndex,
+      next: currentParticipantIndex,
+      isStreaming: get().isStreaming,
+    });
+    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex');
+  },
   setError: (error: Error | null) =>
     set({ error }, false, 'thread/setError'),
   setSendMessage: (fn?: SendMessage) =>
@@ -645,7 +674,7 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
  * Data Slice - Transient data state
  * Round numbers, pending messages, and expected participant IDs
  */
-const createDataSlice: SliceCreator<DataSlice> = set => ({
+const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
   ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: (value: number | null) =>
@@ -656,8 +685,16 @@ const createDataSlice: SliceCreator<DataSlice> = set => ({
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  setStreamingRoundNumber: (value: number | null) =>
-    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
+  setStreamingRoundNumber: (value: number | null) => {
+    // 🔍 DEBUG: Track streaming round number changes
+    const prevValue = get().streamingRoundNumber;
+    console.log('[DEBUG:store:setStreamingRoundNumber]', {
+      prev: prevValue,
+      next: value,
+      isStreaming: get().isStreaming,
+    });
+    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber');
+  },
   setCurrentRoundNumber: (value: number | null) =>
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
 });
@@ -1210,17 +1247,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
   },
 
   updateParticipants: (participants: ChatParticipant[]) => {
-    // 🔍 DEBUG LOG 5: Track participant updates
-    const currentState = get();
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG-5] updateParticipants:', {
-      previousParticipantIds: currentState.participants.map(p => ({ id: p.id, model: p.modelId })),
-      newParticipantIds: participants.map(p => ({ id: p.id, model: p.modelId })),
-      messagesInStore: currentState.messages.length,
-      messagesParticipantIds: [...new Set(currentState.messages
-        .filter(m => m.metadata && typeof m.metadata === 'object' && 'participantId' in m.metadata)
-        .map(m => (m.metadata as { participantId?: string }).participantId))],
-    });
     set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
   },
 

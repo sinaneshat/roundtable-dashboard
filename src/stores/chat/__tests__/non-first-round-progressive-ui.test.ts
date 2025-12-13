@@ -106,7 +106,7 @@ function createPartialDataWithResults(
 // TESTS
 // ============================================================================
 
-describe('Non-First Round Progressive UI', () => {
+describe('non-first round progressive UI', () => {
   describe('updatePartialPreSearchData', () => {
     it('should update searchData when partial queries arrive', () => {
       const store = createChatStore();
@@ -330,7 +330,7 @@ describe('Non-First Round Progressive UI', () => {
     });
   });
 
-  describe('Progressive UI flow simulation', () => {
+  describe('progressive UI flow simulation', () => {
     it('should handle complete progressive update flow for round 1', () => {
       const store = createChatStore();
       const threadId = 'thread-123';
@@ -527,7 +527,7 @@ describe('Non-First Round Progressive UI', () => {
     });
   });
 
-  describe('Reference equality for re-rendering', () => {
+  describe('reference equality for re-rendering', () => {
     it('should create new preSearches array reference when updating partial data', () => {
       const store = createChatStore();
       const threadId = 'thread-123';

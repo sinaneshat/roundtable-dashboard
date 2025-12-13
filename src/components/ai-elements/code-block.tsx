@@ -11,7 +11,7 @@
 
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import type { ComponentProps, HTMLAttributes } from 'react';
-import { createContext, memo, use, useEffect, useMemo, useState } from 'react';
+import { createContext, memo, use, useEffect, useMemo, useRef, useState } from 'react';
 import type { BundledLanguage, ShikiTransformer } from 'shiki';
 import { codeToHtml } from 'shiki';
 
@@ -164,6 +164,15 @@ export function CodeBlockCopyButton({
 }: CodeBlockCopyButtonProps) {
   const [isCopied, setIsCopied] = useState(false);
   const { code } = use(CodeBlockContext);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const copyToClipboard = async () => {
     if (typeof window === 'undefined' || !navigator?.clipboard?.writeText) {
@@ -175,7 +184,10 @@ export function CodeBlockCopyButton({
       await navigator.clipboard.writeText(code);
       setIsCopied(true);
       onCopy?.();
-      setTimeout(() => setIsCopied(false), timeout);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => setIsCopied(false), timeout);
     } catch (error) {
       onError?.(error as Error);
     }
