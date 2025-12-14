@@ -54,7 +54,7 @@ function RHFRadioGroup({
                 >
                   <FormLabel
                     htmlFor={`${field.name}-${index}`}
-                    className="flex cursor-pointer items-start space-x-3 rounded-md border p-4 hover:bg-accent hover:text-accent-foreground transition-colors [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
+                    className="flex cursor-pointer items-start space-x-3 rounded-2xl border p-4 hover:bg-accent hover:text-accent-foreground transition-colors [&:has([data-state=checked])]:border-primary [&:has([data-state=checked])]:bg-primary/5"
                   >
                     <FormControl>
                       <RadioGroupItem

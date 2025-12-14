@@ -26,7 +26,7 @@ function RHFCheckbox({
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem className="flex w-full flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+        <FormItem className="flex w-full flex-row items-start space-x-3 space-y-0 rounded-2xl border p-4">
           <FormControl>
             <Checkbox
               required={required}

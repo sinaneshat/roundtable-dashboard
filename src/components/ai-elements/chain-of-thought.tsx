@@ -82,7 +82,7 @@ export function ChainOfThought({
       <Collapsible open={open} onOpenChange={handleOpenChange} disabled={disabled}>
         <div
           className={cn(
-            'rounded-lg border border-border/50 bg-muted/30',
+            'w-full rounded-2xl border border-border/50 bg-muted/30',
             disabled && 'opacity-100',
             className,
           )}

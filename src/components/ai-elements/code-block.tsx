@@ -119,7 +119,7 @@ function CodeBlockComponent({
     <CodeBlockContext value={contextValue}>
       <div
         className={cn(
-          'group relative w-full overflow-hidden rounded-md border bg-background text-foreground',
+          'group relative w-full overflow-hidden rounded-2xl border bg-background text-foreground',
           className,
         )}
         {...props}

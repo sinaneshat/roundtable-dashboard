@@ -63,7 +63,7 @@ export function ApiKeyCard({
           {/* Left: Icon + Title + Description */}
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <div className={cn(
-              'flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors',
+              'flex size-9 shrink-0 items-center justify-center rounded-full transition-colors',
               isDisabled || isExpired
                 ? 'bg-muted'
                 : 'bg-primary/10',

@@ -36,7 +36,7 @@ function RHFSwitch({
       name={name}
       render={({ field }) => (
         <FormItem
-          className={`${cn('flex flex-row items-center justify-between rounded-lg border p-4', className)}`}
+          className={`${cn('flex flex-row items-center justify-between rounded-2xl border p-4', className)}`}
         >
           <div className="space-y-0.5">
             <FormLabel className="text-base">{title}</FormLabel>

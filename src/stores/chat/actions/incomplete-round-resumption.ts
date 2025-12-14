@@ -87,6 +87,15 @@ export type UseIncompleteRoundResumptionReturn = {
    * The round number being resumed (if any)
    */
   resumingRoundNumber: number | null;
+
+  /**
+   * ✅ UNIFIED PHASES: Current phase being resumed (if any)
+   * - 'pre_search': Resuming pre-search/web search phase
+   * - 'participants': Resuming participant streaming phase
+   * - 'analyzer': Resuming round summary/analysis phase
+   * - null: No phase resumption in progress
+   */
+  currentResumptionPhase: 'idle' | 'pre_search' | 'participants' | 'analyzer' | 'complete' | null;
 };
 
 /**
@@ -117,6 +126,7 @@ export function useIncompleteRoundResumption(
     messages,
     participants,
     preSearches,
+    analyses, // ✅ UNIFIED PHASES: Need analyses for analyzer resumption
     isStreaming,
     waitingToStartStreaming,
     pendingMessage,
@@ -124,10 +134,18 @@ export function useIncompleteRoundResumption(
     hasEarlyOptimisticMessage,
     enableWebSearch,
     thread,
+    // ✅ UNIFIED PHASES: Phase-based resumption state from server prefill
+    currentResumptionPhase,
+    preSearchResumption,
+    analyzerResumption,
+    resumptionRoundNumber,
+    streamResumptionPrefilled,
+    isCreatingAnalysis,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
     preSearches: s.preSearches,
+    analyses: s.analyses, // ✅ UNIFIED PHASES: Need analyses for analyzer resumption
     isStreaming: s.isStreaming,
     waitingToStartStreaming: s.waitingToStartStreaming,
     pendingMessage: s.pendingMessage,
@@ -135,6 +153,13 @@ export function useIncompleteRoundResumption(
     hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
     enableWebSearch: s.enableWebSearch,
     thread: s.thread,
+    // ✅ UNIFIED PHASES: Phase-based resumption state from server prefill
+    currentResumptionPhase: s.currentResumptionPhase,
+    preSearchResumption: s.preSearchResumption,
+    analyzerResumption: s.analyzerResumption,
+    resumptionRoundNumber: s.resumptionRoundNumber,
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
+    isCreatingAnalysis: s.isCreatingAnalysis,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -148,6 +173,9 @@ export function useIncompleteRoundResumption(
     setExpectedParticipantIds: s.setExpectedParticipantIds,
     setMessages: s.setMessages,
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
+    // ✅ UNIFIED PHASES: Actions for phase-based resumption
+    clearStreamResumption: s.clearStreamResumption,
+    setIsCreatingAnalysis: s.setIsCreatingAnalysis,
   })));
 
   // ============================================================================
@@ -158,6 +186,9 @@ export function useIncompleteRoundResumption(
   const orphanedPreSearchUIRecoveryRef = useRef<string | null>(null);
   const activeStreamCheckRef = useRef<string | null>(null);
   const activeStreamCheckCompleteRef = useRef(false);
+  // ✅ UNIFIED PHASES: Phase-based resumption tracking
+  const preSearchPhaseResumptionAttemptedRef = useRef<string | null>(null);
+  const analyzerPhaseResumptionAttemptedRef = useRef<string | null>(null);
 
   // Calculate incomplete round state (moved up for use in pending round recovery)
   const enabledParticipants = getEnabledParticipants(participants);
@@ -472,6 +503,9 @@ export function useIncompleteRoundResumption(
     resumptionAttemptedRef.current = null;
     staleWaitingStateRef.current = false; // Reset so stale state detection works on navigation
     lastCheckedSignatureRef.current = null; // Reset signature to allow fresh check
+    // ✅ UNIFIED PHASES: Reset phase-based resumption refs
+    preSearchPhaseResumptionAttemptedRef.current = null;
+    analyzerPhaseResumptionAttemptedRef.current = null;
   }, [threadId]);
 
   // ============================================================================
@@ -704,6 +738,22 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ UNIFIED PHASES: Skip if server prefilled a different phase
+    // When currentResumptionPhase is set, we let phase-specific effects handle resumption
+    // This prevents overlapping triggers (e.g., triggering participants while pre-search is streaming)
+    if (streamResumptionPrefilled && currentResumptionPhase) {
+      // If prefilled phase is pre_search or analyzer, don't run participant resumption here
+      // Those phases have their own effects that will transition to participants when ready
+      if (currentResumptionPhase === 'pre_search' || currentResumptionPhase === 'analyzer') {
+        return;
+      }
+      // If phase is 'idle' or 'complete', no resumption needed
+      if (currentResumptionPhase === 'idle' || currentResumptionPhase === 'complete') {
+        return;
+      }
+      // If phase is 'participants', this effect should handle it (continue below)
+    }
+
     // ✅ OPTIMIZED: Wait for initial check to complete (no longer makes network call)
     // The check effect sets activeStreamCheckCompleteRef.current = true synchronously
     if (!activeStreamCheckCompleteRef.current) {
@@ -846,8 +896,169 @@ export function useIncompleteRoundResumption(
     enableWebSearch,
     // ✅ RACE CONDITION FIX: Include thread to detect when thread.enableWebSearch is loaded
     thread,
+    // ✅ UNIFIED PHASES: Include phase state for proper phase-based resumption
+    currentResumptionPhase,
+    streamResumptionPrefilled,
     // Note: refs (activeStreamCheckCompleteRef, backendNextParticipantRef) are not in deps
     // because they don't cause re-renders - the effect checks their values when it runs
+    actions,
+  ]);
+
+  // ============================================================================
+  // ✅ UNIFIED PHASES: PRE-SEARCH PHASE RESUMPTION EFFECT
+  // ============================================================================
+  // When server prefills state with currentResumptionPhase = 'pre_search':
+  // - The pre-search was interrupted mid-stream
+  // - PreSearchStream component handles its own resumption (NOT AI SDK)
+  // - This effect monitors pre-search completion and transitions to participants phase
+  //
+  // Flow:
+  // 1. Server prefills preSearchResumption with status='streaming'
+  // 2. AI SDK resume receives 204 (non-participant phase) - does nothing
+  // 3. PreSearchStream component (rendered via timeline) handles its own resumption
+  // 4. When pre-search completes, status changes to 'complete' in preSearches array
+  // 5. This effect detects completion and triggers participant resumption
+  useEffect(() => {
+    // Only run if we have a pre-search phase to resume
+    if (currentResumptionPhase !== 'pre_search' || !streamResumptionPrefilled) {
+      return;
+    }
+
+    // Skip if already attempted
+    const resumptionKey = `${threadId}_presearch_${resumptionRoundNumber}`;
+    if (preSearchPhaseResumptionAttemptedRef.current === resumptionKey) {
+      return;
+    }
+
+    // Check if pre-search has completed
+    // First check the store's preSearches array (populated from server data)
+    const preSearchForRound = preSearches.find(ps => ps.roundNumber === resumptionRoundNumber);
+    const preSearchComplete = preSearchForRound?.status === AnalysisStatuses.COMPLETE;
+    const preSearchFailed = preSearchForRound?.status === AnalysisStatuses.FAILED;
+
+    // Also check the prefilled resumption state for initial status
+    // This handles the case where preSearches array hasn't been populated yet
+    const prefilledComplete = preSearchResumption?.status === 'complete';
+    const prefilledFailed = preSearchResumption?.status === 'failed';
+
+    if (preSearchComplete || preSearchFailed || prefilledComplete || prefilledFailed) {
+      // Mark as attempted
+      preSearchPhaseResumptionAttemptedRef.current = resumptionKey;
+
+      // Clear the resumption state - let normal participant triggering take over
+      // Don't clear all resumption state, just the phase-specific parts
+      // The participants phase will be handled by the main resumption effect
+      // Actually, we should NOT clear here - let the participant triggering logic work
+
+      // Set up for participant triggering
+      if ((preSearchComplete || prefilledComplete) && resumptionRoundNumber !== null) {
+        actions.setStreamingRoundNumber(resumptionRoundNumber);
+        actions.setNextParticipantToTrigger(0);
+        actions.setWaitingToStartStreaming(true);
+      }
+    }
+  }, [
+    currentResumptionPhase,
+    streamResumptionPrefilled,
+    threadId,
+    resumptionRoundNumber,
+    preSearches,
+    preSearchResumption, // ✅ Include prefilled state in dependencies
+    actions,
+  ]);
+
+  // ============================================================================
+  // ✅ UNIFIED PHASES: ANALYZER PHASE RESUMPTION EFFECT
+  // ============================================================================
+  // When server prefills state with currentResumptionPhase = 'analyzer':
+  // - All participants have finished their responses
+  // - The round summary/analysis was interrupted mid-stream
+  // - RoundSummaryStream component handles its own resumption (NOT AI SDK)
+  //
+  // Flow:
+  // 1. Server prefills analyzerResumption with status='pending' or 'streaming'
+  // 2. AI SDK resume receives 204 (non-participant phase) - does nothing
+  // 3. RoundSummaryStream component (rendered via timeline) handles resumption via attemptAnalysisResume
+  // 4. If 'pending': Component triggers analysis streaming automatically
+  // 5. When analysis completes, the round is complete
+  useEffect(() => {
+    // Only run if we have an analyzer phase to resume
+    if (currentResumptionPhase !== 'analyzer' || !streamResumptionPrefilled) {
+      return;
+    }
+
+    // Skip if already creating analysis (prevents double triggers)
+    if (isCreatingAnalysis) {
+      return;
+    }
+
+    // Skip if already streaming (AI SDK resume is handling it)
+    if (isStreaming || waitingToStartStreaming) {
+      return;
+    }
+
+    // Skip if already attempted
+    const resumptionKey = `${threadId}_analyzer_${resumptionRoundNumber}`;
+    if (analyzerPhaseResumptionAttemptedRef.current === resumptionKey) {
+      return;
+    }
+
+    // Check if analysis already exists for this round
+    const analysisForRound = analyses.find(a => a.roundNumber === resumptionRoundNumber);
+
+    if (analysisForRound) {
+      // Analysis exists - check its status
+      if (analysisForRound.status === AnalysisStatuses.COMPLETE) {
+        // Round is complete - clear resumption state
+        analyzerPhaseResumptionAttemptedRef.current = resumptionKey;
+        actions.clearStreamResumption();
+        return;
+      }
+
+      if (analysisForRound.status === AnalysisStatuses.STREAMING) {
+        // RoundSummaryStream component handles STREAMING status via attemptAnalysisResume
+        // Just mark as attempted - component will handle resumption when rendered
+        analyzerPhaseResumptionAttemptedRef.current = resumptionKey;
+        return;
+      }
+
+      if (analysisForRound.status === AnalysisStatuses.PENDING) {
+        // Pending analysis needs to be triggered
+        analyzerPhaseResumptionAttemptedRef.current = resumptionKey;
+        // Set streaming flags to trigger analysis streaming
+        // The analysis streaming is handled by the chat-store-provider's analysis effect
+        actions.setStreamingRoundNumber(resumptionRoundNumber);
+        actions.setIsCreatingAnalysis(true);
+        actions.setWaitingToStartStreaming(true);
+      }
+    } else if (analyzerResumption?.analysisId) {
+      // No analysis in store but server says we have one
+      // The analysis exists on the backend but hasn't been loaded to the store yet
+      // This typically means the page was refreshed during analysis streaming
+      // The analysis data should be fetched by the thread data loading
+      // Just mark as attempted and let normal flow handle it
+      analyzerPhaseResumptionAttemptedRef.current = resumptionKey;
+
+      // Set streaming state to indicate analysis is in progress
+      // The thread data loading will populate the analyses array
+      if (resumptionRoundNumber !== null) {
+        actions.setStreamingRoundNumber(resumptionRoundNumber);
+        actions.setIsCreatingAnalysis(true);
+        // Don't set waitingToStartStreaming here - let the analysis
+        // be loaded from server first, then the normal analysis
+        // streaming flow will pick it up
+      }
+    }
+  }, [
+    currentResumptionPhase,
+    streamResumptionPrefilled,
+    threadId,
+    resumptionRoundNumber,
+    analyzerResumption,
+    analyses,
+    isCreatingAnalysis,
+    isStreaming,
+    waitingToStartStreaming,
     actions,
   ]);
 
@@ -855,5 +1066,7 @@ export function useIncompleteRoundResumption(
     isIncomplete,
     nextParticipantIndex,
     resumingRoundNumber: isIncomplete ? currentRoundNumber : null,
+    // ✅ UNIFIED PHASES: Expose current resumption phase for debugging/UI
+    currentResumptionPhase: streamResumptionPrefilled ? currentResumptionPhase : null,
   };
 }

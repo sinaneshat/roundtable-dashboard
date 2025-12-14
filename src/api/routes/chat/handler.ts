@@ -33,12 +33,8 @@ export {
 } from './handlers/role.handler';
 export {
   getThreadStreamResumptionStateHandler,
-  resumeStreamHandler,
   resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';
-export {
-  getStreamStatusHandler,
-} from './handlers/stream-status.handler';
 export {
   streamChatHandler,
 } from './handlers/streaming.handler';

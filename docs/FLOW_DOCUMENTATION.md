@@ -384,7 +384,7 @@ const { messages, stop } = useChat({
 
 **Backend:**
 - `src/api/routes/chat/handlers/streaming.handler.ts:625-817` - Stream lifecycle tracking
-- `src/api/routes/chat/handlers/stream-status.handler.ts` - Status check endpoint
+- `src/api/routes/chat/handlers/stream-resume.handler.ts` - Stream resumption (AI SDK pattern)
 - `src/api/services/resumable-stream-kv.service.ts` - KV operations
 
 **Frontend:**
@@ -393,7 +393,8 @@ const { messages, stop } = useChat({
 
 **API Routes:**
 - `POST /api/v1/chat` - Streaming endpoint (marks streams active/completed)
-- `GET /api/v1/chat/threads/:threadId/streams/:streamId` - Status check
+- `GET /api/v1/chat/threads/:threadId/stream` - Resume active stream (AI SDK pattern)
+- `GET /api/v1/chat/threads/:threadId/stream-status` - Unified resumption state metadata
 
 ### Testing
 

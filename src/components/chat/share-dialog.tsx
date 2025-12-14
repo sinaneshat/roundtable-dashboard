@@ -272,7 +272,7 @@ export function ShareDialog({
                         <Component key={id} url={shareUrl} title={shareTitle} blankTarget>
                           <button
                             type="button"
-                            className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2 py-2 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+                            className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-xl px-2 py-2 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
                           >
                             {SOCIAL_ICONS[id]}
                             <span>{name}</span>
@@ -304,7 +304,7 @@ export function ShareDialog({
             </div>
 
             {/* Embed Options - API Keys Modal Style */}
-            <Accordion type="single" collapsible className="w-full rounded-lg border border-border">
+            <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
               <AccordionItem value="embed" className="border-0">
                 <AccordionTrigger className="px-4 hover:no-underline">
                   <div className="flex items-center gap-3">

@@ -4,6 +4,17 @@ import { BRAND } from '@/constants/brand';
 import { SubscriptionChangedClient } from '@/containers/screens/chat/billing/SubscriptionChangedClient';
 import { createMetadata } from '@/utils/metadata';
 
+// ============================================================================
+// Static Generation - Transient page UI is static
+// ============================================================================
+
+/**
+ * Force Static Generation
+ * - Page UI is a static shell
+ * - Subscription data is fetched client-side
+ */
+export const dynamic = 'force-static';
+
 export const metadata: Metadata = createMetadata({
   title: `Subscription Changed - ${BRAND.fullName}`,
   description: 'Your subscription has been updated successfully.',

@@ -179,7 +179,7 @@ export function UsageMetrics() {
         <Button
           variant={isMaxedOut ? 'default' : 'outline'}
           size="sm"
-          className="w-full h-6 rounded-md gap-1 text-[10px] font-medium mt-2"
+          className="w-full h-6 rounded-full gap-1 text-[10px] font-medium mt-2"
           onClick={handleUpgrade}
         >
           <ArrowUpCircle className="size-2.5" />

@@ -407,7 +407,7 @@ export function ModelSelectionModal({
                                       onClearRole(selectedModelForRole!);
                                       handleBackToModelList();
                                     }}
-                                    className="shrink-0 p-1 rounded-md hover:bg-white/10 transition-colors"
+                                    className="shrink-0 p-1 rounded-full hover:bg-white/10 transition-colors"
                                   >
                                     <X className="h-4 w-4 text-muted-foreground" />
                                   </button>
@@ -465,7 +465,7 @@ export function ModelSelectionModal({
                                       onClearRole(selectedModelForRole!);
                                       handleBackToModelList();
                                     }}
-                                    className="shrink-0 p-1 rounded-md hover:bg-white/10 transition-colors"
+                                    className="shrink-0 p-1 rounded-full hover:bg-white/10 transition-colors"
                                   >
                                     <X className="h-4 w-4 text-muted-foreground" />
                                   </button>

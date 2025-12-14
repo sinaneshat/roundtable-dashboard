@@ -20,7 +20,7 @@ import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
-import { AccordionEntrance, TimelineEntrance } from '@/components/ui/motion';
+import { ScrollFadeEntrance } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
@@ -82,6 +82,9 @@ type ThreadTimelineProps = {
 
   // Message content scrolling (demo mode)
   maxContentHeight?: number;
+
+  // Skip all entrance animations (for demo that has already completed)
+  skipEntranceAnimations?: boolean;
 };
 
 export function ThreadTimeline({
@@ -106,6 +109,7 @@ export function ThreadTimeline({
   demoAnalysisOpen,
   isDataReady = true,
   maxContentHeight,
+  skipEntranceAnimations = false,
 }: ThreadTimelineProps) {
   // TanStack Virtual hook - official pattern
   const {
@@ -137,6 +141,10 @@ export function ThreadTimeline({
 
   // Helper to check if item should animate
   const shouldAnimate = (itemKey: React.Key): boolean => {
+    // Skip all animations when explicitly requested (e.g., demo already completed)
+    if (skipEntranceAnimations) {
+      return false;
+    }
     const key = String(itemKey);
     if (animatedItemsRef.current.has(key)) {
       return false; // Already animated
@@ -195,9 +203,11 @@ export function ThreadTimeline({
           >
             {/* Changelog items */}
             {item.type === 'changelog' && item.data.length > 0 && (
-              <TimelineEntrance
+              <ScrollFadeEntrance
                 index={virtualItem.index}
                 skipAnimation={!shouldAnimate(virtualItem.key)}
+                enableScrollEffect
+                scrollIntensity={0.08}
               >
                 <div className="mb-6">
                   <UnifiedErrorBoundary context="configuration">
@@ -209,13 +219,19 @@ export function ThreadTimeline({
                     />
                   </UnifiedErrorBoundary>
                 </div>
-              </TimelineEntrance>
+              </ScrollFadeEntrance>
             )}
 
             {/* Pre-search items */}
             {item.type === 'pre-search' && (
-              <AccordionEntrance skipAnimation={!shouldAnimate(virtualItem.key)}>
-                <div className="mb-6">
+              <ScrollFadeEntrance
+                index={virtualItem.index}
+                skipAnimation={!shouldAnimate(virtualItem.key)}
+                enableScrollEffect
+                scrollIntensity={0.1}
+                skipScale
+              >
+                <div className="w-full mb-6">
                   <UnifiedErrorBoundary context="pre-search">
                     <PreSearchCard
                       threadId={threadId}
@@ -227,14 +243,18 @@ export function ThreadTimeline({
                     />
                   </UnifiedErrorBoundary>
                 </div>
-              </AccordionEntrance>
+              </ScrollFadeEntrance>
             )}
 
             {/* Message items */}
+            {/* Note: Scroll effect disabled here - ChatMessageList has its own
+                ScrollAwareUserMessage and ScrollAwareParticipant wrappers that
+                handle scroll effects at the individual message level */}
             {item.type === 'messages' && (
-              <TimelineEntrance
+              <ScrollFadeEntrance
                 index={virtualItem.index}
                 skipAnimation={!shouldAnimate(virtualItem.key)}
+                enableScrollEffect={false}
               >
                 <div className="space-y-3 pb-2">
                   <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
@@ -250,6 +270,7 @@ export function ThreadTimeline({
                       streamingRoundNumber={streamingRoundNumber}
                       demoPreSearchOpen={demoPreSearchOpen}
                       maxContentHeight={maxContentHeight}
+                      skipEntranceAnimations={skipEntranceAnimations}
                     />
                   </UnifiedErrorBoundary>
 
@@ -304,13 +325,19 @@ export function ThreadTimeline({
                     );
                   })()}
                 </div>
-              </TimelineEntrance>
+              </ScrollFadeEntrance>
             )}
 
             {/* Round Summary items */}
             {item.type === 'analysis' && (
-              <AccordionEntrance skipAnimation={!shouldAnimate(virtualItem.key)}>
-                <div className="mb-4">
+              <ScrollFadeEntrance
+                index={virtualItem.index}
+                skipAnimation={!shouldAnimate(virtualItem.key)}
+                enableScrollEffect
+                scrollIntensity={0.1}
+                skipScale
+              >
+                <div className="w-full mb-4">
                   <RoundSummaryCard
                     analysis={item.data}
                     threadId={threadId}
@@ -326,7 +353,7 @@ export function ThreadTimeline({
                     demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
                   />
                 </div>
-              </AccordionEntrance>
+              </ScrollFadeEntrance>
             )}
           </div>
         );

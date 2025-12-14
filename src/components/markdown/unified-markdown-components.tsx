@@ -228,7 +228,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
 
     // Tables - AI Elements: clean, readable tables with borders
     table: ({ children }: { children?: React.ReactNode }) => (
-      <div className="overflow-x-auto my-6 rounded-lg border border-border">
+      <div className="overflow-x-auto my-6 rounded-2xl border border-border">
         <table className="min-w-full border-collapse text-sm">
           {children}
         </table>
@@ -270,7 +270,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Pa
       <img
         src={src}
         alt={alt || ''}
-        className="max-w-full h-auto rounded-lg my-4"
+        className="max-w-full h-auto rounded-2xl my-4"
         loading="lazy"
         referrerPolicy="no-referrer"
         {...props}

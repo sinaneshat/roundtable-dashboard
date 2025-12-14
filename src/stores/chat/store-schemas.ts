@@ -130,6 +130,7 @@ import type {
   SetWaitingToStartStreaming,
   StartRegeneration,
   TryMarkAnalysisCreated,
+  TryMarkPreSearchTriggered,
   UpdateAnalysisData,
   UpdateAnalysisError,
   UpdateAnalysisStatus,
@@ -376,6 +377,8 @@ export const TrackingActionsSchema = z.object({
   clearAnalysisTracking: z.custom<ClearAnalysisTracking>(),
   markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
+  /** Atomic check-and-mark to prevent race conditions in pre-search triggering */
+  tryMarkPreSearchTriggered: z.custom<TryMarkPreSearchTriggered>(),
   clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
   /** ✅ ANALYSIS STREAM TRACKING: Mark analysis stream as triggered (ID + round) */
   markAnalysisStreamTriggered: z.custom<MarkAnalysisStreamTriggered>(),
@@ -443,6 +446,29 @@ export const StreamResumptionStateEntitySchema = z.object({
  */
 export type StreamResumptionState = z.infer<typeof StreamResumptionStateEntitySchema>;
 
+/**
+ * Pre-search resumption state for phase-based tracking
+ */
+export const PreSearchResumptionStateSchema = z.object({
+  enabled: z.boolean(),
+  status: z.enum(['pending', 'streaming', 'complete', 'failed']).nullable(),
+  streamId: z.string().nullable(),
+  preSearchId: z.string().nullable(),
+});
+
+export type PreSearchResumptionState = z.infer<typeof PreSearchResumptionStateSchema>;
+
+/**
+ * Analyzer resumption state for phase-based tracking
+ */
+export const AnalyzerResumptionStateSchema = z.object({
+  status: z.enum(['pending', 'streaming', 'complete', 'failed']).nullable(),
+  streamId: z.string().nullable(),
+  analysisId: z.string().nullable(),
+});
+
+export type AnalyzerResumptionState = z.infer<typeof AnalyzerResumptionStateSchema>;
+
 export const StreamResumptionSliceStateSchema = z.object({
   streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
   resumptionAttempts: z.custom<Set<string>>(),
@@ -451,6 +477,14 @@ export const StreamResumptionSliceStateSchema = z.object({
   streamResumptionPrefilled: z.boolean(),
   /** Thread ID that the prefilled state is for - ensures state matches current thread */
   prefilledForThreadId: z.string().nullable(),
+  /** ✅ UNIFIED PHASES: Current phase for resumption logic */
+  currentResumptionPhase: z.enum(['idle', 'pre_search', 'participants', 'analyzer', 'complete']).nullable(),
+  /** Pre-search resumption state (null if web search not enabled) */
+  preSearchResumption: PreSearchResumptionStateSchema.nullable(),
+  /** Analyzer resumption state */
+  analyzerResumption: AnalyzerResumptionStateSchema.nullable(),
+  /** Current round number for resumption */
+  resumptionRoundNumber: z.number().nullable(),
 });
 
 export const StreamResumptionActionsSchema = z.object({

@@ -113,7 +113,7 @@ if (mode === 'analyzing') {
 | `ChatModes` | `ANALYZING`, `BRAINSTORMING`, `DEBATING`, `SOLVING` | Thread mode selection |
 | `AnalysisStatuses` | `PENDING`, `STREAMING`, `COMPLETE`, `FAILED` | Moderator analysis lifecycle |
 | `PreSearchStatuses` | `IDLE`, `STREAMING`, `ACTIVE`, `COMPLETE`, `FAILED` | Pre-search lifecycle |
-| `AiSdkStatuses` | `READY`, `STREAMING`, `AWAITING_MESSAGE` | AI SDK hook status |
+| `AiSdkStatuses` | `READY`, `SUBMITTED`, `STREAMING`, `ERROR` | AI SDK hook status |
 
 **Reference**: `/src/api/core/enums.ts:1-694`
 

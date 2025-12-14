@@ -1,7 +1,18 @@
 'use client';
 
-import { AnimatePresence, motion, type HTMLMotionProps, type Variants } from 'motion/react';
+import {
+  AnimatePresence,
+  motion,
+  useInView,
+  useScroll,
+  useSpring,
+  useTransform,
+  type HTMLMotionProps,
+  type MotionValue,
+  type Variants,
+} from 'motion/react';
 import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -790,6 +801,344 @@ export function AccordionEntrance({
       animate="animate"
       variants={accordionCardVariants}
       className={cn(className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// =============================================================================
+// SCROLL-AWARE ANIMATIONS - Continuous scroll-linked warp effects
+// Uses useScroll for smooth, continuous animations during scroll
+// =============================================================================
+
+/**
+ * Spring configuration for smooth scroll-linked animations
+ */
+const scrollSpringConfig = {
+  stiffness: 300,
+  damping: 30,
+  restDelta: 0.001,
+};
+
+/**
+ * Hook for continuous scroll-linked warp effect
+ * Returns smooth opacity and y values based on element position in viewport
+ */
+function useScrollWarp(options?: {
+  intensity?: number;
+  edgeThreshold?: number;
+}): {
+  ref: React.RefObject<HTMLDivElement>;
+  opacity: MotionValue<number>;
+  y: MotionValue<number>;
+  isReady: boolean;
+} {
+  const { intensity = 0.15, edgeThreshold = 0.2 } = options || {};
+  const ref = useRef<HTMLDivElement>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  // Track when component is mounted (hydration complete)
+  useEffect(() => {
+    // Small delay to ensure DOM is ready
+    const timer = requestAnimationFrame(() => setIsReady(true));
+    return () => cancelAnimationFrame(timer);
+  }, []);
+
+  // Track element's scroll progress through viewport
+  // offset: ["start end", "end start"] means:
+  // - 0 when element's start reaches viewport's end (entering from bottom)
+  // - 1 when element's end reaches viewport's start (exiting from top)
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start end', 'end start'],
+  });
+
+  // Smooth the scroll progress with spring physics
+  const smoothProgress = useSpring(scrollYProgress, scrollSpringConfig);
+
+  // Transform progress to opacity - subtle fade near edges
+  const opacity = useTransform(smoothProgress, (progress) => {
+    // progress 0 = entering from bottom, 0.5 = center, 1 = exiting from top
+    const distanceFromCenter = Math.abs(progress - 0.5);
+
+    // No effect in center zone
+    if (distanceFromCenter < (0.5 - edgeThreshold)) {
+      return 1;
+    }
+
+    // Parabolic falloff near edges
+    const edgeProximity = (distanceFromCenter - (0.5 - edgeThreshold)) / edgeThreshold;
+    const opacityReduction = edgeProximity * edgeProximity * intensity;
+
+    return Math.max(0.7, 1 - opacityReduction);
+  });
+
+  // Transform progress to Y - subtle shift toward center at edges
+  const y = useTransform(smoothProgress, (progress) => {
+    const distanceFromCenter = Math.abs(progress - 0.5);
+
+    if (distanceFromCenter < (0.5 - edgeThreshold)) {
+      return 0;
+    }
+
+    const edgeProximity = (distanceFromCenter - (0.5 - edgeThreshold)) / edgeThreshold;
+    // Shift toward center: positive when at bottom, negative when at top
+    const direction = progress < 0.5 ? 1 : -1;
+    return direction * edgeProximity * edgeProximity * (intensity * 80);
+  });
+
+  return { ref: ref as React.RefObject<HTMLDivElement>, opacity, y, isReady };
+}
+
+type ScrollMagnifierProps = {
+  children: ReactNode;
+  className?: string;
+  /** Intensity of the magnifier effect (0-1, default 0.12) */
+  intensity?: number;
+  /** How close to viewport edge before effect starts (0-1, default 0.15) */
+  edgeThreshold?: number;
+  /** Disable the scroll effect entirely */
+  disabled?: boolean;
+};
+
+/**
+ * Wrapper component with continuous scroll-linked warp effect
+ * Creates smooth warping as elements move through viewport
+ */
+export function ScrollMagnifier({
+  children,
+  className,
+  intensity = 0.12,
+  edgeThreshold = 0.15,
+  disabled = false,
+}: ScrollMagnifierProps) {
+  const { ref, opacity, y, isReady } = useScrollWarp({ intensity, edgeThreshold });
+
+  if (disabled) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
+
+  // Before hydration, render without scroll effects
+  if (!isReady) {
+    return <div ref={ref} className={cn('w-full', className)}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      style={{ opacity, y }}
+      className={cn('w-full', className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+type ScrollFadeEntranceProps = {
+  children: ReactNode;
+  className?: string;
+  /** Index for staggered delay */
+  index?: number;
+  /** Skip initial mount animation (for pre-existing items) */
+  skipAnimation?: boolean;
+  /** Enable scroll-based magnifier effect */
+  enableScrollEffect?: boolean;
+  /** Intensity of scroll effect */
+  scrollIntensity?: number;
+  /** Skip scale transform (use only opacity/y) - preserves element width */
+  skipScale?: boolean;
+};
+
+/**
+ * Combined entrance + InView-based fade wrapper
+ * Animates in once on mount, warps when leaving viewport
+ * Uses Intersection Observer (hydration-safe)
+ */
+export function ScrollFadeEntrance({
+  children,
+  className,
+  index = 0,
+  skipAnimation = false,
+  enableScrollEffect = true,
+  scrollIntensity = 0.15,
+  skipScale: _skipScale = false,
+}: ScrollFadeEntranceProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Trigger when element is 12% from viewport edge
+  const isInView = useInView(ref, { once: false, margin: '-12% 0px -12% 0px' });
+
+  // Calculate out-of-view values based on intensity
+  const outOfViewOpacity = 1 - (scrollIntensity * 1.5);
+  const outOfViewY = scrollIntensity * 60; // Subtle y shift
+
+  if (skipAnimation) {
+    if (!enableScrollEffect) {
+      return <div className={cn('w-full', className)}>{children}</div>;
+    }
+    // InView-based warp only (no entrance animation)
+    return (
+      <motion.div
+        ref={ref}
+        animate={{
+          opacity: isInView ? 1 : outOfViewOpacity,
+          y: isInView ? 0 : outOfViewY,
+        }}
+        transition={{
+          duration: 0.2,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  // Full animation: entrance + InView warp
+  return (
+    <motion.div
+      ref={enableScrollEffect ? ref : undefined}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{
+        opacity: enableScrollEffect ? (isInView ? 1 : outOfViewOpacity) : 1,
+        y: enableScrollEffect ? (isInView ? 0 : outOfViewY) : 0,
+      }}
+      transition={{
+        duration: 0.3,
+        delay: index * 0.03,
+        ease: ANIMATION_EASE.enter,
+      }}
+      className={cn('w-full', className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * Participant card with InView-based animations
+ * Entrance animation + warp when leaving viewport
+ * Uses Intersection Observer (hydration-safe)
+ */
+export function ScrollAwareParticipant({
+  children,
+  className,
+  index = 0,
+  skipAnimation = false,
+  enableScrollEffect = true,
+  scrollIntensity = 0.12,
+}: ScrollFadeEntranceProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Trigger when element is 10% from viewport edge
+  const isInView = useInView(ref, { once: false, margin: '-10% 0px -10% 0px' });
+
+  // Calculate out-of-view values
+  const outOfViewOpacity = 1 - (scrollIntensity * 1.5);
+  const outOfViewY = scrollIntensity * 50;
+
+  if (skipAnimation) {
+    if (!enableScrollEffect) {
+      return <div className={cn('w-full', className)}>{children}</div>;
+    }
+    return (
+      <motion.div
+        ref={ref}
+        animate={{
+          opacity: isInView ? 1 : outOfViewOpacity,
+          y: isInView ? 0 : outOfViewY,
+        }}
+        transition={{
+          duration: 0.2,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      ref={enableScrollEffect ? ref : undefined}
+      initial="initial"
+      animate={{
+        opacity: enableScrollEffect ? (isInView ? 1 : outOfViewOpacity) : 1,
+        y: enableScrollEffect ? (isInView ? 0 : outOfViewY) : 0,
+        x: 0,
+      }}
+      variants={participantMessageVariants}
+      transition={{
+        delay: index * 0.08,
+        duration: 0.3,
+        ease: ANIMATION_EASE.enter,
+      }}
+      className={cn('w-full', className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/**
+ * User message with InView-based animations
+ * Entrance animation + warp when leaving viewport
+ * Uses Intersection Observer (hydration-safe)
+ */
+export function ScrollAwareUserMessage({
+  children,
+  className,
+  skipAnimation = false,
+  enableScrollEffect = true,
+  scrollIntensity = 0.1,
+}: Omit<ScrollFadeEntranceProps, 'index'>) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Trigger when element is 10% from viewport edge
+  const isInView = useInView(ref, { once: false, margin: '-10% 0px -10% 0px' });
+
+  // Calculate out-of-view values
+  const outOfViewOpacity = 1 - (scrollIntensity * 1.5);
+  const outOfViewY = scrollIntensity * 40;
+
+  if (skipAnimation) {
+    if (!enableScrollEffect) {
+      return <div className={cn('w-full', className)}>{children}</div>;
+    }
+    return (
+      <motion.div
+        ref={ref}
+        animate={{
+          opacity: isInView ? 1 : outOfViewOpacity,
+          y: isInView ? 0 : outOfViewY,
+        }}
+        transition={{
+          duration: 0.2,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      ref={enableScrollEffect ? ref : undefined}
+      initial="initial"
+      animate={{
+        opacity: enableScrollEffect ? (isInView ? 1 : outOfViewOpacity) : 1,
+        y: enableScrollEffect ? (isInView ? 0 : outOfViewY) : 0,
+        x: 0,
+        scale: 1,
+      }}
+      variants={userMessageVariants}
+      transition={{
+        duration: 0.25,
+        ease: ANIMATION_EASE.enter,
+      }}
+      className={cn('w-full', className)}
     >
       {children}
     </motion.div>

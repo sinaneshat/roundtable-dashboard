@@ -175,7 +175,7 @@ function AttachmentChip({
           transition={{ duration: 0.15 }}
           className={cn(
             'relative group flex items-center gap-1.5 shrink-0',
-            'h-8 px-1.5 pr-1 rounded-lg',
+            'h-8 px-1.5 pr-1 rounded-xl',
             'bg-muted/60 border border-border/40',
             'hover:bg-muted hover:border-border/60',
             'transition-colors duration-150',

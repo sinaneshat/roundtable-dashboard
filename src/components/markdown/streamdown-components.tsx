@@ -170,7 +170,7 @@ export const streamdownComponents = {
 
   // Tables - AI Elements: clean, readable tables with borders
   table: ({ children, className }: BaseProps) => (
-    <div className={cn('overflow-x-auto my-6 rounded-lg border border-border', className)}>
+    <div className={cn('overflow-x-auto my-6 rounded-2xl border border-border', className)}>
       <table className="min-w-full border-collapse text-sm">
         {children}
       </table>
@@ -210,7 +210,7 @@ export const streamdownComponents = {
     <img
       src={src}
       alt={alt || ''}
-      className={cn('max-w-full h-auto rounded-lg my-4', className)}
+      className={cn('max-w-full h-auto rounded-2xl my-4', className)}
       loading="lazy"
       referrerPolicy="no-referrer"
       {...props}

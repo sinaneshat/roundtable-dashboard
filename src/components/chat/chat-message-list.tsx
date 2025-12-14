@@ -16,7 +16,7 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ParticipantEntrance, UserMessageEntrance } from '@/components/ui/motion';
+import { ScrollAwareParticipant, ScrollAwareUserMessage } from '@/components/ui/motion';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
@@ -488,6 +488,8 @@ type ChatMessageListProps = {
   demoPreSearchOpen?: boolean; // Demo mode controlled accordion state
   /** Max height for scrollable content in message cards. Used in demo mode. */
   maxContentHeight?: number;
+  /** Skip all entrance animations (for demo that has already completed) */
+  skipEntranceAnimations?: boolean;
 };
 export const ChatMessageList = memo(
   ({
@@ -505,6 +507,7 @@ export const ChatMessageList = memo(
     streamingRoundNumber: _streamingRoundNumber = null,
     demoPreSearchOpen,
     maxContentHeight,
+    skipEntranceAnimations = false,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const tParticipant = useTranslations('chat.participant');
@@ -532,6 +535,10 @@ export const ChatMessageList = memo(
 
     // Helper to check if message should animate
     const shouldAnimateMessage = (messageId: string): boolean => {
+      // Skip all animations when explicitly requested (e.g., demo already completed)
+      if (skipEntranceAnimations) {
+        return false;
+      }
       if (animatedMessagesRef.current.has(messageId)) {
         return false; // Already animated
       }
@@ -916,9 +923,10 @@ export const ChatMessageList = memo(
                     );
 
                     return (
-                      <UserMessageEntrance
+                      <ScrollAwareUserMessage
                         key={messageKey}
                         skipAnimation={!shouldAnimateMessage(message.id)}
+                        enableScrollEffect
                         className="w-full"
                       >
                         <div
@@ -953,7 +961,7 @@ export const ChatMessageList = memo(
                             return null;
                           })}
                         </div>
-                      </UserMessageEntrance>
+                      </ScrollAwareUserMessage>
                     );
                   })}
                 </div>
@@ -1109,12 +1117,13 @@ export const ChatMessageList = memo(
                         }
 
                         // ✅ Use ParticipantMessageWrapper for consistent header rendering
-                        // ✅ ANIMATION: Staggered entrance for participant cards
+                        // ✅ ANIMATION: Staggered entrance + scroll magnifier effect
                         return (
-                          <ParticipantEntrance
+                          <ScrollAwareParticipant
                             key={`participant-${participant.id}`}
                             index={participantIdx}
                             skipAnimation={!shouldAnimateMessage(`participant-${participant.id}-${roundNumber}`)}
+                            enableScrollEffect
                           >
                             <ParticipantMessageWrapper
                               participant={participant}
@@ -1127,7 +1136,7 @@ export const ChatMessageList = memo(
                               loadingText={loadingText}
                               maxContentHeight={maxContentHeight}
                             />
-                          </ParticipantEntrance>
+                          </ScrollAwareParticipant>
                         );
                       })}
                     </div>

@@ -756,6 +756,9 @@ function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, st
   if (metadata.streamId !== undefined) {
     headers['X-Stream-Id'] = metadata.streamId;
   }
+  if (metadata.phase !== undefined) {
+    headers['X-Stream-Phase'] = metadata.phase;
+  }
   if (metadata.roundNumber !== undefined) {
     headers['X-Round-Number'] = String(metadata.roundNumber);
   }
@@ -779,6 +782,9 @@ function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, st
   }
   if (metadata.resumedFromBuffer !== undefined) {
     headers['X-Resumed-From-Buffer'] = String(metadata.resumedFromBuffer);
+  }
+  if (metadata.analysisId !== undefined) {
+    headers['X-Analysis-Id'] = metadata.analysisId;
   }
 
   return headers;

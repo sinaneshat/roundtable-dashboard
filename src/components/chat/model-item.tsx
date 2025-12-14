@@ -77,6 +77,8 @@ export function ModelItem({
   const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels;
   // Disable selection if model can't handle uploaded files (e.g., no vision for images/PDFs)
   const isDisabledDueToFileIncompatibility = !isSelected && isIncompatibleWithFiles;
+  // Show warning badge for ANY incompatible model (selected or not)
+  const showFileIncompatibilityWarning = isIncompatibleWithFiles;
   // Allow deselecting all - validation shown elsewhere
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
@@ -116,7 +118,7 @@ export function ModelItem({
                 {tModels('limitReached')}
               </Badge>
             )}
-            {isDisabledDueToFileIncompatibility && !isDisabledDueToTier && !isDisabledDueToLimit && (
+            {showFileIncompatibilityWarning && !isDisabledDueToTier && !isDisabledDueToLimit && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1">
@@ -163,7 +165,7 @@ export function ModelItem({
                             e.stopPropagation();
                             _onClearRole();
                           }}
-                          className="shrink-0 p-0.5 rounded-sm hover:bg-white/10 transition-colors"
+                          className="shrink-0 p-0.5 rounded-full hover:bg-white/10 transition-colors"
                           aria-label="Clear role"
                         >
                           <X className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground" />
@@ -197,7 +199,7 @@ export function ModelItem({
         ? (
             <Link
               href="/chat/pricing"
-              className="shrink-0 p-1 sm:p-1.5 rounded-md touch-manipulation"
+              className="shrink-0 p-1 sm:p-1.5 rounded-full touch-manipulation"
               onClick={e => e.stopPropagation()}
               aria-label="Upgrade to unlock this model"
             >
@@ -224,14 +226,29 @@ export function ModelItem({
         value={orderedModel}
         dragControls={dragControls}
         dragListener={false}
+        dragElastic={0}
+        dragMomentum={false}
         layout
         style={{ position: 'relative' }}
         className={cn(
-          'p-3 sm:p-4 w-full rounded-xl block touch-manipulation',
-          'cursor-pointer transition-colors duration-200',
-          !isDisabled && 'hover:bg-white/5 active:bg-white/10',
+          'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
           isDisabled && 'opacity-50 cursor-not-allowed',
         )}
+        whileHover={
+          !isDisabled
+            ? {
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                borderColor: 'rgba(255, 255, 255, 0.12)',
+              }
+            : undefined
+        }
+        whileDrag={{
+          scale: 1.02,
+          boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.4)',
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          cursor: 'grabbing',
+        }}
+        transition={{ duration: 0.15 }}
         onClick={isDisabled ? undefined : onToggle}
       >
         {itemContent}
@@ -245,8 +262,9 @@ export function ModelItem({
       tabIndex={isDisabled ? -1 : 0}
       className={cn(
         'p-3 sm:p-4 w-full rounded-xl block touch-manipulation',
-        'cursor-pointer transition-colors duration-200',
-        !isDisabled && 'hover:bg-white/5 active:bg-white/10',
+        'border border-transparent',
+        'cursor-pointer transition-all duration-200 ease-out',
+        !isDisabled && 'hover:bg-white/[0.08] hover:backdrop-blur-md hover:border-white/[0.12] active:bg-white/[0.12]',
         isDisabled && 'opacity-50 cursor-not-allowed',
       )}
       onClick={isDisabled ? undefined : onToggle}

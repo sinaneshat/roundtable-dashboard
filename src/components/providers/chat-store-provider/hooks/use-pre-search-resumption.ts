@@ -96,22 +96,22 @@ export function usePreSearchResumption({
       return;
     }
 
-    // Check if already triggered locally (via store tracking)
-    const currentState = store.getState();
-    if (currentState.hasPreSearchBeenTriggered(currentRound)) {
-      // Already tracked locally, stream should be running
-      return;
-    }
-
     // Prevent duplicate resumption attempts for same round
     if (attemptedResumptionRef.current.has(currentRound)) {
       return;
     }
 
+    // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
+    const currentState = store.getState();
+    const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
+    if (!didMark) {
+      // Already triggered locally, stream should be running
+      return;
+    }
+
     // ✅ RESUMPTION: Pre-search is streaming but not tracked locally = page refresh scenario
-    // Mark as attempted and triggered
+    // Mark as attempted
     attemptedResumptionRef.current.add(currentRound);
-    currentState.markPreSearchTriggered(currentRound);
 
     // Get user query
     const userMessageForRound = storeMessages.find((msg) => {

@@ -174,6 +174,14 @@ export const STREAM_RESUMPTION_DEFAULTS = {
   streamResumptionPrefilled: false,
   /** Thread ID that the prefilled state is for - ensures state matches current thread */
   prefilledForThreadId: null,
+  /** ✅ UNIFIED PHASES: Current phase for resumption logic */
+  currentResumptionPhase: null,
+  /** Pre-search resumption state (null if web search not enabled) */
+  preSearchResumption: null,
+  /** Analyzer resumption state */
+  analyzerResumption: null,
+  /** Current round number for resumption */
+  resumptionRoundNumber: null,
 } satisfies StreamResumptionSliceState;
 
 // ============================================================================
@@ -315,6 +323,12 @@ export const COMPLETE_RESET_STATE = {
   streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
   resumptionAttempts: new Set<string>(),
   nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
+  streamResumptionPrefilled: STREAM_RESUMPTION_DEFAULTS.streamResumptionPrefilled,
+  prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
+  currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
+  preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
+  analyzerResumption: STREAM_RESUMPTION_DEFAULTS.analyzerResumption,
+  resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
   // Animation state
   pendingAnimations: new Set<number>(),
   animationResolvers: new Map(),
@@ -365,6 +379,12 @@ export const THREAD_RESET_STATE = {
   streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
   resumptionAttempts: new Set<string>(),
   nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
+  streamResumptionPrefilled: STREAM_RESUMPTION_DEFAULTS.streamResumptionPrefilled,
+  prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
+  currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
+  preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
+  analyzerResumption: STREAM_RESUMPTION_DEFAULTS.analyzerResumption,
+  resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
   // Animation state
   pendingAnimations: new Set<number>(),
   animationResolvers: new Map(),

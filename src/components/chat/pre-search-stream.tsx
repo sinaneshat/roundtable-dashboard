@@ -64,6 +64,8 @@ function PreSearchStreamComponent({
   // ✅ ZUSTAND PATTERN: Use store for pre-search deduplication tracking
   // When PreSearchStream decides to execute, it MUST mark the store so provider knows
   // Without this, both PreSearchStream and provider can race to execute simultaneously
+  // 🚨 ATOMIC: Use tryMarkPreSearchTriggered for atomic check-and-mark to prevent race conditions
+  const tryMarkPreSearchTriggered = useChatStore(s => s.tryMarkPreSearchTriggered);
   const markPreSearchTriggered = useChatStore(s => s.markPreSearchTriggered);
   const clearPreSearchTracking = useChatStore(s => s.clearPreSearchTracking);
 
@@ -167,11 +169,15 @@ function PreSearchStreamComponent({
       return;
     }
 
-    // ✅ ZUSTAND PATTERN: Mark store BEFORE starting stream to prevent duplicates
-    // This signals to provider that PreSearchStream is handling this pre-search
-    // Without this, provider's pendingMessage effect may also try to execute
-    // @see ChatStoreProvider pendingMessage effect
-    markPreSearchTriggered(preSearch.roundNumber);
+    // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
+    // Returns true only if this is the first component to mark this round
+    // Returns false if another component already marked it (useStreamingTrigger, usePendingMessage)
+    // This eliminates duplicate API calls that were happening simultaneously
+    const didMark = tryMarkPreSearchTriggered(preSearch.roundNumber);
+    if (!didMark) {
+      // Another component already claimed this pre-search - skip execution
+      return;
+    }
 
     const abortController = new AbortController();
     // Store controller for cleanup - we use AbortController API for fetch-based streaming
@@ -501,7 +507,7 @@ function PreSearchStreamComponent({
     // ✅ FIX: Added forceRetryCount to re-trigger effect when stuck stream detection fires
     // ✅ FIX: Removed providerTriggered - component now always attempts stream for progressive UI
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, markPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
 
   // ✅ POLLING DEDUPLICATION: Prevent multiple concurrent polling loops
   const isPollingRef = useRef(false);

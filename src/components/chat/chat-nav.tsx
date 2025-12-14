@@ -336,7 +336,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               href="/chat/pricing"
               className="group/upgrade group-data-[collapsible=icon]:hidden flex items-center gap-3 rounded-xl bg-accent px-3 py-2.5 transition-colors duration-200 hover:bg-accent/80"
             >
-              <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground'}`}>
+              <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground'}`}>
                 <Sparkles className="size-4" />
               </div>
               <div className="flex flex-1 flex-col min-w-0">

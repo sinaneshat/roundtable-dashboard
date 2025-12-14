@@ -92,7 +92,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
           <ScrollArea className="h-[460px]">
             <div className="space-y-4 py-4 pr-4">
               {/* API Documentation Accordion */}
-              <Accordion type="single" collapsible className="w-full rounded-lg border border-border">
+              <Accordion type="single" collapsible className="w-full rounded-xl border border-border">
                 <AccordionItem value="docs" className="border-0">
                   <AccordionTrigger className="px-4 hover:no-underline">
                     <div className="flex items-center gap-3">
@@ -117,7 +117,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-auto justify-start text-left w-full rounded-lg border border-border hover:bg-muted/50"
+                          className="h-auto justify-start text-left w-full rounded-xl border border-border hover:bg-muted/50"
                           onClick={() => window.open('/api/v1/scalar', '_blank')}
                         >
                           <div className="flex items-center gap-3 w-full p-1">
@@ -134,7 +134,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-auto justify-start text-left w-full rounded-lg border border-border hover:bg-muted/50"
+                          className="h-auto justify-start text-left w-full rounded-xl border border-border hover:bg-muted/50"
                           onClick={() => window.open('/api/v1/doc', '_blank')}
                         >
                           <div className="flex items-center gap-3 w-full p-1">
@@ -151,7 +151,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-auto justify-start text-left w-full rounded-lg border border-border hover:bg-muted/50"
+                          className="h-auto justify-start text-left w-full rounded-xl border border-border hover:bg-muted/50"
                           onClick={() => window.open('/api/v1/llms.txt', '_blank')}
                         >
                           <div className="flex items-center gap-3 w-full p-1">

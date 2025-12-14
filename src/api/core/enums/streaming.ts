@@ -157,3 +157,35 @@ export const PendingMessageValidationReasons = {
   WAITING_FOR_PRE_SEARCH_CREATION: 'waiting for pre-search creation' as const,
   WAITING_FOR_PRE_SEARCH: 'waiting for pre-search' as const,
 } as const;
+
+// ============================================================================
+// ROUND PHASE (Unified stream resumption phase tracking)
+// ============================================================================
+
+/**
+ * Round Phase - Current phase of a conversation round for resumption
+ *
+ * Order of phases in a complete round:
+ * 1. pre_search - Web search is executing (if enabled)
+ * 2. participants - AI participants are streaming responses
+ * 3. analyzer - Round summary/analysis is being generated
+ * 4. complete - All phases finished successfully
+ *
+ * Used by ThreadStreamResumptionState to determine where to resume.
+ */
+export const ROUND_PHASES = ['idle', 'pre_search', 'participants', 'analyzer', 'complete'] as const;
+
+export const RoundPhaseSchema = z.enum(ROUND_PHASES).openapi({
+  description: 'Current phase of a conversation round for stream resumption',
+  example: 'participants',
+});
+
+export type RoundPhase = z.infer<typeof RoundPhaseSchema>;
+
+export const RoundPhases = {
+  IDLE: 'idle' as const,
+  PRE_SEARCH: 'pre_search' as const,
+  PARTICIPANTS: 'participants' as const,
+  ANALYZER: 'analyzer' as const,
+  COMPLETE: 'complete' as const,
+} as const;

@@ -9,7 +9,7 @@ function Skeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="skeleton"
-      className={cn("bg-accent animate-pulse rounded-md", className)}
+      className={cn("bg-accent animate-pulse rounded-xl", className)}
       {...props}
     />
   )
@@ -18,7 +18,7 @@ function Skeleton({ className, ...props }: ComponentProps<"div">) {
 // Enhanced skeleton patterns for complex layouts
 function CardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("rounded-lg border bg-card p-6 space-y-4", className)} {...props}>
+    <div className={cn("rounded-2xl border bg-card p-6 space-y-4", className)} {...props}>
       <div className="flex items-center justify-between">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-6 w-16" />
@@ -50,7 +50,7 @@ function TableRowSkeleton({ columns = 4, className, ...props }: { columns?: numb
 
 function StatCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("rounded-lg border bg-card p-6", className)} {...props}>
+    <div className={cn("rounded-2xl border bg-card p-6", className)} {...props}>
       <div className="flex items-center justify-between mb-4">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-8 w-8 rounded" />
@@ -66,7 +66,7 @@ function StatCardSkeleton({ className, ...props }: React.ComponentProps<"div">) 
 
 function ChartSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("rounded-lg border bg-card p-6", className)} {...props}>
+    <div className={cn("rounded-2xl border bg-card p-6", className)} {...props}>
       <div className="flex items-center justify-between mb-6">
         <div className="space-y-1">
           <Skeleton className="h-6 w-40" />
@@ -81,7 +81,7 @@ function ChartSkeleton({ className, ...props }: React.ComponentProps<"div">) {
 
 function PaymentMethodSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("rounded-lg border bg-card p-6 space-y-4", className)} {...props}>
+    <div className={cn("rounded-2xl border bg-card p-6 space-y-4", className)} {...props}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-8 rounded" />
@@ -105,7 +105,7 @@ function PaymentMethodSkeleton({ className, ...props }: React.ComponentProps<"di
 
 function SubscriptionSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("rounded-lg border bg-card", className)} {...props}>
+    <div className={cn("rounded-2xl border bg-card", className)} {...props}>
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -125,7 +125,7 @@ function SubscriptionSkeleton({ className, ...props }: React.ComponentProps<"div
           <Skeleton className="h-2 w-full rounded-full" />
         </div>
       </div>
-      <div className="px-6 py-4 bg-accent/50 rounded-b-lg">
+      <div className="px-6 py-4 bg-accent/50 rounded-b-2xl">
         <div className="flex items-center justify-between">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-8 w-24 rounded" />
@@ -185,7 +185,7 @@ function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<
 function AnalysisCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div className={cn("mt-6", className)} {...props}>
-      <div className="rounded-lg bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
+      <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
         {/* Analysis header */}
         <div className="flex items-center gap-2">
           <Skeleton className="size-4 rounded bg-white/15" />
@@ -226,7 +226,7 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
     >
       <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
         <div className="rounded-2xl bg-card border border-white/[0.12] shadow-lg p-4">
-          <Skeleton className="h-12 w-full bg-white/10 rounded-lg" />
+          <Skeleton className="h-12 w-full bg-white/10 rounded-xl" />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
               <Skeleton className="size-6 rounded bg-white/10" />

@@ -659,6 +659,19 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     }, false, 'tracking/markPreSearchTriggered'),
   hasPreSearchBeenTriggered: roundNumber =>
     get().triggeredPreSearchRounds.has(roundNumber),
+  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasPreSearchBeenTriggered and markPreSearchTriggered
+  // Returns true if successfully marked (was not already triggered), false if already triggered
+  tryMarkPreSearchTriggered: (roundNumber) => {
+    const state = get();
+    if (state.triggeredPreSearchRounds.has(roundNumber)) {
+      return false; // Already triggered by another component
+    }
+    // Add to set atomically - JavaScript is single-threaded so this is safe
+    set((draft) => {
+      draft.triggeredPreSearchRounds.add(roundNumber);
+    }, false, 'tracking/tryMarkPreSearchTriggered');
+    return true; // Successfully marked
+  },
   clearPreSearchTracking: roundNumber =>
     set((draft) => {
       draft.triggeredPreSearchRounds.delete(roundNumber);
@@ -842,28 +855,69 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       nextParticipantToTrigger: null,
       streamResumptionPrefilled: false,
       prefilledForThreadId: null,
+      // ✅ UNIFIED PHASES: Clear phase-based resumption state
+      currentResumptionPhase: null,
+      preSearchResumption: null,
+      analyzerResumption: null,
+      resumptionRoundNumber: null,
     }, false, 'streamResumption/clearStreamResumption'),
 
   // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
   // Called during SSR to set up state BEFORE AI SDK resume runs
+  // ✅ UNIFIED PHASES: Now handles pre-search, participants, and analyzer phases
   prefillStreamResumptionState: (threadId, serverState) => {
-    // Only set if we have an active stream with participants that need triggering
-    if (!serverState.hasActiveStream || serverState.roundComplete) {
-      // No active stream or round complete - no prefill needed
+    // If round is complete or idle, no prefill needed
+    if (serverState.roundComplete || serverState.currentPhase === 'complete' || serverState.currentPhase === 'idle') {
       return;
     }
 
-    // Set the prefill flag and next participant to trigger
-    // This tells AI SDK phantom resume detection to skip setting isStreaming
-    // and lets incomplete-round-resumption handle the continuation
-    set({
+    // Build the state update based on current phase
+    const stateUpdate: Record<string, unknown> = {
       streamResumptionPrefilled: true,
       prefilledForThreadId: threadId,
-      nextParticipantToTrigger: serverState.nextParticipantToTrigger,
-      // If there's a next participant to trigger, set waitingToStartStreaming
-      // This enables the provider effect to trigger the continuation
-      waitingToStartStreaming: serverState.nextParticipantToTrigger !== null,
-    }, false, 'streamResumption/prefillStreamResumptionState');
+      currentResumptionPhase: serverState.currentPhase,
+      resumptionRoundNumber: serverState.roundNumber,
+    };
+
+    // Handle phase-specific state
+    switch (serverState.currentPhase) {
+      case 'pre_search':
+        // Pre-search phase needs resumption
+        if (serverState.preSearch) {
+          stateUpdate.preSearchResumption = {
+            enabled: serverState.preSearch.enabled,
+            status: serverState.preSearch.status,
+            streamId: serverState.preSearch.streamId,
+            preSearchId: serverState.preSearch.preSearchId,
+          };
+        }
+        // Set waitingToStartStreaming to enable provider effect to handle pre-search resumption
+        stateUpdate.waitingToStartStreaming = true;
+        break;
+
+      case 'participants':
+        // Participants phase needs resumption
+        stateUpdate.nextParticipantToTrigger = serverState.participants.nextParticipantToTrigger;
+        // If there's a next participant to trigger, set waitingToStartStreaming
+        // This enables the provider effect to trigger the continuation
+        stateUpdate.waitingToStartStreaming = serverState.participants.nextParticipantToTrigger !== null;
+        break;
+
+      case 'analyzer':
+        // Analyzer phase needs resumption
+        if (serverState.analyzer) {
+          stateUpdate.analyzerResumption = {
+            status: serverState.analyzer.status,
+            streamId: serverState.analyzer.streamId,
+            analysisId: serverState.analyzer.analysisId,
+          };
+        }
+        // Set waitingToStartStreaming to enable provider effect to handle analyzer resumption
+        stateUpdate.waitingToStartStreaming = true;
+        break;
+    }
+
+    set(stateUpdate, false, 'streamResumption/prefillStreamResumptionState');
   },
 });
 

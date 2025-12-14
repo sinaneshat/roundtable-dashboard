@@ -126,7 +126,7 @@ export function MarkdownPre({ children, className, ...props }: MarkdownPreProps)
   return (
     <pre
       className={cn(
-        'bg-muted rounded-lg overflow-x-auto my-4 p-4 text-sm font-mono',
+        'bg-muted rounded-2xl overflow-x-auto my-4 p-4 text-sm font-mono',
         className,
       )}
       {...props}

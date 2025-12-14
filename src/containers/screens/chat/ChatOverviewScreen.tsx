@@ -45,7 +45,7 @@ import {
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { showApiErrorToast } from '@/lib/toast';
+import { showApiErrorToast, toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
 import {
   useChatFormActions,
@@ -422,6 +422,11 @@ export default function ChatOverviewScreen() {
     if (incompatibleSelected.length === 0)
       return;
 
+    // Get model names for toast message
+    const incompatibleModelNames = incompatibleSelected
+      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .filter((name): name is string => Boolean(name));
+
     // Remove incompatible participants
     const compatibleParticipants = selectedParticipants.filter(
       p => !incompatibleModelIds.has(p.modelId),
@@ -435,7 +440,19 @@ export default function ChatOverviewScreen() {
 
     setSelectedParticipants(reindexed);
     setPersistedModelIds(reindexed.map(p => p.modelId));
-  }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds]);
+
+    // Show toast notification
+    if (incompatibleModelNames.length > 0) {
+      const modelList = incompatibleModelNames.length <= 2
+        ? incompatibleModelNames.join(' and ')
+        : `${incompatibleModelNames.slice(0, 2).join(', ')} and ${incompatibleModelNames.length - 2} more`;
+
+      toastManager.warning(
+        t('chat.models.modelsDeselected'),
+        t('chat.models.modelsDeselectedDescription', { models: modelList }),
+      );
+    }
+  }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
 
   // ============================================================================
   // THREAD ACTIONS SYNC (for header when thread is active on overview)

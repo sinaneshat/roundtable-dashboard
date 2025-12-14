@@ -93,13 +93,13 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   // If a provider is not in this list, it automatically gets the OpenRouter fallback icon
 
   // Supported Providers (from models-config.service.ts)
-  'anthropic': 'anthropic.png',
+  'anthropic': 'claude.png',
   'openai': 'openai.png',
   'google': 'google.png',
   'meta': 'meta.png',
   'meta-llama': 'meta.png',
-  'x-ai': 'xai.png',
-  'xai': 'xai.png',
+  'x-ai': 'grok.png',
+  'xai': 'grok.png',
   'deepseek': 'deepseek.png',
   'qwen': 'qwen.png',
   'moonshotai': 'kimi.png',
@@ -108,7 +108,8 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'microsoft': 'microsoft.png',
 
   // Model name aliases (for backward compatibility)
-  'claude': 'anthropic.png',
+  'claude': 'claude.png',
+  'grok': 'grok.png',
   'gemini': 'google.png',
   'gpt': 'openai.png',
 

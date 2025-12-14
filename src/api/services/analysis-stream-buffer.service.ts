@@ -35,10 +35,14 @@ import {
 } from '@/api/types/streaming';
 
 /**
- * Generate stream ID for analysis
+ * Generate unified stream ID for analysis
+ * Format: {threadId}_r{roundNumber}_analyzer
+ *
+ * ✅ UNIFIED STREAM ID: Follows pattern from @/api/types/streaming.ts
+ * This enables the unified resume handler to detect and route analyzer streams.
  */
 export function generateAnalysisStreamId(threadId: string, roundNumber: number): string {
-  return `analysis:${threadId}:r${roundNumber}`;
+  return `${threadId}_r${roundNumber}_analyzer`;
 }
 
 /**

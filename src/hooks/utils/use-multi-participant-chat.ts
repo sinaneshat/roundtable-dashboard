@@ -1283,8 +1283,10 @@ export function useMultiParticipantChat(
     }
 
     // ✅ Guards: Wait for dependencies to be ready (effect will retry)
-    // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
-    const canSendMessage = status === AiSdkStatuses.READY;
+    // ✅ FIX: Relaxed status check to handle 204 resume response edge case
+    // Don't require status === 'ready', just ensure we're not actively streaming/submitted
+    // Store subscription guards prevent premature calls (messages exist, not already streaming)
+    const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
     if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
       return;
     }
@@ -1401,8 +1403,9 @@ export function useMultiParticipantChat(
     }
 
     // ✅ Guards: Wait for dependencies to be ready
-    // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
-    const canSendMessage = status === AiSdkStatuses.READY;
+    // ✅ FIX: Relaxed status check to handle 204 resume response edge case
+    // Don't require status === 'ready', just ensure we're not actively streaming/submitted
+    const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
 
     if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
       return;
@@ -1525,8 +1528,9 @@ export function useMultiParticipantChat(
    */
   const sendMessage = useCallback(
     async (content: string) => {
-      // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
-      const canSendMessage = status === AiSdkStatuses.READY;
+      // ✅ FIX: Relaxed status check to handle 204 resume response edge case
+      // Don't require status === 'ready', just ensure we're not actively streaming/submitted
+      const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
       if (!canSendMessage || isExplicitlyStreaming) {
         return;
       }
@@ -1655,8 +1659,9 @@ export function useMultiParticipantChat(
    * and re-sends the user's prompt to regenerate the round from ground up.
    */
   const retry = useCallback(() => {
-    // ✅ FIX: AI SDK v5 status is 'ready' when ready to accept new messages
-    const canSendMessage = status === AiSdkStatuses.READY;
+    // ✅ FIX: Relaxed status check to handle 204 resume response edge case
+    // Don't require status === 'ready', just ensure we're not actively streaming/submitted
+    const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
     if (!canSendMessage) {
       return;
     }
@@ -1939,10 +1944,10 @@ export function useMultiParticipantChat(
   }, [status, isExplicitlyStreaming]);
 
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
-  // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'
+  // AI SDK v5 Pattern: status can be 'ready' | 'submitted' | 'streaming' | 'error'
   // - isExplicitlyStreaming: Our manual flag for participant orchestration
   // - We rely primarily on isExplicitlyStreaming which is set/cleared by our logic
-  // - This prevents false positives on initial mount when status='awaiting_message'
+  // - This prevents false positives on initial mount
   // ✅ ENUM PATTERN: Use isExplicitlyStreaming as single source of truth
   const isActuallyStreaming = isExplicitlyStreaming;
 
@@ -1953,7 +1958,17 @@ export function useMultiParticipantChat(
   // ✅ AI SDK READINESS: Derive from status for provider's continueFromParticipant guard
   // When AI SDK isn't ready, continueFromParticipant returns early silently.
   // Provider needs this flag to wait before calling continueFromParticipant.
-  const isReady = status === AiSdkStatuses.READY && messages.length > 0;
+  //
+  // ✅ FIX: Relaxed status check to handle 204 resume response edge case
+  // After AI SDK receives 204 from resume endpoint (no active stream), status might not
+  // immediately become 'ready'. We need to allow starting rounds when:
+  // 1. Messages exist (hydration complete)
+  // 2. Not currently streaming/submitted (active operation)
+  // Previously: status === 'ready' && messages.length > 0
+  // Now: messages exist AND status is not actively processing (streaming/submitted)
+  const isReady = messages.length > 0
+    && status !== AiSdkStatuses.STREAMING
+    && status !== AiSdkStatuses.SUBMITTED;
 
   // ✅ INFINITE LOOP FIX: Memoize return value to prevent new object reference on every render
   // Without this, the chat object creates a new reference each render, causing any effect

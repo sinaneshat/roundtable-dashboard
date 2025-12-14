@@ -14,6 +14,7 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
+import { FadeIn } from '@/components/ui/motion';
 import { queryKeys } from '@/lib/data/query-keys';
 import { cn } from '@/lib/ui/cn';
 import { AnimationIndices } from '@/stores/chat';
@@ -161,7 +162,7 @@ export function PreSearchCard({
   }, [demoOpen, isManualControlValid, manualControl, isLatest]);
 
   return (
-    <div className={cn('mb-4', className)}>
+    <div className={cn('w-full mb-4', className)}>
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}
@@ -202,25 +203,27 @@ export function PreSearchCard({
         <ChainOfThoughtContent>
           {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
-            <div className="space-y-4">
-              {/* PreSearchStream handles all states: PENDING, STREAMING, and COMPLETE */}
-              {!hasError && (
-                <PreSearchStream
-                  threadId={threadId}
-                  preSearch={preSearch}
-                  onStreamStart={handleStreamStart}
-                  onStreamComplete={handleStreamComplete}
-                />
-              )}
+            <FadeIn duration={0.25}>
+              <div className="space-y-4">
+                {/* PreSearchStream handles all states: PENDING, STREAMING, and COMPLETE */}
+                {!hasError && (
+                  <PreSearchStream
+                    threadId={threadId}
+                    preSearch={preSearch}
+                    onStreamStart={handleStreamStart}
+                    onStreamComplete={handleStreamComplete}
+                  />
+                )}
 
-              {/* Failed state */}
-              {hasError && preSearch.errorMessage && (
-                <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                  <span className="size-1.5 rounded-full bg-destructive/80" />
-                  <span>{preSearch.errorMessage}</span>
-                </div>
-              )}
-            </div>
+                {/* Failed state */}
+                {hasError && preSearch.errorMessage && (
+                  <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                    <span className="size-1.5 rounded-full bg-destructive/80" />
+                    <span>{preSearch.errorMessage}</span>
+                  </div>
+                )}
+              </div>
+            </FadeIn>
           )}
         </ChainOfThoughtContent>
       </ChainOfThought>

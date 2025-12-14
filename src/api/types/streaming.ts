@@ -409,6 +409,141 @@ export function isThreadActiveStream(value: unknown): value is ThreadActiveStrea
 }
 
 // ============================================================================
+// UNIFIED STREAM ID UTILITIES
+// ============================================================================
+
+/**
+ * Stream phase identifiers for unified stream ID format
+ * Used to identify which phase a stream belongs to from its ID
+ */
+export const STREAM_PHASES = ['presearch', 'participant', 'analyzer'] as const;
+export type StreamPhase = (typeof STREAM_PHASES)[number];
+
+/**
+ * Unified stream ID format: {threadId}_r{roundNumber}_{phase}[_{index}]
+ *
+ * Examples:
+ * - Pre-search: thread123_r0_presearch
+ * - Participant 0: thread123_r0_participant_0
+ * - Participant 1: thread123_r0_participant_1
+ * - Analyzer: thread123_r0_analyzer
+ *
+ * This unifies the previously inconsistent formats:
+ * - OLD pre-search: presearch_{threadId}_{roundNumber}_{timestamp}
+ * - OLD participant: {threadId}_r{roundNumber}_p{participantIndex}
+ * - OLD analyzer: analysis:{threadId}:r{roundNumber}
+ */
+
+/**
+ * Generate unified stream ID for pre-search
+ */
+export function generatePreSearchStreamId(threadId: string, roundNumber: number): string {
+  return `${threadId}_r${roundNumber}_presearch`;
+}
+
+/**
+ * Generate unified stream ID for participant
+ */
+export function generateParticipantStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
+  return `${threadId}_r${roundNumber}_participant_${participantIndex}`;
+}
+
+/**
+ * Generate unified stream ID for analyzer
+ */
+export function generateAnalyzerStreamId(threadId: string, roundNumber: number): string {
+  return `${threadId}_r${roundNumber}_analyzer`;
+}
+
+/**
+ * Parse stream ID to extract components
+ * Returns null if stream ID doesn't match expected format
+ */
+export function parseStreamId(streamId: string): {
+  threadId: string;
+  roundNumber: number;
+  phase: StreamPhase;
+  participantIndex?: number;
+} | null {
+  // Pattern: {threadId}_r{roundNumber}_{phase}[_{index}]
+  // Examples: thread123_r0_presearch, thread123_r0_participant_0, thread123_r0_analyzer
+
+  // Match pre-search: {threadId}_r{roundNumber}_presearch
+  const presearchMatch = streamId.match(/^(.+)_r(\d+)_presearch$/);
+  if (presearchMatch) {
+    return {
+      threadId: presearchMatch[1]!,
+      roundNumber: parseInt(presearchMatch[2]!, 10),
+      phase: 'presearch',
+    };
+  }
+
+  // Match participant: {threadId}_r{roundNumber}_participant_{index}
+  const participantMatch = streamId.match(/^(.+)_r(\d+)_participant_(\d+)$/);
+  if (participantMatch) {
+    return {
+      threadId: participantMatch[1]!,
+      roundNumber: parseInt(participantMatch[2]!, 10),
+      phase: 'participant',
+      participantIndex: parseInt(participantMatch[3]!, 10),
+    };
+  }
+
+  // Match analyzer: {threadId}_r{roundNumber}_analyzer
+  const analyzerMatch = streamId.match(/^(.+)_r(\d+)_analyzer$/);
+  if (analyzerMatch) {
+    return {
+      threadId: analyzerMatch[1]!,
+      roundNumber: parseInt(analyzerMatch[2]!, 10),
+      phase: 'analyzer',
+    };
+  }
+
+  // Legacy format support: {threadId}_r{roundNumber}_p{participantIndex}
+  const legacyParticipantMatch = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
+  if (legacyParticipantMatch) {
+    return {
+      threadId: legacyParticipantMatch[1]!,
+      roundNumber: parseInt(legacyParticipantMatch[2]!, 10),
+      phase: 'participant',
+      participantIndex: parseInt(legacyParticipantMatch[3]!, 10),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Get the phase from a stream ID
+ * Returns null if stream ID doesn't match expected format
+ */
+export function getStreamPhase(streamId: string): StreamPhase | null {
+  const parsed = parseStreamId(streamId);
+  return parsed?.phase ?? null;
+}
+
+/**
+ * Check if stream ID is for pre-search
+ */
+export function isPreSearchStreamId(streamId: string): boolean {
+  return getStreamPhase(streamId) === 'presearch';
+}
+
+/**
+ * Check if stream ID is for participant
+ */
+export function isParticipantStreamId(streamId: string): boolean {
+  return getStreamPhase(streamId) === 'participant';
+}
+
+/**
+ * Check if stream ID is for analyzer
+ */
+export function isAnalyzerStreamId(streamId: string): boolean {
+  return getStreamPhase(streamId) === 'analyzer';
+}
+
+// ============================================================================
 // SAFE PARSERS FOR KV DATA
 // ============================================================================
 

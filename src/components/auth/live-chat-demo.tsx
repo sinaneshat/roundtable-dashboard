@@ -102,21 +102,44 @@ This gives you real data instead of speculation. If the experiment succeeds, you
 ];
 
 // ============================================================================
-// STAGES - Module-level completion tracking to prevent reset
+// STAGES - Persistent completion tracking to prevent reset
 // ============================================================================
 
 type Stage = 'idle' | 'user-message' | 'participant-0-streaming' | 'participant-0-complete' | 'participant-1-streaming' | 'participant-1-complete' | 'participant-2-streaming' | 'complete';
 
-// Module-level flag to track if demo has completed (persists across remounts)
-let hasCompletedOnce = false;
+const DEMO_COMPLETED_KEY = 'roundtable-demo-completed';
+
+// Check if demo has completed (using sessionStorage for persistence)
+function isDemoCompleted(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  try {
+    return sessionStorage.getItem(DEMO_COMPLETED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+// Mark demo as completed
+function markDemoCompleted(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    sessionStorage.setItem(DEMO_COMPLETED_KEY, 'true');
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 // Helper to get initial state based on completion status
 function getInitialStage(): Stage {
-  return hasCompletedOnce ? 'complete' : 'idle';
+  return isDemoCompleted() ? 'complete' : 'idle';
 }
 
 function getInitialStreamingText(): string[] {
-  return hasCompletedOnce ? [...DEMO_MESSAGES] : ['', '', ''];
+  return isDemoCompleted() ? [...DEMO_MESSAGES] : ['', '', ''];
 }
 
 export function LiveChatDemo() {
@@ -125,6 +148,9 @@ export function LiveChatDemo() {
   const [streamingText, setStreamingText] = useState(getInitialStreamingText);
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
   const intervalsRef = useRef<NodeJS.Timeout[]>([]);
+
+  // Track if demo started already completed (to skip entrance animations on remount)
+  const startedCompleteRef = useRef(isDemoCompleted());
 
   // Ref-stable setter to avoid lint false positive in animation callback
   const updateStreamingText = useRef(setStreamingText).current;
@@ -141,15 +167,15 @@ export function LiveChatDemo() {
 
   // Mark as completed when reaching final stage
   useEffect(() => {
-    if (stage === 'complete' && !hasCompletedOnce) {
-      hasCompletedOnce = true;
+    if (stage === 'complete' && !startedCompleteRef.current) {
+      markDemoCompleted();
     }
   }, [stage]);
 
   // Stage progression
   useEffect(() => {
     // Already completed - don't run any timers
-    if (hasCompletedOnce) {
+    if (startedCompleteRef.current) {
       return;
     }
 
@@ -357,7 +383,7 @@ export function LiveChatDemo() {
               streamingRoundNumber={1}
               preSearches={[]}
               isReadOnly={true}
-              maxContentHeight={280}
+              skipEntranceAnimations={startedCompleteRef.current}
             />
           )}
         </div>

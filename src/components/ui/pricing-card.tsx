@@ -273,7 +273,7 @@ export function PricingCard({
                 <HoverBorderGradient
                   as="button"
                   containerClassName={cn(
-                    'w-full rounded-md',
+                    'w-full rounded-4xl',
                     isProcessingManageBilling && 'cursor-not-allowed opacity-50',
                   )}
                   className="w-full text-center text-sm font-medium transition-all duration-200 bg-background text-foreground"
@@ -297,7 +297,7 @@ export function PricingCard({
               <HoverBorderGradient
                 as="button"
                 containerClassName={cn(
-                  'w-full rounded-md',
+                  'w-full rounded-4xl',
                   isActionButtonLoading && 'cursor-not-allowed opacity-50',
                 )}
                 className={cn(

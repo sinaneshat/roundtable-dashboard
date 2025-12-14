@@ -200,7 +200,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           <button
             type="button"
             onClick={handleClose}
-            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors"
+            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors"
             aria-label={t('actions.close')}
           >
             <X className="size-4.5 text-muted-foreground" />

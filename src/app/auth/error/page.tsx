@@ -7,6 +7,17 @@ import { BRAND } from '@/constants/brand';
 import { AuthErrorScreen } from '@/containers/screens/errors';
 import { createMetadata } from '@/utils/metadata';
 
+// ============================================================================
+// Static Generation - Error UI shell is static
+// ============================================================================
+
+/**
+ * Force Static Generation
+ * - Error page UI is a static shell
+ * - Error details are passed via searchParams and handled client-side
+ */
+export const dynamic = 'force-static';
+
 export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: `Authentication Error - ${BRAND.fullName}`,

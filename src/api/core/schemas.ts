@@ -653,6 +653,11 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Stream ID for resumption',
     example: 'thread_123_r0_p0',
   }),
+  /** Current stream phase (presearch, participant, analyzer) */
+  phase: z.enum(['presearch', 'participant', 'analyzer']).optional().openapi({
+    description: 'Current stream phase',
+    example: 'participant',
+  }),
   /** 0-based round number */
   roundNumber: z.number().int().nonnegative().optional().openapi({
     description: '0-based round number',
@@ -692,6 +697,11 @@ export const SSEStreamMetadataSchema = z.object({
   resumedFromBuffer: z.boolean().optional().openapi({
     description: 'Whether stream was resumed from buffer',
     example: true,
+  }),
+  /** Analysis ID (for analyzer phase) */
+  analysisId: z.string().optional().openapi({
+    description: 'Analysis ID for analyzer phase',
+    example: 'analysis_abc123',
   }),
 }).openapi('SSEStreamMetadata');
 

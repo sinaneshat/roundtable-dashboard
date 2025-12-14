@@ -1,5 +1,5 @@
 /**
- * Stream Resume Handler - Resume buffered participant stream
+ * Stream Resume Handler - Resume buffered streams across ALL phases
  *
  * Following AI SDK Chatbot Resume Streams documentation:
  * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
@@ -12,109 +12,32 @@
  * 2. GET handler returns 204 if no active stream, or resumes the stream
  * 3. Frontend uses resume: true which triggers GET on mount
  *
+ * ✅ UNIFIED RESUMPTION: Supports pre-search, participants, and analyzer phases
  * ✅ PATTERN: Uses Responses.sse() and Responses.noContentWithHeaders() from core
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
-import { StreamStatuses } from '@/api/core/enums';
-import { clearThreadActiveStream, getNextParticipantToStream, getThreadActiveStream } from '@/api/services/resumable-stream-kv.service';
+import type { AnalysisStatus, RoundPhase } from '@/api/core/enums';
+import { AnalysisStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
+import { getActiveAnalysisStreamId, getAnalysisStreamChunks, getAnalysisStreamMetadata } from '@/api/services/analysis-stream-buffer.service';
+import { getActivePreSearchStreamId, getPreSearchStreamChunks, getPreSearchStreamMetadata } from '@/api/services/pre-search-stream-buffer.service';
+import { clearThreadActiveStream, getNextParticipantToStream, getThreadActiveStream, updateParticipantStatus } from '@/api/services/resumable-stream-kv.service';
 import { createLiveParticipantResumeStream, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
 import type { ApiEnv } from '@/api/types';
+import { parseStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
-import type { getThreadStreamResumptionStateRoute, resumeStreamRoute, resumeThreadStreamRoute } from '../route';
-import { StreamIdParamSchema, ThreadIdParamSchema } from '../schema';
+import type { getThreadStreamResumptionStateRoute, resumeThreadStreamRoute } from '../route';
+import type { AnalyzerPhaseStatus, ParticipantPhaseStatus, PreSearchPhaseStatus } from '../schema';
+import { ThreadIdParamSchema } from '../schema';
 
 // ============================================================================
-// Stream Resume Handler
-// ============================================================================
-
-/**
- * GET /chat/threads/:threadId/streams/:streamId/resume
- *
- * Resume participant stream from buffered SSE chunks
- * Returns 204 No Content if no buffer exists or stream has no chunks
- * Returns SSE stream if buffer has chunks
- *
- * @pattern Following stream-status.handler.ts pattern
- */
-export const resumeStreamHandler: RouteHandler<typeof resumeStreamRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    operationName: 'resumeStream',
-    validateParams: StreamIdParamSchema,
-  },
-  async (c) => {
-    // ✅ LOCAL DEV FIX: If KV is not available, return 204 immediately
-    // Without KV, stream resumption cannot work properly.
-    if (!c.env?.KV) {
-      return Responses.noContentWithHeaders();
-    }
-
-    const { user } = c.auth();
-    const { streamId } = c.validated.params;
-
-    // Parse stream ID to extract thread, round, and participant
-    // Format: {threadId}_r{roundNumber}_p{participantIndex}
-    const streamIdMatch = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
-
-    if (!streamIdMatch) {
-      throw createError.badRequest('Invalid stream ID format', { errorType: 'validation' });
-    }
-
-    // Extract capture groups - guaranteed to exist after successful match
-    const threadId = streamIdMatch[1];
-    const roundNumberStr = streamIdMatch[2];
-    const participantIndexStr = streamIdMatch[3];
-
-    // Type guard: Verify all capture groups exist
-    if (!threadId || !roundNumberStr || !participantIndexStr) {
-      throw createError.badRequest('Invalid stream ID format', { errorType: 'validation' });
-    }
-
-    // Verify thread ownership
-    const db = await getDbAsync();
-    const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, threadId),
-      columns: { id: true, userId: true },
-    });
-
-    if (!thread) {
-      throw createError.notFound('Thread not found');
-    }
-
-    if (thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to access this thread');
-    }
-
-    // Get stream buffer metadata
-    const metadata = await getStreamMetadata(streamId, c.env);
-
-    // No buffer exists - return 204 No Content
-    if (!metadata) {
-      return Responses.noContentWithHeaders();
-    }
-
-    // ✅ AI SDK RESUME PATTERN: Return live stream with standard headers
-    // The stream polls KV for new chunks as they arrive from the original stream
-    const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
-    const liveStream = createLiveParticipantResumeStream(streamId, c.env);
-
-    // Return SSE stream using Responses.sse() builder
-    return Responses.sse(liveStream, {
-      isActive: isStreamActive,
-      resumedFromBuffer: true,
-    });
-  },
-);
-
-// ============================================================================
-// Thread Stream Resume Handler (AI SDK Documentation Pattern)
+// Thread Stream Resume Handler (AI SDK v5 Official Pattern)
 // ============================================================================
 
 /**
@@ -165,133 +88,265 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       throw createError.unauthorized('Not authorized to access this thread');
     }
 
-    // Get thread-level active stream
+    // ============================================================================
+    // PHASE-AWARE STREAM DETECTION
+    // Determine current round and check all phases for active streams
+    // ============================================================================
+
+    // Get current round from latest message
+    const latestMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.threadId, threadId),
+      orderBy: desc(tables.chatMessage.createdAt),
+      columns: { roundNumber: true },
+    });
+    const currentRound = latestMessage?.roundNumber ?? 0;
+
+    const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
+
+    // ============================================================================
+    // PHASE 1: Check for active PRE-SEARCH stream
+    // ============================================================================
+    // ✅ AI SDK RESUME FIX: Return 204 with phase metadata for pre-search phase
+    // AI SDK's resume: true expects UIMessage format, but pre-search uses custom SSE format.
+    // Instead of returning the stream (which AI SDK can't parse), return 204 with metadata.
+    // The frontend PreSearchStream component has its own resumption logic that handles this.
+    const preSearchStreamId = await getActivePreSearchStreamId(threadId, currentRound, c.env);
+    if (preSearchStreamId) {
+      const preSearchMetadata = await getPreSearchStreamMetadata(preSearchStreamId, c.env);
+      const preSearchChunks = await getPreSearchStreamChunks(preSearchStreamId, c.env);
+
+      // Check if pre-search is still active (not completed/failed)
+      if (preSearchMetadata && (preSearchMetadata.status === StreamStatuses.ACTIVE || preSearchMetadata.status === StreamStatuses.STREAMING)) {
+        // Check for staleness
+        const lastChunkTime = preSearchChunks && preSearchChunks.length > 0
+          ? Math.max(...preSearchChunks.map(chunk => chunk.timestamp))
+          : 0;
+        const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+
+        if (!isStale) {
+          // ✅ AI SDK RESUME FIX: Return 204 with phase metadata instead of SSE stream
+          // This tells the frontend that pre-search is active but should be handled
+          // by PreSearchStream component, not AI SDK resume.
+          // NOTE: Use 'presearch' (no underscore) to match SSEStreamMetadataSchema
+          return Responses.noContentWithHeaders({
+            phase: 'presearch',
+            roundNumber: currentRound,
+            streamId: preSearchStreamId,
+          });
+        }
+      }
+    }
+
+    // ============================================================================
+    // PHASE 2: Check for active PARTICIPANT stream
+    // ============================================================================
     const activeStream = await getThreadActiveStream(threadId, c.env);
 
-    // No active stream - return 204 No Content
-    if (!activeStream) {
-      return Responses.noContentWithHeaders();
-    }
+    if (activeStream && activeStream.roundNumber === currentRound) {
+      // ✅ FIX: Get the next participant that needs to stream
+      const nextParticipant = await getNextParticipantToStream(threadId, c.env);
+      const roundComplete = !nextParticipant;
+      const streamIdToResume = activeStream.streamId;
 
-    // ✅ FIX: Get the next participant that needs to stream (may be different from activeStream.participantIndex)
-    // This handles the case where one participant finished but another still needs to stream
-    const nextParticipant = await getNextParticipantToStream(threadId, c.env);
-
-    // If no next participant and all are done, the round is complete
-    const roundComplete = !nextParticipant;
-
-    // Determine which stream to return:
-    // - If there's an actively streaming participant, return their stream
-    // - Otherwise, return the last active stream's buffered data
-    const streamIdToResume = activeStream.streamId;
-
-    // ✅ CRITICAL FIX: Validate stream ID matches active stream metadata
-    // The stream ID format is: {threadId}_r{roundNumber}_p{participantIndex}
-    // If the stream ID's round/participant doesn't match activeStream metadata,
-    // the KV data is stale and we should return 204 instead of corrupted data.
-    const streamIdMatch = streamIdToResume.match(/^(.+)_r(\d+)_p(\d+)$/);
-    if (streamIdMatch) {
-      const streamIdRound = Number.parseInt(streamIdMatch[2]!, 10);
-      const streamIdParticipant = Number.parseInt(streamIdMatch[3]!, 10);
-
-      // Check if stream ID round/participant matches activeStream metadata
-      if (streamIdRound !== activeStream.roundNumber) {
-        // Stream ID is from a different round - KV data is stale
-        // Return 204 so frontend triggers fresh streaming instead of using corrupted data
+      // Parse and validate stream ID
+      const parsed = parseStreamId(streamIdToResume);
+      if (parsed && parsed.roundNumber !== activeStream.roundNumber) {
+        // Stream ID is from different round - stale data
         return Responses.noContentWithHeaders();
       }
 
-      // Also validate participant index matches for extra safety
-      if (streamIdParticipant !== activeStream.participantIndex) {
-        // Participant mismatch - this could be a race condition or stale data
-        // Return 204 to be safe
+      // Get stream buffer metadata
+      const metadata = await getStreamMetadata(streamIdToResume, c.env);
+
+      if (!metadata) {
+        // No buffer - return round info for frontend to trigger remaining participants
+        if (nextParticipant && !roundComplete) {
+          return Responses.noContentWithHeaders({
+            roundNumber: activeStream.roundNumber,
+            totalParticipants: activeStream.totalParticipants,
+            nextParticipantIndex: nextParticipant.participantIndex,
+            participantStatuses: activeStream.participantStatuses,
+            roundComplete: false,
+          });
+        }
         return Responses.noContentWithHeaders();
       }
-    }
 
-    // Get stream buffer metadata
-    const metadata = await getStreamMetadata(streamIdToResume, c.env);
+      // Check for stale stream
+      const chunks = await getStreamChunks(streamIdToResume, c.env);
+      const lastChunkTime = chunks && chunks.length > 0
+        ? Math.max(...chunks.map(chunk => chunk.timestamp))
+        : 0;
 
-    // No buffer exists - return 204 with round info so frontend can trigger remaining participants
-    if (!metadata) {
-      // ✅ FIX: Even without buffer, return round info so frontend knows what to do
-      if (nextParticipant && !roundComplete) {
-        return Responses.noContentWithHeaders({
-          roundNumber: activeStream.roundNumber,
-          totalParticipants: activeStream.totalParticipants,
-          nextParticipantIndex: nextParticipant.participantIndex,
-          participantStatuses: activeStream.participantStatuses,
-          roundComplete: false,
-        });
+      const streamCreatedTime = activeStream.createdAt
+        ? new Date(activeStream.createdAt).getTime()
+        : 0;
+      const hasNoChunks = !chunks || chunks.length === 0;
+      const streamIsOldWithNoChunks = hasNoChunks
+        && streamCreatedTime > 0
+        && Date.now() - streamCreatedTime > STALE_CHUNK_TIMEOUT_MS;
+
+      const isStaleStream = (lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS)
+        || streamIsOldWithNoChunks;
+
+      if (isStaleStream) {
+        // Mark stale participant as failed
+        await updateParticipantStatus(
+          threadId,
+          activeStream.roundNumber,
+          activeStream.participantIndex,
+          ParticipantStreamStatuses.FAILED,
+          c.env,
+        );
+
+        const updatedNextParticipant = await getNextParticipantToStream(threadId, c.env);
+        const updatedRoundComplete = !updatedNextParticipant;
+
+        if (updatedRoundComplete) {
+          await clearThreadActiveStream(threadId, c.env);
+        }
+
+        if (updatedNextParticipant && !updatedRoundComplete) {
+          return Responses.noContentWithHeaders({
+            roundNumber: activeStream.roundNumber,
+            totalParticipants: activeStream.totalParticipants,
+            nextParticipantIndex: updatedNextParticipant.participantIndex,
+            participantStatuses: activeStream.participantStatuses,
+            roundComplete: false,
+          });
+        }
+        return Responses.noContentWithHeaders();
       }
-      return Responses.noContentWithHeaders();
+
+      // Return live participant resume stream
+      const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
+      const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env);
+
+      return Responses.sse(liveStream, {
+        streamId: streamIdToResume,
+        phase: 'participant',
+        roundNumber: activeStream.roundNumber,
+        participantIndex: activeStream.participantIndex,
+        totalParticipants: activeStream.totalParticipants,
+        participantStatuses: activeStream.participantStatuses,
+        isActive: isStreamActive,
+        roundComplete,
+        resumedFromBuffer: true,
+        ...(nextParticipant ? { nextParticipantIndex: nextParticipant.participantIndex } : {}),
+      });
     }
 
-    // ✅ STALE CHUNK DETECTION: Check if stream has received data recently
-    // When user refreshes mid-stream, the original worker dies but KV still has chunks.
-    // Without this check, the live resume stream polls forever waiting for more chunks.
-    // If the last chunk is older than threshold, the stream is stale and we should
-    // return 204 so frontend can trigger incomplete round resumption (fresh stream).
-    const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
-    const chunks = await getStreamChunks(streamIdToResume, c.env);
-    const lastChunkTime = chunks && chunks.length > 0
-      ? Math.max(...chunks.map(chunk => chunk.timestamp))
-      : 0;
-    const isStaleStream = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+    // ============================================================================
+    // PHASE 3: Check for active ANALYZER stream
+    // ============================================================================
+    // ✅ AI SDK RESUME FIX: Return 204 with phase metadata for analyzer phase
+    // AI SDK's resume: true expects UIMessage format, but analyzer uses useObject with custom schema.
+    // Instead of returning the stream (which AI SDK can't parse), return 204 with metadata.
+    // The frontend RoundSummaryStream component has its own resumption logic (attemptAnalysisResume).
+    const analyzerStreamId = await getActiveAnalysisStreamId(threadId, currentRound, c.env);
+    if (analyzerStreamId) {
+      const analyzerMetadata = await getAnalysisStreamMetadata(analyzerStreamId, c.env);
+      const analyzerChunks = await getAnalysisStreamChunks(analyzerStreamId, c.env);
 
-    if (isStaleStream) {
-      // Stream is stale - clear KV state and return 204
-      // Frontend's incomplete round resumption will trigger fresh participant stream
-      await clearThreadActiveStream(threadId, c.env);
+      // Check if analyzer is still active (check both ACTIVE and STREAMING for consistency with pre-search)
+      if (analyzerMetadata && (analyzerMetadata.status === StreamStatuses.ACTIVE || analyzerMetadata.status === StreamStatuses.STREAMING)) {
+        // Check for staleness
+        const lastChunkTime = analyzerChunks && analyzerChunks.length > 0
+          ? Math.max(...analyzerChunks.map(chunk => chunk.timestamp))
+          : 0;
+        const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
 
-      // Return 204 with round info so frontend knows what participant to trigger
-      if (nextParticipant && !roundComplete) {
-        return Responses.noContentWithHeaders({
-          roundNumber: activeStream.roundNumber,
-          totalParticipants: activeStream.totalParticipants,
-          nextParticipantIndex: nextParticipant.participantIndex,
-          participantStatuses: activeStream.participantStatuses,
-          roundComplete: false,
-        });
+        if (!isStale) {
+          // ✅ AI SDK RESUME FIX: Return 204 with phase metadata instead of SSE stream
+          // This tells the frontend that analyzer is active but should be handled
+          // by RoundSummaryStream component (via attemptAnalysisResume), not AI SDK resume.
+          // NOTE: Use 'analyzer' to match SSEStreamMetadataSchema
+          return Responses.noContentWithHeaders({
+            phase: 'analyzer',
+            roundNumber: currentRound,
+            streamId: analyzerStreamId,
+            analysisId: analyzerMetadata.analysisId,
+          });
+        }
       }
-      return Responses.noContentWithHeaders();
     }
 
-    // ✅ AI SDK RESUME PATTERN: Return live stream with standard headers
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
-    // The stream polls KV for new chunks as they arrive from the original stream
-    const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
-    const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env);
-
-    // Return SSE stream using Responses.sse() builder with multi-participant metadata
-    return Responses.sse(liveStream, {
-      streamId: streamIdToResume,
-      roundNumber: activeStream.roundNumber,
-      participantIndex: activeStream.participantIndex,
-      totalParticipants: activeStream.totalParticipants,
-      participantStatuses: activeStream.participantStatuses,
-      isActive: isStreamActive,
-      roundComplete,
-      resumedFromBuffer: true,
-      ...(nextParticipant ? { nextParticipantIndex: nextParticipant.participantIndex } : {}),
-    });
+    // No active stream found in any phase
+    return Responses.noContentWithHeaders();
   },
 );
 
 // ============================================================================
-// Thread Stream Resumption State Handler (Metadata Only)
+// Thread Stream Resumption State Handler (Unified Metadata)
 // ============================================================================
+
+/**
+ * Determine current round phase based on status of each phase
+ */
+function determineCurrentPhase(
+  preSearchStatus: PreSearchPhaseStatus | null,
+  participantStatus: ParticipantPhaseStatus,
+  analyzerStatus: AnalyzerPhaseStatus | null,
+): RoundPhase {
+  // Check pre-search phase first (if enabled)
+  if (preSearchStatus?.enabled) {
+    const status = preSearchStatus.status;
+    if (status === AnalysisStatuses.PENDING || status === AnalysisStatuses.STREAMING) {
+      return RoundPhases.PRE_SEARCH;
+    }
+  }
+
+  // Check participants phase
+  if (!participantStatus.allComplete) {
+    return RoundPhases.PARTICIPANTS;
+  }
+
+  // Check analyzer phase
+  if (analyzerStatus) {
+    const status = analyzerStatus.status;
+    if (status === AnalysisStatuses.PENDING || status === AnalysisStatuses.STREAMING) {
+      return RoundPhases.ANALYZER;
+    }
+    if (status === AnalysisStatuses.COMPLETE) {
+      return RoundPhases.COMPLETE;
+    }
+  }
+
+  // All participants done but no analyzer started/needed
+  return RoundPhases.COMPLETE;
+}
+
+/**
+ * Check if a KV-tracked stream is stale based on last chunk time
+ */
+function isStreamStale(lastChunkTime: number, createdTime: number, hasChunks: boolean, staleTimeoutMs = 15000): boolean {
+  if (hasChunks && lastChunkTime > 0) {
+    return Date.now() - lastChunkTime > staleTimeoutMs;
+  }
+  // No chunks but stream exists - check creation time
+  if (!hasChunks && createdTime > 0) {
+    return Date.now() - createdTime > staleTimeoutMs;
+  }
+  return false;
+}
 
 /**
  * GET /chat/threads/:threadId/stream-status
  *
- * Get stream resumption state metadata for server-side prefetching.
- * Returns JSON metadata only (not the SSE stream itself).
+ * Get UNIFIED stream resumption state metadata for server-side prefetching.
+ * Returns JSON metadata for ALL phases (pre-search, participants, analyzer).
  *
  * This enables:
  * 1. Server component to check for active streams during page load
  * 2. Zustand pre-fill with resumption state before React renders
  * 3. Proper coordination between AI SDK resume and incomplete-round-resumption
+ * 4. Detection of current phase for seamless resumption
+ *
+ * Phase detection logic:
+ * 1. If preSearch.status is 'pending' or 'streaming' → currentPhase = 'pre_search'
+ * 2. If participants.allComplete is false → currentPhase = 'participants'
+ * 3. If analyzer.status is 'pending' or 'streaming' → currentPhase = 'analyzer'
+ * 4. Otherwise → currentPhase = 'complete' (or 'idle' if no round started)
  *
  * @pattern Following AI SDK Chatbot Resume Streams documentation
  */
@@ -304,12 +359,13 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
   async (c) => {
     const { user } = c.auth();
     const { threadId } = c.validated.params;
+    const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
 
-    // Verify thread ownership
+    // Verify thread ownership and get thread config
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
       where: eq(tables.chatThread.id, threadId),
-      columns: { id: true, userId: true },
+      columns: { id: true, userId: true, enableWebSearch: true },
     });
 
     if (!thread) {
@@ -320,49 +376,289 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       throw createError.unauthorized('Not authorized to access this thread');
     }
 
-    // Default response when no KV or no active stream
-    const noActiveStreamResponse = {
+    // Default response when no active stream in any phase
+    const createIdleResponse = () => ({
+      roundNumber: null,
+      currentPhase: RoundPhases.IDLE as RoundPhase,
+      preSearch: null,
+      participants: {
+        hasActiveStream: false,
+        streamId: null,
+        totalParticipants: null,
+        currentParticipantIndex: null,
+        participantStatuses: null,
+        nextParticipantToTrigger: null,
+        allComplete: true,
+      } as ParticipantPhaseStatus,
+      analyzer: null,
+      roundComplete: true,
+      // Legacy fields for backwards compatibility
       hasActiveStream: false,
       streamId: null,
-      roundNumber: null,
       totalParticipants: null,
       participantStatuses: null,
       nextParticipantToTrigger: null,
-      roundComplete: true,
+    });
+
+    // ✅ LOCAL DEV FIX: If KV is not available, check database only
+    const hasKV = !!c.env?.KV;
+
+    // ============================================================================
+    // STEP 1: Determine current round number from latest message
+    // ============================================================================
+    const latestMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.threadId, threadId),
+      orderBy: desc(tables.chatMessage.createdAt),
+      columns: { roundNumber: true },
+    });
+
+    const currentRoundNumber = latestMessage?.roundNumber ?? 0;
+
+    // ============================================================================
+    // STEP 2: Get pre-search phase status (if web search enabled)
+    // ============================================================================
+    let preSearchStatus: PreSearchPhaseStatus | null = null;
+
+    if (thread.enableWebSearch) {
+      // Check database for pre-search record
+      const preSearchRecord = await db.query.chatPreSearch.findFirst({
+        where: and(
+          eq(tables.chatPreSearch.threadId, threadId),
+          eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
+        ),
+        columns: { id: true, status: true },
+      });
+
+      // Check KV for active stream
+      let preSearchStreamId: string | null = null;
+      let preSearchKVStatus: AnalysisStatus | null = null;
+
+      if (hasKV) {
+        preSearchStreamId = await getActivePreSearchStreamId(threadId, currentRoundNumber, c.env);
+
+        if (preSearchStreamId) {
+          const metadata = await getPreSearchStreamMetadata(preSearchStreamId, c.env);
+          const chunks = await getPreSearchStreamChunks(preSearchStreamId, c.env);
+          const lastChunkTime = chunks && chunks.length > 0
+            ? Math.max(...chunks.map(chunk => chunk.timestamp))
+            : 0;
+
+          // Check if stream is stale
+          const stale = isStreamStale(
+            lastChunkTime,
+            metadata?.createdAt ?? 0,
+            (chunks?.length ?? 0) > 0,
+            STALE_CHUNK_TIMEOUT_MS,
+          );
+
+          if (stale) {
+            preSearchStreamId = null; // Mark as not resumable
+            preSearchKVStatus = AnalysisStatuses.FAILED;
+          } else if (metadata?.status === StreamStatuses.ACTIVE || metadata?.status === StreamStatuses.STREAMING) {
+            preSearchKVStatus = AnalysisStatuses.STREAMING;
+          } else if (metadata?.status === StreamStatuses.COMPLETED) {
+            preSearchKVStatus = AnalysisStatuses.COMPLETE;
+          }
+        }
+      }
+
+      // Determine status from KV or DB
+      const dbStatus = preSearchRecord?.status as AnalysisStatus | undefined;
+      const effectiveStatus = preSearchKVStatus ?? dbStatus ?? null;
+
+      preSearchStatus = {
+        enabled: true,
+        status: effectiveStatus,
+        streamId: preSearchStreamId,
+        preSearchId: preSearchRecord?.id ?? null,
+      };
+    }
+
+    // ============================================================================
+    // STEP 3: Get participant phase status
+    // ============================================================================
+    let participantStatus: ParticipantPhaseStatus = {
+      hasActiveStream: false,
+      streamId: null,
+      totalParticipants: null,
+      currentParticipantIndex: null,
+      participantStatuses: null,
+      nextParticipantToTrigger: null,
+      allComplete: true,
     };
 
-    // ✅ LOCAL DEV FIX: If KV is not available, return no active stream
-    if (!c.env?.KV) {
-      return Responses.ok(c, noActiveStreamResponse);
+    if (hasKV) {
+      const activeStream = await getThreadActiveStream(threadId, c.env);
+
+      if (activeStream && activeStream.roundNumber === currentRoundNumber) {
+        // Check for stale participant stream
+        const chunks = await getStreamChunks(activeStream.streamId, c.env);
+        const lastChunkTime = chunks && chunks.length > 0
+          ? Math.max(...chunks.map(chunk => chunk.timestamp))
+          : 0;
+
+        const streamCreatedTime = activeStream.createdAt
+          ? new Date(activeStream.createdAt).getTime()
+          : 0;
+
+        const stale = isStreamStale(
+          lastChunkTime,
+          streamCreatedTime,
+          (chunks?.length ?? 0) > 0,
+          STALE_CHUNK_TIMEOUT_MS,
+        );
+
+        if (stale) {
+          // Mark the stale participant as failed
+          await updateParticipantStatus(
+            threadId,
+            activeStream.roundNumber,
+            activeStream.participantIndex,
+            ParticipantStreamStatuses.FAILED,
+            c.env,
+          );
+        }
+
+        // Get next participant that needs triggering (recalculate after potential status update)
+        const nextParticipant = await getNextParticipantToStream(threadId, c.env);
+        const allComplete = !nextParticipant;
+
+        // If round is complete after marking stale participant as failed, clean up
+        if (allComplete && stale) {
+          await clearThreadActiveStream(threadId, c.env);
+        } else {
+          // Convert participantStatuses Record<number, string> to Record<string, string>
+          const participantStatusesStringKeyed = activeStream.participantStatuses
+            ? Object.fromEntries(
+                Object.entries(activeStream.participantStatuses).map(([k, v]) => [String(k), v]),
+              )
+            : null;
+
+          participantStatus = {
+            hasActiveStream: !stale,
+            streamId: stale ? null : activeStream.streamId,
+            totalParticipants: activeStream.totalParticipants,
+            currentParticipantIndex: activeStream.participantIndex,
+            participantStatuses: participantStatusesStringKeyed,
+            nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
+            allComplete,
+          };
+        }
+      }
     }
 
-    // Get thread-level active stream state from KV
-    const activeStream = await getThreadActiveStream(threadId, c.env);
+    // If no KV participant data, check if all participants have messages for this round
+    if (!hasKV || !participantStatus.hasActiveStream) {
+      const participants = await db.query.chatParticipant.findMany({
+        where: and(
+          eq(tables.chatParticipant.threadId, threadId),
+          eq(tables.chatParticipant.isEnabled, true),
+        ),
+        columns: { id: true },
+      });
 
-    // No active stream - return clean state
-    if (!activeStream) {
-      return Responses.ok(c, noActiveStreamResponse);
+      const totalParticipants = participants.length;
+
+      // Count assistant messages for this round
+      const assistantMessages = await db.query.chatMessage.findMany({
+        where: and(
+          eq(tables.chatMessage.threadId, threadId),
+          eq(tables.chatMessage.roundNumber, currentRoundNumber),
+          eq(tables.chatMessage.role, 'assistant'),
+        ),
+        columns: { id: true },
+      });
+
+      participantStatus.totalParticipants = totalParticipants;
+      participantStatus.allComplete = assistantMessages.length >= totalParticipants;
     }
 
-    // Get next participant that needs triggering
-    const nextParticipant = await getNextParticipantToStream(threadId, c.env);
-    const roundComplete = !nextParticipant;
+    // ============================================================================
+    // STEP 4: Get analyzer phase status
+    // ============================================================================
+    let analyzerStatus: AnalyzerPhaseStatus | null = null;
 
-    // Convert participantStatuses Record<number, string> to Record<string, string> for JSON
-    const participantStatusesStringKeyed = activeStream.participantStatuses
-      ? Object.fromEntries(
-          Object.entries(activeStream.participantStatuses).map(([k, v]) => [String(k), v]),
-        )
-      : null;
+    // Check database for analysis record
+    const analysisRecord = await db.query.chatModeratorAnalysis.findFirst({
+      where: and(
+        eq(tables.chatModeratorAnalysis.threadId, threadId),
+        eq(tables.chatModeratorAnalysis.roundNumber, currentRoundNumber),
+      ),
+      columns: { id: true, status: true },
+    });
+
+    // Check KV for active stream
+    let analysisStreamId: string | null = null;
+    let analysisKVStatus: AnalysisStatus | null = null;
+
+    if (hasKV) {
+      analysisStreamId = await getActiveAnalysisStreamId(threadId, currentRoundNumber, c.env);
+
+      if (analysisStreamId) {
+        const metadata = await getAnalysisStreamMetadata(analysisStreamId, c.env);
+        const chunks = await getAnalysisStreamChunks(analysisStreamId, c.env);
+        const lastChunkTime = chunks && chunks.length > 0
+          ? Math.max(...chunks.map(chunk => chunk.timestamp))
+          : 0;
+
+        // Check if stream is stale
+        const stale = isStreamStale(
+          lastChunkTime,
+          metadata?.createdAt ?? 0,
+          (chunks?.length ?? 0) > 0,
+          STALE_CHUNK_TIMEOUT_MS,
+        );
+
+        if (stale) {
+          analysisStreamId = null; // Mark as not resumable
+          analysisKVStatus = AnalysisStatuses.FAILED;
+        } else if (metadata?.status === StreamStatuses.ACTIVE || metadata?.status === StreamStatuses.STREAMING) {
+          analysisKVStatus = AnalysisStatuses.STREAMING;
+        } else if (metadata?.status === StreamStatuses.COMPLETED) {
+          analysisKVStatus = AnalysisStatuses.COMPLETE;
+        }
+      }
+    }
+
+    // Determine status from KV or DB
+    const dbAnalysisStatus = analysisRecord?.status as AnalysisStatus | undefined;
+    const effectiveAnalysisStatus = analysisKVStatus ?? dbAnalysisStatus ?? null;
+
+    if (analysisRecord || analysisStreamId) {
+      analyzerStatus = {
+        status: effectiveAnalysisStatus,
+        streamId: analysisStreamId,
+        analysisId: analysisRecord?.id ?? null,
+      };
+    }
+
+    // ============================================================================
+    // STEP 5: Determine current phase and build response
+    // ============================================================================
+    const currentPhase = determineCurrentPhase(preSearchStatus, participantStatus, analyzerStatus);
+    const roundComplete = currentPhase === RoundPhases.COMPLETE;
+
+    // Check if there's any active stream
+    const hasActiveStream = currentPhase !== RoundPhases.IDLE && currentPhase !== RoundPhases.COMPLETE;
+
+    // If no activity at all, return idle response
+    if (currentPhase === RoundPhases.IDLE) {
+      return Responses.ok(c, createIdleResponse());
+    }
 
     return Responses.ok(c, {
-      hasActiveStream: true,
-      streamId: activeStream.streamId,
-      roundNumber: activeStream.roundNumber,
-      totalParticipants: activeStream.totalParticipants,
-      participantStatuses: participantStatusesStringKeyed,
-      nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
+      roundNumber: currentRoundNumber,
+      currentPhase,
+      preSearch: preSearchStatus,
+      participants: participantStatus,
+      analyzer: analyzerStatus,
       roundComplete,
+      // Legacy fields for backwards compatibility
+      hasActiveStream,
+      streamId: participantStatus.streamId,
+      totalParticipants: participantStatus.totalParticipants,
+      participantStatuses: participantStatus.participantStatuses,
+      nextParticipantToTrigger: participantStatus.nextParticipantToTrigger,
     });
   },
 );

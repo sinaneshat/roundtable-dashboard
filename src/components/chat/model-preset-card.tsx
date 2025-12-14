@@ -2,6 +2,7 @@
 
 import { EyeOff, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
 
 import type { BaseModelResponse, EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -41,6 +42,7 @@ export const ModelPresetCard = memo(({
   incompatibleModelIds,
 }: ModelPresetCardProps) => {
   const router = useRouter();
+  const t = useTranslations('chat.models');
   const isLocked = !canAccessPreset(preset, userTier);
   const Icon = preset.icon;
 
@@ -95,11 +97,11 @@ export const ModelPresetCard = memo(({
       disabled={isFullyDisabled}
       className={cn(
         'relative flex flex-col h-full p-4 rounded-xl text-left w-full',
-        'border border-white/[0.08] bg-card/50 backdrop-blur-sm',
-        'transition-all duration-200',
+        'border border-transparent',
+        'transition-all duration-200 ease-out',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
-        !isLocked && !isFullyDisabled && 'hover:bg-white/5 hover:border-white/[0.15] hover:backdrop-blur-md cursor-pointer',
-        isLocked && 'opacity-70 cursor-pointer hover:opacity-80',
+        !isLocked && !isFullyDisabled && 'hover:bg-white/[0.08] hover:border-white/[0.12] hover:backdrop-blur-md cursor-pointer',
+        isLocked && 'opacity-70 cursor-pointer hover:opacity-80 hover:bg-white/[0.05]',
         isFullyDisabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
@@ -125,15 +127,15 @@ export const ModelPresetCard = memo(({
               >
                 <EyeOff className="size-3" />
                 {compatibleModelCount === 0
-                  ? 'No Vision'
+                  ? t('noVision')
                   : `${compatibleModelCount}/${presetModels.length}`}
               </Badge>
             </div>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-[220px]">
             {compatibleModelCount === 0
-              ? 'All models in this preset cannot process images/PDFs. Remove visual files to use this preset.'
-              : `${presetModels.length - compatibleModelCount} model(s) cannot process images/PDFs and will be excluded.`}
+              ? t('presetNoVisionAll')
+              : t('presetNoVisionPartial', { count: presetModels.length - compatibleModelCount })}
           </TooltipContent>
         </Tooltip>
       )}

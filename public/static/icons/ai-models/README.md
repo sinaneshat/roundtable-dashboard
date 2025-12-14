@@ -69,7 +69,7 @@ Current logo inventory (38 providers):
 | NVIDIA | `nvidia.png` | nvidia |
 | DeepSeek | `deepseek.png` | deepseek |
 | Perplexity | `perplexity.png` | perplexity |
-| xAI | `xai.png` | xai |
+| xAI (Grok) | `grok.png` | grok |
 | Mistral AI | `mistral.png` | mistralai |
 | Cohere | `cohere.png` | cohere |
 | AI21 Labs | `ai21.png` | ai21 |
@@ -94,7 +94,7 @@ Current logo inventory (38 providers):
 | Stability AI | `stabilityai.png` | stability |
 | Hugging Face | `huggingface.png` | huggingface |
 | OpenRouter | `openrouter.png` | openrouter |
-| Claude | `claude.png` | anthropic |
+| Claude | `claude.png` | claude |
 | Gemini | `gemini.png` | google |
 
 ## Fallback Behavior
@@ -114,11 +114,11 @@ All icons optimized with **colorful priority**, white only for black icons:
    - **Priority 2**: Download standard light variants (often colorful)
    - **Priority 3**: Download dark variants (white on transparent) ONLY for black icons
 
-2. **Black Icon Replacement**: 11 black icons replaced with white variants:
-   - ai21, anthropic, claude, groq, ibm, inflection, liquid, openai, openrouter, replicate, xai
+2. **Black Icon Replacement**: 10 black icons replaced with white variants:
+   - ai21, anthropic, claude, groq, ibm, inflection, liquid, openai, openrouter, replicate
 
-3. **Colorful Icons Retained** (27 icons):
-   - alibaba, aws, azure, baichuan, baidu, bytedance, cohere, databricks, deepseek, gemini, gemini-vertex, google, huggingface, hunyuan, kimi, meta, microsoft, minimax, mistral, moonshot, nvidia, perplexity, qwen, stabilityai, together, yi, zhipu
+3. **Colorful Icons Retained** (28 icons):
+   - alibaba, aws, azure, baichuan, baidu, bytedance, cohere, databricks, deepseek, gemini, gemini-vertex, google, grok, huggingface, hunyuan, kimi, meta, microsoft, minimax, mistral, moonshot, nvidia, perplexity, qwen, stabilityai, together, yi, zhipu
 
 4. **Resizing**: High-quality Lanczos downscaling from 1024×1024 to 128×128 pixels
 
@@ -135,8 +135,8 @@ All icons optimized with **colorful priority**, white only for black icons:
 
 ## Maintenance
 
-**Last updated**: 2025-11-04
-**Total logos**: 38 providers (27 colorful, 11 white - **NO black icons**)
+**Last updated**: 2025-12-14
+**Total logos**: 38 providers (28 colorful, 10 white - **NO black icons**)
 **Total size**: ~100KB for all icons (down from 1.6MB = **94% reduction**)
 **Average per icon**: ~2.6KB (down from ~43KB = **94% reduction per icon**)
 **Icon resolution**: All 128×128 pixels (optimized for web)
@@ -145,8 +145,8 @@ All icons optimized with **colorful priority**, white only for black icons:
 **Color policy**: **Colorful icons prioritized** - white only for formerly black icons
 
 **Key improvements:**
-- ✅ **Colorful icons prioritized**: 27 icons retain full brand colors
-- ✅ **Black icons eliminated**: 11 replaced with white variants (ai21, anthropic, claude, groq, ibm, inflection, liquid, openai, openrouter, replicate, xai)
+- ✅ **Colorful icons prioritized**: 28 icons retain full brand colors (including grok)
+- ✅ **Black icons eliminated**: 10 replaced with white variants (ai21, anthropic, claude, groq, ibm, inflection, liquid, openai, openrouter, replicate)
 - ✅ Downloaded -color variants from LobeHub CDN where available
 - ✅ Resized to 128×128 pixels for balanced quality/performance
 - ✅ **94% size reduction**: 1.6MB → 100KB total

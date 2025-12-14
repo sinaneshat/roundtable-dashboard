@@ -44,6 +44,7 @@ import {
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
+import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, isVisionRequiredMimeType } from '@/lib/utils/file-capability';
 import {
   AnalysisTimeouts,
@@ -303,6 +304,11 @@ export function ChatView({
     if (incompatibleSelected.length === 0)
       return;
 
+    // Get model names for toast message
+    const incompatibleModelNames = incompatibleSelected
+      .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
+      .filter((name): name is string => Boolean(name));
+
     // Remove incompatible participants and re-index priorities
     const compatibleParticipants = selectedParticipants
       .filter(p => !incompatibleModelIds.has(p.modelId))
@@ -313,7 +319,19 @@ export function ChatView({
     } else {
       setSelectedParticipants(compatibleParticipants);
     }
-  }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants]);
+
+    // Show toast notification
+    if (incompatibleModelNames.length > 0) {
+      const modelList = incompatibleModelNames.length <= 2
+        ? incompatibleModelNames.join(' and ')
+        : `${incompatibleModelNames.slice(0, 2).join(', ')} and ${incompatibleModelNames.length - 2} more`;
+
+      toastManager.warning(
+        t('models.modelsDeselected'),
+        t('models.modelsDeselectedDescription', { models: modelList }),
+      );
+    }
+  }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants, allEnabledModels, t]);
 
   // Form actions
   const formActions = useChatFormActions();

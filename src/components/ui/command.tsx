@@ -20,7 +20,7 @@ function Command({ ref, className, glass = false, ...props }: CommandProps) {
     <CommandPrimitive
       ref={ref}
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-md',
+        'flex h-full w-full flex-col overflow-hidden rounded-2xl',
         glass ? glassCard('medium') : 'bg-popover text-popover-foreground',
         className,
       )}
@@ -117,7 +117,7 @@ function CommandItem({ ref, className, ...props }: ComponentPropsWithoutRef<type
     <CommandPrimitive.Item
       ref={ref}
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled=\'true\']:pointer-events-none data-[disabled=\'true\']:opacity-50',
+        'relative flex cursor-default select-none items-center rounded-xl px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled=\'true\']:pointer-events-none data-[disabled=\'true\']:opacity-50',
         className,
       )}
       {...props}

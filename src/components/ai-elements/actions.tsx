@@ -81,7 +81,7 @@ export function Action({
             variant="ghost"
             size="sm"
             className={cn(
-              'h-7 w-7 p-0 rounded-md text-muted-foreground hover:text-foreground',
+              'h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground',
               className,
             )}
             aria-label={label}
@@ -102,7 +102,7 @@ export function Action({
       variant="ghost"
       size="sm"
       className={cn(
-        'h-7 w-7 p-0 rounded-md text-muted-foreground hover:text-foreground',
+        'h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground',
         className,
       )}
       aria-label={label}

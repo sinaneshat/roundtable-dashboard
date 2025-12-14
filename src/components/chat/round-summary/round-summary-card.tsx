@@ -11,6 +11,7 @@ import {
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
 import { Badge } from '@/components/ui/badge';
+import { FadeIn } from '@/components/ui/motion';
 import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 import { cn } from '@/lib/ui/cn';
 
@@ -101,7 +102,7 @@ export function RoundSummaryCard({
   }, [demoOpen, isManualControlValid, manualControl, isLatest]);
 
   return (
-    <div className={cn('py-1.5', className)}>
+    <div className={cn('w-full py-1.5', className)}>
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}
@@ -135,7 +136,7 @@ export function RoundSummaryCard({
         </div>
         <ChainOfThoughtContent>
           {(demoShowContent === undefined || demoShowContent) && (
-            <>
+            <FadeIn duration={0.25}>
               {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
                 ? (
                     <RoundSummaryStream
@@ -157,7 +158,7 @@ export function RoundSummaryCard({
                           </div>
                         )
                       : null}
-            </>
+            </FadeIn>
           )}
         </ChainOfThoughtContent>
       </ChainOfThought>

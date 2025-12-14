@@ -38,6 +38,12 @@ const nextConfig: NextConfig = {
       '@radix-ui/react-icons',
       'motion',
     ],
+
+    // View Transitions API integration (Baseline 2025)
+    // Browser support: Chrome 111+, Safari 18+, Firefox 144+
+    // Enables smooth page transitions during client-side navigation
+    // https://developer.chrome.com/docs/web-platform/view-transitions
+    viewTransition: true,
   },
 
   // External packages for Server Components bundling

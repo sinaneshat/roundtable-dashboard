@@ -102,14 +102,16 @@ export function useStreamingTrigger({
       // If pre-search has STREAMING status but not tracked locally = refreshed during stream
       if (currentRoundPreSearch.status === AnalysisStatuses.STREAMING) {
         const currentState = store.getState();
-        if (currentState.hasPreSearchBeenTriggered(currentRound)) {
+
+        // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
+        const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
+        if (!didMark) {
           // Already triggered locally, wait for it to complete
           return;
         }
 
         // ✅ RESUMPTION: Pre-search is streaming but not tracked locally = page refresh
         // Need to attempt resumption by re-executing (backend handles resume logic via KV buffer)
-        currentState.markPreSearchTriggered(currentRound);
 
         const pendingMsg = currentState.pendingMessage;
         const userMessageForRound = storeMessages.find((msg) => {
@@ -188,11 +190,13 @@ export function useStreamingTrigger({
       // Execute pending pre-search
       if (currentRoundPreSearch.status === AnalysisStatuses.PENDING) {
         const currentState = store.getState();
-        if (currentState.hasPreSearchBeenTriggered(currentRound)) {
+
+        // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
+        const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
+        if (!didMark) {
+          // Another component already claimed this pre-search
           return;
         }
-
-        currentState.markPreSearchTriggered(currentRound);
 
         const pendingMsg = currentState.pendingMessage;
         const userMessageForRound = storeMessages.find((msg) => {
@@ -304,10 +308,19 @@ export function useStreamingTrigger({
       return;
     }
 
+    // ✅ FIX: Check chat.isReady before setting ref and calling startRound
+    // Without this, startRound may silently return early (if AI SDK status !== 'ready')
+    // but the ref would be set, blocking all future attempts for this round.
+    // Bug: Pre-search completes → effect runs → ref set → startRound returns early
+    // → status becomes ready → effect re-runs → ref already set → blocked forever
+    if (!chat.isReady) {
+      return;
+    }
+
     startRoundCalledForRoundRef.current = currentRound;
     chat.startRound(storeParticipants);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
+  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
 
   // Clear waitingToStartStreaming when streaming begins
   useEffect(() => {

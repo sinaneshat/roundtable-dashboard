@@ -19,6 +19,7 @@ import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AccordionEntrance } from '@/components/ui/motion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
 import { safeExtractDomain } from '@/lib/utils';
@@ -52,38 +53,40 @@ export function WebSearchDisplay({
     const currentStage = getStreamingStage(query, answer);
 
     return (
-      <div className={cn('relative py-2', className)}>
-        <ChainOfThought open disabled>
-          <ChainOfThoughtHeader disabled>
-            <div className="flex items-center gap-2">
-              <Globe className="size-4 animate-pulse" />
-              <TextShimmer className="text-sm">{query ? `Searching for "${query}"` : t('title')}</TextShimmer>
-            </div>
-          </ChainOfThoughtHeader>
-          <ChainOfThoughtContent>
-            <ChainOfThoughtStep
-              icon={Search}
-              label="Query"
-              status={currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
-            />
-            <ChainOfThoughtStep
-              icon={Globe}
-              label="Searching the web"
-              status={currentStage === WebSearchStreamingStages.SEARCH ? ChainOfThoughtStepStatuses.ACTIVE : currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.PENDING : ChainOfThoughtStepStatuses.COMPLETE}
-            />
-            <ChainOfThoughtStep
-              icon={Search}
-              label="Synthesizing answer"
-              status={currentStage === WebSearchStreamingStages.SYNTHESIZE ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.PENDING}
-            />
-            <div className="space-y-2 mt-2">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-5/6" />
-            </div>
-          </ChainOfThoughtContent>
-        </ChainOfThought>
-      </div>
+      <AccordionEntrance>
+        <div className={cn('relative py-2', className)}>
+          <ChainOfThought open disabled>
+            <ChainOfThoughtHeader disabled>
+              <div className="flex items-center gap-2">
+                <Globe className="size-4 animate-pulse" />
+                <TextShimmer className="text-sm">{query ? `Searching for "${query}"` : t('title')}</TextShimmer>
+              </div>
+            </ChainOfThoughtHeader>
+            <ChainOfThoughtContent>
+              <ChainOfThoughtStep
+                icon={Search}
+                label="Query"
+                status={currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
+              />
+              <ChainOfThoughtStep
+                icon={Globe}
+                label="Searching the web"
+                status={currentStage === WebSearchStreamingStages.SEARCH ? ChainOfThoughtStepStatuses.ACTIVE : currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.PENDING : ChainOfThoughtStepStatuses.COMPLETE}
+              />
+              <ChainOfThoughtStep
+                icon={Search}
+                label="Synthesizing answer"
+                status={currentStage === WebSearchStreamingStages.SYNTHESIZE ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.PENDING}
+              />
+              <div className="space-y-2 mt-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-5/6" />
+              </div>
+            </ChainOfThoughtContent>
+          </ChainOfThought>
+        </div>
+      </AccordionEntrance>
     );
   }
 
@@ -103,80 +106,82 @@ export function WebSearchDisplay({
   });
 
   return (
-    <div className={cn('relative py-2', className)}>
-      <ChainOfThought open={isOpen} onOpenChange={setIsOpen}>
-        <ChainOfThoughtHeader>
-          <div className="flex items-center gap-2">
-            <Globe className="size-4" />
-            <span>{query ? `Searched for "${query}"` : t('title')}</span>
-          </div>
-        </ChainOfThoughtHeader>
+    <AccordionEntrance>
+      <div className={cn('relative py-2', className)}>
+        <ChainOfThought open={isOpen} onOpenChange={setIsOpen}>
+          <ChainOfThoughtHeader>
+            <div className="flex items-center gap-2">
+              <Globe className="size-4" />
+              <span>{query ? `Searched for "${query}"` : t('title')}</span>
+            </div>
+          </ChainOfThoughtHeader>
 
-        <ChainOfThoughtContent>
-          {/* Search Results as Domain Badges */}
-          <ChainOfThoughtStep
-            icon={Search}
-            label={`Found ${successfulResults.length} ${successfulResults.length === 1 ? 'source' : 'sources'}`}
-            status={ChainOfThoughtStepStatuses.COMPLETE}
-          >
-            <ChainOfThoughtSearchResults>
-              {domains.map((domain, index) => (
-                // eslint-disable-next-line react/no-array-index-key -- domains can be duplicated across results; index ensures uniqueness
-                <ChainOfThoughtSearchResult key={`${domain}-${index}`}>
-                  <a
-                    href={successfulResults[index]?.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline"
-                  >
-                    {domain}
-                  </a>
-                </ChainOfThoughtSearchResult>
-              ))}
-            </ChainOfThoughtSearchResults>
-          </ChainOfThoughtStep>
-
-          {/* Image Gallery */}
-          {hasImages && (
-            <ChainOfThoughtStep
-              icon={Globe}
-              label="Found images"
-              status={ChainOfThoughtStepStatuses.COMPLETE}
-            >
-              <WebSearchImageGallery results={successfulResults} />
-            </ChainOfThoughtStep>
-          )}
-
-          {/* AI Answer Summary */}
-          {(answer || isStreaming) && (
+          <ChainOfThoughtContent>
+            {/* Search Results as Domain Badges */}
             <ChainOfThoughtStep
               icon={Search}
-              label="Answer"
-              status={isStreaming ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
+              label={`Found ${successfulResults.length} ${successfulResults.length === 1 ? 'source' : 'sources'}`}
+              status={ChainOfThoughtStepStatuses.COMPLETE}
             >
-              <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
-                <LLMAnswerDisplay
-                  answer={answer ?? null}
-                  isStreaming={isStreaming}
-                  sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
-                />
-              </div>
+              <ChainOfThoughtSearchResults>
+                {domains.map((domain, index) => (
+                  // eslint-disable-next-line react/no-array-index-key -- domains can be duplicated across results; index ensures uniqueness
+                  <ChainOfThoughtSearchResult key={`${domain}-${index}`}>
+                    <a
+                      href={successfulResults[index]?.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                    >
+                      {domain}
+                    </a>
+                  </ChainOfThoughtSearchResult>
+                ))}
+              </ChainOfThoughtSearchResults>
             </ChainOfThoughtStep>
-          )}
 
-          {/* Error display */}
-          {hasErrors && (
-            <Alert variant="destructive">
-              <AlertCircle className="size-4" />
-              <AlertDescription>
-                {t('error.failedToLoad', {
-                  count: totalResults - successfulResults.length,
-                })}
-              </AlertDescription>
-            </Alert>
-          )}
-        </ChainOfThoughtContent>
-      </ChainOfThought>
-    </div>
+            {/* Image Gallery */}
+            {hasImages && (
+              <ChainOfThoughtStep
+                icon={Globe}
+                label="Found images"
+                status={ChainOfThoughtStepStatuses.COMPLETE}
+              >
+                <WebSearchImageGallery results={successfulResults} />
+              </ChainOfThoughtStep>
+            )}
+
+            {/* AI Answer Summary */}
+            {(answer || isStreaming) && (
+              <ChainOfThoughtStep
+                icon={Search}
+                label="Answer"
+                status={isStreaming ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
+              >
+                <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
+                  <LLMAnswerDisplay
+                    answer={answer ?? null}
+                    isStreaming={isStreaming}
+                    sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
+                  />
+                </div>
+              </ChainOfThoughtStep>
+            )}
+
+            {/* Error display */}
+            {hasErrors && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertDescription>
+                  {t('error.failedToLoad', {
+                    count: totalResults - successfulResults.length,
+                  })}
+                </AlertDescription>
+              </Alert>
+            )}
+          </ChainOfThoughtContent>
+        </ChainOfThought>
+      </div>
+    </AccordionEntrance>
   );
 }

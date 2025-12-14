@@ -213,6 +213,109 @@ describe('pre-Search vs Participant Coordination', () => {
       expect(canTrigger2).toBe(false);
     });
   });
+
+  describe('atomic tryMarkPreSearchTriggered', () => {
+    it('returns true on first call, false on subsequent calls', () => {
+      const store = createChatStore();
+
+      // First call should succeed
+      const result1 = store.getState().tryMarkPreSearchTriggered(0);
+      expect(result1).toBe(true);
+
+      // Second call should fail (already triggered)
+      const result2 = store.getState().tryMarkPreSearchTriggered(0);
+      expect(result2).toBe(false);
+
+      // Third call should also fail
+      const result3 = store.getState().tryMarkPreSearchTriggered(0);
+      expect(result3).toBe(false);
+    });
+
+    it('allows different rounds independently', () => {
+      const store = createChatStore();
+
+      // Round 0
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+
+      // Round 1 - different round, should succeed
+      expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
+
+      // Round 0 again - should fail (already marked)
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
+    });
+
+    it('prevents race condition between multiple concurrent callers', () => {
+      const store = createChatStore();
+      const results: boolean[] = [];
+
+      // Simulate concurrent calls from different components
+      // In JS single-threaded model, these run sequentially but test the atomic behavior
+      results.push(store.getState().tryMarkPreSearchTriggered(0));
+      results.push(store.getState().tryMarkPreSearchTriggered(0));
+      results.push(store.getState().tryMarkPreSearchTriggered(0));
+
+      // Only the first call should succeed
+      expect(results.filter(r => r === true)).toHaveLength(1);
+      expect(results.filter(r => r === false)).toHaveLength(2);
+    });
+
+    it('marks the round as triggered after returning true', () => {
+      const store = createChatStore();
+
+      // Before calling tryMark
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
+
+      // Call tryMark
+      store.getState().tryMarkPreSearchTriggered(0);
+
+      // After calling tryMark
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+    });
+
+    it('does not modify state when returning false', () => {
+      const store = createChatStore();
+
+      // First call marks round 0
+      store.getState().tryMarkPreSearchTriggered(0);
+
+      // Get the set state before duplicate call
+      const sizeBefore = store.getState().triggeredPreSearchRounds.size;
+
+      // Duplicate call should not add anything new
+      store.getState().tryMarkPreSearchTriggered(0);
+
+      expect(store.getState().triggeredPreSearchRounds.size).toBe(sizeBefore);
+    });
+
+    it('can be cleared and re-triggered', () => {
+      const store = createChatStore();
+
+      // First trigger
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
+
+      // Clear tracking
+      store.getState().clearPreSearchTracking(0);
+
+      // Can trigger again after clearing
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+    });
+
+    it('is cleared by startRegeneration', () => {
+      const store = createChatStore();
+
+      // Mark round 0 as triggered
+      store.getState().tryMarkPreSearchTriggered(0);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+
+      // Start regeneration clears tracking
+      store.getState().startRegeneration(0);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
+
+      // Can trigger again after regeneration
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+    });
+  });
 });
 
 // ============================================================================

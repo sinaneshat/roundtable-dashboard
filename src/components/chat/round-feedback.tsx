@@ -51,7 +51,7 @@ function RoundFeedbackComponent({
             disabled={disabled || isPending}
             aria-label={t('like')}
             className={cn(
-              'h-7 w-7 p-0 rounded-md transition-colors',
+              'h-7 w-7 p-0 rounded-full transition-colors',
               currentFeedback === FeedbackTypes.LIKE
                 ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30 hover:text-green-700'
                 : 'text-muted-foreground hover:text-green-600 hover:bg-green-500/10',
@@ -80,7 +80,7 @@ function RoundFeedbackComponent({
             disabled={disabled || isPending}
             aria-label={t('dislike')}
             className={cn(
-              'h-7 w-7 p-0 rounded-md transition-colors',
+              'h-7 w-7 p-0 rounded-full transition-colors',
               currentFeedback === FeedbackTypes.DISLIKE
                 ? 'bg-red-500/20 text-red-600 hover:bg-red-500/30 hover:text-red-700'
                 : 'text-muted-foreground hover:text-red-600 hover:bg-red-500/10',

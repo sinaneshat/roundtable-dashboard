@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
 import {
+  AnalysisStatusSchema,
   ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
   ChatModeSchema,
@@ -8,6 +9,7 @@ import {
   ParticipantStreamStatusSchema,
   PreSearchQueryStatusSchema,
   ResolutionTypeSchema,
+  RoundPhaseSchema,
   SearchResultStatusSchema,
   StanceTypeSchema,
   UIMessageRoleSchema,
@@ -1251,22 +1253,6 @@ export const ThreadIdParamSchema = z.object({
   }),
 }).openapi('ThreadIdParam');
 
-/**
- * Stream ID param schema (threadId + streamId)
- */
-export const StreamIdParamSchema = z.object({
-  threadId: z.string().openapi({
-    param: { name: 'threadId', in: 'path' },
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  streamId: z.string().openapi({
-    param: { name: 'streamId', in: 'path' },
-    description: 'Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
-    example: 'thread_abc123_r0_p0',
-  }),
-}).openapi('StreamIdParam');
-
 // ============================================================================
 // RESUMABLE STREAM SCHEMAS
 // ============================================================================
@@ -1292,39 +1278,162 @@ export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSch
 
 export type StreamStatusResponse = z.infer<typeof StreamStatusResponseSchema>;
 
+// ============================================================================
+// UNIFIED RESUMPTION PHASE SCHEMAS
+// ============================================================================
+
 /**
- * Thread stream resumption state schema
- * Returns metadata about active stream for server-side prefetching
- * ✅ RESUMABLE STREAMS: Enables Zustand pre-fill before React renders
+ * Pre-search phase status schema for unified resumption
+ * Tracks web search execution status within a round
  */
-export const ThreadStreamResumptionStateSchema = z.object({
+export const PreSearchPhaseStatusSchema = z.object({
+  enabled: z.boolean().openapi({
+    description: 'Whether web search is enabled for this thread',
+    example: true,
+  }),
+  status: AnalysisStatusSchema.nullable().openapi({
+    description: 'Pre-search status (pending/streaming/complete/failed)',
+    example: 'complete',
+  }),
+  streamId: z.string().nullable().openapi({
+    description: 'Active pre-search stream ID for resumption',
+    example: 'presearch_thread_abc123_0_1234567890',
+  }),
+  preSearchId: z.string().nullable().openapi({
+    description: 'Database pre-search record ID',
+    example: 'ps_abc123',
+  }),
+}).openapi('PreSearchPhaseStatus');
+
+export type PreSearchPhaseStatus = z.infer<typeof PreSearchPhaseStatusSchema>;
+
+/**
+ * Participant phase status schema for unified resumption
+ * Tracks all participant stream statuses within a round
+ */
+export const ParticipantPhaseStatusSchema = z.object({
   hasActiveStream: z.boolean().openapi({
-    description: 'Whether thread has an active stream in KV',
+    description: 'Whether there is an active participant stream in KV',
     example: true,
   }),
   streamId: z.string().nullable().openapi({
-    description: 'Active stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
+    description: 'Active participant stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
     example: 'thread_abc123_r0_p1',
-  }),
-  roundNumber: RoundNumberSchema.nullable().openapi({
-    description: 'Round number of the active stream',
-    example: 0,
   }),
   totalParticipants: RoundNumberSchema.nullable().openapi({
     description: 'Total number of participants in the round',
     example: 3,
+  }),
+  currentParticipantIndex: RoundNumberSchema.nullable().openapi({
+    description: 'Index of currently streaming participant',
+    example: 1,
   }),
   participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema).nullable().openapi({
     description: 'Status of each participant (keyed by index)',
     example: { 0: 'completed', 1: 'active', 2: 'active' },
   }),
   nextParticipantToTrigger: RoundNumberSchema.nullable().openapi({
-    description: 'Index of next participant that needs to be triggered (not started or empty interrupted)',
+    description: 'Index of next participant that needs to be triggered',
     example: 2,
   }),
-  roundComplete: z.boolean().openapi({
+  allComplete: z.boolean().openapi({
     description: 'Whether all participants have finished (completed or failed)',
     example: false,
+  }),
+}).openapi('ParticipantPhaseStatus');
+
+export type ParticipantPhaseStatus = z.infer<typeof ParticipantPhaseStatusSchema>;
+
+/**
+ * Analyzer phase status schema for unified resumption
+ * Tracks round summary/analysis generation status
+ */
+export const AnalyzerPhaseStatusSchema = z.object({
+  status: AnalysisStatusSchema.nullable().openapi({
+    description: 'Analyzer status (pending/streaming/complete/failed)',
+    example: 'streaming',
+  }),
+  streamId: z.string().nullable().openapi({
+    description: 'Active analysis stream ID for resumption',
+    example: 'analysis:thread_abc123:r0',
+  }),
+  analysisId: z.string().nullable().openapi({
+    description: 'Database analysis record ID',
+    example: 'analysis_abc123',
+  }),
+}).openapi('AnalyzerPhaseStatus');
+
+export type AnalyzerPhaseStatus = z.infer<typeof AnalyzerPhaseStatusSchema>;
+
+/**
+ * Thread stream resumption state schema - UNIFIED VERSION
+ *
+ * Returns comprehensive metadata about ALL active streams for server-side prefetching.
+ * Enables unified resumption across pre-search, participants, and analyzer phases.
+ *
+ * ✅ AI SDK v5 PATTERN: Supports resume across all streaming phases
+ * ✅ RESUMABLE STREAMS: Enables Zustand pre-fill before React renders
+ *
+ * Phase detection logic:
+ * 1. If preSearch.status is 'pending' or 'streaming' → currentPhase = 'pre_search'
+ * 2. If participants.allComplete is false → currentPhase = 'participants'
+ * 3. If analyzer.status is 'pending' or 'streaming' → currentPhase = 'analyzer'
+ * 4. Otherwise → currentPhase = 'complete' (or 'idle' if no round started)
+ */
+export const ThreadStreamResumptionStateSchema = z.object({
+  // Round identification
+  roundNumber: RoundNumberSchema.nullable().openapi({
+    description: 'Current round number being processed (0-based)',
+    example: 0,
+  }),
+
+  // Current phase for resumption logic
+  currentPhase: RoundPhaseSchema.openapi({
+    description: 'Current phase of the round: idle, pre_search, participants, analyzer, or complete',
+    example: 'participants',
+  }),
+
+  // Pre-search phase status (null if web search not enabled)
+  preSearch: PreSearchPhaseStatusSchema.nullable().openapi({
+    description: 'Pre-search phase status (null if web search disabled)',
+  }),
+
+  // Participant streaming phase status
+  participants: ParticipantPhaseStatusSchema.openapi({
+    description: 'Participant streaming phase status',
+  }),
+
+  // Analyzer/round summary phase status
+  analyzer: AnalyzerPhaseStatusSchema.nullable().openapi({
+    description: 'Analyzer/round summary phase status',
+  }),
+
+  // Overall round completion status
+  roundComplete: z.boolean().openapi({
+    description: 'Whether the entire round is complete (all phases finished)',
+    example: false,
+  }),
+
+  // Legacy compatibility fields
+  hasActiveStream: z.boolean().openapi({
+    description: 'LEGACY: Use currentPhase !== "complete" instead. Whether any stream is active',
+    example: true,
+  }),
+  streamId: z.string().nullable().openapi({
+    description: 'LEGACY: Use phase-specific streamId. Active participant stream ID',
+    example: 'thread_abc123_r0_p1',
+  }),
+  totalParticipants: RoundNumberSchema.nullable().openapi({
+    description: 'LEGACY: Use participants.totalParticipants',
+    example: 3,
+  }),
+  participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema).nullable().openapi({
+    description: 'LEGACY: Use participants.participantStatuses',
+    example: { 0: 'completed', 1: 'active', 2: 'active' },
+  }),
+  nextParticipantToTrigger: RoundNumberSchema.nullable().openapi({
+    description: 'LEGACY: Use participants.nextParticipantToTrigger',
+    example: 2,
   }),
 }).openapi('ThreadStreamResumptionState');
 

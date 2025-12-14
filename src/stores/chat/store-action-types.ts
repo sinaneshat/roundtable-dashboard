@@ -222,6 +222,13 @@ export type MarkPreSearchTriggered = (roundNumber: number) => void;
 export type HasPreSearchBeenTriggered = (roundNumber: number) => boolean;
 
 /**
+ * Atomic check-and-mark for pre-search triggering (prevents race conditions)
+ * Returns true if successfully marked (was not already triggered)
+ * Returns false if already triggered (another component got there first)
+ */
+export type TryMarkPreSearchTriggered = (roundNumber: number) => boolean;
+
+/**
  * Clear pre-search tracking for a round (used during regeneration)
  */
 export type ClearPreSearchTracking = (roundNumber: number) => void;
@@ -336,17 +343,46 @@ export type ClearStreamResumption = () => void;
  * Pre-fill stream resumption state from server-side KV check
  * Called during SSR to set up state BEFORE AI SDK resume runs
  * ✅ RESUMABLE STREAMS: Enables proper coordination between AI SDK and incomplete-round-resumption
+ * ✅ UNIFIED PHASES: Supports pre-search, participants, and analyzer resumption
  */
 export type PrefillStreamResumptionState = (
   threadId: string,
   serverState: {
+    // Round identification
+    roundNumber: number | null;
+    // Current phase for resumption logic (idle, pre_search, participants, analyzer, complete)
+    currentPhase: 'idle' | 'pre_search' | 'participants' | 'analyzer' | 'complete';
+    // Pre-search phase status (null if web search not enabled)
+    preSearch: {
+      enabled: boolean;
+      status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
+      streamId: string | null;
+      preSearchId: string | null;
+    } | null;
+    // Participant streaming phase status
+    participants: {
+      hasActiveStream: boolean;
+      streamId: string | null;
+      totalParticipants: number | null;
+      currentParticipantIndex: number | null;
+      participantStatuses: Record<string, 'active' | 'completed' | 'failed'> | null;
+      nextParticipantToTrigger: number | null;
+      allComplete: boolean;
+    };
+    // Analyzer/round summary phase status
+    analyzer: {
+      status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
+      streamId: string | null;
+      analysisId: string | null;
+    } | null;
+    // Overall round completion status
+    roundComplete: boolean;
+    // Legacy compatibility fields
     hasActiveStream: boolean;
     streamId: string | null;
-    roundNumber: number | null;
     totalParticipants: number | null;
     participantStatuses: Record<string, 'active' | 'completed' | 'failed'> | null;
     nextParticipantToTrigger: number | null;
-    roundComplete: boolean;
   },
 ) => void;
 

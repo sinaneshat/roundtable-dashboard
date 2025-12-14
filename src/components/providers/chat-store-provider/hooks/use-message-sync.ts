@@ -248,32 +248,61 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       // ✅ BUG FIX: Don't overwrite messages that have content with empty ones
       // Bug pattern: round 1 participant incorrectly targets round 0 message ID,
       // causing original content to be replaced with empty streaming message
+      //
+      // ✅ RESUMPTION FIX: Prefer MORE COMPLETE content over less complete
+      // When prefetch has complete content and resume has partial, keep prefetch
+      // When resume has more content than prefetch (continuation), use resume
       const messageDedupeMap = new Map<string, typeof mergedMessages[0]>();
       for (const msg of mergedMessages) {
         const existing = messageDedupeMap.get(msg.id);
         if (existing) {
-          // Check if existing has content
-          const existingHasContent = existing.parts?.some(
-            p => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-          ) || false;
-          const newHasContent = msg.parts?.some(
-            p => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-          ) || false;
-
-          // Don't replace message with content with one without content
-          // UNLESS they're from the same participant (legitimate update)
-          if (existingHasContent && !newHasContent) {
-            const existingParticipantId = existing.metadata && typeof existing.metadata === 'object' && 'participantId' in existing.metadata
-              ? existing.metadata.participantId
-              : null;
-            const newParticipantId = msg.metadata && typeof msg.metadata === 'object' && 'participantId' in msg.metadata
-              ? msg.metadata.participantId
-              : null;
-
-            // If different participants, keep the one with content
-            if (existingParticipantId !== newParticipantId) {
-              continue; // Keep existing, don't overwrite
+          // Calculate content length for each
+          const existingContentLength = existing.parts?.reduce((len, p) => {
+            if (p.type === 'text' && 'text' in p && typeof p.text === 'string') {
+              return len + p.text.length;
             }
+            return len;
+          }, 0) || 0;
+          const newContentLength = msg.parts?.reduce((len, p) => {
+            if (p.type === 'text' && 'text' in p && typeof p.text === 'string') {
+              return len + p.text.length;
+            }
+            return len;
+          }, 0) || 0;
+
+          // Check finish reason - completed messages are more authoritative
+          const existingFinishReason = existing.metadata && typeof existing.metadata === 'object' && 'finishReason' in existing.metadata
+            ? existing.metadata.finishReason
+            : null;
+          const newFinishReason = msg.metadata && typeof msg.metadata === 'object' && 'finishReason' in msg.metadata
+            ? msg.metadata.finishReason
+            : null;
+
+          const existingIsComplete = existingFinishReason === 'stop' || existingFinishReason === 'length';
+          const newIsComplete = newFinishReason === 'stop' || newFinishReason === 'length';
+
+          // Determine which message to keep
+          // Priority: 1. Complete > incomplete, 2. More content > less content
+          let keepExisting = false;
+
+          if (existingIsComplete && !newIsComplete) {
+            // Existing is complete, new is incomplete - keep existing
+            keepExisting = true;
+          } else if (!existingIsComplete && newIsComplete) {
+            // New is complete, existing is incomplete - use new
+            keepExisting = false;
+          } else if (existingContentLength > newContentLength && existingContentLength > 0) {
+            // Same completion status, but existing has more content - keep existing
+            // This handles the case where prefetch has more content than KV buffer
+            keepExisting = true;
+          } else if (existingContentLength > 0 && newContentLength === 0) {
+            // Existing has content, new is empty - keep existing
+            keepExisting = true;
+          }
+          // Otherwise, use new (default behavior for updates)
+
+          if (keepExisting) {
+            continue; // Skip this message, keep existing
           }
         }
         messageDedupeMap.set(msg.id, msg);
