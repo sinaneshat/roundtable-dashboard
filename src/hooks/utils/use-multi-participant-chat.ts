@@ -387,12 +387,12 @@ export function useMultiParticipantChat(
     }
 
     // Round complete - reset state
-    // Analysis triggering now handled automatically by store subscription
+    // Summary triggering now handled automatically by store subscription
     if (nextIndex >= totalParticipants) {
       // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
       isStreamingRef.current = false;
 
-      // eslint-disable-next-line react-dom/no-flush-sync -- Required for analysis trigger synchronization
+      // eslint-disable-next-line react-dom/no-flush-sync -- Required for summary trigger synchronization
       flushSync(() => {
         setIsExplicitlyStreaming(false);
         setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
@@ -464,32 +464,47 @@ export function useMultiParticipantChat(
     queuedParticipantsThisRoundRef.current.add(nextIndex);
     participantIndexQueue.current.push(nextIndex);
 
-    if (aiSendMessageRef.current) {
-      aiSendMessageRef.current({
-        text: userText,
-        // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to participant 1+
-        // Bug: Without files, backend receives message without file parts, causing
-        // "Invalid file URL: filename" errors when AI provider uses filename as fallback URL
-        ...(fileParts.length > 0 && { files: fileParts }),
-        metadata: {
-          role: UIMessageRoles.USER,
-          roundNumber: currentRoundRef.current,
-          isParticipantTrigger: true,
-        },
-      });
-    }
+    // DEBUG: Verbose queue tracing disabled
 
-    // ✅ CRITICAL FIX: Reset trigger lock SYNCHRONOUSLY after triggering next participant
-    // Previously used requestAnimationFrame which caused a race condition:
-    // - Fast-responding models (single word responses) complete before rAF fires
-    // - When last participant finishes, triggerNextParticipantWithRefs is called
-    // - But isTriggeringRef is still true (rAF hasn't reset it yet)
-    // - Function returns early, round never completes, analysis never triggers
+    // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
+    // Same pattern as startRound for consistent error handling
     //
-    // The lock only needs to prevent CONCURRENT calls within the same synchronous execution
-    // By resetting synchronously AFTER aiSendMessage returns, we ensure the lock is cleared
-    // before the next onFinish callback can call this function
-    isTriggeringRef.current = false;
+    // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
+    if (aiSendMessageRef.current) {
+      const sendMessage = aiSendMessageRef.current;
+      // DEBUG: console.log('[triggerNextParticipant] CALLING aiSendMessage', { nextIndex });
+
+      queueMicrotask(async () => {
+        try {
+          await sendMessage({
+            text: userText,
+            // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to participant 1+
+            // Bug: Without files, backend receives message without file parts, causing
+            // "Invalid file URL: filename" errors when AI provider uses filename as fallback URL
+            ...(fileParts.length > 0 && { files: fileParts }),
+            metadata: {
+              role: UIMessageRoles.USER,
+              roundNumber: currentRoundRef.current,
+              isParticipantTrigger: true,
+            },
+          });
+          // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
+          isTriggeringRef.current = false;
+        } catch (error) {
+          // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
+          console.error('[triggerNextParticipant] aiSendMessage failed, resetting state:', error);
+          isStreamingRef.current = false;
+          isTriggeringRef.current = false;
+          queuedParticipantsThisRoundRef.current.clear();
+          participantIndexQueue.current = [];
+          lastUsedParticipantIndex.current = null;
+        }
+      });
+    } else {
+      // No sendMessage ref available, reset immediately
+      isTriggeringRef.current = false;
+    }
+    // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // Note: callbackRefs not in deps - we use callbackRefs.onComplete.current to always get latest value
     // hasResponded, markAsResponded, resetErrorTracking are stable functions
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -516,18 +531,25 @@ export function useMultiParticipantChat(
       // Peek at the next queued index without removing it
       const queuedIndex = participantIndexQueue.current[0];
 
+      // DEBUG: Trace queue state and caller
+      // DEBUG: Verbose queue tracing disabled
+      // console.log('[prepareSendMessagesRequest] ENTRY', { ... });
+
       let participantIndexToUse: number;
 
       if (queuedIndex !== undefined && queuedIndex !== lastUsedParticipantIndex.current) {
         // New participant detected - shift from queue and remember it
         participantIndexToUse = participantIndexQueue.current.shift()!;
         lastUsedParticipantIndex.current = participantIndexToUse;
+        // DEBUG: console.log('[prepareSendMessagesRequest] NEW PARTICIPANT', ...);
       } else if (lastUsedParticipantIndex.current !== null) {
         // Same participant (retry/duplicate call) - reuse last index without shifting queue
         participantIndexToUse = lastUsedParticipantIndex.current;
+        // DEBUG: console.log('[prepareSendMessagesRequest] REUSING LAST', ...);
       } else {
         // Fallback to current index ref (shouldn't normally happen)
         participantIndexToUse = currentIndexRef.current;
+        // DEBUG: console.log('[prepareSendMessagesRequest] FALLBACK', ...);
       }
 
       // ✅ ATTACHMENTS: Only send attachment IDs with first participant (when user message is created)
@@ -650,8 +672,10 @@ export function useMultiParticipantChat(
     // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
     // 2. GET: Returns buffered chunks + polls for new ones until stream completes
     //
-    // Only enable when we have a valid threadId (prevents 404s on overview page)
-    resume: !!useChatId,
+    // ⚠️ DISABLED: Resume causes "Cannot read properties of undefined (reading 'state')" errors
+    // The AI SDK's Chat instance state gets corrupted during resume attempts on new threads
+    // Our store-based resumption handles this case without AI SDK's resume feature
+    resume: false,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -918,6 +942,10 @@ export function useMultiParticipantChat(
         const idMatch = data.message?.id?.match(/_r(\d+)_p(\d+)/);
         const roundFromId = idMatch ? Number.parseInt(idMatch[1]!) : null;
         const finalRoundNumber = backendRoundNumber ?? roundFromId ?? currentRoundRef.current;
+        // 🔍 DEBUG: Only log when fallback used (potential race condition)
+        if (backendRoundNumber === null && roundFromId === null) {
+          console.error('[ROUND-DEBUG] onFinish used REF FALLBACK', { msgId: data.message?.id?.slice(-15), refRound: currentRoundRef.current, pIdx: currentIndex });
+        }
 
         // 🐛 DEBUG: Log message ID received from AI SDK
         const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
@@ -1146,7 +1174,7 @@ export function useMultiParticipantChat(
       // CRITICAL: Trigger next participant after current one finishes
       // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
       // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
-      // which has its own timeout mechanism for analysis creation
+      // which has its own timeout mechanism for summary creation
       // ✅ FIX: Must await to block onFinish from returning before next participant triggers
       // Without await, onFinish returns immediately and AI SDK status changes,
       // allowing multiple streams to start concurrently (race condition)
@@ -1269,6 +1297,15 @@ export function useMultiParticipantChat(
    * Only check isExplicitlyStreaming to prevent concurrent rounds
    */
   const startRound = useCallback((participantsOverride?: ChatParticipant[]) => {
+    // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
+    // Must happen FIRST before any other logic. Two effects calling startRound simultaneously
+    // could both pass guards before either sets the lock, causing duplicate aiSendMessage calls
+    // which corrupts AI SDK's Chat instance state ("Cannot read properties of undefined (reading 'state')")
+    if (isTriggeringRef.current) {
+      return;
+    }
+    isTriggeringRef.current = true;
+
     // ✅ CRITICAL FIX: Allow caller to pass fresh participants (from store subscription)
     // When subscription calls this before provider re-renders, ref is stale
     // Subscription can pass participants directly from store.getState()
@@ -1283,16 +1320,39 @@ export function useMultiParticipantChat(
     }
 
     // ✅ Guards: Wait for dependencies to be ready (effect will retry)
-    // ✅ FIX: Relaxed status check to handle 204 resume response edge case
-    // Don't require status === 'ready', just ensure we're not actively streaming/submitted
-    // Store subscription guards prevent premature calls (messages exist, not already streaming)
-    const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
-    if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
+    // ✅ FIX: Require AI SDK to be fully ready before sending
+    // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
+    // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
+    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
+      isTriggeringRef.current = false;
       return;
     }
 
-    // Set lock to prevent concurrent calls
-    isTriggeringRef.current = true;
+    // ✅ FIX: Ensure threadId is valid before proceeding
+    // AI SDK's Chat instance requires a valid id to initialize its internal state map
+    // Calling sendMessage before this is ready causes "Cannot read properties of undefined (reading 'state')"
+    const effectiveThreadId = callbackRefs.threadId.current;
+    if (!effectiveThreadId || effectiveThreadId.trim() === '') {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    // ✅ FIX: Ensure AI SDK has been hydrated with initial messages
+    // Without this check, we might call aiSendMessage before setMessages has initialized
+    // the AI SDK's internal state, causing "Cannot read properties of undefined (reading 'state')"
+    if (!hasHydratedRef.current) {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    // ✅ FIX: Ensure AI SDK has actually processed the hydrated messages
+    // setMessages is asynchronous in React - the AI SDK might not have updated its internal
+    // state map yet. Check that AI SDK's messages match what we expect.
+    // This prevents "Cannot read properties of undefined (reading 'state')" error
+    if (messages.length === 0) {
+      isTriggeringRef.current = false;
+      return;
+    }
 
     const uniqueParticipants = deduplicateParticipants(currentParticipants);
     const enabled = getEnabledParticipants(uniqueParticipants);
@@ -1335,6 +1395,7 @@ export function useMultiParticipantChat(
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new round
     queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
+    participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
 
     // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
     // This prevents race condition where pendingMessage effect checks ref
@@ -1361,25 +1422,53 @@ export function useMultiParticipantChat(
     if (!queuedParticipantsThisRoundRef.current.has(0)) {
       queuedParticipantsThisRoundRef.current.add(0);
       participantIndexQueue.current.push(0);
+      // DEBUG: console.log('[startRound] QUEUE PUSH', ...);
     }
 
-    // Trigger streaming with the existing user message
-    // Use isParticipantTrigger:true to indicate this is triggering the first participant
-    aiSendMessage({
-      text: userText,
-      // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to the model
-      // Without this, Round 0 attachments are never seen by the participant
-      ...(fileParts.length > 0 && { files: fileParts }),
-      metadata: {
-        role: UIMessageRoles.USER,
-        roundNumber,
-        isParticipantTrigger: true,
-      },
+    // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
+    // The AI SDK's Chat instance can be in an invalid state during:
+    // - Hot Module Replacement (Fast Refresh in development)
+    // - Component remount
+    // - ThreadId changes during initialization
+    // By deferring to microtask and catching errors, we can recover gracefully
+    //
+    // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
+    // This prevents other functions (continueFromParticipant, etc.) from calling aiSendMessage concurrently
+    queueMicrotask(async () => {
+      try {
+        // Trigger streaming with the existing user message
+        // Use isParticipantTrigger:true to indicate this is triggering the first participant
+        await aiSendMessage({
+          text: userText,
+          // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to the model
+          // Without this, Round 0 attachments are never seen by the participant
+          ...(fileParts.length > 0 && { files: fileParts }),
+          metadata: {
+            role: UIMessageRoles.USER,
+            roundNumber,
+            isParticipantTrigger: true,
+          },
+        });
+        // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
+        isTriggeringRef.current = false;
+      } catch (error) {
+        // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
+        // This handles the "Cannot read properties of undefined (reading 'state')" error
+        // that occurs when AI SDK's Chat instance is corrupted (e.g., during Fast Refresh)
+        console.error('[startRound] aiSendMessage failed, resetting state:', error);
+        isStreamingRef.current = false;
+        isTriggeringRef.current = false;
+        queuedParticipantsThisRoundRef.current.clear();
+        participantIndexQueue.current = [];
+        lastUsedParticipantIndex.current = null;
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required for error recovery
+        flushSync(() => {
+          setIsExplicitlyStreaming(false);
+        });
+      }
     });
-
-    // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
-    // Same fix as triggerNextParticipantWithRefs - prevents race conditions
-    isTriggeringRef.current = false;
+    // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
+    // This prevents concurrent aiSendMessage calls from startRound/continueFromParticipant/etc.
   }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
   // Note: participantsOverride comes from caller, not deps
   // callbackRefs provides stable ref access to threadId (no deps needed)
@@ -1393,6 +1482,13 @@ export function useMultiParticipantChat(
    * @param participantsOverride - Optional fresh participants to use
    */
   const continueFromParticipant = useCallback((fromIndex: number, participantsOverride?: ChatParticipant[]) => {
+    // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
+    // Same pattern as startRound - must happen FIRST before any other logic
+    if (isTriggeringRef.current) {
+      return;
+    }
+    isTriggeringRef.current = true;
+
     // ✅ CRITICAL FIX: Allow caller to pass fresh participants (from store subscription)
     const currentParticipants = participantsOverride || participantsRef.current;
 
@@ -1403,16 +1499,26 @@ export function useMultiParticipantChat(
     }
 
     // ✅ Guards: Wait for dependencies to be ready
-    // ✅ FIX: Relaxed status check to handle 204 resume response edge case
-    // Don't require status === 'ready', just ensure we're not actively streaming/submitted
-    const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
-
-    if (messages.length === 0 || !canSendMessage || isExplicitlyStreaming || isTriggeringRef.current) {
+    // ✅ FIX: Require AI SDK to be fully ready before sending
+    // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
+    // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
+    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
+      isTriggeringRef.current = false;
       return;
     }
 
-    // Set lock to prevent concurrent calls
-    isTriggeringRef.current = true;
+    // ✅ FIX: Ensure threadId is valid before proceeding
+    const effectiveThreadId = callbackRefs.threadId.current;
+    if (!effectiveThreadId || effectiveThreadId.trim() === '') {
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    // ✅ FIX: Ensure AI SDK has been hydrated with initial messages
+    if (!hasHydratedRef.current) {
+      isTriggeringRef.current = false;
+      return;
+    }
 
     const uniqueParticipants = deduplicateParticipants(currentParticipants);
     const enabled = getEnabledParticipants(uniqueParticipants);
@@ -1488,6 +1594,7 @@ export function useMultiParticipantChat(
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new continuation
     queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for continuation
+    participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
 
     // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
     isStreamingRef.current = true;
@@ -1506,19 +1613,38 @@ export function useMultiParticipantChat(
       participantIndexQueue.current.push(fromIndex);
     }
 
-    // Trigger streaming for the specified participant
-    aiSendMessage({
-      text: userText,
-      metadata: {
-        role: UIMessageRoles.USER,
-        roundNumber,
-        isParticipantTrigger: true,
-      },
+    // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
+    // Same pattern as startRound for consistent error handling
+    //
+    // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
+    queueMicrotask(async () => {
+      try {
+        // Trigger streaming for the specified participant
+        await aiSendMessage({
+          text: userText,
+          metadata: {
+            role: UIMessageRoles.USER,
+            roundNumber,
+            isParticipantTrigger: true,
+          },
+        });
+        // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
+        isTriggeringRef.current = false;
+      } catch (error) {
+        // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
+        console.error('[continueFromParticipant] aiSendMessage failed, resetting state:', error);
+        isStreamingRef.current = false;
+        isTriggeringRef.current = false;
+        queuedParticipantsThisRoundRef.current.clear();
+        participantIndexQueue.current = [];
+        lastUsedParticipantIndex.current = null;
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required for error recovery
+        flushSync(() => {
+          setIsExplicitlyStreaming(false);
+        });
+      }
     });
-
-    // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
-    // Same fix as triggerNextParticipantWithRefs - prevents race conditions
-    isTriggeringRef.current = false;
+    // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
   }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
 
   /**
@@ -1528,25 +1654,27 @@ export function useMultiParticipantChat(
    */
   const sendMessage = useCallback(
     async (content: string) => {
-      // ✅ FIX: Relaxed status check to handle 204 resume response edge case
-      // Don't require status === 'ready', just ensure we're not actively streaming/submitted
-      const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
-      if (!canSendMessage || isExplicitlyStreaming) {
+      // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
+      // Same pattern as startRound - must happen FIRST before any other logic
+      if (isTriggeringRef.current) {
         return;
       }
+      isTriggeringRef.current = true;
 
-      // Guard: Prevent concurrent calls using triggering lock
-      if (isTriggeringRef.current) {
+      // ✅ FIX: Require AI SDK to be fully ready before sending
+      // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
+      // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
+      // The 204 resume response case will eventually set status to 'ready', so callers should wait
+      if (status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
+        isTriggeringRef.current = false;
         return;
       }
 
       const trimmed = content.trim();
       if (!trimmed) {
+        isTriggeringRef.current = false;
         return;
       }
-
-      // Set lock to prevent concurrent calls
-      isTriggeringRef.current = true;
 
       // AI SDK v5 Pattern: Simple, straightforward participant filtering
       const uniqueParticipants = deduplicateParticipants(participants);
@@ -1563,6 +1691,7 @@ export function useMultiParticipantChat(
       roundParticipantsRef.current = enabled;
       lastUsedParticipantIndex.current = null; // Reset for new round
       queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
+      participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
 
       // ✅ CRITICAL FIX: Validate regenerate round matches current round
       // If regenerateRoundNumberRef is set but doesn't match current round,
@@ -1625,6 +1754,7 @@ export function useMultiParticipantChat(
       if (!queuedParticipantsThisRoundRef.current.has(0)) {
         queuedParticipantsThisRoundRef.current.add(0);
         participantIndexQueue.current.push(0);
+        // DEBUG: console.log('[sendMessage] INITIAL QUEUE PUSH', ...);
       }
 
       // ✅ ATTACHMENTS: Get file parts from ref for AI SDK message creation
@@ -1632,20 +1762,39 @@ export function useMultiParticipantChat(
       // Without this, file attachments in 2nd+ rounds don't show until refresh
       const fileParts = callbackRefs.pendingFileParts.current || [];
 
-      // Send message without custom ID - let backend generate unique IDs
-      aiSendMessage({
-        text: trimmed,
-        // ✅ AI SDK v5: Include files so user message has file parts
-        ...(fileParts.length > 0 && { files: fileParts }),
-        metadata: {
-          role: UIMessageRoles.USER,
-          roundNumber: newRoundNumber,
-        },
+      // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
+      // Same pattern as startRound for consistent error handling
+      //
+      // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
+      queueMicrotask(async () => {
+        try {
+          // Send message without custom ID - let backend generate unique IDs
+          await aiSendMessage({
+            text: trimmed,
+            // ✅ AI SDK v5: Include files so user message has file parts
+            ...(fileParts.length > 0 && { files: fileParts }),
+            metadata: {
+              role: UIMessageRoles.USER,
+              roundNumber: newRoundNumber,
+            },
+          });
+          // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
+          isTriggeringRef.current = false;
+        } catch (error) {
+          // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
+          console.error('[sendMessage] aiSendMessage failed, resetting state:', error);
+          isStreamingRef.current = false;
+          isTriggeringRef.current = false;
+          queuedParticipantsThisRoundRef.current.clear();
+          participantIndexQueue.current = [];
+          lastUsedParticipantIndex.current = null;
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for error recovery
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+        }
       });
-
-      // ✅ CRITICAL FIX: Reset synchronously instead of via requestAnimationFrame
-      // Same fix as triggerNextParticipantWithRefs - prevents race conditions
-      isTriggeringRef.current = false;
+      // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
     [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming],
@@ -1659,10 +1808,10 @@ export function useMultiParticipantChat(
    * and re-sends the user's prompt to regenerate the round from ground up.
    */
   const retry = useCallback(() => {
-    // ✅ FIX: Relaxed status check to handle 204 resume response edge case
-    // Don't require status === 'ready', just ensure we're not actively streaming/submitted
-    const canSendMessage = status !== AiSdkStatuses.STREAMING && status !== AiSdkStatuses.SUBMITTED;
-    if (!canSendMessage) {
+    // ✅ FIX: Require AI SDK to be fully ready before sending
+    // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
+    // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
+    if (status !== AiSdkStatuses.READY) {
       return;
     }
 
@@ -1708,7 +1857,7 @@ export function useMultiParticipantChat(
     // STEP 1: Set regenerate flag to preserve round numbering
     regenerateRoundNumberRef.current = roundNumber;
 
-    // STEP 2: Call onRetry FIRST to remove analysis and cleanup state
+    // STEP 2: Call onRetry FIRST to remove summary and cleanup state
     // This must happen before setMessages to ensure UI updates properly
     callbackRefs.onRetry.current?.(roundNumber);
 
@@ -1736,6 +1885,7 @@ export function useMultiParticipantChat(
     currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     lastUsedParticipantIndex.current = null; // Reset for retry
     queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for retry
+    participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries before retry
 
     // Update participant index synchronously (no flushSync needed)
     setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);

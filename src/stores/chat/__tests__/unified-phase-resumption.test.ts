@@ -4,7 +4,7 @@
  * Tests for the unified stream resumption across all phases:
  * - Pre-search phase
  * - Participants phase
- * - Analyzer phase
+ * - Summarizer phase
  *
  * BUG SCENARIOS BEING TESTED:
  * 1. Overlapping resumption triggers - multiple phases trying to resume simultaneously
@@ -49,10 +49,10 @@ type PreSearchPhaseStatus = {
   preSearchId: string | null;
 };
 
-type AnalyzerPhaseStatus = {
+type SummarizerPhaseStatus = {
   status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
   streamId: string | null;
-  analysisId: string | null;
+  summaryId: string | null;
 };
 
 type ThreadStreamResumptionState = {
@@ -60,7 +60,7 @@ type ThreadStreamResumptionState = {
   currentPhase: RoundPhase;
   preSearch: PreSearchPhaseStatus | null;
   participants: ParticipantPhaseStatus;
-  analyzer: AnalyzerPhaseStatus | null;
+  summarizer: SummarizerPhaseStatus | null;
   roundComplete: boolean;
   hasActiveStream: boolean;
   streamId: string | null;
@@ -132,7 +132,7 @@ describe('unified Phase Resumption', () => {
           nextParticipantToTrigger: 0,
           allComplete: false,
         },
-        analyzer: null,
+        summarizer: null,
         roundComplete: false,
         hasActiveStream: true,
         streamId: 'presearch_thread_123_0',
@@ -166,7 +166,7 @@ describe('unified Phase Resumption', () => {
           nextParticipantToTrigger: 2,
           allComplete: false,
         },
-        analyzer: null,
+        summarizer: null,
         roundComplete: false,
         hasActiveStream: true,
         streamId: 'thread_123_r0_p1',
@@ -183,10 +183,10 @@ describe('unified Phase Resumption', () => {
       expect(serverState.participants.participantStatuses?.['1']).toBe('active');
     });
 
-    it('should correctly detect analyzer phase when all participants done', () => {
+    it('should correctly detect summarizer phase when all participants done', () => {
       const serverState: ThreadStreamResumptionState = {
         roundNumber: 0,
-        currentPhase: 'analyzer',
+        currentPhase: 'summarizer',
         preSearch: {
           enabled: true,
           status: 'complete',
@@ -202,22 +202,22 @@ describe('unified Phase Resumption', () => {
           nextParticipantToTrigger: null,
           allComplete: true,
         },
-        analyzer: {
+        summarizer: {
           status: 'streaming',
-          streamId: 'analysis_thread_123_r0',
-          analysisId: 'analysis_123',
+          streamId: 'summary_thread_123_r0',
+          summaryId: 'summary_123',
         },
         roundComplete: false,
         hasActiveStream: true,
-        streamId: 'analysis_thread_123_r0',
+        streamId: 'summary_thread_123_r0',
         totalParticipants: 3,
         participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
         nextParticipantToTrigger: null,
       };
 
-      expect(serverState.currentPhase).toBe('analyzer');
+      expect(serverState.currentPhase).toBe('summarizer');
       expect(serverState.participants.allComplete).toBe(true);
-      expect(serverState.analyzer?.status).toBe('streaming');
+      expect(serverState.summarizer?.status).toBe('streaming');
     });
   });
 
@@ -237,22 +237,22 @@ describe('unified Phase Resumption', () => {
       expect(shouldTriggerParticipants).toBe(false);
     });
 
-    it('should NOT trigger analyzer while participants are still streaming', () => {
-      // BUG: If last participant finishes but analyzer effect runs before
+    it('should NOT trigger summarizer while participants are still streaming', () => {
+      // BUG: If last participant finishes but summarizer effect runs before
       // participant phase completion is detected
 
       const currentPhase = 'participants' as const;
       const participantsAllComplete = false;
-      const analyzerStatus = null;
+      const summarizerStatus = null;
 
-      // Analyzer should only be triggered when:
-      // 1. currentPhase === 'analyzer' OR
-      // 2. participants.allComplete === true AND analyzer not yet started
-      const shouldTriggerAnalyzer
-        = currentPhase === 'analyzer'
-          || (participantsAllComplete && analyzerStatus === null);
+      // Summarizer should only be triggered when:
+      // 1. currentPhase === 'summarizer' OR
+      // 2. participants.allComplete === true AND summarizer not yet started
+      const shouldTriggerSummarizer
+        = currentPhase === 'summarizer'
+          || (participantsAllComplete && summarizerStatus === null);
 
-      expect(shouldTriggerAnalyzer).toBe(false);
+      expect(shouldTriggerSummarizer).toBe(false);
     });
 
     it('should prevent double-triggering of the same participant', () => {
@@ -359,24 +359,24 @@ describe('unified Phase Resumption', () => {
       expect(currentPhase).toBe('participants');
     });
 
-    it('should transition from participants to analyzer after all participants complete', () => {
+    it('should transition from participants to summarizer after all participants complete', () => {
       let currentPhase: RoundPhase = 'participants';
       const participantsAllComplete = true;
-      const analyzerStatus = null;
+      const summarizerStatus = null;
 
-      if (participantsAllComplete && (analyzerStatus === null || analyzerStatus === 'pending')) {
-        currentPhase = 'analyzer';
+      if (participantsAllComplete && (summarizerStatus === null || summarizerStatus === 'pending')) {
+        currentPhase = 'summarizer';
       }
 
-      expect(currentPhase).toBe('analyzer');
+      expect(currentPhase).toBe('summarizer');
     });
 
-    it('should transition to complete after analyzer finishes', () => {
-      let currentPhase: RoundPhase = 'analyzer';
+    it('should transition to complete after summarizer finishes', () => {
+      let currentPhase: RoundPhase = 'summarizer';
       const participantsAllComplete = true;
-      const analyzerStatus = 'complete';
+      const summarizerStatus = 'complete';
 
-      if (participantsAllComplete && analyzerStatus === 'complete') {
+      if (participantsAllComplete && summarizerStatus === 'complete') {
         currentPhase = 'complete';
       }
 
@@ -399,7 +399,7 @@ describe('unified Phase Resumption', () => {
 
   describe('race Condition Prevention', () => {
     it('should guard against multiple effects triggering the same phase resumption', () => {
-      // BUG: Multiple effects (pre-search resumption, participant resumption, analyzer resumption)
+      // BUG: Multiple effects (pre-search resumption, participant resumption, summarizer resumption)
       // might all run and try to set state simultaneously
 
       const resumptionAttempted = new Map<string, boolean>();
@@ -409,7 +409,7 @@ describe('unified Phase Resumption', () => {
       // Pre-search resumption attempts
       const preSearchKey = `${threadId}_presearch_${roundNumber}`;
       const participantsKey = `${threadId}_participants_${roundNumber}`;
-      const _analyzerKey = `${threadId}_analyzer_${roundNumber}`; // Unused but shows full pattern
+      const _summarizerKey = `${threadId}_summarizer_${roundNumber}`; // Unused but shows full pattern
 
       // First attempt should succeed
       const canAttemptPreSearch = !resumptionAttempted.has(preSearchKey);
@@ -445,15 +445,15 @@ describe('unified Phase Resumption', () => {
       // Test that phase transitions happen in order and don't overlap
 
       const phaseOrder: RoundPhase[] = [];
-      const expectedOrder: RoundPhase[] = ['pre_search', 'participants', 'analyzer', 'complete'];
+      const expectedOrder: RoundPhase[] = ['pre_search', 'participants', 'summarizer', 'complete'];
 
       // Simulate phase transitions
       phaseOrder.push('pre_search');
       // ... pre-search completes
       phaseOrder.push('participants');
       // ... participants complete
-      phaseOrder.push('analyzer');
-      // ... analyzer completes
+      phaseOrder.push('summarizer');
+      // ... summarizer completes
       phaseOrder.push('complete');
 
       expect(phaseOrder).toEqual(expectedOrder);
@@ -530,10 +530,10 @@ describe('unified Phase Resumption', () => {
           nextParticipantToTrigger: null,
           allComplete: true,
         },
-        analyzer: {
+        summarizer: {
           status: 'complete',
           streamId: null,
-          analysisId: 'analysis_123',
+          summaryId: 'summary_123',
         },
         roundComplete: true,
         hasActiveStream: false,

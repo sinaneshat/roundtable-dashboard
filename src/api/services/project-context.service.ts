@@ -7,19 +7,19 @@
  * - Aggregating project memories for RAG context
  * - Fetching relevant messages from other threads in the project
  * - Fetching pre-search results from project threads
- * - Fetching moderator analyses from project threads
+ * - Fetching moderator summaries from project threads
  * - Building comprehensive project context for AI participants
  *
  * OpenAI ChatGPT Projects Pattern:
  * - Cross-chat memory: Conversations reference info from other chats in same project
  * - File auto-referencing: Files are automatically referenced when relevant
  * - Search history: Previous searches inform current conversations
- * - Analysis context: Past moderator analyses provide insights
+ * - Summary context: Past moderator summaries provide insights
  */
 
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 
-import { ModeratorAnalysisPayloadSchema, PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
+import { PreSearchDataPayloadSchema, RoundSummaryPayloadSchema } from '@/api/routes/chat/schema';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
@@ -70,7 +70,7 @@ export type ProjectSearchContext = {
     threadTitle: string;
     roundNumber: number;
     userQuery: string;
-    analysis: string | null;
+    summary: string | null;
     results: Array<{
       query: string;
       answer: string | null;
@@ -79,8 +79,8 @@ export type ProjectSearchContext = {
   totalCount: number;
 };
 
-export type ProjectAnalysisContext = {
-  analyses: Array<{
+export type ProjectSummaryContext = {
+  summaries: Array<{
     threadId: string;
     threadTitle: string;
     roundNumber: number;
@@ -109,7 +109,7 @@ export type AggregatedProjectContext = {
   memories: ProjectMemoryContext;
   chats: ProjectChatContext;
   searches: ProjectSearchContext;
-  analyses: ProjectAnalysisContext;
+  summaries: ProjectSummaryContext;
   attachments: ProjectAttachmentContext;
 };
 
@@ -276,7 +276,7 @@ export async function getProjectSearchContext(
       threadTitle: threadTitleMap.get(search.threadId) || 'Unknown',
       roundNumber: search.roundNumber,
       userQuery: search.userQuery,
-      analysis: searchData?.analysis || null,
+      summary: searchData?.summary || null,
       results: searchData?.results?.slice(0, 3).map(r => ({
         query: r.query,
         answer: r.answer,
@@ -291,15 +291,15 @@ export async function getProjectSearchContext(
 }
 
 // ============================================================================
-// Analysis Context
+// Summary Context
 // ============================================================================
 
 /**
- * Fetch moderator analyses from other threads in the project
+ * Fetch moderator summaries from other threads in the project
  */
-export async function getProjectAnalysisContext(
+export async function getProjectSummaryContext(
   params: Pick<ProjectContextParams, 'projectId' | 'currentThreadId' | 'maxAnalyses' | 'db'>,
-): Promise<ProjectAnalysisContext> {
+): Promise<ProjectSummaryContext> {
   const { projectId, currentThreadId, maxAnalyses = 3, db } = params;
 
   // Get other threads in this project
@@ -312,14 +312,14 @@ export async function getProjectAnalysisContext(
   });
 
   if (projectThreads.length === 0) {
-    return { analyses: [], totalCount: 0 };
+    return { summaries: [], totalCount: 0 };
   }
 
   const threadIds = projectThreads.map(t => t.id);
   const threadTitleMap = new Map(projectThreads.map(t => [t.id, t.title]));
 
-  // Get completed analyses from project threads
-  const moderatorAnalyses = await db.query.chatModeratorAnalysis.findMany({
+  // Get completed summaries from project threads
+  const moderatorSummaries = await db.query.chatModeratorAnalysis.findMany({
     where: and(
       inArray(tables.chatModeratorAnalysis.threadId, threadIds),
       eq(tables.chatModeratorAnalysis.status, 'complete'),
@@ -330,30 +330,30 @@ export async function getProjectAnalysisContext(
       threadId: true,
       roundNumber: true,
       userQuestion: true,
-      analysisData: true,
+      summaryData: true,
     },
   });
 
-  const analyses = moderatorAnalyses.map((analysis) => {
+  const summaries = moderatorSummaries.map((summary) => {
     // ✅ TYPE-SAFE: Use Zod validation instead of force cast
-    // Use partial schema since analysisData may not have all required fields
-    const parseResult = ModeratorAnalysisPayloadSchema.partial().safeParse(analysis.analysisData);
+    // Use partial schema since summaryData may not have all required fields
+    const parseResult = RoundSummaryPayloadSchema.partial().safeParse(summary.summaryData);
     const data = parseResult.success ? parseResult.data : null;
 
     return {
-      threadId: analysis.threadId,
-      threadTitle: threadTitleMap.get(analysis.threadId) || 'Unknown',
-      roundNumber: analysis.roundNumber,
-      userQuestion: analysis.userQuestion,
-      summary: data?.article?.narrative || '',
-      recommendations: data?.recommendations?.map(r => r.title) || [],
-      keyThemes: data?.article?.headline || null,
+      threadId: summary.threadId,
+      threadTitle: threadTitleMap.get(summary.threadId) || 'Unknown',
+      roundNumber: summary.roundNumber,
+      userQuestion: summary.userQuestion,
+      summary: data?.summary || '',
+      recommendations: [], // No recommendations in simplified schema
+      keyThemes: null, // No key themes in simplified schema
     };
   });
 
   return {
-    analyses,
-    totalCount: moderatorAnalyses.length,
+    summaries,
+    totalCount: moderatorSummaries.length,
   };
 }
 
@@ -425,11 +425,11 @@ export async function getProjectAttachmentContext(
 export async function getAggregatedProjectContext(
   params: ProjectContextParams,
 ): Promise<AggregatedProjectContext> {
-  const [memories, chats, searches, analyses, attachments] = await Promise.all([
+  const [memories, chats, searches, summaries, attachments] = await Promise.all([
     getProjectMemories(params),
     getProjectChatContext(params),
     getProjectSearchContext(params),
-    getProjectAnalysisContext(params),
+    getProjectSummaryContext(params),
     getProjectAttachmentContext(params),
   ]);
 
@@ -437,7 +437,7 @@ export async function getAggregatedProjectContext(
     memories,
     chats,
     searches,
-    analyses,
+    summaries,
     attachments,
   };
 }
@@ -477,23 +477,23 @@ export function formatProjectContextForPrompt(
   if (context.searches.searches.length > 0) {
     const searchLines = context.searches.searches.map((s) => {
       const answers = s.results.filter(r => r.answer).map(r => r.answer).slice(0, 1);
-      return `- "${s.userQuery}": ${answers[0] || s.analysis || 'No summary'}`;
+      return `- "${s.userQuery}": ${answers[0] || s.summary || 'No summary'}`;
     });
     sections.push(`### Previous Research in Project\n${searchLines.join('\n')}`);
   }
 
-  // Format analysis context
-  if (context.analyses.analyses.length > 0) {
-    const analysisLines = context.analyses.analyses.map((a) => {
-      const recs = a.recommendations.slice(0, 2).join(', ');
-      return `- **${a.userQuestion}**: ${a.summary.slice(0, 150)}${recs ? ` (Recommendations: ${recs})` : ''}`;
+  // Format summary context
+  if (context.summaries.summaries.length > 0) {
+    const summaryLines = context.summaries.summaries.map((s) => {
+      const recs = s.recommendations.slice(0, 2).join(', ');
+      return `- **${s.userQuestion}**: ${s.summary.slice(0, 150)}${recs ? ` (Recommendations: ${recs})` : ''}`;
     });
-    sections.push(`### Key Insights from Project Analyses\n${analysisLines.join('\n')}`);
+    sections.push(`### Key Insights from Project Summaries\n${summaryLines.join('\n')}`);
   }
 
   if (sections.length === 0) {
     return '';
   }
 
-  return `\n\n## Project Context\n\nThe following context is from other conversations, research, and analyses within this project. Use this information to provide more informed and coherent responses.\n\n${sections.join('\n\n')}`;
+  return `\n\n## Project Context\n\nThe following context is from other conversations, research, and summaries within this project. Use this information to provide more informed and coherent responses.\n\n${sections.join('\n\n')}`;
 }

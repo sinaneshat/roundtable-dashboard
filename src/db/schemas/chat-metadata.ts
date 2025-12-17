@@ -214,7 +214,7 @@ export const DbPreSearchDataSchema = z.object({
     searchDepth: WebSearchDepthSchema,
     index: z.number().int().nonnegative(),
   })),
-  analysis: z.string(),
+  summary: z.string(),
   successCount: z.number().int().nonnegative(),
   failureCount: z.number().int().nonnegative(),
   totalResults: z.number().int().nonnegative(),

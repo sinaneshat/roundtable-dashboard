@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useMemo } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { MessageStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 
@@ -17,7 +17,7 @@ export type UnifiedLoadingIndicatorProps = {
   loadingDetails: {
     isCreatingThread: boolean;
     isStreamingParticipants: boolean;
-    isStreamingAnalysis: boolean;
+    isStreamingSummary: boolean;
     isNavigating: boolean;
   };
   /** Pre-search items to check for active pre-search loading */
@@ -38,7 +38,7 @@ export function UnifiedLoadingIndicator({
   // Check for active pre-search
   const hasActivePreSearch = useMemo(() => {
     return preSearches.some(
-      ps => ps.status === AnalysisStatuses.PENDING || ps.status === AnalysisStatuses.STREAMING,
+      ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
     );
   }, [preSearches]);
 
@@ -53,7 +53,7 @@ export function UnifiedLoadingIndicator({
     if (hasActivePreSearch) {
       return 'Searching';
     }
-    // Default for streaming participants or analysis
+    // Default for streaming participants or summary
     return 'Thinking';
   }, [loadingDetails, hasActivePreSearch]);
 

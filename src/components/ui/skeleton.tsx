@@ -179,14 +179,14 @@ function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<
 }
 
 /**
- * Analysis card skeleton - matches RoundAnalysisCard ChainOfThought style
+ * Summary card skeleton - matches RoundSummaryCard ChainOfThought style
  * Reusable across thread and public loading pages
  */
-function AnalysisCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function SummaryCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div className={cn("mt-6", className)} {...props}>
       <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
-        {/* Analysis header */}
+        {/* Summary header */}
         <div className="flex items-center gap-2">
           <Skeleton className="size-4 rounded bg-white/15" />
           <Skeleton className="h-4 w-32 bg-white/15" />
@@ -243,17 +243,17 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
 }
 
 /**
- * Thread messages skeleton - user message + AI responses + analysis
+ * Thread messages skeleton - user message + AI responses + summary
  * Reusable pattern for chat thread loading states
  */
 function ThreadMessagesSkeleton({
   participantCount = 2,
-  showAnalysis = true,
+  showSummary = true,
   className,
   ...props
 }: {
   participantCount?: number;
-  showAnalysis?: boolean;
+  showSummary?: boolean;
 } & React.ComponentProps<"div">) {
   return (
     <div className={cn("space-y-3", className)} {...props}>
@@ -261,7 +261,7 @@ function ThreadMessagesSkeleton({
       {Array.from({ length: participantCount }, (_, i) => (
         <AssistantMessageSkeleton key={i} />
       ))}
-      {showAnalysis && <AnalysisCardSkeleton />}
+      {showSummary && <SummaryCardSkeleton />}
     </div>
   )
 }
@@ -364,7 +364,7 @@ export {
   SubscriptionSkeleton,
   UserMessageSkeleton,
   AssistantMessageSkeleton,
-  AnalysisCardSkeleton,
+  SummaryCardSkeleton,
   StickyInputSkeleton,
   ThreadMessagesSkeleton,
   QuickStartSkeleton,

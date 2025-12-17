@@ -13,26 +13,24 @@ import type { MutableRefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { AnalysisStatuses, MessageRoles, ScreenModes } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { transformPreSearch } from '@/lib/utils/date-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { extractFileContextForSearch, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
-import { AnimationIndices, readPreSearchStreamData } from '@/stores/chat';
+import { AnimationIndices, getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
 
-import type { ChatHook, CreatePreSearchMutation } from '../types';
+import type { ChatHook } from '../types';
 
 type UseStreamingTriggerParams = {
   store: ChatStoreApi;
   chat: ChatHook;
   effectiveThreadId: string;
   queryClientRef: MutableRefObject<QueryClient>;
-  createPreSearch: CreatePreSearchMutation;
 };
 
 /**
@@ -46,7 +44,6 @@ export function useStreamingTrigger({
   chat,
   effectiveThreadId,
   queryClientRef,
-  createPreSearch,
 }: UseStreamingTriggerParams) {
   const router = useRouter();
 
@@ -100,7 +97,7 @@ export function useStreamingTrigger({
       // ✅ FIX: Handle both STREAMING and PENDING pre-searches that need resumption
       // After page refresh, triggeredPreSearchRounds is empty (Set not persisted)
       // If pre-search has STREAMING status but not tracked locally = refreshed during stream
-      if (currentRoundPreSearch.status === AnalysisStatuses.STREAMING) {
+      if (currentRoundPreSearch.status === MessageStatuses.STREAMING) {
         const currentState = store.getState();
 
         // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
@@ -152,7 +149,7 @@ export function useStreamingTrigger({
 
               if (!response.ok) {
                 console.error('[useStreamingTrigger] Pre-search resumption failed:', response.status);
-                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.FAILED);
+                store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(currentRound);
                 return;
               }
@@ -167,7 +164,7 @@ export function useStreamingTrigger({
               if (searchData) {
                 store.getState().updatePreSearchData(currentRound, searchData);
               } else {
-                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.COMPLETE);
+                store.getState().updatePreSearchStatus(currentRound, MessageStatuses.COMPLETE);
               }
 
               store.getState().clearPreSearchActivity(currentRound);
@@ -188,7 +185,7 @@ export function useStreamingTrigger({
       }
 
       // Execute pending pre-search
-      if (currentRoundPreSearch.status === AnalysisStatuses.PENDING) {
+      if (currentRoundPreSearch.status === MessageStatuses.PENDING) {
         const currentState = store.getState();
 
         // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between multiple components
@@ -212,7 +209,6 @@ export function useStreamingTrigger({
         }
 
         const threadIdForSearch = storeThread?.id || effectiveThreadId;
-        const isPlaceholder = currentRoundPreSearch.id.startsWith('placeholder-');
 
         queueMicrotask(() => {
           const executeSearch = async () => {
@@ -221,22 +217,8 @@ export function useStreamingTrigger({
               const fileContext = await extractFileContextForSearch(attachments);
               const attachmentIds = store.getState().pendingAttachmentIds || undefined;
 
-              if (isPlaceholder) {
-                const createResponse = await createPreSearch.mutateAsync({
-                  param: { threadId: threadIdForSearch, roundNumber: currentRound.toString() },
-                  json: { userQuery, fileContext: fileContext || undefined, attachmentIds },
-                });
-
-                if (createResponse?.data) {
-                  const preSearchWithDates = transformPreSearch(createResponse.data);
-                  store.getState().addPreSearch({
-                    ...preSearchWithDates,
-                    status: AnalysisStatuses.STREAMING,
-                  });
-                }
-              } else {
-                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.STREAMING);
-              }
+              // Update status to STREAMING - execute endpoint auto-creates DB record
+              store.getState().updatePreSearchStatus(currentRound, MessageStatuses.STREAMING);
 
               const response = await executePreSearchStreamService({
                 param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
@@ -245,7 +227,7 @@ export function useStreamingTrigger({
 
               if (!response.ok && response.status !== 409) {
                 console.error('[startRound] Pre-search execution failed:', response.status);
-                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.FAILED);
+                store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(currentRound);
                 return;
               }
@@ -259,7 +241,7 @@ export function useStreamingTrigger({
               if (searchData) {
                 store.getState().updatePreSearchData(currentRound, searchData);
               } else {
-                store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.COMPLETE);
+                store.getState().updatePreSearchStatus(currentRound, MessageStatuses.COMPLETE);
               }
 
               store.getState().clearPreSearchActivity(currentRound);
@@ -286,7 +268,7 @@ export function useStreamingTrigger({
       }
 
       // Defensive timing guard
-      if (currentRoundPreSearch.status === AnalysisStatuses.COMPLETE && currentRoundPreSearch.completedAt) {
+      if (currentRoundPreSearch.status === MessageStatuses.COMPLETE && currentRoundPreSearch.completedAt) {
         const completedTime = currentRoundPreSearch.completedAt instanceof Date
           ? currentRoundPreSearch.completedAt.getTime()
           : new Date(currentRoundPreSearch.completedAt).getTime();
@@ -318,7 +300,11 @@ export function useStreamingTrigger({
     }
 
     startRoundCalledForRoundRef.current = currentRound;
-    chat.startRound(storeParticipants);
+    // ✅ FIX: Use queueMicrotask to run startRound outside React's lifecycle
+    // startRound uses flushSync internally which cannot be called during render/effects
+    queueMicrotask(() => {
+      chat.startRound(storeParticipants);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
 
@@ -351,7 +337,8 @@ export function useStreamingTrigger({
       const now = Date.now();
       const waitingStartTime = waitingStartTimeRef.current ?? now;
       const elapsedWaitingTime = now - waitingStartTime;
-      const latestWebSearchEnabled = latestState.thread?.enableWebSearch ?? latestState.enableWebSearch;
+      // Thread state is source of truth; form state only for new chats
+      const latestWebSearchEnabled = getEffectiveWebSearchEnabled(latestState.thread, latestState.enableWebSearch);
 
       if (!latestState.createdThreadId && elapsedWaitingTime < 60_000) {
         return;
@@ -371,8 +358,8 @@ export function useStreamingTrigger({
             if (elapsedWaitingTime < 60_000)
               return;
           } else {
-            const isStillRunning = preSearchForRound.status === AnalysisStatuses.PENDING
-              || preSearchForRound.status === AnalysisStatuses.STREAMING;
+            const isStillRunning = preSearchForRound.status === MessageStatuses.PENDING
+              || preSearchForRound.status === MessageStatuses.STREAMING;
 
             if (isStillRunning) {
               const lastActivityTime = latestState.getPreSearchActivityTime(currentRound);

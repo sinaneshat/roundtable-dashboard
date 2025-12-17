@@ -11,7 +11,7 @@ import {
  * ✅ SINGLE SOURCE OF TRUTH - Get user usage statistics
  *
  * This is the ONLY usage/quota endpoint needed.
- * Returns ALL quota information for threads, messages, analysis, and custom roles.
+ * Returns ALL quota information for threads, messages, summaries, and custom roles.
  * Frontend derives quota blocking from: remaining === 0 or used >= limit
  */
 export const getUserUsageStatsRoute = createRoute({

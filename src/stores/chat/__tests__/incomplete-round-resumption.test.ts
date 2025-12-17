@@ -6,12 +6,12 @@
  * - Before participants start
  * - Mid-participant streaming
  * - Between participants
- * - Before analysis
+ * - Before summary
  *
  * These tests verify that:
  * 1. Streams are properly resumed from KV buffer
  * 2. Participant order is maintained during resumption
- * 3. Analysis only triggers after ALL participants complete
+ * 3. Summary only triggers after ALL participants complete
  * 4. State flags are correctly managed
  * 5. Race conditions don't cause duplicate streams
  */
@@ -20,7 +20,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
+import type { MESSAGE_STATUSES as MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import {
@@ -103,7 +104,7 @@ function createMockParticipants(count: number = 2): ChatParticipant[] {
  */
 function createMockPreSearch(
   roundNumber: number,
-  status: typeof AnalysisStatuses[keyof typeof AnalysisStatuses],
+  status: typeof MessageStatuses[keyof typeof MessageStatuses],
   overrides?: Partial<StoredPreSearch>,
 ): StoredPreSearch {
   return {
@@ -258,7 +259,7 @@ describe('useIncompleteRoundResumption', () => {
       // SCENARIO: User refreshes page while search is streaming
       // EXPECTED: Wait for search to complete before triggering participants
       const roundNumber = 0;
-      const streamingPreSearch = createMockPreSearch(roundNumber, AnalysisStatuses.STREAMING);
+      const streamingPreSearch = createMockPreSearch(roundNumber, MessageStatuses.STREAMING);
 
       setupMockStore({
         messages: [
@@ -292,11 +293,11 @@ describe('useIncompleteRoundResumption', () => {
     it('should trigger participants after pre-search COMPLETES', async () => {
       // SCENARIO: Pre-search completes, participants should start
       const roundNumber = 0;
-      const completePreSearch = createMockPreSearch(roundNumber, AnalysisStatuses.COMPLETE, {
+      const completePreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
         searchData: {
           queries: [],
           results: [],
-          analysis: 'Test analysis',
+          summary: 'Test summary',
           successCount: 0,
           failureCount: 0,
           totalResults: 0,
@@ -334,7 +335,7 @@ describe('useIncompleteRoundResumption', () => {
     it('should recover orphaned pre-search user query and add optimistic message', () => {
       // SCENARIO: User refreshes during search - pre-search exists but user message doesn't
       const roundNumber = 0;
-      const orphanedPreSearch = createMockPreSearch(roundNumber, AnalysisStatuses.COMPLETE, {
+      const orphanedPreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
         userQuery: 'My search query that was lost',
       });
 
@@ -557,11 +558,11 @@ describe('useIncompleteRoundResumption', () => {
   });
 
   // ==========================================================================
-  // ANALYSIS TRIGGERING TESTS
+  // SUMMARY TRIGGERING TESTS
   // ==========================================================================
-  describe('analysis Triggering Conditions', () => {
+  describe('summary Triggering Conditions', () => {
     it('should NOT mark round complete while any participant is still streaming', () => {
-      // SCENARIO: BUG - Analysis triggers before participant 1 finishes
+      // SCENARIO: BUG - Summary triggers before participant 1 finishes
       const roundNumber = 0;
 
       setupMockStore({
@@ -592,7 +593,7 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Round is still incomplete because participant 1 is streaming
-      // Analysis should NOT trigger yet
+      // Summary should NOT trigger yet
       expect(result.current.isIncomplete).toBe(false); // Don't try to resume in-progress streams
     });
 
@@ -629,7 +630,7 @@ describe('useIncompleteRoundResumption', () => {
             roundNumber,
           }),
         ],
-        preSearches: [createMockPreSearch(roundNumber, AnalysisStatuses.STREAMING)],
+        preSearches: [createMockPreSearch(roundNumber, MessageStatuses.STREAMING)],
         enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
         participants: createMockParticipants(2),
@@ -1066,7 +1067,7 @@ describe('useIncompleteRoundResumption', () => {
     it('should NOT start participant 0 while pre-search is PENDING', () => {
       // SCENARIO: Pre-search created but not started yet
       const roundNumber = 0;
-      const pendingPreSearch = createMockPreSearch(roundNumber, AnalysisStatuses.PENDING);
+      const pendingPreSearch = createMockPreSearch(roundNumber, MessageStatuses.PENDING);
 
       setupMockStore({
         messages: [
@@ -1095,11 +1096,11 @@ describe('useIncompleteRoundResumption', () => {
     it('should correctly handle transition from search to first participant', () => {
       // SCENARIO: Search just completed, about to start participant 0
       const roundNumber = 0;
-      const completePreSearch = createMockPreSearch(roundNumber, AnalysisStatuses.COMPLETE, {
+      const completePreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
         searchData: {
           queries: [],
           results: [],
-          analysis: 'Test',
+          summary: 'Test',
           successCount: 0,
           failureCount: 0,
           totalResults: 0,
@@ -1342,7 +1343,7 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [], // No messages - user message wasn't persisted
         preSearches: [
-          createMockPreSearch(roundNumber, AnalysisStatuses.STREAMING, {
+          createMockPreSearch(roundNumber, MessageStatuses.STREAMING, {
             userQuery: 'User query that needs recovery',
           }),
         ],
@@ -1365,11 +1366,11 @@ describe('useIncompleteRoundResumption', () => {
   });
 
   // ==========================================================================
-  // ANALYSIS TIMING TESTS (BLIND SPOTS)
+  // SUMMARY TIMING TESTS (BLIND SPOTS)
   // ==========================================================================
-  describe('analysis Timing', () => {
-    it('should NOT trigger analysis while any participant has empty parts', () => {
-      // SCENARIO: BUG - Analysis triggered before participant finished showing content
+  describe('summary Timing', () => {
+    it('should NOT trigger summary while any participant has empty parts', () => {
+      // SCENARIO: BUG - Summary triggered before participant finished showing content
       const roundNumber = 0;
 
       setupMockStore({
@@ -1442,7 +1443,7 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      // All participants complete - ready for analysis
+      // All participants complete - ready for summary
       expect(result.current.isIncomplete).toBe(false);
       expect(result.current.resumingRoundNumber).toBe(null);
     });

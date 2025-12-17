@@ -13,9 +13,9 @@ src/stores/chat/
 └── actions/                     # Store-specific action hooks
     ├── form-actions.ts          # Form submission orchestration
     ├── feedback-actions.ts      # Round feedback management
-    ├── analysis-orchestrator.ts # Analysis server sync
-    ├── analysis-deduplication.ts # Analysis deduplication logic
-    └── chat-analysis.ts         # Analysis cache management
+    ├── summary-orchestrator.ts  # Summary server sync
+    ├── summary-deduplication.ts # Summary deduplication logic
+    └── chat-summary.ts          # Summary cache management
 ```
 
 ## Architecture Principles
@@ -121,12 +121,12 @@ function Component() {
 Moved from `hooks/utils/` to `stores/chat/actions/`:
 - `use-chat-form-actions.ts` → `actions/form-actions.ts`
 - `use-feedback-actions.ts` → `actions/feedback-actions.ts`
-- `use-analysis-orchestrator.ts` → `actions/analysis-orchestrator.ts`
-- `use-analysis-deduplication.ts` → `actions/analysis-deduplication.ts`
-- `use-chat-analysis.ts` → `actions/chat-analysis.ts`
+- `use-summary-orchestrator.ts` → `actions/summary-orchestrator.ts`
+- `use-summary-deduplication.ts` → `actions/summary-deduplication.ts`
+- `use-chat-summary.ts` → `actions/chat-summary.ts`
 
 Consolidated to store subscriptions (deleted):
-- `use-analysis-creation.ts` → Automatic analysis triggering in store.ts
+- `use-summary-creation.ts` → Automatic summary triggering in store.ts
 - Streaming trigger effect → Automatic streaming trigger in store.ts
 - Pending message orchestration → Automatic message sending in store.ts
 

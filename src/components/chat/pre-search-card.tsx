@@ -5,7 +5,7 @@ import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { MessageStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
@@ -80,7 +80,7 @@ export function PreSearchCard({
   // This ensures animations are registered BEFORE any callbacks fire
   // useLayoutEffect runs synchronously after DOM mutations, before browser paint
   useLayoutEffect(() => {
-    const isStreaming = preSearch.status === AnalysisStatuses.STREAMING;
+    const isStreaming = preSearch.status === MessageStatuses.STREAMING;
     if (isStreaming && !hasRegisteredRef.current) {
       registerAnimation(AnimationIndices.PRE_SEARCH);
       hasRegisteredRef.current = true;
@@ -103,9 +103,9 @@ export function PreSearchCard({
   // Previous RAF approach had a bug: cleanup could cancel RAF before it fired,
   // leaving animation stuck forever (especially on refresh where state changes quickly)
   useLayoutEffect(() => {
-    const wasStreaming = prevStatusRef.current === AnalysisStatuses.STREAMING;
-    const nowComplete = preSearch.status !== AnalysisStatuses.STREAMING
-      && preSearch.status !== AnalysisStatuses.PENDING;
+    const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
+    const nowComplete = preSearch.status !== MessageStatuses.STREAMING
+      && preSearch.status !== MessageStatuses.PENDING;
 
     if (wasStreaming && nowComplete && hasRegisteredRef.current) {
       // Complete synchronously - no RAF that could be canceled
@@ -120,16 +120,16 @@ export function PreSearchCard({
   // Stream start callback: Update status to STREAMING when backend starts processing
   // This ensures the UI reflects the actual streaming state and maintains loading indicator visibility
   const handleStreamStart = useCallback(() => {
-    updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.STREAMING);
+    updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.STREAMING);
   }, [preSearch.roundNumber, updatePreSearchStatus]);
 
   // Stream completion callback: Update store and invalidate queries
-  // Pattern from round-analysis-card.tsx:37-47 (onStreamComplete prop)
+  // Pattern from round-summary-card.tsx:37-47 (onStreamComplete prop)
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
     if (completedData) {
       // Update store with completed data
       updatePreSearchData(preSearch.roundNumber, completedData);
-      updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.COMPLETE);
+      updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.COMPLETE);
 
       // Invalidate list query to sync orchestrator (store-first pattern)
       queryClient.invalidateQueries({
@@ -138,8 +138,8 @@ export function PreSearchCard({
     }
   }, [threadId, preSearch.roundNumber, updatePreSearchData, updatePreSearchStatus, queryClient]);
 
-  const isStreamingOrPending = preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING;
-  const hasError = preSearch.status === AnalysisStatuses.FAILED;
+  const isStreamingOrPending = preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING;
+  const hasError = preSearch.status === MessageStatuses.FAILED;
 
   // ✅ REACT 19: Event handler (not useEffect) for user interaction
   const handleOpenChange = useCallback((open: boolean) => {
@@ -152,14 +152,20 @@ export function PreSearchCard({
   }, [isStreamingOrPending, preSearch.roundNumber]);
 
   // ✅ REACT 19: Fully derived accordion state (no useEffect needed)
-  // Priority: demoOpen > valid manual control > isLatest
+  // Priority: demoOpen > streaming/pending (always open) > valid manual control > isLatest
+  // ✅ PROGRESSIVE UI FIX: Keep accordion open during streaming/pending
+  // Without this, when new timeline items are added, isLatest becomes false,
+  // accordion closes, PreSearchStream unmounts, and progressive updates are lost
   const isOpen = useMemo(() => {
     if (demoOpen !== undefined)
       return demoOpen;
+    // Keep open during streaming/pending to preserve PreSearchStream mount
+    if (isStreamingOrPending)
+      return true;
     if (isManualControlValid && manualControl)
       return manualControl.open;
     return isLatest;
-  }, [demoOpen, isManualControlValid, manualControl, isLatest]);
+  }, [demoOpen, isStreamingOrPending, isManualControlValid, manualControl, isLatest]);
 
   return (
     <div className={cn('w-full mb-4', className)}>

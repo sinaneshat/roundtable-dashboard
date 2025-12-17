@@ -3,24 +3,24 @@
  *
  * Tests for the chat flow state machine logic:
  * - State determination based on context
- * - Analysis triggering conditions
+ * - Summary triggering conditions
  * - Participant completion detection
  * - State transition actions
  *
  * These tests verify that:
- * 1. Analysis is only triggered after ALL participants complete
+ * 1. Summary is only triggered after ALL participants complete
  * 2. State transitions are correct based on context
  * 3. Incomplete messages don't count as "responded"
- * 4. Guard conditions prevent premature analysis
+ * 4. Guard conditions prevent premature summary
  */
 
 import { describe, expect, it } from 'vitest';
 
 import type { FlowState } from '@/api/core/enums';
 import {
-  AnalysisStatuses,
   FinishReasons,
   FlowStates,
+  MESSAGE_STATUSES,
   MessagePartTypes,
   MessageRoles,
   ScreenModes,
@@ -39,11 +39,11 @@ type FlowContext = {
   hasMessages: boolean;
   participantCount: number;
   allParticipantsResponded: boolean;
-  analysisStatus: typeof AnalysisStatuses[keyof typeof AnalysisStatuses] | null;
-  analysisExists: boolean;
+  summaryStatus: typeof MessageStatuses[keyof typeof MessageStatuses] | null;
+  summaryExists: boolean;
   isAiSdkStreaming: boolean;
   isCreatingThread: boolean;
-  isCreatingAnalysis: boolean;
+  isCreatingSummary: boolean;
   hasNavigated: boolean;
   screenMode: typeof ScreenModes[keyof typeof ScreenModes] | null;
 };
@@ -57,37 +57,37 @@ function determineFlowState(context: FlowContext): FlowState {
     return FlowStates.COMPLETE;
   }
 
-  // Priority 2: Ready to navigate (analysis done + title ready)
+  // Priority 2: Ready to navigate (summary done + title ready)
   if (
     context.screenMode === ScreenModes.OVERVIEW
-    && context.analysisStatus === AnalysisStatuses.COMPLETE
+    && context.summaryStatus === MESSAGE_STATUSES.COMPLETE
     && context.hasAiGeneratedTitle
     && context.threadSlug
   ) {
     return FlowStates.NAVIGATING;
   }
 
-  // Priority 3: Analysis streaming
+  // Priority 3: Summary streaming
   if (
-    context.analysisStatus === AnalysisStatuses.STREAMING
-    || (context.analysisExists && context.isAiSdkStreaming)
+    context.summaryStatus === MESSAGE_STATUSES.STREAMING
+    || (context.summaryExists && context.isAiSdkStreaming)
   ) {
-    return FlowStates.STREAMING_ANALYSIS;
+    return FlowStates.STREAMING_SUMMARY;
   }
 
-  // Priority 4: Creating analysis (participants done, no analysis yet)
+  // Priority 4: Creating summary (participants done, no summary yet)
   if (
     !context.isAiSdkStreaming
     && context.allParticipantsResponded
     && context.participantCount > 0
-    && !context.analysisExists
-    && !context.isCreatingAnalysis
+    && !context.summaryExists
+    && !context.isCreatingSummary
   ) {
-    return FlowStates.CREATING_ANALYSIS;
+    return FlowStates.CREATING_SUMMARY;
   }
 
   // Priority 5: Participants streaming
-  if (context.isAiSdkStreaming && !context.analysisExists) {
+  if (context.isAiSdkStreaming && !context.summaryExists) {
     return FlowStates.STREAMING_PARTICIPANTS;
   }
 
@@ -122,6 +122,13 @@ function calculateAllParticipantsResponded(
 
   // Only count messages with actual content or finishReason
   const completedMessagesInRound = participantMessagesInRound.filter((m) => {
+    // Check for streaming parts - don't count messages still streaming
+    const hasStreamingParts = m.parts?.some(
+      p => 'state' in p && p.state === 'streaming',
+    ) ?? false;
+    if (hasStreamingParts)
+      return false;
+
     // Check for text content
     const hasTextContent = m.parts?.some(
       p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
@@ -129,10 +136,10 @@ function calculateAllParticipantsResponded(
     if (hasTextContent)
       return true;
 
-    // Check for finishReason
+    // Check for finishReason - accept any (including 'unknown')
     const metadata = m.metadata as { finishReason?: string } | undefined;
     const finishReason = metadata?.finishReason;
-    if (finishReason && finishReason !== FinishReasons.UNKNOWN)
+    if (finishReason)
       return true;
 
     return false;
@@ -156,11 +163,11 @@ function createDefaultContext(): FlowContext {
     hasMessages: false,
     participantCount: 2,
     allParticipantsResponded: false,
-    analysisStatus: null,
-    analysisExists: false,
+    summaryStatus: null,
+    summaryExists: false,
     isAiSdkStreaming: false,
     isCreatingThread: false,
-    isCreatingAnalysis: false,
+    isCreatingSummary: false,
     hasNavigated: false,
     screenMode: ScreenModes.OVERVIEW,
   };
@@ -208,87 +215,87 @@ describe('flow State Machine - State Determination', () => {
       expect(determineFlowState(context)).toBe(FlowStates.STREAMING_PARTICIPANTS);
     });
 
-    it('does NOT return STREAMING_PARTICIPANTS when analysis exists', () => {
+    it('does NOT return STREAMING_PARTICIPANTS when summary exists', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
-      context.analysisExists = true;
-      // Should be STREAMING_ANALYSIS instead
-      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_ANALYSIS);
+      context.summaryExists = true;
+      // Should be STREAMING_SUMMARY instead
+      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
     });
   });
 
-  describe('creating Analysis State', () => {
-    it('returns CREATING_ANALYSIS when all participants responded and no analysis', () => {
+  describe('creating Summary State', () => {
+    it('returns CREATING_SUMMARY when all participants responded and no summary', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
-      context.analysisExists = false;
+      context.summaryExists = false;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).toBe(FlowStates.CREATING_ANALYSIS);
+      expect(determineFlowState(context)).toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('does NOT return CREATING_ANALYSIS when still streaming', () => {
+    it('does NOT return CREATING_SUMMARY when still streaming', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
       context.isAiSdkStreaming = true;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_ANALYSIS);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('does NOT return CREATING_ANALYSIS when not all participants responded', () => {
+    it('does NOT return CREATING_SUMMARY when not all participants responded', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = false;
       context.participantCount = 2;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_ANALYSIS);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('does NOT return CREATING_ANALYSIS when analysis already exists', () => {
+    it('does NOT return CREATING_SUMMARY when summary already exists', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
-      context.analysisExists = true;
+      context.summaryExists = true;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_ANALYSIS);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('does NOT return CREATING_ANALYSIS when no participants', () => {
+    it('does NOT return CREATING_SUMMARY when no participants', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = false; // Can't be true with 0 participants
       context.participantCount = 0;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_ANALYSIS);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('does NOT return CREATING_ANALYSIS when already creating analysis', () => {
+    it('does NOT return CREATING_SUMMARY when already creating summary', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
-      context.isCreatingAnalysis = true;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_ANALYSIS);
+      context.isCreatingSummary = true;
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
     });
   });
 
-  describe('streaming Analysis State', () => {
-    it('returns STREAMING_ANALYSIS when analysis status is streaming', () => {
+  describe('streaming Summary State', () => {
+    it('returns STREAMING_SUMMARY when summary status is streaming', () => {
       const context = createDefaultContext();
-      context.analysisStatus = AnalysisStatuses.STREAMING;
-      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_ANALYSIS);
+      context.summaryStatus = MESSAGE_STATUSES.STREAMING;
+      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
     });
 
-    it('returns STREAMING_ANALYSIS when analysis exists and SDK streaming', () => {
+    it('returns STREAMING_SUMMARY when summary exists and SDK streaming', () => {
       const context = createDefaultContext();
-      context.analysisExists = true;
+      context.summaryExists = true;
       context.isAiSdkStreaming = true;
-      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_ANALYSIS);
+      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
     });
   });
 
   describe('navigating State', () => {
-    it('returns NAVIGATING when analysis complete and has AI title', () => {
+    it('returns NAVIGATING when summary complete and has AI title', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.OVERVIEW;
-      context.analysisStatus = AnalysisStatuses.COMPLETE;
+      context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
       context.hasAiGeneratedTitle = true;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).toBe(FlowStates.NAVIGATING);
@@ -297,7 +304,7 @@ describe('flow State Machine - State Determination', () => {
     it('does NOT navigate without AI-generated title', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.OVERVIEW;
-      context.analysisStatus = AnalysisStatuses.COMPLETE;
+      context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
       context.hasAiGeneratedTitle = false;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).not.toBe(FlowStates.NAVIGATING);
@@ -306,7 +313,7 @@ describe('flow State Machine - State Determination', () => {
     it('does NOT navigate on thread screen mode', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.THREAD;
-      context.analysisStatus = AnalysisStatuses.COMPLETE;
+      context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
       context.hasAiGeneratedTitle = true;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).not.toBe(FlowStates.NAVIGATING);
@@ -404,14 +411,29 @@ describe('participant Completion Detection', () => {
       expect(result).toBe(true);
     });
 
-    it('does NOT count messages with UNKNOWN finishReason', () => {
+    it('dOES count messages with UNKNOWN finishReason (stream ended)', () => {
+      // ✅ FIX: 'unknown' finishReason means stream ended (possibly abnormally)
+      // For summarizer trigger purposes, we should accept any finishReason
+      // The message has finished streaming, even if abnormally
       const messages = [
         { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
         { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
         { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, finishReason: FinishReasons.UNKNOWN }, parts: [] },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBe(true); // 'unknown' counts as completed
+    });
+
+    it('does NOT count messages with streaming parts', () => {
+      // ✅ CRITICAL: Messages with state:'streaming' parts are still in-flight
+      // Do NOT count them as completed even if they have content
+      const messages = [
+        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
+        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
+        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, finishReason: FinishReasons.UNKNOWN }, parts: [{ type: MessagePartTypes.TEXT, text: 'Partial', state: 'streaming' }] },
+      ];
+      const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
+      expect(result).toBe(false); // streaming parts = not complete
     });
   });
 
@@ -485,9 +507,9 @@ describe('participant Completion Detection', () => {
   });
 });
 
-describe('analysis Triggering Guard Conditions', () => {
+describe('summary Triggering Guard Conditions', () => {
   describe('full Flow Integration', () => {
-    it('prevents analysis when first participant still streaming', () => {
+    it('prevents summary when first participant still streaming', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
       context.participantCount = 2;
@@ -495,10 +517,10 @@ describe('analysis Triggering Guard Conditions', () => {
 
       const state = determineFlowState(context);
       expect(state).toBe(FlowStates.STREAMING_PARTICIPANTS);
-      expect(state).not.toBe(FlowStates.CREATING_ANALYSIS);
+      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('prevents analysis when second participant has not started', () => {
+    it('prevents summary when second participant has not started', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
       context.participantCount = 2;
@@ -509,26 +531,26 @@ describe('analysis Triggering Guard Conditions', () => {
       expect(state).toBe(FlowStates.STREAMING_PARTICIPANTS);
     });
 
-    it('allows analysis only after ALL participants complete', () => {
+    it('allows summary only after ALL participants complete', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = false;
       context.participantCount = 2;
       context.allParticipantsResponded = true;
-      context.analysisExists = false;
+      context.summaryExists = false;
 
       const state = determineFlowState(context);
-      expect(state).toBe(FlowStates.CREATING_ANALYSIS);
+      expect(state).toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('transitions to STREAMING_ANALYSIS after analysis created', () => {
+    it('transitions to STREAMING_SUMMARY after summary created', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
       context.participantCount = 2;
       context.allParticipantsResponded = true;
-      context.analysisExists = true;
+      context.summaryExists = true;
 
       const state = determineFlowState(context);
-      expect(state).toBe(FlowStates.STREAMING_ANALYSIS);
+      expect(state).toBe(FlowStates.STREAMING_SUMMARY);
     });
   });
 
@@ -539,10 +561,10 @@ describe('analysis Triggering Guard Conditions', () => {
       context.isAiSdkStreaming = false; // SDK not streaming (after refresh)
       context.participantCount = 2;
       context.allParticipantsResponded = false; // Only 1 message exists
-      context.analysisExists = false;
+      context.summaryExists = false;
 
       const state = determineFlowState(context);
-      // Should stay IDLE, not jump to CREATING_ANALYSIS
+      // Should stay IDLE, not jump to CREATING_SUMMARY
       expect(state).toBe(FlowStates.IDLE);
     });
 
@@ -554,19 +576,19 @@ describe('analysis Triggering Guard Conditions', () => {
 
       const state = determineFlowState(context);
       expect(state).toBe(FlowStates.IDLE);
-      expect(state).not.toBe(FlowStates.CREATING_ANALYSIS);
+      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
     });
 
-    it('prevents double analysis creation', () => {
+    it('prevents double summary creation', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = false;
       context.participantCount = 2;
       context.allParticipantsResponded = true;
-      context.isCreatingAnalysis = true; // Already creating
+      context.isCreatingSummary = true; // Already creating
 
       const state = determineFlowState(context);
-      // Should NOT return CREATING_ANALYSIS when already creating
-      expect(state).not.toBe(FlowStates.CREATING_ANALYSIS);
+      // Should NOT return CREATING_SUMMARY when already creating
+      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
     });
   });
 });
@@ -579,15 +601,15 @@ describe('state Priority', () => {
     context.isAiSdkStreaming = true;
     context.isCreatingThread = true;
     context.allParticipantsResponded = true;
-    context.analysisStatus = AnalysisStatuses.STREAMING;
+    context.summaryStatus = MESSAGE_STATUSES.STREAMING;
 
     expect(determineFlowState(context)).toBe(FlowStates.COMPLETE);
   });
 
-  it('nAVIGATING takes precedence over STREAMING_ANALYSIS', () => {
+  it('nAVIGATING takes precedence over STREAMING_SUMMARY', () => {
     const context = createDefaultContext();
     context.screenMode = ScreenModes.OVERVIEW;
-    context.analysisStatus = AnalysisStatuses.COMPLETE;
+    context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
     context.hasAiGeneratedTitle = true;
     context.threadSlug = 'test-slug';
     context.isAiSdkStreaming = true;
@@ -595,13 +617,13 @@ describe('state Priority', () => {
     expect(determineFlowState(context)).toBe(FlowStates.NAVIGATING);
   });
 
-  it('sTREAMING_ANALYSIS takes precedence over CREATING_ANALYSIS', () => {
+  it('sTREAMING_ANALYSIS takes precedence over CREATING_SUMMARY', () => {
     const context = createDefaultContext();
-    context.analysisStatus = AnalysisStatuses.STREAMING;
+    context.summaryStatus = MESSAGE_STATUSES.STREAMING;
     context.allParticipantsResponded = true;
     context.participantCount = 2;
 
-    expect(determineFlowState(context)).toBe(FlowStates.STREAMING_ANALYSIS);
+    expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
   });
 
   it('cREATING_ANALYSIS takes precedence over STREAMING_PARTICIPANTS when streaming stopped', () => {
@@ -609,9 +631,9 @@ describe('state Priority', () => {
     context.isAiSdkStreaming = false;
     context.allParticipantsResponded = true;
     context.participantCount = 2;
-    context.analysisExists = false;
+    context.summaryExists = false;
 
-    expect(determineFlowState(context)).toBe(FlowStates.CREATING_ANALYSIS);
+    expect(determineFlowState(context)).toBe(FlowStates.CREATING_SUMMARY);
   });
 
   it('sTREAMING_PARTICIPANTS takes precedence over CREATING_THREAD', () => {

@@ -227,9 +227,9 @@ function buildPreviousRoundSearchContext(
   // ✅ 0-BASED: roundNumber is 0-based, add +1 for display
   let context = `### Round ${roundNumber + 1} Search Summary (internal: ${roundNumber})\n\n`;
 
-  if (preSearch.analysis) {
-    // Use AI-generated analysis as summary
-    context += `${preSearch.analysis}\n\n`;
+  if (preSearch.summary) {
+    // Use AI-generated summary
+    context += `${preSearch.summary}\n\n`;
   } else {
     // Fallback: list queries and basic stats
     context += `Searched ${preSearch.results.length} ${preSearch.results.length === 1 ? 'query' : 'queries'}: `;

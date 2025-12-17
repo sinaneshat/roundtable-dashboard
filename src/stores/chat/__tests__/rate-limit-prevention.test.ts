@@ -23,9 +23,9 @@ describe('rate limit prevention', () => {
       expect(STALE_TIMES.threadMessages).toBeGreaterThanOrEqual(5 * 1000);
     });
 
-    it('threadAnalyses should be Infinity for ONE-WAY DATA FLOW pattern', () => {
-      // Analyses use ONE-WAY DATA FLOW: store is source of truth, not query cache
-      expect(STALE_TIMES.threadAnalyses).toBe(Infinity);
+    it('threadSummaries should be Infinity for ONE-WAY DATA FLOW pattern', () => {
+      // Summaries use ONE-WAY DATA FLOW: store is source of truth, not query cache
+      expect(STALE_TIMES.threadSummaries).toBe(Infinity);
     });
 
     it('usage should have reasonable staleTime to prevent abuse', () => {
@@ -54,7 +54,7 @@ describe('rate limit prevention', () => {
   describe('handle complete fetch behavior', () => {
     it('handleComplete fetches should use staleTime > 0 to prevent redundant requests', () => {
       // The FETCH_STALE_TIME constant in provider.tsx should be > 0
-      // This prevents multiple fetches during the streaming → analysis transition
+      // This prevents multiple fetches during the streaming → summary transition
       const EXPECTED_FETCH_STALE_TIME = 5 * 1000; // 5 seconds (from provider.tsx)
 
       // This test documents the expected behavior

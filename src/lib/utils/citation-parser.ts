@@ -7,7 +7,7 @@
  * - thd_abc123 (thread)
  * - att_abc123 (attachment)
  * - sch_abc123 (search)
- * - ana_abc123 (analysis)
+ * - sum_abc123 (summary)
  *
  * @module lib/utils/citation-parser
  */

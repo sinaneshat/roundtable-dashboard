@@ -5,32 +5,31 @@
  * Simulates real-world scenarios including:
  * - Stream message arrival patterns
  * - Pre-search completion triggering participant streams
- * - Analysis creation and updates
+ * - Summary creation and updates
  * - Resumption from various phases
  * - Error recovery scenarios
  */
 
 import { renderHook } from '@testing-library/react';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  AnalysisStatuses,
   FinishReasons,
   MessageRoles,
-  ScreenModes,
+  MessageStatuses,
 } from '@/api/core/enums';
-import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
-  createMockAnalysis,
   createMockStoredPreSearch,
+  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
 
-import { createChatStore } from '../store';
 import type { ChatStoreApi } from '../store';
+import { createChatStore } from '../store';
 
 // ============================================================================
 // TEST HELPERS
@@ -84,15 +83,27 @@ function createStreamingAssistantMessage(
   modelId: string = 'gpt-4o',
   partialContent: string = '',
 ) {
-  return createTestAssistantMessage({
-    id: createMessageId(threadId, roundNumber, participantIndex),
-    content: partialContent,
-    roundNumber,
-    participantId: `participant-${participantIndex}`,
-    participantIndex,
-    model: modelId,
-    finishReason: undefined, // Still streaming
-  });
+  // Create message manually to avoid helper's default finishReason
+  messageIdCounter++;
+  const msgId = `${threadId}_r${roundNumber}_p${participantIndex}_${messageIdCounter}`;
+  return {
+    id: msgId,
+    role: 'assistant' as const,
+    parts: [{ type: 'text' as const, text: partialContent }],
+    metadata: {
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      participantRole: null,
+      model: modelId,
+      finishReason: undefined, // Still streaming - no finishReason yet
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      hasError: false,
+      isTransient: false,
+      isPartialResponse: true,
+    },
+  };
 }
 
 function createPreSearch(
@@ -100,26 +111,31 @@ function createPreSearch(
   roundNumber: number,
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
-  return createMockStoredPreSearch(roundNumber,
-    status === 'pending' ? AnalysisStatuses.PENDING :
-    status === 'streaming' ? AnalysisStatuses.STREAMING :
-    status === 'complete' ? AnalysisStatuses.COMPLETE :
-    AnalysisStatuses.FAILED
-  );
+  return createMockStoredPreSearch(roundNumber, status === 'pending'
+    ? MessageStatuses.PENDING
+    : status === 'streaming'
+      ? MessageStatuses.STREAMING
+      : status === 'complete'
+        ? MessageStatuses.COMPLETE
+        : MessageStatuses.FAILED);
 }
 
-function createAnalysis(
+function createSummaryEntry(
   threadId: string,
   roundNumber: number,
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
   participantMessageIds: string[] = [],
-): StoredModeratorAnalysis {
-  return createMockAnalysis(roundNumber,
-    status === 'pending' ? AnalysisStatuses.PENDING :
-    status === 'streaming' ? AnalysisStatuses.STREAMING :
-    status === 'complete' ? AnalysisStatuses.COMPLETE :
-    AnalysisStatuses.FAILED,
-    participantMessageIds
+): StoredModeratorSummary {
+  return createMockSummary(
+    roundNumber,
+    status === 'pending'
+      ? MessageStatuses.PENDING
+      : status === 'streaming'
+        ? MessageStatuses.STREAMING
+        : status === 'complete'
+          ? MessageStatuses.COMPLETE
+          : MessageStatuses.FAILED,
+    { participantMessageIds },
   );
 }
 
@@ -150,7 +166,7 @@ describe('stream Message Arrival Patterns', () => {
       expect(messages).toHaveLength(2);
 
       // P0's message should be streaming (no finishReason)
-      const p0Msg = messages.find(m => {
+      const p0Msg = messages.find((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0;
       });
@@ -172,14 +188,14 @@ describe('stream Message Arrival Patterns', () => {
       const messages = store.getState().messages;
 
       // P0 should be complete
-      const p0Msg = messages.find(m => {
+      const p0Msg = messages.find((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0;
       });
       expect((p0Msg?.metadata as DbAssistantMessageMetadata)?.finishReason).toBe(FinishReasons.STOP);
 
       // P1 should be streaming
-      const p1Msg = messages.find(m => {
+      const p1Msg = messages.find((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 1;
       });
@@ -203,20 +219,20 @@ describe('stream Message Arrival Patterns', () => {
         useThreadTimeline({
           messages,
           changelog: [],
-          analyses: [],
+          summaries: [],
         }),
       );
 
       const r0Messages = result.current.find(item => item.type === 'messages' && item.roundNumber === 0);
       expect(r0Messages).toBeDefined();
+      expect(r0Messages?.type).toBe('messages');
 
-      if (r0Messages?.type === 'messages') {
-        const assistantMsgs = r0Messages.data.filter(m => m.role === 'assistant');
-        // Should be sorted by participantIndex: 0, 1, 2
-        expect((assistantMsgs[0]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
-        expect((assistantMsgs[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);
-        expect((assistantMsgs[2]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(2);
-      }
+      const messagesData = r0Messages?.type === 'messages' ? r0Messages.data : [];
+      const assistantMsgs = messagesData.filter(m => m.role === 'assistant');
+      // Should be sorted by participantIndex: 0, 1, 2
+      expect((assistantMsgs[0]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
+      expect((assistantMsgs[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);
+      expect((assistantMsgs[2]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(2);
     });
   });
 
@@ -230,7 +246,7 @@ describe('stream Message Arrival Patterns', () => {
         useThreadTimeline({
           messages: [],
           changelog: [],
-          analyses: [],
+          summaries: [],
           preSearches: [preSearch],
         }),
       );
@@ -250,7 +266,7 @@ describe('stream Message Arrival Patterns', () => {
         useThreadTimeline({
           messages: [userMsg],
           changelog: [],
-          analyses: [],
+          summaries: [],
           preSearches: [preSearch],
         }),
       );
@@ -272,7 +288,7 @@ describe('stream Message Arrival Patterns', () => {
         useThreadTimeline({
           messages: [],
           changelog: [],
-          analyses: [],
+          summaries: [],
           preSearches: [preSearch],
         }),
       );
@@ -285,7 +301,7 @@ describe('stream Message Arrival Patterns', () => {
         useThreadTimeline({
           messages: [userMsg],
           changelog: [],
-          analyses: [],
+          summaries: [],
           preSearches: [preSearch],
         }),
       );
@@ -294,79 +310,79 @@ describe('stream Message Arrival Patterns', () => {
     });
   });
 
-  describe('analysis Creation and Updates', () => {
-    it('should NOT show pending analysis when participants still streaming', () => {
+  describe('summary Creation and Updates', () => {
+    it('should NOT show pending summary when participants still streaming', () => {
       const userMsg = createUserMessageForRound(threadId, 0);
       const p0Streaming = createStreamingAssistantMessage(threadId, 0, 0, 'gpt-4o', 'Still streaming...');
-      const analysis = createAnalysis(threadId, 0, 'pending', [p0Streaming.id]);
+      const summary = createSummaryEntry(threadId, 0, 'pending', [p0Streaming.id]);
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages: [userMsg, p0Streaming],
           changelog: [],
-          analyses: [analysis],
+          summaries: [summary],
         }),
       );
 
-      // Analysis should NOT appear (pending + no finishReason on messages)
-      const analysisItem = result.current.find(item => item.type === 'analysis');
-      expect(analysisItem).toBeUndefined();
+      // Summary should NOT appear (pending + no finishReason on messages)
+      const summaryItem = result.current.find(item => item.type === 'summary');
+      expect(summaryItem).toBeUndefined();
     });
 
-    it('should show analysis once all referenced messages complete', () => {
+    it('should show summary once all referenced messages complete', () => {
       const userMsg = createUserMessageForRound(threadId, 0);
       const p0Complete = createAssistantMessageForRound(threadId, 0, 0, 'gpt-4o', 'Complete');
       const p1Complete = createAssistantMessageForRound(threadId, 0, 1, 'claude-3-opus', 'Complete');
 
-      const analysis = createAnalysis(threadId, 0, 'pending', [p0Complete.id, p1Complete.id]);
+      const summary = createSummaryEntry(threadId, 0, 'pending', [p0Complete.id, p1Complete.id]);
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages: [userMsg, p0Complete, p1Complete],
           changelog: [],
-          analyses: [analysis],
+          summaries: [summary],
         }),
       );
 
-      // Analysis should appear (pending but all messages have finishReason)
-      const analysisItem = result.current.find(item => item.type === 'analysis');
-      expect(analysisItem).toBeDefined();
+      // Summary should appear (pending but all messages have finishReason)
+      const summaryItem = result.current.find(item => item.type === 'summary');
+      expect(summaryItem).toBeDefined();
     });
 
-    it('should show streaming analysis regardless of message state', () => {
+    it('should show streaming summary regardless of message state', () => {
       const userMsg = createUserMessageForRound(threadId, 0);
       const p0Complete = createAssistantMessageForRound(threadId, 0, 0);
-      const analysis = createAnalysis(threadId, 0, 'streaming');
+      const summary = createSummaryEntry(threadId, 0, 'streaming');
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages: [userMsg, p0Complete],
           changelog: [],
-          analyses: [analysis],
+          summaries: [summary],
         }),
       );
 
-      // Streaming analysis should always show
-      const analysisItem = result.current.find(item => item.type === 'analysis');
-      expect(analysisItem).toBeDefined();
+      // Streaming summary should always show
+      const summaryItem = result.current.find(item => item.type === 'summary');
+      expect(summaryItem).toBeDefined();
     });
 
-    it('should show complete analysis with summary', () => {
+    it('should show complete summary', () => {
       const userMsg = createUserMessageForRound(threadId, 0);
       const p0Complete = createAssistantMessageForRound(threadId, 0, 0);
-      const analysis = createAnalysis(threadId, 0, 'complete');
+      const summary = createSummaryEntry(threadId, 0, 'complete');
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages: [userMsg, p0Complete],
           changelog: [],
-          analyses: [analysis],
+          summaries: [summary],
         }),
       );
 
-      const analysisItem = result.current.find(item => item.type === 'analysis');
-      expect(analysisItem).toBeDefined();
-      expect(analysisItem?.data.status).toBe(AnalysisStatuses.COMPLETE);
+      const summaryItem = result.current.find(item => item.type === 'summary');
+      expect(summaryItem).toBeDefined();
+      expect(summaryItem?.data.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 });
@@ -402,35 +418,35 @@ describe('complete Round Flow Simulation', () => {
     const p1Complete = createAssistantMessageForRound(threadId, 0, 1, 'claude-3-opus', 'I agree, Paris is the capital.');
     store.getState().setMessages([userMsg, p0Complete, p1Complete]);
 
-    // Phase 5: Analysis streams
-    const analysisStreaming = createAnalysis(threadId, 0, 'streaming', [p0Complete.id, p1Complete.id]);
-    store.getState().setAnalyses([analysisStreaming]);
+    // Phase 5: Summary streams
+    const summaryStreaming = createSummaryEntry(threadId, 0, 'streaming', [p0Complete.id, p1Complete.id]);
+    store.getState().setSummaries([summaryStreaming]);
 
-    // Phase 6: Analysis completes
-    const analysisComplete = createAnalysis(threadId, 0, 'complete', [p0Complete.id, p1Complete.id]);
-    store.getState().setAnalyses([analysisComplete]);
+    // Phase 6: Summary completes
+    const summaryComplete = createSummaryEntry(threadId, 0, 'complete', [p0Complete.id, p1Complete.id]);
+    store.getState().setSummaries([summaryComplete]);
 
     // Verify final state
     const messages = store.getState().messages;
-    const analyses = store.getState().analyses;
+    const summaries = store.getState().summaries;
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
         changelog: [],
-        analyses,
+        summaries,
       }),
     );
 
-    // Should have: messages, analysis for round 0
+    // Should have: messages, summary for round 0
     const r0Items = result.current.filter(item => item.roundNumber === 0);
-    expect(r0Items).toHaveLength(2); // messages + analysis
+    expect(r0Items).toHaveLength(2); // messages + summary
 
     const messagesItem = r0Items.find(item => item.type === 'messages');
-    const analysisItem = r0Items.find(item => item.type === 'analysis');
+    const summaryItem = r0Items.find(item => item.type === 'summary');
 
     expect(messagesItem).toBeDefined();
-    expect(analysisItem).toBeDefined();
+    expect(summaryItem).toBeDefined();
 
     // Messages order: user, p0, p1
     if (messagesItem?.type === 'messages') {
@@ -466,20 +482,20 @@ describe('complete Round Flow Simulation', () => {
     const p0Complete = createAssistantMessageForRound(threadId, 0, 0, 'gpt-4o', 'Based on the search results...');
     store.getState().setMessages([userMsg, p0Complete]);
 
-    // Phase 7: Analysis completes
-    const analysis = createAnalysis(threadId, 0, 'complete', [p0Complete.id]);
-    store.getState().setAnalyses([analysis]);
+    // Phase 7: Summary completes
+    const summary = createSummaryEntry(threadId, 0, 'complete', [p0Complete.id]);
+    store.getState().setSummaries([summary]);
 
     // Verify timeline
     const messages = store.getState().messages;
-    const analyses = store.getState().analyses;
+    const summaries = store.getState().summaries;
     const preSearches = store.getState().preSearches;
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
         changelog: [],
-        analyses,
+        summaries,
         preSearches,
       }),
     );
@@ -488,45 +504,45 @@ describe('complete Round Flow Simulation', () => {
     const preSearchItem = result.current.find(item => item.type === 'pre-search');
     expect(preSearchItem).toBeUndefined();
 
-    // But messages and analysis should be there
+    // But messages and summary should be there
     const r0Items = result.current.filter(item => item.roundNumber === 0);
     expect(r0Items.find(item => item.type === 'messages')).toBeDefined();
-    expect(r0Items.find(item => item.type === 'analysis')).toBeDefined();
+    expect(r0Items.find(item => item.type === 'summary')).toBeDefined();
   });
 
   it('should simulate multi-round conversation', () => {
     // Round 0
     const r0User = createUserMessageForRound(threadId, 0, 'First question');
     const r0P0 = createAssistantMessageForRound(threadId, 0, 0, 'gpt-4o', 'First answer');
-    const r0Analysis = createAnalysis(threadId, 0, 'complete', [r0P0.id]);
+    const r0Summary = createSummaryEntry(threadId, 0, 'complete', [r0P0.id]);
 
     // Round 1
     const r1User = createUserMessageForRound(threadId, 1, 'Follow up');
     const r1P0 = createAssistantMessageForRound(threadId, 1, 0, 'gpt-4o', 'Follow up answer');
-    const r1Analysis = createAnalysis(threadId, 1, 'complete', [r1P0.id]);
+    const r1Summary = createSummaryEntry(threadId, 1, 'complete', [r1P0.id]);
 
     // Round 2
     const r2User = createUserMessageForRound(threadId, 2, 'Final question');
     const r2P0 = createAssistantMessageForRound(threadId, 2, 0, 'gpt-4o', 'Final answer');
-    const r2Analysis = createAnalysis(threadId, 2, 'complete', [r2P0.id]);
+    const r2Summary = createSummaryEntry(threadId, 2, 'complete', [r2P0.id]);
 
     const messages = [r0User, r0P0, r1User, r1P0, r2User, r2P0];
-    const analyses = [r0Analysis, r1Analysis, r2Analysis];
+    const summaries = [r0Summary, r1Summary, r2Summary];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
         changelog: [],
-        analyses,
+        summaries,
       }),
     );
 
-    // Should have 6 items: (messages + analysis) × 3 rounds
+    // Should have 6 items: (messages + summary) × 3 rounds
     expect(result.current).toHaveLength(6);
 
     // Verify round ordering
     const rounds = result.current.map(item => item.roundNumber);
-    expect(rounds).toEqual([0, 0, 1, 1, 2, 2]); // messages, analysis for each round in order
+    expect(rounds).toEqual([0, 0, 1, 1, 2, 2]); // messages, summary for each round in order
   });
 });
 
@@ -535,11 +551,9 @@ describe('complete Round Flow Simulation', () => {
 // ============================================================================
 
 describe('resumption Flow Simulation', () => {
-  let store: ChatStoreApi;
   const threadId = 'thread-resumption';
 
   beforeEach(() => {
-    store = createChatStore();
     messageIdCounter = 0;
   });
 
@@ -551,7 +565,7 @@ describe('resumption Flow Simulation', () => {
       useThreadTimeline({
         messages: [],
         changelog: [],
-        analyses: [],
+        summaries: [],
         preSearches: [preSearch],
       }),
     );
@@ -559,7 +573,7 @@ describe('resumption Flow Simulation', () => {
     // Pre-search should show as standalone (orphaned)
     const preSearchItem = result.current.find(item => item.type === 'pre-search');
     expect(preSearchItem).toBeDefined();
-    expect(preSearchItem?.data.status).toBe(AnalysisStatuses.STREAMING);
+    expect(preSearchItem?.data.status).toBe(MessageStatuses.STREAMING);
   });
 
   it('should resume from participant streaming phase', () => {
@@ -572,7 +586,7 @@ describe('resumption Flow Simulation', () => {
       useThreadTimeline({
         messages: [userMsg, p0Streaming],
         changelog: [],
-        analyses: [],
+        summaries: [],
         preSearches: [preSearch],
       }),
     );
@@ -583,7 +597,7 @@ describe('resumption Flow Simulation', () => {
 
     // P0 should still be in messages (streaming state)
     if (messagesItem?.type === 'messages') {
-      const p0 = messagesItem.data.find(m => {
+      const p0 = messagesItem.data.find((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0;
       });
@@ -592,27 +606,27 @@ describe('resumption Flow Simulation', () => {
     }
   });
 
-  it('should resume from analysis streaming phase', () => {
-    // State when page was refreshed: complete messages + streaming analysis
+  it('should resume from summary streaming phase', () => {
+    // State when page was refreshed: complete messages + streaming summary
     const userMsg = createUserMessageForRound(threadId, 0);
     const p0Complete = createAssistantMessageForRound(threadId, 0, 0);
-    const analysisStreaming = createAnalysis(threadId, 0, 'streaming', [p0Complete.id]);
+    const summaryStreaming = createSummaryEntry(threadId, 0, 'streaming', [p0Complete.id]);
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages: [userMsg, p0Complete],
         changelog: [],
-        analyses: [analysisStreaming],
+        summaries: [summaryStreaming],
       }),
     );
 
-    // Should have messages and analysis
+    // Should have messages and summary
     const messagesItem = result.current.find(item => item.type === 'messages');
-    const analysisItem = result.current.find(item => item.type === 'analysis');
+    const summaryItem = result.current.find(item => item.type === 'summary');
 
     expect(messagesItem).toBeDefined();
-    expect(analysisItem).toBeDefined();
-    expect(analysisItem?.data.status).toBe(AnalysisStatuses.STREAMING);
+    expect(summaryItem).toBeDefined();
+    expect(summaryItem?.data.status).toBe(MessageStatuses.STREAMING);
   });
 
   it('should resume mid-round with completed participants', () => {
@@ -625,7 +639,7 @@ describe('resumption Flow Simulation', () => {
       useThreadTimeline({
         messages: [userMsg, p0Complete, p1Streaming],
         changelog: [],
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -663,7 +677,7 @@ describe('error Recovery Scenarios', () => {
       useThreadTimeline({
         messages: [userMsg],
         changelog: [],
-        analyses: [],
+        summaries: [],
         preSearches: [preSearchFailed],
       }),
     );
@@ -673,26 +687,26 @@ describe('error Recovery Scenarios', () => {
     expect(messagesItem).toBeDefined();
   });
 
-  it('should handle analysis failure gracefully', () => {
+  it('should handle summary failure gracefully', () => {
     const userMsg = createUserMessageForRound(threadId, 0);
     const p0Complete = createAssistantMessageForRound(threadId, 0, 0);
-    const analysisFailed = createAnalysis(threadId, 0, 'failed', [p0Complete.id]);
+    const summaryFailed = createSummaryEntry(threadId, 0, 'failed', [p0Complete.id]);
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages: [userMsg, p0Complete],
         changelog: [],
-        analyses: [analysisFailed],
+        summaries: [summaryFailed],
       }),
     );
 
-    // Both messages and failed analysis should be visible
+    // Both messages and failed summary should be visible
     const messagesItem = result.current.find(item => item.type === 'messages');
-    const analysisItem = result.current.find(item => item.type === 'analysis');
+    const summaryItem = result.current.find(item => item.type === 'summary');
 
     expect(messagesItem).toBeDefined();
-    expect(analysisItem).toBeDefined();
-    expect(analysisItem?.data.status).toBe(AnalysisStatuses.FAILED);
+    expect(summaryItem).toBeDefined();
+    expect(summaryItem?.data.status).toBe(MessageStatuses.FAILED);
   });
 
   it('should handle participant message with error finishReason', () => {
@@ -703,7 +717,7 @@ describe('error Recovery Scenarios', () => {
       useThreadTimeline({
         messages: [userMsg, p0Error],
         changelog: [],
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -711,7 +725,7 @@ describe('error Recovery Scenarios', () => {
     expect(messagesItem).toBeDefined();
 
     if (messagesItem?.type === 'messages') {
-      const p0 = messagesItem.data.find(m => {
+      const p0 = messagesItem.data.find((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0;
       });
@@ -726,7 +740,7 @@ describe('error Recovery Scenarios', () => {
       useThreadTimeline({
         messages: [userMsg],
         changelog: [],
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -767,7 +781,7 @@ describe('timeline Ordering Edge Cases', () => {
       useThreadTimeline({
         messages: [r0User, r0P0, r2User, r2P0, r5User, r5P0],
         changelog: [],
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -786,7 +800,7 @@ describe('timeline Ordering Edge Cases', () => {
       useThreadTimeline({
         messages: [userMsg],
         changelog: [],
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -825,7 +839,7 @@ describe('timeline Ordering Edge Cases', () => {
       useThreadTimeline({
         messages: [userMsg],
         changelog,
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -856,7 +870,7 @@ describe('timeline Ordering Edge Cases', () => {
       useThreadTimeline({
         messages: [r0User, r0P0],
         changelog: r1Changelog,
-        analyses: [],
+        summaries: [],
       }),
     );
 

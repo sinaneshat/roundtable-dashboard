@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import { MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
@@ -112,7 +112,7 @@ function PreSearchStreamComponent({
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
   // ✅ CRITICAL FIX: Do NOT abort fetch on unmount
-  // Following the ModeratorAnalysisStream pattern - let the fetch complete in the background
+  // Following the RoundSummaryStream pattern - let the fetch complete in the background
   // Aborting on unmount causes "Malformed JSON in request body" errors because:
   // 1. Component unmounts quickly after starting fetch
   // 2. Abort happens after HTTP headers sent but before body completes
@@ -165,7 +165,7 @@ function PreSearchStreamComponent({
     // PENDING: Start new stream
     // STREAMING: Attempt to resume from KV buffer (backend handles this automatically)
     // COMPLETE/FAILED: No action needed
-    if (preSearch.status !== AnalysisStatuses.PENDING && preSearch.status !== AnalysisStatuses.STREAMING) {
+    if (preSearch.status !== MessageStatuses.PENDING && preSearch.status !== MessageStatuses.STREAMING) {
       return;
     }
 
@@ -247,7 +247,7 @@ function PreSearchStreamComponent({
           // ✅ CRITICAL FIX: Check if pre-search completed during our retries
           // Backend returns 202 with status:'complete' and searchData when pre-search finishes
           // We must detect this and call onStreamComplete instead of continuing to retry
-          if (responseData?.data?.status === AnalysisStatuses.COMPLETE && responseData.data.searchData) {
+          if (responseData?.data?.status === MessageStatuses.COMPLETE && responseData.data.searchData) {
             // Pre-search is complete! Update UI and call completion callback
             const completedSearchData = responseData.data.searchData;
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI update
@@ -556,10 +556,10 @@ function PreSearchStreamComponent({
         }
 
         const preSearchList = result.data.items;
-        const current = preSearchList.find(ps => ps.id === preSearch.id);
+        const current = preSearchList.find((ps: StoredPreSearch) => ps.id === preSearch.id);
 
         if (current) {
-          if (current.status === AnalysisStatuses.COMPLETE && current.searchData) {
+          if (current.status === MessageStatuses.COMPLETE && current.searchData) {
             const completedData = current.searchData;
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
             flushSync(() => {
@@ -572,7 +572,7 @@ function PreSearchStreamComponent({
               isAutoRetryingOnFalseRef.current(); // Clear auto-retry state
             }
             return;
-          } else if (current.status === AnalysisStatuses.FAILED) {
+          } else if (current.status === MessageStatuses.FAILED) {
             // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive polling UI
             flushSync(() => {
               setError(new Error(current.errorMessage || 'Pre-search failed'));
@@ -583,7 +583,7 @@ function PreSearchStreamComponent({
               isAutoRetryingOnFalseRef.current(); // Clear auto-retry state
             }
             return;
-          } else if (current.status === AnalysisStatuses.STREAMING || current.status === AnalysisStatuses.PENDING) {
+          } else if (current.status === MessageStatuses.STREAMING || current.status === MessageStatuses.PENDING) {
             // ✅ STUCK STREAM DETECTION: Check if we've been polling for too long
             // This happens in local dev when:
             // 1. User refreshes during streaming
@@ -664,8 +664,8 @@ function PreSearchStreamComponent({
 
     if (
       !roundAlreadyMarked
-      && (preSearch.status === AnalysisStatuses.COMPLETE
-        || preSearch.status === AnalysisStatuses.FAILED)
+      && (preSearch.status === MessageStatuses.COMPLETE
+        || preSearch.status === MessageStatuses.FAILED)
     ) {
       markPreSearchTriggered(preSearch.roundNumber);
     }
@@ -705,12 +705,12 @@ function PreSearchStreamComponent({
 
   // For COMPLETE status, only show if there are actual results (not just queries)
   const hasResults = displayData && displayData.results && displayData.results.length > 0;
-  if (preSearch.status === AnalysisStatuses.COMPLETE && !hasResults) {
+  if (preSearch.status === MessageStatuses.COMPLETE && !hasResults) {
     return null;
   }
 
   // ✅ Determine loading state for AnimatePresence
-  const isPendingWithNoData = (preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData;
+  const isPendingWithNoData = (preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING) && !hasData;
 
   // Don't render if no data and not pending/streaming
   if (!hasData && !isPendingWithNoData) {
@@ -720,13 +720,13 @@ function PreSearchStreamComponent({
   // ✅ Safe access with optional chaining when displayData could be undefined
   const queries = displayData?.queries ?? [];
   const results = displayData?.results ?? [];
-  const analysis = displayData?.analysis;
+  const summary = displayData?.summary;
   const totalResults = displayData?.totalResults;
   const totalTime = displayData?.totalTime;
   const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
   const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
 
-  const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
+  const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
 
   // ✅ SIMPLIFIED: No easing animations - sections appear instantly
   // Only the typing effect inside items is animated
@@ -741,8 +741,8 @@ function PreSearchStreamComponent({
 
   return (
     <AnimatedStreamingList groupId={`pre-search-stream-${preSearch.id}`} className="space-y-4">
-      {/* Search Summary - only show if we have analysis text */}
-      {analysis && (
+      {/* Search Summary - only show if we have summary text */}
+      {summary && (
         <AnimatedStreamingItem
           key="search-config"
           itemKey="search-config"
@@ -755,8 +755,8 @@ function PreSearchStreamComponent({
               index: q.index,
             }))}
             results={validResults.flatMap(r => r.results || [])}
-            searchPlan={analysis}
-            isStreamingPlan={isStreamingNow && !analysis}
+            searchPlan={summary}
+            isStreamingPlan={isStreamingNow && !summary}
             totalResults={totalResults}
             totalTime={totalTime}
           />

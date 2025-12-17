@@ -65,7 +65,7 @@ export function useNavigationReset() {
     const effectiveThreadId = thread?.id || createdThreadId;
     if (effectiveThreadId) {
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.messages(effectiveThreadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(effectiveThreadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.summaries(effectiveThreadId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.preSearches(effectiveThreadId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.feedback(effectiveThreadId) });
     }

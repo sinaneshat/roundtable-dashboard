@@ -16,7 +16,6 @@ import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
   createCustomRoleService,
-  createPreSearchService,
   createThreadService,
   deleteCustomRoleService,
   deleteParticipantService,
@@ -931,18 +930,18 @@ export function useDeleteCustomRoleMutation() {
 }
 
 // ============================================================================
-// Analysis Mutations
+// Summary Mutations
 // ============================================================================
 
 /**
- * ❌ REMOVED: useTriggerAnalysisMutation
+ * ❌ REMOVED: useTriggerSummaryMutation
  *
- * Analysis is now handled via:
+ * Summary is now handled via:
  * 1. Auto-detection on backend (streamChatHandler onFinish callback)
  * 2. On-demand streaming via useObject hook from @ai-sdk/react
  *
- * No manual mutation needed - analysis streams automatically when component renders
- * Reference: See src/components/chat/round-analysis-stream.tsx for usage
+ * No manual mutation needed - summary streams automatically when component renders
+ * Reference: See src/components/chat/round-summary-stream.tsx for usage
  */
 
 // ============================================================================
@@ -974,69 +973,6 @@ export function useSetRoundFeedbackMutation() {
     },
     retry: false,
     throwOnError: false,
-  });
-}
-
-// ============================================================================
-// Pre-Search Creation - Web Search Ordering Fix
-// ============================================================================
-
-/**
- * Create PENDING pre-search record hook
- *
- * ✅ NEW: Fixes web search ordering bug
- * ✅ PURPOSE: Creates pre-search record BEFORE participants start streaming
- *
- * **CRITICAL FIX FOR WEB SEARCH ORDERING**:
- *
- * OLD FLOW (Broken):
- *   User message → Participant streaming → Pre-search created during streaming
- *
- * NEW FLOW (Fixed):
- *   User message → Create PENDING pre-search → Execute search → Participants start
- *
- * **USAGE**:
- * ```tsx
- * const createPreSearch = useCreatePreSearchMutation();
- *
- * // Before sending message, create pre-search
- * await createPreSearch.mutateAsync({
- *   param: {
- *     threadId: 'thread-1',
- *     roundNumber: '1',
- *   },
- *   json: {
- *     userQuery: 'What is Bitcoin price?',
- *   },
- * });
- *
- * // Wait for pre-search to complete
- * // Then call sendMessage() to start participants
- * ```
- *
- * **FLOW**:
- * 1. User sends message with web search enabled
- * 2. Frontend calls this hook → Creates PENDING record
- * 3. PreSearchOrchestrator syncs record to store
- * 4. PreSearchStream detects PENDING → Executes search (STREAMING)
- * 5. Search completes (COMPLETE)
- * 6. Frontend detects COMPLETE → Calls sendMessage() → Participants start
- *
- * **REFERENCE**: WEB_SEARCH_ORDERING_FIX_STRATEGY.md
- */
-export function useCreatePreSearchMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: createPreSearchService,
-    onSuccess: (_data, variables) => {
-      // ✅ INVALIDATE: Trigger orchestrator to sync new pre-search
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.preSearches(variables.param.threadId),
-      });
-    },
-    retry: false,
-    throwOnError: true, // Throw errors since pre-search is critical for correct flow
   });
 }
 

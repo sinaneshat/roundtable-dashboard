@@ -23,7 +23,6 @@
 // Those are re-exported from chat-test-factories with test-friendly defaults
 // ============================================================================
 export {
-  createMockAnalysesListResponse,
   createMockAssistantMessage,
   createMockChangelogListResponse,
   createMockFetchError,
@@ -33,6 +32,7 @@ export {
   createMockParticipantDetailResponse,
   createMockPreSearch,
   createMockPreSearchesListResponse,
+  createMockSummariesListResponse,
   createMockThreadDetailResponse,
   createMockThreadListResponse,
 } from './api-mocks';

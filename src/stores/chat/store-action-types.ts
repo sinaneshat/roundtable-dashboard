@@ -36,14 +36,14 @@
 
 import type { UIMessage } from 'ai';
 
-import type { AnalysisStatus, ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
+import type { ChatMode, FeedbackType, MessageStatus, ScreenMode } from '@/api/core/enums';
 import type {
-  ModeratorAnalysisPayload,
   PartialPreSearchData,
   PreSearchDataPayload,
   RoundFeedbackData,
-  StoredModeratorAnalysis,
+  RoundSummaryAIContent,
   StoredPreSearch,
+  StoredRoundSummary,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
@@ -87,18 +87,18 @@ export type SetCreatedThreadId = (id: string | null) => void;
 export type ResetUI = () => void;
 
 // ============================================================================
-// ANALYSIS ACTIONS
+// SUMMARY ACTIONS
 // ============================================================================
 
-export type SetAnalyses = (analyses: StoredModeratorAnalysis[]) => void;
-export type AddAnalysis = (analysis: StoredModeratorAnalysis) => void;
-export type UpdateAnalysisData = (roundNumber: number, data: ModeratorAnalysisPayload) => void;
-export type UpdateAnalysisStatus = (roundNumber: number, status: AnalysisStatus) => void;
-export type UpdateAnalysisError = (roundNumber: number, errorMessage: string) => void;
-export type RemoveAnalysis = (roundNumber: number) => void;
-export type ClearAllAnalyses = () => void;
+export type SetSummaries = (summaries: StoredRoundSummary[]) => void;
+export type AddSummary = (summary: StoredRoundSummary) => void;
+export type UpdateSummaryData = (roundNumber: number, data: RoundSummaryAIContent) => void;
+export type UpdateSummaryStatus = (roundNumber: number, status: MessageStatus) => void;
+export type UpdateSummaryError = (roundNumber: number, errorMessage: string) => void;
+export type RemoveSummary = (roundNumber: number) => void;
+export type ClearAllSummaries = () => void;
 
-export type CreatePendingAnalysisParams = {
+export type CreatePendingSummaryParams = {
   roundNumber: number;
   messages: UIMessage[];
   userQuestion: string;
@@ -106,7 +106,7 @@ export type CreatePendingAnalysisParams = {
   mode: ChatMode;
 };
 
-export type CreatePendingAnalysis = (params: CreatePendingAnalysisParams) => void;
+export type CreatePendingSummary = (params: CreatePendingSummaryParams) => void;
 
 // ============================================================================
 // PRE-SEARCH ACTIONS
@@ -117,7 +117,7 @@ export type AddPreSearch = (preSearch: StoredPreSearch) => void;
 export type UpdatePreSearchData = (roundNumber: number, data: PreSearchDataPayload) => void;
 /** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
 export type UpdatePartialPreSearchData = (roundNumber: number, partialData: PartialPreSearchData) => void;
-export type UpdatePreSearchStatus = (roundNumber: number, status: AnalysisStatus) => void;
+export type UpdatePreSearchStatus = (roundNumber: number, status: MessageStatus) => void;
 export type RemovePreSearch = (roundNumber: number) => void;
 export type ClearAllPreSearches = () => void;
 export type CheckStuckPreSearches = () => void;
@@ -168,7 +168,7 @@ export type CheckStuckStreams = () => void;
 
 export type SetHasInitiallyLoaded = (value: boolean) => void;
 export type SetIsRegenerating = (value: boolean) => void;
-export type SetIsCreatingAnalysis = (value: boolean) => void;
+export type SetIsCreatingSummary = (value: boolean) => void;
 export type SetIsWaitingForChangelog = (value: boolean) => void;
 export type SetHasPendingConfigChanges = (value: boolean) => void;
 
@@ -190,26 +190,26 @@ export type SetCurrentRoundNumber = (value: number | null) => void;
 export type SetHasSentPendingMessage = (value: boolean) => void;
 
 /**
- * Mark a round as having analysis created (prevents duplicates)
+ * Mark a round as having summary created (prevents duplicates)
  */
-export type MarkAnalysisCreated = (roundNumber: number) => void;
+export type MarkSummaryCreated = (roundNumber: number) => void;
 
 /**
- * Check if analysis has been created for a round (returns boolean)
+ * Check if summary has been created for a round (returns boolean)
  */
-export type HasAnalysisBeenCreated = (roundNumber: number) => boolean;
+export type HasSummaryBeenCreated = (roundNumber: number) => boolean;
 
 /**
- * Atomic check-and-mark for analysis creation (prevents race conditions)
+ * Atomic check-and-mark for summary creation (prevents race conditions)
  * Returns true if successfully marked (was not already created)
  * Returns false if already created (another component got there first)
  */
-export type TryMarkAnalysisCreated = (roundNumber: number) => boolean;
+export type TryMarkSummaryCreated = (roundNumber: number) => boolean;
 
 /**
- * Clear analysis tracking for a round (used during regeneration)
+ * Clear summary tracking for a round (used during regeneration)
  */
-export type ClearAnalysisTracking = (roundNumber: number) => void;
+export type ClearSummaryTracking = (roundNumber: number) => void;
 
 /**
  * Mark a round as having pre-search triggered (prevents duplicates)
@@ -234,22 +234,27 @@ export type TryMarkPreSearchTriggered = (roundNumber: number) => boolean;
 export type ClearPreSearchTracking = (roundNumber: number) => void;
 
 /**
- * Mark analysis stream as triggered (prevents duplicate stream submissions)
- * Takes both analysisId and roundNumber for two-level deduplication
+ * Clear all pre-search tracking (used during navigation cleanup)
  */
-export type MarkAnalysisStreamTriggered = (analysisId: string, roundNumber: number) => void;
+export type ClearAllPreSearchTracking = () => void;
 
 /**
- * Check if analysis stream has been triggered (returns boolean)
- * Can check by analysisId or roundNumber
+ * Mark summary stream as triggered (prevents duplicate stream submissions)
+ * Takes both summaryId and roundNumber for two-level deduplication
  */
-export type HasAnalysisStreamBeenTriggered = (analysisId: string, roundNumber: number) => boolean;
+export type MarkSummaryStreamTriggered = (summaryId: string, roundNumber: number) => void;
 
 /**
- * Clear analysis stream tracking for a round (used during regeneration)
- * Clears both round tracking and any analysis IDs containing the round number
+ * Check if summary stream has been triggered (returns boolean)
+ * Can check by summaryId or roundNumber
  */
-export type ClearAnalysisStreamTracking = (roundNumber: number) => void;
+export type HasSummaryStreamBeenTriggered = (summaryId: string, roundNumber: number) => boolean;
+
+/**
+ * Clear summary stream tracking for a round (used during regeneration)
+ * Clears both round tracking and any summary IDs containing the round number
+ */
+export type ClearSummaryStreamTracking = (roundNumber: number) => void;
 
 /**
  * ✅ IMMEDIATE UI FEEDBACK: Set flag when early optimistic message is added
@@ -343,15 +348,15 @@ export type ClearStreamResumption = () => void;
  * Pre-fill stream resumption state from server-side KV check
  * Called during SSR to set up state BEFORE AI SDK resume runs
  * ✅ RESUMABLE STREAMS: Enables proper coordination between AI SDK and incomplete-round-resumption
- * ✅ UNIFIED PHASES: Supports pre-search, participants, and analyzer resumption
+ * ✅ UNIFIED PHASES: Supports pre-search, participants, and summarizer resumption
  */
 export type PrefillStreamResumptionState = (
   threadId: string,
   serverState: {
     // Round identification
     roundNumber: number | null;
-    // Current phase for resumption logic (idle, pre_search, participants, analyzer, complete)
-    currentPhase: 'idle' | 'pre_search' | 'participants' | 'analyzer' | 'complete';
+    // Current phase for resumption logic (idle, pre_search, participants, summarizer, complete)
+    currentPhase: 'idle' | 'pre_search' | 'participants' | 'summarizer' | 'complete';
     // Pre-search phase status (null if web search not enabled)
     preSearch: {
       enabled: boolean;
@@ -369,11 +374,11 @@ export type PrefillStreamResumptionState = (
       nextParticipantToTrigger: number | null;
       allComplete: boolean;
     };
-    // Analyzer/round summary phase status
-    analyzer: {
+    // Summarizer/round summary phase status
+    summarizer: {
       status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
       streamId: string | null;
-      analysisId: string | null;
+      summaryId: string | null;
     } | null;
     // Overall round completion status
     roundComplete: boolean;
@@ -474,7 +479,7 @@ export type ResetThreadState = () => void;
 
 /**
  * Complete reset to overview screen state
- * Clears thread, form, analysis, pre-search, feedback, callbacks, and screen mode
+ * Clears thread, form, summary, pre-search, feedback, callbacks, and screen mode
  * Used when navigating back to overview
  */
 export type ResetToOverview = () => void;
@@ -485,7 +490,7 @@ export type ResetToOverview = () => void;
  * Called when navigating BETWEEN threads (e.g., /chat/thread-1 → /chat/thread-2)
  * Unlike ResetThreadState which only clears flags, this ALSO clears:
  * - thread, participants, messages (previous thread data)
- * - analyses, preSearches (previous thread content)
+ * - summaries, preSearches (previous thread content)
  * - AI SDK hook's internal messages (via chatSetMessages)
  *
  * This prevents the critical bug where stale messages/participants from
@@ -517,14 +522,14 @@ export type UpdateParticipants = (participants: ChatParticipant[]) => void;
 export type PrepareForNewMessage = (message: string, participantIds: string[], attachmentIds?: string[], fileParts?: ExtendedFilePart[]) => void;
 
 /**
- * Mark streaming/analysis as complete
+ * Mark streaming/summary as complete
  * Clears streaming flags and round numbers
  */
 export type CompleteStreaming = () => void;
 
 /**
  * Start round regeneration
- * Clears analysis tracking and sets regeneration flag
+ * Clears summary tracking and sets regeneration flag
  */
 export type StartRegeneration = (roundNumber: number) => void;
 

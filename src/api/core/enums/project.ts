@@ -40,7 +40,7 @@ export const ProjectIndexStatuses = {
 export const PROJECT_MEMORY_SOURCES = [
   'chat',
   'explicit',
-  'analysis',
+  'summary',
   'search',
 ] as const;
 
@@ -56,7 +56,7 @@ export type ProjectMemorySource = z.infer<typeof ProjectMemorySourceSchema>;
 export const ProjectMemorySources = {
   CHAT: 'chat' as const,
   EXPLICIT: 'explicit' as const,
-  ANALYSIS: 'analysis' as const,
+  SUMMARY: 'summary' as const,
   SEARCH: 'search' as const,
 } as const;
 
@@ -124,7 +124,7 @@ export const CITATION_SOURCE_TYPES = [
   'thread',
   'attachment',
   'search',
-  'analysis',
+  'summary',
   'rag',
 ] as const;
 
@@ -142,7 +142,7 @@ export const CitationSourceTypes = {
   THREAD: 'thread' as const,
   ATTACHMENT: 'attachment' as const,
   SEARCH: 'search' as const,
-  ANALYSIS: 'analysis' as const,
+  SUMMARY: 'summary' as const,
   RAG: 'rag' as const,
 } as const;
 
@@ -151,7 +151,7 @@ export const CitationSourceLabels: Record<CitationSourceType, string> = {
   [CitationSourceTypes.THREAD]: 'Thread',
   [CitationSourceTypes.ATTACHMENT]: 'File',
   [CitationSourceTypes.SEARCH]: 'Search',
-  [CitationSourceTypes.ANALYSIS]: 'Analysis',
+  [CitationSourceTypes.SUMMARY]: 'Summary',
   [CitationSourceTypes.RAG]: 'Indexed File',
 } as const;
 
@@ -159,7 +159,7 @@ export const CitationSourceLabels: Record<CitationSourceType, string> = {
 // CITATION PREFIXES
 // ============================================================================
 
-export const CITATION_PREFIXES = ['mem', 'thd', 'att', 'sch', 'ana', 'rag'] as const;
+export const CITATION_PREFIXES = ['mem', 'thd', 'att', 'sch', 'sum', 'rag'] as const;
 
 export type CitationPrefix = (typeof CITATION_PREFIXES)[number];
 
@@ -168,7 +168,7 @@ export const CitationSourcePrefixes: Record<CitationSourceType, CitationPrefix> 
   [CitationSourceTypes.THREAD]: 'thd',
   [CitationSourceTypes.ATTACHMENT]: 'att',
   [CitationSourceTypes.SEARCH]: 'sch',
-  [CitationSourceTypes.ANALYSIS]: 'ana',
+  [CitationSourceTypes.SUMMARY]: 'sum',
   [CitationSourceTypes.RAG]: 'rag',
 };
 
@@ -177,7 +177,7 @@ export const CitationPrefixToSourceType: Record<CitationPrefix, CitationSourceTy
   thd: CitationSourceTypes.THREAD,
   att: CitationSourceTypes.ATTACHMENT,
   sch: CitationSourceTypes.SEARCH,
-  ana: CitationSourceTypes.ANALYSIS,
+  sum: CitationSourceTypes.SUMMARY,
   rag: CitationSourceTypes.RAG,
 };
 
@@ -186,6 +186,6 @@ export const CitationSourceContentLimits: Record<CitationSourceType, number> = {
   [CitationSourceTypes.THREAD]: 400,
   [CitationSourceTypes.ATTACHMENT]: 300,
   [CitationSourceTypes.SEARCH]: 300,
-  [CitationSourceTypes.ANALYSIS]: 400,
+  [CitationSourceTypes.SUMMARY]: 400,
   [CitationSourceTypes.RAG]: 500,
 } as const;

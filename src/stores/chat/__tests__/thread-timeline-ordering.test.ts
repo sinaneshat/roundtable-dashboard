@@ -9,13 +9,13 @@
  * 2. Pre-search card (if web search enabled)
  * 3. Participant responses (in priority order)
  * 4. Round summary/analysis card
- * 5. Feedback buttons (after analysis)
+ * 5. Feedback buttons (after summary)
  *
  * Timeline Events:
  * - Thread creation
  * - Message timestamps
  * - Streaming start/end times
- * - Analysis trigger times
+ * - Summary trigger times
  *
  * Key Validations:
  * - Elements appear in correct order
@@ -38,7 +38,7 @@ import {
 // ============================================================================
 
 type TimelineElement = {
-  type: 'user-message' | 'pre-search' | 'participant-message' | 'analysis' | 'feedback';
+  type: 'user-message' | 'pre-search' | 'participant-message' | 'summary' | 'feedback';
   roundNumber: number;
   participantIndex?: number;
   timestamp: Date;
@@ -97,13 +97,13 @@ function buildRoundTimeline(
   baseTime: Date,
   options?: {
     includePreSearch?: boolean;
-    includeAnalysis?: boolean;
+    includeSummary?: boolean;
     includeFeedback?: boolean;
   },
 ): TimelineElement[] {
   const {
     includePreSearch = true,
-    includeAnalysis = true,
+    includeSummary = true,
     includeFeedback = true,
   } = options ?? {};
 
@@ -125,13 +125,13 @@ function buildRoundTimeline(
     timeline.push(createTimelineElement('participant-message', roundNumber, currentTime, i));
   }
 
-  // 4. Analysis
-  if (includeAnalysis) {
+  // 4. Summary
+  if (includeSummary) {
     currentTime = new Date(currentTime.getTime() + 2000);
-    timeline.push(createTimelineElement('analysis', roundNumber, currentTime));
+    timeline.push(createTimelineElement('summary', roundNumber, currentTime));
   }
 
-  // 5. Feedback (after analysis)
+  // 5. Feedback (after summary)
   if (includeFeedback) {
     currentTime = new Date(currentTime.getTime() + 500);
     timeline.push(createTimelineElement('feedback', roundNumber, currentTime));
@@ -155,7 +155,7 @@ describe('element Order Within Round', () => {
         'participant-message',
         'participant-message',
         'participant-message',
-        'analysis',
+        'summary',
         'feedback',
       ];
 
@@ -185,19 +185,19 @@ describe('element Order Within Round', () => {
       const participantIndices = timeline
         .map((e, i) => (e.type === 'participant-message' ? i : -1))
         .filter(i => i !== -1);
-      const analysisIndex = timeline.findIndex(e => e.type === 'analysis');
+      const summaryIndex = timeline.findIndex(e => e.type === 'summary');
       const lastParticipantIndex = Math.max(...participantIndices);
 
-      expect(analysisIndex).toBeGreaterThan(lastParticipantIndex);
+      expect(summaryIndex).toBeGreaterThan(lastParticipantIndex);
     });
 
-    it('feedback appears after analysis', () => {
+    it('feedback appears after summary', () => {
       const timeline = buildRoundTimeline(0, 3, new Date());
 
-      const analysisIndex = timeline.findIndex(e => e.type === 'analysis');
+      const summaryIndex = timeline.findIndex(e => e.type === 'summary');
       const feedbackIndex = timeline.findIndex(e => e.type === 'feedback');
 
-      expect(feedbackIndex).toBeGreaterThan(analysisIndex);
+      expect(feedbackIndex).toBeGreaterThan(summaryIndex);
     });
   });
 
@@ -210,7 +210,7 @@ describe('element Order Within Round', () => {
         'participant-message',
         'participant-message',
         'participant-message',
-        'analysis',
+        'summary',
         'feedback',
       ];
 
@@ -225,10 +225,10 @@ describe('element Order Within Round', () => {
     });
   });
 
-  describe('round Without Analysis', () => {
+  describe('round Without Summary', () => {
     it('order is correct without analysis (e.g., brainstorming mode)', () => {
       const timeline = buildRoundTimeline(0, 3, new Date(), {
-        includeAnalysis: false,
+        includeSummary: false,
         includeFeedback: false,
       });
 
@@ -430,12 +430,12 @@ describe('visual Ordering', () => {
 
     it('analysis card appears after last participant card', () => {
       const elements = buildRoundTimeline(0, 2, new Date());
-      const analysisIndex = elements.findIndex(e => e.type === 'analysis');
+      const summaryIndex = elements.findIndex(e => e.type === 'summary');
       const participantIndices = elements
         .map((e, i) => e.type === 'participant-message' ? i : -1)
         .filter(i => i !== -1);
 
-      expect(analysisIndex).toBeGreaterThan(Math.max(...participantIndices));
+      expect(summaryIndex).toBeGreaterThan(Math.max(...participantIndices));
     });
   });
 
@@ -481,7 +481,7 @@ describe('special UI States', () => {
     it('timeline shows partial elements during streaming', () => {
       // Mid-streaming: user + pre-search + participant 0 + (participant 1 streaming)
       const partialTimeline = buildRoundTimeline(0, 2, new Date(), {
-        includeAnalysis: false, // Not yet triggered
+        includeSummary: false, // Not yet triggered
         includeFeedback: false,
       });
 
@@ -572,8 +572,8 @@ describe('element ID Patterns', () => {
 
   describe('analysis IDs', () => {
     it('analysis ID contains round number', () => {
-      const analysisId = 'analysis-round-0';
-      expect(analysisId).toContain('0');
+      const summaryId = 'summary-round-0';
+      expect(summaryId).toContain('0');
     });
   });
 });

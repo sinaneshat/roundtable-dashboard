@@ -10,7 +10,7 @@
  * - Optimistic message handling
  * - Message replacement patterns
  * - Round summary positioning
- * - Analysis card placement
+ * - Summary card placement
  *
  * Key Validations:
  * - Correct visual order
@@ -21,8 +21,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import type { StoredModeratorSummary } from '@/api/routes/chat/schema';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
   createTestAssistantMessage,
@@ -63,7 +63,7 @@ type RoundGroup = {
   roundNumber: number;
   userMessage: TestMessage | null;
   participantMessages: TestAssistantMessage[];
-  analysis: StoredModeratorAnalysis | null;
+  summary: StoredModeratorSummary | null;
 };
 
 /**
@@ -72,7 +72,7 @@ type RoundGroup = {
  */
 function groupMessagesByRound(
   messages: TestMessage[],
-  analyses: StoredModeratorAnalysis[],
+  summaries: StoredModeratorSummary[],
 ): RoundGroup[] {
   const roundMap = new Map<number, RoundGroup>();
 
@@ -85,7 +85,7 @@ function groupMessagesByRound(
         roundNumber,
         userMessage: null,
         participantMessages: [],
-        analysis: null,
+        summary: null,
       });
     }
 
@@ -98,11 +98,11 @@ function groupMessagesByRound(
     }
   });
 
-  // Add analyses to rounds
-  analyses.forEach((analysis) => {
-    const group = roundMap.get(analysis.roundNumber);
+  // Add summaries to rounds
+  summaries.forEach((summary) => {
+    const group = roundMap.get(summary.roundNumber);
     if (group) {
-      group.analysis = analysis;
+      group.summary = summary;
     }
   });
 
@@ -137,9 +137,9 @@ function getRoundElementOrder(group: RoundGroup): string[] {
     order.push(`participant-${group.roundNumber}-${pIndex}`);
   });
 
-  // 3. Analysis card last (if complete)
-  if (group.analysis && group.analysis.status === AnalysisStatuses.COMPLETE) {
-    order.push(`analysis-${group.roundNumber}`);
+  // 3. Summary card last (if complete)
+  if (group.summary && group.summary.status === MessageStatuses.COMPLETE) {
+    order.push(`summary-${group.roundNumber}`);
   }
 
   return order;
@@ -319,8 +319,8 @@ describe('message Grouping by Round', () => {
     });
   });
 
-  describe('analysis Inclusion', () => {
-    it('attaches analysis to correct round', () => {
+  describe('summary Inclusion', () => {
+    it('attaches summary to correct round', () => {
       const messages = [
         createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
         createTestAssistantMessage({
@@ -333,23 +333,23 @@ describe('message Grouping by Round', () => {
         }),
       ];
 
-      const analyses: StoredModeratorAnalysis[] = [
+      const summaries: StoredModeratorSummary[] = [
         {
-          id: 'analysis-0',
+          id: 'summary-0',
           threadId: 'thread-123',
           roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          analysisData: { keyInsights: [], participantAnalyses: [], verdict: '', recommendations: [] },
+          status: MessageStatuses.COMPLETE,
+          summaryData: { keyInsights: [], participantAnalyses: [], verdict: '', recommendations: [] },
           errorMessage: null,
           createdAt: new Date(),
           completedAt: new Date(),
-        } as StoredModeratorAnalysis,
+        } as StoredModeratorSummary,
       ];
 
-      const groups = groupMessagesByRound(messages, analyses);
+      const groups = groupMessagesByRound(messages, summaries);
 
-      expect(groups[0]?.analysis).toBeDefined();
-      expect(groups[0]?.analysis?.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(groups[0]?.summary).toBeDefined();
+      expect(groups[0]?.summary?.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 });
@@ -360,7 +360,7 @@ describe('message Grouping by Round', () => {
 
 describe('uI Element Order', () => {
   describe('round Element Sequence', () => {
-    it('orders: user → participants → analysis', () => {
+    it('orders: user → participants → summary', () => {
       const group: RoundGroup = {
         roundNumber: 0,
         userMessage: createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
@@ -382,16 +382,16 @@ describe('uI Element Order', () => {
             finishReason: FinishReasons.STOP,
           }),
         ],
-        analysis: {
-          id: 'analysis-0',
+        summary: {
+          id: 'summary-0',
           threadId: 'thread-123',
           roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          analysisData: null,
+          status: MessageStatuses.COMPLETE,
+          summaryData: null,
           errorMessage: null,
           createdAt: new Date(),
           completedAt: new Date(),
-        } as StoredModeratorAnalysis,
+        } as StoredModeratorSummary,
       };
 
       const order = getRoundElementOrder(group);
@@ -400,11 +400,11 @@ describe('uI Element Order', () => {
         'user-0',
         'participant-0-0',
         'participant-0-1',
-        'analysis-0',
+        'summary-0',
       ]);
     });
 
-    it('excludes incomplete analysis from order', () => {
+    it('excludes incomplete summary from order', () => {
       const group: RoundGroup = {
         roundNumber: 0,
         userMessage: createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
@@ -418,21 +418,21 @@ describe('uI Element Order', () => {
             finishReason: FinishReasons.STOP,
           }),
         ],
-        analysis: {
-          id: 'analysis-0',
+        summary: {
+          id: 'summary-0',
           threadId: 'thread-123',
           roundNumber: 0,
-          status: AnalysisStatuses.STREAMING, // Not complete
-          analysisData: null,
+          status: MessageStatuses.STREAMING, // Not complete
+          summaryData: null,
           errorMessage: null,
           createdAt: new Date(),
           completedAt: null,
-        } as StoredModeratorAnalysis,
+        } as StoredModeratorSummary,
       };
 
       const order = getRoundElementOrder(group);
 
-      expect(order).not.toContain('analysis-0');
+      expect(order).not.toContain('summary-0');
     });
 
     it('handles round with only user message (during streaming)', () => {
@@ -440,7 +440,7 @@ describe('uI Element Order', () => {
         roundNumber: 0,
         userMessage: createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
         participantMessages: [],
-        analysis: null,
+        summary: null,
       };
 
       const order = getRoundElementOrder(group);
@@ -856,22 +856,22 @@ describe('empty States', () => {
     });
   });
 
-  describe('orphan Analysis', () => {
-    it('analysis without messages is not displayed', () => {
-      const analyses: StoredModeratorAnalysis[] = [
+  describe('orphan Summary', () => {
+    it('summary without messages is not displayed', () => {
+      const summaries: StoredModeratorSummary[] = [
         {
-          id: 'analysis-0',
+          id: 'summary-0',
           threadId: 'thread-123',
           roundNumber: 0,
-          status: AnalysisStatuses.COMPLETE,
-          analysisData: null,
+          status: MessageStatuses.COMPLETE,
+          summaryData: null,
           errorMessage: null,
           createdAt: new Date(),
           completedAt: new Date(),
-        } as StoredModeratorAnalysis,
+        } as StoredModeratorSummary,
       ];
 
-      const groups = groupMessagesByRound([], analyses);
+      const groups = groupMessagesByRound([], summaries);
 
       // No round group created without messages
       expect(groups).toHaveLength(0);
@@ -908,19 +908,19 @@ describe('error Message Display', () => {
     });
   });
 
-  describe('analysis Error', () => {
-    it('shows failed analysis in round', () => {
-      const analyses: StoredModeratorAnalysis[] = [
+  describe('summary Error', () => {
+    it('shows failed summary in round', () => {
+      const summaries: StoredModeratorSummary[] = [
         {
-          id: 'analysis-0',
+          id: 'summary-0',
           threadId: 'thread-123',
           roundNumber: 0,
-          status: AnalysisStatuses.FAILED,
-          analysisData: null,
-          errorMessage: 'Analysis generation failed',
+          status: MessageStatuses.FAILED,
+          summaryData: null,
+          errorMessage: 'Summary generation failed',
           createdAt: new Date(),
           completedAt: new Date(),
-        } as StoredModeratorAnalysis,
+        } as StoredModeratorSummary,
       ];
 
       const messages = [
@@ -935,10 +935,10 @@ describe('error Message Display', () => {
         }),
       ];
 
-      const groups = groupMessagesByRound(messages, analyses);
+      const groups = groupMessagesByRound(messages, summaries);
 
-      expect(groups[0]?.analysis?.status).toBe(AnalysisStatuses.FAILED);
-      expect(groups[0]?.analysis?.errorMessage).toBe('Analysis generation failed');
+      expect(groups[0]?.summary?.status).toBe(MessageStatuses.FAILED);
+      expect(groups[0]?.summary?.errorMessage).toBe('Summary generation failed');
     });
   });
 });

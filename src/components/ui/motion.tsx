@@ -1,15 +1,12 @@
 'use client';
 
+import type { HTMLMotionProps, MotionValue, Variants } from 'motion/react';
 import {
   AnimatePresence,
   motion,
-  useInView,
   useScroll,
   useSpring,
   useTransform,
-  type HTMLMotionProps,
-  type MotionValue,
-  type Variants,
 } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -178,7 +175,7 @@ export function AnimatedAccordionContent({
                 damping: 40,
               },
               opacity: { duration: ANIMATION_DURATION.fast, delay: 0.05 },
-            }
+            },
           }}
           exit={{
             opacity: 0,
@@ -190,7 +187,7 @@ export function AnimatedAccordionContent({
                 damping: 40,
               },
               opacity: { duration: ANIMATION_DURATION.fast },
-            }
+            },
           }}
           onAnimationComplete={onAnimationComplete}
           className={cn('overflow-hidden', className)}
@@ -206,7 +203,7 @@ export function AnimatedAccordionContent({
 }
 
 // =============================================================================
-// SECTION ANIMATIONS - For analysis sections and cards
+// SECTION ANIMATIONS - For summary sections and cards
 // =============================================================================
 
 type AnimatedSectionProps = {
@@ -261,9 +258,11 @@ export function AnimatedSection({
       initial="hidden"
       animate="visible"
       className={cn(className)}
-      transition={disableLayoutDuringStreaming ? undefined : {
-        layout: layoutTransition,
-      }}
+      transition={disableLayoutDuringStreaming
+        ? undefined
+        : {
+            layout: layoutTransition,
+          }}
     >
       {children}
     </motion.div>
@@ -375,46 +374,46 @@ export function AnimatedStaggerItem({
 const defaultFadeIn: Variants = {
   initial: { opacity: 0, y: 8 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 }
+  exit: { opacity: 0, y: -8 },
 };
 
 const defaultScaleIn: Variants = {
   initial: { opacity: 0, scale: 0.98 },
   animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.98 }
+  exit: { opacity: 0, scale: 0.98 },
 };
 
 const defaultSlideIn: Variants = {
   initial: { opacity: 0, x: -8 },
   animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: 8 }
+  exit: { opacity: 0, x: 8 },
 };
 
 const staggerItem: Variants = {
   initial: { opacity: 0, y: 8 },
-  animate: { 
-    opacity: 1, 
+  animate: {
+    opacity: 1,
     y: 0,
-    transition: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }
-  }
+    transition: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] },
+  },
 };
 
 // Base motion component props
-interface MotionComponentProps extends HTMLMotionProps<'div'> {
+type MotionComponentProps = {
   children: ReactNode;
   className?: string;
   delay?: number;
   duration?: number;
-}
+} & HTMLMotionProps<'div'>;
 
 // FadeIn Component
-export function FadeIn({ 
-  children, 
-  className, 
-  delay = 0, 
+export function FadeIn({
+  children,
+  className,
+  delay = 0,
   duration = 0.2,
   variants = defaultFadeIn,
-  ...props 
+  ...props
 }: MotionComponentProps & { variants?: Variants }) {
   return (
     <motion.div
@@ -422,10 +421,10 @@ export function FadeIn({
       animate="animate"
       exit="exit"
       variants={variants}
-      transition={{ 
-        duration, 
+      transition={{
+        duration,
         delay,
-        ease: [0.25, 0.1, 0.25, 1]
+        ease: [0.25, 0.1, 0.25, 1],
       }}
       className={cn(className)}
       {...props}
@@ -436,13 +435,13 @@ export function FadeIn({
 }
 
 // ScaleIn Component
-export function ScaleIn({ 
-  children, 
-  className, 
-  delay = 0, 
+export function ScaleIn({
+  children,
+  className,
+  delay = 0,
   duration = 0.2,
   variants = defaultScaleIn,
-  ...props 
+  ...props
 }: MotionComponentProps & { variants?: Variants }) {
   return (
     <motion.div
@@ -450,10 +449,10 @@ export function ScaleIn({
       animate="animate"
       exit="exit"
       variants={variants}
-      transition={{ 
-        duration, 
+      transition={{
+        duration,
         delay,
-        ease: [0.25, 0.1, 0.25, 1]
+        ease: [0.25, 0.1, 0.25, 1],
       }}
       className={cn(className)}
       {...props}
@@ -464,13 +463,13 @@ export function ScaleIn({
 }
 
 // SlideIn Component
-export function SlideIn({ 
-  children, 
-  className, 
-  delay = 0, 
+export function SlideIn({
+  children,
+  className,
+  delay = 0,
   duration = 0.2,
   variants = defaultSlideIn,
-  ...props 
+  ...props
 }: MotionComponentProps & { variants?: Variants }) {
   return (
     <motion.div
@@ -478,10 +477,10 @@ export function SlideIn({
       animate="animate"
       exit="exit"
       variants={variants}
-      transition={{ 
-        duration, 
+      transition={{
+        duration,
         delay,
-        ease: [0.25, 0.1, 0.25, 1]
+        ease: [0.25, 0.1, 0.25, 1],
       }}
       className={cn(className)}
       {...props}
@@ -492,13 +491,13 @@ export function SlideIn({
 }
 
 // StaggerContainer Component
-export function StaggerContainer({ 
-  children, 
+export function StaggerContainer({
+  children,
   className,
   staggerDelay = 0.1,
   delayChildren = 0.1,
-  ...props 
-}: MotionComponentProps & { 
+  ...props
+}: MotionComponentProps & {
   staggerDelay?: number;
   delayChildren?: number;
 }) {
@@ -507,9 +506,9 @@ export function StaggerContainer({
     animate: {
       transition: {
         staggerChildren: staggerDelay,
-        delayChildren
-      }
-    }
+        delayChildren,
+      },
+    },
   };
 
   return (
@@ -544,12 +543,12 @@ export function StaggerItem({
 }
 
 // Simple wrapper without hover effects - for initial load only
-export function SimpleMotion({ 
-  children, 
+export function SimpleMotion({
+  children,
   className,
   delay: _delay,
   duration: _duration,
-  ...props 
+  ...props
 }: MotionComponentProps) {
   return (
     <div
@@ -828,13 +827,15 @@ const scrollSpringConfig = {
 function useScrollWarp(options?: {
   intensity?: number;
   edgeThreshold?: number;
+  /** When true, disables scroll tracking entirely (ref won't be used) */
+  disabled?: boolean;
 }): {
   ref: React.RefObject<HTMLDivElement>;
   opacity: MotionValue<number>;
   y: MotionValue<number>;
   isReady: boolean;
 } {
-  const { intensity = 0.15, edgeThreshold = 0.2 } = options || {};
+  const { intensity = 0.15, edgeThreshold = 0.2, disabled = false } = options || {};
   const ref = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
 
@@ -849,8 +850,10 @@ function useScrollWarp(options?: {
   // offset: ["start end", "end start"] means:
   // - 0 when element's start reaches viewport's end (entering from bottom)
   // - 1 when element's end reaches viewport's start (exiting from top)
+  // IMPORTANT: Only pass target when enabled AND after hydration
+  // When disabled, the ref won't be attached to any element, so we must not use it
   const { scrollYProgress } = useScroll({
-    target: ref,
+    target: !disabled && isReady ? ref : undefined,
     offset: ['start end', 'end start'],
   });
 
@@ -913,7 +916,7 @@ export function ScrollMagnifier({
   edgeThreshold = 0.15,
   disabled = false,
 }: ScrollMagnifierProps) {
-  const { ref, opacity, y, isReady } = useScrollWarp({ intensity, edgeThreshold });
+  const { ref, opacity, y, isReady } = useScrollWarp({ intensity, edgeThreshold, disabled });
 
   if (disabled) {
     return <div className={cn('w-full', className)}>{children}</div>;
@@ -951,9 +954,8 @@ type ScrollFadeEntranceProps = {
 };
 
 /**
- * Combined entrance + InView-based fade wrapper
- * Animates in once on mount, warps when leaving viewport
- * Uses Intersection Observer (hydration-safe)
+ * Combined entrance + continuous scroll-linked warp
+ * Animates in once on mount, then continuously warps during scroll
  */
 export function ScrollFadeEntrance({
   children,
@@ -964,29 +966,27 @@ export function ScrollFadeEntrance({
   scrollIntensity = 0.15,
   skipScale: _skipScale = false,
 }: ScrollFadeEntranceProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  // Trigger when element is 12% from viewport edge
-  const isInView = useInView(ref, { once: false, margin: '-12% 0px -12% 0px' });
+  // Pass disabled when scroll effect not needed - prevents useScroll from
+  // trying to use a ref that's never attached to any element
+  const { ref, opacity, y, isReady } = useScrollWarp({
+    intensity: scrollIntensity,
+    edgeThreshold: 0.18,
+    disabled: !enableScrollEffect,
+  });
 
-  // Calculate out-of-view values based on intensity
-  const outOfViewOpacity = 1 - (scrollIntensity * 1.5);
-  const outOfViewY = scrollIntensity * 60; // Subtle y shift
-
-  if (skipAnimation) {
-    if (!enableScrollEffect) {
+  // No scroll effect requested
+  if (!enableScrollEffect) {
+    if (skipAnimation) {
       return <div className={cn('w-full', className)}>{children}</div>;
     }
-    // InView-based warp only (no entrance animation)
     return (
       <motion.div
-        ref={ref}
-        animate={{
-          opacity: isInView ? 1 : outOfViewOpacity,
-          y: isInView ? 0 : outOfViewY,
-        }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{
-          duration: 0.2,
-          ease: [0.25, 0.1, 0.25, 1],
+          duration: 0.3,
+          delay: index * 0.03,
+          ease: ANIMATION_EASE.enter,
         }}
         className={cn('w-full', className)}
       >
@@ -995,20 +995,53 @@ export function ScrollFadeEntrance({
     );
   }
 
-  // Full animation: entrance + InView warp
+  // Skip entrance animation, scroll warp only
+  if (skipAnimation) {
+    if (!isReady) {
+      return <div ref={ref} className={cn('w-full', className)}>{children}</div>;
+    }
+    return (
+      <motion.div
+        ref={ref}
+        style={{ opacity, y }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  // Full: entrance animation + continuous scroll warp
+  // Before hydration, show entrance animation without scroll effects
+  if (!isReady) {
+    return (
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: 0.3,
+          delay: index * 0.03,
+          ease: ANIMATION_EASE.enter,
+        }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
-      ref={enableScrollEffect ? ref : undefined}
+      ref={ref}
       initial={{ opacity: 0, y: 16 }}
-      animate={{
-        opacity: enableScrollEffect ? (isInView ? 1 : outOfViewOpacity) : 1,
-        y: enableScrollEffect ? (isInView ? 0 : outOfViewY) : 0,
-      }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.3,
         delay: index * 0.03,
         ease: ANIMATION_EASE.enter,
       }}
+      style={{ opacity, y }}
       className={cn('w-full', className)}
     >
       {children}
@@ -1017,9 +1050,8 @@ export function ScrollFadeEntrance({
 }
 
 /**
- * Participant card with InView-based animations
- * Entrance animation + warp when leaving viewport
- * Uses Intersection Observer (hydration-safe)
+ * Participant card with continuous scroll-linked warp
+ * Entrance animation + continuous scroll warp during scroll
  */
 export function ScrollAwareParticipant({
   children,
@@ -1027,31 +1059,57 @@ export function ScrollAwareParticipant({
   index = 0,
   skipAnimation = false,
   enableScrollEffect = true,
-  scrollIntensity = 0.12,
+  scrollIntensity = 0.18,
 }: ScrollFadeEntranceProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  // Trigger when element is 10% from viewport edge
-  const isInView = useInView(ref, { once: false, margin: '-10% 0px -10% 0px' });
+  const { ref, opacity, y, isReady } = useScrollWarp({
+    intensity: scrollIntensity,
+    edgeThreshold: 0.15,
+    disabled: !enableScrollEffect,
+  });
 
-  // Calculate out-of-view values
-  const outOfViewOpacity = 1 - (scrollIntensity * 1.5);
-  const outOfViewY = scrollIntensity * 50;
-
-  if (skipAnimation) {
-    if (!enableScrollEffect) {
+  // No scroll effect
+  if (!enableScrollEffect) {
+    if (skipAnimation) {
       return <div className={cn('w-full', className)}>{children}</div>;
     }
     return (
       <motion.div
+        initial="initial"
+        animate="animate"
+        variants={participantMessageVariants}
+        transition={{ delay: index * 0.08 }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  // Scroll warp only (no entrance)
+  if (skipAnimation) {
+    if (!isReady) {
+      return <div ref={ref} className={cn('w-full', className)}>{children}</div>;
+    }
+    return (
+      <motion.div
         ref={ref}
-        animate={{
-          opacity: isInView ? 1 : outOfViewOpacity,
-          y: isInView ? 0 : outOfViewY,
-        }}
-        transition={{
-          duration: 0.2,
-          ease: [0.25, 0.1, 0.25, 1],
-        }}
+        style={{ opacity, y }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  // Full: entrance + scroll warp
+  if (!isReady) {
+    return (
+      <motion.div
+        ref={ref}
+        initial="initial"
+        animate="animate"
+        variants={participantMessageVariants}
+        transition={{ delay: index * 0.08 }}
         className={cn('w-full', className)}
       >
         {children}
@@ -1061,19 +1119,12 @@ export function ScrollAwareParticipant({
 
   return (
     <motion.div
-      ref={enableScrollEffect ? ref : undefined}
+      ref={ref}
       initial="initial"
-      animate={{
-        opacity: enableScrollEffect ? (isInView ? 1 : outOfViewOpacity) : 1,
-        y: enableScrollEffect ? (isInView ? 0 : outOfViewY) : 0,
-        x: 0,
-      }}
+      animate="animate"
       variants={participantMessageVariants}
-      transition={{
-        delay: index * 0.08,
-        duration: 0.3,
-        ease: ANIMATION_EASE.enter,
-      }}
+      transition={{ delay: index * 0.08 }}
+      style={{ opacity, y }}
       className={cn('w-full', className)}
     >
       {children}
@@ -1082,9 +1133,8 @@ export function ScrollAwareParticipant({
 }
 
 /**
- * User message with InView-based animations
- * Entrance animation + warp when leaving viewport
- * Uses Intersection Observer (hydration-safe)
+ * User message with continuous scroll-linked warp
+ * Entrance animation + continuous scroll warp during scroll
  */
 export function ScrollAwareUserMessage({
   children,
@@ -1093,29 +1143,53 @@ export function ScrollAwareUserMessage({
   enableScrollEffect = true,
   scrollIntensity = 0.1,
 }: Omit<ScrollFadeEntranceProps, 'index'>) {
-  const ref = useRef<HTMLDivElement>(null);
-  // Trigger when element is 10% from viewport edge
-  const isInView = useInView(ref, { once: false, margin: '-10% 0px -10% 0px' });
+  const { ref, opacity, y, isReady } = useScrollWarp({
+    intensity: scrollIntensity,
+    edgeThreshold: 0.15,
+    disabled: !enableScrollEffect,
+  });
 
-  // Calculate out-of-view values
-  const outOfViewOpacity = 1 - (scrollIntensity * 1.5);
-  const outOfViewY = scrollIntensity * 40;
-
-  if (skipAnimation) {
-    if (!enableScrollEffect) {
+  // No scroll effect
+  if (!enableScrollEffect) {
+    if (skipAnimation) {
       return <div className={cn('w-full', className)}>{children}</div>;
     }
     return (
       <motion.div
+        initial="initial"
+        animate="animate"
+        variants={userMessageVariants}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  // Scroll warp only (no entrance)
+  if (skipAnimation) {
+    if (!isReady) {
+      return <div ref={ref} className={cn('w-full', className)}>{children}</div>;
+    }
+    return (
+      <motion.div
         ref={ref}
-        animate={{
-          opacity: isInView ? 1 : outOfViewOpacity,
-          y: isInView ? 0 : outOfViewY,
-        }}
-        transition={{
-          duration: 0.2,
-          ease: [0.25, 0.1, 0.25, 1],
-        }}
+        style={{ opacity, y }}
+        className={cn('w-full', className)}
+      >
+        {children}
+      </motion.div>
+    );
+  }
+
+  // Full: entrance + scroll warp
+  if (!isReady) {
+    return (
+      <motion.div
+        ref={ref}
+        initial="initial"
+        animate="animate"
+        variants={userMessageVariants}
         className={cn('w-full', className)}
       >
         {children}
@@ -1125,19 +1199,11 @@ export function ScrollAwareUserMessage({
 
   return (
     <motion.div
-      ref={enableScrollEffect ? ref : undefined}
+      ref={ref}
       initial="initial"
-      animate={{
-        opacity: enableScrollEffect ? (isInView ? 1 : outOfViewOpacity) : 1,
-        y: enableScrollEffect ? (isInView ? 0 : outOfViewY) : 0,
-        x: 0,
-        scale: 1,
-      }}
+      animate="animate"
       variants={userMessageVariants}
-      transition={{
-        duration: 0.25,
-        ease: ANIMATION_EASE.enter,
-      }}
+      style={{ opacity, y }}
       className={cn('w-full', className)}
     >
       {children}

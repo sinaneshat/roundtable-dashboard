@@ -16,7 +16,7 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand';
 
-import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 // ============================================================================
@@ -124,7 +124,7 @@ function createMockUserMessage(roundNumber: number): MockMessage {
 
 function createMockPreSearch(
   roundNumber: number,
-  status: typeof AnalysisStatuses[keyof typeof AnalysisStatuses],
+  status: typeof MessageStatuses[keyof typeof MessageStatuses],
 ): StoredPreSearch {
   return {
     id: `presearch-${roundNumber}`,
@@ -132,11 +132,11 @@ function createMockPreSearch(
     roundNumber,
     status,
     userQuery: 'Test query',
-    searchData: status === AnalysisStatuses.COMPLETE
+    searchData: status === MessageStatuses.COMPLETE
       ? {
           queries: [],
           results: [],
-          analysis: 'Analysis',
+          summary: 'Summary',
           successCount: 1,
           failureCount: 0,
           totalResults: 3,
@@ -145,7 +145,7 @@ function createMockPreSearch(
       : undefined,
     errorMessage: null,
     createdAt: new Date(),
-    completedAt: status === AnalysisStatuses.COMPLETE ? new Date() : null,
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
   } as StoredPreSearch;
 }
 
@@ -172,14 +172,14 @@ describe('useStreamingTrigger', () => {
         participants: [createMockParticipant(0), createMockParticipant(1)],
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.PENDING)],
+        preSearches: [createMockPreSearch(0, MessageStatuses.PENDING)],
         pendingMessage: 'Test query',
       });
 
       const state = store.getState();
 
       // Pre-search is pending and web search enabled
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.PENDING);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.PENDING);
       expect(state.thread?.enableWebSearch).toBe(true);
       expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
     });
@@ -188,7 +188,7 @@ describe('useStreamingTrigger', () => {
       const store = createMockStore({
         waitingToStartStreaming: true,
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.PENDING)],
+        preSearches: [createMockPreSearch(0, MessageStatuses.PENDING)],
       });
 
       const state = store.getState();
@@ -212,14 +212,14 @@ describe('useStreamingTrigger', () => {
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
         // Pre-search was streaming when page refreshed
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.STREAMING)],
+        preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)],
       });
 
       const state = store.getState();
 
       // Pre-search is in STREAMING state but NOT tracked locally
       // (triggeredPreSearchRounds is a Set - not persisted across refresh)
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.STREAMING);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
       expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
 
       // This indicates resumption should happen
@@ -237,15 +237,15 @@ describe('useStreamingTrigger', () => {
         participants: [createMockParticipant(0), createMockParticipant(1)],
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.STREAMING)],
+        preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)],
       });
 
       const state = store.getState();
 
       // Pre-search still streaming
       const preSearch = state.preSearches[0];
-      const isBlocked = preSearch?.status === AnalysisStatuses.STREAMING
-        || preSearch?.status === AnalysisStatuses.PENDING;
+      const isBlocked = preSearch?.status === MessageStatuses.STREAMING
+        || preSearch?.status === MessageStatuses.PENDING;
 
       expect(isBlocked).toBe(true);
       expect(startRound).not.toHaveBeenCalled();
@@ -259,7 +259,7 @@ describe('useStreamingTrigger', () => {
         participants: [createMockParticipant(0), createMockParticipant(1)],
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.COMPLETE)],
+        preSearches: [createMockPreSearch(0, MessageStatuses.COMPLETE)],
         pendingAnimations: new Map(),
       });
 
@@ -267,8 +267,8 @@ describe('useStreamingTrigger', () => {
 
       // Pre-search complete
       const preSearch = state.preSearches[0];
-      const isBlocked = preSearch?.status === AnalysisStatuses.STREAMING
-        || preSearch?.status === AnalysisStatuses.PENDING;
+      const isBlocked = preSearch?.status === MessageStatuses.STREAMING
+        || preSearch?.status === MessageStatuses.PENDING;
 
       expect(isBlocked).toBe(false);
 
@@ -362,7 +362,7 @@ describe('useStreamingTrigger', () => {
         createdThreadId: 'thread-123',
         thread: { id: 'thread-123', enableWebSearch: true },
         messages: [createMockUserMessage(0)],
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.STREAMING)],
+        preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)],
       });
 
       // Pre-search has its own timeout logic (60 seconds max)
@@ -373,7 +373,7 @@ describe('useStreamingTrigger', () => {
       // Hook should check pre-search activity time
       const state = store.getState();
 
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.STREAMING);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
     });
   });
 
@@ -513,7 +513,7 @@ describe('streaming trigger edge cases', () => {
       participants: [createMockParticipant(0)],
       messages: [createMockUserMessage(0)],
       thread: { id: 'thread-123', enableWebSearch: true },
-      preSearches: [createMockPreSearch(0, AnalysisStatuses.COMPLETE)],
+      preSearches: [createMockPreSearch(0, MessageStatuses.COMPLETE)],
       pendingAnimations: new Map([[0, true]]), // Pre-search animation pending
     });
 
@@ -531,7 +531,7 @@ describe('streaming trigger edge cases', () => {
     const now = Date.now();
     const completedAt = new Date(now - 10); // Completed 10ms ago
 
-    createMockPreSearch(0, AnalysisStatuses.COMPLETE);
+    createMockPreSearch(0, MessageStatuses.COMPLETE);
 
     // Timing guard: wait at least 50ms after completion
     const timeSinceComplete = now - completedAt.getTime();

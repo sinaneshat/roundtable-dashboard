@@ -46,7 +46,7 @@ aiSendMessage({
 });
 ```
 
-**Result:** First round uses `r0_p0`, analysis created with `roundNumber: 0` ✓
+**Result:** First round uses `r0_p0`, summary created with `roundNumber: 0` ✓
 
 ---
 
@@ -76,7 +76,7 @@ sendMessage(pendingMessage); // Sends with roundNumber: 1 ✓
 // Generates participant IDs: r1_p0, r1_p1, etc.
 ```
 
-**Result:** Second round uses `r1_p0`, analysis created with `roundNumber: 1` ✓
+**Result:** Second round uses `r1_p0`, summary created with `roundNumber: 1` ✓
 
 ---
 
@@ -155,7 +155,7 @@ const metadata = message.roundNumber !== null && message.roundNumber !== undefin
 
 ---
 
-## Analysis Creation Pattern
+## Summary Creation Pattern
 
 **Location:** `/src/components/providers/chat-store-provider.tsx:107`
 
@@ -164,7 +164,7 @@ const roundNumber = getCurrentRoundNumber(sdkMessages);
 // ✅ Reads from LAST user message's metadata.roundNumber
 // ✅ Backend assigned this value - frontend trusts it
 
-currentState.createPendingAnalysis({
+currentState.createPendingSummary({
   threadId,
   roundNumber, // ← Uses backend's roundNumber
   mode,
@@ -173,7 +173,7 @@ currentState.createPendingAnalysis({
 });
 ```
 
-**Result:** Analysis roundNumber matches participant message IDs ✓
+**Result:** Summary roundNumber matches participant message IDs ✓
 
 ---
 
@@ -234,7 +234,7 @@ if (currentScreenMode !== 'overview') {
 const roundNumber = getCurrentRoundNumber(messages); // ✓ Reads backend value
 ```
 
-### Bug: Analysis created with wrong roundNumber
+### Bug: Summary created with wrong roundNumber
 
 **Cause:** `getCurrentRoundNumber()` reading from trigger message instead of backend message
 

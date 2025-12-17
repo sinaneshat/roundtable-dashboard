@@ -9,14 +9,13 @@
  * and ensuring proper data flow from API → Store → UI State
  */
 
-import { AnalysisStatuses, ChatModes, MessageRoles, PreSearchStatuses, ResolutionTypes, StanceTypes, ThreadStatuses } from '@/api/core/enums';
+import { ChatModes, MessageRoles, MessageStatuses, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
 import type {
   ChangelogListResponse,
   MessagesListResponse,
-  ModeratorAnalysisListResponse,
-  ModeratorAnalysisPayload,
   ParticipantDetailResponse,
   PreSearchListResponse,
+  RoundSummaryListResponse,
   StoredPreSearch,
   ThreadDetailResponse,
   ThreadListResponse,
@@ -24,52 +23,42 @@ import type {
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation/chat';
 
 // ============================================================================
-// TYPE-SAFE MOCK ANALYSIS DATA
+// TYPE-SAFE MOCK SUMMARY DATA
 // ============================================================================
 
 /**
- * ✅ TYPE-SAFE: Mock analysis data validated against ModeratorAnalysisPayload
+ * ✅ TYPE-SAFE: Mock summary data validated against ModeratorSummaryPayload
  * If schema changes, this will cause a compile error - preventing silent drift
+ *
+ * NEW SIMPLIFIED SCHEMA:
+ * {
+ *   summary: string;
+ *   metrics: {
+ *     engagement: number; // 0-100
+ *     insight: number;    // 0-100
+ *     balance: number;    // 0-100
+ *     clarity: number;    // 0-100
+ *   }
+ * }
  */
-function createTypeSafeAnalysisData(overrides?: Partial<Omit<ModeratorAnalysisPayload, 'roundNumber' | 'mode' | 'userQuestion'>>): Omit<ModeratorAnalysisPayload, 'roundNumber' | 'mode' | 'userQuestion'> {
+type SummaryDataType = {
+  summary: string;
+  metrics: {
+    engagement: number;
+    insight: number;
+    balance: number;
+    clarity: number;
+  };
+};
+
+function createTypeSafeSummaryData(overrides?: Partial<SummaryDataType>): SummaryDataType {
   return {
-    article: {
-      headline: 'Consensus reached on market timing strategy',
-      narrative: 'Good discussion overall with solid reasoning. The panel reached agreement on key market timing factors while acknowledging some areas of uncertainty.',
-      keyTakeaway: 'Proceed with market analysis before final decision',
-    },
-    modelVoices: [
-      {
-        modelName: 'GPT-4',
-        modelId: 'gpt-4',
-        participantIndex: 0,
-        role: 'Analyst',
-        position: 'Solid response with good reasoning',
-        keyContribution: 'Provided market analysis framework',
-        notableQuote: 'Market timing is critical for success',
-      },
-    ],
-    consensusTable: [
-      {
-        topic: 'Market timing is favorable',
-        positions: [
-          { modelName: 'GPT-4', stance: StanceTypes.AGREE, brief: 'Window closing by Q3' },
-        ],
-        resolution: ResolutionTypes.CONSENSUS,
-      },
-    ],
-    minorityViews: [],
-    convergenceDivergence: {
-      convergedOn: ['Market timing importance', 'Competitive analysis needed'],
-      divergedOn: ['Competitive response timing'],
-      evolved: [],
-    },
-    recommendations: [
-      { title: 'Expand market research', description: 'Consider broader competitive analysis' },
-    ],
-    confidence: {
-      overall: 78,
-      reasoning: 'Strong agreement on core strategy with minor open questions',
+    summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors while acknowledging areas of uncertainty. Strong agreement emerged around competitive analysis needs, though timing considerations remain open for discussion.',
+    metrics: {
+      engagement: 85,
+      insight: 78,
+      balance: 82,
+      clarity: 90,
     },
     ...overrides,
   };
@@ -222,6 +211,7 @@ export function createMockThreadDetailResponse(
       participants,
       messages: [],
       changelog: [],
+      summaries: [],
       user: {
         id: '35981ef3-3267-4af7-9fdb-2e3c47149c2c',
         name: 'Test User',
@@ -333,28 +323,28 @@ export function createMockChangelogListResponse(): ChangelogListResponse {
 }
 
 /**
- * Mock response for GET /chat/threads/:id/analyses
- * ✅ FOLLOWS: ModeratorAnalysisListResponseSchema
- * ✅ 0-BASED INDEXING: Analysis for round 0
+ * Mock response for GET /chat/threads/:id/summaries
+ * ✅ FOLLOWS: RoundSummaryListResponseSchema
+ * ✅ 0-BASED INDEXING: Summary for round 0
  */
-export function createMockAnalysesListResponse(
+export function createMockSummariesListResponse(
   threadId: string,
   roundNumber: number = 0,
-): ModeratorAnalysisListResponse {
+): RoundSummaryListResponse {
   return {
     success: true,
     data: {
       items: [
         {
-          id: `analysis_${threadId}_${roundNumber}`,
+          id: `summary_${threadId}_${roundNumber}`,
           threadId,
           roundNumber,
           mode: ChatModes.DEBATING,
           userQuestion: `Question for round ${roundNumber}`,
-          status: AnalysisStatuses.COMPLETE,
+          status: MessageStatuses.COMPLETE,
           participantMessageIds: [`${threadId}_r${roundNumber}_p0`],
-          // ✅ TYPE-SAFE: Uses createTypeSafeAnalysisData helper
-          analysisData: createTypeSafeAnalysisData(),
+          // ✅ TYPE-SAFE: Uses createTypeSafeSummaryData helper
+          summaryData: createTypeSafeSummaryData(),
           errorMessage: null,
           createdAt: new Date(),
           completedAt: new Date(),
@@ -403,7 +393,7 @@ export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): Store
           responseTime: 100,
         },
       ],
-      analysis: 'Test analysis summary',
+      summary: 'Test summary',
       successCount: 1,
       failureCount: 0,
       totalResults: 1,
@@ -481,7 +471,7 @@ export function createMockPreSearchesListResponse(
                 responseTime: 100,
               },
             ],
-            analysis: 'Test analysis',
+            summary: 'Test summary',
             successCount: 1,
             failureCount: 0,
             totalResults: 1,
@@ -539,42 +529,29 @@ export function createMockFetchError(
 }
 
 /**
- * Create a mock StoredModeratorAnalysis for testing
- * ✅ FOLLOWS: StoredModeratorAnalysis schema
- * ✅ TYPE-SAFE: Uses createTypeSafeAnalysisData helper - schema drift causes compile error
+ * Create a mock StoredRoundSummary for testing
+ * ✅ FOLLOWS: StoredRoundSummary schema
+ * ✅ TYPE-SAFE: Uses createTypeSafeSummaryData helper - schema drift causes compile error
  */
-export function createMockAnalysis(overrides?: Partial<import('@/api/routes/chat/schema').StoredModeratorAnalysis>): import('@/api/routes/chat/schema').StoredModeratorAnalysis {
+export function createMockSummary(overrides?: Partial<import('@/api/routes/chat/schema').StoredRoundSummary>): import('@/api/routes/chat/schema').StoredRoundSummary {
   const now = new Date();
 
   return {
-    id: 'analysis_test_123',
+    id: 'summary_test_123',
     threadId: 'thread_123',
     roundNumber: 0,
     mode: ChatModes.DEBATING,
     userQuestion: 'Test question',
-    status: AnalysisStatuses.COMPLETE,
+    status: MessageStatuses.COMPLETE,
     participantMessageIds: [],
-    // ✅ TYPE-SAFE: Uses createTypeSafeAnalysisData helper
-    analysisData: createTypeSafeAnalysisData({
-      article: {
-        headline: 'Test analysis headline',
-        narrative: 'Test analysis narrative with comprehensive discussion summary.',
-        keyTakeaway: 'Test key takeaway for quick scanning',
-      },
-      modelVoices: [
-        {
-          modelName: 'GPT-4',
-          modelId: 'gpt-4',
-          participantIndex: 0,
-          role: 'Analyst',
-          position: 'Test position statement',
-          keyContribution: 'Test key contribution',
-          notableQuote: 'Test notable quote',
-        },
-      ],
-      confidence: {
-        overall: 78,
-        reasoning: 'Test confidence reasoning',
+    // ✅ TYPE-SAFE: Uses createTypeSafeSummaryData helper
+    summaryData: createTypeSafeSummaryData({
+      summary: 'Test summary with comprehensive discussion overview and key insights from all participants.',
+      metrics: {
+        engagement: 85,
+        insight: 78,
+        balance: 82,
+        clarity: 90,
       },
     }),
     errorMessage: null,

@@ -55,8 +55,9 @@ export const STALE_TIMES = {
   threadDetail: 10 * 1000, // 10 seconds - thread detail refreshed on each visit
   threadMessages: 5 * 1000, // 5 seconds - messages added in real-time
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
-  threadAnalyses: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
-  preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as analyses)
+  threadSummaries: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
+  summaries: 30_000, // 30 seconds - round summaries update per round
+  preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as summaries)
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time
   publicThreadDetail: 5 * 60 * 1000, // 5 minutes - public threads change less frequently
 
@@ -71,7 +72,6 @@ export const STALE_TIMES = {
   // ============================================================================
   chatRoles: 10 * 60 * 1000, // 10 minutes - roles are fairly static
   changelog: 30 * 1000, // 30 seconds - configuration changes tracked in real-time
-  analyses: 30 * 1000, // 30 seconds - moderator analyses update per round
 
   // ============================================================================
   // Special Cases

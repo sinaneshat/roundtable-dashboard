@@ -10,7 +10,7 @@
  * RESPONSIBILITIES:
  * - Slug polling and URL updates
  * - Navigation to thread detail page
- * - Analysis completion detection
+ * - Summary completion detection
  * - Timeout fallbacks for stuck states
  * - Pre-populating TanStack Query cache before navigation (eliminates loading.tsx)
  *
@@ -24,7 +24,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
 import { useSession } from '@/lib/auth/client';
@@ -71,7 +71,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     createdThreadId: s.createdThreadId,
   })));
 
-  const analyses = useChatStore(s => s.analyses);
+  const summaries = useChatStore(s => s.summaries);
   const setThread = useChatStore(s => s.setThread);
 
   // ============================================================================
@@ -96,7 +96,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     const thread = state.thread;
     const currentParticipants = state.participants;
     const currentMessages = state.messages;
-    const currentAnalyses = state.analyses;
+    const currentSummaries = state.summaries;
     const currentPreSearches = state.preSearches;
 
     if (!thread)
@@ -135,18 +135,18 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       },
     );
 
-    // 2. Pre-populate analyses
-    // Format matches getThreadAnalysesService response
-    if (currentAnalyses.length > 0) {
+    // 2. Pre-populate summaries
+    // Format matches getThreadSummariesService response
+    if (currentSummaries.length > 0) {
       queryClient.setQueryData(
-        queryKeys.threads.analyses(threadId),
+        queryKeys.threads.summaries(threadId),
         {
           success: true,
           data: {
-            items: currentAnalyses.map(a => ({
-              ...a,
-              createdAt: toISOString(a.createdAt),
-              completedAt: toISOStringOrNull(a.completedAt),
+            items: currentSummaries.map((s: { createdAt: string | Date; completedAt: string | Date | null }) => ({
+              ...s,
+              createdAt: toISOString(s.createdAt),
+              completedAt: toISOStringOrNull(s.completedAt),
             })),
           },
           meta: createPrefetchMeta(),
@@ -207,35 +207,35 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   }, [streamingState.showInitialUI]);
 
   // ============================================================================
-  // ANALYSIS COMPLETION DETECTION
+  // SUMMARY COMPLETION DETECTION
   // ============================================================================
 
   /**
-   * Check if first analysis is completed
-   * PRIMARY: Analysis status = 'complete'
+   * Check if first summary is completed
+   * PRIMARY: Summary status = 'complete'
    * FALLBACK: Timeout-based completion (safety net)
    * ✅ 0-BASED: First round is round 0
    */
-  const firstAnalysisCompleted = useMemo(() => {
-    const firstAnalysis = analyses[0];
-    if (!firstAnalysis || firstAnalysis.roundNumber !== 0) {
+  const firstSummaryCompleted = useMemo(() => {
+    const firstSummary = summaries[0];
+    if (!firstSummary || firstSummary.roundNumber !== 0) {
       return false;
     }
 
-    // PRIMARY: Analysis reached 'completed' status
-    if (firstAnalysis.status === AnalysisStatuses.COMPLETE) {
+    // PRIMARY: Summary reached 'completed' status
+    if (firstSummary.status === MessageStatuses.COMPLETE) {
       return true;
     }
 
-    // SAFETY NET 1: Analysis stuck at 'streaming' for >60s
+    // SAFETY NET 1: Summary stuck at 'streaming' for >60s
     if (
-      firstAnalysis.status === AnalysisStatuses.STREAMING
-      && firstAnalysis.createdAt
+      firstSummary.status === MessageStatuses.STREAMING
+      && firstSummary.createdAt
     ) {
       const SAFETY_TIMEOUT_MS = 60000; // 60 seconds
-      const createdTime = firstAnalysis.createdAt instanceof Date
-        ? firstAnalysis.createdAt.getTime()
-        : new Date(firstAnalysis.createdAt).getTime();
+      const createdTime = firstSummary.createdAt instanceof Date
+        ? firstSummary.createdAt.getTime()
+        : new Date(firstSummary.createdAt).getTime();
       const elapsed = Date.now() - createdTime;
 
       if (elapsed > SAFETY_TIMEOUT_MS) {
@@ -243,23 +243,23 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       }
     }
 
-    // SAFETY NET 2: Analysis stuck at 'pending' for >60s
-    // ✅ CRITICAL FIX: Only apply timeout to placeholder analyses (no participantMessageIds)
-    // When analysis has participantMessageIds, it's ready to stream - not stuck
-    // The ModeratorAnalysisStream component will render and trigger the POST request
-    const isPlaceholderAnalysis = !firstAnalysis.participantMessageIds
-      || firstAnalysis.participantMessageIds.length === 0;
+    // SAFETY NET 2: Summary stuck at 'pending' for >60s
+    // ✅ CRITICAL FIX: Only apply timeout to placeholder summaries (no participantMessageIds)
+    // When summary has participantMessageIds, it's ready to stream - not stuck
+    // The RoundSummaryStream component will render and trigger the POST request
+    const isPlaceholderSummary = !firstSummary.participantMessageIds
+      || firstSummary.participantMessageIds.length === 0;
 
     if (
       !streamingState.isStreaming
-      && firstAnalysis.status === AnalysisStatuses.PENDING
-      && firstAnalysis.createdAt
-      && isPlaceholderAnalysis // Only timeout if no participantMessageIds yet
+      && firstSummary.status === MessageStatuses.PENDING
+      && firstSummary.createdAt
+      && isPlaceholderSummary // Only timeout if no participantMessageIds yet
     ) {
       const SAFETY_TIMEOUT_MS = 60000; // 60 seconds
-      const createdTime = firstAnalysis.createdAt instanceof Date
-        ? firstAnalysis.createdAt.getTime()
-        : new Date(firstAnalysis.createdAt).getTime();
+      const createdTime = firstSummary.createdAt instanceof Date
+        ? firstSummary.createdAt.getTime()
+        : new Date(firstSummary.createdAt).getTime();
       const elapsed = Date.now() - createdTime;
 
       if (elapsed > SAFETY_TIMEOUT_MS) {
@@ -268,7 +268,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
 
     return false;
-  }, [analyses, streamingState.isStreaming]);
+  }, [summaries, streamingState.isStreaming]);
 
   // ============================================================================
   // SLUG POLLING & URL UPDATES
@@ -410,7 +410,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // ============================================================================
 
   /**
-   * STEP 2: Navigate to thread detail page when first analysis completes
+   * STEP 2: Navigate to thread detail page when first summary completes
    * After URL replaced, do full navigation to ChatThreadScreen
    */
   const hasAiSlug = Boolean(aiGeneratedSlug || (threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug));
@@ -432,11 +432,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       return;
     }
 
-    // Navigate ONLY when analysis is fully completed + AI slug ready
-    // Wait for participants to speak AND analysis to finish before navigating
+    // Navigate ONLY when summary is fully completed + AI slug ready
+    // Wait for participants to speak AND summary to finish before navigating
     const shouldNavigate = !hasNavigated
       && hasAiSlug
-      && firstAnalysisCompleted;
+      && firstSummaryCompleted;
 
     if (shouldNavigate) {
       // Mark as navigated
@@ -482,7 +482,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
   }, [
     isActive,
-    firstAnalysisCompleted,
+    firstSummaryCompleted,
     streamingState.showInitialUI,
     hasNavigated,
     hasAiSlug,

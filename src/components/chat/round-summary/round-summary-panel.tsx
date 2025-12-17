@@ -2,43 +2,46 @@
 
 import { useTranslations } from 'next-intl';
 
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
-import { hasAnalysisData } from '@/lib/utils/analysis-utils';
+import { MessageStatuses } from '@/api/core/enums';
+import type { StoredRoundSummary } from '@/api/routes/chat/schema';
+import { hasSummaryData } from '@/lib/utils/summary-utils';
 
 import { RoundSummaryText } from './round-summary-text';
 
 type RoundSummaryPanelProps = {
-  analysis: StoredModeratorAnalysis;
+  summary: StoredRoundSummary;
 };
 
-export function RoundSummaryPanel({ analysis }: RoundSummaryPanelProps) {
+export function RoundSummaryPanel({ summary }: RoundSummaryPanelProps) {
   const t = useTranslations('moderator');
 
-  if (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) {
+  if (summary.status === MessageStatuses.PENDING || summary.status === MessageStatuses.STREAMING) {
     return null;
   }
 
-  if (analysis.status === AnalysisStatuses.FAILED) {
+  if (summary.status === MessageStatuses.FAILED) {
     return (
       <div className="flex items-center gap-2 py-2 text-sm text-destructive">
         <span className="size-1.5 rounded-full bg-destructive/80" />
-        <span>{t('errorAnalyzing')}</span>
+        <span>{t('errorSummarizing')}</span>
       </div>
     );
   }
 
-  if (!hasAnalysisData(analysis.analysisData)) {
+  if (!hasSummaryData(summary.summaryData)) {
     return (
       <div className="py-2 text-sm text-destructive">
-        {t('errorAnalyzing')}
+        {t('errorSummarizing')}
       </div>
     );
   }
 
-  const data = analysis.analysisData;
+  const data = summary.summaryData;
 
   return (
-    <RoundSummaryText article={data.article} />
+    <RoundSummaryText
+      summary={data.summary}
+      metrics={data.metrics}
+    />
   );
 }

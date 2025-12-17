@@ -19,15 +19,15 @@ import {
   DeleteThreadResponseSchema,
   GetThreadFeedbackResponseSchema,
   MessagesListResponseSchema,
-  ModeratorAnalysisListResponseSchema,
-  ModeratorAnalysisPayloadSchema,
-  ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
   PreSearchListResponseSchema,
   PreSearchRequestSchema,
   PreSearchResponseSchema,
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
+  RoundSummaryListResponseSchema,
+  RoundSummaryPayloadSchema,
+  RoundSummaryRequestSchema,
   SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
@@ -342,44 +342,8 @@ export const getThreadChangelogRoute = createRoute({
 });
 
 /**
- * POST Create Pre-Search Route - Create PENDING pre-search record
- * ✅ NEW: Creates PENDING record BEFORE participant streaming
- * ✅ IDEMPOTENT: Returns existing record if already exists
- * ✅ DATABASE-FIRST: Matches thread creation pattern (thread.handler.ts:269-278)
- */
-export const createPreSearchRoute = createRoute({
-  method: 'post',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search/create',
-  tags: ['chat'],
-  summary: 'Create PENDING pre-search record before participant streaming',
-  description: 'Creates a PENDING pre-search record that must exist BEFORE participants start streaming. This ensures correct event ordering: user message → pre-search (PENDING → STREAMING → COMPLETE) → participants. Does NOT execute the search - that happens via the execute endpoint.',
-  request: {
-    params: ThreadRoundParamSchema,
-    body: {
-      required: true,
-      content: {
-        'application/json': {
-          schema: PreSearchRequestSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Pre-search record created or already exists (idempotent)',
-      content: {
-        'application/json': {
-          schema: PreSearchResponseSchema,
-        },
-      },
-    },
-    ...createMutationRouteResponses(),
-  },
-});
-
-/**
  * POST Pre-Search Route - Execute or return existing search
- * ✅ FOLLOWS: analyzeRoundRoute pattern exactly
+ * ✅ FOLLOWS: summarizeRoundRoute pattern exactly
  * ✅ IDEMPOTENT: Returns existing if already completed
  * ✅ DATABASE-FIRST: Creates record before streaming
  */
@@ -388,7 +352,7 @@ export const executePreSearchRoute = createRoute({
   path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
   tags: ['chat'],
   summary: 'Execute pre-search for conversation round (streaming)',
-  description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as moderator analysis.',
+  description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as moderator summary.',
   request: {
     params: ThreadRoundParamSchema,
     body: {
@@ -690,37 +654,37 @@ export const deleteCustomRoleRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
 });
-export const analyzeRoundRoute = createRoute({
+export const summarizeRoundRoute = createRoute({
   method: 'post',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/analyze',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/summarize',
   tags: ['chat'],
-  summary: 'Analyze conversation round with AI moderator (streaming)',
-  description: 'Generate AI-powered analysis, ratings, and insights for all participant responses in a conversation round. Streams structured analysis object in real-time using AI SDK streamObject(). Use experimental_useObject hook on frontend for progressive rendering. Returns completed analysis immediately if already exists.',
+  summary: 'Generate round summary (streaming)',
+  description: 'Generate a concise summary with metrics for all participant responses in a conversation round. Streams summary text and metrics in real-time using AI SDK streamObject(). Returns completed summary immediately if already exists.',
   request: {
     params: ThreadRoundParamSchema,
     body: {
-      required: false, // ✅ FIXED: Allow empty body (backend auto-queries messages from database)
+      required: false,
       content: {
         'application/json': {
-          schema: ModeratorAnalysisRequestSchema,
+          schema: RoundSummaryRequestSchema,
         },
       },
     },
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Analysis streaming in progress OR completed analysis returned (if already exists). Content-Type: text/plain for streaming, application/json for completed.',
+      description: 'Summary streaming in progress OR completed summary returned (if already exists). Content-Type: text/plain for streaming, application/json for completed.',
       content: {
         'text/plain': {
-          schema: z.string().describe('Streaming object data (AI SDK format)'),
+          schema: z.string().describe('Streaming summary data (AI SDK format)'),
         },
         'application/json': {
-          schema: createApiResponseSchema(ModeratorAnalysisPayloadSchema).describe('Completed analysis (if already exists)'),
+          schema: createApiResponseSchema(RoundSummaryPayloadSchema).describe('Completed summary (if already exists)'),
         },
       },
     },
     [HttpStatusCodes.CONFLICT]: {
-      description: 'Analysis already in progress or completed for this round',
+      description: 'Summary already in progress or completed for this round',
       content: {
         'application/json': {
           schema: ApiErrorResponseSchema,
@@ -732,7 +696,7 @@ export const analyzeRoundRoute = createRoute({
 });
 /**
  * GET Thread Pre-Searches Route - List all pre-searches for thread
- * ✅ FOLLOWS: getThreadAnalysesRoute pattern
+ * ✅ FOLLOWS: getThreadSummariesRoute pattern
  */
 export const getThreadPreSearchesRoute = createRoute({
   method: 'get',
@@ -754,20 +718,20 @@ export const getThreadPreSearchesRoute = createRoute({
   },
 });
 
-export const getThreadAnalysesRoute = createRoute({
+export const getThreadSummariesRoute = createRoute({
   method: 'get',
-  path: '/chat/threads/:id/analyses',
+  path: '/chat/threads/:id/summaries',
   tags: ['chat'],
-  summary: 'Get moderator analyses for thread',
-  description: 'Retrieve all moderator analyses for a thread, showing past analysis results for each round',
+  summary: 'Get round summaries for thread',
+  description: 'Retrieve all round summaries for a thread, showing past summary results for each round',
   request: {
     params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Analyses retrieved successfully',
+      description: 'Summaries retrieved successfully',
       content: {
-        'application/json': { schema: ModeratorAnalysisListResponseSchema },
+        'application/json': { schema: RoundSummaryListResponseSchema },
       },
     },
     ...createProtectedRouteResponses(),
@@ -926,29 +890,29 @@ Returns \`ThreadStreamResumptionState\` with:
 });
 
 /**
- * GET /chat/threads/:threadId/rounds/:roundNumber/analyze/resume
- * ✅ RESUMABLE STREAMS: Resume buffered analysis stream (object stream)
+ * GET /chat/threads/:threadId/rounds/:roundNumber/summarize/resume
+ * ✅ RESUMABLE STREAMS: Resume buffered summary stream (object stream)
  */
-export const resumeAnalysisStreamRoute = createRoute({
+export const resumeSummaryStreamRoute = createRoute({
   method: 'get',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/analyze/resume',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/summarize/resume',
   tags: ['chat'],
-  summary: 'Resume buffered analysis stream',
-  description: `Resume a moderator analysis stream from buffered chunks. Returns the full stream as text for client consumption.
+  summary: 'Resume buffered summary stream',
+  description: `Resume a round summary stream from buffered chunks. Returns the full stream as text for client consumption.
 
-This endpoint enables analysis stream resumption after page reload. Unlike chat streams which use SSE format, analysis streams use plain text (JSON being built incrementally).
+This endpoint enables summary stream resumption after page reload. Unlike chat streams which use SSE format, summary streams use plain text (JSON being built incrementally).
 
 **Response Types**:
 - text/plain: Text stream with buffered chunks (if stream has data)
 - 204 No Content: No stream buffer exists or stream has no chunks
 
 **Usage Pattern**:
-1. Frontend detects page reload during analysis streaming
+1. Frontend detects page reload during summary streaming
 2. Calls this endpoint to check for and resume active stream
 3. If 200: Receives buffered chunks, continues rendering
-4. If 204: No active stream, may need to retry analysis
+4. If 204: No active stream, may need to retry summary
 
-**Example**: GET /chat/threads/thread_123/rounds/0/analyze/resume`,
+**Example**: GET /chat/threads/thread_123/rounds/0/summarize/resume`,
   request: {
     params: ThreadRoundParamSchema,
   },

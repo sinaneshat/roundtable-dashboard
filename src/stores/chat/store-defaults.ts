@@ -15,7 +15,6 @@
 import { DEFAULT_CHAT_MODE, ScreenModes } from '@/api/core/enums';
 
 import type {
-  AnalysisState,
   AnimationState,
   AttachmentsState,
   CallbacksState,
@@ -26,6 +25,7 @@ import type {
   PreSearchState,
   ScreenState,
   StreamResumptionSliceState,
+  SummaryState,
   ThreadState,
   TrackingState,
   UIState,
@@ -65,12 +65,12 @@ export const UI_DEFAULTS = {
 } satisfies UIState;
 
 // ============================================================================
-// ANALYSIS SLICE DEFAULTS
+// SUMMARY SLICE DEFAULTS
 // ============================================================================
 
-export const ANALYSIS_DEFAULTS = {
-  analyses: [],
-} satisfies AnalysisState;
+export const SUMMARY_DEFAULTS = {
+  summaries: [],
+} satisfies SummaryState;
 
 // ============================================================================
 // PRE-SEARCH SLICE DEFAULTS
@@ -105,7 +105,7 @@ export const THREAD_DEFAULTS = {
 export const FLAGS_DEFAULTS = {
   hasInitiallyLoaded: false,
   isRegenerating: false,
-  isCreatingAnalysis: false,
+  isCreatingSummary: false,
   isWaitingForChangelog: false,
   hasPendingConfigChanges: false,
 } satisfies FlagsState;
@@ -135,12 +135,12 @@ export const DATA_DEFAULTS = {
 // causing state pollution across thread navigations
 export const TRACKING_DEFAULTS = {
   hasSentPendingMessage: false,
-  createdAnalysisRounds: new Set<number>(),
+  createdSummaryRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by round number */
-  triggeredAnalysisRounds: new Set<number>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by analysis ID */
-  triggeredAnalysisIds: new Set<string>(),
+  /** ✅ SUMMARY STREAM TRACKING: Prevents duplicate stream submissions by round number */
+  triggeredSummaryRounds: new Set<number>(),
+  /** ✅ SUMMARY STREAM TRACKING: Prevents duplicate stream submissions by summary ID */
+  triggeredSummaryIds: new Set<string>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Track when early optimistic message added by handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: false,
 } satisfies TrackingState;
@@ -178,8 +178,8 @@ export const STREAM_RESUMPTION_DEFAULTS = {
   currentResumptionPhase: null,
   /** Pre-search resumption state (null if web search not enabled) */
   preSearchResumption: null,
-  /** Analyzer resumption state */
-  analyzerResumption: null,
+  /** Summarizer resumption state */
+  summarizerResumption: null,
   /** Current round number for resumption */
   resumptionRoundNumber: null,
 } satisfies StreamResumptionSliceState;
@@ -210,7 +210,7 @@ export const ATTACHMENTS_DEFAULTS = {
 
 /**
  * All streaming-related flags that must be cleared together
- * Used when streaming completes (participants or analysis)
+ * Used when streaming completes (participants or summary)
  */
 export const STREAMING_STATE_RESET = {
   isStreaming: false,
@@ -221,13 +221,13 @@ export const STREAMING_STATE_RESET = {
 } satisfies Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'>;
 
 /**
- * Analysis creation flags
- * Used when analysis creation/streaming completes
+ * Summary creation flags
+ * Used when summary creation/streaming completes
  */
-export const ANALYSIS_STATE_RESET = {
-  isCreatingAnalysis: false,
+export const SUMMARY_STATE_RESET = {
+  isCreatingSummary: false,
   isWaitingForChangelog: false,
-} satisfies Pick<FlagsState, 'isCreatingAnalysis' | 'isWaitingForChangelog'>;
+} satisfies Pick<FlagsState, 'isCreatingSummary' | 'isWaitingForChangelog'>;
 
 /**
  * Pending message state that must be cleared after message is sent
@@ -277,8 +277,8 @@ export const COMPLETE_RESET_STATE = {
   waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
   createdThreadId: UI_DEFAULTS.createdThreadId,
-  // Analysis state
-  analyses: ANALYSIS_DEFAULTS.analyses,
+  // Summary state
+  summaries: SUMMARY_DEFAULTS.summaries,
   // Pre-search state
   preSearches: PRESEARCH_DEFAULTS.preSearches,
   preSearchActivityTimes: new Map<number, number>(),
@@ -295,7 +295,7 @@ export const COMPLETE_RESET_STATE = {
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
-  isCreatingAnalysis: FLAGS_DEFAULTS.isCreatingAnalysis,
+  isCreatingSummary: FLAGS_DEFAULTS.isCreatingSummary,
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
   // Data state
@@ -309,10 +309,10 @@ export const COMPLETE_RESET_STATE = {
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
   // 🚨 BUG FIX: Create fresh Set instances for each complete reset
-  createdAnalysisRounds: new Set<number>(),
+  createdSummaryRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-  triggeredAnalysisRounds: new Set<number>(),
-  triggeredAnalysisIds: new Set<string>(),
+  triggeredSummaryRounds: new Set<number>(),
+  triggeredSummaryIds: new Set<string>(),
   hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // Callbacks state
   onComplete: CALLBACKS_DEFAULTS.onComplete,
@@ -327,7 +327,7 @@ export const COMPLETE_RESET_STATE = {
   prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
   currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
   preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
-  analyzerResumption: STREAM_RESUMPTION_DEFAULTS.analyzerResumption,
+  summarizerResumption: STREAM_RESUMPTION_DEFAULTS.summarizerResumption,
   resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
   // Animation state
   pendingAnimations: new Set<number>(),
@@ -349,7 +349,7 @@ export const THREAD_RESET_STATE = {
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
-  isCreatingAnalysis: FLAGS_DEFAULTS.isCreatingAnalysis,
+  isCreatingSummary: FLAGS_DEFAULTS.isCreatingSummary,
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
   // Data state
@@ -363,10 +363,10 @@ export const THREAD_RESET_STATE = {
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
   // 🚨 BUG FIX: Create fresh Set/Map instances for each thread reset
-  createdAnalysisRounds: new Set<number>(),
+  createdSummaryRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-  triggeredAnalysisRounds: new Set<number>(),
-  triggeredAnalysisIds: new Set<string>(),
+  triggeredSummaryRounds: new Set<number>(),
+  triggeredSummaryIds: new Set<string>(),
   preSearchActivityTimes: new Map<number, number>(),
   hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // AI SDK methods (thread-related)
@@ -383,7 +383,7 @@ export const THREAD_RESET_STATE = {
   prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
   currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
   preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
-  analyzerResumption: STREAM_RESUMPTION_DEFAULTS.analyzerResumption,
+  summarizerResumption: STREAM_RESUMPTION_DEFAULTS.summarizerResumption,
   resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
   // Animation state
   pendingAnimations: new Set<number>(),
@@ -409,8 +409,8 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   messages: THREAD_DEFAULTS.messages,
   error: THREAD_DEFAULTS.error,
   currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
-  // 🚨 CRITICAL: Clear analyses and pre-searches from previous thread
-  analyses: ANALYSIS_DEFAULTS.analyses,
+  // 🚨 CRITICAL: Clear summaries and pre-searches from previous thread
+  summaries: SUMMARY_DEFAULTS.summaries,
   preSearches: PRESEARCH_DEFAULTS.preSearches,
   // 🚨 CRITICAL: Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,

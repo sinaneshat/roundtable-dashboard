@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { AnalysisStatuses, ChangelogTypes, MessagePartTypes, MessageRoles, ThreadStatusSchema } from '@/api/core/enums';
+import { ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
@@ -400,14 +400,14 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // 3. POST endpoint updates status to STREAMING → Executes SSE streaming
     // 4. POST endpoint updates status to COMPLETED → Stores results
     //
-    // Matches moderator analysis pattern: database record created upfront
+    // Matches moderator summary pattern: database record created upfront
     if (body.enableWebSearch) {
       await db.insert(tables.chatPreSearch).values({
         id: ulid(),
         threadId,
         roundNumber: 0, // ✅ 0-BASED: First round is 0
         userQuery: body.firstMessage,
-        status: AnalysisStatuses.PENDING,
+        status: MessageStatuses.PENDING,
         createdAt: now,
       });
     }
@@ -666,7 +666,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // ✅ CRITICAL FIX: Disable participants instead of deleting them
       // Deleting participants breaks foreign key relationships with messages.
       // Messages reference participants via participantId, so if we delete a participant,
-      // analysis queries with `with: { participant: true }` will fail because the join returns null.
+      // summary queries with `with: { participant: true }` will fail because the join returns null.
       // Instead, set isEnabled=false to preserve data integrity while removing from active use.
       const batchOperations: Array<BatchItem<'sqlite'>> = [];
       for (const current of currentParticipants) {
@@ -1072,7 +1072,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     const allPreSearches = await db.query.chatPreSearch.findMany({
       where: and(
         eq(tables.chatPreSearch.threadId, thread.id),
-        eq(tables.chatPreSearch.status, AnalysisStatuses.COMPLETE),
+        eq(tables.chatPreSearch.status, MessageStatuses.COMPLETE),
       ),
       orderBy: [tables.chatPreSearch.roundNumber],
     });

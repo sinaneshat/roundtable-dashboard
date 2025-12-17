@@ -12,27 +12,26 @@
  */
 
 import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  AnalysisStatuses,
+  ChangelogChangeTypes,
   FinishReasons,
   MessageRoles,
-  ScreenModes,
-  ChangelogChangeTypes,
+  MessageStatuses,
 } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import type { ChatThread, ChatParticipant } from '@/db/validation';
+import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
-  createMockAnalysis,
   createMockStoredPreSearch,
+  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
 
-import { createChatStore } from '../store';
 import type { ChatStoreApi } from '../store';
+import { createChatStore } from '../store';
 
 // ============================================================================
 // TYPES
@@ -230,11 +229,11 @@ function simulateRoundCompletion(
   participants: ParticipantConfig[],
   options: {
     includePreSearch?: boolean;
-    includeAnalysis?: boolean;
+    includeSummary?: boolean;
     userContent?: string;
   } = {},
 ): void {
-  const { includePreSearch = false, includeAnalysis = true, userContent = `Question R${roundNumber}` } = options;
+  const { includePreSearch = false, includeSummary = true, userContent = `Question R${roundNumber}` } = options;
 
   // Get existing messages
   const existingMessages = store.getState().messages;
@@ -248,7 +247,7 @@ function simulateRoundCompletion(
 
   // Pre-search if enabled
   if (includePreSearch) {
-    store.getState().addPreSearch(createMockStoredPreSearch(roundNumber, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(roundNumber, MessageStatuses.COMPLETE));
   }
 
   // Participant messages
@@ -266,9 +265,9 @@ function simulateRoundCompletion(
 
   store.getState().setMessages([...existingMessages, userMsg, ...participantMsgs]);
 
-  // Analysis
-  if (includeAnalysis) {
-    store.getState().addAnalysis(createMockAnalysis(roundNumber, AnalysisStatuses.COMPLETE));
+  // Summary
+  if (includeSummary) {
+    store.getState().addSummary(createMockSummary(roundNumber, MessageStatuses.COMPLETE));
   }
 }
 
@@ -335,7 +334,7 @@ describe('mode Change Timeline Tests', () => {
         useThreadTimeline({
           messages,
           changelog,
-          analyses: [],
+          summaries: [],
         }),
       );
 
@@ -403,7 +402,7 @@ describe('mode Change Timeline Tests', () => {
 
   describe('multiple Mode Changes Across Rounds', () => {
     it('should track mode changes independently per round', () => {
-      const store = createChatStore();
+      const _store = createChatStore();
       const threadId = 'thread-123';
 
       const configs: RoundConfiguration[] = [
@@ -475,7 +474,7 @@ describe('web Search Toggle Timeline Tests', () => {
       store.getState().setParticipants([createMockParticipant(0, 'gpt-4o')]);
 
       // Add pre-search
-      store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+      store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
 
       const preSearches = store.getState().preSearches;
       expect(preSearches).toHaveLength(1);
@@ -657,11 +656,11 @@ describe('participant Change Timeline Tests', () => {
 
       // Verify messages
       const messages = store.getState().messages;
-      const r0Msgs = messages.filter(m => {
+      const r0Msgs = messages.filter((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.roundNumber === 0 && meta?.role === MessageRoles.ASSISTANT;
       });
-      const r1Msgs = messages.filter(m => {
+      const r1Msgs = messages.filter((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.roundNumber === 1 && meta?.role === MessageRoles.ASSISTANT;
       });
@@ -792,7 +791,7 @@ describe('participant Change Timeline Tests', () => {
       simulateRoundCompletion(store, 1, participants1);
 
       // Verify R1 messages have correct order
-      const r1Msgs = store.getState().messages.filter(m => {
+      const r1Msgs = store.getState().messages.filter((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.roundNumber === 1 && meta?.role === MessageRoles.ASSISTANT;
       }).sort((a, b) => {
@@ -998,7 +997,7 @@ describe('combined Changes Timeline Tests', () => {
       createMockParticipant(0, 'gpt-4o', 'Lead'),
       createMockParticipant(1, 'claude-3-opus', 'Support'),
     ]);
-    store.getState().addPreSearch(createMockStoredPreSearch(1, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(1, MessageStatuses.COMPLETE));
     simulateRoundCompletion(store, 1, [
       { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
       { id: 'p1', modelId: 'claude-3-opus', role: 'Support', priority: 1, isEnabled: true },
@@ -1007,13 +1006,13 @@ describe('combined Changes Timeline Tests', () => {
     // Verify timeline elements via useThreadTimeline
     const preSearches = store.getState().preSearches;
     const messages = store.getState().messages;
-    const analyses = store.getState().analyses;
+    const summaries = store.getState().summaries;
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
         changelog,
-        analyses,
+        summaries,
         preSearches,
       }),
     );
@@ -1029,13 +1028,13 @@ describe('combined Changes Timeline Tests', () => {
     expect(preSearches.find(ps => ps.roundNumber === 1)).toBeDefined();
 
     // R1 messages
-    expect(messages.filter(m => {
+    expect(messages.filter((m) => {
       const meta = m.metadata as DbAssistantMessageMetadata;
       return meta?.roundNumber === 1 && meta?.role === MessageRoles.ASSISTANT;
     })).toHaveLength(2);
 
-    // R1 analysis
-    expect(analyses.find(a => a.roundNumber === 1)).toBeDefined();
+    // R1 summary
+    expect(summaries.find(a => a.roundNumber === 1)).toBeDefined();
 
     // Verify timeline order for R1: changelog comes before messages
     const r1Items = result.current.filter(item => item.roundNumber === 1);
@@ -1103,7 +1102,7 @@ describe('changelog Placement in Timeline', () => {
     const messages = store.getState().messages;
 
     // Verify R1 user message exists
-    const r1UserMsg = messages.find(m => {
+    const r1UserMsg = messages.find((m) => {
       const meta = m.metadata as DbUserMessageMetadata;
       return meta?.role === MessageRoles.USER && meta?.roundNumber === 1;
     });
@@ -1114,7 +1113,7 @@ describe('changelog Placement in Timeline', () => {
       useThreadTimeline({
         messages,
         changelog,
-        analyses: [],
+        summaries: [],
       }),
     );
 
@@ -1304,13 +1303,13 @@ describe('round Number Consistency', () => {
     });
 
     store.getState().setMessages([userMsg, p0Msg]);
-    store.getState().addPreSearch(createMockStoredPreSearch(roundNumber, AnalysisStatuses.COMPLETE));
-    store.getState().addAnalysis(createMockAnalysis(roundNumber, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(roundNumber, MessageStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(roundNumber, MessageStatuses.COMPLETE));
 
     // Verify all elements have correct roundNumber
     const messages = store.getState().messages;
     const preSearches = store.getState().preSearches;
-    const analyses = store.getState().analyses;
+    const summaries = store.getState().summaries;
 
     messages.forEach((msg) => {
       const meta = msg.metadata as DbUserMessageMetadata | DbAssistantMessageMetadata;
@@ -1318,7 +1317,7 @@ describe('round Number Consistency', () => {
     });
 
     expect(preSearches[0]?.roundNumber).toBe(roundNumber);
-    expect(analyses[0]?.roundNumber).toBe(roundNumber);
+    expect(summaries[0]?.roundNumber).toBe(roundNumber);
   });
 
   it('should detect roundNumber mismatch in message ID vs metadata', () => {

@@ -111,7 +111,7 @@ if (mode === 'analyzing') {
 |------|----------------|-----------|
 | `MessageRoles` | `USER`, `ASSISTANT`, `TOOL` | Message role discrimination |
 | `ChatModes` | `ANALYZING`, `BRAINSTORMING`, `DEBATING`, `SOLVING` | Thread mode selection |
-| `AnalysisStatuses` | `PENDING`, `STREAMING`, `COMPLETE`, `FAILED` | Moderator analysis lifecycle |
+| `MessageStatuses` | `PENDING`, `STREAMING`, `COMPLETE`, `FAILED` | Message lifecycle (summaries, pre-searches) |
 | `PreSearchStatuses` | `IDLE`, `STREAMING`, `ACTIVE`, `COMPLETE`, `FAILED` | Pre-search lifecycle |
 | `AiSdkStatuses` | `READY`, `SUBMITTED`, `STREAMING`, `ERROR` | AI SDK hook status |
 
@@ -1903,14 +1903,14 @@ export const MY_JSON_STRUCTURE = {
 - Use `satisfies ValidatePromptTemplate<SchemaType>` to ensure template matches schema
 - Import `p.compute`, `p.context`, `p.extract`, `p.optional` helpers for consistent placeholders
 - Location: `/src/api/utils/prompt-template.ts` provides the type utilities
-- Example: See `MODERATOR_ANALYSIS_JSON_STRUCTURE` in `/src/api/services/prompts.service.ts`
+- Example: See `MODERATOR_SUMMARY_JSON_STRUCTURE` in `/src/api/services/prompts.service.ts`
 
 ### ❌ Hardcoded Mock Data Without Type Validation
 
 **WRONG**:
 ```typescript
 // Mock data can drift from schema without warning
-const mockAnalysis = {
+const mockSummary = {
   article: { headline: 'Test', narrative: 'Content' },
   // Missing required fields? No error until runtime
 };
@@ -1918,12 +1918,12 @@ const mockAnalysis = {
 
 **CORRECT**:
 ```typescript
-import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
+import type { ModeratorSummaryPayload } from '@/api/routes/chat/schema';
 
 // Type-safe mock factory - compile error if schema changes
 const createTypeSafeMockData = (
-  overrides?: Partial<ModeratorAnalysisPayload>
-): ModeratorAnalysisPayload => ({
+  overrides?: Partial<ModeratorSummaryPayload>
+): ModeratorSummaryPayload => ({
   article: { headline: 'Test', narrative: 'Content', keyTakeaway: 'Action' },
   // All required fields enforced by TypeScript
   ...overrides,

@@ -16,7 +16,6 @@ import type { ChatStoreApi } from '@/stores/chat';
 type UseNavigationCleanupParams = {
   store: ChatStoreApi;
   prevPathnameRef: MutableRefObject<string | null>;
-  preSearchCreationAttemptedRef: MutableRefObject<Set<number>>;
 };
 
 /**
@@ -25,7 +24,6 @@ type UseNavigationCleanupParams = {
 export function useNavigationCleanup({
   store,
   prevPathnameRef,
-  preSearchCreationAttemptedRef,
 }: UseNavigationCleanupParams) {
   const pathname = usePathname();
 
@@ -36,7 +34,7 @@ export function useNavigationCleanup({
     if (prevPath === null) {
       prevPathnameRef.current = pathname;
       if (pathname === '/chat') {
-        preSearchCreationAttemptedRef.current = new Set();
+        store.getState().clearAllPreSearchTracking();
       }
       return;
     }
@@ -69,15 +67,15 @@ export function useNavigationCleanup({
       currentState.setWaitingToStartStreaming(false);
     }
 
-    // Clear refs when navigating to /chat
+    // Clear tracking when navigating to /chat
     if (isGoingToOverview && (isLeavingThread || isComingFromNonChatPage)) {
-      preSearchCreationAttemptedRef.current = new Set();
+      currentState.clearAllPreSearchTracking();
     }
 
     // Full reset when navigating between different threads
     if (isNavigatingBetweenThreads) {
       currentState.resetForThreadNavigation();
-      preSearchCreationAttemptedRef.current = new Set();
+      currentState.clearAllPreSearchTracking();
     }
 
     // Reset when navigating from overview to a DIFFERENT thread
@@ -92,5 +90,5 @@ export function useNavigationCleanup({
     }
 
     prevPathnameRef.current = pathname;
-  }, [pathname, store, prevPathnameRef, preSearchCreationAttemptedRef]);
+  }, [pathname, store, prevPathnameRef]);
 }

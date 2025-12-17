@@ -42,7 +42,7 @@ type PreSearchStatus = {
   };
 };
 
-type AnalysisStatus = {
+type MessageStatus = {
   roundNumber: number;
   status: 'pending' | 'streaming' | 'complete' | 'failed';
   data?: {
@@ -53,11 +53,11 @@ type AnalysisStatus = {
 
 type RoundState = {
   roundNumber: number;
-  status: 'pending' | 'pre_search' | 'streaming' | 'analysis' | 'complete' | 'error';
+  status: 'pending' | 'pre_search' | 'streaming' | 'summary' | 'complete' | 'error';
   userMessage?: Message;
   participantMessages: Message[];
   preSearch?: PreSearchStatus;
-  analysis?: AnalysisStatus;
+  summary?: MessageStatus;
   startedAt: Date;
   completedAt?: Date;
 };
@@ -197,13 +197,13 @@ function advanceToNextParticipant(state: ConversationState): ConversationState {
   return state;
 }
 
-function startAnalysis(state: ConversationState, roundNumber: number): ConversationState {
+function startSummary(state: ConversationState, roundNumber: number): ConversationState {
   const round = state.rounds.get(roundNumber);
   if (!round)
     return state;
 
-  round.status = 'analysis';
-  round.analysis = {
+  round.status = 'summary';
+  round.summary = {
     roundNumber,
     status: 'streaming',
   };
@@ -211,17 +211,17 @@ function startAnalysis(state: ConversationState, roundNumber: number): Conversat
   return state;
 }
 
-function completeAnalysis(
+function completeSummary(
   state: ConversationState,
   roundNumber: number,
-  data: AnalysisStatus['data'],
+  data: MessageStatus['data'],
 ): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round || !round.analysis)
+  if (!round || !round.summary)
     return state;
 
-  round.analysis.status = 'complete';
-  round.analysis.data = data;
+  round.summary.status = 'complete';
+  round.summary.data = data;
 
   return state;
 }
@@ -483,8 +483,8 @@ describe('multi-Round Streaming Lifecycle', () => {
     });
   });
 
-  describe('analysis Phase', () => {
-    it('should trigger analysis after all participants complete', () => {
+  describe('summary Phase', () => {
+    it('should trigger summary after all participants complete', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
@@ -508,15 +508,15 @@ describe('multi-Round Streaming Lifecycle', () => {
           state = advanceToNextParticipant(state);
       }
 
-      // Start analysis
-      state = startAnalysis(state, 0);
+      // Start summary
+      state = startSummary(state, 0);
 
       const round = state.rounds.get(0);
-      expect(round?.status).toBe('analysis');
-      expect(round?.analysis?.status).toBe('streaming');
+      expect(round?.status).toBe('summary');
+      expect(round?.summary?.status).toBe('streaming');
     });
 
-    it('should complete round after analysis finishes', () => {
+    it('should complete round after summary finishes', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
@@ -539,8 +539,8 @@ describe('multi-Round Streaming Lifecycle', () => {
           state = advanceToNextParticipant(state);
       }
 
-      state = startAnalysis(state, 0);
-      state = completeAnalysis(state, 0, {
+      state = startSummary(state, 0);
+      state = completeSummary(state, 0, {
         leaderboard: [{ participantId: 'p1', score: 9 }],
         summary: 'Great discussion',
       });
@@ -548,7 +548,7 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       const round = state.rounds.get(0);
       expect(round?.status).toBe('complete');
-      expect(round?.analysis?.status).toBe('complete');
+      expect(round?.summary?.status).toBe('complete');
       expect(round?.completedAt).toBeDefined();
       expect(state.isStreaming).toBe(false);
     });
@@ -575,8 +575,8 @@ describe('multi-Round Streaming Lifecycle', () => {
         if (i < 2)
           state = advanceToNextParticipant(state);
       }
-      state = startAnalysis(state, 0);
-      state = completeAnalysis(state, 0, { leaderboard: [], summary: 'R0' });
+      state = startSummary(state, 0);
+      state = completeSummary(state, 0, { leaderboard: [], summary: 'R0' });
       state = completeRound(state, 0);
 
       // Complete Round 1
@@ -596,8 +596,8 @@ describe('multi-Round Streaming Lifecycle', () => {
         if (i < 2)
           state = advanceToNextParticipant(state);
       }
-      state = startAnalysis(state, 1);
-      state = completeAnalysis(state, 1, { leaderboard: [], summary: 'R1' });
+      state = startSummary(state, 1);
+      state = completeSummary(state, 1, { leaderboard: [], summary: 'R1' });
       state = completeRound(state, 1);
 
       // Complete Round 2
@@ -617,8 +617,8 @@ describe('multi-Round Streaming Lifecycle', () => {
         if (i < 2)
           state = advanceToNextParticipant(state);
       }
-      state = startAnalysis(state, 2);
-      state = completeAnalysis(state, 2, { leaderboard: [], summary: 'R2' });
+      state = startSummary(state, 2);
+      state = completeSummary(state, 2, { leaderboard: [], summary: 'R2' });
       state = completeRound(state, 2);
 
       // Verify all rounds exist and are complete
@@ -629,7 +629,7 @@ describe('multi-Round Streaming Lifecycle', () => {
         const round = state.rounds.get(r);
         expect(round?.status).toBe('complete');
         expect(round?.participantMessages).toHaveLength(3);
-        expect(round?.analysis?.status).toBe('complete');
+        expect(round?.summary?.status).toBe('complete');
       }
     });
 
@@ -664,8 +664,8 @@ describe('multi-Round Streaming Lifecycle', () => {
       state = appendToMessage(state, msgId2, 'Key concepts include...');
       state = completeMessage(state, msgId2);
 
-      state = startAnalysis(state, 0);
-      state = completeAnalysis(state, 0, { leaderboard: [], summary: 'Good overview' });
+      state = startSummary(state, 0);
+      state = completeSummary(state, 0, { leaderboard: [], summary: 'Good overview' });
       state = completeRound(state, 0);
 
       // Start Round 1
@@ -803,8 +803,8 @@ describe('multi-Round Streaming Lifecycle', () => {
       }
 
       // Third participant fails, round still completes
-      state = startAnalysis(state, 0);
-      state = completeAnalysis(state, 0, { leaderboard: [], summary: 'Partial' });
+      state = startSummary(state, 0);
+      state = completeSummary(state, 0, { leaderboard: [], summary: 'Partial' });
       state = completeRound(state, 0);
 
       const round = state.rounds.get(0);

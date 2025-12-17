@@ -10,7 +10,7 @@
  * - Enables type-safe filtering in handlers and services
  *
  * **CONSOLIDATION NOTES**:
- * - Replaces inline filtering logic from analysis.handler.ts:315-320, 360-384
+ * - Replaces inline filtering logic from summary.handler.ts:315-320, 360-384
  * - Replaces inline filtering logic from streaming.handler.ts:501-504
  * - Replaces inline filtering logic from message-persistence.service.ts:583-590
  *
@@ -34,7 +34,7 @@ import {
  * Pre-search messages contain web search results and are NOT participant responses.
  *
  * **REPLACES**: Inline `metadata?.isPreSearch === true` checks in handlers
- * **CONSOLIDATES**: Pattern from streaming.handler.ts:501-504, analysis.handler.ts:316-320
+ * **CONSOLIDATES**: Pattern from streaming.handler.ts:501-504, summary.handler.ts:316-320
  *
  * @param message - ChatMessage from database query
  * @returns true if message is pre-search with validated metadata
@@ -62,7 +62,7 @@ export function isDbPreSearchMessage(message: ChatMessage): boolean {
  * This double-check ensures database integrity and prevents pre-search leakage
  *
  * **REPLACES**: Inline participantId + metadata checks in handlers
- * **CONSOLIDATES**: Pattern from analysis.handler.ts:375-384, message-persistence.service.ts:583-590
+ * **CONSOLIDATES**: Pattern from summary.handler.ts:375-384, message-persistence.service.ts:583-590
  *
  * @param message - ChatMessage from database query
  * @returns true if message is participant response with validated metadata
@@ -96,7 +96,7 @@ export function isDbParticipantMessage(message: ChatMessage): boolean {
  * Excludes pre-search messages to ensure only participant responses are included.
  *
  * **REPLACES**: Inline filter logic throughout handlers
- * **CONSOLIDATES**: Pattern from analysis.handler.ts:315-320, 360-384, streaming.handler.ts:501-504
+ * **CONSOLIDATES**: Pattern from summary.handler.ts:315-320, 360-384, streaming.handler.ts:501-504
  *
  * **USE CASES**:
  * - Analysis handler: Filter messages for moderator analysis
@@ -108,7 +108,7 @@ export function isDbParticipantMessage(message: ChatMessage): boolean {
  *
  * @example
  * ```typescript
- * // In analysis.handler.ts
+ * // In summary.handler.ts
  * const participantMessages = filterDbToParticipantMessages(roundMessages);
  * // Now guaranteed to only contain participant responses
  * ```

@@ -419,7 +419,7 @@ export const GenerateResponsesInputSchema = z.object({
 }).openapi('GenerateResponsesInput');
 
 /**
- * Generate Analysis Input
+ * Generate Summary Input
  */
 export const GenerateAnalysisInputSchema = z.object({
   threadId: CoreSchemas.id(),
@@ -463,7 +463,7 @@ export const UpdateParticipantInputSchema = z.object({
 }).openapi('UpdateParticipantInput');
 
 /**
- * Get Round Analysis Input
+ * Get Round Summary Input
  */
 export const GetRoundAnalysisInputSchema = z.object({
   threadId: CoreSchemas.id(),
@@ -800,7 +800,7 @@ export const MCP_TOOLS: MCPTool[] = [
   // Round Management
   {
     name: 'list_rounds',
-    description: 'List all rounds in a thread with metadata (message count, analysis status, feedback).',
+    description: 'List all rounds in a thread with metadata (message count, summary status, feedback).',
     inputSchema: {
       type: 'object',
       properties: { threadId: { type: 'string', description: 'Thread ID' } },
@@ -832,10 +832,10 @@ export const MCP_TOOLS: MCPTool[] = [
       required: ['threadId', 'roundNumber', 'feedback'],
     },
   },
-  // Analysis
+  // Summary
   {
     name: 'generate_analysis',
-    description: 'Generate AI moderator analysis comparing participant responses for a round.',
+    description: 'Generate AI moderator summary comparing participant responses for a round.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -847,7 +847,7 @@ export const MCP_TOOLS: MCPTool[] = [
   },
   {
     name: 'get_round_analysis',
-    description: 'Retrieve existing moderator analysis for a specific round.',
+    description: 'Retrieve existing moderator summary for a specific round.',
     inputSchema: {
       type: 'object',
       properties: {

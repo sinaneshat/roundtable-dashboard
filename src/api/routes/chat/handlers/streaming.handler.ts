@@ -243,25 +243,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // OLD FLOW (Broken - caused participants to speak before web search):
       //   User message → Participant streaming → Pre-search created here → Search executes
       //
-      // NEW FLOW (Fixed - correct event ordering):
-      //   User message → Frontend creates PENDING pre-search → Search executes → COMPLETE → Participants start
+      // CURRENT FLOW (consolidated - execute auto-creates):
+      //   User message → Frontend adds placeholder → Execute endpoint auto-creates + streams → COMPLETE → Participants start
       //
-      // CHANGES:
-      // - Round 0: Pre-search created in thread.handler.ts:269-278 (thread creation) ✅ Already correct
-      // - Round N: Pre-search created by frontend via createPreSearchHandler BEFORE sendMessage() ✅ Fixed
-      //
-      // REMOVED:
-      // - Pre-search creation code (lines 128-196) moved to createPreSearchHandler
-      // - Frontend now calls createPreSearchRoute BEFORE participant streaming
-      // - Ensures PENDING record exists before participants start
+      // IMPLEMENTATION:
+      // - Execute endpoint (executePreSearchHandler) auto-creates DB record if not exists
+      // - Frontend uses placeholder pre-search for optimistic UI
+      // - No separate create endpoint needed - single source of truth
       //
       // REFERENCE:
-      // - New endpoint: POST /chat/threads/:threadId/rounds/:roundNumber/pre-search/create
-      // - Handler: createPreSearchHandler in pre-search.handler.ts
-      // - Frontend: useCreatePreSearch hook + chat-store-provider.tsx
-      //
-      // This comment serves as historical record of the bug fix.
-      // See WEB_SEARCH_ORDERING_FIX_STRATEGY.md for complete details.
+      // - Endpoint: POST /chat/threads/:threadId/rounds/:roundNumber/pre-search
+      // - Handler: executePreSearchHandler in pre-search.handler.ts
+      // - Frontend: useStreamingTrigger hook in chat-store-provider
 
       // =========================================================================
       // STEP 4: Handle regeneration (delete old round data)

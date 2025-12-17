@@ -34,7 +34,7 @@ export type GetUsageStatsResponse = InferResponseType<
  * Returns ALL quota information (can derive canCreate from used/limit):
  * - threads: { used, limit, remaining, percentage, status }
  * - messages: { used, limit, remaining, percentage, status }
- * - analysis: { used, limit, remaining, percentage, status }
+ * - analysis: { used, limit, remaining, percentage, status } (round summaries)
  * - customRoles: { used, limit, remaining, percentage, status }
  * - period: { start, end, daysRemaining }
  * - subscription: { tier, isAnnual }

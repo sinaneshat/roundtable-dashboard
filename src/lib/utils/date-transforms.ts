@@ -12,15 +12,15 @@
 
 import type { z } from 'zod';
 
-import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
-import { StoredModeratorAnalysisSchema, StoredPreSearchSchema } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import { StoredPreSearchSchema, StoredRoundSummarySchema } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // TYPE INFERENCE FROM SINGLE SOURCE OF TRUTH
 // ============================================================================
 
 /** Inferred type for raw API response - uses schema from @/api/routes/chat/schema */
-export type RawStoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
+export type RawStoredRoundSummary = z.infer<typeof StoredRoundSummarySchema>;
 
 // ============================================================================
 // CORE DATE UTILITIES
@@ -192,31 +192,31 @@ export function transformChatMessage(
 }
 
 /**
- * Transform StoredModeratorAnalysis API response with date fields
+ * Transform StoredRoundSummary API response with date fields
  *
- * **SINGLE SOURCE OF TRUTH**: Use for all analysis data transformations.
+ * **SINGLE SOURCE OF TRUTH**: Use for all round summary data transformations.
  * Uses Zod schema validation for type safety.
  *
  * Converts string dates to Date objects:
  * - createdAt: always present
  * - completedAt: nullable
  *
- * @param analysis - Raw analysis from API (validated against schema)
- * @returns Analysis with Date objects
+ * @param summary - Raw summary from API (validated against schema)
+ * @returns Summary with Date objects
  *
  * @example
  * ```typescript
- * const analyses = apiResponse.data.items.map(transformModeratorAnalysis);
+ * const summaries = apiResponse.data.items.map(transformRoundSummary);
  * ```
  */
-export function transformModeratorAnalysis(
-  analysis: unknown,
-): StoredModeratorAnalysis {
+export function transformRoundSummary(
+  summary: unknown,
+): StoredRoundSummary {
   // Validate input against schema
-  const validated = StoredModeratorAnalysisSchema.parse(analysis);
+  const validated = StoredRoundSummarySchema.parse(summary);
 
   // ✅ TYPE-SAFE: Return properly typed object
-  // Schema validation ensures this matches StoredModeratorAnalysis
+  // Schema validation ensures this matches StoredRoundSummary
   return {
     ...validated,
     createdAt: ensureDate(validated.createdAt),
@@ -289,23 +289,28 @@ export function transformChatMessages(
 }
 
 /**
- * Transform array of moderator analyses
+ * Transform array of round summaries
  *
  * **Zod-validated transformation** - No type assertions needed.
  *
- * @param analyses - Array of raw analyses from API (validated against schema)
- * @returns Array of analyses with Date objects
+ * @param summaries - Array of raw summaries from API (validated against schema)
+ * @returns Array of summaries with Date objects
  *
  * @example
  * ```typescript
- * const analyses = transformModeratorAnalyses(apiResponse.data.items);
+ * const summaries = transformRoundSummaries(apiResponse.data.items);
  * ```
  */
-export function transformModeratorAnalyses(
-  analyses: unknown[],
-): StoredModeratorAnalysis[] {
-  return analyses.map(transformModeratorAnalysis);
+export function transformRoundSummaries(
+  summaries: unknown[],
+): StoredRoundSummary[] {
+  return summaries.map(transformRoundSummary);
 }
+
+/**
+ * @deprecated Use transformRoundSummaries instead
+ */
+export const transformModeratorAnalyses = transformRoundSummaries;
 
 /**
  * Transform a single pre-search from API format to application format
@@ -367,7 +372,7 @@ export type ThreadDataBundle = {
   messages?: Array<Omit<ChatMessage, 'createdAt'> & {
     createdAt: string | Date;
   }>;
-  analyses?: unknown[];
+  summaries?: unknown[];
 };
 
 /**
@@ -377,7 +382,7 @@ export type TransformedThreadDataBundle = {
   thread?: ChatThread;
   participants?: ChatParticipant[];
   messages?: ChatMessage[];
-  analyses?: StoredModeratorAnalysis[];
+  summaries?: StoredRoundSummary[];
 };
 
 /**
@@ -416,6 +421,6 @@ export function transformThreadBundle(
     thread: bundle.thread ? transformChatThread(bundle.thread) : undefined,
     participants: bundle.participants ? transformChatParticipants(bundle.participants) : undefined,
     messages: bundle.messages ? transformChatMessages(bundle.messages) : undefined,
-    analyses: bundle.analyses ? transformModeratorAnalyses(bundle.analyses) : undefined,
+    summaries: bundle.summaries ? transformRoundSummaries(bundle.summaries) : undefined,
   };
 }

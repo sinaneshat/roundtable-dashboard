@@ -1170,7 +1170,7 @@ This project follows a strict foreign key cascade policy to ensure data integrit
 | Parent Table | Child Table | ON DELETE Behavior | Rationale |
 |--------------|-------------|-------------------|-----------|
 | `user` | ALL tables | CASCADE | User owns all data - complete removal |
-| `chat_thread` | `chat_message`, `chat_participant`, `chat_thread_changelog`, `chat_moderator_analysis` | CASCADE | Thread-scoped data - remove with thread |
+| `chat_thread` | `chat_message`, `chat_participant`, `chat_thread_changelog`, `chat_moderator_summary` | CASCADE | Thread-scoped data - remove with thread |
 | `chat_participant` | `chat_message` | SET NULL | Preserve historical messages even if participant removed |
 | `chat_custom_role` | `chat_participant` | SET NULL | Participants have inline role fallback (`settings.systemPrompt`) |
 | `stripe_subscription` | `stripe_invoice` | SET NULL | Preserve historical invoices for accounting/audit |
@@ -1215,7 +1215,7 @@ threadId: text('thread_id')
 - `chat_message` - All messages in thread
 - `chat_participant` - All AI participants
 - `chat_thread_changelog` - Thread history
-- `chat_moderator_analysis` - AI analysis rounds
+- `chat_moderator_summary` - AI summary rounds
 
 **3. Participant Deletion → SET NULL for Messages**
 

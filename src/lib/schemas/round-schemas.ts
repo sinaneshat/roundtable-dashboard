@@ -37,7 +37,7 @@ export const NO_ROUND_SENTINEL = -1;
  * ✅ 0-BASED: Allows 0 (first round)
  * ✅ NON-NEGATIVE: Rejects negative numbers except sentinel
  * ✅ NO .int(): AI SDK providers reject integer type constraints in output_format schemas
- * IMPORTANT: This schema is used in AI-generated schemas (ModeratorAnalysisPayloadSchema)
+ * IMPORTANT: This schema is used in AI-generated schemas (RoundSummaryPayloadSchema)
  * so we CANNOT use .int() as it causes "integer type properties maximum, minimum not supported" errors
  */
 export const RoundNumberSchema = z.number().describe('Round number (0-based: first round is 0, must be integer >= 0)');

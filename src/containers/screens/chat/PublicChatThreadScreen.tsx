@@ -13,7 +13,7 @@ import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
-import { transformModeratorAnalysis, transformPreSearches } from '@/lib/utils/date-transforms';
+import { transformPreSearches, transformRoundSummary } from '@/lib/utils/date-transforms';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
@@ -26,7 +26,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
-  const rawAnalyses = useMemo(() => threadResponse?.analyses || [], [threadResponse]);
+  const rawSummaries = useMemo(() => threadResponse?.summaries || [], [threadResponse]);
   const rawFeedback = useMemo(() => threadResponse?.feedback || [], [threadResponse]);
   const user = useMemo(() => threadResponse?.user, [threadResponse]);
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
@@ -40,11 +40,11 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     updatedAt: new Date(p.updatedAt),
   })), [rawParticipants]);
 
-  // Transform analyses - convert string dates to Date objects using Zod validation
-  // ✅ SINGLE SOURCE OF TRUTH: Use transformModeratorAnalysis for type-safe date conversion
-  const analyses = useMemo(
-    () => rawAnalyses?.map(analysis => transformModeratorAnalysis(analysis)) || [],
-    [rawAnalyses],
+  // Transform summaries - convert string dates to Date objects using Zod validation
+  // ✅ SINGLE SOURCE OF TRUTH: Use transformRoundSummary for type-safe date conversion
+  const summaries = useMemo(
+    () => rawSummaries?.map((summary: { createdAt: string | Date; completedAt?: string | Date | null; [key: string]: unknown }) => transformRoundSummary(summary)) || [],
+    [rawSummaries],
   );
 
   // ✅ PUBLIC PAGE FIX: Include pre-searches for web search display
@@ -68,7 +68,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const timeline: TimelineItem[] = useThreadTimeline({
     messages,
     changelog,
-    analyses,
+    summaries,
     preSearches,
   });
 
@@ -78,7 +78,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   useChatScroll({
     messages,
-    analyses,
+    summaries,
     enableNearBottomDetection: true,
   });
 

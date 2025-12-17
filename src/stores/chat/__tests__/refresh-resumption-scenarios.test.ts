@@ -9,7 +9,7 @@
  * - Refresh during participant 0 streaming
  * - Refresh between participants (P0 done, P1 not started)
  * - Refresh during last participant streaming
- * - Refresh during analysis streaming
+ * - Refresh during summary streaming
  * - Refresh after round complete
  *
  * Resumption Behavior:
@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons, MessageRoles, StreamStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, StreamStatuses } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import {
   createMockParticipant,
@@ -42,7 +42,7 @@ import {
 type _RefreshScenario = {
   name: string;
   preRefreshState: {
-    streamingPhase: 'pre-search' | 'participant' | 'analysis' | 'complete';
+    streamingPhase: 'pre-search' | 'participant' | 'summary' | 'complete';
     currentParticipantIndex: number;
     participantCount: number;
     roundNumber: number;
@@ -122,31 +122,31 @@ function createPartialRoundMessages(
 describe('refresh During Pre-Search', () => {
   describe('pre-Search Still Streaming', () => {
     it('detects incomplete pre-search on refresh', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.STREAMING);
+      const preSearch = createMockStoredPreSearch(0, MESSAGE_STATUSES.STREAMING);
       const _messages = [
         createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
       ];
 
-      const hasIncompletePreSearch = preSearch.status === AnalysisStatuses.PENDING
-        || preSearch.status === AnalysisStatuses.STREAMING;
+      const hasIncompletePreSearch = preSearch.status === MESSAGE_STATUSES.PENDING
+        || preSearch.status === MESSAGE_STATUSES.STREAMING;
 
       expect(hasIncompletePreSearch).toBe(true);
     });
 
     it('blocks participant streaming while pre-search incomplete', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.STREAMING);
+      const preSearch = createMockStoredPreSearch(0, MESSAGE_STATUSES.STREAMING);
 
-      const shouldWaitForPreSearch = preSearch.status === AnalysisStatuses.PENDING
-        || preSearch.status === AnalysisStatuses.STREAMING;
+      const shouldWaitForPreSearch = preSearch.status === MESSAGE_STATUSES.PENDING
+        || preSearch.status === MESSAGE_STATUSES.STREAMING;
 
       expect(shouldWaitForPreSearch).toBe(true);
     });
 
     it('resumes participants after pre-search completes', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE);
+      const preSearch = createMockStoredPreSearch(0, MESSAGE_STATUSES.COMPLETE);
 
-      const shouldWaitForPreSearch = preSearch.status === AnalysisStatuses.PENDING
-        || preSearch.status === AnalysisStatuses.STREAMING;
+      const shouldWaitForPreSearch = preSearch.status === MESSAGE_STATUSES.PENDING
+        || preSearch.status === MESSAGE_STATUSES.STREAMING;
 
       expect(shouldWaitForPreSearch).toBe(false);
     });
@@ -154,7 +154,7 @@ describe('refresh During Pre-Search', () => {
 
   describe('orphaned Pre-Search (User Message Missing)', () => {
     it('detects orphaned pre-search without user message', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.STREAMING);
+      const preSearch = createMockStoredPreSearch(0, MESSAGE_STATUSES.STREAMING);
       preSearch.userQuery = 'Lost user query';
       const messages: unknown[] = []; // No messages
 
@@ -164,7 +164,7 @@ describe('refresh During Pre-Search', () => {
     });
 
     it('recovers user query from orphaned pre-search', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE);
+      const preSearch = createMockStoredPreSearch(0, MESSAGE_STATUSES.COMPLETE);
       preSearch.userQuery = 'Recovered query text';
 
       // Should create optimistic user message from userQuery
@@ -372,18 +372,18 @@ describe('refresh During Participant Streaming', () => {
 // ============================================================================
 
 describe('refresh During Analysis', () => {
-  describe('analysis Streaming', () => {
+  describe('summary Streaming', () => {
     it('detects analysis in progress', () => {
-      const analysisStatus = AnalysisStatuses.STREAMING;
+      const analysisStatus = MESSAGE_STATUSES.STREAMING;
 
-      const isAnalysisComplete = analysisStatus === AnalysisStatuses.COMPLETE
-        || analysisStatus === AnalysisStatuses.FAILED;
+      const isAnalysisComplete = analysisStatus === MESSAGE_STATUSES.COMPLETE
+        || analysisStatus === MESSAGE_STATUSES.FAILED;
 
       expect(isAnalysisComplete).toBe(false);
     });
 
     it('allows round to complete even if analysis fails', () => {
-      const _analysisStatus = AnalysisStatuses.FAILED;
+      const _analysisStatus = MESSAGE_STATUSES.FAILED;
       const allParticipantsComplete = true;
 
       // Round is considered complete even with failed analysis
@@ -394,27 +394,27 @@ describe('refresh During Analysis', () => {
     });
   });
 
-  describe('navigation Blocked Until Analysis Complete', () => {
-    it('blocks navigation on overview screen until analysis complete', () => {
+  describe('navigation Blocked Until Summary Complete', () => {
+    it('blocks navigation on overview screen until summary complete', () => {
       const screenMode = 'overview';
-      const analysisStatus = AnalysisStatuses.STREAMING;
+      const summaryStatus = MESSAGE_STATUSES.STREAMING;
       const hasAiGeneratedTitle = true;
 
       const canNavigate = screenMode === 'overview'
-        && analysisStatus === AnalysisStatuses.COMPLETE
+        && summaryStatus === MESSAGE_STATUSES.COMPLETE
         && hasAiGeneratedTitle;
 
       expect(canNavigate).toBe(false);
     });
 
-    it('allows navigation when analysis complete', () => {
+    it('allows navigation when summary complete', () => {
       const screenMode = 'overview';
-      const analysisStatus = AnalysisStatuses.COMPLETE;
+      const summaryStatus = MESSAGE_STATUSES.COMPLETE;
       const hasAiGeneratedTitle = true;
       const threadSlug = 'test-thread';
 
       const canNavigate = screenMode === 'overview'
-        && analysisStatus === AnalysisStatuses.COMPLETE
+        && summaryStatus === MESSAGE_STATUSES.COMPLETE
         && hasAiGeneratedTitle
         && !!threadSlug;
 

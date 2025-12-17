@@ -53,7 +53,7 @@
  * - FormSlice: Form input, mode, participants
  * - FeedbackSlice: Round feedback (like/dislike)
  * - UISlice: Initial UI, thread creation, streaming flags
- * - AnalysisSlice: Moderator analyses
+ * - SummarySlice: Round summaries
  * - PreSearchSlice: Pre-search results
  * - ThreadSlice: Thread data, participants, messages, AI SDK methods
  * - FlagsSlice: Loading states that need re-renders
@@ -75,11 +75,11 @@ import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type {
-  ModeratorAnalysisPayload,
-  StoredModeratorAnalysis,
+  RoundSummaryAIContent,
   StoredPreSearch,
+  StoredRoundSummary,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
@@ -94,8 +94,6 @@ import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import {
-  ANALYSIS_DEFAULTS,
-  ANALYSIS_STATE_RESET,
   ANIMATION_DEFAULTS,
   ATTACHMENTS_DEFAULTS,
   CALLBACKS_DEFAULTS,
@@ -110,6 +108,8 @@ import {
   SCREEN_DEFAULTS,
   STREAM_RESUMPTION_DEFAULTS,
   STREAMING_STATE_RESET,
+  SUMMARY_DEFAULTS,
+  SUMMARY_STATE_RESET,
   THREAD_DEFAULTS,
   THREAD_NAVIGATION_RESET_STATE,
   THREAD_RESET_STATE,
@@ -117,7 +117,6 @@ import {
   UI_DEFAULTS,
 } from './store-defaults';
 import type {
-  AnalysisSlice,
   AnimationSlice,
   AttachmentsSlice,
   CallbacksSlice,
@@ -130,6 +129,7 @@ import type {
   PreSearchSlice,
   ScreenSlice,
   StreamResumptionSlice,
+  SummarySlice,
   ThreadSlice,
   TrackingSlice,
   UISlice,
@@ -253,64 +253,59 @@ const createUISlice: SliceCreator<UISlice> = set => ({
 });
 
 /**
- * Analysis Slice - Moderator analysis state
- * Manages pending, streaming, and completed moderator analyses
+ * Summary Slice - Round summary state
+ * Manages pending, streaming, and completed round summaries
  */
-const createAnalysisSlice: SliceCreator<AnalysisSlice> = set => ({
-  ...ANALYSIS_DEFAULTS,
+const createSummarySlice: SliceCreator<SummarySlice> = set => ({
+  ...SUMMARY_DEFAULTS,
 
-  setAnalyses: (analyses: StoredModeratorAnalysis[]) =>
-    set({ analyses }, false, 'analysis/setAnalyses'),
+  setSummaries: (summaries: StoredRoundSummary[]) =>
+    set({ summaries }, false, 'summary/setSummaries'),
   // ✅ IMMER: Direct mutations
-  addAnalysis: (analysis: StoredModeratorAnalysis) =>
+  addSummary: (summary: StoredRoundSummary) =>
     set((draft) => {
       // Deduplicate by roundNumber to prevent retrigger bug
-      const exists = draft.analyses.some(
-        a => a.threadId === analysis.threadId && a.roundNumber === analysis.roundNumber,
+      const exists = draft.summaries.some(
+        s => s.threadId === summary.threadId && s.roundNumber === summary.roundNumber,
       );
       if (!exists) {
-        draft.analyses.push(analysis);
+        draft.summaries.push(summary);
       }
-    }, false, 'analysis/addAnalysis'),
-  updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) =>
+    }, false, 'summary/addSummary'),
+  updateSummaryData: (roundNumber: number, data: RoundSummaryAIContent) =>
     set((draft) => {
-      const a = draft.analyses.find(a => a.roundNumber === roundNumber);
-      if (a) {
-        // Update mode at analysis level
-        const modeResult = ChatModeSchema.safeParse(data.mode);
-        if (modeResult.success)
-          a.mode = modeResult.data;
-        // analysisData excludes roundNumber, mode, userQuestion (stored at analysis level)
-        const { roundNumber: _, mode: __, userQuestion: ___, ...analysisContent } = data;
-        a.analysisData = analysisContent;
-        a.status = AnalysisStatuses.COMPLETE;
+      const s = draft.summaries.find(s => s.roundNumber === roundNumber);
+      if (s) {
+        // AI content only: summary + metrics (metadata stored at summary row level)
+        s.summaryData = data;
+        s.status = MessageStatuses.COMPLETE;
       }
-    }, false, 'analysis/updateAnalysisData'),
-  updateAnalysisStatus: (roundNumber, status) =>
+    }, false, 'summary/updateSummaryData'),
+  updateSummaryStatus: (roundNumber, status) =>
     set((draft) => {
-      draft.analyses.forEach((a) => {
-        if (a.roundNumber === roundNumber)
-          a.status = status;
+      draft.summaries.forEach((s) => {
+        if (s.roundNumber === roundNumber)
+          s.status = status;
       });
-    }, false, 'analysis/updateAnalysisStatus'),
-  updateAnalysisError: (roundNumber, errorMessage) =>
+    }, false, 'summary/updateSummaryStatus'),
+  updateSummaryError: (roundNumber, errorMessage) =>
     set((draft) => {
-      draft.analyses.forEach((a) => {
-        if (a.roundNumber === roundNumber) {
-          a.status = AnalysisStatuses.FAILED;
-          a.errorMessage = errorMessage;
+      draft.summaries.forEach((s) => {
+        if (s.roundNumber === roundNumber) {
+          s.status = MessageStatuses.FAILED;
+          s.errorMessage = errorMessage;
         }
       });
-    }, false, 'analysis/updateAnalysisError'),
-  removeAnalysis: roundNumber =>
+    }, false, 'summary/updateSummaryError'),
+  removeSummary: roundNumber =>
     set((draft) => {
-      const idx = draft.analyses.findIndex(a => a.roundNumber === roundNumber);
+      const idx = draft.summaries.findIndex(s => s.roundNumber === roundNumber);
       if (idx !== -1)
-        draft.analyses.splice(idx, 1);
-    }, false, 'analysis/removeAnalysis'),
-  clearAllAnalyses: () =>
-    set(ANALYSIS_DEFAULTS, false, 'analysis/clearAllAnalyses'),
-  createPendingAnalysis: (params: { roundNumber: number; messages: UIMessage[]; userQuestion: string; threadId: string; mode: ChatMode }) => {
+        draft.summaries.splice(idx, 1);
+    }, false, 'summary/removeSummary'),
+  clearAllSummaries: () =>
+    set(SUMMARY_DEFAULTS, false, 'summary/clearAllSummaries'),
+  createPendingSummary: (params: { roundNumber: number; messages: UIMessage[]; userQuestion: string; threadId: string; mode: ChatMode }) => {
     const { roundNumber, messages, userQuestion, threadId, mode: rawMode } = params;
 
     // Validate and narrow mode type to match database schema
@@ -325,14 +320,14 @@ const createAnalysisSlice: SliceCreator<AnalysisSlice> = set => ({
     // getParticipantMessagesWithIds() uses isParticipantMessage() type guard internally
     const { ids: participantMessageIds, messages: participantMessages } = getParticipantMessagesWithIds(messages, roundNumber);
 
-    // ✅ SAFETY CHECK: Don't create analysis if no valid participant messages
+    // ✅ SAFETY CHECK: Don't create summary if no valid participant messages
     if (participantMessageIds.length === 0) {
       return;
     }
 
     // ✅ CRITICAL FIX: Deduplicate message IDs and keep only unique messages
     // Backend bug can cause duplicate message IDs for different participants
-    // Instead of failing, deduplicate by participantId to ensure analysis proceeds
+    // Instead of failing, deduplicate by participantId to ensure summary proceeds
     const uniqueIds = new Set(participantMessageIds);
     if (uniqueIds.size !== participantMessageIds.length) {
       // ✅ TYPE-SAFE: Use type guard to ensure messages have valid participant metadata
@@ -357,7 +352,7 @@ const createAnalysisSlice: SliceCreator<AnalysisSlice> = set => ({
     }
 
     // ✅ CRITICAL FIX: Verify all messages have correct round number
-    // Prevents using messages from previous rounds in analysis
+    // Prevents using messages from previous rounds in summary
     // ✅ TYPE-SAFE: Use extraction utility instead of type casting
     const allMessagesFromCorrectRound = participantMessages.every((msg) => {
       const msgRound = getRoundNumber(msg.metadata);
@@ -375,26 +370,26 @@ const createAnalysisSlice: SliceCreator<AnalysisSlice> = set => ({
     // - Messages were in transitional state during streaming
     // - Zod metadata extraction returned null for valid messages
     //
-    // The backend is the source of truth for analyses. Frontend should:
+    // The backend is the source of truth for summaries. Frontend should:
     // - Trust that allMessagesFromCorrectRound check (above) validates round numbers
-    // - Allow analysis creation and let ModeratorAnalysisStream handle streaming
-    // - Fetch backend analyses to merge any that frontend missed
+    // - Allow summary creation and let RoundSummaryStream handle streaming
+    // - Fetch backend summaries to merge any that frontend missed
 
-    // Generate unique analysis ID
-    const analysisId = `analysis_${threadId}_${roundNumber}_${Date.now()}`;
+    // Generate unique summary ID
+    const summaryId = `summary_${threadId}_${roundNumber}_${Date.now()}`;
 
     // ✅ Set status to pending - component will update to streaming when POST starts
     // Virtualization checks for BOTH pending and streaming to prevent unmounting
     // This ensures accurate status: pending → streaming (when POST starts) → completed/failed
-    const pendingAnalysis: StoredModeratorAnalysis = {
-      id: analysisId,
+    const pendingSummary: StoredRoundSummary = {
+      id: summaryId,
       threadId,
       roundNumber,
       mode,
       userQuestion,
-      status: AnalysisStatuses.PENDING,
+      status: MessageStatuses.PENDING,
       participantMessageIds,
-      analysisData: null,
+      summaryData: null,
       errorMessage: null,
       completedAt: null,
       createdAt: new Date(),
@@ -402,22 +397,22 @@ const createAnalysisSlice: SliceCreator<AnalysisSlice> = set => ({
 
     // ✅ IMMER: Direct mutation with deduplication
     set((draft) => {
-      const existingIndex = draft.analyses.findIndex(
-        a => a.threadId === threadId && a.roundNumber === roundNumber,
+      const existingIndex = draft.summaries.findIndex(
+        s => s.threadId === threadId && s.roundNumber === roundNumber,
       );
 
       if (existingIndex >= 0) {
-        const existing = draft.analyses[existingIndex]!;
+        const existing = draft.summaries[existingIndex]!;
         // Update placeholder (empty participantMessageIds) with real data
         if (!existing.participantMessageIds || existing.participantMessageIds.length === 0) {
-          Object.assign(existing, pendingAnalysis, { id: existing.id, createdAt: existing.createdAt });
+          Object.assign(existing, pendingSummary, { id: existing.id, createdAt: existing.createdAt });
         }
-        // else: Real analysis exists, skip
+        // else: Real summary exists, skip
       } else {
-        // Add new analysis
-        draft.analyses.push(pendingAnalysis);
+        // Add new summary
+        draft.summaries.push(pendingSummary);
       }
-    }, false, 'analysis/createPendingAnalysis');
+    }, false, 'summary/createPendingSummary');
   },
 });
 
@@ -443,8 +438,8 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
           return;
 
         // Race condition fix: STREAMING > PENDING (provider wins over orchestrator)
-        if (existing.status === AnalysisStatuses.PENDING && preSearch.status === AnalysisStatuses.STREAMING) {
-          Object.assign(existing, preSearch, { status: AnalysisStatuses.STREAMING });
+        if (existing.status === MessageStatuses.PENDING && preSearch.status === MessageStatuses.STREAMING) {
+          Object.assign(existing, preSearch, { status: MessageStatuses.STREAMING });
         }
         // Otherwise skip duplicate
         return;
@@ -457,7 +452,7 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
       draft.preSearches.forEach((ps) => {
         if (ps.roundNumber === roundNumber) {
           ps.searchData = data;
-          ps.status = AnalysisStatuses.COMPLETE;
+          ps.status = MessageStatuses.COMPLETE;
         }
       });
     }, false, 'preSearch/updatePreSearchData'),
@@ -468,7 +463,7 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
         if (ps.roundNumber === roundNumber) {
           // ✅ PATTERN: Build partial PreSearchDataPayload with defaults for missing fields
           // Partial data has minimal result structure; full data comes on DONE event
-          const existingAnalysis = ps.searchData?.analysis ?? '';
+          const existingSummary = ps.searchData?.summary ?? '';
           ps.searchData = {
             queries: partialData.queries,
             results: partialData.results.map(r => ({
@@ -484,7 +479,7 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
               responseTime: r.responseTime,
               index: r.index,
             })),
-            analysis: partialData.analysis ?? existingAnalysis,
+            summary: partialData.summary ?? existingSummary,
             successCount: partialData.results.length,
             failureCount: 0,
             totalResults: partialData.totalResults ?? partialData.results.length,
@@ -516,11 +511,11 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
     set((draft) => {
       const now = Date.now();
       draft.preSearches.forEach((ps) => {
-        if (ps.status !== AnalysisStatuses.STREAMING && ps.status !== AnalysisStatuses.PENDING)
+        if (ps.status !== MessageStatuses.STREAMING && ps.status !== MessageStatuses.PENDING)
           return;
         const lastActivityTime = draft.preSearchActivityTimes.get(ps.roundNumber);
         if (shouldPreSearchTimeout(ps, lastActivityTime, now)) {
-          ps.status = AnalysisStatuses.COMPLETE;
+          ps.status = MessageStatuses.COMPLETE;
         }
       });
     }, false, 'preSearch/checkStuckPreSearches'),
@@ -592,8 +587,8 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
   setIsRegenerating: (value: boolean) =>
     set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
-  setIsCreatingAnalysis: (value: boolean) =>
-    set({ isCreatingAnalysis: value }, false, 'flags/setIsCreatingAnalysis'),
+  setIsCreatingSummary: (value: boolean) =>
+    set({ isCreatingSummary: value }, false, 'flags/setIsCreatingSummary'),
   setIsWaitingForChangelog: (value: boolean) =>
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
   setHasPendingConfigChanges: (value: boolean) =>
@@ -623,36 +618,36 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
 
 /**
  * Tracking Slice - Deduplication tracking
- * Tracks which rounds have had analyses/pre-searches created to prevent duplicates
+ * Tracks which rounds have had summaries/pre-searches created to prevent duplicates
  */
 const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
   ...TRACKING_DEFAULTS,
 
   setHasSentPendingMessage: value =>
     set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
-  markAnalysisCreated: roundNumber =>
+  markSummaryCreated: roundNumber =>
     set((draft) => {
-      draft.createdAnalysisRounds.add(roundNumber);
-    }, false, 'tracking/markAnalysisCreated'),
-  hasAnalysisBeenCreated: roundNumber =>
-    get().createdAnalysisRounds.has(roundNumber),
-  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasAnalysisBeenCreated and markAnalysisCreated
+      draft.createdSummaryRounds.add(roundNumber);
+    }, false, 'tracking/markSummaryCreated'),
+  hasSummaryBeenCreated: roundNumber =>
+    get().createdSummaryRounds.has(roundNumber),
+  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasSummaryBeenCreated and markSummaryCreated
   // Returns true if successfully marked (was not already created), false if already created
-  tryMarkAnalysisCreated: (roundNumber) => {
+  tryMarkSummaryCreated: (roundNumber) => {
     const state = get();
-    if (state.createdAnalysisRounds.has(roundNumber)) {
+    if (state.createdSummaryRounds.has(roundNumber)) {
       return false; // Already created by another component
     }
     // Add to set atomically - JavaScript is single-threaded so this is safe
     set((draft) => {
-      draft.createdAnalysisRounds.add(roundNumber);
-    }, false, 'tracking/tryMarkAnalysisCreated');
+      draft.createdSummaryRounds.add(roundNumber);
+    }, false, 'tracking/tryMarkSummaryCreated');
     return true; // Successfully marked
   },
-  clearAnalysisTracking: roundNumber =>
+  clearSummaryTracking: roundNumber =>
     set((draft) => {
-      draft.createdAnalysisRounds.delete(roundNumber);
-    }, false, 'tracking/clearAnalysisTracking'),
+      draft.createdSummaryRounds.delete(roundNumber);
+    }, false, 'tracking/clearSummaryTracking'),
   markPreSearchTriggered: roundNumber =>
     set((draft) => {
       draft.triggeredPreSearchRounds.add(roundNumber);
@@ -676,28 +671,32 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     set((draft) => {
       draft.triggeredPreSearchRounds.delete(roundNumber);
     }, false, 'tracking/clearPreSearchTracking'),
-  // ✅ ANALYSIS STREAM TRACKING: Two-level deduplication for analysis streams
-  markAnalysisStreamTriggered: (analysisId, roundNumber) =>
+  clearAllPreSearchTracking: () =>
     set((draft) => {
-      draft.triggeredAnalysisIds.add(analysisId);
-      draft.triggeredAnalysisRounds.add(roundNumber);
-    }, false, 'tracking/markAnalysisStreamTriggered'),
-  hasAnalysisStreamBeenTriggered: (analysisId, roundNumber) => {
+      draft.triggeredPreSearchRounds = new Set<number>();
+    }, false, 'tracking/clearAllPreSearchTracking'),
+  // ✅ SUMMARY STREAM TRACKING: Two-level deduplication for summary streams
+  markSummaryStreamTriggered: (summaryId, roundNumber) =>
+    set((draft) => {
+      draft.triggeredSummaryIds.add(summaryId);
+      draft.triggeredSummaryRounds.add(roundNumber);
+    }, false, 'tracking/markSummaryStreamTriggered'),
+  hasSummaryStreamBeenTriggered: (summaryId, roundNumber) => {
     const state = get();
-    return state.triggeredAnalysisIds.has(analysisId) || state.triggeredAnalysisRounds.has(roundNumber);
+    return state.triggeredSummaryIds.has(summaryId) || state.triggeredSummaryRounds.has(roundNumber);
   },
-  clearAnalysisStreamTracking: roundNumber =>
+  clearSummaryStreamTracking: roundNumber =>
     set((draft) => {
       // Clear round tracking
-      draft.triggeredAnalysisRounds.delete(roundNumber);
-      // Clear analysis IDs that contain this round number
-      // Analysis IDs often contain round number in their format
-      for (const id of draft.triggeredAnalysisIds) {
+      draft.triggeredSummaryRounds.delete(roundNumber);
+      // Clear summary IDs that contain this round number
+      // Summary IDs often contain round number in their format
+      for (const id of draft.triggeredSummaryIds) {
         if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
-          draft.triggeredAnalysisIds.delete(id);
+          draft.triggeredSummaryIds.delete(id);
         }
       }
-    }, false, 'tracking/clearAnalysisStreamTracking'),
+    }, false, 'tracking/clearSummaryStreamTracking'),
   setHasEarlyOptimisticMessage: value =>
     set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
 });
@@ -858,13 +857,13 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       // ✅ UNIFIED PHASES: Clear phase-based resumption state
       currentResumptionPhase: null,
       preSearchResumption: null,
-      analyzerResumption: null,
+      summarizerResumption: null,
       resumptionRoundNumber: null,
     }, false, 'streamResumption/clearStreamResumption'),
 
   // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
   // Called during SSR to set up state BEFORE AI SDK resume runs
-  // ✅ UNIFIED PHASES: Now handles pre-search, participants, and analyzer phases
+  // ✅ UNIFIED PHASES: Now handles pre-search, participants, and summarizer phases
   prefillStreamResumptionState: (threadId, serverState) => {
     // If round is complete or idle, no prefill needed
     if (serverState.roundComplete || serverState.currentPhase === 'complete' || serverState.currentPhase === 'idle') {
@@ -903,16 +902,16 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         stateUpdate.waitingToStartStreaming = serverState.participants.nextParticipantToTrigger !== null;
         break;
 
-      case 'analyzer':
-        // Analyzer phase needs resumption
-        if (serverState.analyzer) {
-          stateUpdate.analyzerResumption = {
-            status: serverState.analyzer.status,
-            streamId: serverState.analyzer.streamId,
-            analysisId: serverState.analyzer.analysisId,
+      case 'summarizer':
+        // Summarizer phase needs resumption
+        if (serverState.summarizer) {
+          stateUpdate.summarizerResumption = {
+            status: serverState.summarizer.status,
+            streamId: serverState.summarizer.streamId,
+            summaryId: serverState.summarizer.summaryId,
           };
         }
-        // Set waitingToStartStreaming to enable provider effect to handle analyzer resumption
+        // Set waitingToStartStreaming to enable provider effect to handle summarizer resumption
         stateUpdate.waitingToStartStreaming = true;
         break;
     }
@@ -963,7 +962,7 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
 
   // ✅ FIX: Wait for ALL pending animations to complete
   // This ensures sequential execution with no overlapping animations
-  // Used by provider handleComplete to wait for all participant animations before creating analysis
+  // Used by provider handleComplete to wait for all participant animations before creating summary
   waitForAllAnimations: async () => {
     const state = get();
     const pendingIndices = Array.from(state.pendingAnimations);
@@ -974,7 +973,7 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
 
     // ✅ CRITICAL FIX: Add timeout to prevent indefinite blocking
     // If animations don't complete within 5 seconds, force-clear them and continue
-    // This prevents analysis creation from being blocked forever by stuck animations
+    // This prevents summary creation from being blocked forever by stuck animations
     const ANIMATION_TIMEOUT_MS = 5000;
 
     const animationPromises = pendingIndices.map(index => state.waitForAnimation(index));
@@ -1064,7 +1063,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
    * Called when navigating BETWEEN threads (e.g., /chat/thread-1 → /chat/thread-2)
    * Unlike resetThreadState which only clears flags, this ALSO clears:
    * - thread, participants, messages (previous thread data)
-   * - analyses, preSearches (previous thread content)
+   * - summaries, preSearches (previous thread content)
    * - createdThreadId (prevents confusion with new thread)
    *
    * This prevents the critical bug where stale messages/participants from
@@ -1084,10 +1083,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     set({
       ...THREAD_NAVIGATION_RESET_STATE,
       // Create fresh Set instances
-      createdAnalysisRounds: new Set<number>(),
+      createdSummaryRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
-      triggeredAnalysisRounds: new Set<number>(),
-      triggeredAnalysisIds: new Set<string>(),
+      triggeredSummaryRounds: new Set<number>(),
+      triggeredSummaryIds: new Set<string>(),
       resumptionAttempts: new Set<string>(),
       pendingAnimations: new Set<number>(),
       animationResolvers: new Map(),
@@ -1110,10 +1109,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // but useScreenInitialization hasn't run yet to set it
       screenMode: ScreenModes.OVERVIEW,
       // ✅ Create fresh Set instances (same as resetToNewChat)
-      createdAnalysisRounds: new Set(),
+      createdSummaryRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
-      triggeredAnalysisRounds: new Set(),
-      triggeredAnalysisIds: new Set(),
+      triggeredSummaryRounds: new Set(),
+      triggeredSummaryIds: new Set(),
     }, false, 'operations/resetToOverview');
   },
 
@@ -1183,7 +1182,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // Reset flags (previously in ChatThreadScreen useEffect via resetThreadState)
       waitingToStartStreaming: false,
       isRegenerating: false,
-      isCreatingAnalysis: false,
+      isCreatingSummary: false,
       isWaitingForChangelog: false,
       hasPendingConfigChanges: false,
       regeneratingRoundNumber: null,
@@ -1194,10 +1193,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       streamingRoundNumber: null,
       currentRoundNumber: null,
       hasSentPendingMessage: false,
-      createdAnalysisRounds: new Set<number>(),
+      createdSummaryRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
-      triggeredAnalysisRounds: new Set<number>(),
-      triggeredAnalysisIds: new Set<string>(),
+      triggeredSummaryRounds: new Set<number>(),
+      triggeredSummaryIds: new Set<string>(),
       preSearchActivityTimes: new Map<number, number>(),
       hasEarlyOptimisticMessage: false,
       streamResumptionState: null,
@@ -1237,6 +1236,13 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       const hasExistingOptimisticMessage = draft.hasEarlyOptimisticMessage;
       const fileParts = providedFileParts || [];
 
+      // ✅ DUPLICATION FIX: Check if optimistic message already exists for this round
+      const hasOptimisticForRound = currentMessages.some(
+        m => m.role === MessageRoles.USER
+          && (m.metadata as { roundNumber?: number })?.roundNumber === nextRoundNumber
+          && (m.metadata as { isOptimistic?: boolean })?.isOptimistic === true,
+      );
+
       // Reset streaming state
       draft.waitingToStartStreaming = false;
       draft.isStreaming = false;
@@ -1253,7 +1259,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       draft.nextParticipantToTrigger = null;
 
       // Set message state
-      draft.isCreatingAnalysis = false;
+      draft.isCreatingSummary = false;
       draft.isWaitingForChangelog = true;
       draft.pendingMessage = message;
       draft.pendingAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : null;
@@ -1267,8 +1273,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         ? draft.streamingRoundNumber
         : (isOnThreadScreen ? nextRoundNumber : null);
 
-      // Add optimistic user message if needed
-      if (isOnThreadScreen && !hasExistingOptimisticMessage) {
+      // Add optimistic user message if needed (prevent duplicates)
+      if (isOnThreadScreen && !hasExistingOptimisticMessage && !hasOptimisticForRound) {
         draft.messages.push({
           id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
           role: MessageRoles.USER,
@@ -1287,28 +1293,28 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
   completeStreaming: () =>
     set({
-      // ✅ TYPE-SAFE: Use reset groups to ensure ALL streaming/analysis flags are cleared
+      // ✅ TYPE-SAFE: Use reset groups to ensure ALL streaming/summary flags are cleared
       // This prevents infinite loops when both provider and flow-state-machine call completeStreaming
       ...STREAMING_STATE_RESET,
-      ...ANALYSIS_STATE_RESET,
+      ...SUMMARY_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
       // ✅ CRITICAL FIX: Also clear animation state to prevent waitForAllAnimations from blocking
-      // If animations are stuck pending when streaming completes, the next round's analysis
+      // If animations are stuck pending when streaming completes, the next round's summary
       // creation would hang forever waiting for animations that will never complete
       pendingAnimations: new Set<number>(),
       animationResolvers: new Map<number, () => void>(),
     }, false, 'operations/completeStreaming'),
 
   startRegeneration: (roundNumber: number) => {
-    const { clearAnalysisTracking, clearPreSearchTracking, clearAnalysisStreamTracking } = get();
-    clearAnalysisTracking(roundNumber);
+    const { clearSummaryTracking, clearPreSearchTracking, clearSummaryStreamTracking } = get();
+    clearSummaryTracking(roundNumber);
     clearPreSearchTracking(roundNumber);
-    clearAnalysisStreamTracking(roundNumber);
+    clearSummaryStreamTracking(roundNumber);
     set({
       // ✅ TYPE-SAFE: Clear all streaming state before starting regeneration
       ...STREAMING_STATE_RESET,
-      ...ANALYSIS_STATE_RESET,
+      ...SUMMARY_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
       // Then set regeneration-specific state
@@ -1319,10 +1325,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
   completeRegeneration: (_roundNumber: number) =>
     set({
-      // ✅ TYPE-SAFE: Clear ALL streaming/analysis/pending/regeneration flags
+      // ✅ TYPE-SAFE: Clear ALL streaming/summary/pending/regeneration flags
       // This was CRITICAL bug - was only clearing 4 fields, blocking next round
       ...STREAMING_STATE_RESET,
-      ...ANALYSIS_STATE_RESET,
+      ...SUMMARY_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
     }, false, 'operations/completeRegeneration'),
@@ -1377,10 +1383,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // but useScreenInitialization hasn't run yet to set it
       screenMode: ScreenModes.OVERVIEW,
       // ✅ CRITICAL: Reset tracking Sets (need new instances)
-      createdAnalysisRounds: new Set(),
+      createdSummaryRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
-      triggeredAnalysisRounds: new Set(),
-      triggeredAnalysisIds: new Set(),
+      triggeredSummaryRounds: new Set(),
+      triggeredSummaryIds: new Set(),
     }, false, 'operations/resetToNewChat');
   },
 
@@ -1409,7 +1415,7 @@ export function createChatStore() {
           ...createFormSlice(...args),
           ...createFeedbackSlice(...args),
           ...createUISlice(...args),
-          ...createAnalysisSlice(...args),
+          ...createSummarySlice(...args),
           ...createPreSearchSlice(...args),
           ...createThreadSlice(...args),
           ...createFlagsSlice(...args),
@@ -1434,7 +1440,7 @@ export function createChatStore() {
   // ============================================================================
   // Store Subscriptions (Removed)
   // ============================================================================
-  // Analysis triggering, streaming orchestration, and message sending moved to
+  // Summary triggering, streaming orchestration, and message sending moved to
   // AI SDK v5 onComplete callbacks in chat-store-provider.tsx:79-198
   // This provides direct access to fresh chat hook state and eliminates stale closures.
 

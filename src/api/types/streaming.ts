@@ -253,29 +253,29 @@ export function isStreamBufferMetadata(value: unknown): value is StreamBufferMet
 }
 
 // ============================================================================
-// ANALYSIS STREAM TYPES
+// ROUND SUMMARY STREAM TYPES
 // ============================================================================
 
 /**
- * Analysis stream chunk schema
+ * Round summary stream chunk schema
  * Used for object stream buffering (JSON being built incrementally)
  */
-export const AnalysisStreamChunkSchema = z.object({
+export const SummaryStreamChunkSchema = z.object({
   data: z.string(),
   timestamp: z.number(),
 });
 
-/** Analysis stream chunk format */
-export type AnalysisStreamChunk = z.infer<typeof AnalysisStreamChunkSchema>;
+/** Round summary stream chunk format */
+export type SummaryStreamChunk = z.infer<typeof SummaryStreamChunkSchema>;
 
 /**
- * Analysis stream buffer metadata schema
+ * Round summary stream buffer metadata schema
  */
-export const AnalysisStreamBufferMetadataSchema = z.object({
+export const SummaryStreamBufferMetadataSchema = z.object({
   streamId: z.string(),
   threadId: z.string(),
   roundNumber: z.number(),
-  analysisId: z.string(),
+  summaryId: z.string(),
   status: StreamStatusSchema,
   chunkCount: z.number(),
   createdAt: z.number(),
@@ -283,21 +283,21 @@ export const AnalysisStreamBufferMetadataSchema = z.object({
   errorMessage: z.string().nullable(),
 });
 
-/** Analysis stream buffer metadata */
-export type AnalysisStreamBufferMetadata = z.infer<typeof AnalysisStreamBufferMetadataSchema>;
+/** Round summary stream buffer metadata */
+export type SummaryStreamBufferMetadata = z.infer<typeof SummaryStreamBufferMetadataSchema>;
 
 /**
- * Type guard: Check if value is AnalysisStreamChunk
+ * Type guard: Check if value is SummaryStreamChunk
  */
-export function isAnalysisStreamChunk(value: unknown): value is AnalysisStreamChunk {
-  return AnalysisStreamChunkSchema.safeParse(value).success;
+export function isSummaryStreamChunk(value: unknown): value is SummaryStreamChunk {
+  return SummaryStreamChunkSchema.safeParse(value).success;
 }
 
 /**
- * Type guard: Check if value is AnalysisStreamBufferMetadata
+ * Type guard: Check if value is SummaryStreamBufferMetadata
  */
-export function isAnalysisStreamBufferMetadata(value: unknown): value is AnalysisStreamBufferMetadata {
-  return AnalysisStreamBufferMetadataSchema.safeParse(value).success;
+export function isSummaryStreamBufferMetadata(value: unknown): value is SummaryStreamBufferMetadata {
+  return SummaryStreamBufferMetadataSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -416,7 +416,7 @@ export function isThreadActiveStream(value: unknown): value is ThreadActiveStrea
  * Stream phase identifiers for unified stream ID format
  * Used to identify which phase a stream belongs to from its ID
  */
-export const STREAM_PHASES = ['presearch', 'participant', 'analyzer'] as const;
+export const STREAM_PHASES = ['presearch', 'participant', 'summarizer'] as const;
 export type StreamPhase = (typeof STREAM_PHASES)[number];
 
 /**
@@ -426,12 +426,12 @@ export type StreamPhase = (typeof STREAM_PHASES)[number];
  * - Pre-search: thread123_r0_presearch
  * - Participant 0: thread123_r0_participant_0
  * - Participant 1: thread123_r0_participant_1
- * - Analyzer: thread123_r0_analyzer
+ * - Summarizer: thread123_r0_summarizer
  *
  * This unifies the previously inconsistent formats:
  * - OLD pre-search: presearch_{threadId}_{roundNumber}_{timestamp}
  * - OLD participant: {threadId}_r{roundNumber}_p{participantIndex}
- * - OLD analyzer: analysis:{threadId}:r{roundNumber}
+ * - OLD summarizer: analysis:{threadId}:r{roundNumber}
  */
 
 /**
@@ -449,10 +449,10 @@ export function generateParticipantStreamId(threadId: string, roundNumber: numbe
 }
 
 /**
- * Generate unified stream ID for analyzer
+ * Generate unified stream ID for summarizer
  */
-export function generateAnalyzerStreamId(threadId: string, roundNumber: number): string {
-  return `${threadId}_r${roundNumber}_analyzer`;
+export function generateSummarizerStreamId(threadId: string, roundNumber: number): string {
+  return `${threadId}_r${roundNumber}_summarizer`;
 }
 
 /**
@@ -466,14 +466,14 @@ export function parseStreamId(streamId: string): {
   participantIndex?: number;
 } | null {
   // Pattern: {threadId}_r{roundNumber}_{phase}[_{index}]
-  // Examples: thread123_r0_presearch, thread123_r0_participant_0, thread123_r0_analyzer
+  // Examples: thread123_r0_presearch, thread123_r0_participant_0, thread123_r0_summarizer
 
   // Match pre-search: {threadId}_r{roundNumber}_presearch
   const presearchMatch = streamId.match(/^(.+)_r(\d+)_presearch$/);
   if (presearchMatch) {
     return {
       threadId: presearchMatch[1]!,
-      roundNumber: parseInt(presearchMatch[2]!, 10),
+      roundNumber: Number.parseInt(presearchMatch[2]!, 10),
       phase: 'presearch',
     };
   }
@@ -483,19 +483,19 @@ export function parseStreamId(streamId: string): {
   if (participantMatch) {
     return {
       threadId: participantMatch[1]!,
-      roundNumber: parseInt(participantMatch[2]!, 10),
+      roundNumber: Number.parseInt(participantMatch[2]!, 10),
       phase: 'participant',
-      participantIndex: parseInt(participantMatch[3]!, 10),
+      participantIndex: Number.parseInt(participantMatch[3]!, 10),
     };
   }
 
-  // Match analyzer: {threadId}_r{roundNumber}_analyzer
-  const analyzerMatch = streamId.match(/^(.+)_r(\d+)_analyzer$/);
-  if (analyzerMatch) {
+  // Match summarizer: {threadId}_r{roundNumber}_summarizer
+  const summarizerMatch = streamId.match(/^(.+)_r(\d+)_summarizer$/);
+  if (summarizerMatch) {
     return {
-      threadId: analyzerMatch[1]!,
-      roundNumber: parseInt(analyzerMatch[2]!, 10),
-      phase: 'analyzer',
+      threadId: summarizerMatch[1]!,
+      roundNumber: Number.parseInt(summarizerMatch[2]!, 10),
+      phase: 'summarizer',
     };
   }
 
@@ -504,9 +504,9 @@ export function parseStreamId(streamId: string): {
   if (legacyParticipantMatch) {
     return {
       threadId: legacyParticipantMatch[1]!,
-      roundNumber: parseInt(legacyParticipantMatch[2]!, 10),
+      roundNumber: Number.parseInt(legacyParticipantMatch[2]!, 10),
       phase: 'participant',
-      participantIndex: parseInt(legacyParticipantMatch[3]!, 10),
+      participantIndex: Number.parseInt(legacyParticipantMatch[3]!, 10),
     };
   }
 
@@ -537,10 +537,10 @@ export function isParticipantStreamId(streamId: string): boolean {
 }
 
 /**
- * Check if stream ID is for analyzer
+ * Check if stream ID is for summarizer
  */
-export function isAnalyzerStreamId(streamId: string): boolean {
-  return getStreamPhase(streamId) === 'analyzer';
+export function isSummarizerStreamId(streamId: string): boolean {
+  return getStreamPhase(streamId) === 'summarizer';
 }
 
 // ============================================================================
@@ -566,20 +566,20 @@ export function parseStreamChunksArray(data: unknown): StreamChunk[] | null {
 }
 
 /**
- * Safely parse AnalysisStreamBufferMetadata from KV data
+ * Safely parse SummaryStreamBufferMetadata from KV data
  * @returns Parsed metadata or null if invalid
  */
-export function parseAnalysisStreamBufferMetadata(data: unknown): AnalysisStreamBufferMetadata | null {
-  const result = AnalysisStreamBufferMetadataSchema.safeParse(data);
+export function parseSummaryStreamBufferMetadata(data: unknown): SummaryStreamBufferMetadata | null {
+  const result = SummaryStreamBufferMetadataSchema.safeParse(data);
   return result.success ? result.data : null;
 }
 
 /**
- * Safely parse AnalysisStreamChunk array from KV data
+ * Safely parse SummaryStreamChunk array from KV data
  * @returns Parsed chunks array or null if invalid
  */
-export function parseAnalysisStreamChunksArray(data: unknown): AnalysisStreamChunk[] | null {
-  const result = z.array(AnalysisStreamChunkSchema).safeParse(data);
+export function parseSummaryStreamChunksArray(data: unknown): SummaryStreamChunk[] | null {
+  const result = z.array(SummaryStreamChunkSchema).safeParse(data);
   return result.success ? result.data : null;
 }
 

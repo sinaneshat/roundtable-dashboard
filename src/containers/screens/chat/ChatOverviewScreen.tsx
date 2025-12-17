@@ -20,7 +20,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -99,11 +99,11 @@ export default function ChatOverviewScreen() {
   // STORE STATE
   // ============================================================================
 
-  const { isStreaming, error: streamError, isCreatingAnalysis } = useChatStore(
+  const { isStreaming, error: streamError, isCreatingSummary } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
       error: s.error,
-      isCreatingAnalysis: s.isCreatingAnalysis,
+      isCreatingSummary: s.isCreatingSummary,
     })),
   );
 
@@ -132,7 +132,7 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const analyses = useChatStore(s => s.analyses);
+  const summaries = useChatStore(s => s.summaries);
   const preSearches = useChatStore(s => s.preSearches);
 
   // Store actions
@@ -474,11 +474,11 @@ export default function ChatOverviewScreen() {
   // Screen initialization for orchestrator
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
   const hasActivePreSearch = preSearches.some(
-    ps => ps.status === AnalysisStatuses.PENDING || ps.status === AnalysisStatuses.STREAMING,
+    ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
   );
-  const hasStreamingAnalysis = analyses.some(
-    a => (a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING)
-      && a.participantMessageIds && a.participantMessageIds.length > 0,
+  const hasStreamingSummary = summaries.some(
+    s => (s.status === MessageStatuses.PENDING || s.status === MessageStatuses.STREAMING)
+      && s.participantMessageIds && s.participantMessageIds.length > 0,
   );
 
   useScreenInitialization({
@@ -488,9 +488,9 @@ export default function ChatOverviewScreen() {
     chatMode: selectedMode,
     enableOrchestrator: (
       !isStreaming
-      && !isCreatingAnalysis
+      && !isCreatingSummary
       && !hasActivePreSearch
-      && !hasStreamingAnalysis
+      && !hasStreamingSummary
       && shouldInitializeThread
     ),
   });
@@ -500,7 +500,7 @@ export default function ChatOverviewScreen() {
   // For existing thread (reusing thread screen flow): block during streaming/analysis
   const pendingMessage = useChatStore(s => s.pendingMessage);
   const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming;
-  const isSubmitBlocked = isStreaming || isCreatingAnalysis || Boolean(pendingMessage);
+  const isSubmitBlocked = isStreaming || isCreatingSummary || Boolean(pendingMessage);
 
   // ============================================================================
   // LAYOUT EFFECTS (external system sync only - DOM, scroll, navigation)

@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StoreApi } from 'zustand';
 import { createStore } from 'zustand';
 
-import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 // Type for the store state
@@ -108,7 +108,7 @@ function createMockUserMessage(roundNumber: number) {
 
 function createMockPreSearch(
   roundNumber: number,
-  status: typeof AnalysisStatuses[keyof typeof AnalysisStatuses],
+  status: typeof MessageStatuses[keyof typeof MessageStatuses],
 ): StoredPreSearch {
   return {
     id: `presearch-${roundNumber}`,
@@ -116,11 +116,11 @@ function createMockPreSearch(
     roundNumber,
     status,
     userQuery: 'Test query',
-    searchData: status === AnalysisStatuses.COMPLETE
+    searchData: status === MessageStatuses.COMPLETE
       ? {
           queries: [],
           results: [],
-          analysis: 'Analysis',
+          summary: 'Summary',
           successCount: 1,
           failureCount: 0,
           totalResults: 3,
@@ -129,7 +129,7 @@ function createMockPreSearch(
       : undefined,
     errorMessage: null,
     createdAt: new Date(),
-    completedAt: status === AnalysisStatuses.COMPLETE ? new Date() : null,
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
   } as StoredPreSearch;
 }
 
@@ -276,7 +276,7 @@ describe('useRoundResumption', () => {
         participants: [createMockParticipant(0), createMockParticipant(1)],
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.STREAMING)], // Still streaming
+        preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)], // Still streaming
       });
 
       createMockChatHook({
@@ -288,8 +288,8 @@ describe('useRoundResumption', () => {
       const preSearch = state.preSearches[0];
 
       // Pre-search is still streaming, should block resumption
-      const isPreSearchBlocking = preSearch?.status === AnalysisStatuses.STREAMING
-        || preSearch?.status === AnalysisStatuses.PENDING;
+      const isPreSearchBlocking = preSearch?.status === MessageStatuses.STREAMING
+        || preSearch?.status === MessageStatuses.PENDING;
 
       expect(isPreSearchBlocking).toBe(true);
       expect(continueFromParticipant).not.toHaveBeenCalled();
@@ -304,7 +304,7 @@ describe('useRoundResumption', () => {
         participants: [createMockParticipant(0), createMockParticipant(1)],
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, AnalysisStatuses.COMPLETE)], // Completed
+        preSearches: [createMockPreSearch(0, MessageStatuses.COMPLETE)], // Completed
       });
 
       const chat = createMockChatHook({
@@ -316,8 +316,8 @@ describe('useRoundResumption', () => {
       const preSearch = state.preSearches[0];
 
       // Pre-search complete, should NOT block
-      const isPreSearchBlocking = preSearch?.status === AnalysisStatuses.STREAMING
-        || preSearch?.status === AnalysisStatuses.PENDING;
+      const isPreSearchBlocking = preSearch?.status === MessageStatuses.STREAMING
+        || preSearch?.status === MessageStatuses.PENDING;
 
       expect(isPreSearchBlocking).toBe(false);
 

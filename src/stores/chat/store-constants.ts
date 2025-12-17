@@ -2,21 +2,18 @@
  * Store Constants - Shared Values Across Store and Orchestrators
  *
  * Centralized constants to ensure consistency between different parts of the store.
- * Extracted from inline definitions in analysis-orchestrator.ts and pre-search-orchestrator.ts
+ * Extracted from inline definitions in summary-orchestrator.ts and pre-search-orchestrator.ts
  *
- * ✅ PATTERN: Single source of truth for magic values
- * ✅ TYPE-SAFE: const assertions for literal types
- * ✅ REUSABLE: Shared by orchestrators and store logic
- *
- * Location: /src/stores/chat/store-constants.ts
- * Used by: analysis-orchestrator.ts, pre-search-orchestrator.ts
+ * PATTERN: Single source of truth for magic values
+ * TYPE-SAFE: const assertions for literal types
+ * REUSABLE: Shared by orchestrators and store logic
  */
 
-import type { AnalysisStatus } from '@/api/core/enums';
-import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { MessageStatus } from '@/api/core/enums';
+import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 
 /**
- * Priority order for analysis/pre-search status resolution
+ * Priority order for summary/pre-search status resolution
  *
  * When deduplicating or merging server/client state, higher priority wins.
  * Failed status has HIGHEST priority - server-side errors are authoritative.
@@ -24,23 +21,19 @@ import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat
  *
  * CRITICAL: failed=4 ensures server validation errors (schema mismatch)
  * always override client-side optimistic "complete" status.
- *
- * Usage:
- * - analysis-orchestrator.ts: Server vs client analysis merging
- * - pre-search-orchestrator.ts: Server vs client pre-search merging
  */
-export const ANALYSIS_STATUS_PRIORITY = {
+export const MESSAGE_STATUS_PRIORITY = {
   failed: 4,
   complete: 3,
   streaming: 2,
   pending: 1,
-} as const satisfies Record<AnalysisStatus, number>;
+} as const satisfies Record<MessageStatus, number>;
 
 /**
  * Type guard to ensure status has a priority value
  */
-export function getStatusPriority(status: AnalysisStatus): number {
-  return ANALYSIS_STATUS_PRIORITY[status] ?? 0;
+export function getStatusPriority(status: MessageStatus): number {
+  return MESSAGE_STATUS_PRIORITY[status] ?? 0;
 }
 
 // ============================================================================
@@ -48,19 +41,19 @@ export function getStatusPriority(status: AnalysisStatus): number {
 // ============================================================================
 
 /**
- * Compare keys for ModeratorAnalysis - Must match component dependencies
+ * Compare keys for RoundSummary - Must match component dependencies
  */
-export const MODERATOR_ANALYSIS_COMPARE_KEYS = [
+export const ROUND_SUMMARY_COMPARE_KEYS = [
   'roundNumber',
   'status',
   'id',
-  'analysisData',
+  'summaryData',
   'errorMessage',
-] as const satisfies ReadonlyArray<keyof StoredModeratorAnalysis>;
+] as const satisfies ReadonlyArray<keyof StoredRoundSummary>;
 
 /**
  * Compare keys for PreSearch - Must match PreSearchStream effect dependencies
- * ✅ CRITICAL: Missing keys cause unnecessary re-renders → aborted streams
+ * CRITICAL: Missing keys cause unnecessary re-renders → aborted streams
  */
 export const PRE_SEARCH_COMPARE_KEYS = [
   'roundNumber',
@@ -82,44 +75,33 @@ export const PRE_SEARCH_COMPARE_KEYS = [
  * Participant animations use indices 0, 1, 2, etc. (based on participant index)
  * Non-participant animations use negative indices to avoid collisions
  *
- * ✅ PATTERN: Enum-based approach for type safety and consistency
- * ✅ SINGLE SOURCE OF TRUTH: All animation indices defined here
- *
- * Usage:
- * - PreSearchCard: Uses PRE_SEARCH for pre-search animation tracking
- * - ModelMessageCard: Uses participant indices directly (0, 1, 2, ...)
- * - Provider: Checks animation completion before proceeding to next step
+ * PATTERN: Enum-based approach for type safety and consistency
+ * SINGLE SOURCE OF TRUTH: All animation indices defined here
  */
 export const AnimationIndices = {
-  /**
-   * Pre-search animation index (-1)
-   * Used by PreSearchCard to register/complete animations
-   */
+  /** Pre-search animation index (-1) */
   PRE_SEARCH: -1,
 } as const;
 
 // ============================================================================
-// ANALYSIS TIMEOUT CONFIGURATION
+// SUMMARY TIMEOUT CONFIGURATION
 // ============================================================================
 
 /**
- * Analysis timeout constants for stuck analysis detection and cleanup
+ * Summary timeout constants for stuck summary detection and cleanup
  *
- * ✅ PATTERN: Centralized timeout configuration
- * ✅ SINGLE SOURCE OF TRUTH: Used by ChatView stuck analysis cleanup
- *
- * Usage:
- * - ChatView.tsx: Periodic check for stuck streaming analyses
+ * PATTERN: Centralized timeout configuration
+ * SINGLE SOURCE OF TRUTH: Used by ChatView stuck summary cleanup
  */
-export const AnalysisTimeouts = {
+export const SummaryTimeouts = {
   /**
-   * Maximum time (ms) an analysis can be in streaming state before considered stuck
+   * Maximum time (ms) a summary can be in streaming state before considered stuck
    * Default: 45 seconds (reduced from 90s for faster recovery from truncated streams)
    */
   STUCK_THRESHOLD_MS: 45_000,
 
   /**
-   * Interval (ms) between stuck analysis checks
+   * Interval (ms) between stuck summary checks
    * Default: 10 seconds
    */
   CHECK_INTERVAL_MS: 10_000,

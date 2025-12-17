@@ -9,7 +9,7 @@
  * ✅ PERFORMANCE: Shallow comparison (no JSON.stringify)
  *
  * Location: /src/lib/utils/state-merge.ts
- * Used by: analysis-orchestrator.ts, pre-search-orchestrator.ts
+ * Used by: summary-orchestrator.ts, pre-search-orchestrator.ts
  */
 
 /**
@@ -119,9 +119,9 @@ export function mergeServerClientState<T, K extends string | number>(
  *
  * @example
  * const changed = hasStateChanged(
- *   prevAnalyses,
- *   nextAnalyses,
- *   ['roundNumber', 'status', 'id', 'analysisData']
+ *   prevSummaries,
+ *   nextSummaries,
+ *   ['roundNumber', 'status', 'id', 'summaryData']
  * );
  */
 export function hasStateChanged<T>(
@@ -146,7 +146,7 @@ export function hasStateChanged<T>(
       const prevValue = prevItem[key];
       const nextValue = nextItem[key];
 
-      // Handle boolean conversion for nullable fields (e.g., !!analysisData)
+      // Handle boolean conversion for nullable fields (e.g., !!summaryData)
       if (typeof prevValue === 'object' && typeof nextValue === 'object') {
         return Boolean(prevValue) !== Boolean(nextValue);
       }

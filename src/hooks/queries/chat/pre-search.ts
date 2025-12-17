@@ -2,7 +2,7 @@
  * Thread Pre-Search Query Hooks
  *
  * TanStack Query hooks for thread pre-search operations
- * Following EXACT pattern from analysis.ts
+ * Following EXACT pattern from summary.ts
  *
  * IMPORTANT: staleTime values MUST match server-side prefetch values
  */
@@ -11,7 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { MessageStatuses } from '@/api/core/enums';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
@@ -19,7 +19,7 @@ import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
 
 /**
  * Hook to fetch all pre-search results for a thread
- * ✅ FOLLOWS: useThreadAnalysesQuery pattern exactly
+ * ✅ FOLLOWS: useThreadSummariesQuery pattern exactly
  * ✅ USED BY: usePreSearchOrchestrator to sync to store
  *
  * @param threadId - Thread ID
@@ -59,7 +59,7 @@ export function useThreadPreSearchesQuery(
       // Only poll when pre-search is PENDING (waiting for execution to start)
       // Don't poll during STREAMING - SSE handles updates
       const hasPendingPreSearch = query.state.data?.data?.items?.some(
-        ps => ps.status === AnalysisStatuses.PENDING,
+        ps => ps.status === MessageStatuses.PENDING,
       );
 
       // Poll every 500ms only for PENDING status to catch execution start

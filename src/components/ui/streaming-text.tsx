@@ -121,8 +121,8 @@ type StreamingBlockProps = {
  *
  * @example
  * ```tsx
- * <StreamingBlock isStreaming={isAnalyzing}>
- *   <AnalysisContent data={analysisData} />
+ * <StreamingBlock isStreaming={isSummarizing}>
+ *   <SummaryContent data={summaryData} />
  * </StreamingBlock>
  * ```
  */

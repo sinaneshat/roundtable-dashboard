@@ -124,7 +124,7 @@ export function getRoundNumberFromMetadata(
  * USAGE: Primary function for reading the current round number
  * - Use this in onRoundComplete callbacks
  * - Use this when you need to know what round you're in
- * - Use this for creating analyses, changelogs, feedback
+ * - Use this for creating summaries, changelogs, feedback
  *
  * SINGLE SOURCE OF TRUTH: Reads from last user message metadata
  * NEVER recalculates by counting messages

@@ -17,8 +17,8 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
+import { MessageStatuses } from '@/api/core/enums';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredRoundSummary, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -104,15 +104,15 @@ export default function ChatThreadScreen({
   // STORE STATE
   // ============================================================================
 
-  const { isStreaming, isCreatingAnalysis, pendingMessage } = useChatStore(
+  const { isStreaming, isCreatingSummary, pendingMessage } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
-      isCreatingAnalysis: s.isCreatingAnalysis,
+      isCreatingSummary: s.isCreatingSummary,
       pendingMessage: s.pendingMessage,
     })),
   );
 
-  const analyses = useChatStore(s => s.analyses);
+  const summaries = useChatStore(s => s.summaries);
   const selectedMode = useChatStore(s => s.selectedMode);
   const inputValue = useChatStore(s => s.inputValue);
   const selectedParticipants = useChatStore(s => s.selectedParticipants);
@@ -145,8 +145,8 @@ export default function ChatThreadScreen({
   const formActions = useChatFormActions();
 
   // Screen initialization
-  const hasStreamingAnalysis = analyses.some(
-    a => a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING,
+  const hasStreamingSummary = summaries.some(
+    (a: StoredRoundSummary) => a.status === MessageStatuses.PENDING || a.status === MessageStatuses.STREAMING,
   );
 
   // ✅ FIX: Select individual values instead of nested object to avoid infinite loop
@@ -162,11 +162,11 @@ export default function ChatThreadScreen({
     chatMode: selectedMode || (thread.mode as ChatMode),
     isRegeneration: regeneratingRoundNumber !== null,
     regeneratingRoundNumber,
-    enableOrchestrator: !isRegenerating && !hasStreamingAnalysis,
+    enableOrchestrator: !isRegenerating && !hasStreamingSummary,
   });
 
   // Input blocking for submit guard only (ChatView handles its own input state)
-  const isSubmitBlocked = isStreaming || isCreatingAnalysis || Boolean(pendingMessage);
+  const isSubmitBlocked = isStreaming || isCreatingSummary || Boolean(pendingMessage);
 
   // ✅ SIMPLIFIED: Removed duplicate initialization useEffect
   // All state setup now happens in initializeThread (called by useScreenInitialization)

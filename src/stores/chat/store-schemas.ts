@@ -25,8 +25,8 @@ import {
 import {
   ChatParticipantSchema,
   ChatThreadSchema,
-  StoredModeratorAnalysisSchema,
   StoredPreSearchSchema,
+  StoredRoundSummarySchema,
 } from '@/api/routes/chat/schema';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
@@ -35,53 +35,54 @@ import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 
 import type {
-  AddAnalysis,
   AddAttachments,
   AddParticipant,
   AddPreSearch,
+  AddSummary,
   AnimationResolver,
   ChatSetMessages,
   CheckStuckPreSearches,
   CheckStuckStreams,
-  ClearAllAnalyses,
   ClearAllPreSearches,
-  ClearAnalysisStreamTracking,
-  ClearAnalysisTracking,
+  ClearAllPreSearchTracking,
+  ClearAllSummaries,
   ClearAnimations,
   ClearAttachments,
   ClearPreSearchActivity,
   ClearPreSearchTracking,
   ClearStreamResumption,
+  ClearSummaryStreamTracking,
+  ClearSummaryTracking,
   CompleteAnimation,
   CompleteRegeneration,
   CompleteStreaming,
-  CreatePendingAnalysis,
+  CreatePendingSummary,
   GetAttachments,
   GetPreSearchActivityTime,
   HandleResumedStreamComplete,
   HandleStreamResumptionFailure,
-  HasAnalysisBeenCreated,
-  HasAnalysisStreamBeenTriggered,
   HasAttachments,
   HasPreSearchBeenTriggered,
+  HasSummaryBeenCreated,
+  HasSummaryStreamBeenTriggered,
   InitializeThread,
   IsStreamResumptionStale,
   IsStreamResumptionValid,
   LoadFeedbackFromServer,
-  MarkAnalysisCreated,
-  MarkAnalysisStreamTriggered,
   MarkPreSearchTriggered,
   MarkResumptionAttempted,
+  MarkSummaryCreated,
+  MarkSummaryStreamTriggered,
   NeedsMessageSync,
   NeedsStreamResumption,
   OnComplete,
   PrefillStreamResumptionState,
   PrepareForNewMessage,
   RegisterAnimation,
-  RemoveAnalysis,
   RemoveAttachment,
   RemoveParticipant,
   RemovePreSearch,
+  RemoveSummary,
   ReorderParticipants,
   ResetForm,
   ResetForThreadNavigation,
@@ -90,7 +91,6 @@ import type {
   ResetToNewChat,
   ResetToOverview,
   ResetUI,
-  SetAnalyses,
   SetChatSetMessages,
   SetCreatedThreadId,
   SetCurrentParticipantIndex,
@@ -104,7 +104,7 @@ import type {
   SetHasPendingConfigChanges,
   SetHasSentPendingMessage,
   SetInputValue,
-  SetIsCreatingAnalysis,
+  SetIsCreatingSummary,
   SetIsCreatingThread,
   SetIsRegenerating,
   SetIsStreaming,
@@ -126,14 +126,12 @@ import type {
   SetShowInitialUI,
   SetStartRound,
   SetStreamingRoundNumber,
+  SetSummaries,
   SetThread,
   SetWaitingToStartStreaming,
   StartRegeneration,
-  TryMarkAnalysisCreated,
   TryMarkPreSearchTriggered,
-  UpdateAnalysisData,
-  UpdateAnalysisError,
-  UpdateAnalysisStatus,
+  TryMarkSummaryCreated,
   UpdateAttachmentPreview,
   UpdateAttachmentUpload,
   UpdatePartialPreSearchData,
@@ -142,6 +140,9 @@ import type {
   UpdatePreSearchActivity,
   UpdatePreSearchData,
   UpdatePreSearchStatus,
+  UpdateSummaryData,
+  UpdateSummaryError,
+  UpdateSummaryStatus,
   WaitForAnimation,
 } from './store-action-types';
 
@@ -225,25 +226,25 @@ export const UIActionsSchema = z.object({
 export const UISliceSchema = z.intersection(UIStateSchema, UIActionsSchema);
 
 // ============================================================================
-// ANALYSIS SLICE SCHEMAS
+// SUMMARY SLICE SCHEMAS
 // ============================================================================
 
-export const AnalysisStateSchema = z.object({
-  analyses: z.array(StoredModeratorAnalysisSchema),
+export const SummaryStateSchema = z.object({
+  summaries: z.array(StoredRoundSummarySchema),
 });
 
-export const AnalysisActionsSchema = z.object({
-  setAnalyses: z.custom<SetAnalyses>(),
-  addAnalysis: z.custom<AddAnalysis>(),
-  updateAnalysisData: z.custom<UpdateAnalysisData>(),
-  updateAnalysisStatus: z.custom<UpdateAnalysisStatus>(),
-  updateAnalysisError: z.custom<UpdateAnalysisError>(),
-  removeAnalysis: z.custom<RemoveAnalysis>(),
-  clearAllAnalyses: z.custom<ClearAllAnalyses>(),
-  createPendingAnalysis: z.custom<CreatePendingAnalysis>(),
+export const SummaryActionsSchema = z.object({
+  setSummaries: z.custom<SetSummaries>(),
+  addSummary: z.custom<AddSummary>(),
+  updateSummaryData: z.custom<UpdateSummaryData>(),
+  updateSummaryStatus: z.custom<UpdateSummaryStatus>(),
+  updateSummaryError: z.custom<UpdateSummaryError>(),
+  removeSummary: z.custom<RemoveSummary>(),
+  clearAllSummaries: z.custom<ClearAllSummaries>(),
+  createPendingSummary: z.custom<CreatePendingSummary>(),
 });
 
-export const AnalysisSliceSchema = z.intersection(AnalysisStateSchema, AnalysisActionsSchema);
+export const SummarySliceSchema = z.intersection(SummaryStateSchema, SummaryActionsSchema);
 
 // ============================================================================
 // PRE-SEARCH SLICE SCHEMAS
@@ -310,7 +311,7 @@ export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActions
 export const FlagsStateSchema = z.object({
   hasInitiallyLoaded: z.boolean(),
   isRegenerating: z.boolean(),
-  isCreatingAnalysis: z.boolean(),
+  isCreatingSummary: z.boolean(),
   isWaitingForChangelog: z.boolean(),
   hasPendingConfigChanges: z.boolean(),
 });
@@ -318,7 +319,7 @@ export const FlagsStateSchema = z.object({
 export const FlagsActionsSchema = z.object({
   setHasInitiallyLoaded: z.custom<SetHasInitiallyLoaded>(),
   setIsRegenerating: z.custom<SetIsRegenerating>(),
-  setIsCreatingAnalysis: z.custom<SetIsCreatingAnalysis>(),
+  setIsCreatingSummary: z.custom<SetIsCreatingSummary>(),
   setIsWaitingForChangelog: z.custom<SetIsWaitingForChangelog>(),
   setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
 });
@@ -358,34 +359,35 @@ export const DataSliceSchema = z.intersection(DataStateSchema, DataActionsSchema
 
 export const TrackingStateSchema = z.object({
   hasSentPendingMessage: z.boolean(),
-  createdAnalysisRounds: z.custom<Set<number>>(),
+  createdSummaryRounds: z.custom<Set<number>>(),
   triggeredPreSearchRounds: z.custom<Set<number>>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by round number */
-  triggeredAnalysisRounds: z.custom<Set<number>>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Prevents duplicate stream submissions by analysis ID */
-  triggeredAnalysisIds: z.custom<Set<string>>(),
+  /** ✅ SUMMARY STREAM TRACKING: Prevents duplicate stream submissions by round number */
+  triggeredSummaryRounds: z.custom<Set<number>>(),
+  /** ✅ SUMMARY STREAM TRACKING: Prevents duplicate stream submissions by summary ID */
+  triggeredSummaryIds: z.custom<Set<string>>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Flag to track early optimistic message from handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: z.boolean(),
 });
 
 export const TrackingActionsSchema = z.object({
   setHasSentPendingMessage: z.custom<SetHasSentPendingMessage>(),
-  markAnalysisCreated: z.custom<MarkAnalysisCreated>(),
-  hasAnalysisBeenCreated: z.custom<HasAnalysisBeenCreated>(),
-  /** Atomic check-and-mark to prevent race conditions in analysis creation */
-  tryMarkAnalysisCreated: z.custom<TryMarkAnalysisCreated>(),
-  clearAnalysisTracking: z.custom<ClearAnalysisTracking>(),
+  markSummaryCreated: z.custom<MarkSummaryCreated>(),
+  hasSummaryBeenCreated: z.custom<HasSummaryBeenCreated>(),
+  /** Atomic check-and-mark to prevent race conditions in summary creation */
+  tryMarkSummaryCreated: z.custom<TryMarkSummaryCreated>(),
+  clearSummaryTracking: z.custom<ClearSummaryTracking>(),
   markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
   /** Atomic check-and-mark to prevent race conditions in pre-search triggering */
   tryMarkPreSearchTriggered: z.custom<TryMarkPreSearchTriggered>(),
   clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Mark analysis stream as triggered (ID + round) */
-  markAnalysisStreamTriggered: z.custom<MarkAnalysisStreamTriggered>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Check if analysis stream was triggered */
-  hasAnalysisStreamBeenTriggered: z.custom<HasAnalysisStreamBeenTriggered>(),
-  /** ✅ ANALYSIS STREAM TRACKING: Clear tracking for regeneration */
-  clearAnalysisStreamTracking: z.custom<ClearAnalysisStreamTracking>(),
+  clearAllPreSearchTracking: z.custom<ClearAllPreSearchTracking>(),
+  /** ✅ SUMMARY STREAM TRACKING: Mark summary stream as triggered (ID + round) */
+  markSummaryStreamTriggered: z.custom<MarkSummaryStreamTriggered>(),
+  /** ✅ SUMMARY STREAM TRACKING: Check if summary stream was triggered */
+  hasSummaryStreamBeenTriggered: z.custom<HasSummaryStreamBeenTriggered>(),
+  /** ✅ SUMMARY STREAM TRACKING: Clear tracking for regeneration */
+  clearSummaryStreamTracking: z.custom<ClearSummaryStreamTracking>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Set when early optimistic message added by handleUpdateThreadAndSend */
   setHasEarlyOptimisticMessage: z.custom<SetHasEarlyOptimisticMessage>(),
 });
@@ -459,15 +461,15 @@ export const PreSearchResumptionStateSchema = z.object({
 export type PreSearchResumptionState = z.infer<typeof PreSearchResumptionStateSchema>;
 
 /**
- * Analyzer resumption state for phase-based tracking
+ * Summarizer resumption state for phase-based tracking
  */
-export const AnalyzerResumptionStateSchema = z.object({
+export const SummarizerResumptionStateSchema = z.object({
   status: z.enum(['pending', 'streaming', 'complete', 'failed']).nullable(),
   streamId: z.string().nullable(),
-  analysisId: z.string().nullable(),
+  summaryId: z.string().nullable(),
 });
 
-export type AnalyzerResumptionState = z.infer<typeof AnalyzerResumptionStateSchema>;
+export type SummarizerResumptionState = z.infer<typeof SummarizerResumptionStateSchema>;
 
 export const StreamResumptionSliceStateSchema = z.object({
   streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
@@ -478,11 +480,11 @@ export const StreamResumptionSliceStateSchema = z.object({
   /** Thread ID that the prefilled state is for - ensures state matches current thread */
   prefilledForThreadId: z.string().nullable(),
   /** ✅ UNIFIED PHASES: Current phase for resumption logic */
-  currentResumptionPhase: z.enum(['idle', 'pre_search', 'participants', 'analyzer', 'complete']).nullable(),
+  currentResumptionPhase: z.enum(['idle', 'pre_search', 'participants', 'summarizer', 'complete']).nullable(),
   /** Pre-search resumption state (null if web search not enabled) */
   preSearchResumption: PreSearchResumptionStateSchema.nullable(),
-  /** Analyzer resumption state */
-  analyzerResumption: AnalyzerResumptionStateSchema.nullable(),
+  /** Summarizer resumption state */
+  summarizerResumption: SummarizerResumptionStateSchema.nullable(),
   /** Current round number for resumption */
   resumptionRoundNumber: z.number().nullable(),
 });
@@ -606,7 +608,7 @@ export const ChatStoreSchema = z.intersection(
                           ),
                           UISliceSchema,
                         ),
-                        AnalysisSliceSchema,
+                        SummarySliceSchema,
                       ),
                       PreSearchSliceSchema,
                     ),
@@ -658,9 +660,9 @@ export type UIState = z.infer<typeof UIStateSchema>;
 export type UIActions = z.infer<typeof UIActionsSchema>;
 export type UISlice = z.infer<typeof UISliceSchema>;
 
-export type AnalysisState = z.infer<typeof AnalysisStateSchema>;
-export type AnalysisActions = z.infer<typeof AnalysisActionsSchema>;
-export type AnalysisSlice = z.infer<typeof AnalysisSliceSchema>;
+export type SummaryState = z.infer<typeof SummaryStateSchema>;
+export type SummaryActions = z.infer<typeof SummaryActionsSchema>;
+export type SummarySlice = z.infer<typeof SummarySliceSchema>;
 
 export type PreSearchState = z.infer<typeof PreSearchStateSchema>;
 export type PreSearchActions = z.infer<typeof PreSearchActionsSchema>;

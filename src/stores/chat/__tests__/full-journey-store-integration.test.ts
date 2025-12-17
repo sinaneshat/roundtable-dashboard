@@ -5,7 +5,7 @@
  * Uses createChatStore factory to test real state transitions.
  *
  * Key Journeys:
- * - Thread creation → streaming → analysis → navigation
+ * - Thread creation → streaming → summary → navigation
  * - Multi-round conversations with state preservation
  * - Stream resumption after refresh
  * - Configuration changes between rounds
@@ -19,7 +19,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes, FinishReasons, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -64,12 +64,12 @@ describe('store Initialization', () => {
     expect(typeof state.setShowInitialUI).toBe('function');
     expect(typeof state.setWaitingToStartStreaming).toBe('function');
 
-    // Analysis actions
-    expect(typeof state.createPendingAnalysis).toBe('function');
-    expect(typeof state.updateAnalysisStatus).toBe('function');
+    // Summary actions
+    expect(typeof state.createPendingSummary).toBe('function');
+    expect(typeof state.updateMessageStatus).toBe('function');
 
     // Tracking actions
-    expect(typeof state.tryMarkAnalysisCreated).toBe('function');
+    expect(typeof state.tryMarkSummaryCreated).toBe('function');
   });
 });
 
@@ -231,10 +231,10 @@ describe('message Accumulation', () => {
 });
 
 // ============================================================================
-// ANALYSIS CREATION FLOW TESTS
+// SUMMARY CREATION FLOW TESTS
 // ============================================================================
 
-describe('analysis Creation Flow', () => {
+describe('summary Creation Flow', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -244,23 +244,23 @@ describe('analysis Creation Flow', () => {
     state.setParticipants(createMockParticipants(2));
   });
 
-  it('atomic analysis creation prevents race conditions', () => {
+  it('atomic summary creation prevents race conditions', () => {
     const state = getStoreState(store);
 
     // First caller marks round 0
-    const firstResult = state.tryMarkAnalysisCreated(0);
+    const firstResult = state.tryMarkSummaryCreated(0);
     expect(firstResult).toBe(true);
 
     // Second caller (race condition) tries same round
-    const secondResult = state.tryMarkAnalysisCreated(0);
+    const secondResult = state.tryMarkSummaryCreated(0);
     expect(secondResult).toBe(false);
 
     // Verify only marked once
-    expect(getStoreState(store).createdAnalysisRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdAnalysisRounds.size).toBe(1);
+    expect(getStoreState(store).createdSummaryRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdSummaryRounds.size).toBe(1);
   });
 
-  it('creates pending analysis with correct data', () => {
+  it('creates pending summary with correct data', () => {
     const state = getStoreState(store);
 
     const messages: UIMessage[] = [
@@ -287,7 +287,7 @@ describe('analysis Creation Flow', () => {
       }),
     ];
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Test question',
@@ -295,13 +295,13 @@ describe('analysis Creation Flow', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    const analyses = getStoreState(store).analyses;
-    expect(analyses).toHaveLength(1);
-    expect(analyses[0]!.roundNumber).toBe(0);
-    expect(analyses[0]!.status).toBe(AnalysisStatuses.PENDING);
+    const summaries = getStoreState(store).summaries;
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]!.roundNumber).toBe(0);
+    expect(summaries[0]!.status).toBe(MessageStatuses.PENDING);
   });
 
-  it('updates analysis status through lifecycle', () => {
+  it('updates summary status through lifecycle', () => {
     const state = getStoreState(store);
 
     // Create pending - requires valid participant messages
@@ -318,7 +318,7 @@ describe('analysis Creation Flow', () => {
     ];
     state.setMessages(messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Test',
@@ -326,16 +326,16 @@ describe('analysis Creation Flow', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    expect(getStoreState(store).summaries).toHaveLength(1);
 
-    // updateAnalysisStatus takes roundNumber, not analysisId
+    // updateMessageStatus takes roundNumber, not summaryId
     // Transition to streaming
-    state.updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.STREAMING);
+    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
     // Transition to complete
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
   });
 });
 
@@ -355,10 +355,10 @@ describe('multi-Round Conversation', () => {
     state.setShowInitialUI(false);
   });
 
-  it('maintains separate analyses per round', () => {
+  it('maintains separate summaries per round', () => {
     const state = getStoreState(store);
 
-    // Round 0 messages (required for analysis creation)
+    // Round 0 messages (required for summary creation)
     const round0Messages: UIMessage[] = [
       createTestUserMessage({ id: 'r0_user', content: 'Question 0', roundNumber: 0 }),
       createTestAssistantMessage({
@@ -387,8 +387,8 @@ describe('multi-Round Conversation', () => {
     // Set all messages first
     state.setMessages([...round0Messages, ...round1Messages]);
 
-    // Round 0 analysis
-    state.createPendingAnalysis({
+    // Round 0 summary
+    state.createPendingSummary({
       roundNumber: 0,
       messages: [...round0Messages, ...round1Messages], // Pass all messages, it filters by roundNumber
       userQuestion: 'Question 0',
@@ -396,8 +396,8 @@ describe('multi-Round Conversation', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    // Round 1 analysis
-    state.createPendingAnalysis({
+    // Round 1 summary
+    state.createPendingSummary({
       roundNumber: 1,
       messages: [...round0Messages, ...round1Messages],
       userQuestion: 'Question 1',
@@ -405,10 +405,10 @@ describe('multi-Round Conversation', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    const analyses = getStoreState(store).analyses;
-    expect(analyses).toHaveLength(2);
-    expect(analyses[0]!.roundNumber).toBe(0);
-    expect(analyses[1]!.roundNumber).toBe(1);
+    const summaries = getStoreState(store).summaries;
+    expect(summaries).toHaveLength(2);
+    expect(summaries[0]!.roundNumber).toBe(0);
+    expect(summaries[1]!.roundNumber).toBe(1);
   });
 
   it('preserves round 0 messages when adding round 1', () => {
@@ -501,7 +501,7 @@ describe('thread Navigation Reset', () => {
       }),
     ];
     state.setMessages(messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Old',
@@ -510,13 +510,13 @@ describe('thread Navigation Reset', () => {
     });
 
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    expect(getStoreState(store).summaries).toHaveLength(1);
 
     // Navigate to new thread - reset via resetForThreadNavigation
     state.resetForThreadNavigation();
 
     expect(getStoreState(store).messages).toEqual([]);
-    expect(getStoreState(store).analyses).toEqual([]);
+    expect(getStoreState(store).summaries).toEqual([]);
     expect(getStoreState(store).thread).toBeNull();
   });
 
@@ -524,17 +524,17 @@ describe('thread Navigation Reset', () => {
     const state = getStoreState(store);
 
     // Build up tracking state
-    state.tryMarkAnalysisCreated(0);
-    state.tryMarkAnalysisCreated(1);
+    state.tryMarkSummaryCreated(0);
+    state.tryMarkSummaryCreated(1);
     state.setHasSentPendingMessage(true);
 
-    expect(getStoreState(store).createdAnalysisRounds.size).toBe(2);
+    expect(getStoreState(store).createdSummaryRounds.size).toBe(2);
     expect(getStoreState(store).hasSentPendingMessage).toBe(true);
 
     // Reset
     state.resetForThreadNavigation();
 
-    expect(getStoreState(store).createdAnalysisRounds.size).toBe(0);
+    expect(getStoreState(store).createdSummaryRounds.size).toBe(0);
     expect(getStoreState(store).hasSentPendingMessage).toBe(false);
   });
 
@@ -687,7 +687,7 @@ describe('pre-Search State', () => {
 // ============================================================================
 
 describe('complete Round Journey (Integration)', () => {
-  it('full round: user message → participants → analysis → complete', () => {
+  it('full round: user message → participants → summary → complete', () => {
     const store = createChatStore();
     const state = getStoreState(store);
 
@@ -753,12 +753,12 @@ describe('complete Round Journey (Integration)', () => {
 
     expect(getStoreState(store).messages).toHaveLength(3);
 
-    // === STEP 5: All participants done, create analysis ===
+    // === STEP 5: All participants done, create summary ===
     // Atomic check-and-mark
-    const canCreateAnalysis = state.tryMarkAnalysisCreated(0);
-    expect(canCreateAnalysis).toBe(true);
+    const canCreateSummary = state.tryMarkSummaryCreated(0);
+    expect(canCreateSummary).toBe(true);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: [userMessage, p0Message, p1Message],
       userQuestion: 'What is the best approach?',
@@ -768,30 +768,30 @@ describe('complete Round Journey (Integration)', () => {
 
     state.completeStreaming();
 
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    expect(getStoreState(store).summaries).toHaveLength(1);
     expect(getStoreState(store).isStreaming).toBe(false);
 
-    // === STEP 6: Analysis streaming ===
-    // updateAnalysisStatus takes roundNumber, not analysisId
-    state.setIsCreatingAnalysis(true);
-    state.updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
+    // === STEP 6: Summary streaming ===
+    // updateMessageStatus takes roundNumber, not summaryId
+    state.setIsCreatingSummary(true);
+    state.updateMessageStatus(0, MessageStatuses.STREAMING);
 
-    expect(getStoreState(store).isCreatingAnalysis).toBe(true);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.STREAMING);
+    expect(getStoreState(store).isCreatingSummary).toBe(true);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
-    // === STEP 7: Analysis complete ===
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
-    state.setIsCreatingAnalysis(false);
+    // === STEP 7: Summary complete ===
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.setIsCreatingSummary(false);
 
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
-    expect(getStoreState(store).isCreatingAnalysis).toBe(false);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+    expect(getStoreState(store).isCreatingSummary).toBe(false);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
     expect(finalState.messages).toHaveLength(3);
-    expect(finalState.analyses).toHaveLength(1);
+    expect(finalState.summaries).toHaveLength(1);
     expect(finalState.isStreaming).toBe(false);
-    expect(finalState.createdAnalysisRounds.has(0)).toBe(true);
+    expect(finalState.createdSummaryRounds.has(0)).toBe(true);
   });
 });
 
@@ -838,7 +838,7 @@ describe('stop Button Behavior', () => {
     expect(getStoreState(store).isStreaming).toBe(false);
   });
 
-  it('stop prevents analysis creation if not all participants done', () => {
+  it('stop prevents summary creation if not all participants done', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
@@ -861,7 +861,7 @@ describe('stop Button Behavior', () => {
     // Stop with only 1/3 participants
     state.completeStreaming();
 
-    // No analysis should be created (only 1 of 3 participants)
-    expect(getStoreState(store).analyses).toHaveLength(0);
+    // No summary should be created (only 1 of 3 participants)
+    expect(getStoreState(store).summaries).toHaveLength(0);
   });
 });

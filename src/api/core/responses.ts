@@ -783,8 +783,8 @@ function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, st
   if (metadata.resumedFromBuffer !== undefined) {
     headers['X-Resumed-From-Buffer'] = String(metadata.resumedFromBuffer);
   }
-  if (metadata.analysisId !== undefined) {
-    headers['X-Analysis-Id'] = metadata.analysisId;
+  if (metadata.summaryId !== undefined) {
+    headers['X-Summary-Id'] = metadata.summaryId;
   }
 
   return headers;
@@ -855,7 +855,7 @@ export function noContentWithHeaders(
 
 /**
  * Standard text stream headers for AI SDK streamObject responses
- * Used for streaming JSON text (analysis, object generation)
+ * Used for streaming JSON text (round summaries, object generation)
  */
 export const TEXT_STREAM_HEADERS = {
   'Content-Type': 'text/plain; charset=utf-8',
@@ -886,8 +886,8 @@ function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<st
   if (metadata.roundNumber !== undefined) {
     headers['X-Round-Number'] = String(metadata.roundNumber);
   }
-  if (metadata.analysisId !== undefined) {
-    headers['X-Analysis-Id'] = metadata.analysisId;
+  if (metadata.summaryId !== undefined) {
+    headers['X-Summary-Id'] = metadata.summaryId;
   }
   if (metadata.streamStatus !== undefined) {
     headers['X-Stream-Status'] = metadata.streamStatus;
@@ -906,9 +906,9 @@ function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<st
  * return Responses.textStream(stream);
  *
  * @example
- * // Text stream with metadata (resumed analysis)
+ * // Text stream with metadata (resumed round summary)
  * return Responses.textStream(stream, {
- *   streamId: 'analysis_123',
+ *   streamId: 'summary_123',
  *   resumedFromBuffer: true,
  * });
  */
@@ -928,11 +928,11 @@ export function textStream(
 }
 
 /**
- * Create a completed text response (for completed analysis)
+ * Create a completed text response (for completed round summary)
  * Returns already-completed text content
  *
  * @example
- * return Responses.textComplete(completedAnalysisText);
+ * return Responses.textComplete(completedSummaryText);
  */
 export function textComplete(
   content: string,
@@ -1005,8 +1005,8 @@ export function jsonRpc<T>(
  * @example
  * return Responses.polling(c, {
  *   status: 'streaming',
- *   resourceId: analysisId,
- *   message: 'Analysis in progress',
+ *   resourceId: summaryId,
+ *   message: 'Round summary in progress',
  *   retryAfterMs: 2000,
  * });
  */

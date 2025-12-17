@@ -10,15 +10,15 @@
  * @module lib/testing/chat-test-factories
  */
 
-import type { AnalysisStatus, StreamStatus } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModes, StreamStatuses } from '@/api/core/enums';
-import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { MessageStatus, StreamStatus } from '@/api/core/enums';
+import { ChatModes, MessageStatuses, StreamStatuses } from '@/api/core/enums';
+import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import {
-  createMockAnalysis as _createMockAnalysis,
   createMockParticipant as _createMockParticipant,
+  createMockSummary as _createMockSummary,
   createMockThread as _createMockThread,
 } from './api-mocks';
 
@@ -81,20 +81,20 @@ export function createMockParticipants(
 }
 
 // ============================================================================
-// ANALYSIS FACTORIES
+// SUMMARY FACTORIES
 // ============================================================================
 
 /**
- * Creates a mock StoredModeratorAnalysis for testing with roundNumber and status
+ * Creates a mock StoredRoundSummary for testing with roundNumber and status
  * This is the preferred version for tests that specify round/status directly
  */
-export function createMockAnalysis(
+export function createMockSummary(
   roundNumber: number,
-  status: AnalysisStatus = AnalysisStatuses.COMPLETE,
-  overrides?: Partial<StoredModeratorAnalysis>,
-): StoredModeratorAnalysis {
-  return _createMockAnalysis({
-    id: `analysis-${roundNumber}`,
+  status: MessageStatus = MessageStatuses.COMPLETE,
+  overrides?: Partial<StoredRoundSummary>,
+): StoredRoundSummary {
+  return _createMockSummary({
+    id: `summary-${roundNumber}`,
     threadId: 'thread-123',
     roundNumber,
     status,
@@ -140,10 +140,10 @@ export function createParticipantConfigs(count: number): ParticipantConfig[] {
  */
 export function createMockStoredPreSearch(
   roundNumber: number,
-  status: AnalysisStatus = AnalysisStatuses.COMPLETE,
+  status: MessageStatus = MessageStatuses.COMPLETE,
   overrides?: Partial<StoredPreSearch>,
 ): StoredPreSearch {
-  const isComplete = status === AnalysisStatuses.COMPLETE;
+  const isComplete = status === MessageStatuses.COMPLETE;
 
   return {
     id: `presearch-${roundNumber}`,
@@ -155,7 +155,7 @@ export function createMockStoredPreSearch(
       ? {
           queries: [],
           results: [],
-          analysis: 'Analysis',
+          summary: 'Summary',
           successCount: 1,
           failureCount: 0,
           totalResults: 3,
@@ -235,16 +235,16 @@ export type TestStoreState = {
   streamingRoundNumber: number | null;
   currentParticipantIndex: number;
   currentRoundNumber: number | null;
-  isCreatingAnalysis: boolean;
+  isCreatingSummary: boolean;
   isWaitingForChangelog: boolean;
   hasSentPendingMessage: boolean;
   error: Error | null;
   preSearches: StoredPreSearch[];
-  analyses: StoredModeratorAnalysis[];
+  summaries: StoredRoundSummary[];
   triggeredPreSearchRounds: Set<number>;
-  triggeredAnalysisRounds: Set<number>;
-  triggeredAnalysisIds: Set<string>;
-  createdAnalysisRounds: Set<number>;
+  triggeredSummaryRounds: Set<number>;
+  triggeredSummaryIds: Set<string>;
+  createdSummaryRounds: Set<number>;
 };
 
 /**
@@ -259,16 +259,16 @@ export function createInitialStoreState(
     streamingRoundNumber: null,
     currentParticipantIndex: 0,
     currentRoundNumber: null,
-    isCreatingAnalysis: false,
+    isCreatingSummary: false,
     isWaitingForChangelog: false,
     hasSentPendingMessage: false,
     error: null,
     preSearches: [],
-    analyses: [],
+    summaries: [],
     triggeredPreSearchRounds: new Set(),
-    triggeredAnalysisRounds: new Set(),
-    triggeredAnalysisIds: new Set(),
-    createdAnalysisRounds: new Set(),
+    triggeredSummaryRounds: new Set(),
+    triggeredSummaryIds: new Set(),
+    createdSummaryRounds: new Set(),
     ...overrides,
   };
 }
@@ -365,7 +365,7 @@ export type TestStreamState = {
   completedParticipants: string[];
   pendingParticipants: string[];
   preSearchComplete: boolean;
-  analysisComplete: boolean;
+  summaryComplete: boolean;
   messages: Array<{
     id: string;
     participantId: string;
@@ -408,7 +408,7 @@ export function createTestStreamState(
     completedParticipants: [],
     pendingParticipants: ['participant-0', 'participant-1'],
     preSearchComplete: false,
-    analysisComplete: false,
+    summaryComplete: false,
     messages: [],
     lastEventId: '',
     timestamp: Date.now(),

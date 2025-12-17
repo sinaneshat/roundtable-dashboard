@@ -231,30 +231,30 @@ export function memoizeRoundCalculation<T>(
 }
 
 /**
- * Memoize analysis state calculations
+ * Memoize summary state calculations
  *
- * **Use Case**: Checking analysis completion status
- * **Performance**: Avoids re-iterating analysis arrays
+ * **Use Case**: Checking summary completion status
+ * **Performance**: Avoids re-iterating summary arrays
  *
  * @example
  * ```typescript
- * const checkComplete = memoizeAnalysisCheck((analyses) => {
- *   return analyses.every(a => a.status === 'complete');
+ * const checkComplete = memoizeSummaryCheck((summaries) => {
+ *   return summaries.every(s => s.status === 'complete');
  * });
  * ```
  */
-export function memoizeAnalysisCheck<T>(
-  fn: (analyses: unknown[]) => T,
-): (analyses: unknown[]) => T {
+export function memoizeSummaryCheck<T>(
+  fn: (summaries: unknown[]) => T,
+): (summaries: unknown[]) => T {
   const cache = new WeakMap<unknown[], T>();
 
-  return (analyses: unknown[]): T => {
-    if (cache.has(analyses)) {
-      return cache.get(analyses)!;
+  return (summaries: unknown[]): T => {
+    if (cache.has(summaries)) {
+      return cache.get(summaries)!;
     }
 
-    const result = fn(analyses);
-    cache.set(analyses, result);
+    const result = fn(summaries);
+    cache.set(summaries, result);
     return result;
   };
 }

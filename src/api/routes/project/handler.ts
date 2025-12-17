@@ -1230,17 +1230,17 @@ export const getProjectContextHandler: RouteHandler<typeof getProjectContextRout
         items: context.searches.searches.map(s => ({
           threadTitle: s.threadTitle,
           userQuery: s.userQuery,
-          analysis: s.analysis,
+          summary: s.summary,
         })),
         totalCount: context.searches.totalCount,
       },
-      analyses: {
-        items: context.analyses.analyses.map(a => ({
-          threadTitle: a.threadTitle,
-          userQuestion: a.userQuestion,
-          summary: a.summary,
+      summaries: {
+        items: context.summaries.summaries.map(s => ({
+          threadTitle: s.threadTitle,
+          userQuestion: s.userQuestion,
+          summary: s.summary,
         })),
-        totalCount: context.analyses.totalCount,
+        totalCount: context.summaries.totalCount,
       },
     });
   },

@@ -5,7 +5,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
-import { AnalysisStatuses, MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -883,7 +883,7 @@ export const ChatMessageList = memo(
     });
 
     return (
-      <div className="touch-pan-y space-y-4">
+      <div className="touch-pan-y space-y-8">
         {messageGroups.map((group, groupIndex) => {
           const roundNumber = group.type === 'user-group'
             ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
@@ -1001,8 +1001,8 @@ export const ChatMessageList = memo(
                   // 2. Streaming is active
                   // 3. Pre-search just completed but streaming hasn't started yet (waitForStream phase)
                   const preSearchActive = preSearch
-                    && (preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING);
-                  const preSearchComplete = preSearch && preSearch.status === AnalysisStatuses.COMPLETE;
+                    && (preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING);
+                  const preSearchComplete = preSearch && preSearch.status === MessageStatuses.COMPLETE;
 
                   // ✅ FIX: Check if this is the round that's about to stream
                   // After pre-search completes, there's a brief gap before isStreaming becomes true

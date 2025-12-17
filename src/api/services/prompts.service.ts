@@ -19,7 +19,7 @@ import type { z } from '@hono/zod-openapi';
 
 import type { ChatMode, PlaceholderPrefix, QueryAnalysisResult } from '@/api/core/enums';
 import { ChatModes, PlaceholderPrefixes, QueryAnalysisComplexities, WebSearchDepths } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
+import type { RoundSummaryPayload } from '@/api/routes/chat/schema';
 import type { AttachmentCitationInfo } from '@/api/types/citations';
 
 // ============================================================================
@@ -699,141 +699,76 @@ ${basePrompt}`;
 }
 
 /**
- * Moderator analysis JSON structure instruction
- * ✅ CRITICAL: MUST match ModeratorAnalysisPayloadSchema exactly
- * ✅ SINGLE SOURCE: Used by analysis.handler.ts for enforcing JSON output structure
+ * Round Summary JSON structure instruction
+ * ✅ CRITICAL: MUST match RoundSummaryPayloadSchema exactly
+ * ✅ SINGLE SOURCE: Used by summary.handler.ts for enforcing JSON output structure
  *
  * Since we use mode:'json' (not mode:'json_schema'), the model follows this text example.
  * This structure MUST match the Zod schema in /src/api/routes/chat/schema.ts
  *
  * Used by:
- * - /src/api/routes/chat/handlers/analysis.handler.ts - Moderator analysis streaming
+ * - /src/api/routes/chat/handlers/summary.handler.ts - Round summary streaming
  *
- * @returns JSON structure template matching ModeratorAnalysisPayloadSchema
+ * @returns JSON structure template matching RoundSummaryPayloadSchema
  */
 /**
- * Article-Style Analysis Schema - TYPE-SAFE PROMPT TEMPLATE
+ * Round Summary Schema - TYPE-SAFE PROMPT TEMPLATE
  *
- * ✅ SINGLE SOURCE OF TRUTH: Structure validated against ModeratorAnalysisPayload type
+ * ✅ SINGLE SOURCE OF TRUTH: Structure validated against RoundSummaryPayload type
  * ✅ TYPE-SAFE: `satisfies ValidatePromptTemplate<...>` causes compile error if structure drifts
- * ✅ ARTICLE FORMAT: Coherent narrative summary with transparent attribution
+ * ✅ SIMPLIFIED FORMAT: Concise summary with engagement metrics
  * ✅ ALL VALUES ARE PLACEHOLDERS - AI must compute actual values from conversation
  *
- * If you change ModeratorAnalysisPayloadSchema in schema.ts, TypeScript will error here
+ * If you change RoundSummaryPayloadSchema in schema.ts, TypeScript will error here
  * until this template is updated to match - preventing silent schema drift.
  */
-/**
- * ✅ STREAMING ORDER: Fields ordered to match UI display from top to bottom
- * This ensures content streams in visual order for better UX:
- * 1. Confidence header (top)
- * 2. Model badges
- * 3. Key Insights (article + recommendations)
- * 4. Consensus Table
- * 5. Minority Views
- * 6. Convergence & Divergence (bottom)
- */
-export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
+export const MODERATOR_SUMMARY_JSON_STRUCTURE = {
   roundNumber: p.context('0-based round number'),
   mode: p.context('analyzing|brainstorming|debating|solving'),
   userQuestion: p.context('actual user question'),
-  confidence: {
-    overall: p.compute('0-100 based on consensus level and evidence quality'),
-    reasoning: p.compute('1-2 sentence explanation of confidence score'),
+  summary: p.compute('2-3 sentence concise summary of the conversation'),
+  metrics: {
+    engagement: p.compute('0-100 score for how actively participants contributed'),
+    insight: p.compute('0-100 score for quality and depth of ideas shared'),
+    balance: p.compute('0-100 score for how well perspectives were distributed'),
+    clarity: p.compute('0-100 score for how clear and understandable the discussion was'),
   },
-  modelVoices: [{
-    modelName: p.context('model display name'),
-    modelId: p.context('model ID'),
-    participantIndex: p.context('0-based index'),
-    role: p.context('participant role or null'),
-    position: p.compute('summarize their stance in 1-2 sentences'),
-    keyContribution: p.compute('their most valuable insight'),
-    notableQuote: p.extract('impactful quote from their response'),
-  }],
-  article: {
-    headline: p.compute('1-line summary of outcome'),
-    narrative: p.compute('2-4 paragraph synthesis of all perspectives into coherent story'),
-    keyTakeaway: p.compute('1-2 sentence actionable conclusion'),
-  },
-  recommendations: [{
-    title: p.compute('short action title'),
-    description: p.compute('why this matters'),
-    suggestedPrompt: p.optional('follow-up question user could ask'),
-    suggestedModels: [p.optional('model IDs from available list')],
-    suggestedRoles: [p.optional('matching roles for models')],
-  }],
-  consensusTable: [{
-    topic: p.compute('key topic of discussion'),
-    positions: [{
-      modelName: p.context('model display name'),
-      stance: p.compute('agree|disagree|nuanced'),
-      brief: p.compute('1-line reason for stance'),
-    }],
-    resolution: p.compute('consensus|majority|split|contested'),
-  }],
-  minorityViews: [{
-    modelName: p.context('model display name'),
-    view: p.extract('their dissenting opinion'),
-    reasoning: p.compute('why they disagree'),
-    worthConsidering: p.compute('true if view has merit despite being minority'),
-  }],
-  convergenceDivergence: {
-    convergedOn: [p.compute('points where all/most agreed')],
-    divergedOn: [p.compute('points of ongoing disagreement')],
-    evolved: [{
-      point: p.compute('topic where views changed'),
-      initialState: p.compute('where discussion started'),
-      finalState: p.compute('where discussion ended'),
-    }],
-  },
-} satisfies ValidatePromptTemplate<ModeratorAnalysisPayload>;
+} satisfies ValidatePromptTemplate<RoundSummaryPayload>;
 
 /**
- * Build moderator analysis enhanced user prompt
+ * Build round summary enhanced user prompt
  * ✅ SINGLE SOURCE: Creates user prompt with JSON structure instructions
- * ✅ REPLACES: Inline prompt construction in analysis.handler.ts:88-95
+ * ✅ REPLACES: Inline prompt construction in summary.handler.ts
  * ✅ DYNAMIC VALUES: All numeric values must be computed from actual conversation
  *
  * Used by:
- * - /src/api/routes/chat/handlers/analysis.handler.ts - generateModeratorAnalysis()
+ * - /src/api/routes/chat/handlers/summary.handler.ts - generateRoundSummary()
  *
- * @param userPrompt - Base user prompt from moderator-analysis.service
+ * @param userPrompt - Base user prompt from summary building function
  * @returns Enhanced prompt with JSON structure guidance
  */
-export function buildModeratorAnalysisEnhancedPrompt(userPrompt: string): string {
+export function buildModeratorSummaryEnhancedPrompt(userPrompt: string): string {
   return `${userPrompt}
 
-OUTPUT STYLE: Brief polished "summary article" - like a journalist's concise synthesis
-USER GOAL: Quick at-a-glance understanding of what the panel concluded
+OUTPUT STYLE: Concise summary with engagement metrics
 
 CRITICAL REQUIREMENTS:
-1. Respond with valid JSON matching the structure below IN EXACT FIELD ORDER
-2. BE CONCISE - users want quick insights, not lengthy reports
-3. FIELD ORDER MATTERS: Generate fields in exact order shown (confidence first, then modelVoices, etc.)
-4. confidence: 0-100 score with 1-2 sentence reasoning
-5. modelVoices: Just core position (1 sentence each), skip verbose quotes
-6. article.headline: 1 powerful sentence (max 15 words)
-7. article.keyTakeaway: 1 actionable sentence (the bottom line)
-8. article.narrative: 1-2 SHORT paragraphs max (be brief!)
-9. recommendations: Max 2-3 actionable next steps
-10. consensusTable: Only 2-3 most important topics, not exhaustive
-11. minorityViews: Only include if genuinely worth noting (empty array if unanimous)
-12. All placeholders MUST be computed from actual conversation data
+1. Respond with valid JSON matching the structure below
+2. BE CONCISE - summary should be 2-3 sentences maximum
+3. All metrics should be scored 0-100 based on the conversation quality
+4. All values MUST be computed from actual conversation data
 
-STANCE/RESOLUTION TYPES:
-- stance: agree | disagree | nuanced
-- resolution: consensus | majority | split | contested
-
-JSON STRUCTURE (GENERATE IN THIS EXACT ORDER):
-${JSON.stringify(MODERATOR_ANALYSIS_JSON_STRUCTURE, null, 2)}`;
+JSON STRUCTURE:
+${JSON.stringify(MODERATOR_SUMMARY_JSON_STRUCTURE, null, 2)}`;
 }
 
 /**
- * Moderator analysis prompts
+ * Moderator summary prompts
  * ✅ NOTE: Complex moderator prompt building logic lives in:
- * - /src/api/services/moderator-analysis.service.ts - buildModeratorSystemPrompt()
- * - /src/api/services/moderator-analysis.service.ts - buildModeratorUserPrompt()
+ * - /src/api/services/moderator-summary.service.ts - buildModeratorSystemPrompt()
+ * - /src/api/services/moderator-summary.service.ts - buildModeratorUserPrompt()
  *
- * Those functions are the SINGLE SOURCE OF TRUTH for moderator analysis prompts.
+ * Those functions are the SINGLE SOURCE OF TRUTH for moderator summary prompts.
  * They handle mode-specific criteria, rating scales, badge logic, and model suggestions.
  */
 

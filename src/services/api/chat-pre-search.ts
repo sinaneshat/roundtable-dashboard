@@ -6,6 +6,7 @@
  *
  * ✅ TYPE INFERENCE: All types inferred from Zod schemas
  * ✅ SINGLE SOURCE OF TRUTH: Imports from shared schemas and enums
+ * ✅ SIMPLIFIED: Execute endpoint auto-creates DB record, no separate create needed
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';
@@ -26,14 +27,6 @@ export type PreSearchResponse = InferResponseType<
   ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post']
 >;
 
-export type CreatePreSearchRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['create']['$post']
->;
-
-export type CreatePreSearchResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['create']['$post']
->;
-
 export type GetThreadPreSearchesRequest = InferRequestType<
   ApiClientType['chat']['threads'][':id']['pre-searches']['$get']
 >;
@@ -47,31 +40,15 @@ export type GetThreadPreSearchesResponse = InferResponseType<
 // ============================================================================
 
 /**
- * Create PENDING pre-search record
- *
- * ✅ NEW: Fixes web search ordering bug
- * ✅ IDEMPOTENT: Returns existing record if already exists
- * ✅ USED BY: useCreatePreSearch mutation hook
- * ✅ TYPE-SAFE: Uses CreatePreSearchRequest inferred from backend schema
- *
- * @param data - Request parameters inferred from backend route
- */
-export async function createPreSearchService(data: CreatePreSearchRequest) {
-  const client = await createApiClient();
-  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].create.$post(data));
-}
-
-/**
  * Get all pre-search results for a thread
  *
- * ✅ FOLLOWS: getThreadAnalysesService pattern exactly
+ * ✅ FOLLOWS: getThreadSummariesService pattern exactly
  * ✅ USED BY: useThreadPreSearchesQuery hook (orchestrator)
  *
  * @param data - Request with param.id for thread ID
  */
 export async function getThreadPreSearchesService(data: GetThreadPreSearchesRequest) {
   const client = await createApiClient();
-  // Internal fallback: ensure param exists
   const params: GetThreadPreSearchesRequest = {
     param: data.param ?? { id: '' },
   };
@@ -81,8 +58,10 @@ export async function getThreadPreSearchesService(data: GetThreadPreSearchesRequ
 /**
  * Execute pre-search SSE stream
  *
- * ✅ PATTERN: Returns raw Response for SSE streaming (like streamChatService)
- * ✅ RPC-COMPLIANT: Uses Hono RPC client directly - no custom headers needed
+ * ✅ AUTO-CREATES: Backend creates DB record if it doesn't exist
+ * ✅ IDEMPOTENT: Returns existing results if already complete
+ * ✅ PATTERN: Returns raw Response for SSE streaming
+ * ✅ RPC-COMPLIANT: Uses Hono RPC client directly
  * ✅ USED BY: PreSearchStream component, executePreSearch utility
  *
  * EXCEPTION: Does NOT parse response because SSE streams must return raw Response

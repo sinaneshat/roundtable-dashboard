@@ -4,7 +4,7 @@
  * Verifies timeline items appear in correct order during streaming:
  * 1. Pre-search should appear before participant messages
  * 2. User messages should appear before assistant responses
- * 3. Round summary/analysis should appear after all participants
+ * 3. Round summary should appear after all participants
  * 4. Non-initial rounds should maintain correct ordering
  *
  * Bug scenarios tested:
@@ -15,8 +15,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes, MessagePartTypes, MessageRoles } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, StoredAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import { ChatModes, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import type { ChatMessage, ChatParticipant, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 
 import { createChatStore } from '../store';
 
@@ -118,7 +118,7 @@ function createPlaceholderPreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: AnalysisStatuses.PENDING,
+    status: MESSAGE_STATUSES.PENDING,
     searchData: null,
     errorMessage: null,
     createdAt: new Date(),
@@ -136,11 +136,11 @@ function createCompletePreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: AnalysisStatuses.COMPLETE,
+    status: MESSAGE_STATUSES.COMPLETE,
     searchData: {
       queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
       results: [],
-      analysis: 'test analysis',
+      summary: 'test summary',
       successCount: 1,
       failureCount: 0,
       totalResults: 0,
@@ -152,23 +152,23 @@ function createCompletePreSearch(
   } as StoredPreSearch;
 }
 
-function createAnalysis(
+function createSummary(
   threadId: string,
   roundNumber: number,
   status: 'pending' | 'streaming' | 'complete' = 'complete',
-): StoredAnalysis {
+): StoredRoundSummary {
   return {
-    id: `analysis-${threadId}-r${roundNumber}`,
+    id: `summary-${threadId}-r${roundNumber}`,
     threadId,
     roundNumber,
     mode: ChatModes.ANALYZING,
     userQuestion: 'test question',
     status: status === 'pending'
-      ? AnalysisStatuses.PENDING
+      ? MESSAGE_STATUSES.PENDING
       : status === 'streaming'
-        ? AnalysisStatuses.STREAMING
-        : AnalysisStatuses.COMPLETE,
-    analysisData: status === 'complete'
+        ? MESSAGE_STATUSES.STREAMING
+        : MESSAGE_STATUSES.COMPLETE,
+    summaryData: status === 'complete'
       ? {
           confidence: { overall: 85, reasoning: 'test' },
           modelVoices: [],
@@ -183,7 +183,7 @@ function createAnalysis(
     errorMessage: null,
     completedAt: status === 'complete' ? new Date() : null,
     createdAt: new Date(),
-  } as StoredAnalysis;
+  } as StoredRoundSummary;
 }
 
 /**
@@ -196,7 +196,7 @@ function verifyTimelineOrder(
   const state = store.getState();
   const messages = state.messages;
   const preSearches = state.preSearches;
-  const analyses = state.analyses;
+  const summaries = state.summaries;
 
   const actualItems: MockTimelineItem[] = [];
 
@@ -214,15 +214,15 @@ function verifyTimelineOrder(
     preSearchByRound.set(ps.roundNumber, ps);
   }
 
-  const analysisByRound = new Map<number, StoredAnalysis>();
-  for (const a of analyses) {
-    analysisByRound.set(a.roundNumber, a);
+  const summaryByRound = new Map<number, StoredRoundSummary>();
+  for (const s of summaries) {
+    summaryByRound.set(s.roundNumber, s);
   }
 
   const rounds = [...new Set([
     ...messagesByRound.keys(),
     ...preSearchByRound.keys(),
-    ...analysisByRound.keys(),
+    ...summaryByRound.keys(),
   ])].sort((a, b) => a - b);
 
   for (const roundNumber of rounds) {
@@ -245,8 +245,8 @@ function verifyTimelineOrder(
       }
     }
 
-    const analysis = analysisByRound.get(roundNumber);
-    if (analysis) {
+    const summary = summaryByRound.get(roundNumber);
+    if (summary) {
       actualItems.push({ type: 'round-summary', roundNumber });
     }
   }
@@ -305,7 +305,7 @@ describe('timeline ordering during streaming', () => {
         createAssistantMessage(threadId, 0, 1, 'participant-1', 'Response 1'),
       ]);
 
-      store.getState().setAnalyses([createAnalysis(threadId, 0)]);
+      store.getState().setSummaries([createSummary(threadId, 0)]);
 
       verifyTimelineOrder(store, [
         { type: 'pre-search', roundNumber: 0 },
@@ -335,7 +335,7 @@ describe('timeline ordering during streaming', () => {
         createAssistantMessage(threadId, 0, 0, 'participant-0', 'Response 0'),
         createAssistantMessage(threadId, 0, 1, 'participant-1', 'Response 1'),
       ]);
-      store.getState().setAnalyses([createAnalysis(threadId, 0)]);
+      store.getState().setSummaries([createSummary(threadId, 0)]);
 
       store.getState().addPreSearch(createPlaceholderPreSearch(threadId, 1, 'round 1 query'));
 
@@ -344,8 +344,8 @@ describe('timeline ordering during streaming', () => {
 
       expect(round0PreSearch).toBeDefined();
       expect(round1PreSearch).toBeDefined();
-      expect(round0PreSearch!.status).toBe(AnalysisStatuses.COMPLETE);
-      expect(round1PreSearch!.status).toBe(AnalysisStatuses.PENDING);
+      expect(round0PreSearch!.status).toBe(MESSAGE_STATUSES.COMPLETE);
+      expect(round1PreSearch!.status).toBe(MESSAGE_STATUSES.PENDING);
     });
 
     it('should maintain correct order for multi-round conversation', () => {
@@ -371,9 +371,9 @@ describe('timeline ordering during streaming', () => {
         createAssistantMessage(threadId, 1, 1, 'participant-1', 'R1 Response 1'),
       ]);
 
-      store.getState().setAnalyses([
-        createAnalysis(threadId, 0),
-        createAnalysis(threadId, 1),
+      store.getState().setSummaries([
+        createSummary(threadId, 0),
+        createSummary(threadId, 1),
       ]);
 
       verifyTimelineOrder(store, [
@@ -397,34 +397,34 @@ describe('timeline ordering during streaming', () => {
       const threadId = 'thread-123';
 
       store.getState().addPreSearch(createPlaceholderPreSearch(threadId, 0, 'test query'));
-      expect(store.getState().preSearches[0]?.status).toBe(AnalysisStatuses.PENDING);
+      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.PENDING);
 
-      store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
-      expect(store.getState().preSearches[0]?.status).toBe(AnalysisStatuses.STREAMING);
+      store.getState().updatePreSearchStatus(0, MESSAGE_STATUSES.STREAMING);
+      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.STREAMING);
 
       store.getState().updatePreSearchData(0, {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
         results: [],
-        analysis: 'done',
+        summary: 'done',
         successCount: 1,
         failureCount: 0,
         totalResults: 0,
         totalTime: 100,
       });
-      expect(store.getState().preSearches[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.COMPLETE);
     });
 
-    it('should handle analysis status transition from PENDING to STREAMING to COMPLETE', () => {
+    it('should handle summary status transition from PENDING to STREAMING to COMPLETE', () => {
       const store = createChatStore();
       const threadId = 'thread-123';
 
-      store.getState().addAnalysis(createAnalysis(threadId, 0, 'pending'));
-      expect(store.getState().analyses[0]?.status).toBe(AnalysisStatuses.PENDING);
+      store.getState().addSummary(createSummary(threadId, 0, 'pending'));
+      expect(store.getState().summaries[0]?.status).toBe(MESSAGE_STATUSES.PENDING);
 
-      store.getState().updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
-      expect(store.getState().analyses[0]?.status).toBe(AnalysisStatuses.STREAMING);
+      store.getState().updateMessageStatus(0, MESSAGE_STATUSES.STREAMING);
+      expect(store.getState().summaries[0]?.status).toBe(MESSAGE_STATUSES.STREAMING);
 
-      const completeAnalysisData = {
+      const completeSummaryData = {
         confidence: { overall: 85, reasoning: 'test' },
         modelVoices: [],
         article: { headline: 'test', narrative: 'test', keyTakeaway: 'test' },
@@ -433,8 +433,8 @@ describe('timeline ordering during streaming', () => {
         minorityViews: [],
         convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
       };
-      store.getState().updateAnalysisData(0, completeAnalysisData);
-      expect(store.getState().analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+      store.getState().updateSummaryData(0, completeSummaryData);
+      expect(store.getState().summaries[0]?.status).toBe(MESSAGE_STATUSES.COMPLETE);
     });
   });
 
@@ -538,28 +538,28 @@ describe('timeline ordering during streaming', () => {
     });
   });
 
-  describe('analysis deduplication', () => {
-    it('should not duplicate analysis when adding for same round', () => {
+  describe('summary deduplication', () => {
+    it('should not duplicate summary when adding for same round', () => {
       const store = createChatStore();
       const threadId = 'thread-123';
 
-      store.getState().addAnalysis(createAnalysis(threadId, 0, 'pending'));
-      expect(store.getState().analyses).toHaveLength(1);
+      store.getState().addSummary(createSummary(threadId, 0, 'pending'));
+      expect(store.getState().summaries).toHaveLength(1);
 
-      store.getState().addAnalysis(createAnalysis(threadId, 0, 'streaming'));
-      expect(store.getState().analyses).toHaveLength(1);
+      store.getState().addSummary(createSummary(threadId, 0, 'streaming'));
+      expect(store.getState().summaries).toHaveLength(1);
     });
 
-    it('should add analysis for different rounds', () => {
+    it('should add summary for different rounds', () => {
       const store = createChatStore();
       const threadId = 'thread-123';
 
-      store.getState().addAnalysis(createAnalysis(threadId, 0));
-      store.getState().addAnalysis(createAnalysis(threadId, 1));
-      store.getState().addAnalysis(createAnalysis(threadId, 2));
+      store.getState().addSummary(createSummary(threadId, 0));
+      store.getState().addSummary(createSummary(threadId, 1));
+      store.getState().addSummary(createSummary(threadId, 2));
 
-      expect(store.getState().analyses).toHaveLength(3);
-      expect(store.getState().analyses.map(a => a.roundNumber)).toEqual([0, 1, 2]);
+      expect(store.getState().summaries).toHaveLength(3);
+      expect(store.getState().summaries.map(s => s.roundNumber)).toEqual([0, 1, 2]);
     });
   });
 });

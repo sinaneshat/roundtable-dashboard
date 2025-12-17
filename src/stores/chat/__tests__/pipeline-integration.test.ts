@@ -1,10 +1,10 @@
 /**
- * Pre-Search → Participant → Analysis Pipeline Integration Tests
+ * Pre-Search → Participant → Summary Pipeline Integration Tests
  *
  * Tests the complete data flow through all stages of a conversation round:
  * - Pre-search (web search) phase
  * - Participant streaming phase
- * - Analysis generation phase
+ * - Summary generation phase
  * - State handoffs between phases
  *
  * These tests verify the pipeline orchestration and data flow integrity.
@@ -13,7 +13,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes, FinishReasons, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import {
   createMockParticipant,
@@ -57,7 +57,7 @@ function createMockParticipants(count: number): ChatParticipant[] {
 
 function createMockPreSearch(
   roundNumber: number,
-  status: typeof AnalysisStatuses[keyof typeof AnalysisStatuses],
+  status: typeof MessageStatuses[keyof typeof MessageStatuses],
   hasData = false,
 ): StoredPreSearch {
   return {
@@ -77,7 +77,7 @@ function createMockPreSearch(
             results: [{ title: 'Result', url: 'https://example.com', content: 'Content', score: 0.9 }],
             responseTime: 1000,
           }],
-          analysis: 'Search analysis',
+          summary: 'Search summary',
           successCount: 1,
           failureCount: 0,
           totalResults: 1,
@@ -85,7 +85,7 @@ function createMockPreSearch(
         }
       : undefined,
     errorMessage: null,
-    completedAt: status === AnalysisStatuses.COMPLETE ? new Date() : null,
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
   } as StoredPreSearch;
 }
 
@@ -135,11 +135,11 @@ describe('pipeline Phase Transitions', () => {
     it('pre-search pending blocks participant streaming', () => {
       const state = getStoreState(store);
 
-      const pendingPreSearch = createMockPreSearch(0, AnalysisStatuses.PENDING);
+      const pendingPreSearch = createMockPreSearch(0, MessageStatuses.PENDING);
       state.addPreSearch(pendingPreSearch);
 
       // Pre-search is pending
-      expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.PENDING);
+      expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.PENDING);
 
       // Streaming should not start yet (controlled by orchestrator)
       expect(getStoreState(store).isStreaming).toBe(false);
@@ -148,19 +148,19 @@ describe('pipeline Phase Transitions', () => {
     it('pre-search streaming shows activity', () => {
       const state = getStoreState(store);
 
-      const streamingPreSearch = createMockPreSearch(0, AnalysisStatuses.STREAMING);
+      const streamingPreSearch = createMockPreSearch(0, MessageStatuses.STREAMING);
       state.addPreSearch(streamingPreSearch);
 
-      expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.STREAMING);
+      expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.STREAMING);
     });
 
     it('pre-search complete allows participant streaming', () => {
       const state = getStoreState(store);
 
-      const completePreSearch = createMockPreSearch(0, AnalysisStatuses.COMPLETE, true);
+      const completePreSearch = createMockPreSearch(0, MessageStatuses.COMPLETE, true);
       state.addPreSearch(completePreSearch);
 
-      expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
       expect(getStoreState(store).preSearches[0]!.searchData).toBeDefined();
 
       // Now participant streaming can start
@@ -185,7 +185,7 @@ describe('pipeline Phase Transitions', () => {
       expect(getStoreState(store).currentParticipantIndex).toBe(1);
     });
 
-    it('all participants complete enables analysis phase', () => {
+    it('all participants complete enables summary phase', () => {
       const state = getStoreState(store);
 
       const round0Messages = createRoundMessages(0, 2);
@@ -194,8 +194,8 @@ describe('pipeline Phase Transitions', () => {
       // All participants done
       state.setIsStreaming(false);
 
-      // Can now create analysis
-      state.createPendingAnalysis({
+      // Can now create summary
+      state.createPendingSummary({
         roundNumber: 0,
         messages: round0Messages,
         userQuestion: 'Question for round 0',
@@ -203,20 +203,20 @@ describe('pipeline Phase Transitions', () => {
         mode: ChatModes.ANALYZING,
       });
 
-      expect(getStoreState(store).analyses).toHaveLength(1);
+      expect(getStoreState(store).summaries).toHaveLength(1);
     });
   });
 
-  describe('analysis Phase', () => {
-    it('analysis uses participant messages from correct round', () => {
+  describe('summary Phase', () => {
+    it('summary uses participant messages from correct round', () => {
       const state = getStoreState(store);
 
       const round0Messages = createRoundMessages(0, 2);
       const round1Messages = createRoundMessages(1, 2);
       state.setMessages([...round0Messages, ...round1Messages]);
 
-      // Create analysis for round 0 only
-      state.createPendingAnalysis({
+      // Create summary for round 0 only
+      state.createPendingSummary({
         roundNumber: 0,
         messages: [...round0Messages, ...round1Messages],
         userQuestion: 'Question for round 0',
@@ -225,19 +225,19 @@ describe('pipeline Phase Transitions', () => {
       });
 
       // Should only have round 0 participant message IDs
-      const analysis = getStoreState(store).analyses[0]!;
-      expect(analysis.participantMessageIds).toHaveLength(2);
-      expect(analysis.participantMessageIds[0]).toContain('_r0_');
-      expect(analysis.participantMessageIds[1]).toContain('_r0_');
+      const summary = getStoreState(store).summaries[0]!;
+      expect(summary.participantMessageIds).toHaveLength(2);
+      expect(summary.participantMessageIds[0]).toContain('_r0_');
+      expect(summary.participantMessageIds[1]).toContain('_r0_');
     });
 
-    it('analysis completion marks round as finished', () => {
+    it('summary completion marks round as finished', () => {
       const state = getStoreState(store);
 
       const round0Messages = createRoundMessages(0, 2);
       state.setMessages(round0Messages);
 
-      state.createPendingAnalysis({
+      state.createPendingSummary({
         roundNumber: 0,
         messages: round0Messages,
         userQuestion: 'Q',
@@ -245,10 +245,10 @@ describe('pipeline Phase Transitions', () => {
         mode: ChatModes.ANALYZING,
       });
 
-      state.updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
-      state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+      state.updateMessageStatus(0, MessageStatuses.STREAMING);
+      state.updateMessageStatus(0, MessageStatuses.COMPLETE);
 
-      expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 });
@@ -272,23 +272,23 @@ describe('pipeline Data Flow', () => {
     const state = getStoreState(store);
 
     // Pre-search completes with data
-    const preSearch = createMockPreSearch(0, AnalysisStatuses.COMPLETE, true);
+    const preSearch = createMockPreSearch(0, MessageStatuses.COMPLETE, true);
     state.addPreSearch(preSearch);
 
     // Data is accessible
     const storedPreSearch = getStoreState(store).preSearches[0]!;
     expect(storedPreSearch.searchData).toBeDefined();
     expect(storedPreSearch.searchData!.results).toHaveLength(1);
-    expect(storedPreSearch.searchData!.analysis).toBe('Search analysis');
+    expect(storedPreSearch.searchData!.summary).toBe('Search summary');
   });
 
-  it('participant messages feed into analysis', () => {
+  it('participant messages feed into summary', () => {
     const state = getStoreState(store);
 
     const round0Messages = createRoundMessages(0, 3);
     state.setMessages(round0Messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Question for round 0',
@@ -296,8 +296,8 @@ describe('pipeline Data Flow', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    // Analysis has reference to all 3 participant messages
-    expect(getStoreState(store).analyses[0]!.participantMessageIds).toHaveLength(3);
+    // Summary has reference to all 3 participant messages
+    expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(3);
   });
 
   it('userQuestion preserved through pipeline', () => {
@@ -321,7 +321,7 @@ describe('pipeline Data Flow', () => {
     ];
     state.setMessages(round0Messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion,
@@ -329,7 +329,7 @@ describe('pipeline Data Flow', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    expect(getStoreState(store).analyses[0]!.userQuestion).toBe(userQuestion);
+    expect(getStoreState(store).summaries[0]!.userQuestion).toBe(userQuestion);
   });
 });
 
@@ -352,45 +352,45 @@ describe('multi-Round Pipeline', () => {
     const state = getStoreState(store);
 
     // Round 0 pipeline
-    const preSearch0 = createMockPreSearch(0, AnalysisStatuses.COMPLETE, true);
+    const preSearch0 = createMockPreSearch(0, MessageStatuses.COMPLETE, true);
     state.addPreSearch(preSearch0);
 
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q0',
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
 
     // Round 1 pipeline
-    const preSearch1 = createMockPreSearch(1, AnalysisStatuses.COMPLETE, true);
+    const preSearch1 = createMockPreSearch(1, MessageStatuses.COMPLETE, true);
     state.addPreSearch(preSearch1);
 
     const round1Messages = createRoundMessages(1, 2);
     state.setMessages([...round0Messages, ...round1Messages]);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 1,
       messages: [...round0Messages, ...round1Messages],
       userQuestion: 'Q1',
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(1, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(1, MessageStatuses.COMPLETE);
 
     // Verify independence
     expect(getStoreState(store).preSearches).toHaveLength(2);
     expect(getStoreState(store).preSearches[0]!.roundNumber).toBe(0);
     expect(getStoreState(store).preSearches[1]!.roundNumber).toBe(1);
 
-    expect(getStoreState(store).analyses).toHaveLength(2);
-    expect(getStoreState(store).analyses[0]!.roundNumber).toBe(0);
-    expect(getStoreState(store).analyses[1]!.roundNumber).toBe(1);
+    expect(getStoreState(store).summaries).toHaveLength(2);
+    expect(getStoreState(store).summaries[0]!.roundNumber).toBe(0);
+    expect(getStoreState(store).summaries[1]!.roundNumber).toBe(1);
   });
 
   it('round 1 can access round 0 context', () => {
@@ -399,7 +399,7 @@ describe('multi-Round Pipeline', () => {
     // Complete round 0
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q0',
@@ -434,22 +434,22 @@ describe('pipeline Deduplication', () => {
   it('pre-search not duplicated on repeated add', () => {
     const state = getStoreState(store);
 
-    const preSearch = createMockPreSearch(0, AnalysisStatuses.STREAMING);
+    const preSearch = createMockPreSearch(0, MessageStatuses.STREAMING);
     state.addPreSearch(preSearch);
     state.addPreSearch(preSearch); // Duplicate
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
   });
 
-  it('analysis creation atomic prevents duplicates', () => {
+  it('summary creation atomic prevents duplicates', () => {
     const state = getStoreState(store);
 
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
     // First attempt
-    expect(state.tryMarkAnalysisCreated(0)).toBe(true);
-    state.createPendingAnalysis({
+    expect(state.tryMarkSummaryCreated(0)).toBe(true);
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q',
@@ -458,10 +458,10 @@ describe('pipeline Deduplication', () => {
     });
 
     // Second attempt blocked
-    expect(state.tryMarkAnalysisCreated(0)).toBe(false);
+    expect(state.tryMarkSummaryCreated(0)).toBe(false);
 
-    // Only one analysis exists
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    // Only one summary exists
+    expect(getStoreState(store).summaries).toHaveLength(1);
   });
 
   it('pre-search trigger tracking prevents duplicates', () => {
@@ -481,7 +481,7 @@ describe('pipeline Deduplication', () => {
 // ============================================================================
 
 describe('complete Pipeline Journey', () => {
-  it('full round with web search: pre-search → participants → analysis', () => {
+  it('full round with web search: pre-search → participants → summary', () => {
     const store = createChatStore();
     const state = getStoreState(store);
 
@@ -498,9 +498,9 @@ describe('complete Pipeline Journey', () => {
     expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBe(true);
 
     // Pre-search starts streaming
-    const pendingPreSearch = createMockPreSearch(0, AnalysisStatuses.PENDING);
+    const pendingPreSearch = createMockPreSearch(0, MessageStatuses.PENDING);
     state.addPreSearch(pendingPreSearch);
-    expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.PENDING);
+    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.PENDING);
 
     // Pre-search completes with data
     state.updatePreSearchData(0, {
@@ -513,14 +513,14 @@ describe('complete Pipeline Journey', () => {
         ],
         responseTime: 1200,
       }],
-      analysis: 'The search reveals significant AI developments in 2024.',
+      summary: 'The search reveals significant AI developments in 2024.',
       successCount: 1,
       failureCount: 0,
       totalResults: 1,
       totalTime: 1200,
     });
-    expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.COMPLETE);
-    expect(getStoreState(store).preSearches[0]!.searchData!.analysis).toContain('AI developments');
+    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
+    expect(getStoreState(store).preSearches[0]!.searchData!.summary).toContain('AI developments');
 
     // === PHASE 2: Participant Streaming ===
     state.setIsStreaming(true);
@@ -561,60 +561,60 @@ describe('complete Pipeline Journey', () => {
     // All participants done
     expect(getStoreState(store).messages).toHaveLength(3);
 
-    // === PHASE 3: Analysis ===
+    // === PHASE 3: Summary ===
     // Complete streaming
     state.completeStreaming();
     expect(getStoreState(store).isStreaming).toBe(false);
 
-    // Atomic analysis creation check
-    expect(state.tryMarkAnalysisCreated(0)).toBe(true);
+    // Atomic summary creation check
+    expect(state.tryMarkSummaryCreated(0)).toBe(true);
 
-    // Create pending analysis
-    state.createPendingAnalysis({
+    // Create pending summary
+    state.createPendingSummary({
       roundNumber: 0,
       messages: [userMessage, p0Message, p1Message],
       userQuestion: 'What are the latest AI trends?',
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    expect(getStoreState(store).analyses).toHaveLength(1);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.PENDING);
+    expect(getStoreState(store).summaries).toHaveLength(1);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.PENDING);
 
-    // Analysis starts streaming
-    state.setIsCreatingAnalysis(true);
-    state.updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.STREAMING);
+    // Summary starts streaming
+    state.setIsCreatingSummary(true);
+    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
-    // Analysis completes
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
-    state.setIsCreatingAnalysis(false);
+    // Summary completes
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.setIsCreatingSummary(false);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
 
     // Pre-search complete with data
     expect(finalState.preSearches).toHaveLength(1);
-    expect(finalState.preSearches[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+    expect(finalState.preSearches[0]!.status).toBe(MessageStatuses.COMPLETE);
     expect(finalState.preSearches[0]!.searchData).toBeDefined();
 
     // All messages present
     expect(finalState.messages).toHaveLength(3);
 
-    // Analysis complete
-    expect(finalState.analyses).toHaveLength(1);
-    expect(finalState.analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
-    expect(finalState.analyses[0]!.participantMessageIds).toHaveLength(2);
+    // Summary complete
+    expect(finalState.summaries).toHaveLength(1);
+    expect(finalState.summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+    expect(finalState.summaries[0]!.participantMessageIds).toHaveLength(2);
 
     // Tracking state correct
     expect(finalState.triggeredPreSearchRounds.has(0)).toBe(true);
-    expect(finalState.createdAnalysisRounds.has(0)).toBe(true);
+    expect(finalState.createdSummaryRounds.has(0)).toBe(true);
 
     // Flags cleared
     expect(finalState.isStreaming).toBe(false);
-    expect(finalState.isCreatingAnalysis).toBe(false);
+    expect(finalState.isCreatingSummary).toBe(false);
   });
 
-  it('pipeline without web search: participants → analysis', () => {
+  it('pipeline without web search: participants → summary', () => {
     const store = createChatStore();
     const state = getStoreState(store);
 
@@ -636,23 +636,23 @@ describe('complete Pipeline Journey', () => {
     state.setMessages(round0Messages);
     state.completeStreaming();
 
-    // === PHASE 2: Analysis ===
-    state.tryMarkAnalysisCreated(0);
-    state.createPendingAnalysis({
+    // === PHASE 2: Summary ===
+    state.tryMarkSummaryCreated(0);
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Question for round 0',
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
 
     // === VERIFY ===
     const finalState = getStoreState(store);
     expect(finalState.preSearches).toHaveLength(0); // No pre-search
     expect(finalState.messages).toHaveLength(3);
-    expect(finalState.analyses).toHaveLength(1);
-    expect(finalState.analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+    expect(finalState.summaries).toHaveLength(1);
+    expect(finalState.summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
   });
 });
 
@@ -676,12 +676,12 @@ describe('pipeline Interruption Handling', () => {
 
     // Pre-search starts
     state.markPreSearchTriggered(0);
-    const pendingPreSearch = createMockPreSearch(0, AnalysisStatuses.STREAMING);
+    const pendingPreSearch = createMockPreSearch(0, MessageStatuses.STREAMING);
     state.addPreSearch(pendingPreSearch);
 
     // User stops (simulated by not completing pre-search)
     // Pre-search stays in streaming state
-    expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.STREAMING);
+    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.STREAMING);
 
     // Participant streaming can still be started (bypass pre-search)
     state.setIsStreaming(true);
@@ -721,13 +721,13 @@ describe('pipeline Interruption Handling', () => {
     const state = getStoreState(store);
 
     // Build up pipeline state
-    const preSearch = createMockPreSearch(0, AnalysisStatuses.COMPLETE, true);
+    const preSearch = createMockPreSearch(0, MessageStatuses.COMPLETE, true);
     state.addPreSearch(preSearch);
 
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q',
@@ -737,7 +737,7 @@ describe('pipeline Interruption Handling', () => {
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
     expect(getStoreState(store).messages).toHaveLength(3);
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    expect(getStoreState(store).summaries).toHaveLength(1);
 
     // Navigate away
     state.resetForThreadNavigation();
@@ -745,8 +745,8 @@ describe('pipeline Interruption Handling', () => {
     // All cleared
     expect(getStoreState(store).preSearches).toEqual([]);
     expect(getStoreState(store).messages).toEqual([]);
-    expect(getStoreState(store).analyses).toEqual([]);
+    expect(getStoreState(store).summaries).toEqual([]);
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(0);
-    expect(getStoreState(store).createdAnalysisRounds.size).toBe(0);
+    expect(getStoreState(store).createdSummaryRounds.size).toBe(0);
   });
 });

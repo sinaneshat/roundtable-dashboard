@@ -14,7 +14,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes, FinishReasons, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipant,
   createMockParticipants,
@@ -93,7 +93,7 @@ describe('participant Configuration Changes', () => {
       expect(getStoreState(store).messages).toHaveLength(3);
     });
 
-    it('preserves round 0 analysis when participant added', () => {
+    it('preserves round 0 summary when participant added', () => {
       const state = getStoreState(store);
 
       // Round 0 with 2 participants
@@ -101,25 +101,25 @@ describe('participant Configuration Changes', () => {
       const round0Messages = createRoundMessages(0, 2);
       state.setMessages(round0Messages);
 
-      // Create analysis for round 0
-      state.createPendingAnalysis({
+      // Create summary for round 0
+      state.createPendingSummary({
         roundNumber: 0,
         messages: round0Messages,
         userQuestion: 'Question for round 0',
         threadId: 'thread-config-123',
         mode: ChatModes.ANALYZING,
       });
-      state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+      state.updateMessageStatus(0, MessageStatuses.COMPLETE);
 
-      expect(getStoreState(store).analyses).toHaveLength(1);
-      expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(getStoreState(store).summaries).toHaveLength(1);
+      expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
 
       // Add participant
       state.setParticipants(createMockParticipants(3));
 
-      // Analysis preserved
-      expect(getStoreState(store).analyses).toHaveLength(1);
-      expect(getStoreState(store).analyses[0]!.roundNumber).toBe(0);
+      // Summary preserved
+      expect(getStoreState(store).summaries).toHaveLength(1);
+      expect(getStoreState(store).summaries[0]!.roundNumber).toBe(0);
     });
 
     it('round 1 uses new participant count', () => {
@@ -137,8 +137,8 @@ describe('participant Configuration Changes', () => {
       const round1Messages = createRoundMessages(1, 3);
       state.setMessages([...round0Messages, ...round1Messages]);
 
-      // Create analysis for round 1 - should find 3 participant messages
-      state.createPendingAnalysis({
+      // Create summary for round 1 - should find 3 participant messages
+      state.createPendingSummary({
         roundNumber: 1,
         messages: [...round0Messages, ...round1Messages],
         userQuestion: 'Question for round 1',
@@ -146,8 +146,8 @@ describe('participant Configuration Changes', () => {
         mode: ChatModes.ANALYZING,
       });
 
-      expect(getStoreState(store).analyses).toHaveLength(1);
-      expect(getStoreState(store).analyses[0]!.participantMessageIds).toHaveLength(3);
+      expect(getStoreState(store).summaries).toHaveLength(1);
+      expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(3);
     });
   });
 
@@ -179,8 +179,8 @@ describe('participant Configuration Changes', () => {
       const round0Messages = createRoundMessages(0, 3);
       state.setMessages(round0Messages);
 
-      // Create analysis for round 0
-      state.createPendingAnalysis({
+      // Create summary for round 0
+      state.createPendingSummary({
         roundNumber: 0,
         messages: round0Messages,
         userQuestion: 'Question for round 0',
@@ -191,8 +191,8 @@ describe('participant Configuration Changes', () => {
       // Remove participant
       state.setParticipants(createMockParticipants(2));
 
-      // Round 0 analysis preserved with original 3 participant message IDs
-      expect(getStoreState(store).analyses[0]!.participantMessageIds).toHaveLength(3);
+      // Round 0 summary preserved with original 3 participant message IDs
+      expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(3);
     });
 
     it('round 1 uses reduced participant count', () => {
@@ -210,8 +210,8 @@ describe('participant Configuration Changes', () => {
       const round1Messages = createRoundMessages(1, 2);
       state.setMessages([...round0Messages, ...round1Messages]);
 
-      // Create analysis for round 1 - should find 2 participant messages
-      state.createPendingAnalysis({
+      // Create summary for round 1 - should find 2 participant messages
+      state.createPendingSummary({
         roundNumber: 1,
         messages: [...round0Messages, ...round1Messages],
         userQuestion: 'Question for round 1',
@@ -219,9 +219,9 @@ describe('participant Configuration Changes', () => {
         mode: ChatModes.ANALYZING,
       });
 
-      // Find round 1 analysis
-      const round1Analysis = getStoreState(store).analyses.find(a => a.roundNumber === 1);
-      expect(round1Analysis!.participantMessageIds).toHaveLength(2);
+      // Find round 1 summary
+      const round1Summary = getStoreState(store).summaries.find(a => a.roundNumber === 1);
+      expect(round1Summary!.participantMessageIds).toHaveLength(2);
     });
   });
 
@@ -335,7 +335,7 @@ describe('chat Mode Changes', () => {
     expect(getStoreState(store).selectedMode).toBe(ChatModes.BRAINSTORMING);
   });
 
-  it('analysis uses mode at time of creation', () => {
+  it('summary uses mode at time of creation', () => {
     const state = getStoreState(store);
 
     // Round 0 in ANALYZING mode
@@ -343,7 +343,7 @@ describe('chat Mode Changes', () => {
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Question for round 0',
@@ -354,8 +354,8 @@ describe('chat Mode Changes', () => {
     // Change mode
     state.setSelectedMode(ChatModes.DEBATING);
 
-    // Round 0 analysis still has ANALYZING mode
-    expect(getStoreState(store).analyses[0]!.mode).toBe(ChatModes.ANALYZING);
+    // Round 0 summary still has ANALYZING mode
+    expect(getStoreState(store).summaries[0]!.mode).toBe(ChatModes.ANALYZING);
   });
 
   it('subsequent round uses new mode', () => {
@@ -364,7 +364,7 @@ describe('chat Mode Changes', () => {
     // Round 0 in ANALYZING mode
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q0',
@@ -378,7 +378,7 @@ describe('chat Mode Changes', () => {
     // Round 1 in DEBATING mode
     const round1Messages = createRoundMessages(1, 2);
     state.setMessages([...round0Messages, ...round1Messages]);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 1,
       messages: [...round0Messages, ...round1Messages],
       userQuestion: 'Q1',
@@ -387,8 +387,8 @@ describe('chat Mode Changes', () => {
     });
 
     // Each round has its mode preserved
-    expect(getStoreState(store).analyses[0]!.mode).toBe(ChatModes.ANALYZING);
-    expect(getStoreState(store).analyses[1]!.mode).toBe(ChatModes.DEBATING);
+    expect(getStoreState(store).summaries[0]!.mode).toBe(ChatModes.ANALYZING);
+    expect(getStoreState(store).summaries[1]!.mode).toBe(ChatModes.DEBATING);
   });
 });
 
@@ -412,18 +412,18 @@ describe('complete Configuration Change Journey', () => {
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q0',
       threadId: 'thread-config-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
 
     expect(getStoreState(store).messages).toHaveLength(3);
-    expect(getStoreState(store).analyses).toHaveLength(1);
-    expect(getStoreState(store).analyses[0]!.participantMessageIds).toHaveLength(2);
+    expect(getStoreState(store).summaries).toHaveLength(1);
+    expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(2);
 
     // === CONFIG CHANGE: Add participant ===
     state.setParticipants(createMockParticipants(3));
@@ -432,18 +432,18 @@ describe('complete Configuration Change Journey', () => {
     const round1Messages = createRoundMessages(1, 3);
     state.setMessages([...round0Messages, ...round1Messages]);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 1,
       messages: [...round0Messages, ...round1Messages],
       userQuestion: 'Q1',
       threadId: 'thread-config-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(1, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(1, MessageStatuses.COMPLETE);
 
     expect(getStoreState(store).messages).toHaveLength(7); // 3 + 4
-    expect(getStoreState(store).analyses).toHaveLength(2);
-    expect(getStoreState(store).analyses[1]!.participantMessageIds).toHaveLength(3);
+    expect(getStoreState(store).summaries).toHaveLength(2);
+    expect(getStoreState(store).summaries[1]!.participantMessageIds).toHaveLength(3);
 
     // === CONFIG CHANGE: Enable web search ===
     state.setEnableWebSearch(true);
@@ -454,26 +454,26 @@ describe('complete Configuration Change Journey', () => {
     const round2Messages = createRoundMessages(2, 3);
     state.setMessages([...round0Messages, ...round1Messages, ...round2Messages]);
 
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 2,
       messages: [...round0Messages, ...round1Messages, ...round2Messages],
       userQuestion: 'Q2',
       threadId: 'thread-config-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(2, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(2, MessageStatuses.COMPLETE);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
 
     // All rounds preserved
     expect(finalState.messages).toHaveLength(11); // 3 + 4 + 4
-    expect(finalState.analyses).toHaveLength(3);
+    expect(finalState.summaries).toHaveLength(3);
 
     // Each round has correct participant count
-    expect(finalState.analyses[0]!.participantMessageIds).toHaveLength(2);
-    expect(finalState.analyses[1]!.participantMessageIds).toHaveLength(3);
-    expect(finalState.analyses[2]!.participantMessageIds).toHaveLength(3);
+    expect(finalState.summaries[0]!.participantMessageIds).toHaveLength(2);
+    expect(finalState.summaries[1]!.participantMessageIds).toHaveLength(3);
+    expect(finalState.summaries[2]!.participantMessageIds).toHaveLength(3);
 
     // Pre-search was triggered for round 2
     expect(finalState.triggeredPreSearchRounds.has(2)).toBe(true);
@@ -498,22 +498,22 @@ describe('tracking State Isolation Between Rounds', () => {
     state.setScreenMode(ScreenModes.THREAD);
   });
 
-  it('analysis tracking per round is independent', () => {
+  it('summary tracking per round is independent', () => {
     const state = getStoreState(store);
 
     // Mark round 0 as created
-    expect(state.tryMarkAnalysisCreated(0)).toBe(true);
-    expect(state.tryMarkAnalysisCreated(0)).toBe(false); // Already marked
+    expect(state.tryMarkSummaryCreated(0)).toBe(true);
+    expect(state.tryMarkSummaryCreated(0)).toBe(false); // Already marked
 
     // Round 1 is independent
-    expect(state.tryMarkAnalysisCreated(1)).toBe(true);
-    expect(state.tryMarkAnalysisCreated(1)).toBe(false);
+    expect(state.tryMarkSummaryCreated(1)).toBe(true);
+    expect(state.tryMarkSummaryCreated(1)).toBe(false);
 
     // Round 2 is independent
-    expect(state.tryMarkAnalysisCreated(2)).toBe(true);
+    expect(state.tryMarkSummaryCreated(2)).toBe(true);
 
     // Check all are tracked
-    expect(getStoreState(store).createdAnalysisRounds.size).toBe(3);
+    expect(getStoreState(store).createdSummaryRounds.size).toBe(3);
   });
 
   it('pre-search tracking per round is independent', () => {

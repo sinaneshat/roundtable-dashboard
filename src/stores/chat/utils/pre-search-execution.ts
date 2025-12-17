@@ -7,14 +7,32 @@
  * @module stores/chat/utils/pre-search-execution
  */
 
-import type { UseMutationResult } from '@tanstack/react-query';
-
-import { AnalysisStatuses, Environments, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
-import type { PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
+import { Environments, MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
+import type { ChatThread, PartialPreSearchData, PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
-import { transformPreSearch } from '@/lib/utils/date-transforms';
 
 import type { ChatStoreApi } from '../store';
+
+/**
+ * Get effective web search enabled state from thread (single source of truth).
+ * Thread state is THE source of truth for all decisions after thread exists.
+ * Form state only used for new chats before thread is created.
+ *
+ * @param thread - The chat thread (null before thread creation)
+ * @param formEnableWebSearch - Form state (only used if thread is null)
+ * @returns boolean - true if web search enabled, false otherwise
+ */
+export function getEffectiveWebSearchEnabled(
+  thread: ChatThread | null,
+  formEnableWebSearch: boolean,
+): boolean {
+  // Thread exists = thread is source of truth
+  if (thread) {
+    return thread.enableWebSearch;
+  }
+  // No thread yet = form state (user's intent for new chat)
+  return formEnableWebSearch;
+}
 
 /**
  * Parse and validate pre-search data from SSE stream
@@ -72,7 +90,7 @@ export async function readPreSearchStreamData(
       onPartialUpdate({
         queries,
         results,
-        analysis: analysisRationale,
+        summary: analysisRationale,
       });
     }
   };
@@ -166,12 +184,7 @@ export type ExecutePreSearchOptions = {
   /** Optional extracted text content from uploaded files to include in search query generation */
   fileContext?: string;
   existingPreSearch: StoredPreSearch | null;
-  createPreSearchMutation: UseMutationResult<
-    { data: StoredPreSearch } | undefined,
-    Error,
-    { param: { threadId: string; roundNumber: string }; json: { userQuery: string } }
-  >;
-  /** ✅ PATTERN: Mutation's mutateAsync for SSE stream execution */
+  /** ✅ PATTERN: Mutation's mutateAsync for SSE stream execution - auto-creates DB record */
   executePreSearchMutateAsync: ExecutePreSearchStreamMutateAsync;
   onQueryInvalidate: () => void;
 };
@@ -195,7 +208,6 @@ export async function executePreSearch(
     userQuery,
     fileContext,
     existingPreSearch,
-    createPreSearchMutation,
     executePreSearchMutateAsync,
     onQueryInvalidate,
   } = options;
@@ -203,19 +215,19 @@ export async function executePreSearch(
   const state = store.getState();
 
   // Already complete - nothing to do
-  if (existingPreSearch?.status === AnalysisStatuses.COMPLETE) {
+  if (existingPreSearch?.status === MessageStatuses.COMPLETE) {
     return 'complete';
   }
 
   // Already failed - nothing to do
-  if (existingPreSearch?.status === AnalysisStatuses.FAILED) {
+  if (existingPreSearch?.status === MessageStatuses.FAILED) {
     return 'failed';
   }
 
   // Check if already triggered (prevents duplicate execution)
   if (state.hasPreSearchBeenTriggered(roundNumber)) {
     // Check if streaming
-    if (existingPreSearch?.status === AnalysisStatuses.STREAMING) {
+    if (existingPreSearch?.status === MessageStatuses.STREAMING) {
       return 'in_progress';
     }
     return 'in_progress';
@@ -224,33 +236,9 @@ export async function executePreSearch(
   // Mark as triggered BEFORE any async operations
   state.markPreSearchTriggered(roundNumber);
 
-  // Determine if we need to create DB record
-  const needsDbCreate = !existingPreSearch || existingPreSearch.id.startsWith('placeholder-');
-
   try {
-    // Create DB record if needed
-    if (needsDbCreate) {
-      const createResponse = await createPreSearchMutation.mutateAsync({
-        param: {
-          threadId,
-          roundNumber: roundNumber.toString(),
-        },
-        json: {
-          userQuery,
-        },
-      });
-
-      if (createResponse?.data) {
-        const preSearchWithDates = transformPreSearch(createResponse.data);
-        store.getState().addPreSearch({
-          ...preSearchWithDates,
-          status: AnalysisStatuses.STREAMING,
-        });
-      }
-    } else {
-      // Update existing to streaming
-      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.STREAMING);
-    }
+    // Update status to STREAMING - execute endpoint auto-creates DB record
+    store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.STREAMING);
 
     // ✅ PATTERN: Use mutation instead of direct service import
     // ✅ FILE CONTEXT: Pass file content for query generation consideration
@@ -280,7 +268,7 @@ export async function executePreSearch(
       if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
         console.error('[executePreSearch] Pre-search execution failed:', response.status);
       }
-      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.FAILED);
+      store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.FAILED);
       store.getState().clearPreSearchActivity(roundNumber);
       store.getState().clearPreSearchTracking(roundNumber);
       return 'failed';
@@ -302,7 +290,7 @@ export async function executePreSearch(
     if (searchData) {
       store.getState().updatePreSearchData(roundNumber, searchData);
     } else {
-      store.getState().updatePreSearchStatus(roundNumber, AnalysisStatuses.COMPLETE);
+      store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.COMPLETE);
     }
 
     // Clear activity tracking
@@ -355,13 +343,13 @@ export function shouldWaitForPreSearch(
 
   // Pre-search in progress - check if stale
   if (
-    preSearchForRound.status === AnalysisStatuses.PENDING
-    || preSearchForRound.status === AnalysisStatuses.STREAMING
+    preSearchForRound.status === MessageStatuses.PENDING
+    || preSearchForRound.status === MessageStatuses.STREAMING
   ) {
     // ✅ RESUMPTION FIX: Check if STREAMING status is stale (from before page refresh)
     // If pre-search has been "streaming" for too long, it's likely stale and we should
     // not block resumption. The actual pre-search resumption/retry logic will handle it.
-    if (preSearchForRound.status === AnalysisStatuses.STREAMING) {
+    if (preSearchForRound.status === MessageStatuses.STREAMING) {
       const createdTime = preSearchForRound.createdAt instanceof Date
         ? preSearchForRound.createdAt.getTime()
         : new Date(preSearchForRound.createdAt).getTime();

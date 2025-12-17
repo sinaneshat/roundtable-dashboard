@@ -11,7 +11,7 @@ import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animatio
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 // ============================================================================
-// REALISTIC DEMO DATA - Startup Strategy Use Case
+// DEMO DATA
 // ============================================================================
 
 const DEMO_USER = {
@@ -19,27 +19,15 @@ const DEMO_USER = {
   image: null,
 };
 
-const DEMO_USER_MESSAGE = {
-  id: 'msg-demo-user',
-  content: 'We\'re a B2B SaaS startup with $2M ARR considering whether to expand into enterprise sales or double down on our SMB motion. Our sales cycle is currently 14 days with an ACV of $8K. What factors should we consider and what would you recommend?',
-};
+const DEMO_USER_MESSAGE_CONTENT = 'We\'re a B2B SaaS startup with $2M ARR considering whether to expand into enterprise sales or double down on our SMB motion. Our sales cycle is currently 14 days with an ACV of $8K. What factors should we consider and what would you recommend?';
 
-const DEMO_PARTICIPANTS = [
-  {
-    modelId: 'anthropic/claude-sonnet-4',
-    role: 'Strategic Analyst',
-  },
-  {
-    modelId: 'openai/gpt-4.1',
-    role: 'Growth Advisor',
-  },
-  {
-    modelId: 'google/gemini-2.5-pro',
-    role: 'Operations Expert',
-  },
+const DEMO_PARTICIPANTS_DATA = [
+  { modelId: 'anthropic/claude-sonnet-4', role: 'Strategic Analyst' },
+  { modelId: 'openai/gpt-4.1', role: 'Growth Advisor' },
+  { modelId: 'google/gemini-2.5-pro', role: 'Operations Expert' },
 ];
 
-const DEMO_MESSAGES = [
+const DEMO_RESPONSES = [
   `This is a pivotal decision that will fundamentally shape your company's trajectory. Let me break down the key factors:
 
 **Current State Analysis:**
@@ -102,290 +90,200 @@ This gives you real data instead of speculation. If the experiment succeeds, you
 ];
 
 // ============================================================================
-// STAGES - Persistent completion tracking to prevent reset
+// STATIC DATA FOR TIMELINE
 // ============================================================================
 
-type Stage = 'idle' | 'user-message' | 'participant-0-streaming' | 'participant-0-complete' | 'participant-1-streaming' | 'participant-1-complete' | 'participant-2-streaming' | 'complete';
+const STATIC_PARTICIPANTS: ChatParticipant[] = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
+  id: `participant-${idx}`,
+  threadId: 'demo-thread',
+  modelId: p.modelId,
+  customRoleId: null,
+  role: p.role,
+  priority: idx,
+  isEnabled: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  settings: null,
+}));
 
-const DEMO_COMPLETED_KEY = 'roundtable-demo-completed';
+const PARTICIPANT_CONTEXT = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
+  id: `participant-${idx}`,
+  modelId: p.modelId,
+  role: p.role,
+}));
 
-// Check if demo has completed (using sessionStorage for persistence)
-function isDemoCompleted(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  try {
-    return sessionStorage.getItem(DEMO_COMPLETED_KEY) === 'true';
-  } catch {
-    return false;
-  }
+function createUserMessage(): ChatMessage {
+  return {
+    id: 'msg-demo-user',
+    threadId: 'demo-thread',
+    participantId: null,
+    role: 'user',
+    parts: [{ type: 'text', text: DEMO_USER_MESSAGE_CONTENT }],
+    roundNumber: 1,
+    createdAt: new Date(),
+    metadata: { role: 'user', roundNumber: 1 },
+  };
 }
 
-// Mark demo as completed
-function markDemoCompleted(): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  try {
-    sessionStorage.setItem(DEMO_COMPLETED_KEY, 'true');
-  } catch {
-    // Ignore storage errors
-  }
+function createParticipantMessage(index: number, text: string): ChatMessage {
+  return {
+    id: `msg-demo-participant-${index}`,
+    threadId: 'demo-thread',
+    participantId: `participant-${index}`,
+    role: 'assistant',
+    parts: [{ type: MessagePartTypes.TEXT, text }],
+    roundNumber: 1,
+    createdAt: new Date(),
+    metadata: {
+      role: 'assistant' as const,
+      roundNumber: 1,
+      participantId: `participant-${index}`,
+      participantIndex: index,
+      participantRole: DEMO_PARTICIPANTS_DATA[index]?.role ?? null,
+      model: DEMO_PARTICIPANTS_DATA[index]?.modelId ?? '',
+      finishReason: 'stop' as const,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      hasError: false,
+      isTransient: false,
+      isPartialResponse: false,
+    },
+  };
 }
 
-// Helper to get initial state based on completion status
-function getInitialStage(): Stage {
-  return isDemoCompleted() ? 'complete' : 'idle';
-}
+// ============================================================================
+// COMPONENT - Simplified, no completion tracking
+// ============================================================================
 
-function getInitialStreamingText(): string[] {
-  return isDemoCompleted() ? [...DEMO_MESSAGES] : ['', '', ''];
-}
+// Module-level flag to track completion (persists across remounts)
+let demoHasCompleted = false;
 
 export function LiveChatDemo() {
-  // If already completed, start at complete stage with full text
-  const [stage, setStage] = useState<Stage>(getInitialStage);
-  const [streamingText, setStreamingText] = useState(getInitialStreamingText);
-  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
-  const intervalsRef = useRef<NodeJS.Timeout[]>([]);
+  // -1 = waiting, 0/1/2 = streaming that participant, 3 = all done
+  const [activeParticipant, setActiveParticipant] = useState(() => demoHasCompleted ? 3 : -1);
+  const [streamedText, setStreamedText] = useState(() => demoHasCompleted ? [...DEMO_RESPONSES] : ['', '', '']);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track if demo started already completed (to skip entrance animations on remount)
-  const startedCompleteRef = useRef(isDemoCompleted());
-
-  // Ref-stable setter to avoid lint false positive in animation callback
-  const updateStreamingText = useRef(setStreamingText).current;
-
-  // Cleanup on unmount
+  // Mark complete when animation finishes
   useEffect(() => {
-    const timeouts = timeoutsRef.current;
-    const intervals = intervalsRef.current;
-    return () => {
-      timeouts.forEach(clearTimeout);
-      intervals.forEach(clearInterval);
-    };
-  }, []);
-
-  // Mark as completed when reaching final stage
-  useEffect(() => {
-    if (stage === 'complete' && !startedCompleteRef.current) {
-      markDemoCompleted();
+    if (activeParticipant >= 3) {
+      demoHasCompleted = true;
     }
-  }, [stage]);
+  }, [activeParticipant]);
 
-  // Stage progression
+  // Start animation on mount - only if not already completed
   useEffect(() => {
-    // Already completed - don't run any timers
-    if (startedCompleteRef.current) {
+    if (demoHasCompleted) {
       return;
     }
 
-    let timeout: NodeJS.Timeout | undefined;
+    const timeout = setTimeout(() => {
+      setActiveParticipant(0);
+    }, 500);
 
-    if (stage === 'idle') {
-      timeout = setTimeout(() => setStage('user-message'), 600);
-    } else if (stage === 'user-message') {
-      timeout = setTimeout(() => setStage('participant-0-streaming'), 800);
-    } else if (stage === 'participant-0-complete') {
-      timeout = setTimeout(() => setStage('participant-1-streaming'), 400);
-    } else if (stage === 'participant-1-complete') {
-      timeout = setTimeout(() => setStage('participant-2-streaming'), 400);
-    }
-    // Stay at 'complete' forever - never reset
+    return () => clearTimeout(timeout);
+  }, []);
 
-    return () => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-    };
-  }, [stage]);
-
-  // Generic typing animation for participants
-  const animateParticipant = useCallback((index: number, onComplete: () => void) => {
-    const fullText = DEMO_MESSAGES[index] || '';
+  // Animation function
+  const runAnimation = useCallback((index: number) => {
+    const fullText = DEMO_RESPONSES[index] || '';
     let charIndex = 0;
-    let completionTimeout: NodeJS.Timeout | undefined;
 
-    const interval = setInterval(() => {
-      if (charIndex < fullText.length) {
-        charIndex = Math.min(charIndex + TYPING_CHARS_PER_FRAME, fullText.length);
-        updateStreamingText((prev) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(() => {
+      charIndex += TYPING_CHARS_PER_FRAME;
+
+      if (charIndex >= fullText.length) {
+        charIndex = fullText.length;
+        setStreamedText((prev) => {
+          const next = [...prev];
+          next[index] = fullText;
+          return next;
+        });
+
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+
+        // Next participant after pause
+        setTimeout(() => {
+          setActiveParticipant(index + 1);
+        }, 300);
+      } else {
+        setStreamedText((prev) => {
           const next = [...prev];
           next[index] = fullText.slice(0, charIndex);
           return next;
         });
-      } else {
-        clearInterval(interval);
-        completionTimeout = setTimeout(onComplete, 300);
       }
     }, TYPING_FRAME_INTERVAL);
+  }, []);
 
-    intervalsRef.current.push(interval);
+  // Trigger animation when activeParticipant changes
+  useEffect(() => {
+    if (activeParticipant >= 0 && activeParticipant < 3) {
+      runAnimation(activeParticipant);
+    }
+
     return () => {
-      clearInterval(interval);
-      if (completionTimeout) {
-        clearTimeout(completionTimeout);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [updateStreamingText]);
-
-  // Participant 0 streaming
-  useEffect(() => {
-    if (stage !== 'participant-0-streaming') {
-      return;
-    }
-    return animateParticipant(0, () => setStage('participant-0-complete'));
-  }, [stage, animateParticipant]);
-
-  // Participant 1 streaming
-  useEffect(() => {
-    if (stage !== 'participant-1-streaming') {
-      return;
-    }
-    return animateParticipant(1, () => setStage('participant-1-complete'));
-  }, [stage, animateParticipant]);
-
-  // Participant 2 streaming
-  useEffect(() => {
-    if (stage !== 'participant-2-streaming') {
-      return;
-    }
-    return animateParticipant(2, () => setStage('complete'));
-  }, [stage, animateParticipant]);
-
-  const isStreaming = stage.includes('streaming');
+  }, [activeParticipant, runAnimation]);
 
   // Build messages
-  const messages: ChatMessage[] = [];
+  const messages: ChatMessage[] = [createUserMessage()];
 
-  // User message
-  if (stage !== 'idle') {
-    messages.push({
-      id: DEMO_USER_MESSAGE.id,
-      threadId: 'demo-thread',
-      participantId: null,
-      role: 'user',
-      parts: [{ type: 'text', text: DEMO_USER_MESSAGE.content }],
-      roundNumber: 1,
-      createdAt: new Date(),
-      metadata: { role: 'user', roundNumber: 1 },
-    });
-  }
-
-  // Participant messages
-  const participantStageOrder: Stage[] = [
-    'participant-0-streaming',
-    'participant-0-complete',
-    'participant-1-streaming',
-    'participant-1-complete',
-    'participant-2-streaming',
-    'complete',
-  ];
-
-  const currentStageIndex = participantStageOrder.indexOf(stage);
-
-  if (currentStageIndex >= 0) {
+  // All done - show all participants with full text
+  if (activeParticipant >= 3) {
     for (let i = 0; i < 3; i++) {
-      const streamingStage = `participant-${i}-streaming` as Stage;
-      const completeStage = i === 2 ? 'complete' : `participant-${i}-complete` as Stage;
-
-      const streamingIndex = participantStageOrder.indexOf(streamingStage);
-      const completeIndex = participantStageOrder.indexOf(completeStage);
-
-      // Show if we've reached streaming stage
-      if (currentStageIndex >= streamingIndex) {
-        const isCurrentlyStreaming = stage === streamingStage;
-        const isComplete = currentStageIndex >= completeIndex;
-
-        const text = isCurrentlyStreaming
-          ? (streamingText[i] ?? '')
-          : isComplete
-            ? (DEMO_MESSAGES[i] ?? '')
-            : '';
-
-        messages.push({
-          id: `msg-demo-participant-${i}`,
-          threadId: 'demo-thread',
-          participantId: `participant-${i}`,
-          role: 'assistant',
-          parts: [{ type: MessagePartTypes.TEXT, text }],
-          roundNumber: 1,
-          createdAt: new Date(),
-          metadata: {
-            role: 'assistant' as const,
-            roundNumber: 1,
-            participantId: `participant-${i}`,
-            participantIndex: i,
-            participantRole: DEMO_PARTICIPANTS[i]?.role ?? null,
-            model: DEMO_PARTICIPANTS[i]?.modelId ?? '',
-            finishReason: 'stop' as const,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
-          },
-        });
+      messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));
+    }
+  } else {
+    // Animation in progress
+    for (let i = 0; i < 3; i++) {
+      if (activeParticipant > i) {
+        // This participant finished - full text
+        messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));
+      } else if (activeParticipant === i) {
+        // Currently streaming
+        messages.push(createParticipantMessage(i, streamedText[i] || ''));
       }
+      // else: not started yet, don't add
     }
   }
 
-  // Build store participants
-  const storeParticipants: ChatParticipant[] = DEMO_PARTICIPANTS.map((p, idx) => ({
-    id: `participant-${idx}`,
-    threadId: 'demo-thread',
-    modelId: p.modelId,
-    customRoleId: null,
-    role: p.role,
-    priority: idx,
-    isEnabled: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    settings: null,
-  }));
-
-  // Convert to timeline
-  const participantContext = DEMO_PARTICIPANTS.map((p, idx) => ({
-    id: `participant-${idx}`,
-    modelId: p.modelId,
-    role: p.role,
-  }));
-
-  const uiMessages = chatMessagesToUIMessages(messages, participantContext);
+  const uiMessages = chatMessagesToUIMessages(messages, PARTICIPANT_CONTEXT);
   const timelineItems = useThreadTimeline({
     messages: uiMessages,
-    analyses: [],
+    summaries: [],
     changelog: [],
   });
 
-  // Current streaming participant
-  const currentStreamingIndex = stage === 'participant-0-streaming'
-    ? 0
-    : stage === 'participant-1-streaming'
-      ? 1
-      : stage === 'participant-2-streaming'
-        ? 2
-        : null;
+  const isStreaming = activeParticipant >= 0 && activeParticipant < 3;
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
       <ScrollArea className="h-full min-h-0 flex-1">
         <div className="w-full px-4 sm:px-6 pt-6 pb-6">
-          {stage !== 'idle' && (
-            <ThreadTimeline
-              timelineItems={timelineItems}
-              user={DEMO_USER}
-              participants={storeParticipants}
-              threadId="demo-thread"
-              isStreaming={isStreaming}
-              currentParticipantIndex={currentStreamingIndex ?? 0}
-              currentStreamingParticipant={
-                currentStreamingIndex !== null ? storeParticipants[currentStreamingIndex] ?? null : null
-              }
-              streamingRoundNumber={1}
-              preSearches={[]}
-              isReadOnly={true}
-              skipEntranceAnimations={startedCompleteRef.current}
-            />
-          )}
+          <ThreadTimeline
+            timelineItems={timelineItems}
+            user={DEMO_USER}
+            participants={STATIC_PARTICIPANTS}
+            threadId="demo-thread"
+            isStreaming={isStreaming}
+            currentParticipantIndex={isStreaming ? activeParticipant : 0}
+            currentStreamingParticipant={isStreaming ? STATIC_PARTICIPANTS[activeParticipant] ?? null : null}
+            streamingRoundNumber={isStreaming ? 1 : null}
+            preSearches={[]}
+            isReadOnly={true}
+            skipEntranceAnimations={false}
+          />
         </div>
       </ScrollArea>
     </div>

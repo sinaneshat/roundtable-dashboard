@@ -10,7 +10,7 @@
  * ARCHITECTURE:
  * - Reads all state from Zustand store (single source of truth)
  * - Handles message rendering via ThreadTimeline
- * - Manages analysis streaming and completion
+ * - Manages summary streaming and completion
  * - Provides unified input with toolbar and modals
  * - Consistent loading indicators and scroll behavior
  */
@@ -21,8 +21,8 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
-import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
+import { RoundSummaryAIContentSchema } from '@/api/routes/chat/schema';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -47,7 +47,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, isVisionRequiredMimeType } from '@/lib/utils/file-capability';
 import {
-  AnalysisTimeouts,
+  SummaryTimeouts,
   useChatFormActions,
   useFeedbackActions,
   useFlowLoading,
@@ -100,7 +100,7 @@ export function ChatView({
   // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
   const contextParticipants = useChatStore(s => s.participants);
   const preSearches = useChatStore(s => s.preSearches);
-  const analyses = useChatStore(s => s.analyses);
+  const summaries = useChatStore(s => s.summaries);
 
   const { thread, createdThreadId } = useChatStore(
     useShallow(s => ({
@@ -109,10 +109,10 @@ export function ChatView({
     })),
   );
 
-  const { streamingRoundNumber, isCreatingAnalysis, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded } = useChatStore(
+  const { streamingRoundNumber, isCreatingSummary, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded } = useChatStore(
     useShallow(s => ({
       streamingRoundNumber: s.streamingRoundNumber,
-      isCreatingAnalysis: s.isCreatingAnalysis,
+      isCreatingSummary: s.isCreatingSummary,
       waitingToStartStreaming: s.waitingToStartStreaming,
       isCreatingThread: s.isCreatingThread,
       pendingMessage: s.pendingMessage,
@@ -132,10 +132,10 @@ export function ChatView({
   const setModelOrder = useChatStore(s => s.setModelOrder);
   const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
 
-  // Analysis actions
-  const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
-  const updateAnalysisStatus = useChatStore(s => s.updateAnalysisStatus);
-  const updateAnalysisError = useChatStore(s => s.updateAnalysisError);
+  // Summary actions
+  const updateSummaryData = useChatStore(s => s.updateSummaryData);
+  const updateSummaryStatus = useChatStore(s => s.updateSummaryStatus);
+  const updateSummaryError = useChatStore(s => s.updateSummaryError);
 
   // ============================================================================
   // DERIVED STATE
@@ -239,13 +239,13 @@ export function ChatView({
     return getIncompatibleModelIds(allEnabledModels, files);
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
-  // Timeline with messages, analyses, changelog, and pre-searches
+  // Timeline with messages, summaries, changelog, and pre-searches
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
   // This enables rendering pre-search cards even when user message
   // hasn't been persisted yet (e.g., page refresh during web search phase)
   const timelineItems: TimelineItem[] = useThreadTimeline({
     messages,
-    analyses,
+    summaries,
     changelog,
     preSearches,
   });
@@ -281,7 +281,7 @@ export function ChatView({
   // Thread actions (for both screens - manages changelog waiting flag)
   const threadActions = useThreadActions({
     slug: slug || '',
-    isRoundInProgress: isStreaming || isCreatingAnalysis,
+    isRoundInProgress: isStreaming || isCreatingSummary,
     isChangelogFetching,
   });
 
@@ -345,7 +345,7 @@ export function ChatView({
 
   useChatScroll({
     messages,
-    analyses,
+    summaries,
     enableNearBottomDetection: true,
   });
 
@@ -355,41 +355,41 @@ export function ChatView({
     || isCreatingThread
     || waitingToStartStreaming
     || showLoader
-    || isCreatingAnalysis
+    || isCreatingSummary
     || Boolean(pendingMessage);
 
   // Mobile keyboard handling
   const keyboardOffset = useVisualViewportPosition();
 
-  // Stuck analysis cleanup - timer-based cleanup for analyses that get stuck streaming
+  // Stuck summary cleanup - timer-based cleanup for summaries that get stuck streaming
   // React 19: Valid effect for timer (external system)
-  // Uses interval to periodically check for stuck analyses
+  // Uses interval to periodically check for stuck summaries
   useEffect(() => {
-    const checkStuckAnalyses = () => {
-      const stuckAnalyses = analyses.filter((analysis) => {
-        if (analysis.status !== AnalysisStatuses.STREAMING)
+    const checkStuckSummaries = () => {
+      const stuckSummaries = summaries.filter((summary) => {
+        if (summary.status !== MessageStatuses.STREAMING)
           return false;
-        const createdTime = analysis.createdAt instanceof Date
-          ? analysis.createdAt.getTime()
-          : new Date(analysis.createdAt).getTime();
+        const createdTime = summary.createdAt instanceof Date
+          ? summary.createdAt.getTime()
+          : new Date(summary.createdAt).getTime();
         const elapsed = Date.now() - createdTime;
-        return elapsed > AnalysisTimeouts.STUCK_THRESHOLD_MS;
+        return elapsed > SummaryTimeouts.STUCK_THRESHOLD_MS;
       });
 
-      if (stuckAnalyses.length > 0) {
-        stuckAnalyses.forEach((analysis) => {
+      if (stuckSummaries.length > 0) {
+        stuckSummaries.forEach((summary) => {
           // Mark as FAILED with error message (not COMPLETE - that's incorrect for stuck streams)
-          updateAnalysisError(analysis.roundNumber, 'Analysis timed out. The stream was interrupted. Please try again.');
+          updateSummaryError(summary.roundNumber, 'Summary timed out. The stream was interrupted. Please try again.');
         });
       }
     };
 
     // Check immediately and set up interval
-    checkStuckAnalyses();
-    const intervalId = setInterval(checkStuckAnalyses, AnalysisTimeouts.CHECK_INTERVAL_MS);
+    checkStuckSummaries();
+    const intervalId = setInterval(checkStuckSummaries, SummaryTimeouts.CHECK_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [analyses, updateAnalysisError]);
+  }, [summaries, updateSummaryError]);
 
   // ============================================================================
   // CALLBACKS
@@ -533,32 +533,32 @@ export function ChatView({
     }
   }, [removeParticipant, mode, setHasPendingConfigChanges]);
 
-  const handleAnalysisStreamStart = useCallback((roundNumber: number) => {
-    updateAnalysisStatus(roundNumber, AnalysisStatuses.STREAMING);
+  const handleSummaryStreamStart = useCallback((roundNumber: number) => {
+    updateSummaryStatus(roundNumber, MessageStatuses.STREAMING);
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
-  }, [updateAnalysisStatus, queryClient]);
+  }, [updateSummaryStatus, queryClient]);
 
-  const handleAnalysisStreamComplete = useCallback((roundNumber: number, completedData?: unknown, error?: unknown) => {
+  const handleSummaryStreamComplete = useCallback((roundNumber: number, completedData?: unknown, error?: unknown) => {
     if (completedData) {
       // Data already validated by AI SDK's useObject with same schema
       // This safeParse is defensive - should always pass if stream component worked correctly
-      const parseResult = ModeratorAnalysisPayloadSchema.safeParse(completedData);
+      const parseResult = RoundSummaryAIContentSchema.safeParse(completedData);
       if (parseResult.success) {
-        updateAnalysisData(roundNumber, parseResult.data);
+        updateSummaryData(roundNumber, parseResult.data);
       } else {
         // Log validation error for debugging (shouldn't happen if stream validated correctly)
-        console.error('[Analysis] Validation failed:', parseResult.error.flatten());
-        updateAnalysisError(roundNumber, 'Invalid analysis data received. Please try again.');
+        console.error('[Summary] Validation failed:', parseResult.error.flatten());
+        updateSummaryError(roundNumber, 'Invalid summary data received. Please try again.');
       }
     } else if (error) {
       const errorMessage = error instanceof Error
         ? error.message
-        : 'Analysis failed. Please try again.';
-      updateAnalysisError(roundNumber, errorMessage);
+        : 'Summary failed. Please try again.';
+      updateSummaryError(roundNumber, errorMessage);
     } else {
-      updateAnalysisError(roundNumber, 'Analysis completed without data. Please try again.');
+      updateSummaryError(roundNumber, 'Summary completed without data. Please try again.');
     }
-  }, [updateAnalysisData, updateAnalysisError]);
+  }, [updateSummaryData, updateSummaryError]);
 
   // ============================================================================
   // RENDER
@@ -589,8 +589,8 @@ export function ChatView({
               )}
               pendingFeedback={pendingFeedback}
               getFeedbackHandler={feedbackActions.getFeedbackHandler}
-              onAnalysisStreamStart={handleAnalysisStreamStart}
-              onAnalysisStreamComplete={handleAnalysisStreamComplete}
+              onSummaryStreamStart={handleSummaryStreamStart}
+              onSummaryStreamComplete={handleSummaryStreamComplete}
               preSearches={preSearches}
               isDataReady={isStoreReady}
             />

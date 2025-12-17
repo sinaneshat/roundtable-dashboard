@@ -138,10 +138,10 @@ function htmlToMarkdown(html: string): string {
 /**
  * Stream search query generation (gradual)
  *
- * Uses streamObject for progressive query generation like analysis streaming.
+ * Uses streamObject for progressive query generation like summary streaming.
  * Returns stream iterator that yields partial query as it's generated.
  *
- * Pattern from: /src/api/routes/chat/handlers/analysis.handler.ts:91-120
+ * Pattern from: /src/api/routes/chat/handlers/summary.handler.ts:91-120
  *
  * ✅ ERROR HANDLING: Comprehensive error context following error-metadata.service.ts pattern
  *

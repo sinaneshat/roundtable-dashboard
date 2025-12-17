@@ -2,13 +2,13 @@
  * Placeholder Object Factories
  *
  * Centralized factory functions for creating placeholder/optimistic objects:
- * - Placeholder analysis objects (for eager UI rendering)
+ * - Placeholder summary objects (for eager UI rendering)
  * - Placeholder pre-search objects (for web search UI)
  * - Optimistic user messages (for immediate UI feedback)
  *
  * ✅ PATTERN: Uses enum constants from @/api/core/enums for type-safe status values
  * ✅ SINGLE SOURCE: Eliminates duplicate inline object creation in form-actions.ts
- * ✅ TYPE-SAFE: Returns typed StoredModeratorAnalysis, StoredPreSearch, and UIMessage objects
+ * ✅ TYPE-SAFE: Returns typed StoredRoundSummary, StoredPreSearch, and UIMessage objects
  *
  * @module stores/chat/utils/placeholder-factories
  */
@@ -16,18 +16,18 @@
 import type { UIMessage } from 'ai';
 
 import type { ChatMode } from '@/api/core/enums';
-import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
-import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 
 // ============================================================================
-// PLACEHOLDER ANALYSIS FACTORY
+// PLACEHOLDER SUMMARY FACTORY
 // ============================================================================
 
 /**
- * Parameters for creating a placeholder analysis
+ * Parameters for creating a placeholder summary
  */
-export type CreatePlaceholderAnalysisParams = {
+export type CreatePlaceholderSummaryParams = {
   threadId: string;
   roundNumber: number;
   mode: ChatMode;
@@ -35,33 +35,33 @@ export type CreatePlaceholderAnalysisParams = {
 };
 
 /**
- * Create a placeholder analysis object for eager UI rendering
+ * Create a placeholder summary object for eager UI rendering
  *
- * Creates an analysis in PENDING status that allows RoundAnalysisCard
+ * Creates a summary in PENDING status that allows RoundSummaryCard
  * to render with loading UI before participants finish streaming.
  *
  * @example
  * // In handleCreateThread:
- * actions.addAnalysis(createPlaceholderAnalysis({
+ * actions.addSummary(createPlaceholderSummary({
  *   threadId: thread.id,
  *   roundNumber: 0,
  *   mode: thread.mode,
  *   userQuestion: prompt,
  * }));
  */
-export function createPlaceholderAnalysis(
-  params: CreatePlaceholderAnalysisParams,
-): StoredModeratorAnalysis {
+export function createPlaceholderSummary(
+  params: CreatePlaceholderSummaryParams,
+): StoredRoundSummary {
   const { threadId, roundNumber, mode, userQuestion } = params;
 
   return {
-    id: `placeholder-analysis-${threadId}-${roundNumber}`,
+    id: `placeholder-summary-${threadId}-${roundNumber}`,
     threadId,
     roundNumber,
     mode,
     userQuestion,
-    status: AnalysisStatuses.PENDING,
-    analysisData: null,
+    status: MessageStatuses.PENDING,
+    summaryData: null,
     participantMessageIds: [],
     createdAt: new Date(),
     completedAt: null,
@@ -108,7 +108,7 @@ export function createPlaceholderPreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: AnalysisStatuses.PENDING,
+    status: MessageStatuses.PENDING,
     searchData: null,
     createdAt: new Date(),
     completedAt: null,

@@ -7,7 +7,7 @@
  * This service handles:
  * - Saving AI assistant messages after streaming completes
  * - Extracting reasoning from multiple sources (deltas, finishResult, providerMetadata)
- * - Creating pending analysis records for completed rounds
+ * - Creating pending summary records for completed rounds
  *
  * @see /src/api/types/citations.ts for citation type definitions
  */
@@ -18,10 +18,10 @@ import { ulid } from 'ulid';
 import type { z } from 'zod';
 
 import {
-  AnalysisStatuses,
   ChatModeSchema,
   MessagePartTypes,
   MessageRoles,
+  MessageStatuses,
 } from '@/api/core/enums';
 import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
@@ -525,11 +525,11 @@ export async function saveStreamedMessage(
     // Increment message usage quota (charged regardless of stream completion)
     await incrementMessageUsage(userId, 1);
 
-    // ✅ CRITICAL FIX: Trigger analysis creation if last participant
+    // ✅ CRITICAL FIX: Trigger summary creation if last participant
     // Removed savedMessage check because onConflictDoNothing() can return undefined
-    // even when the message exists, preventing analysis creation
+    // even when the message exists, preventing summary creation
     if (participantIndex === participants.length - 1) {
-      await createPendingAnalysis({
+      await createPendingSummary({
         threadId,
         roundNumber,
         threadMode,
@@ -545,10 +545,10 @@ export async function saveStreamedMessage(
 }
 
 // ============================================================================
-// Analysis Creation
+// Summary Creation
 // ============================================================================
 
-type CreatePendingAnalysisParams = {
+type CreatePendingSummaryParams = {
   threadId: string;
   roundNumber: number;
   threadMode: string;
@@ -558,32 +558,32 @@ type CreatePendingAnalysisParams = {
 };
 
 /**
- * Create pending analysis record for completed rounds
+ * Create pending summary record for completed rounds
  *
  * This runs synchronously after the last participant completes streaming.
- * The frontend will then stream the analysis using the analysis endpoint.
+ * The frontend will then stream the summary using the summary endpoint.
  *
  * ✅ CRITICAL FIX: Removed fire-and-forget pattern to prevent race conditions
  * Previously used IIFE that ran in background, causing database queries to execute
- * before all participant messages were fully visible, resulting in incomplete analysis records.
+ * before all participant messages were fully visible, resulting in incomplete summary records.
  *
  * Reference: streaming.handler.ts lines 1524-1621
  */
-async function createPendingAnalysis(
-  params: CreatePendingAnalysisParams,
+async function createPendingSummary(
+  params: CreatePendingSummaryParams,
 ): Promise<void> {
   const { threadId, roundNumber, threadMode, userId, participants, db }
     = params;
 
   try {
-    // Check analysis quota first (silent return if quota exceeded)
+    // Check summary quota first (silent return if quota exceeded)
     const stats = await getUserUsageStats(userId);
     if (stats.analysis.remaining === 0) {
       return;
     }
 
-    // Check if analysis already exists
-    const existingAnalysis = await db
+    // Check if summary already exists
+    const existingSummary = await db
       .select()
       .from(tables.chatModeratorAnalysis)
       .where(
@@ -594,13 +594,13 @@ async function createPendingAnalysis(
       )
       .get();
 
-    if (existingAnalysis) {
-      return; // Analysis already exists
+    if (existingSummary) {
+      return; // Summary already exists
     }
 
     // ✅ CRITICAL FIX: Retry logic to ensure all participant messages are visible
     // D1/SQLite has eventual consistency - we need to poll until all messages are found
-    // This prevents creating analysis records with incomplete participant message IDs
+    // This prevents creating summary records with incomplete participant message IDs
     let roundMessages: ChatMessage[] = [];
     let assistantMessages: ChatMessage[] = [];
     const maxRetries = 10;
@@ -626,7 +626,7 @@ async function createPendingAnalysis(
       // ✅ TYPE-SAFE FILTERING: Use consolidated utility for participant message filtering
       // Replaces inline logic with Zod-validated type guard from message-type-guards.ts
       // Pre-search messages have role: 'assistant' but are NOT actual participant responses
-      // They should be excluded from analysis to prevent ID inconsistency when web search is enabled
+      // They should be excluded from summary to prevent ID inconsistency when web search is enabled
       assistantMessages = filterDbToParticipantMessages(roundMessages);
 
       // Check if we have all expected participant messages
@@ -673,29 +673,29 @@ async function createPendingAnalysis(
     const validatedMode = safeParse(ChatModeSchema, threadMode);
 
     if (!validatedMode) {
-      // Invalid mode - skip analysis creation
+      // Invalid mode - skip summary creation
       return;
     }
 
-    // Create pending analysis record
-    const analysisId = ulid();
+    // Create pending summary record
+    const summaryId = ulid();
     await db
       .insert(tables.chatModeratorAnalysis)
       .values({
-        id: analysisId,
+        id: summaryId,
         threadId,
         roundNumber,
         mode: validatedMode,
         userQuestion,
-        status: AnalysisStatuses.PENDING,
+        status: MessageStatuses.PENDING,
         participantMessageIds,
-        analysisData: null,
+        summaryData: null,
         completedAt: null,
         errorMessage: null,
       })
       .run();
   } catch {
-    // Analysis creation errors should not break the chat flow
-    // Silently fail and let frontend handle analysis creation if needed
+    // Summary creation errors should not break the chat flow
+    // Silently fail and let frontend handle summary creation if needed
   }
 }

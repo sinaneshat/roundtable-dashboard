@@ -653,8 +653,8 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Stream ID for resumption',
     example: 'thread_123_r0_p0',
   }),
-  /** Current stream phase (presearch, participant, analyzer) */
-  phase: z.enum(['presearch', 'participant', 'analyzer']).optional().openapi({
+  /** Current stream phase (presearch, participant, summarizer) */
+  phase: z.enum(['presearch', 'participant', 'summarizer']).optional().openapi({
     description: 'Current stream phase',
     example: 'participant',
   }),
@@ -698,10 +698,10 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Whether stream was resumed from buffer',
     example: true,
   }),
-  /** Analysis ID (for analyzer phase) */
-  analysisId: z.string().optional().openapi({
-    description: 'Analysis ID for analyzer phase',
-    example: 'analysis_abc123',
+  /** Summary ID (for summarizer phase) */
+  summaryId: z.string().optional().openapi({
+    description: 'Summary ID for summarizer phase',
+    example: 'summary_abc123',
   }),
 }).openapi('SSEStreamMetadata');
 
@@ -727,15 +727,15 @@ export const TextStreamMetadataSchema = z.object({
     description: 'Resource ID (e.g., analysis ID)',
     example: 'analysis_abc123',
   }),
-  /** Round number for analysis streams */
+  /** Round number for round summary streams */
   roundNumber: z.number().int().nonnegative().optional().openapi({
-    description: 'Round number for analysis streams',
+    description: 'Round number for round summary streams',
     example: 0,
   }),
-  /** Analysis ID for analysis streams */
-  analysisId: z.string().optional().openapi({
-    description: 'Analysis ID for analysis streams',
-    example: 'mod_analysis_123',
+  /** Summary ID for round summary streams */
+  summaryId: z.string().optional().openapi({
+    description: 'Summary ID for round summary streams',
+    example: 'summary_123',
   }),
   /** Stream status (e.g., 'completed', 'streaming') */
   streamStatus: z.string().optional().openapi({

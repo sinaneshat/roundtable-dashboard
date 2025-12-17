@@ -16,7 +16,7 @@
  * Used by:
  * - useMultiParticipantChat: Sync callbacks and state values to prevent stale closures
  * - ChatOverviewScreen: Sync messages, participants for onComplete callback
- * - ChatThreadScreen: Sync messages, participants, createPendingAnalysis
+ * - ChatThreadScreen: Sync messages, participants, createPendingSummary
  *
  * @module hooks/utils/use-synced-refs
  */

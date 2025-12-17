@@ -42,7 +42,7 @@ function getQueryKeysToInvalidate(threadId: string | null) {
 
   return [
     queryKeys.threads.messages(threadId),
-    queryKeys.threads.analyses(threadId),
+    queryKeys.threads.summaries(threadId),
     queryKeys.threads.preSearches(threadId),
     queryKeys.threads.feedback(threadId),
   ];
@@ -95,7 +95,7 @@ describe('query Cache Invalidation', () => {
 
       expect(keys).toHaveLength(4);
       expect(keys).toContainEqual(queryKeys.threads.messages(threadId));
-      expect(keys).toContainEqual(queryKeys.threads.analyses(threadId));
+      expect(keys).toContainEqual(queryKeys.threads.summaries(threadId));
       expect(keys).toContainEqual(queryKeys.threads.preSearches(threadId));
       expect(keys).toContainEqual(queryKeys.threads.feedback(threadId));
     });

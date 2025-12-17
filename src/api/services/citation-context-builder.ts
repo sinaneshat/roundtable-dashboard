@@ -140,7 +140,7 @@ function buildSearchSources(
       type: CitationSourceTypes.SEARCH,
       sourceId: uniqueId,
       title: `Search: "${search.userQuery}"`,
-      content: search.analysis || content,
+      content: search.summary || content,
       metadata: {
         threadId: search.threadId,
         threadTitle: search.threadTitle,
@@ -151,34 +151,34 @@ function buildSearchSources(
 }
 
 /**
- * Build citable sources from moderator analyses
+ * Build citable sources from moderator summaries
  */
-function buildAnalysisSources(
-  analyses: AggregatedProjectContext['analyses'],
+function buildSummarySources(
+  summaries: AggregatedProjectContext['summaries'],
 ): CitableSource[] {
-  return analyses.analyses.map((analysis) => {
+  return summaries.summaries.map((summary) => {
     const content = [
-      `Question: ${analysis.userQuestion}`,
-      `Summary: ${analysis.summary}`,
-      analysis.recommendations.length > 0
-        ? `Recommendations: ${analysis.recommendations.join(', ')}`
+      `Question: ${summary.userQuestion}`,
+      `Summary: ${summary.summary}`,
+      summary.recommendations.length > 0
+        ? `Recommendations: ${summary.recommendations.join(', ')}`
         : '',
-      analysis.keyThemes ? `Key Themes: ${analysis.keyThemes}` : '',
+      summary.keyThemes ? `Key Themes: ${summary.keyThemes}` : '',
     ].filter(Boolean).join('\n');
 
     // Create unique ID from threadId + roundNumber
-    const uniqueId = `${analysis.threadId}_r${analysis.roundNumber}`;
+    const uniqueId = `${summary.threadId}_r${summary.roundNumber}`;
 
     return {
-      id: generateSourceId(CitationSourceTypes.ANALYSIS, uniqueId),
-      type: CitationSourceTypes.ANALYSIS,
+      id: generateSourceId(CitationSourceTypes.SUMMARY, uniqueId),
+      type: CitationSourceTypes.SUMMARY,
       sourceId: uniqueId,
-      title: `Analysis: ${analysis.userQuestion.slice(0, 50)}`,
+      title: `Summary: ${summary.userQuestion.slice(0, 50)}`,
       content,
       metadata: {
-        threadId: analysis.threadId,
-        threadTitle: analysis.threadTitle,
-        roundNumber: analysis.roundNumber,
+        threadId: summary.threadId,
+        threadTitle: summary.threadTitle,
+        roundNumber: summary.roundNumber,
       },
     };
   });
@@ -311,7 +311,7 @@ export async function buildCitableContext(
   const memorySources = buildMemorySources(aggregatedContext.memories);
   const threadSources = buildThreadSources(aggregatedContext.chats);
   const searchSources = buildSearchSources(aggregatedContext.searches);
-  const analysisSources = buildAnalysisSources(aggregatedContext.analyses);
+  const summarySources = buildSummarySources(aggregatedContext.summaries);
   const attachmentSources = buildAttachmentSources(aggregatedContext.attachments);
 
   // Combine all sources
@@ -319,7 +319,7 @@ export async function buildCitableContext(
     ...memorySources,
     ...threadSources,
     ...searchSources,
-    ...analysisSources,
+    ...summarySources,
     ...attachmentSources,
   ];
 
@@ -360,7 +360,7 @@ export async function buildCitableContext(
       totalMemories: aggregatedContext.memories.totalCount,
       totalThreads: aggregatedContext.chats.totalThreads,
       totalSearches: aggregatedContext.searches.totalCount,
-      totalAnalyses: aggregatedContext.analyses.totalCount,
+      totalSummaries: aggregatedContext.summaries.totalCount,
       totalAttachments: attachmentSources.length,
     },
   };

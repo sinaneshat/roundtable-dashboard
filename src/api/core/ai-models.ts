@@ -15,15 +15,15 @@
 import { ModelIdEnum } from '@/api/services/models-config.service';
 
 // ============================================================================
-// ANALYSIS MODELS
+// ROUND SUMMARY MODELS
 // ============================================================================
 
 /**
- * Model for round analysis and moderator analysis
+ * Model for round summary generation (moderator summaries)
  * ✅ ALWAYS CLAUDE 3.5 SONNET: Tested & works reliably with mode:'json' for complex schemas
  * ⚠️ DO NOT CHANGE: Claude Sonnet 4 has issues with streamObject mode:'json' - returns empty responses
  */
-export const ANALYSIS_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
+export const SUMMARY_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
 
 // ============================================================================
 // TITLE GENERATION MODELS
@@ -41,7 +41,7 @@ export const TITLE_GENERATION_MODEL_ID = ModelIdEnum.enum['google/gemini-2.0-fla
 
 /**
  * Model for web search query generation
- * Uses Claude 3.5 Sonnet - reliable structured output, same as analysis
+ * Uses Claude 3.5 Sonnet - reliable structured output, same as round summary
  */
 export const WEB_SEARCH_MODEL_ID = ModelIdEnum.enum['anthropic/claude-3.5-sonnet'];
 
@@ -61,7 +61,7 @@ export const IMAGE_ANALYSIS_MODEL_ID = ModelIdEnum.enum['google/gemini-2.0-flash
 // ============================================================================
 
 export const AIModels = {
-  ANALYSIS: ANALYSIS_MODEL_ID,
+  SUMMARY: SUMMARY_MODEL_ID,
   TITLE_GENERATION: TITLE_GENERATION_MODEL_ID,
   WEB_SEARCH: WEB_SEARCH_MODEL_ID,
   IMAGE_ANALYSIS: IMAGE_ANALYSIS_MODEL_ID,

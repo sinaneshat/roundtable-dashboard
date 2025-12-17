@@ -34,7 +34,8 @@ import { getRoundNumber } from '@/lib/utils/metadata';
 import { chatParticipantsToConfig, getParticipantModelIds, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
-import { createOptimisticUserMessage, createPlaceholderAnalysis, createPlaceholderPreSearch } from '../utils/placeholder-factories';
+import { createOptimisticUserMessage, createPlaceholderPreSearch, createPlaceholderSummary } from '../utils/placeholder-factories';
+import { getEffectiveWebSearchEnabled } from '../utils/pre-search-execution';
 import { validateInfiniteQueryCache } from './types';
 
 /**
@@ -114,7 +115,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     initializeThread: s.initializeThread,
     updateParticipants: s.updateParticipants,
     addPreSearch: s.addPreSearch,
-    addAnalysis: s.addAnalysis,
+    addSummary: s.addSummary,
     // ✅ IMMEDIATE UI FEEDBACK: For eager accordion collapse and optimistic message
     setStreamingRoundNumber: s.setStreamingRoundNumber,
     // ✅ THREAD SCREEN RESUMPTION: Required for continueFromParticipant effect
@@ -271,10 +272,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         );
       });
 
-      // ✅ EAGER RENDERING: Create placeholder analysis immediately for round 0
-      // This allows the RoundAnalysisCard to render in PENDING state with loading UI
+      // ✅ EAGER RENDERING: Create placeholder summary immediately for round 0
+      // This allows the RoundSummaryCard to render in PENDING state with loading UI
       // before participants finish streaming. Creates better UX with immediate visual feedback.
-      actions.addAnalysis(createPlaceholderAnalysis({
+      actions.addSummary(createPlaceholderSummary({
         threadId: thread.id,
         roundNumber: 0,
         mode: thread.mode,
@@ -439,7 +440,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // This ensures the pre-search accordion appears in the SAME render cycle as the user message,
       // preventing the "late accordion" issue where user message renders first without pre-search,
       // then pre-search appears in a subsequent render causing layout shift and placeholder duplications
-      if (formState.enableWebSearch) {
+      // ✅ SINGLE SOURCE OF TRUTH: Use thread state for existing threads, form state for user intent
+      const effectiveWebSearch = getEffectiveWebSearchEnabled(threadState.thread, formState.enableWebSearch);
+      if (effectiveWebSearch) {
         actions.addPreSearch(createPlaceholderPreSearch({
           threadId,
           roundNumber: nextRoundNumber,
@@ -496,32 +499,28 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         // Update participants optimistically
         actions.updateParticipants(optimisticParticipants);
 
-        // ✅ BUG FIX: Wait for PATCH completion when web search is enabled OR changes
-        // Bug report: "enabling web search mid convo won't have a record made for it
-        // and afterwards is not causing the initial searches to happen"
-        //
+        // ✅ BUG FIX: Wait for PATCH completion when config changes affect streaming
         // ROOT CAUSE: Fire-and-forget pattern causes race condition
-        // When web search is toggled but participants unchanged (no temp IDs):
-        // 1. PATCH request fires (async, not awaited)
-        // 2. Message immediately prepares and sends
-        // 3. Streaming handler fetches thread (PATCH may not have completed)
-        // 4. Thread still has old enableWebSearch value
-        // 5. No pre-search record created → participants respond without search context
+        // When PATCH runs async, streaming handler may read stale DB state
         //
-        // ✅ EXTENDED FIX: Also wait when web search is CURRENTLY ENABLED (not just changed)
-        // Even if web search didn't change between rounds, if participants/mode changed,
-        // the fire-and-forget PATCH might not complete before streaming starts
-        // This ensures thread.enableWebSearch is updated before streaming starts
-        // Streaming handler will then correctly create pre-search record (streaming.handler.ts:141-160)
+        // ✅ DUPLICATE CHANGELOG FIX: Also wait when mode changes
+        // Without this, both PATCH and streaming handler log mode change:
+        // 1. PATCH fires async (not awaited)
+        // 2. Streaming handler starts, reads old thread.mode
+        // 3. Streaming handler logs changelog (old → new)
+        // 4. PATCH completes and also logs changelog (old → new)
+        // Result: 2 duplicate changelog entries
         //
         // Performance impact: Minimal (PATCH typically completes in <100ms)
-        // Correctness impact: Critical (prevents broken web search functionality)
-        const needsWait = updateResult.hasTemporaryIds || webSearchChanged || formState.enableWebSearch;
+        // Correctness impact: Critical (prevents duplicate changelogs)
+        // ✅ SINGLE SOURCE OF TRUTH: Use effectiveWebSearch (thread state) not form state
+        const needsWait = updateResult.hasTemporaryIds || webSearchChanged || modeChanged || effectiveWebSearch;
         if (needsWait) {
           // Wait for response when:
           // 1. Creating new participants (temporary IDs)
           // 2. Web search state changed
-          // 3. Web search is currently enabled (prevents race condition on subsequent rounds)
+          // 3. Mode changed (prevents duplicate changelog entries)
+          // 4. Web search is currently enabled (prevents race condition on subsequent rounds)
           const response = await updateThreadMutation.mutateAsync({
             param: { id: threadId },
             json: {
@@ -585,7 +584,22 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Prepare for new message (sets flags, pending message, attachment IDs, and pendingFileParts)
       // On THREAD screen, this also adds optimistic user message to UI
       // ✅ FIX: Pass fileParts so pendingFileParts is set for AI SDK message creation
-      actions.prepareForNewMessage(trimmed, [], attachmentIds, fileParts);
+      // ✅ BUG FIX: Pass empty array for participantIds to PRESERVE the already-correct expectedParticipantIds
+      // Previously this passed threadState.participants which was captured at function START (stale)
+      // setExpectedParticipantIds was already called above with correct new IDs
+      // prepareForNewMessage would then OVERWRITE it with stale IDs, causing ID mismatch
+      actions.prepareForNewMessage(
+        trimmed,
+        [], // Don't overwrite - expectedParticipantIds already set correctly above
+        attachmentIds,
+        fileParts,
+      );
+
+      // ✅ FIX: Set nextParticipantToTrigger for thread screen resumption (rounds 2+)
+      // BUG FIX: handleCreateThread sets this (line 330) but handleUpdateThreadAndSend didn't
+      // Without this, if user refreshes during round 2+ streaming, continueFromParticipant
+      // effect can't resume because nextParticipantToTrigger is null (cleared by prepareForNewMessage)
+      actions.setNextParticipantToTrigger(0);
 
       // ✅ FIX: Clear input AFTER prepareForNewMessage so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through

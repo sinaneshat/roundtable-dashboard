@@ -4,39 +4,40 @@
  * Pending Message Hook
  *
  * Watches for pending message conditions and triggers send.
- * Handles pre-search creation before participant streaming.
+ * Adds placeholder pre-search for web search rounds (no API call - execute auto-creates).
  */
 
 import type { MutableRefObject } from 'react';
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
-import { AnalysisStatuses, ScreenModes } from '@/api/core/enums';
-import { transformPreSearch } from '@/lib/utils/date-transforms';
+import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { getEnabledParticipantModelIds } from '@/lib/utils/participant';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { extractFileContextForSearch } from '@/lib/utils/web-search-utils';
 import type { ChatStoreApi } from '@/stores/chat';
+import { getEffectiveWebSearchEnabled } from '@/stores/chat';
 
-import type { ChatHook, CreatePreSearchMutation } from '../types';
+import type { ChatHook } from '../types';
 
 type UsePendingMessageParams = {
   store: ChatStoreApi;
   chat: ChatHook;
   sendMessageRef: MutableRefObject<ChatHook['sendMessage']>;
-  preSearchCreationAttemptedRef: MutableRefObject<Set<number>>;
-  createPreSearch: CreatePreSearchMutation;
 };
 
 /**
  * Handles pending message send with pre-search orchestration
+ *
+ * When web search is enabled, adds a placeholder pre-search to the store.
+ * PreSearchStream component handles execution via executePreSearchStreamService,
+ * which auto-creates the DB record if it doesn't exist.
+ *
+ * This eliminates the separate create API call - execute handles everything.
  */
 export function usePendingMessage({
   store,
   chat,
   sendMessageRef,
-  preSearchCreationAttemptedRef,
-  createPreSearch,
 }: UsePendingMessageParams) {
   // Subscribe to necessary store state
   const pendingMessage = useStore(store, s => s.pendingMessage);
@@ -49,7 +50,7 @@ export function usePendingMessage({
   const preSearches = useStore(store, s => s.preSearches);
   const messages = useStore(store, s => s.messages);
   const thread = useStore(store, s => s.thread);
-  const enableWebSearch = useStore(store, s => s.enableWebSearch);
+  const formEnableWebSearch = useStore(store, s => s.enableWebSearch);
   const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
 
   useEffect(() => {
@@ -67,6 +68,13 @@ export function usePendingMessage({
 
     // Race condition guards
     if (chat.isStreamingRef.current || chat.isTriggeringRef.current) {
+      return;
+    }
+
+    // ✅ FIX: Wait for AI SDK to be ready before sending
+    // Without this, sendMessage may reference a destroyed Chat instance
+    // causing "Cannot read properties of undefined (reading 'state')" error
+    if (!chat.isReady) {
       return;
     }
 
@@ -95,68 +103,41 @@ export function usePendingMessage({
     }
 
     // newRoundNumber already calculated at top of effect
-    const webSearchEnabled = enableWebSearch;
+    // Thread state is source of truth for existing threads; form state for new chats
+    const webSearchEnabled = getEffectiveWebSearchEnabled(thread, formEnableWebSearch);
     const preSearchForRound = Array.isArray(preSearches)
       ? preSearches.find(ps => ps.roundNumber === newRoundNumber)
       : undefined;
 
-    // Create pre-search if needed
-    if (webSearchEnabled && !preSearchForRound) {
-      const alreadyAttempted = preSearchCreationAttemptedRef.current.has(newRoundNumber);
-      if (!alreadyAttempted) {
-        preSearchCreationAttemptedRef.current.add(newRoundNumber);
-      }
+    // Handle web search: add placeholder or wait for completion
+    if (webSearchEnabled) {
+      // No pre-search yet - add placeholder (execute endpoint auto-creates DB record)
+      if (!preSearchForRound) {
+        const currentState = store.getState();
+        if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
+          return;
+        }
 
-      const currentState = store.getState();
-      if (currentState.hasPreSearchBeenTriggered(newRoundNumber)) {
-        return;
-      }
-
-      if (alreadyAttempted) {
-        // Fall through to send without pre-search
-      } else {
-        // ✅ PROGRESSIVE UI FIX: Provider only creates pre-search record, does NOT execute stream
-        // PreSearchStream component handles execution with flushSync for progressive updates
-        // Previously provider executed stream and used store updates (batched by React 18)
-        // which caused users to see only final state, not progressive updates
-
-        const effectiveThreadId = thread?.id || '';
-        queueMicrotask(async () => {
-          const attachments = store.getState().getAttachments();
-          const fileContext = await extractFileContextForSearch(attachments);
-          const attachmentIds = store.getState().pendingAttachmentIds || undefined;
-
-          createPreSearch.mutateAsync({
-            param: { threadId: effectiveThreadId, roundNumber: newRoundNumber.toString() },
-            json: { userQuery: pendingMessage, fileContext: fileContext || undefined, attachmentIds },
-          }).then((createResponse) => {
-            if (createResponse && createResponse.data) {
-              const preSearchWithDates = transformPreSearch(createResponse.data);
-              // ✅ PROGRESSIVE UI FIX: Set status to PENDING, not STREAMING
-              // PreSearchStream will set STREAMING when it starts execution
-              store.getState().addPreSearch({
-                ...preSearchWithDates,
-                status: AnalysisStatuses.PENDING,
-              });
-            }
-            // ✅ PROGRESSIVE UI FIX: DO NOT execute stream here
-            // Let PreSearchStream handle execution with flushSync for immediate UI updates
-          }).catch((error) => {
-            console.error('[ChatStoreProvider] Failed to create pre-search record:', error);
-          });
+        // Add placeholder pre-search to store - PreSearchStream will execute
+        // Execute endpoint auto-creates DB record, so no separate create call needed
+        const effectiveThreadId = thread?.id || currentState.createdThreadId || '';
+        currentState.addPreSearch({
+          id: `placeholder-presearch-${effectiveThreadId}-${newRoundNumber}`,
+          threadId: effectiveThreadId,
+          roundNumber: newRoundNumber,
+          userQuery: pendingMessage,
+          status: MessageStatuses.PENDING,
+          searchData: null,
+          createdAt: new Date(),
+          completedAt: null,
+          errorMessage: null,
         });
         return;
       }
-    }
 
-    // Handle pre-search execution state
-    // ✅ PROGRESSIVE UI FIX: Provider does NOT execute pre-search streams
-    // PreSearchStream component handles all execution with flushSync for progressive updates
-    // Provider only waits for pre-search to complete before sending participant messages
-    if (webSearchEnabled && preSearchForRound) {
-      // Still streaming or pending - wait for PreSearchStream to complete it
-      if (preSearchForRound.status === AnalysisStatuses.STREAMING
-        || preSearchForRound.status === AnalysisStatuses.PENDING) {
+      // Pre-search exists but not complete - wait for PreSearchStream to finish
+      if (preSearchForRound.status === MessageStatuses.STREAMING
+        || preSearchForRound.status === MessageStatuses.PENDING) {
         return;
       }
     }
@@ -186,9 +167,11 @@ export function usePendingMessage({
         console.error('[Provider:pendingMessage] sendMessage threw error:', error);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     store,
+    chat.isReady,
+    chat.isStreamingRef,
+    chat.isTriggeringRef,
     pendingMessage,
     expectedParticipantIds,
     hasSentPendingMessage,
@@ -199,8 +182,8 @@ export function usePendingMessage({
     preSearches,
     messages,
     thread,
-    enableWebSearch,
-    createPreSearch,
+    formEnableWebSearch,
+    waitingToStart,
     sendMessageRef,
   ]);
 }

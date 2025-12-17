@@ -17,6 +17,7 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
+import { ScreenModes } from '@/api/core/enums';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
@@ -40,6 +41,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
   const storeMessages = useStore(store, s => s.messages);
   const storePreSearches = useStore(store, s => s.preSearches);
   const storeThread = useStore(store, s => s.thread);
+  const storeScreenMode = useStore(store, s => s.screenMode);
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
   // chat object changes frequently (messages, streaming state), but we specifically
@@ -115,6 +117,15 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // ✅ RACE CONDITION FIX: Don't handle streaming on OVERVIEW screen
+    // useStreamingTrigger handles OVERVIEW screen streaming via startRound()
+    // This hook is for THREAD screen resumption via continueFromParticipant()
+    // Without this check, both hooks race when waitingToStartStreaming becomes true
+    // after thread creation, causing duplicate streaming attempts
+    if (storeScreenMode === ScreenModes.OVERVIEW) {
+      return;
+    }
+
     // Generate unique key for this resumption attempt
     const threadId = storeThread?.id || 'unknown';
     const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${nextParticipantToTrigger}`;
@@ -145,6 +156,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           || latestState.isStreaming
           || latestParticipants.length === 0
           || latestMessages.length === 0
+          || latestState.screenMode === ScreenModes.OVERVIEW // ✅ RACE FIX: Let useStreamingTrigger handle overview
         ) {
           return;
         }
@@ -204,7 +216,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         retryTimeoutRef.current = null;
       }
     };
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, chat, store]);
 
   // Safety timeout for thread screen resumption
   useEffect(() => {

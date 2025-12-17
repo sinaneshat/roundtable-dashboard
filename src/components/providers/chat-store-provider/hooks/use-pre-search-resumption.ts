@@ -24,7 +24,7 @@ import type { MutableRefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -92,7 +92,7 @@ export function usePreSearchResumption({
     }
 
     // Only handle STREAMING status that needs resumption
-    if (currentRoundPreSearch.status !== AnalysisStatuses.STREAMING) {
+    if (currentRoundPreSearch.status !== MessageStatuses.STREAMING) {
       return;
     }
 
@@ -152,7 +152,7 @@ export function usePreSearchResumption({
 
           if (!response.ok) {
             console.error('[usePreSearchResumption] Pre-search resumption failed:', response.status);
-            store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.FAILED);
+            store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
             store.getState().clearPreSearchActivity(currentRound);
             return;
           }
@@ -167,7 +167,7 @@ export function usePreSearchResumption({
           if (searchData) {
             store.getState().updatePreSearchData(currentRound, searchData);
           } else {
-            store.getState().updatePreSearchStatus(currentRound, AnalysisStatuses.COMPLETE);
+            store.getState().updatePreSearchStatus(currentRound, MessageStatuses.COMPLETE);
           }
 
           store.getState().clearPreSearchActivity(currentRound);

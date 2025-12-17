@@ -72,9 +72,6 @@ export {
 // ============================================================================
 
 export {
-  type CreatePreSearchRequest,
-  type CreatePreSearchResponse,
-  createPreSearchService,
   executePreSearchStreamService,
   type GetThreadPreSearchesRequest,
   type GetThreadPreSearchesResponse,
@@ -117,24 +114,19 @@ export {
 // ============================================================================
 
 export {
-  type AnalyzeRoundRequest,
-  type AnalyzeRoundResponse,
   type CreateThreadRequest,
   type CreateThreadResponse,
   createThreadService,
   type DeleteThreadRequest,
   type DeleteThreadResponse,
   deleteThreadService,
-  // Analysis resume service for stream resumption
-  type GetAnalysisResumeRequest,
-  type GetAnalysisResumeResponse,
-  getAnalysisResumeService,
   type GetPublicThreadRequest,
   type GetPublicThreadResponse,
   getPublicThreadService,
-  type GetThreadAnalysesRequest,
-  type GetThreadAnalysesResponse,
-  getThreadAnalysesService,
+  // Summary resume service for stream resumption
+  type GetSummaryResumeRequest,
+  type GetSummaryResumeResponse,
+  getSummaryResumeService,
   type GetThreadBySlugRequest,
   type GetThreadBySlugResponse,
   getThreadBySlugService,
@@ -153,9 +145,14 @@ export {
   type GetThreadStreamResumptionStateRequest,
   type GetThreadStreamResumptionStateResponse,
   getThreadStreamResumptionStateService,
+  type GetThreadSummariesRequest,
+  type GetThreadSummariesResponse,
+  getThreadSummariesService,
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,
+  type SummarizeRoundRequest,
+  type SummarizeRoundResponse,
   type UpdateThreadRequest,
   type UpdateThreadResponse,
   updateThreadService,
@@ -349,7 +346,7 @@ export {
 } from './usage';
 
 // ============================================================================
-// Chat Analysis Service Exports
+// Chat Summary Service Exports
 // ============================================================================
-// ✅ CONSOLIDATED: Analysis exports now part of chat-threads service
-// GetThreadAnalysesRequest/Response/Service exported above from './chat-threads'
+// ✅ CONSOLIDATED: Summary exports now part of chat-threads service
+// GetThreadSummariesRequest/Response/Service exported above from './chat-threads'

@@ -482,20 +482,20 @@ async function executeToolInternal(
       }
 
       // ----------------------------------------------------------------------
-      // Analysis
+      // Summary
       // ----------------------------------------------------------------------
       case 'generate_analysis': {
         const parsed = GenerateAnalysisInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
-        return await toolGenerateAnalysis(parsed.data, user, db);
+        return await toolGenerateSummary(parsed.data, user, db);
       }
 
       case 'get_round_analysis': {
         const parsed = GetRoundAnalysisInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
-        return await toolGetRoundAnalysis(parsed.data, user, db);
+        return await toolGetRoundSummary(parsed.data, user, db);
       }
 
       // ----------------------------------------------------------------------
@@ -966,29 +966,29 @@ async function toolRoundFeedback(
   return mcpResult({ feedback: input.feedback, saved: true });
 }
 
-async function toolGenerateAnalysis(
+async function toolGenerateSummary(
   input: GenerateAnalysisInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<ToolCallResult> {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
-  // Note: Full analysis generation requires streaming - return guidance
+  // Note: Full summary generation requires streaming - return guidance
   return mcpResult({
-    note: 'Analysis generation requires streaming. Use POST /api/v1/chat/threads/:id/rounds/:roundNumber/analyze instead.',
+    note: 'Summary generation requires streaming. Use POST /api/v1/chat/threads/:id/rounds/:roundNumber/analyze instead.',
     threadId: input.threadId,
     roundNumber: input.roundNumber,
   });
 }
 
-async function toolGetRoundAnalysis(
+async function toolGetRoundSummary(
   input: GetRoundAnalysisInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<ToolCallResult> {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
-  const analysis = await db.query.chatModeratorAnalysis.findFirst({
+  const summary = await db.query.chatModeratorAnalysis.findFirst({
     where: and(
       eq(tables.chatModeratorAnalysis.threadId, input.threadId),
       eq(tables.chatModeratorAnalysis.roundNumber, input.roundNumber),
@@ -996,15 +996,15 @@ async function toolGetRoundAnalysis(
     orderBy: [desc(tables.chatModeratorAnalysis.createdAt)],
   });
 
-  if (!analysis) {
-    return mcpError(`No analysis found for round ${input.roundNumber}`);
+  if (!summary) {
+    return mcpError(`No summary found for round ${input.roundNumber}`);
   }
 
   return mcpResult({
-    analysisId: analysis.id,
-    roundNumber: analysis.roundNumber,
-    status: analysis.status,
-    data: analysis.analysisData,
+    summaryId: summary.id,
+    roundNumber: summary.roundNumber,
+    status: summary.status,
+    data: summary.summaryData,
   });
 }
 

@@ -95,30 +95,30 @@ export type GetThreadChangelogResponse = InferResponseType<
   ApiClientType['chat']['threads'][':id']['changelog']['$get']
 >;
 
-export type GetThreadAnalysesRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':id']['analyses']['$get']
+export type GetThreadSummariesRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':id']['summaries']['$get']
 >;
 
-export type GetThreadAnalysesResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':id']['analyses']['$get']
+export type GetThreadSummariesResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':id']['summaries']['$get']
 >;
 
-// Analysis types - for streaming object generation
-export type AnalyzeRoundRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['$post']
+// Round summary types - for streaming object generation
+export type SummarizeRoundRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['$post']
 >;
 
-export type AnalyzeRoundResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['$post']
+export type SummarizeRoundResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['$post']
 >;
 
-// Analysis resume types - for stream resumption
-export type GetAnalysisResumeRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['resume']['$get']
+// Summary resume types - for stream resumption
+export type GetSummaryResumeRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['resume']['$get']
 >;
 
-export type GetAnalysisResumeResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['resume']['$get']
+export type GetSummaryResumeResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['resume']['$get']
 >;
 
 // ============================================================================
@@ -288,28 +288,28 @@ export async function getThreadChangelogService(data: GetThreadChangelogRequest)
 }
 
 /**
- * Get moderator analyses for a thread
+ * Get round summaries for a thread
  * Protected endpoint - requires authentication (ownership check)
  *
- * Returns all moderator analyses for a thread ordered by round number.
+ * Returns all round summaries for a thread ordered by round number.
  *
  * @param data - Request with param.id for thread ID
  */
-export async function getThreadAnalysesService(data: GetThreadAnalysesRequest) {
+export async function getThreadSummariesService(data: GetThreadSummariesRequest) {
   const client = await createApiClient();
   // Internal fallback: ensure param exists
-  const params: GetThreadAnalysesRequest = {
+  const params: GetThreadSummariesRequest = {
     param: data.param ?? { id: '' },
   };
-  return parseResponse(client.chat.threads[':id'].analyses.$get(params));
+  return parseResponse(client.chat.threads[':id'].summaries.$get(params));
 }
 
 /**
- * Get analysis resume buffer for stream resumption
+ * Get summary resume buffer for stream resumption
  * Protected endpoint - requires authentication (ownership check)
  *
  * ✅ PATTERN: Returns raw Response for custom header handling
- * Used by ModeratorAnalysisStream to resume buffered analysis streams
+ * Used by RoundSummaryStream to resume buffered summary streams
  *
  * Response codes:
  * - 200: Buffer available with X-Stream-Status header
@@ -321,13 +321,13 @@ export async function getThreadAnalysesService(data: GetThreadAnalysesRequest) {
  *
  * @param data - Request with param.threadId and param.roundNumber
  */
-export async function getAnalysisResumeService(data: GetAnalysisResumeRequest) {
+export async function getSummaryResumeService(data: GetSummaryResumeRequest) {
   const client = await createApiClient();
   // Internal fallback: ensure param exists
-  const params: GetAnalysisResumeRequest = {
+  const params: GetSummaryResumeRequest = {
     param: data.param ?? { threadId: '', roundNumber: '' },
   };
-  return client.chat.threads[':threadId'].rounds[':roundNumber'].analyze.resume.$get(params);
+  return client.chat.threads[':threadId'].rounds[':roundNumber'].summarize.resume.$get(params);
 }
 
 // ============================================================================

@@ -7,7 +7,7 @@
  * - Each round begins with a user message
  * - Optional pre-search (web search) phase
  * - Sequential participant responses (round-robin)
- * - Optional round summary/analysis
+ * - Optional round summary
  * - Round completes when all participants respond
  *
  * Key Validations:
@@ -20,13 +20,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons } from '@/api/core/enums';
+import { FinishReasons, MESSAGE_STATUSES as MessageStatuses } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
-  createMockAnalysis,
   createMockParticipant,
   createMockStoredPreSearch,
+  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
@@ -404,34 +404,34 @@ describe('round State Transitions', () => {
 describe('pre-Search Phase', () => {
   describe('blocking Behavior', () => {
     it('participants wait for pre-search when enabled', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.STREAMING);
+      const preSearch = createMockStoredPreSearch(0, MessageStatuses.STREAMING);
       const enableWebSearch = true;
 
       const shouldWait = enableWebSearch
-        && (preSearch.status === AnalysisStatuses.PENDING
-          || preSearch.status === AnalysisStatuses.STREAMING);
+        && (preSearch.status === MessageStatuses.PENDING
+          || preSearch.status === MessageStatuses.STREAMING);
 
       expect(shouldWait).toBe(true);
     });
 
     it('participants proceed when pre-search complete', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE);
+      const preSearch = createMockStoredPreSearch(0, MessageStatuses.COMPLETE);
       const enableWebSearch = true;
 
       const shouldWait = enableWebSearch
-        && (preSearch.status === AnalysisStatuses.PENDING
-          || preSearch.status === AnalysisStatuses.STREAMING);
+        && (preSearch.status === MessageStatuses.PENDING
+          || preSearch.status === MessageStatuses.STREAMING);
 
       expect(shouldWait).toBe(false);
     });
 
     it('participants proceed when web search disabled', () => {
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.STREAMING);
+      const preSearch = createMockStoredPreSearch(0, MessageStatuses.STREAMING);
       const enableWebSearch = false;
 
       const shouldWait = enableWebSearch
-        && (preSearch.status === AnalysisStatuses.PENDING
-          || preSearch.status === AnalysisStatuses.STREAMING);
+        && (preSearch.status === MessageStatuses.PENDING
+          || preSearch.status === MessageStatuses.STREAMING);
 
       expect(shouldWait).toBe(false);
     });
@@ -440,9 +440,9 @@ describe('pre-Search Phase', () => {
   describe('pre-Search Per Round', () => {
     it('each round has its own pre-search', () => {
       const preSearches = [
-        createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE),
-        createMockStoredPreSearch(1, AnalysisStatuses.STREAMING),
-        createMockStoredPreSearch(2, AnalysisStatuses.PENDING),
+        createMockStoredPreSearch(0, MessageStatuses.COMPLETE),
+        createMockStoredPreSearch(1, MessageStatuses.STREAMING),
+        createMockStoredPreSearch(2, MessageStatuses.PENDING),
       ];
 
       expect(preSearches[0]?.roundNumber).toBe(0);
@@ -452,25 +452,25 @@ describe('pre-Search Phase', () => {
 
     it('finds correct pre-search for round', () => {
       const preSearches = [
-        createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE),
-        createMockStoredPreSearch(1, AnalysisStatuses.STREAMING),
+        createMockStoredPreSearch(0, MessageStatuses.COMPLETE),
+        createMockStoredPreSearch(1, MessageStatuses.STREAMING),
       ];
 
       const currentRound = 1;
       const currentPreSearch = preSearches.find(ps => ps.roundNumber === currentRound);
 
-      expect(currentPreSearch?.status).toBe(AnalysisStatuses.STREAMING);
+      expect(currentPreSearch?.status).toBe(MessageStatuses.STREAMING);
     });
   });
 });
 
 // ============================================================================
-// ROUND ANALYSIS PHASE TESTS
+// ROUND SUMMARY PHASE TESTS
 // ============================================================================
 
-describe('round Analysis Phase', () => {
-  describe('analysis Trigger Conditions', () => {
-    it('analysis triggered after all participants complete', () => {
+describe('round Summary Phase', () => {
+  describe('summary Trigger Conditions', () => {
+    it('summary triggered after all participants complete', () => {
       const round = createCompleteRound(0, 3, {
         participantFinishReasons: [FinishReasons.STOP, FinishReasons.STOP, FinishReasons.STOP],
       });
@@ -484,7 +484,7 @@ describe('round Analysis Phase', () => {
       expect(allComplete).toBe(true);
     });
 
-    it('analysis NOT triggered when participants incomplete', () => {
+    it('summary NOT triggered when participants incomplete', () => {
       const round = createCompleteRound(0, 2, {
         participantFinishReasons: [FinishReasons.STOP, FinishReasons.UNKNOWN],
       });
@@ -497,27 +497,27 @@ describe('round Analysis Phase', () => {
     });
   });
 
-  describe('analysis Per Round', () => {
-    it('each round can have its own analysis', () => {
-      const analyses = [
-        createMockAnalysis(0, AnalysisStatuses.COMPLETE),
-        createMockAnalysis(1, AnalysisStatuses.STREAMING),
+  describe('summary Per Round', () => {
+    it('each round can have its own summary', () => {
+      const summaries = [
+        createMockSummary(0, MessageStatuses.COMPLETE),
+        createMockSummary(1, MessageStatuses.STREAMING),
       ];
 
-      expect(analyses[0]?.roundNumber).toBe(0);
-      expect(analyses[1]?.roundNumber).toBe(1);
+      expect(summaries[0]?.roundNumber).toBe(0);
+      expect(summaries[1]?.roundNumber).toBe(1);
     });
 
-    it('finds correct analysis for round', () => {
-      const analyses = [
-        createMockAnalysis(0, AnalysisStatuses.COMPLETE),
-        createMockAnalysis(1, AnalysisStatuses.STREAMING),
+    it('finds correct summary for round', () => {
+      const summaries = [
+        createMockSummary(0, MessageStatuses.COMPLETE),
+        createMockSummary(1, MessageStatuses.STREAMING),
       ];
 
       const currentRound = 1;
-      const currentAnalysis = analyses.find(a => a.roundNumber === currentRound);
+      const currentSummary = summaries.find(s => s.roundNumber === currentRound);
 
-      expect(currentAnalysis?.status).toBe(AnalysisStatuses.STREAMING);
+      expect(currentSummary?.status).toBe(MessageStatuses.STREAMING);
     });
   });
 });

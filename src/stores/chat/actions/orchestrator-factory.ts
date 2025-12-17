@@ -2,29 +2,26 @@
  * Generic Orchestrator Factory
  *
  * Creates type-safe orchestrator hooks for syncing server data to Zustand store.
- * Eliminates code duplication between analysis-orchestrator.ts and pre-search-orchestrator.ts
+ * Eliminates code duplication between summary-orchestrator.ts and pre-search-orchestrator.ts
  *
  * PATTERN: Factory function with generics for reusable orchestration logic
  * USAGE: Create specialized orchestrators by providing configuration
  *
- * ✅ DRY: Single implementation for all orchestrators
- * ✅ TYPE-SAFE: Full generic constraints and inference
- * ✅ PERFORMANCE: Shallow comparison, optimized merging
- *
- * Location: /src/stores/chat/actions/orchestrator-factory.ts
- * Used by: analysis-orchestrator.ts, pre-search-orchestrator.ts
+ * DRY: Single implementation for all orchestrators
+ * TYPE-SAFE: Full generic constraints and inference
+ * PERFORMANCE: Shallow comparison, optimized merging
  *
  * @example
- * const useAnalysisOrchestrator = createOrchestrator({
- *   queryHook: useThreadAnalysesQuery,
- *   storeSelector: s => s.analyses,
- *   storeSetter: s => s.setAnalyses,
+ * const useSummaryOrchestrator = createOrchestrator({
+ *   queryHook: useThreadSummariesQuery,
+ *   storeSelector: s => s.summaries,
+ *   storeSetter: s => s.setSummaries,
  *   extractItems: response => response?.data?.items || [],
- *   transformItems: transformModeratorAnalyses,
+ *   transformItems: transformRoundSummaries,
  *   getItemKey: item => item.roundNumber,
  *   getItemPriority: item => getStatusPriority(item.status),
- *   compareKeys: ['roundNumber', 'status', 'id', 'analysisData'],
- *   deduplicationHook: useAnalysisDeduplication,
+ *   compareKeys: ['roundNumber', 'status', 'id', 'summaryData'],
+ *   deduplicationHook: useSummaryDeduplication,
  * });
  */
 
@@ -105,14 +102,14 @@ export type OrchestratorConfig<
 
   /**
    * Properties to compare for change detection
-   * @example ['roundNumber', 'status', 'id', 'analysisData']
+   * @example ['roundNumber', 'status', 'id', 'summaryData']
    */
   compareKeys: (keyof TItem)[];
 
   /**
    * Optional deduplication hook for additional processing
-   * ✅ TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
-   * @example useAnalysisDeduplication
+   * TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
+   * @example useSummaryDeduplication
    */
   deduplicationHook?: (
     items: TItem[],
@@ -177,21 +174,21 @@ export type OrchestratorReturn = {
  * @returns Hook function for orchestrating data sync
  *
  * @example
- * // Create analysis orchestrator
- * const useAnalysisOrchestrator = createOrchestrator({
- *   queryHook: useThreadAnalysesQuery,
- *   storeSelector: s => s.analyses,
- *   storeSetter: s => s.setAnalyses,
+ * // Create summary orchestrator
+ * const useSummaryOrchestrator = createOrchestrator({
+ *   queryHook: useThreadSummariesQuery,
+ *   storeSelector: s => s.summaries,
+ *   storeSetter: s => s.setSummaries,
  *   extractItems: response => response?.data?.items || [],
- *   transformItems: transformModeratorAnalyses,
+ *   transformItems: transformRoundSummaries,
  *   getItemKey: item => item.roundNumber,
  *   getItemPriority: item => getStatusPriority(item.status),
- *   compareKeys: ['roundNumber', 'status', 'id', 'analysisData'],
- *   deduplicationHook: useAnalysisDeduplication,
+ *   compareKeys: ['roundNumber', 'status', 'id', 'summaryData'],
+ *   deduplicationHook: useSummaryDeduplication,
  * });
  *
  * // Use in component
- * const { isLoading } = useAnalysisOrchestrator({
+ * const { isLoading } = useSummaryOrchestrator({
  *   threadId: 'thread-123',
  *   enabled: true
  * });

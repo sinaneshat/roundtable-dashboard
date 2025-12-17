@@ -3,8 +3,8 @@ import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useState } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { MessageStatuses } from '@/api/core/enums';
+import type { RoundSummaryAIContent, StoredRoundSummary } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -19,12 +19,12 @@ import { RoundSummaryPanel } from './round-summary-panel';
 import { RoundSummaryStream } from './round-summary-stream';
 
 type RoundSummaryCardProps = {
-  analysis: StoredModeratorAnalysis;
+  summary: StoredRoundSummary;
   threadId: string;
   isLatest?: boolean;
   className?: string;
   onStreamStart?: () => void;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error | null) => void;
+  onStreamComplete?: (completedSummaryData?: RoundSummaryAIContent | null, error?: Error | null) => void;
   streamingRoundNumber?: number | null;
   demoOpen?: boolean;
   demoShowContent?: boolean;
@@ -36,7 +36,7 @@ type RoundSummaryCardProps = {
  * Displays a simple summary of what happened in each round.
  */
 export function RoundSummaryCard({
-  analysis,
+  summary,
   threadId,
   isLatest = false,
   className,
@@ -51,11 +51,11 @@ export function RoundSummaryCard({
   // Status configuration for badge styling
   const statusConfig = {
     pending: {
-      label: t('analyzing'),
+      label: t('summarizing'),
       color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     },
     streaming: {
-      label: t('analyzing'),
+      label: t('summarizing'),
       color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     },
     complete: {
@@ -67,7 +67,7 @@ export function RoundSummaryCard({
       color: 'bg-red-500/10 text-red-500 border-red-500/20',
     },
   } as const;
-  const config = statusConfig[analysis.status];
+  const config = statusConfig[summary.status as keyof typeof statusConfig];
 
   // Manual control state with round tracking
   const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
@@ -83,14 +83,14 @@ export function RoundSummaryCard({
   }, [manualControl, streamingRoundNumber]);
 
   // Disable accordion interaction during streaming/pending
-  const isStreamingOrPending = analysis.status === AnalysisStatuses.STREAMING
-    || analysis.status === AnalysisStatuses.PENDING;
+  const isStreamingOrPending = summary.status === MessageStatuses.STREAMING
+    || summary.status === MessageStatuses.PENDING;
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (isStreamingOrPending)
       return;
-    setManualControl({ round: analysis.roundNumber, open });
-  }, [isStreamingOrPending, analysis.roundNumber]);
+    setManualControl({ round: summary.roundNumber, open });
+  }, [isStreamingOrPending, summary.roundNumber]);
 
   // Derived accordion state: demoOpen > valid manual control > isLatest
   const isOpen = useMemo(() => {
@@ -102,7 +102,7 @@ export function RoundSummaryCard({
   }, [demoOpen, isManualControlValid, manualControl, isLatest]);
 
   return (
-    <div className={cn('w-full py-1.5', className)}>
+    <div className={cn('w-full pt-6 pb-1.5', className)}>
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}
@@ -114,7 +114,7 @@ export function RoundSummaryCard({
             <div className="flex items-center gap-2 w-full min-w-0">
               <Clock className="size-4 text-muted-foreground flex-shrink-0" />
               <span className="text-sm font-medium whitespace-nowrap">
-                {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
+                {t('roundSummary', { number: getDisplayRoundNumber(summary.roundNumber) })}
               </span>
               <Badge
                 variant="outline"
@@ -128,7 +128,7 @@ export function RoundSummaryCard({
               <div className="hidden sm:flex items-center gap-2 flex-shrink-0 ml-auto">
                 <span className="text-sm text-muted-foreground">•</span>
                 <span className="text-xs text-muted-foreground capitalize">
-                  {t(`mode.${analysis.mode}`)}
+                  {t(`mode.${summary.mode}`)}
                 </span>
               </div>
             </div>
@@ -137,24 +137,24 @@ export function RoundSummaryCard({
         <ChainOfThoughtContent>
           {(demoShowContent === undefined || demoShowContent) && (
             <FadeIn duration={0.25}>
-              {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
+              {(summary.status === MessageStatuses.PENDING || summary.status === MessageStatuses.STREAMING)
                 ? (
                     <RoundSummaryStream
                       threadId={threadId}
-                      analysis={analysis}
+                      summary={summary}
                       onStreamStart={onStreamStart}
                       onStreamComplete={onStreamComplete}
                     />
                   )
-                : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
+                : summary.status === MessageStatuses.COMPLETE && summary.summaryData
                   ? (
-                      <RoundSummaryPanel analysis={analysis} />
+                      <RoundSummaryPanel summary={summary} />
                     )
-                  : (analysis.status === AnalysisStatuses.FAILED || (analysis.status === AnalysisStatuses.COMPLETE && !analysis.analysisData))
+                  : (summary.status === MessageStatuses.FAILED || (summary.status === MessageStatuses.COMPLETE && !summary.summaryData))
                       ? (
                           <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
                             <span className="size-1.5 rounded-full bg-destructive/80" />
-                            <span>{t('errorAnalyzing')}</span>
+                            <span>{t('errorSummarizing')}</span>
                           </div>
                         )
                       : null}

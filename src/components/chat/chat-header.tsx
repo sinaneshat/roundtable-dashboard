@@ -162,10 +162,10 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   const isStreaming = useChatStore(s => s.isStreaming);
   const isCreatingThread = useChatStore(s => s.isCreatingThread);
   const waitingToStartStreaming = useChatStore(s => s.waitingToStartStreaming);
-  const isCreatingAnalysis = useChatStore(s => s.isCreatingAnalysis);
+  const isCreatingSummary = useChatStore(s => s.isCreatingSummary);
 
   // Show glass header on mobile when thread flow is active (placeholders, pending, or streaming)
-  const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isCreatingAnalysis;
+  const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isCreatingSummary;
   const showGlassEffect = !showInitialUI && isThreadFlowActive;
 
   return (

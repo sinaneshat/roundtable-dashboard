@@ -15,12 +15,12 @@
  * - status: Pre-search status changes
  * - query-generated: Search query with rationale
  * - search-result: Individual search results
- * - analysis: Search analysis summary
+ * - summary: Search summary
  *
- * Analysis Events:
- * - status: Analysis status changes
- * - key-insight: Analysis key insights
- * - participant-analysis: Per-participant analysis
+ * Summary Events:
+ * - status: Summary status changes
+ * - key-insight: Summary key insights
+ * - participant-summary: Per-participant summary
  * - verdict: Final verdict
  *
  * Key Validations:
@@ -32,7 +32,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
@@ -256,23 +256,23 @@ describe('pre-Search SSE Events', () => {
   describe('status Event', () => {
     it('parses status change to streaming', () => {
       const eventString = createSSEEventString('status', {
-        status: AnalysisStatuses.STREAMING,
+        status: MessageStatuses.STREAMING,
       });
 
       const parsed = parseSSEEvent(eventString);
 
       expect(parsed?.event).toBe('status');
-      expect(parsed?.data.status).toBe(AnalysisStatuses.STREAMING);
+      expect(parsed?.data.status).toBe(MessageStatuses.STREAMING);
     });
 
     it('parses status change to complete', () => {
       const eventString = createSSEEventString('status', {
-        status: AnalysisStatuses.COMPLETE,
+        status: MessageStatuses.COMPLETE,
       });
 
       const parsed = parseSSEEvent(eventString);
 
-      expect(parsed?.data.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(parsed?.data.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 
@@ -352,25 +352,25 @@ describe('pre-Search SSE Events', () => {
     });
   });
 
-  describe('analysis Event', () => {
-    it('parses pre-search analysis summary', () => {
-      const eventString = createSSEEventString('analysis', {
-        analysis: 'Based on the search results, the key findings are...',
+  describe('summary Event', () => {
+    it('parses pre-search summary', () => {
+      const eventString = createSSEEventString('summary', {
+        summary: 'Based on the search results, the key findings are...',
       });
 
       const parsed = parseSSEEvent(eventString);
 
-      expect(parsed?.event).toBe('analysis');
-      expect(parsed?.data.analysis).toContain('key findings');
+      expect(parsed?.event).toBe('summary');
+      expect(parsed?.data.summary).toContain('key findings');
     });
   });
 });
 
 // ============================================================================
-// MODERATOR ANALYSIS SSE EVENTS
+// MODERATOR SUMMARY SSE EVENTS
 // ============================================================================
 
-describe('moderator Analysis SSE Events', () => {
+describe('moderator Summary SSE Events', () => {
   describe('key-insight Event', () => {
     it('parses key insight', () => {
       const eventString = createSSEEventString('key-insight', {
@@ -402,12 +402,12 @@ describe('moderator Analysis SSE Events', () => {
     });
   });
 
-  describe('participant-analysis Event', () => {
-    it('parses per-participant analysis', () => {
-      const eventString = createSSEEventString('participant-analysis', {
+  describe('participant-summary Event', () => {
+    it('parses per-participant summary', () => {
+      const eventString = createSSEEventString('participant-summary', {
         participantId: 'participant-0',
         participantIndex: 0,
-        summary: 'This participant provided a comprehensive analysis...',
+        summary: 'This participant provided a comprehensive summary...',
         strengths: ['Clear communication', 'Good examples'],
         areasForImprovement: ['Could be more concise'],
         score: 8.5,
@@ -415,13 +415,13 @@ describe('moderator Analysis SSE Events', () => {
 
       const parsed = parseSSEEvent(eventString);
 
-      expect(parsed?.event).toBe('participant-analysis');
+      expect(parsed?.event).toBe('participant-summary');
       expect(parsed?.data.participantId).toBe('participant-0');
       expect(parsed?.data.score).toBe(8.5);
     });
 
-    it('collects all participant analyses', () => {
-      const participantAnalyses: Array<{ participantId: string; score: number }> = [];
+    it('collects all participant summaries', () => {
+      const participantSummaries: Array<{ participantId: string; score: number }> = [];
 
       const events = [
         { participantId: 'p0', score: 8.0 },
@@ -430,11 +430,11 @@ describe('moderator Analysis SSE Events', () => {
       ];
 
       events.forEach((e) => {
-        participantAnalyses.push(e);
+        participantSummaries.push(e);
       });
 
       // Calculate rankings
-      const ranked = participantAnalyses.sort((a, b) => b.score - a.score);
+      const ranked = participantSummaries.sort((a, b) => b.score - a.score);
 
       expect(ranked[0]?.participantId).toBe('p2');
       expect(ranked[0]?.score).toBe(9.0);
@@ -520,7 +520,7 @@ describe('complete Stream Sequences', () => {
   describe('pre-Search Stream', () => {
     it('processes complete pre-search stream sequence', () => {
       const events = [
-        createSSEEventString('status', { status: AnalysisStatuses.STREAMING }),
+        createSSEEventString('status', { status: MessageStatuses.STREAMING }),
         createSSEEventString('query-generated', {
           query: 'query 1',
           rationale: 'reason',
@@ -547,8 +547,8 @@ describe('complete Stream Sequences', () => {
           results: [],
           responseTime: 1200,
         }),
-        createSSEEventString('analysis', { analysis: 'Summary analysis' }),
-        createSSEEventString('done', { status: AnalysisStatuses.COMPLETE }),
+        createSSEEventString('summary', { summary: 'Summary content' }),
+        createSSEEventString('done', { status: MessageStatuses.COMPLETE }),
       ];
 
       const parsed = collectSSEEvents(events);
@@ -562,21 +562,21 @@ describe('complete Stream Sequences', () => {
       expect(results).toHaveLength(2);
 
       const done = parsed.find(e => e.event === 'done');
-      expect(done?.data.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(done?.data.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 
-  describe('analysis Stream', () => {
-    it('processes complete analysis stream sequence', () => {
+  describe('summary Stream', () => {
+    it('processes complete summary stream sequence', () => {
       const events = [
-        createSSEEventString('status', { status: AnalysisStatuses.STREAMING }),
+        createSSEEventString('status', { status: MessageStatuses.STREAMING }),
         createSSEEventString('key-insight', { insight: 'Insight 1' }),
         createSSEEventString('key-insight', { insight: 'Insight 2' }),
-        createSSEEventString('participant-analysis', { participantId: 'p0', score: 8.0, summary: 'P0 analysis' }),
-        createSSEEventString('participant-analysis', { participantId: 'p1', score: 8.5, summary: 'P1 analysis' }),
+        createSSEEventString('participant-summary', { participantId: 'p0', score: 8.0, summary: 'P0 summary' }),
+        createSSEEventString('participant-summary', { participantId: 'p1', score: 8.5, summary: 'P1 summary' }),
         createSSEEventString('verdict', { verdict: 'Final verdict' }),
         createSSEEventString('recommendations', { recommendations: ['Rec 1', 'Rec 2'] }),
-        createSSEEventString('done', { status: AnalysisStatuses.COMPLETE }),
+        createSSEEventString('done', { status: MessageStatuses.COMPLETE }),
       ];
 
       const parsed = collectSSEEvents(events);
@@ -586,8 +586,8 @@ describe('complete Stream Sequences', () => {
       const insights = parsed.filter(e => e.event === 'key-insight');
       expect(insights).toHaveLength(2);
 
-      const participantAnalyses = parsed.filter(e => e.event === 'participant-analysis');
-      expect(participantAnalyses).toHaveLength(2);
+      const participantSummaries = parsed.filter(e => e.event === 'participant-summary');
+      expect(participantSummaries).toHaveLength(2);
     });
   });
 });
@@ -711,7 +711,7 @@ describe('state Updates from SSE Events', () => {
       const searchData = {
         queries: [] as Array<{ query: string; rationale: string; searchDepth: string; index: number; total: number }>,
         results: [] as Array<{ query: string; answer: string; results: unknown[]; responseTime: number }>,
-        analysis: '',
+        summary: '',
         successCount: 0,
         failureCount: 0,
         totalResults: 0,
@@ -731,8 +731,8 @@ describe('state Updates from SSE Events', () => {
       searchData.totalResults = 5;
       searchData.totalTime = 2200;
 
-      // Process analysis event
-      searchData.analysis = 'Analysis summary';
+      // Process summary event
+      searchData.summary = 'Search summary';
 
       expect(searchData.queries).toHaveLength(2);
       expect(searchData.results).toHaveLength(2);
@@ -741,34 +741,34 @@ describe('state Updates from SSE Events', () => {
     });
   });
 
-  describe('analysis Data Building', () => {
-    it('builds analysis data from stream events', () => {
-      const analysisData = {
+  describe('summary Data Building', () => {
+    it('builds summary data from stream events', () => {
+      const summaryData = {
         keyInsights: [] as string[],
-        participantAnalyses: [] as Array<{ participantId: string; score: number; summary: string }>,
+        participantSummaries: [] as Array<{ participantId: string; score: number; summary: string }>,
         verdict: '',
         recommendations: [] as string[],
       };
 
       // Process key-insight events
-      analysisData.keyInsights.push('Insight 1', 'Insight 2');
+      summaryData.keyInsights.push('Insight 1', 'Insight 2');
 
-      // Process participant-analysis events
-      analysisData.participantAnalyses.push(
+      // Process participant-summary events
+      summaryData.participantSummaries.push(
         { participantId: 'p0', score: 8.0, summary: 'P0 summary' },
         { participantId: 'p1', score: 8.5, summary: 'P1 summary' },
       );
 
       // Process verdict event
-      analysisData.verdict = 'Final verdict';
+      summaryData.verdict = 'Final verdict';
 
       // Process recommendations event
-      analysisData.recommendations = ['Rec 1', 'Rec 2'];
+      summaryData.recommendations = ['Rec 1', 'Rec 2'];
 
-      expect(analysisData.keyInsights).toHaveLength(2);
-      expect(analysisData.participantAnalyses).toHaveLength(2);
-      expect(analysisData.verdict).toBe('Final verdict');
-      expect(analysisData.recommendations).toHaveLength(2);
+      expect(summaryData.keyInsights).toHaveLength(2);
+      expect(summaryData.participantSummaries).toHaveLength(2);
+      expect(summaryData.verdict).toBe('Final verdict');
+      expect(summaryData.recommendations).toHaveLength(2);
     });
   });
 });

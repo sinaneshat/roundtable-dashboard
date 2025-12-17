@@ -9,10 +9,11 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 import type { MutableRefObject } from 'react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useLayoutEffect } from 'react';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ChatStoreApi } from '@/stores/chat';
+import { getEffectiveWebSearchEnabled } from '@/stores/chat';
 
 import type { ChatHook } from '../types';
 
@@ -38,8 +39,11 @@ export function useStateSync({
   startRoundRef,
   setMessagesRef,
 }: UseStateSyncParams) {
-  // Keep refs in sync with latest chat methods
-  useEffect(() => {
+  // ✅ CRITICAL FIX: Use useLayoutEffect to sync refs BEFORE any effects run
+  // Without this, usePendingMessage effect might call sendMessageRef.current
+  // with a stale function that references a destroyed AI SDK Chat instance
+  // Symptom: "Cannot read properties of undefined (reading 'state')" error
+  useLayoutEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
     setMessagesRef.current = chat.setMessages;
@@ -62,9 +66,13 @@ export function useStateSync({
   const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
     queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
 
-    const currentThread = storeRef.current?.getState().thread;
+    const currentThread = storeRef.current?.getState().thread ?? null;
     const threadId = currentThread?.id || storeRef.current?.getState().createdThreadId;
-    const webSearchEnabled = currentThread?.enableWebSearch ?? storeRef.current?.getState().enableWebSearch;
+    // Thread state is source of truth; form state only for new chats
+    const webSearchEnabled = getEffectiveWebSearchEnabled(
+      currentThread,
+      storeRef.current?.getState().enableWebSearch ?? false,
+    );
 
     if (webSearchEnabled && threadId) {
       queryClientRef.current.invalidateQueries({
@@ -78,9 +86,13 @@ export function useStateSync({
   const startRoundWithQuotaInvalidation = useCallback(async () => {
     queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
 
-    const currentThread = storeRef.current?.getState().thread;
+    const currentThread = storeRef.current?.getState().thread ?? null;
     const threadId = currentThread?.id || storeRef.current?.getState().createdThreadId;
-    const webSearchEnabled = currentThread?.enableWebSearch ?? storeRef.current?.getState().enableWebSearch;
+    // Thread state is source of truth; form state only for new chats
+    const webSearchEnabled = getEffectiveWebSearchEnabled(
+      currentThread,
+      storeRef.current?.getState().enableWebSearch ?? false,
+    );
 
     if (webSearchEnabled && threadId) {
       queryClientRef.current.invalidateQueries({

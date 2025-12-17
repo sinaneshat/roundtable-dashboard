@@ -1,8 +1,9 @@
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { ChatThreadChangelog, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import { MessageStatuses } from '@/api/core/enums';
+import type { ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import { getParticipantIndex } from '@/lib/utils/metadata';
 import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 
 /**
@@ -29,8 +30,8 @@ export type TimelineItem
     roundNumber: number;
   }
   | {
-    type: 'analysis';
-    data: StoredModeratorAnalysis;
+    type: 'summary';
+    data: StoredRoundSummary;
     key: string;
     roundNumber: number;
   }
@@ -54,10 +55,10 @@ export type UseThreadTimelineOptions = {
   messages: UIMessage[];
 
   /**
-   * Optional analyses to include in timeline
+   * Optional summaries to include in timeline
    * If not provided, only messages and changelog will be rendered
    */
-  analyses?: StoredModeratorAnalysis[];
+  summaries?: StoredRoundSummary[];
 
   /**
    * Changelog items to group by round
@@ -80,8 +81,8 @@ export type UseThreadTimelineOptions = {
  * - ChatThreadScreen.tsx:726-801 (76 lines)
  * - PublicChatThreadScreen.tsx:43-94 (52 lines)
  *
- * Single source of truth for grouping messages, analyses, and changelog by round number.
- * Handles both authenticated views (with analyses) and public views (without analyses).
+ * Single source of truth for grouping messages, summaries, and changelog by round number.
+ * Handles both authenticated views (with summaries) and public views (without summaries).
  *
  * FLOW:
  * 1. Group messages by round number (from metadata)
@@ -90,26 +91,26 @@ export type UseThreadTimelineOptions = {
  * 4. For each round, assemble timeline items in order:
  *    a. Changelog (configuration changes before messages)
  *    b. Messages (user + assistant responses)
- *    c. Analysis (moderator analysis after messages, if available)
+ *    c. Summary (round summary after messages, if available)
  *
  * @example
  * ```tsx
  * const timeline = useThreadTimeline({
  *   messages,
- *   analyses,  // Optional - omit for public views
+ *   summaries,  // Optional - omit for public views
  *   changelog,
  * });
  *
  * return timeline.map((item) => {
  *   if (item.type === 'messages') return <MessageList messages={item.data} />;
- *   if (item.type === 'analysis') return <AnalysisCard analysis={item.data} />;
+ *   if (item.type === 'summary') return <SummaryCard summary={item.data} />;
  *   if (item.type === 'changelog') return <ChangelogGroup changes={item.data} />;
  * });
  * ```
  */
 export function useThreadTimeline({
   messages,
-  analyses = [],
+  summaries = [],
   changelog,
   preSearches = [],
 }: UseThreadTimelineOptions): TimelineItem[] {
@@ -139,10 +140,8 @@ export function useThreadTimeline({
 
         // For assistant messages, sort by participantIndex
         if (a.role === 'assistant' && b.role === 'assistant') {
-          const metaA = a.metadata as { participantIndex?: number } | undefined;
-          const metaB = b.metadata as { participantIndex?: number } | undefined;
-          const indexA = metaA?.participantIndex ?? 0;
-          const indexB = metaB?.participantIndex ?? 0;
+          const indexA = getParticipantIndex(a.metadata) ?? 0;
+          const indexB = getParticipantIndex(b.metadata) ?? 0;
           return indexA - indexB;
         }
 
@@ -181,7 +180,7 @@ export function useThreadTimeline({
     const allRoundNumbers = new Set<number>([
       ...messagesByRound.keys(),
       ...changelogByRound.keys(),
-      ...analyses.map(a => a.roundNumber),
+      ...summaries.map(s => s.roundNumber),
       ...preSearchByRound.keys(),
     ]);
 
@@ -192,7 +191,7 @@ export function useThreadTimeline({
     sortedRounds.forEach((roundNumber) => {
       const roundMessages = messagesByRound.get(roundNumber);
       const roundChangelog = changelogByRound.get(roundNumber);
-      const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
+      const roundSummary = summaries.find(s => s.roundNumber === roundNumber);
       const roundPreSearch = preSearchByRound.get(roundNumber);
 
       // ✅ RESUMPTION FIX: Don't skip rounds that have pre-search or changelog
@@ -255,46 +254,37 @@ export function useThreadTimeline({
         });
       }
 
-      // Add analysis after messages (if exists and should be shown)
-      // ✅ REVISED: Only show analysis when:
-      // 1. Status is NOT pending (streaming/complete/failed always show)
-      // 2. Status IS pending but all referenced messages have actual content
-      // This prevents analysis card from showing before participants finish streaming
-      if (roundAnalysis) {
-        const isPending = roundAnalysis.status === AnalysisStatuses.PENDING;
-        const hasMessageIds = roundAnalysis.participantMessageIds && roundAnalysis.participantMessageIds.length > 0;
+      // Add summary after messages (if exists and should be shown)
+      // ✅ DEFENSIVE: Verify all referenced messages are complete before showing pending summary
+      // The flow state machine validates completion, but UI adds extra safety check
+      if (roundSummary) {
+        const hasMessageIds = roundSummary.participantMessageIds && roundSummary.participantMessageIds.length > 0;
 
-        let shouldShowAnalysis = false;
-
-        if (!isPending) {
-          // Non-pending (streaming/complete/failed) always show
-          shouldShowAnalysis = true;
-        } else if (hasMessageIds && roundMessages && roundMessages.length > 0) {
-          // Pending with messageIds - only show if ALL referenced messages have content
-          const allMessagesHaveContent = roundAnalysis.participantMessageIds!.every((msgId) => {
-            const msg = roundMessages.find(m => m.id === msgId);
-            if (!msg)
-              return false;
-            // Check for text content
-            const hasText = msg.parts?.some(
-              p => p.type === 'text' && 'text' in p && p.text,
-            );
-            if (hasText)
-              return true;
-            // Check for valid finishReason (completed even if no text)
-            const metadata = msg.metadata as Record<string, unknown> | undefined;
-            const finishReason = metadata?.finishReason;
-            return finishReason && finishReason !== 'unknown';
-          });
-          shouldShowAnalysis = allMessagesHaveContent;
+        // For pending summaries with messageIds, verify all messages are complete (have finishReason)
+        let allMessagesComplete = true;
+        if (roundSummary.status === MessageStatuses.PENDING && hasMessageIds && roundMessages) {
+          const messageIds = new Set(roundSummary.participantMessageIds);
+          const referencedMessages = roundMessages.filter(m => messageIds.has(m.id));
+          allMessagesComplete = referencedMessages.length > 0
+            && referencedMessages.every((m) => {
+              const meta = m.metadata as Record<string, unknown> | undefined;
+              return meta?.finishReason != null;
+            });
         }
-        // Pending with no messageIds = placeholder, don't show
 
-        if (shouldShowAnalysis) {
+        // Show summary when:
+        // 1. Non-pending status (streaming/complete/failed) - always show
+        // 2. Pending status WITH messageIds AND all messages complete
+        // Don't show: Pending with no messageIds OR referenced messages still streaming
+        const shouldShowSummary
+          = roundSummary.status !== MessageStatuses.PENDING
+            || (hasMessageIds && allMessagesComplete);
+
+        if (shouldShowSummary) {
           timeline.push({
-            type: 'analysis',
-            data: roundAnalysis,
-            key: `round-${roundNumber}-analysis`,
+            type: 'summary',
+            data: roundSummary,
+            key: `round-${roundNumber}-summary`,
             roundNumber,
           });
         }
@@ -302,5 +292,5 @@ export function useThreadTimeline({
     });
 
     return timeline;
-  }, [messages, analyses, changelog, preSearches]);
+  }, [messages, summaries, changelog, preSearches]);
 }

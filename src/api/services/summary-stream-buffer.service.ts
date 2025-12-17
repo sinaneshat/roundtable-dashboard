@@ -1,16 +1,16 @@
 /**
- * Analysis Stream Buffer Service - KV-based object stream buffering
+ * Summary Stream Buffer Service - KV-based object stream buffering
  *
  * **BACKEND SERVICE**: Enables stream resumption for `streamObject` after page reload
  * Following backend-patterns.md: Service layer for streaming infrastructure
  *
  * **PURPOSE**:
  * - Buffer object stream chunks into Cloudflare KV
- * - Enable resumption after page reload/connection loss for analysis streams
+ * - Enable resumption after page reload/connection loss for summary streams
  * - Works with AI SDK v5 `streamObject` (which lacks `consumeSseStream` callback)
  *
  * **ARCHITECTURE**:
- * - Stream ID format: `analysis:{threadId}:r{roundNumber}`
+ * - Stream ID format: `summary:{threadId}:r{roundNumber}`
  * - Chunks stored as array in KV with 1-hour TTL
  * - Uses TransformStream to intercept chunks before sending to client
  *
@@ -19,7 +19,7 @@
  * - Object streams use `toTextStreamResponse` which lacks this callback
  * - Solution: Wrap response with TransformStream to intercept chunks
  *
- * @module api/services/analysis-stream-buffer
+ * @module api/services/summary-stream-buffer
  */
 
 import { z } from 'zod';
@@ -27,59 +27,59 @@ import { z } from 'zod';
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
-import type { AnalysisStreamBufferMetadata, AnalysisStreamChunk } from '@/api/types/streaming';
+import type { SummaryStreamBufferMetadata, SummaryStreamChunk } from '@/api/types/streaming';
 import {
-  AnalysisStreamBufferMetadataSchema,
-  AnalysisStreamChunkSchema,
   STREAM_BUFFER_TTL_SECONDS,
+  SummaryStreamBufferMetadataSchema,
+  SummaryStreamChunkSchema,
 } from '@/api/types/streaming';
 
 /**
- * Generate unified stream ID for analysis
- * Format: {threadId}_r{roundNumber}_analyzer
+ * Generate unified stream ID for summary
+ * Format: {threadId}_r{roundNumber}_summarizer
  *
  * ✅ UNIFIED STREAM ID: Follows pattern from @/api/types/streaming.ts
- * This enables the unified resume handler to detect and route analyzer streams.
+ * This enables the unified resume handler to detect and route summarizer streams.
  */
-export function generateAnalysisStreamId(threadId: string, roundNumber: number): string {
-  return `${threadId}_r${roundNumber}_analyzer`;
+export function generateSummaryStreamId(threadId: string, roundNumber: number): string {
+  return `${threadId}_r${roundNumber}_summarizer`;
 }
 
 /**
- * Generate KV key for analysis stream buffer metadata
+ * Generate KV key for summary stream buffer metadata
  */
-function getAnalysisMetadataKey(streamId: string): string {
-  return `stream:analysis:${streamId}:meta`;
+function getSummaryMetadataKey(streamId: string): string {
+  return `stream:summary:${streamId}:meta`;
 }
 
 /**
- * Generate KV key for analysis stream chunks
+ * Generate KV key for summary stream chunks
  */
-function getAnalysisChunksKey(streamId: string): string {
-  return `stream:analysis:${streamId}:chunks`;
+function getSummaryChunksKey(streamId: string): string {
+  return `stream:summary:${streamId}:chunks`;
 }
 
 /**
- * Generate KV key for active analysis stream tracking
+ * Generate KV key for active summary stream tracking
  */
-function getActiveAnalysisKey(threadId: string, roundNumber: number): string {
-  return `stream:analysis:active:${threadId}:r${roundNumber}`;
+function getActiveSummaryKey(threadId: string, roundNumber: number): string {
+  return `stream:summary:active:${threadId}:r${roundNumber}`;
 }
 
 /**
- * Initialize analysis stream buffer in KV
+ * Initialize summary stream buffer in KV
  * Called before streaming starts
  */
-export async function initializeAnalysisStreamBuffer(
+export async function initializeSummaryStreamBuffer(
   streamId: string,
   threadId: string,
   roundNumber: number,
-  analysisId: string,
+  summaryId: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
   if (!env?.KV) {
-    logger?.warn('KV not available - skipping analysis stream buffer initialization', {
+    logger?.warn('KV not available - skipping summary stream buffer initialization', {
       logType: 'edge_case',
       streamId,
     });
@@ -87,11 +87,11 @@ export async function initializeAnalysisStreamBuffer(
   }
 
   try {
-    const metadata: AnalysisStreamBufferMetadata = {
+    const metadata: SummaryStreamBufferMetadata = {
       streamId,
       threadId,
       roundNumber,
-      analysisId,
+      summaryId,
       status: StreamStatuses.ACTIVE,
       chunkCount: 0,
       createdAt: Date.now(),
@@ -101,34 +101,34 @@ export async function initializeAnalysisStreamBuffer(
 
     // Store metadata
     await env.KV.put(
-      getAnalysisMetadataKey(streamId),
+      getSummaryMetadataKey(streamId),
       JSON.stringify(metadata),
       { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
     // Initialize empty chunks array
     await env.KV.put(
-      getAnalysisChunksKey(streamId),
+      getSummaryChunksKey(streamId),
       JSON.stringify([]),
       { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
-    // Track as active analysis stream
+    // Track as active summary stream
     await env.KV.put(
-      getActiveAnalysisKey(threadId, roundNumber),
+      getActiveSummaryKey(threadId, roundNumber),
       streamId,
       { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
-    logger?.info('Initialized analysis stream buffer', {
+    logger?.info('Initialized summary stream buffer', {
       logType: 'operation',
       streamId,
       threadId,
       roundNumber,
-      analysisId,
+      summaryId,
     });
   } catch (error) {
-    logger?.error('Failed to initialize analysis stream buffer', {
+    logger?.error('Failed to initialize summary stream buffer', {
       logType: 'error',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -138,10 +138,10 @@ export async function initializeAnalysisStreamBuffer(
 }
 
 /**
- * Append chunk to analysis stream buffer
+ * Append chunk to summary stream buffer
  * Called as data arrives from object stream
  */
-export async function appendAnalysisStreamChunk(
+export async function appendSummaryStreamChunk(
   streamId: string,
   data: string,
   env: ApiEnv['Bindings'],
@@ -152,17 +152,17 @@ export async function appendAnalysisStreamChunk(
   }
 
   try {
-    const chunk: AnalysisStreamChunk = {
+    const chunk: SummaryStreamChunk = {
       data,
       timestamp: Date.now(),
     };
 
-    const chunksKey = getAnalysisChunksKey(streamId);
+    const chunksKey = getSummaryChunksKey(streamId);
     const rawChunks = await env.KV.get(chunksKey, 'json');
-    const chunksResult = z.array(AnalysisStreamChunkSchema).safeParse(rawChunks);
+    const chunksResult = z.array(SummaryStreamChunkSchema).safeParse(rawChunks);
 
     if (!chunksResult.success) {
-      logger?.warn('Analysis stream chunks not found during append', {
+      logger?.warn('Summary stream chunks not found during append', {
         logType: 'edge_case',
         streamId,
       });
@@ -178,9 +178,9 @@ export async function appendAnalysisStreamChunk(
     );
 
     // Update metadata chunk count
-    const metadataKey = getAnalysisMetadataKey(streamId);
+    const metadataKey = getSummaryMetadataKey(streamId);
     const rawMetadata = await env.KV.get(metadataKey, 'json');
-    const metadataResult = AnalysisStreamBufferMetadataSchema.safeParse(rawMetadata);
+    const metadataResult = SummaryStreamBufferMetadataSchema.safeParse(rawMetadata);
 
     if (metadataResult.success) {
       const metadata = { ...metadataResult.data, chunkCount: updatedChunks.length };
@@ -192,7 +192,7 @@ export async function appendAnalysisStreamChunk(
     }
   } catch (error) {
     // Don't throw - chunk append failures shouldn't break streaming
-    logger?.warn('Failed to append analysis stream chunk', {
+    logger?.warn('Failed to append summary stream chunk', {
       logType: 'edge_case',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -201,10 +201,10 @@ export async function appendAnalysisStreamChunk(
 }
 
 /**
- * Complete analysis stream buffer
+ * Complete summary stream buffer
  * Called when stream finishes successfully
  */
-export async function completeAnalysisStreamBuffer(
+export async function completeSummaryStreamBuffer(
   streamId: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
@@ -214,12 +214,12 @@ export async function completeAnalysisStreamBuffer(
   }
 
   try {
-    const metadataKey = getAnalysisMetadataKey(streamId);
+    const metadataKey = getSummaryMetadataKey(streamId);
     const raw = await env.KV.get(metadataKey, 'json');
-    const result = AnalysisStreamBufferMetadataSchema.safeParse(raw);
+    const result = SummaryStreamBufferMetadataSchema.safeParse(raw);
 
     if (!result.success) {
-      logger?.warn('Analysis stream metadata not found during completion', {
+      logger?.warn('Summary stream metadata not found during completion', {
         logType: 'edge_case',
         streamId,
       });
@@ -238,13 +238,13 @@ export async function completeAnalysisStreamBuffer(
       { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
-    logger?.info('Completed analysis stream buffer', {
+    logger?.info('Completed summary stream buffer', {
       logType: 'operation',
       streamId,
       chunkCount: metadata.chunkCount,
     });
   } catch (error) {
-    logger?.error('Failed to complete analysis stream buffer', {
+    logger?.error('Failed to complete summary stream buffer', {
       logType: 'error',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -253,10 +253,10 @@ export async function completeAnalysisStreamBuffer(
 }
 
 /**
- * Fail analysis stream buffer
+ * Fail summary stream buffer
  * Called when stream encounters an error
  */
-export async function failAnalysisStreamBuffer(
+export async function failSummaryStreamBuffer(
   streamId: string,
   errorMessage: string,
   env: ApiEnv['Bindings'],
@@ -267,12 +267,12 @@ export async function failAnalysisStreamBuffer(
   }
 
   try {
-    const metadataKey = getAnalysisMetadataKey(streamId);
+    const metadataKey = getSummaryMetadataKey(streamId);
     const raw = await env.KV.get(metadataKey, 'json');
-    const result = AnalysisStreamBufferMetadataSchema.safeParse(raw);
+    const result = SummaryStreamBufferMetadataSchema.safeParse(raw);
 
     if (!result.success) {
-      logger?.warn('Analysis stream metadata not found during failure', {
+      logger?.warn('Summary stream metadata not found during failure', {
         logType: 'edge_case',
         streamId,
       });
@@ -292,13 +292,13 @@ export async function failAnalysisStreamBuffer(
       { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
-    logger?.info('Marked analysis stream buffer as failed', {
+    logger?.info('Marked summary stream buffer as failed', {
       logType: 'operation',
       streamId,
       errorMessage,
     });
   } catch (error) {
-    logger?.error('Failed to mark analysis stream as failed', {
+    logger?.error('Failed to mark summary stream as failed', {
       logType: 'error',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -307,10 +307,10 @@ export async function failAnalysisStreamBuffer(
 }
 
 /**
- * Get active analysis stream ID for thread/round
+ * Get active summary stream ID for thread/round
  * Returns null if no active stream exists
  */
-export async function getActiveAnalysisStreamId(
+export async function getActiveSummaryStreamId(
   threadId: string,
   roundNumber: number,
   env: ApiEnv['Bindings'],
@@ -322,12 +322,12 @@ export async function getActiveAnalysisStreamId(
 
   try {
     const streamId = await env.KV.get(
-      getActiveAnalysisKey(threadId, roundNumber),
+      getActiveSummaryKey(threadId, roundNumber),
       'text',
     );
 
     if (streamId) {
-      logger?.info('Found active analysis stream', {
+      logger?.info('Found active summary stream', {
         logType: 'operation',
         threadId,
         roundNumber,
@@ -337,7 +337,7 @@ export async function getActiveAnalysisStreamId(
 
     return streamId;
   } catch (error) {
-    logger?.error('Failed to get active analysis stream ID', {
+    logger?.error('Failed to get active summary stream ID', {
       logType: 'error',
       threadId,
       roundNumber,
@@ -348,27 +348,27 @@ export async function getActiveAnalysisStreamId(
 }
 
 /**
- * Get analysis stream buffer metadata
+ * Get summary stream buffer metadata
  */
-export async function getAnalysisStreamMetadata(
+export async function getSummaryStreamMetadata(
   streamId: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-): Promise<AnalysisStreamBufferMetadata | null> {
+): Promise<SummaryStreamBufferMetadata | null> {
   if (!env?.KV) {
     return null;
   }
 
   try {
-    const raw = await env.KV.get(getAnalysisMetadataKey(streamId), 'json');
-    const result = AnalysisStreamBufferMetadataSchema.safeParse(raw);
+    const raw = await env.KV.get(getSummaryMetadataKey(streamId), 'json');
+    const result = SummaryStreamBufferMetadataSchema.safeParse(raw);
 
     if (!result.success) {
       return null;
     }
 
     const metadata = result.data;
-    logger?.info('Retrieved analysis stream metadata', {
+    logger?.info('Retrieved summary stream metadata', {
       logType: 'operation',
       streamId,
       status: metadata.status,
@@ -377,7 +377,7 @@ export async function getAnalysisStreamMetadata(
 
     return metadata;
   } catch (error) {
-    logger?.error('Failed to get analysis stream metadata', {
+    logger?.error('Failed to get summary stream metadata', {
       logType: 'error',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -387,28 +387,28 @@ export async function getAnalysisStreamMetadata(
 }
 
 /**
- * Get all buffered chunks for an analysis stream
+ * Get all buffered chunks for a summary stream
  * Returns chunks in order they were received
  */
-export async function getAnalysisStreamChunks(
+export async function getSummaryStreamChunks(
   streamId: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-): Promise<AnalysisStreamChunk[] | null> {
+): Promise<SummaryStreamChunk[] | null> {
   if (!env?.KV) {
     return null;
   }
 
   try {
-    const raw = await env.KV.get(getAnalysisChunksKey(streamId), 'json');
-    const result = z.array(AnalysisStreamChunkSchema).safeParse(raw);
+    const raw = await env.KV.get(getSummaryChunksKey(streamId), 'json');
+    const result = z.array(SummaryStreamChunkSchema).safeParse(raw);
 
     if (!result.success) {
       return null;
     }
 
     const chunks = result.data;
-    logger?.info('Retrieved analysis stream chunks', {
+    logger?.info('Retrieved summary stream chunks', {
       logType: 'operation',
       streamId,
       chunkCount: chunks.length,
@@ -416,7 +416,7 @@ export async function getAnalysisStreamChunks(
 
     return chunks;
   } catch (error) {
-    logger?.error('Failed to get analysis stream chunks', {
+    logger?.error('Failed to get summary stream chunks', {
       logType: 'error',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -426,10 +426,10 @@ export async function getAnalysisStreamChunks(
 }
 
 /**
- * Clear active analysis stream tracking
+ * Clear active summary stream tracking
  * Called when stream completes or fails
  */
-export async function clearActiveAnalysisStream(
+export async function clearActiveSummaryStream(
   threadId: string,
   roundNumber: number,
   env: ApiEnv['Bindings'],
@@ -440,15 +440,15 @@ export async function clearActiveAnalysisStream(
   }
 
   try {
-    await env.KV.delete(getActiveAnalysisKey(threadId, roundNumber));
+    await env.KV.delete(getActiveSummaryKey(threadId, roundNumber));
 
-    logger?.info('Cleared active analysis stream tracking', {
+    logger?.info('Cleared active summary stream tracking', {
       logType: 'operation',
       threadId,
       roundNumber,
     });
   } catch (error) {
-    logger?.warn('Failed to clear active analysis stream', {
+    logger?.warn('Failed to clear active summary stream', {
       logType: 'edge_case',
       threadId,
       roundNumber,
@@ -458,10 +458,10 @@ export async function clearActiveAnalysisStream(
 }
 
 /**
- * Delete entire analysis stream buffer
+ * Delete entire summary stream buffer
  * Called to clean up after stream completes
  */
-export async function deleteAnalysisStreamBuffer(
+export async function deleteSummaryStreamBuffer(
   streamId: string,
   threadId: string,
   roundNumber: number,
@@ -474,17 +474,17 @@ export async function deleteAnalysisStreamBuffer(
 
   try {
     await Promise.all([
-      env.KV.delete(getAnalysisMetadataKey(streamId)),
-      env.KV.delete(getAnalysisChunksKey(streamId)),
-      env.KV.delete(getActiveAnalysisKey(threadId, roundNumber)),
+      env.KV.delete(getSummaryMetadataKey(streamId)),
+      env.KV.delete(getSummaryChunksKey(streamId)),
+      env.KV.delete(getActiveSummaryKey(threadId, roundNumber)),
     ]);
 
-    logger?.info('Deleted analysis stream buffer', {
+    logger?.info('Deleted summary stream buffer', {
       logType: 'operation',
       streamId,
     });
   } catch (error) {
-    logger?.warn('Failed to delete analysis stream buffer', {
+    logger?.warn('Failed to delete summary stream buffer', {
       logType: 'edge_case',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -499,7 +499,7 @@ export async function deleteAnalysisStreamBuffer(
  * Object streams send plain text (JSON being built incrementally)
  * Unlike chat streams which use SSE format with prefixes
  */
-export function analysisChunksToTextStream(chunks: AnalysisStreamChunk[]): ReadableStream<Uint8Array> {
+export function summaryChunksToTextStream(chunks: SummaryStreamChunk[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
   return new ReadableStream({
@@ -533,12 +533,12 @@ export function analysisChunksToTextStream(chunks: AnalysisStreamChunk[]): Reada
  * If no new chunks arrive within noNewDataTimeoutMs, assume original stream
  * is dead and send a synthetic complete event so frontend can handle recovery.
  *
- * @param streamId - Analysis stream identifier
+ * @param streamId - Summary stream identifier
  * @param env - Cloudflare environment bindings
  * @param pollIntervalMs - How often to check for new chunks (default 100ms)
  * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
  */
-export function createLiveAnalysisResumeStream(
+export function createLiveSummaryResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
@@ -583,7 +583,7 @@ export function createLiveAnalysisResumeStream(
     async start(controller) {
       try {
         // Send initial buffered chunks
-        const initialChunks = await getAnalysisStreamChunks(streamId, env);
+        const initialChunks = await getSummaryStreamChunks(streamId, env);
         if (initialChunks && initialChunks.length > 0) {
           for (const chunk of initialChunks) {
             if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
@@ -595,7 +595,7 @@ export function createLiveAnalysisResumeStream(
         }
 
         // Check if already complete
-        const metadata = await getAnalysisStreamMetadata(streamId, env);
+        const metadata = await getSummaryStreamMetadata(streamId, env);
         if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
           safeClose(controller);
         }
@@ -627,8 +627,8 @@ export function createLiveAnalysisResumeStream(
         }
 
         // Poll for new chunks
-        const chunks = await getAnalysisStreamChunks(streamId, env);
-        const metadata = await getAnalysisStreamMetadata(streamId, env);
+        const chunks = await getSummaryStreamChunks(streamId, env);
+        const metadata = await getSummaryStreamMetadata(streamId, env);
 
         // Send any new chunks
         if (chunks && chunks.length > lastChunkIndex) {
@@ -677,7 +677,7 @@ export function createLiveAnalysisResumeStream(
  * @param executionCtx - ExecutionContext for waitUntil
  * @param logger - Optional logger
  */
-export function createBufferedAnalysisResponse(
+export function createBufferedSummaryResponse(
   originalResponse: Response,
   streamId: string,
   env: ApiEnv['Bindings'],
@@ -690,10 +690,16 @@ export function createBufferedAnalysisResponse(
     return originalResponse;
   }
 
-  // Create a transform stream that buffers chunks
+  // ✅ STREAMING FIX: Use SYNCHRONOUS transform to prevent backpressure
+  // Async transform functions create backpressure - TransformStream waits for
+  // promise resolution before pulling more chunks, causing buffering behavior.
+  // By making transform sync and using fire-and-forget for KV writes, chunks
+  // flow immediately to the client.
+  const decoder = new TextDecoder();
+
   const transformStream = new TransformStream<Uint8Array, Uint8Array>({
-    async transform(chunk, controller) {
-      // Pass chunk through to client (wrapped in try-catch for client disconnect)
+    transform(chunk, controller) {
+      // Pass chunk through to client IMMEDIATELY (sync, no await)
       try {
         controller.enqueue(chunk);
       } catch {
@@ -701,39 +707,23 @@ export function createBufferedAnalysisResponse(
         return;
       }
 
-      // Buffer chunk to KV asynchronously (don't block)
-      const decoder = new TextDecoder();
+      // Fire-and-forget: Buffer chunk to KV in background (don't block streaming)
       const chunkString = decoder.decode(chunk);
-
-      const bufferChunk = async () => {
-        try {
-          await appendAnalysisStreamChunk(streamId, chunkString, env, logger);
-        } catch {
-          // Silently fail - buffering shouldn't break streaming
-        }
-      };
+      const bufferChunk = appendSummaryStreamChunk(streamId, chunkString, env, logger)
+        .catch(() => {}); // Silently fail - buffering shouldn't break streaming
 
       if (executionCtx) {
-        executionCtx.waitUntil(bufferChunk());
-      } else {
-        bufferChunk().catch(() => {});
+        executionCtx.waitUntil(bufferChunk);
       }
     },
 
-    async flush() {
-      // Stream completed - mark buffer as complete
-      const complete = async () => {
-        try {
-          await completeAnalysisStreamBuffer(streamId, env, logger);
-        } catch {
-          // Silently fail
-        }
-      };
+    flush() {
+      // Stream completed - mark buffer as complete (fire-and-forget)
+      const complete = completeSummaryStreamBuffer(streamId, env, logger)
+        .catch(() => {}); // Silently fail
 
       if (executionCtx) {
-        executionCtx.waitUntil(complete());
-      } else {
-        complete().catch(() => {});
+        executionCtx.waitUntil(complete);
       }
     },
   });
@@ -741,10 +731,24 @@ export function createBufferedAnalysisResponse(
   // Pipe original body through transform
   const bufferedBody = originalBody.pipeThrough(transformStream);
 
-  // Create new response with buffered body and same headers
+  // ✅ STREAMING FIX: Configure headers for proper streaming behavior
+  // AI SDK's toTextStreamResponse() may include Content-Length which causes browsers
+  // to buffer entire response before processing. Remove it for streaming.
+  const streamingHeaders = new Headers(originalResponse.headers);
+
+  // ✅ CRITICAL: Remove Content-Length to enable chunked transfer encoding
+  // With Content-Length, browsers wait for all bytes before firing events
+  streamingHeaders.delete('Content-Length');
+
+  // Disable caching and buffering at all layers
+  streamingHeaders.set('Cache-Control', 'no-cache, no-transform');
+  streamingHeaders.set('X-Accel-Buffering', 'no'); // Disable nginx/proxy buffering
+  streamingHeaders.set('X-Content-Type-Options', 'nosniff'); // Prevent content sniffing
+
+  // Create new response with buffered body and streaming headers
   return new Response(bufferedBody, {
     status: originalResponse.status,
     statusText: originalResponse.statusText,
-    headers: originalResponse.headers,
+    headers: streamingHeaders,
   });
 }

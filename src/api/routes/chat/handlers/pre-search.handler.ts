@@ -1,7 +1,7 @@
 /**
  * Pre-Search Handler
  *
- * ✅ FOLLOWS: backend-patterns.md and analysis.handler.ts patterns
+ * ✅ FOLLOWS: backend-patterns.md and summary.handler.ts patterns
  * ✅ DATABASE-FIRST: Creates record before streaming
  * ✅ IDEMPOTENT: Returns existing results if already completed
  * ✅ SSE STREAMING: Streams search execution progress
@@ -13,7 +13,7 @@
  * - Aligned with AI SDK v5 streamObject pattern
  * - Maintained PreSearchDataPayloadSchema compatibility
  *
- * Architecture matches: src/api/routes/chat/handlers/analysis.handler.ts
+ * Architecture matches: src/api/routes/chat/handlers/summary.handler.ts
  * Reference: backend-patterns.md lines 546-693 (SSE Streaming Pattern)
  */
 
@@ -26,7 +26,7 @@ import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AIModels } from '@/api/core/ai-models';
-import { AnalysisStatuses, IMAGE_MIME_TYPES, MessagePartTypes, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { IMAGE_MIME_TYPES, MessagePartTypes, MessageStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import { loadAttachmentContent } from '@/api/services/attachment-content.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
@@ -63,96 +63,9 @@ import * as tables from '@/db/schema';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 
-import type { createPreSearchRoute, executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
+import type { executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
 import type { GeneratedSearchQuery, MultiQueryGeneration, WebSearchResult } from '../schema';
 import { PreSearchRequestSchema } from '../schema';
-
-// ============================================================================
-// POST Create Pre-Search Handler (Record Creation)
-// ============================================================================
-
-/**
- * Create PENDING pre-search record
- *
- * **PURPOSE**: Fix web search ordering bug by creating pre-search record BEFORE participants stream
- *
- * **CRITICAL FLOW CHANGE**:
- * OLD (Broken):
- *   User sends message → Participant streaming starts → Pre-search created during streaming
- *
- * NEW (Fixed):
- *   User sends message → Pre-search created (PENDING) → Search executes → Participants start
- *
- * **DATABASE-FIRST PATTERN** (matches thread.handler.ts:269-278):
- * - Creates PENDING record immediately
- * - Idempotent (returns existing if already exists)
- * - Does NOT execute search (that happens via executePreSearchHandler)
- * - Frontend calls this BEFORE calling sendMessage()
- *
- * **FLOW**:
- * 1. Frontend detects user sent message with web search enabled
- * 2. Frontend calls this endpoint → Creates PENDING record
- * 3. Frontend waits for PENDING record to sync
- * 4. PreSearchStream component triggers execution (PENDING → STREAMING)
- * 5. Search completes (STREAMING → COMPLETE)
- * 6. Frontend calls sendMessage() → Participants start
- *
- * **REFERENCE**: thread.handler.ts:269-278 (Round 0 pattern that works correctly)
- */
-export const createPreSearchHandler: RouteHandler<typeof createPreSearchRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateParams: ThreadRoundParamSchema,
-    validateBody: PreSearchRequestSchema,
-    operationName: 'createPreSearch',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const { threadId, roundNumber } = c.validated.params;
-    const { userQuery } = c.validated.body;
-    const db = await getDbAsync();
-
-    const roundNum = Number.parseInt(roundNumber, 10);
-    if (Number.isNaN(roundNum) || roundNum < 0) {
-      throw createError.badRequest('Invalid round number');
-    }
-
-    // Verify thread ownership
-    // ✅ FIX: Removed thread.enableWebSearch check - users can enable web search mid-conversation
-    // The act of calling this endpoint IS the user's intent to use web search for this round
-    // The thread's enableWebSearch is now a default/preference, not a hard restriction
-    await verifyThreadOwnership(threadId, user.id, db);
-
-    // ✅ IDEMPOTENT: Check if record already exists
-    const existingSearch = await db.query.chatPreSearch.findFirst({
-      where: (fields, { and, eq: eqOp }) => and(
-        eqOp(fields.threadId, threadId),
-        eqOp(fields.roundNumber, roundNum),
-      ),
-    });
-
-    if (existingSearch) {
-      // Record already exists - return it (idempotent)
-      return Responses.ok(c, existingSearch);
-    }
-
-    // ✅ CREATE PENDING RECORD: This is the fix!
-    // Pre-search record MUST exist before participants start streaming
-    const [preSearch] = await db
-      .insert(tables.chatPreSearch)
-      .values({
-        id: ulid(),
-        threadId,
-        roundNumber: roundNum,
-        userQuery,
-        status: AnalysisStatuses.PENDING,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    return Responses.ok(c, preSearch);
-  },
-);
 
 // ============================================================================
 // IMAGE ANALYSIS FOR SEARCH CONTEXT
@@ -261,7 +174,7 @@ async function analyzeImagesForSearchContext(
 /**
  * Execute pre-search with SSE streaming
  *
- * **DATABASE-FIRST PATTERN** (matches analysis.handler.ts):
+ * **DATABASE-FIRST PATTERN** (matches summary.handler.ts):
  * 1. Check for existing completed search → return immediately
  * 2. Check for in-progress search → return conflict
  * 3. Create/update record with PENDING status
@@ -287,8 +200,8 @@ async function analyzeImagesForSearchContext(
  * - Simplified streaming logic - no nested callbacks
  * - Maintained backward compatibility with PreSearchDataPayloadSchema
  *
- * **PATTERN**: Identical to analyzeRoundHandler architecture
- * **REFERENCE**: analysis.handler.ts:227-648, backend-patterns.md:546-693
+ * **PATTERN**: Identical to summarizeRoundHandler architecture
+ * **REFERENCE**: summary.handler.ts:227-648, backend-patterns.md:546-693
  */
 export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute, ApiEnv> = createHandler(
   {
@@ -335,7 +248,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           threadId,
           roundNumber: roundNum,
           userQuery: body.userQuery,
-          status: AnalysisStatuses.PENDING,
+          status: MessageStatuses.PENDING,
           createdAt: new Date(),
         })
         .returning();
@@ -347,18 +260,18 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     }
 
     // ✅ IDEMPOTENT: Return existing if already completed
-    if (existingSearch.status === AnalysisStatuses.COMPLETE && existingSearch.searchData) {
+    if (existingSearch.status === MessageStatuses.COMPLETE && existingSearch.searchData) {
       return Responses.ok(c, existingSearch);
     }
 
     // Check for stale STREAMING status
-    if (existingSearch.status === AnalysisStatuses.STREAMING) {
+    if (existingSearch.status === MessageStatuses.STREAMING) {
       // Check if stream has timed out using clean timestamp utilities
       if (hasTimestampExceededTimeout(existingSearch.createdAt, STREAMING_CONFIG.STREAM_TIMEOUT_MS)) {
         // SSE connections can get interrupted without backend knowing
         await db.update(tables.chatPreSearch)
           .set({
-            status: AnalysisStatuses.FAILED,
+            status: MessageStatuses.FAILED,
             errorMessage: `Stream timeout after ${formatAgeMs(getTimestampAge(existingSearch.createdAt))} - SSE connection likely interrupted`,
           })
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
@@ -391,13 +304,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
     // ✅ STREAMING: Update to streaming status
     await db.update(tables.chatPreSearch)
-      .set({ status: AnalysisStatuses.STREAMING })
+      .set({ status: MessageStatuses.STREAMING })
       .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
     // ============================================================================
     // ✅ REFACTORED: Direct streamObject integration (no callbacks)
     // ============================================================================
-    // Pattern from analysis.handler.ts:91-120
+    // Pattern from summary.handler.ts:91-120
     // Uses AI SDK v5 streamObject with partialObjectStream iterator
     // ✅ STREAM BUFFER: Generate stream ID and initialize buffer for resumption
     const streamId = generatePreSearchStreamId(threadId, roundNum);
@@ -1029,7 +942,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 index: originalIdx >= 0 ? originalIdx : idx, // ✅ Original query index for matching
               };
             }),
-            analysis: multiQueryResult.analysisRationale || `Multi-query search: ${totalQueries} queries`,
+            summary: multiQueryResult.analysisRationale || `Multi-query search: ${totalQueries} queries`,
             successCount: successfulResults.length,
             failureCount: totalQueries - successfulResults.length,
             totalResults: allSearchResults.length,
@@ -1040,7 +953,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // Update search record
           await db.update(tables.chatPreSearch)
             .set({
-              status: AnalysisStatuses.COMPLETE,
+              status: MessageStatuses.COMPLETE,
               searchData,
               completedAt: new Date(),
             })
@@ -1109,7 +1022,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
           await db.update(tables.chatPreSearch)
             .set({
-              status: AnalysisStatuses.FAILED,
+              status: MessageStatuses.FAILED,
               errorMessage: errorMetadata.errorMessage || 'No successful searches completed',
             })
             .where(eq(tables.chatPreSearch.id, existingSearch.id));
@@ -1162,7 +1075,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         await db.update(tables.chatPreSearch)
           .set({
-            status: AnalysisStatuses.FAILED,
+            status: MessageStatuses.FAILED,
             errorMessage: errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Unknown error'),
           })
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
@@ -1239,7 +1152,7 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
 
     // Mark stale STREAMING/PENDING searches as FAILED
     const orphanedSearches = allPreSearches.filter((search) => {
-      if (search.status !== AnalysisStatuses.STREAMING && search.status !== AnalysisStatuses.PENDING) {
+      if (search.status !== MessageStatuses.STREAMING && search.status !== MessageStatuses.PENDING) {
         return false;
       }
 
@@ -1252,7 +1165,7 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       for (const search of orphanedSearches) {
         await db.update(tables.chatPreSearch)
           .set({
-            status: AnalysisStatuses.FAILED,
+            status: MessageStatuses.FAILED,
             errorMessage: 'Search timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
           })
           .where(eq(tables.chatPreSearch.id, search.id));

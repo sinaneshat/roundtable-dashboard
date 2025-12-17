@@ -14,11 +14,8 @@
  * INITIALIZATION FLOW:
  * 1. Set screen mode in store (for global access)
  * 2. Initialize thread with participants and messages (if provided)
- * 3. Enable analysis orchestrator (thread mode only, when enabled)
- * 4. Register analysis callbacks (handled by store subscriptions)
- *
- * Location: /src/stores/chat/actions/screen-initialization.ts
- * Used by: ChatOverviewScreen, ChatThreadScreen
+ * 3. Enable summary orchestrator (thread mode only, when enabled)
+ * 4. Register summary callbacks (handled by store subscriptions)
  */
 
 'use client';
@@ -32,9 +29,9 @@ import { ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 
-import { useAnalysisOrchestrator } from './analysis-orchestrator';
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { usePreSearchOrchestrator } from './pre-search-orchestrator';
+import { useSummaryOrchestrator } from './summary-orchestrator';
 
 export type UseScreenInitializationOptions = {
   /** Screen mode: 'overview', 'thread', or 'public' */
@@ -45,12 +42,12 @@ export type UseScreenInitializationOptions = {
   participants?: ChatParticipant[];
   /** Initial messages (for SSR hydration) */
   initialMessages?: UIMessage[];
-  /** Chat mode for analysis */
+  /** Chat mode */
   chatMode?: ChatMode | null;
   /** Regeneration state (thread mode only) */
   isRegeneration?: boolean;
   regeneratingRoundNumber?: number | null;
-  /** Analysis orchestrator enable flag */
+  /** Summary orchestrator enable flag */
   enableOrchestrator?: boolean;
 };
 
@@ -144,7 +141,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   const shouldEnableOrchestrator = Boolean(thread?.id) && enableOrchestrator;
   const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
 
-  useAnalysisOrchestrator({
+  useSummaryOrchestrator({
     threadId: thread?.id || '',
     enabled: shouldEnableOrchestrator,
     deduplicationOptions: { regeneratingRoundNumber },

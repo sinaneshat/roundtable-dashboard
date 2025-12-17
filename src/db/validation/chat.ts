@@ -9,7 +9,7 @@
  */
 
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import { FeedbackTypeSchema, MessageRoleSchema } from '@/api/core/enums';
 import {
@@ -118,15 +118,41 @@ export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
 });
 
 /**
- * Moderator Analysis Schemas
- * AI-generated analysis results for conversation rounds
+ * Moderator Summary Schemas
+ * AI-generated summary results for conversation rounds
+ *
+ * ✅ SIMPLIFIED STRUCTURE: Refactored from complex analysisData to simple summaryData
+ * Note: Table name `chatModeratorAnalysis` unchanged for migration simplicity
  */
-export const chatModeratorAnalysisSelectSchema = createSelectSchema(chatModeratorAnalysis);
+export const DbSummaryDataSchema = z.object({
+  summary: z.string(),
+  metrics: z.object({
+    engagement: z.number().min(0).max(10),
+    insight: z.number().min(0).max(10),
+    balance: z.number().min(0).max(10),
+    clarity: z.number().min(0).max(10),
+  }),
+});
+
+export type DbSummaryData = z.infer<typeof DbSummaryDataSchema>;
+
+export const chatModeratorAnalysisSelectSchema = createSelectSchema(chatModeratorAnalysis).extend({
+  // ✅ TYPE-SAFE: Use strictly typed summary data schema
+  summaryData: DbSummaryDataSchema.nullable().optional(),
+});
+
 export const chatModeratorAnalysisInsertSchema = createInsertSchema(chatModeratorAnalysis, {
   roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
   userQuestion: Refinements.content(),
+}).extend({
+  // ✅ TYPE-SAFE: Use strictly typed summary data schema
+  summaryData: DbSummaryDataSchema.nullable().optional(),
 });
-export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis);
+
+export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis).extend({
+  // ✅ TYPE-SAFE: Use strictly typed summary data schema
+  summaryData: DbSummaryDataSchema.nullable().optional(),
+});
 
 /**
  * Pre-Search Schemas

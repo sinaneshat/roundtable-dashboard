@@ -15,9 +15,6 @@ export {
   useApiKeysQuery,
 } from './api-keys';
 
-// Chat analysis queries (protected)
-export { useThreadAnalysesQuery } from './chat/analysis';
-
 // Chat changelog queries (protected)
 export { useThreadChangelogQuery } from './chat/changelog';
 
@@ -30,6 +27,9 @@ export {
 
 // Chat message queries (protected)
 export { useThreadMessagesQuery } from './chat/messages';
+
+// Chat round summary queries (protected)
+export { useThreadSummariesQuery } from './chat/summary';
 
 // Chat thread queries (protected)
 export {

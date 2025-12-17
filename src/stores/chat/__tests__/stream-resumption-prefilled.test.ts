@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons, MessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles } from '@/api/core/enums';
 
 // Type definitions for the test
 type MessagePart = {
@@ -131,7 +131,7 @@ function createMockPreSearch(
         { query: 'Mars colonization technical feasibility', rationale: 'test', searchDepth: 'advanced', index: 0, total: 3 },
       ],
       results: [{ query: 'Mars colonization', answer: null, results: [], responseTime: 1000, index: 0 }],
-      analysis: 'test analysis',
+      summary: 'test summary',
       successCount: 3,
       failureCount: 0,
       totalResults: 9,
@@ -220,7 +220,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       const participants = createMockParticipants(3);
       const thread = createMockThread();
-      const preSearches = [createMockPreSearch(0, AnalysisStatuses.COMPLETE)];
+      const preSearches = [createMockPreSearch(0, MessageStatuses.COMPLETE)];
       const messages = [
         createUserMessage(0),
         createEmptyParticipantMessage(0, 0, 'deepseek/deepseek-chat-v3-0324'),
@@ -245,7 +245,7 @@ describe('stream Resumption with Prefilled State', () => {
         waitingToStartStreaming: true, // Key flag - set by incomplete-round-resumption
         isCreatingThread: false,
         createdThreadId: null,
-        analyses: [],
+        summaries: [],
         preSearches,
         preSearchActivityTimes: {},
         thread,
@@ -256,7 +256,7 @@ describe('stream Resumption with Prefilled State', () => {
         error: null,
         hasInitiallyLoaded: true,
         isRegenerating: false,
-        isCreatingAnalysis: false,
+        isCreatingSummary: false,
         isWaitingForChangelog: false,
         hasPendingConfigChanges: false,
         regeneratingRoundNumber: null,
@@ -267,10 +267,10 @@ describe('stream Resumption with Prefilled State', () => {
         streamingRoundNumber: 0,
         currentRoundNumber: null,
         hasSentPendingMessage: false,
-        createdAnalysisRounds: {},
+        createdSummaryRounds: {},
         triggeredPreSearchRounds: {},
-        triggeredAnalysisRounds: {},
-        triggeredAnalysisIds: {},
+        triggeredSummaryRounds: {},
+        triggeredSummaryIds: {},
         hasEarlyOptimisticMessage: false,
         screenMode: 'thread',
         isReadOnly: false,
@@ -771,7 +771,7 @@ describe('stream Resumption with Prefilled State', () => {
       const doneEventData = JSON.stringify({
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' }],
         results: [{ query: 'test', answer: null, results: [] }],
-        analysis: 'test',
+        summary: 'test',
         successCount: 1,
         failureCount: 0,
         totalResults: 3,

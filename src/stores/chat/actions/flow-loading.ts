@@ -36,7 +36,7 @@ export type UseFlowLoadingReturn = {
   loadingDetails: {
     isCreatingThread: boolean;
     isStreamingParticipants: boolean;
-    isStreamingAnalysis: boolean;
+    isStreamingSummary: boolean;
     isNavigating: boolean;
   };
 };
@@ -59,7 +59,7 @@ export function useFlowLoading(options: UseFlowLoadingOptions): UseFlowLoadingRe
     () => ({
       isCreatingThread: flowState === FlowStates.CREATING_THREAD,
       isStreamingParticipants: flowState === FlowStates.STREAMING_PARTICIPANTS,
-      isStreamingAnalysis: flowState === FlowStates.STREAMING_ANALYSIS,
+      isStreamingSummary: flowState === FlowStates.STREAMING_SUMMARY,
       isNavigating: flowState === FlowStates.NAVIGATING,
     }),
     [flowState],

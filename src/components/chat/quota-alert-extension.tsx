@@ -72,7 +72,7 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
     if (data.analysis && data.analysis.remaining === 0) {
       return {
         isBlocked: true,
-        blockerType: 'analysis' as const,
+        blockerType: 'summary' as const,
         limit: data.analysis.limit,
       };
     }
@@ -87,8 +87,8 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
         return `You've reached your ${limit} thread limit for this month. Upgrade to create more threads.`;
       case 'messages':
         return `You've reached your ${limit} message limit for this month. Upgrade to continue chatting.`;
-      case 'analysis':
-        return `You've reached your ${limit} analysis limit for this month. Upgrade for multi-participant conversations.`;
+      case 'summary':
+        return `You've reached your ${limit} summary limit for this month. Upgrade for multi-participant conversations.`;
       default:
         return 'Upgrade your plan to continue.';
     }

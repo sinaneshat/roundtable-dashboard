@@ -42,7 +42,7 @@ export const userChatUsage = sqliteTable(
     threadsCreated: integer('threads_created').notNull().default(0),
     messagesCreated: integer('messages_created').notNull().default(0),
     customRolesCreated: integer('custom_roles_created').notNull().default(0),
-    analysisGenerated: integer('analysis_generated').notNull().default(0),
+    analysisGenerated: integer('analysis_generated').notNull().default(0), // Round summaries generated
 
     // ============================================================================
     // SUBSCRIPTION IDENTIFICATION
@@ -139,7 +139,7 @@ export const userChatUsageHistory = sqliteTable(
     threadsCreated: integer('threads_created').notNull().default(0),
     messagesCreated: integer('messages_created').notNull().default(0),
     customRolesCreated: integer('custom_roles_created').notNull().default(0),
-    analysisGenerated: integer('analysis_generated').notNull().default(0),
+    analysisGenerated: integer('analysis_generated').notNull().default(0), // Round summaries generated
 
     // Subscription info at time of period (IDENTIFIER ONLY, not limits)
     // Use this tier to look up historical limits from TIER_QUOTAS in code

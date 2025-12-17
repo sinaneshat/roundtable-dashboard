@@ -458,7 +458,7 @@ const BaseParticipantConfigSchema = z.object({
  * const formData = ParticipantConfigSchema.parse({
  *   id: 'participant-1',
  *   modelId: 'openai/gpt-4',
- *   role: 'The Analyzer',
+ *   role: 'The Summarizer',
  *   customRoleId: null,
  *   priority: 0,
  *   settings: { temperature: 0.7 }

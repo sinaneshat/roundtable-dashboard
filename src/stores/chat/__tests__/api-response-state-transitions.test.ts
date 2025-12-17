@@ -8,12 +8,12 @@
  * - POST /api/v1/chat/message - Send new message
  * - GET /api/v1/chat/thread/:id/stream - Resume stream
  * - POST /api/v1/chat/thread/:id/pre-search - Trigger pre-search
- * - POST /api/v1/chat/thread/:id/analysis - Trigger analysis
+ * - POST /api/v1/chat/thread/:id/summary - Trigger summary
  *
  * State Transitions:
  * - idle → streaming → complete
  * - pre-search: pending → streaming → complete/failed
- * - analysis: pending → streaming → complete/failed
+ * - summary: pending → streaming → complete/failed
  *
  * Key Validations:
  * - Correct state updates on API responses
@@ -24,11 +24,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, StreamStatuses } from '@/api/core/enums';
+import { MessageStatuses, StreamStatuses } from '@/api/core/enums';
 import {
   createInitialStoreState,
-  createMockAnalysis,
   createMockStoredPreSearch,
+  createMockSummary,
 } from '@/lib/testing';
 
 // ============================================================================
@@ -134,11 +134,11 @@ describe('pre-Search API Responses', () => {
     it('adds pending pre-search on trigger', () => {
       const state = createInitialStoreState();
 
-      const preSearch = createMockStoredPreSearch(0, AnalysisStatuses.PENDING);
+      const preSearch = createMockStoredPreSearch(0, MessageStatuses.PENDING);
       state.preSearches.push(preSearch);
 
       expect(state.preSearches).toHaveLength(1);
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.PENDING);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.PENDING);
     });
 
     it('prevents duplicate pre-search triggers via tracking set', () => {
@@ -148,14 +148,14 @@ describe('pre-Search API Responses', () => {
       const roundNumber = 0;
       if (!state.triggeredPreSearchRounds.has(roundNumber)) {
         state.triggeredPreSearchRounds.add(roundNumber);
-        state.preSearches.push(createMockStoredPreSearch(roundNumber, AnalysisStatuses.PENDING));
+        state.preSearches.push(createMockStoredPreSearch(roundNumber, MessageStatuses.PENDING));
       }
 
       expect(state.preSearches).toHaveLength(1);
 
       // Duplicate trigger attempt
       if (!state.triggeredPreSearchRounds.has(roundNumber)) {
-        state.preSearches.push(createMockStoredPreSearch(roundNumber, AnalysisStatuses.PENDING));
+        state.preSearches.push(createMockStoredPreSearch(roundNumber, MessageStatuses.PENDING));
       }
 
       // Should still be 1 - duplicate prevented
@@ -166,47 +166,47 @@ describe('pre-Search API Responses', () => {
   describe('pre-Search Status Updates', () => {
     it('updates status to streaming when stream starts', () => {
       const state = createInitialStoreState();
-      state.preSearches = [createMockStoredPreSearch(0, AnalysisStatuses.PENDING)];
+      state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.PENDING)];
 
       // Simulate streaming start SSE event
-      state.preSearches[0]!.status = AnalysisStatuses.STREAMING;
+      state.preSearches[0]!.status = MessageStatuses.STREAMING;
 
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.STREAMING);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
     });
 
     it('updates status to complete with searchData', () => {
       const state = createInitialStoreState();
-      state.preSearches = [createMockStoredPreSearch(0, AnalysisStatuses.STREAMING)];
+      state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.STREAMING)];
 
       // Simulate done SSE event
       const searchData = {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
         results: [],
-        analysis: 'Test analysis',
+        summary: 'Test summary',
         successCount: 1,
         failureCount: 0,
         totalResults: 3,
         totalTime: 5000,
       };
 
-      state.preSearches[0]!.status = AnalysisStatuses.COMPLETE;
+      state.preSearches[0]!.status = MessageStatuses.COMPLETE;
       state.preSearches[0]!.searchData = searchData;
       state.preSearches[0]!.completedAt = new Date();
 
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
       expect(state.preSearches[0]?.searchData).toBeDefined();
       expect(state.preSearches[0]?.completedAt).not.toBeNull();
     });
 
     it('updates status to failed with errorMessage', () => {
       const state = createInitialStoreState();
-      state.preSearches = [createMockStoredPreSearch(0, AnalysisStatuses.STREAMING)];
+      state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.STREAMING)];
 
       // Simulate error SSE event
-      state.preSearches[0]!.status = AnalysisStatuses.FAILED;
+      state.preSearches[0]!.status = MessageStatuses.FAILED;
       state.preSearches[0]!.errorMessage = 'Search failed: timeout';
 
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.FAILED);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.FAILED);
       expect(state.preSearches[0]?.errorMessage).toBe('Search failed: timeout');
     });
   });
@@ -214,22 +214,22 @@ describe('pre-Search API Responses', () => {
   describe('pre-Search Blocking Logic', () => {
     it('blocks participant streaming while pre-search pending', () => {
       const state = createInitialStoreState();
-      state.preSearches = [createMockStoredPreSearch(0, AnalysisStatuses.PENDING)];
+      state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.PENDING)];
 
       const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
-      const shouldWait = preSearch?.status === AnalysisStatuses.PENDING
-        || preSearch?.status === AnalysisStatuses.STREAMING;
+      const shouldWait = preSearch?.status === MessageStatuses.PENDING
+        || preSearch?.status === MessageStatuses.STREAMING;
 
       expect(shouldWait).toBe(true);
     });
 
     it('unblocks participant streaming when pre-search complete', () => {
       const state = createInitialStoreState();
-      state.preSearches = [createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE)];
+      state.preSearches = [createMockStoredPreSearch(0, MessageStatuses.COMPLETE)];
 
       const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
-      const shouldWait = preSearch?.status === AnalysisStatuses.PENDING
-        || preSearch?.status === AnalysisStatuses.STREAMING;
+      const shouldWait = preSearch?.status === MessageStatuses.PENDING
+        || preSearch?.status === MessageStatuses.STREAMING;
 
       expect(shouldWait).toBe(false);
     });
@@ -240,111 +240,111 @@ describe('pre-Search API Responses', () => {
 // ANALYSIS API RESPONSE TESTS
 // ============================================================================
 
-describe('analysis API Responses', () => {
-  describe('analysis Creation', () => {
-    it('creates pending analysis when triggered', () => {
+describe('summary API Responses', () => {
+  describe('summary Creation', () => {
+    it('creates pending summary when triggered', () => {
       const state = createInitialStoreState();
 
-      const analysis = createMockAnalysis(0, AnalysisStatuses.PENDING);
-      state.analyses.push(analysis);
-      state.createdAnalysisRounds.add(0);
+      const summary = createMockSummary(0, MessageStatuses.PENDING);
+      state.summaries.push(summary);
+      state.createdSummaryRounds.add(0);
 
-      expect(state.analyses).toHaveLength(1);
-      expect(state.createdAnalysisRounds.has(0)).toBe(true);
+      expect(state.summaries).toHaveLength(1);
+      expect(state.createdSummaryRounds.has(0)).toBe(true);
     });
 
-    it('sets isCreatingAnalysis flag during creation', () => {
+    it('sets isCreatingSummary flag during creation', () => {
       const state = createInitialStoreState();
 
-      state.isCreatingAnalysis = true;
-      expect(state.isCreatingAnalysis).toBe(true);
+      state.isCreatingSummary = true;
+      expect(state.isCreatingSummary).toBe(true);
 
       // After creation complete
-      state.isCreatingAnalysis = false;
-      expect(state.isCreatingAnalysis).toBe(false);
+      state.isCreatingSummary = false;
+      expect(state.isCreatingSummary).toBe(false);
     });
 
-    it('prevents duplicate analysis creation via tracking', () => {
+    it('prevents duplicate summary creation via tracking', () => {
       const state = createInitialStoreState();
 
       const roundNumber = 0;
 
       // First creation
-      if (!state.createdAnalysisRounds.has(roundNumber)) {
-        state.createdAnalysisRounds.add(roundNumber);
-        state.analyses.push(createMockAnalysis(roundNumber, AnalysisStatuses.PENDING));
+      if (!state.createdSummaryRounds.has(roundNumber)) {
+        state.createdSummaryRounds.add(roundNumber);
+        state.summaries.push(createMockSummary(roundNumber, MessageStatuses.PENDING));
       }
 
       // Duplicate attempt
-      if (!state.createdAnalysisRounds.has(roundNumber)) {
-        state.analyses.push(createMockAnalysis(roundNumber, AnalysisStatuses.PENDING));
+      if (!state.createdSummaryRounds.has(roundNumber)) {
+        state.summaries.push(createMockSummary(roundNumber, MessageStatuses.PENDING));
       }
 
-      expect(state.analyses).toHaveLength(1);
+      expect(state.summaries).toHaveLength(1);
     });
   });
 
-  describe('analysis Stream Tracking', () => {
-    it('prevents duplicate stream triggers via triggeredAnalysisRounds', () => {
+  describe('summary Stream Tracking', () => {
+    it('prevents duplicate stream triggers via triggeredSummaryRounds', () => {
       const state = createInitialStoreState();
 
       // First stream trigger
       const roundNumber = 0;
-      if (!state.triggeredAnalysisRounds.has(roundNumber)) {
-        state.triggeredAnalysisRounds.add(roundNumber);
+      if (!state.triggeredSummaryRounds.has(roundNumber)) {
+        state.triggeredSummaryRounds.add(roundNumber);
         // Trigger stream...
       }
 
-      expect(state.triggeredAnalysisRounds.has(roundNumber)).toBe(true);
+      expect(state.triggeredSummaryRounds.has(roundNumber)).toBe(true);
 
       // Second trigger should be blocked
-      const shouldTrigger = !state.triggeredAnalysisRounds.has(roundNumber);
+      const shouldTrigger = !state.triggeredSummaryRounds.has(roundNumber);
       expect(shouldTrigger).toBe(false);
     });
 
-    it('prevents duplicate stream triggers via triggeredAnalysisIds', () => {
+    it('prevents duplicate stream triggers via triggeredSummaryIds', () => {
       const state = createInitialStoreState();
 
-      const analysisId = 'analysis-123';
+      const summaryId = 'summary-123';
 
       // First trigger
-      if (!state.triggeredAnalysisIds.has(analysisId)) {
-        state.triggeredAnalysisIds.add(analysisId);
+      if (!state.triggeredSummaryIds.has(summaryId)) {
+        state.triggeredSummaryIds.add(summaryId);
       }
 
       // Second trigger blocked
-      const shouldTrigger = !state.triggeredAnalysisIds.has(analysisId);
+      const shouldTrigger = !state.triggeredSummaryIds.has(summaryId);
       expect(shouldTrigger).toBe(false);
     });
   });
 
-  describe('analysis Status Updates', () => {
+  describe('summary Status Updates', () => {
     it('updates status to streaming when stream starts', () => {
       const state = createInitialStoreState();
-      state.analyses = [createMockAnalysis(0, AnalysisStatuses.PENDING)];
+      state.summaries = [createMockSummary(0, MessageStatuses.PENDING)];
 
-      state.analyses[0]!.status = AnalysisStatuses.STREAMING;
+      state.summaries[0]!.status = MessageStatuses.STREAMING;
 
-      expect(state.analyses[0]?.status).toBe(AnalysisStatuses.STREAMING);
+      expect(state.summaries[0]?.status).toBe(MessageStatuses.STREAMING);
     });
 
-    it('updates status to complete with analysisData', () => {
+    it('updates status to complete with summaryData', () => {
       const state = createInitialStoreState();
-      state.analyses = [createMockAnalysis(0, AnalysisStatuses.STREAMING)];
+      state.summaries = [createMockSummary(0, MessageStatuses.STREAMING)];
 
-      const analysisData = {
+      const summaryData = {
         keyInsights: ['Insight 1', 'Insight 2'],
         participantAnalyses: [],
         verdict: 'The participants agreed on key points.',
         recommendations: ['Consider X', 'Try Y'],
       };
 
-      state.analyses[0]!.status = AnalysisStatuses.COMPLETE;
-      state.analyses[0]!.analysisData = analysisData;
-      state.analyses[0]!.completedAt = new Date();
+      state.summaries[0]!.status = MessageStatuses.COMPLETE;
+      state.summaries[0]!.summaryData = summaryData;
+      state.summaries[0]!.completedAt = new Date();
 
-      expect(state.analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
-      expect(state.analyses[0]?.analysisData).toBeDefined();
+      expect(state.summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
+      expect(state.summaries[0]?.summaryData).toBeDefined();
     });
   });
 });
@@ -564,16 +564,16 @@ describe('state Consistency', () => {
     it('clears tracking sets on round completion', () => {
       const state = createInitialStoreState();
       state.triggeredPreSearchRounds.add(0);
-      state.triggeredAnalysisRounds.add(0);
-      state.triggeredAnalysisIds.add('analysis-0');
-      state.createdAnalysisRounds.add(0);
+      state.triggeredSummaryRounds.add(0);
+      state.triggeredSummaryIds.add('summary-0');
+      state.createdSummaryRounds.add(0);
 
       // Clear for new round (simulating clearAnalysisTracking)
-      state.triggeredAnalysisRounds.clear();
-      state.triggeredAnalysisIds.clear();
+      state.triggeredSummaryRounds.clear();
+      state.triggeredSummaryIds.clear();
 
-      expect(state.triggeredAnalysisRounds.size).toBe(0);
-      expect(state.triggeredAnalysisIds.size).toBe(0);
+      expect(state.triggeredSummaryRounds.size).toBe(0);
+      expect(state.triggeredSummaryIds.size).toBe(0);
     });
   });
 });
@@ -613,24 +613,24 @@ describe('idempotency', () => {
     });
   });
 
-  describe('analysis Trigger Idempotency', () => {
-    it('same analysis cannot be triggered twice (by ID)', () => {
+  describe('summary Trigger Idempotency', () => {
+    it('same summary cannot be triggered twice (by ID)', () => {
       const state = createInitialStoreState();
 
-      const analysisId = 'analysis-123';
-      state.triggeredAnalysisIds.add(analysisId);
+      const summaryId = 'summary-123';
+      state.triggeredSummaryIds.add(summaryId);
 
-      const canTrigger = !state.triggeredAnalysisIds.has(analysisId);
+      const canTrigger = !state.triggeredSummaryIds.has(summaryId);
       expect(canTrigger).toBe(false);
     });
 
-    it('same round cannot trigger analysis twice (by round)', () => {
+    it('same round cannot trigger summary twice (by round)', () => {
       const state = createInitialStoreState();
 
       const roundNumber = 0;
-      state.triggeredAnalysisRounds.add(roundNumber);
+      state.triggeredSummaryRounds.add(roundNumber);
 
-      const canTrigger = !state.triggeredAnalysisRounds.has(roundNumber);
+      const canTrigger = !state.triggeredSummaryRounds.has(roundNumber);
       expect(canTrigger).toBe(false);
     });
   });

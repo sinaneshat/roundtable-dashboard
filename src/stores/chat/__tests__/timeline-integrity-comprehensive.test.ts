@@ -2,7 +2,7 @@
  * Timeline Integrity Comprehensive Tests
  *
  * Ensures the integrity of timeline elements throughout all conversation scenarios:
- * - User message → Pre-search (if enabled) → Participants → Analysis
+ * - User message → Pre-search (if enabled) → Participants → Summary
  * - Resumption after page refresh
  * - Uninterrupted multi-round conversations
  * - Config changes between rounds (changelog card)
@@ -14,40 +14,39 @@
  * 2. User message
  * 3. [Optional] Pre-search card (if web search enabled)
  * 4. Participant messages (P0 → P1 → P2 in priority order)
- * 5. Round summary/analysis card (after last participant)
+ * 5. Round summary card (after last participant)
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  AnalysisStatuses,
   FinishReasons,
   MessageRoles,
-  ScreenModes,
+  MessageStatuses,
   StreamStatuses,
 } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatThread } from '@/db/validation';
 import {
-  createMockAnalysis,
   createMockStoredPreSearch,
+  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
 
-import { createChatStore } from '../store';
 import type { ChatStoreApi } from '../store';
+import { createChatStore } from '../store';
 
 // ============================================================================
 // TIMELINE ELEMENT TYPES
 // ============================================================================
 
-type TimelineElementType =
-  | 'changelog'
-  | 'user_message'
-  | 'pre_search'
-  | 'participant_message'
-  | 'analysis';
+type TimelineElementType
+  = | 'changelog'
+    | 'user_message'
+    | 'pre_search'
+    | 'participant_message'
+    | 'summary';
 
 type TimelineElement = {
   type: TimelineElementType;
@@ -105,7 +104,7 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     roundNumbers.add(ps.roundNumber);
   });
 
-  state.analyses.forEach((a) => {
+  state.summaries.forEach((a) => {
     roundNumbers.add(a.roundNumber);
   });
 
@@ -159,11 +158,11 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
       });
     }
 
-    // Analysis for this round
-    const analysis = state.analyses.find(a => a.roundNumber === roundNumber);
-    if (analysis) {
+    // Summary for this round
+    const summary = state.summaries.find(a => a.roundNumber === roundNumber);
+    if (summary) {
       timeline.push({
-        type: 'analysis',
+        type: 'summary',
         roundNumber,
         timestamp: timestamp++,
       });
@@ -191,18 +190,20 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
   for (const [roundNumber, elements] of roundGroups) {
     const sortedElements = [...elements].sort((a, b) => a.timestamp - b.timestamp);
 
-    let expectedOrder: TimelineElementType[] = [];
+    const expectedOrder: TimelineElementType[] = [];
     const hasPreSearch = sortedElements.some(e => e.type === 'pre_search');
-    const hasAnalysis = sortedElements.some(e => e.type === 'analysis');
+    const hasSummary = sortedElements.some(e => e.type === 'summary');
     const participantCount = sortedElements.filter(e => e.type === 'participant_message').length;
 
     // Build expected order
     expectedOrder.push('user_message');
-    if (hasPreSearch) expectedOrder.push('pre_search');
+    if (hasPreSearch)
+      expectedOrder.push('pre_search');
     for (let i = 0; i < participantCount; i++) {
       expectedOrder.push('participant_message');
     }
-    if (hasAnalysis) expectedOrder.push('analysis');
+    if (hasSummary)
+      expectedOrder.push('summary');
 
     // Validate
     const actualOrder = sortedElements.map(e => e.type);
@@ -235,7 +236,7 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
 
 describe('single Round Timeline Integrity', () => {
   describe('without Web Search', () => {
-    it('should maintain order: user → participants → analysis', () => {
+    it('should maintain order: user → participants → summary', () => {
       const store = createChatStore();
       const participants = createMockParticipants(3);
 
@@ -279,8 +280,8 @@ describe('single Round Timeline Integrity', () => {
 
       store.getState().setMessages([userMsg, p0Msg, p1Msg, p2Msg]);
 
-      // Analysis
-      store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+      // Summary
+      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
       // Validate timeline
       const timeline = buildTimelineFromStore(store);
@@ -297,7 +298,7 @@ describe('single Round Timeline Integrity', () => {
       expect(timeline[2]?.participantIndex).toBe(1);
       expect(timeline[3]?.type).toBe('participant_message');
       expect(timeline[3]?.participantIndex).toBe(2);
-      expect(timeline[4]?.type).toBe('analysis');
+      expect(timeline[4]?.type).toBe('summary');
     });
 
     it('should handle single participant', () => {
@@ -322,18 +323,18 @@ describe('single Round Timeline Integrity', () => {
       });
 
       store.getState().setMessages([userMsg, p0Msg]);
-      store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
       const timeline = buildTimelineFromStore(store);
       expect(timeline).toHaveLength(3);
       expect(timeline[0]?.type).toBe('user_message');
       expect(timeline[1]?.type).toBe('participant_message');
-      expect(timeline[2]?.type).toBe('analysis');
+      expect(timeline[2]?.type).toBe('summary');
     });
   });
 
   describe('with Web Search', () => {
-    it('should maintain order: user → pre-search → participants → analysis', () => {
+    it('should maintain order: user → pre-search → participants → summary', () => {
       const store = createChatStore();
       const participants = createMockParticipants(2);
 
@@ -348,7 +349,7 @@ describe('single Round Timeline Integrity', () => {
       });
 
       // Pre-search
-      store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+      store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
 
       // Participants
       const p0Msg = createTestAssistantMessage({
@@ -369,7 +370,7 @@ describe('single Round Timeline Integrity', () => {
       });
 
       store.getState().setMessages([userMsg, p0Msg, p1Msg]);
-      store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
       const timeline = buildTimelineFromStore(store);
       const validation = validateTimelineOrder(timeline);
@@ -379,7 +380,7 @@ describe('single Round Timeline Integrity', () => {
       expect(timeline[1]?.type).toBe('pre_search');
       expect(timeline[2]?.type).toBe('participant_message');
       expect(timeline[3]?.type).toBe('participant_message');
-      expect(timeline[4]?.type).toBe('analysis');
+      expect(timeline[4]?.type).toBe('summary');
     });
 
     it('should wait for pre-search before participants start', () => {
@@ -389,30 +390,30 @@ describe('single Round Timeline Integrity', () => {
       store.getState().setParticipants(createMockParticipants(2));
 
       // Pre-search in PENDING state
-      store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.PENDING));
+      store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.PENDING));
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      const shouldBlockParticipants =
-        preSearch?.status === AnalysisStatuses.PENDING ||
-        preSearch?.status === AnalysisStatuses.STREAMING;
+      const shouldBlockParticipants
+        = preSearch?.status === MessageStatuses.PENDING
+          || preSearch?.status === MessageStatuses.STREAMING;
 
       expect(shouldBlockParticipants).toBe(true);
 
       // Update to STREAMING
-      store.getState().updatePreSearchStatus(0, AnalysisStatuses.STREAMING);
+      store.getState().updatePreSearchStatus(0, MessageStatuses.STREAMING);
       const preSearchStreaming = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      const stillBlocked =
-        preSearchStreaming?.status === AnalysisStatuses.PENDING ||
-        preSearchStreaming?.status === AnalysisStatuses.STREAMING;
+      const stillBlocked
+        = preSearchStreaming?.status === MessageStatuses.PENDING
+          || preSearchStreaming?.status === MessageStatuses.STREAMING;
 
       expect(stillBlocked).toBe(true);
 
       // Complete pre-search
-      store.getState().updatePreSearchStatus(0, AnalysisStatuses.COMPLETE);
+      store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
       const preSearchComplete = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      const canProceed =
-        preSearchComplete?.status !== AnalysisStatuses.PENDING &&
-        preSearchComplete?.status !== AnalysisStatuses.STREAMING;
+      const canProceed
+        = preSearchComplete?.status !== MessageStatuses.PENDING
+          && preSearchComplete?.status !== MessageStatuses.STREAMING;
 
       expect(canProceed).toBe(true);
     });
@@ -470,26 +471,26 @@ describe('multi-Round Timeline Integrity', () => {
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1, r1User, r1P0, r1P1]);
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
-    store.getState().addAnalysis(createMockAnalysis(1, AnalysisStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(1, MessageStatuses.COMPLETE));
 
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
 
     expect(validation.isValid).toBe(true);
-    expect(timeline).toHaveLength(8); // 2 rounds × (1 user + 2 participants + 1 analysis)
+    expect(timeline).toHaveLength(8); // 2 rounds × (1 user + 2 participants + 1 summary)
 
     // Round 0
     expect(timeline[0]).toMatchObject({ type: 'user_message', roundNumber: 0 });
     expect(timeline[1]).toMatchObject({ type: 'participant_message', roundNumber: 0, participantIndex: 0 });
     expect(timeline[2]).toMatchObject({ type: 'participant_message', roundNumber: 0, participantIndex: 1 });
-    expect(timeline[3]).toMatchObject({ type: 'analysis', roundNumber: 0 });
+    expect(timeline[3]).toMatchObject({ type: 'summary', roundNumber: 0 });
 
     // Round 1
     expect(timeline[4]).toMatchObject({ type: 'user_message', roundNumber: 1 });
     expect(timeline[5]).toMatchObject({ type: 'participant_message', roundNumber: 1, participantIndex: 0 });
     expect(timeline[6]).toMatchObject({ type: 'participant_message', roundNumber: 1, participantIndex: 1 });
-    expect(timeline[7]).toMatchObject({ type: 'analysis', roundNumber: 1 });
+    expect(timeline[7]).toMatchObject({ type: 'summary', roundNumber: 1 });
   });
 
   it('should handle mixed web search enabled/disabled across rounds', () => {
@@ -501,7 +502,7 @@ describe('multi-Round Timeline Integrity', () => {
 
     // Round 0: with web search
     const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
-    store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
     const r0P0 = createTestAssistantMessage({
       id: 'p0-r0',
       content: 'A1',
@@ -524,8 +525,8 @@ describe('multi-Round Timeline Integrity', () => {
     });
 
     store.getState().setMessages([r0User, r0P0, r1User, r1P0]);
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
-    store.getState().addAnalysis(createMockAnalysis(1, AnalysisStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(1, MessageStatuses.COMPLETE));
 
     const timeline = buildTimelineFromStore(store);
 
@@ -628,7 +629,7 @@ describe('participant Sequential Execution', () => {
     expect(store.getState().currentParticipantIndex).toBe(2);
   });
 
-  it('should trigger analysis only after last participant', () => {
+  it('should trigger summary only after last participant', () => {
     const store = createChatStore();
     const participantCount = 3;
 
@@ -682,7 +683,7 @@ describe('resumption Timeline Integrity', () => {
 
     // Complete round 0
     const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
-    store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
     const r0P0 = createTestAssistantMessage({
       id: 'p0-r0',
       content: 'A0',
@@ -701,11 +702,11 @@ describe('resumption Timeline Integrity', () => {
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1]);
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
     // Round 1 incomplete (interrupted by refresh)
     const r1User = createTestUserMessage({ id: 'user-r1', content: 'Q2', roundNumber: 1 });
-    store.getState().addPreSearch(createMockStoredPreSearch(1, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(1, MessageStatuses.COMPLETE));
     const r1P0 = createTestAssistantMessage({
       id: 'p0-r1',
       content: 'Incomplete...',
@@ -758,23 +759,23 @@ describe('resumption Timeline Integrity', () => {
     store.getState().setParticipants(createMockParticipants(2));
 
     // Pre-search interrupted (STREAMING state)
-    store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.STREAMING));
+    store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.STREAMING));
 
     const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
     store.getState().setMessages([userMsg]);
 
     // Check pre-search needs resumption
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-    const needsResume = preSearch?.status === AnalysisStatuses.STREAMING;
+    const needsResume = preSearch?.status === MessageStatuses.STREAMING;
 
     expect(needsResume).toBe(true);
 
     // After pre-search resumes and completes
-    store.getState().updatePreSearchStatus(0, AnalysisStatuses.COMPLETE);
+    store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
 
     // Participants can now start
     const updatedPreSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-    const canStartParticipants = updatedPreSearch?.status === AnalysisStatuses.COMPLETE;
+    const canStartParticipants = updatedPreSearch?.status === MessageStatuses.COMPLETE;
 
     expect(canStartParticipants).toBe(true);
   });
@@ -860,21 +861,21 @@ describe('timeline Race Condition Prevention', () => {
     expect(thirdResult).toBe(true);
   });
 
-  it('should prevent duplicate analysis creation', () => {
+  it('should prevent duplicate summary creation', () => {
     const store = createChatStore();
 
     // First creation
-    expect(store.getState().hasAnalysisBeenCreated(0)).toBe(false);
-    store.getState().markAnalysisCreated(0);
-    expect(store.getState().hasAnalysisBeenCreated(0)).toBe(true);
+    expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
+    store.getState().markSummaryCreated(0);
+    expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
 
     // Duplicate should be blocked
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.PENDING));
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.STREAMING));
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.STREAMING));
 
-    // Only one analysis for round 0
-    const round0Analyses = store.getState().analyses.filter(a => a.roundNumber === 0);
-    expect(round0Analyses).toHaveLength(1);
+    // Only one summary for round 0
+    const round0Summaries = store.getState().summaries.filter(a => a.roundNumber === 0);
+    expect(round0Summaries).toHaveLength(1);
   });
 
   it('should prevent participant streaming overlap', () => {
@@ -918,7 +919,7 @@ describe('timeline Race Condition Prevention', () => {
     expect(canSendAfterComplete).toBe(true);
   });
 
-  it('should wait for animations before analysis', async () => {
+  it('should wait for animations before summary', async () => {
     const store = createChatStore();
 
     // Register animations for participants
@@ -941,11 +942,11 @@ describe('timeline Race Condition Prevention', () => {
 });
 
 // ============================================================================
-// ANALYSIS TRIGGER TIMING TESTS
+// SUMMARY TRIGGER TIMING TESTS
 // ============================================================================
 
-describe('analysis Trigger Timing', () => {
-  it('should only trigger analysis after all participants complete', () => {
+describe('summary Trigger Timing', () => {
+  it('should only trigger summary after all participants complete', () => {
     const store = createChatStore();
     const participantCount = 3;
 
@@ -972,23 +973,23 @@ describe('analysis Trigger Timing', () => {
       const completedCount = store.getState().messages.filter((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return (
-          meta?.role === MessageRoles.ASSISTANT &&
-          meta?.roundNumber === 0 &&
-          meta?.finishReason === FinishReasons.STOP
+          meta?.role === MessageRoles.ASSISTANT
+          && meta?.roundNumber === 0
+          && meta?.finishReason === FinishReasons.STOP
         );
       }).length;
 
-      const shouldTriggerAnalysis = completedCount === participantCount;
+      const shouldTriggerSummary = completedCount === participantCount;
 
       if (i < participantCount - 1) {
-        expect(shouldTriggerAnalysis).toBe(false);
+        expect(shouldTriggerSummary).toBe(false);
       } else {
-        expect(shouldTriggerAnalysis).toBe(true);
+        expect(shouldTriggerSummary).toBe(true);
       }
     }
   });
 
-  it('should handle analysis streaming after participant completion', () => {
+  it('should handle summary streaming after participant completion', () => {
     const store = createChatStore();
 
     store.getState().setThread(createMockThread('thread-123', false));
@@ -1017,17 +1018,17 @@ describe('analysis Trigger Timing', () => {
 
     store.getState().setMessages(messages);
 
-    // Analysis starts streaming
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.STREAMING));
+    // Summary starts streaming
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.STREAMING));
 
-    const analysis = store.getState().analyses.find(a => a.roundNumber === 0);
-    expect(analysis?.status).toBe(AnalysisStatuses.STREAMING);
+    const summary = store.getState().summaries.find(a => a.roundNumber === 0);
+    expect(summary?.status).toBe(MessageStatuses.STREAMING);
 
-    // Analysis completes
-    store.getState().updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+    // Summary completes
+    store.getState().updateMessageStatus(0, MessageStatuses.COMPLETE);
 
-    const completedAnalysis = store.getState().analyses.find(a => a.roundNumber === 0);
-    expect(completedAnalysis?.status).toBe(AnalysisStatuses.COMPLETE);
+    const completedSummary = store.getState().summaries.find(a => a.roundNumber === 0);
+    expect(completedSummary?.status).toBe(MessageStatuses.COMPLETE);
 
     // Timeline should be valid
     const timeline = buildTimelineFromStore(store);
@@ -1049,7 +1050,7 @@ describe('web Search Toggle Between Rounds', () => {
     store.getState().setParticipants(createMockParticipants(1));
     store.getState().setEnableWebSearch(true);
 
-    store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
 
     // Round 1: Web search disabled
     store.getState().setEnableWebSearch(false);
@@ -1136,13 +1137,13 @@ describe('error Handling in Timeline', () => {
     store.getState().setParticipants(createMockParticipants(2));
 
     // Pre-search fails
-    store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.FAILED));
+    store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.FAILED));
 
     // Participants should still proceed
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-    const shouldBlockParticipants =
-      preSearch?.status === AnalysisStatuses.PENDING ||
-      preSearch?.status === AnalysisStatuses.STREAMING;
+    const shouldBlockParticipants
+      = preSearch?.status === MessageStatuses.PENDING
+        || preSearch?.status === MessageStatuses.STREAMING;
 
     expect(shouldBlockParticipants).toBe(false);
 
@@ -1195,8 +1196,8 @@ describe('error Handling in Timeline', () => {
 
     store.getState().setMessages([userMsg, p0Error, p1]);
 
-    // Analysis should still be created
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+    // Summary should still be created
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
@@ -1217,17 +1218,17 @@ describe('regeneration Timeline Integrity', () => {
     store.getState().setParticipants(createMockParticipants(2));
 
     // Complete round 0
-    store.getState().addPreSearch(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+    store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
     store.getState().markPreSearchTriggered(0);
-    store.getState().markAnalysisCreated(0);
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+    store.getState().markSummaryCreated(0);
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
     // Start regeneration
     store.getState().startRegeneration(0);
 
     // Round 0 tracking should be cleared
     expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
-    expect(store.getState().hasAnalysisBeenCreated(0)).toBe(false);
+    expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
   });
 
   it('should preserve other rounds during regeneration', () => {
@@ -1237,16 +1238,16 @@ describe('regeneration Timeline Integrity', () => {
     store.getState().setParticipants(createMockParticipants(2));
 
     // Round 0 and 1 complete
-    store.getState().markAnalysisCreated(0);
-    store.getState().markAnalysisCreated(1);
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
-    store.getState().addAnalysis(createMockAnalysis(1, AnalysisStatuses.COMPLETE));
+    store.getState().markSummaryCreated(0);
+    store.getState().markSummaryCreated(1);
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(1, MessageStatuses.COMPLETE));
 
     // Regenerate round 0
     store.getState().startRegeneration(0);
 
     // Round 1 should be preserved
-    expect(store.getState().hasAnalysisBeenCreated(1)).toBe(true);
+    expect(store.getState().hasSummaryBeenCreated(1)).toBe(true);
   });
 });
 
@@ -1274,7 +1275,7 @@ describe('complete Conversation Flow', () => {
       allMessages.push(userMsg);
 
       // Pre-search
-      store.getState().addPreSearch(createMockStoredPreSearch(round, AnalysisStatuses.COMPLETE));
+      store.getState().addPreSearch(createMockStoredPreSearch(round, MessageStatuses.COMPLETE));
 
       // Participants
       for (let p = 0; p < participants.length; p++) {
@@ -1289,8 +1290,8 @@ describe('complete Conversation Flow', () => {
         allMessages.push(pMsg);
       }
 
-      // Analysis
-      store.getState().addAnalysis(createMockAnalysis(round, AnalysisStatuses.COMPLETE));
+      // Summary
+      store.getState().addSummary(createMockSummary(round, MessageStatuses.COMPLETE));
     }
 
     store.getState().setMessages(allMessages);
@@ -1306,7 +1307,7 @@ describe('complete Conversation Flow', () => {
     expect(timeline.filter(e => e.type === 'user_message')).toHaveLength(3);
     expect(timeline.filter(e => e.type === 'pre_search')).toHaveLength(3);
     expect(timeline.filter(e => e.type === 'participant_message')).toHaveLength(6);
-    expect(timeline.filter(e => e.type === 'analysis')).toHaveLength(3);
+    expect(timeline.filter(e => e.type === 'summary')).toHaveLength(3);
   });
 
   it('should handle conversation with participant count change', () => {
@@ -1336,7 +1337,7 @@ describe('complete Conversation Flow', () => {
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1]);
-    store.getState().addAnalysis(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
     // Round 1: 3 participants (one added)
     store.getState().setParticipants(createMockParticipants(3));
@@ -1368,7 +1369,7 @@ describe('complete Conversation Flow', () => {
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1, r1User, r1P0, r1P1, r1P2]);
-    store.getState().addAnalysis(createMockAnalysis(1, AnalysisStatuses.COMPLETE));
+    store.getState().addSummary(createMockSummary(1, MessageStatuses.COMPLETE));
 
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);

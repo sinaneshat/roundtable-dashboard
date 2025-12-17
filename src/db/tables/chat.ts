@@ -2,12 +2,12 @@ import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import {
-  ANALYSIS_STATUSES,
   CHANGELOG_TYPES,
   CHAT_MODES,
   DEFAULT_CHAT_MODE,
   FEEDBACK_TYPES,
   MESSAGE_ROLES,
+  MESSAGE_STATUSES,
   THREAD_STATUSES,
 } from '@/api/core/enums';
 import type {
@@ -300,9 +300,9 @@ export const chatMessage = sqliteTable('chat_message', {
 ]);
 
 /**
- * Moderator Round Analysis
- * Stores AI-generated analysis results for each conversation round
- * Allows users to view past analyses when revisiting threads
+ * Moderator Round Summary
+ * Stores AI-generated summary results for each conversation round
+ * Allows users to view past summaries when revisiting threads
  */
 export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   id: text('id').primaryKey(),
@@ -313,64 +313,22 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   mode: text('mode', { enum: CHAT_MODES }).notNull(), // Mode when analysis was performed
   userQuestion: text('user_question').notNull(), // The user's question/prompt for this round
   // ✅ CRITICAL: Status field for idempotency and state tracking
-  // Prevents duplicate analysis generation on page refresh
-  status: text('status', { enum: ANALYSIS_STATUSES })
+  // Prevents duplicate summary generation on page refresh
+  status: text('status', { enum: MESSAGE_STATUSES })
     .notNull()
     .default('pending'), // pending -> streaming -> complete/failed
-  analysisData: text('analysis_data', { mode: 'json' }).$type<{
-    confidence: {
-      overall: number;
-      reasoning: string;
-    };
-    modelVoices: Array<{
-      modelName: string;
-      modelId: string;
-      participantIndex: number;
-      role: string | null;
-      position: string | null;
-      keyContribution: string | null;
-      notableQuote?: string | null;
-    }>;
-    article: {
-      headline: string;
-      narrative: string;
-      keyTakeaway: string;
-    };
-    recommendations: Array<{
-      title: string;
-      description: string;
-      suggestedPrompt?: string;
-      suggestedModels?: string[];
-      suggestedRoles?: string[];
-    }>;
-    consensusTable: Array<{
-      topic: string;
-      positions: Array<{
-        modelName: string;
-        stance: 'agree' | 'disagree' | 'nuanced';
-        brief: string;
-      }>;
-      resolution: 'consensus' | 'majority' | 'split' | 'contested';
-    }>;
-    minorityViews: Array<{
-      modelName: string;
-      view: string;
-      reasoning?: string | null;
-      worthConsidering?: boolean;
-    }>;
-    convergenceDivergence: {
-      convergedOn: string[];
-      divergedOn: string[];
-      evolved: Array<{
-        point: string;
-        initialState: string;
-        finalState: string;
-      }>;
+  summaryData: text('analysis_data', { mode: 'json' }).$type<{
+    summary: string;
+    metrics: {
+      engagement: number;
+      insight: number;
+      balance: number;
+      clarity: number;
     };
   }>(),
   // Store participant message IDs that were analyzed
   participantMessageIds: text('participant_message_ids', { mode: 'json' }).notNull().$type<string[]>(),
-  // ✅ Error tracking for failed analyses
+  // ✅ Error tracking for failed summaries
   errorMessage: text('error_message'),
   // ✅ Completion timestamp (null until status = 'complete')
   completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
@@ -381,7 +339,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   index('chat_moderator_analysis_thread_idx').on(table.threadId),
   index('chat_moderator_analysis_round_idx').on(table.threadId, table.roundNumber),
   index('chat_moderator_analysis_created_idx').on(table.createdAt),
-  // ✅ NEW: Index on status for efficient querying of in-progress analyses
+  // ✅ NEW: Index on status for efficient querying of in-progress summaries
   index('chat_moderator_analysis_status_idx').on(table.status),
 ]);
 
@@ -427,8 +385,8 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   userQuery: text('user_query').notNull(), // The user's search query
   // ✅ CRITICAL: Status field for idempotency and state tracking
   // Prevents duplicate searches on page refresh
-  // Uses ANALYSIS_STATUSES for consistency (pending/streaming/completed/failed)
-  status: text('status', { enum: ANALYSIS_STATUSES })
+  // Uses MESSAGE_STATUSES for consistency (pending/streaming/completed/failed)
+  status: text('status', { enum: MESSAGE_STATUSES })
     .notNull()
     .default('pending'), // pending -> streaming -> completed/failed
   // Store the full search results as JSON
@@ -485,7 +443,7 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
         reasoning?: string;
       };
     }>;
-    analysis: string; // Overall analysis of why these queries were chosen
+    summary: string; // Overall summary of why these queries were chosen
     successCount: number;
     failureCount: number;
     totalResults: number;
@@ -522,7 +480,7 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   participants: many(chatParticipant),
   messages: many(chatMessage),
   changelog: many(chatThreadChangelog), // Configuration change history
-  moderatorAnalyses: many(chatModeratorAnalysis), // AI-generated round analyses
+  moderatorAnalyses: many(chatModeratorAnalysis), // AI-generated round summaries
   preSearches: many(chatPreSearch), // Web search results for rounds
   roundFeedback: many(chatRoundFeedback), // User feedback for rounds
 }));
@@ -573,7 +531,7 @@ export const chatThreadChangelogRelations = relations(chatThreadChangelog, ({ on
 }));
 
 /**
- * Moderator Analysis Relations
+ * Moderator Summary Relations
  */
 export const chatModeratorAnalysisRelations = relations(chatModeratorAnalysis, ({ one }) => ({
   thread: one(chatThread, {

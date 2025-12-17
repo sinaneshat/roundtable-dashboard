@@ -34,7 +34,6 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
   const prevMessageCountRef = useRef<number>(0);
 
   // Track last stream activity to detect stuck streams
-
   const lastStreamActivityRef = useRef<number>(Date.now());
 
   // Streaming throttle to avoid race conditions
@@ -84,11 +83,11 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     // Prevent circular updates - only sync when ACTUAL CONTENT changes
     // AI SDK returns new array reference on every render
 
-    // Never sync if AI SDK has FEWER messages than store
-    // Prevents message loss during navigation/initialization
-    if (chat.messages.length < currentStoreMessages.length) {
-      return;
-    }
+    // ✅ STREAMING FIX: Don't block sync when AI SDK has fewer messages
+    // Previously returned early when chat.messages.length < currentStoreMessages.length
+    // This blocked syncing NEW streaming messages when AI SDK wasn't fully hydrated
+    // Bug: AI SDK receives streaming responses but store never updates
+    // Fix: Merge new messages from AI SDK into store instead of blocking
 
     // Validate thread ID before syncing to prevent stale messages
     if (currentThreadId && chat.messages.length > 0) {
@@ -111,6 +110,13 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     // 🐛 BUG FIX: Also detect when chat has more messages than store
     // Previously only compared against ref, missing cases where store falls behind
     const chatAheadOfStore = chat.messages.length > currentStoreMessages.length;
+
+    // ✅ STREAMING FIX: Detect when AI SDK has messages that store doesn't have
+    // This handles the case where AI SDK has fewer total messages but some are NEW
+    // (e.g., AI SDK has streaming messages but wasn't fully hydrated with history)
+    const storeMessageIds = new Set(currentStoreMessages.map(m => m.id));
+    const chatHasNewMessages = chat.messages.some(m => !storeMessageIds.has(m.id));
+
     let contentChanged = false;
     let shouldThrottle = false;
 
@@ -154,8 +160,9 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       }
     }
 
-    // 🐛 BUG FIX: Include chatAheadOfStore in sync decision
-    const shouldSync = countChanged || chatAheadOfStore || (contentChanged && !shouldThrottle);
+    // ✅ STREAMING FIX: Include chatHasNewMessages in sync decision
+    // This ensures new streaming messages get synced even when AI SDK has fewer total messages
+    const shouldSync = countChanged || chatAheadOfStore || chatHasNewMessages || (contentChanged && !shouldThrottle);
 
     if (shouldSync) {
       const state = store.getState();

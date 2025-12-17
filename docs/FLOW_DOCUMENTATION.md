@@ -5,7 +5,7 @@
 
 ## OVERVIEW: THE CHAT EXPERIENCE
 
-Roundtable enables users to create conversations where multiple AI models collaborate to answer questions. Each conversation consists of "rounds" - a complete cycle of user question → AI responses → optional analysis.
+Roundtable enables users to create conversations where multiple AI models collaborate to answer questions. Each conversation consists of "rounds" - a complete cycle of user question → AI responses → optional summary.
 
 ---
 
@@ -54,7 +54,7 @@ Roundtable enables users to create conversations where multiple AI models collab
 3. User's message appears at top
 4. First AI starts responding (text streams word-by-word)
 5. **URL stays at `/chat`** during entire first round
-6. **After analysis completes**: Automatic navigation to `/chat/[unique-slug]` (full page transition)
+6. **After summary completes**: Automatic navigation to `/chat/[unique-slug]` (full page transition)
 
 **Behind the Scenes:**
 - System creates conversation record in database
@@ -412,15 +412,15 @@ const { messages, stop } = useChat({
 
 ---
 
-## PART 4: ROUND ANALYSIS
+## PART 4: ROUND SUMMARY
 
-### Analysis Trigger
+### Summary Trigger
 
 **When It Happens:** After the LAST selected AI completes response (automatic)
 
 **What User Sees:**
 1. **Loading changes**: "Analyzing responses..." or "Synthesizing insights..."
-2. **Analysis card appears** below all responses with expandable accordion
+2. **Summary card appears** below all responses with expandable accordion
 3. **Progressive streaming** (5 sections appear in order):
 
    **Section 1: Leaderboard**
@@ -452,14 +452,14 @@ const { messages, stop } = useChat({
    - Key takeaways
 
 **Behind the Scenes:**
-- System uses fast AI model (GPT-4o) to generate analysis
-- Analysis considers conversation mode (Debate analysis differs from Brainstorming)
+- System uses fast AI model (GPT-4o) to generate summary
+- Summary considers conversation mode (Debate summary differs from Brainstorming)
 - Creates structured data with scores, ratings, and text
 - Saves to database linked to specific round number
 
 ### After First Round Completes
 
-**Automatic Navigation** - Once the moderator analysis completes and AI-generated title is ready, the page automatically navigates from `/chat` to `/chat/[slug]`. This transitions from ChatOverviewScreen to ChatThreadScreen, where the user can continue the conversation by typing another message.
+**Automatic Navigation** - Once the moderator summary completes and AI-generated title is ready, the page automatically navigates from `/chat` to `/chat/[slug]`. This transitions from ChatOverviewScreen to ChatThreadScreen, where the user can continue the conversation by typing another message.
 
 ---
 
@@ -473,12 +473,12 @@ const { messages, stop } = useChat({
 - Each round shows:
   - User question
   - All AI responses
-  - Analysis card (collapsed for older rounds)
+  - Summary card (collapsed for older rounds)
   - Like/Dislike buttons for entire round
 - Input box at bottom ready for next message
 
 **Behind the Scenes:**
-- System loads conversation details, messages, participants, analysis (ONE TIME)
+- System loads conversation details, messages, participants, summary (ONE TIME)
 - After initial load, ALL updates happen in browser memory (no server requests)
 - Page refresh is only way to sync with server again
 - This makes interface extremely fast
@@ -492,14 +492,14 @@ Round 1:
   - AI Response 1
   - AI Response 2
   - AI Response 3
-  - Analysis (expandable)
+  - Summary (expandable)
   - Like/Dislike buttons
 
 Round 2:
   - [Configuration Change Banner] ← only if changes made
   - User message
   - AI responses...
-  - Analysis
+  - Summary
   - Like/Dislike buttons
 ```
 
@@ -557,20 +557,20 @@ Changes save when user submits next message (not immediately).
 
 **Immediate Visual Changes:**
 1. All AI responses from that round disappear
-2. Analysis card disappears
+2. Summary card disappears
 3. Feedback buttons reset
 4. Loading indicator appears
 
 **Behind the Scenes:**
 1. **Database cleanup**:
    - Deletes all AI messages from that round
-   - Deletes analysis for that round
+   - Deletes summary for that round
    - Deletes feedback for that round
    - Keeps user's original question
 2. **Re-execution**:
    - All selected AIs generate completely fresh responses
    - Responses stream in same sequential order
-   - New analysis generates after all AIs finish
+   - New summary generates after all AIs finish
    - Round number stays the same (maintains timeline)
 
 **User Can Retry Multiple Times:** Button remains available after regeneration completes.
@@ -613,13 +613,13 @@ Changes save when user submits next message (not immediately).
 
 ### Typical Round Duration
 - Each AI response: 5-15 seconds
-- Analysis generation: 8-12 seconds
-- Full round (3 participants + analysis): ~20-40 seconds
+- Summary generation: 8-12 seconds
+- Full round (3 participants + summary): ~20-40 seconds
 
 ### Response Behavior
 - First token: ~800ms, then real-time streaming
 - Transitions between participants: 200ms pause
-- Analysis sections: 100ms stagger for smooth visual display
+- Summary sections: 100ms stagger for smooth visual display
 
 ---
 
@@ -639,16 +639,16 @@ Changes save when user submits next message (not immediately).
 - Round can complete with partial results
 - User can retry entire round to regenerate all responses
 
-### Analysis Errors
+### Summary Errors
 
 **What User Sees:**
-- Red "Failed" badge on analysis card
+- Red "Failed" badge on summary card
 - Error message details
 - Retry button next to status
 
 **Behavior:**
-- Can retry analysis without regenerating AI responses
-- Failed analysis doesn't prevent continuing conversation
+- Can retry summary without regenerating AI responses
+- Failed summary doesn't prevent continuing conversation
 
 ---
 
@@ -698,9 +698,9 @@ Changes save when user submits next message (not immediately).
    - User sees responses streaming in real-time
    - Still on /chat, still ChatOverviewScreen
 
-4. Analysis completes:
-   - Moderator analysis finishes
-   - Analysis status: COMPLETED
+4. Summary completes:
+   - Moderator summary finishes
+   - Summary status: COMPLETED
    - Streaming finishes completely
 
 5. Slug polling (starts IMMEDIATELY on thread creation):
@@ -715,7 +715,7 @@ Changes save when user submits next message (not immediately).
    - User continues viewing streaming/first round
    - Sidebar updates with AI-generated title
 
-7. When first analysis completes:
+7. When first summary completes:
    - Frontend does router.push to /chat/[ai-generated-slug]
    - ChatOverviewScreen UNMOUNTS
    - ChatThreadScreen MOUNTS
@@ -735,11 +735,11 @@ Changes save when user submits next message (not immediately).
    - Format: sanitized-user-question-text + random suffix
    - Example: "say-hi-1-word-only-nzj311"
 
-2. **AI-Generated Title & Slug** - Created asynchronously after analysis
-   - Backend generates AI title after moderator analysis completes
+2. **AI-Generated Title & Slug** - Created asynchronously after summary
+   - Backend generates AI title after moderator summary completes
    - Creates new slug from AI title
    - Updates database atomically (both title AND slug)
-   - Timing: Typically 8-15 seconds (after analysis completes)
+   - Timing: Typically 8-15 seconds (after summary completes)
 
 **URL Update Mechanism:**
 ```typescript
@@ -773,7 +773,7 @@ window.history.replaceState(
 ```
 Thread created → Polling starts immediately →
 Streaming (20-30s) → AI title ready (background) → URL replaced →
-Analysis streaming (8-12s) → Analysis complete →
+Summary streaming (8-12s) → Summary complete →
 router.push to /chat/[slug]
 ```
 
@@ -800,7 +800,7 @@ router.push to /chat/[slug]
 
 ## GLOSSARY
 
-**Round:** One complete cycle of user question → all AI responses → optional analysis
+**Round:** One complete cycle of user question → all AI responses → optional summary
 
 **Participant:** An AI model selected to respond in the conversation
 
@@ -812,7 +812,7 @@ router.push to /chat/[slug]
 
 **Changelog:** Visual record showing what changed between rounds
 
-**Analysis:** AI-generated evaluation comparing all participant responses
+**Summary:** AI-generated evaluation comparing all participant responses
 
 **Mode:** The type of conversation (Brainstorming, Analyzing, Debating, Problem Solving)
 
@@ -831,15 +831,15 @@ router.push to /chat/[slug]
 4. Submit first message
 5. Verify URL stays at `/chat` during streaming
 6. Verify all participants respond sequentially
-7. Verify analysis generates after last participant
-8. Verify automatic navigation to `/chat/[slug]` after analysis + AI title ready
+7. Verify summary generates after last participant
+8. Verify automatic navigation to `/chat/[slug]` after summary + AI title ready
 9. Verify ChatThreadScreen loads at new URL
 
 **Scenario 2: Multi-Round Conversation**
 1. Complete Round 1 on thread detail page
 2. Submit second message
 3. Verify Round 2 messages appear
-4. Verify analysis generates
+4. Verify summary generates
 5. Verify round numbers are consistent
 
 **Scenario 3: Configuration Changes**
@@ -855,7 +855,7 @@ router.push to /chat/[slug]
 2. Click retry button (only on last round)
 3. Verify old responses disappear
 4. Verify new responses generate
-5. Verify new analysis generates
+5. Verify new summary generates
 6. Verify round number stays the same
 
 **Scenario 5: Error Recovery**
@@ -873,7 +873,7 @@ router.push to /chat/[slug]
 
 ### Performance Benchmarks
 - Time to Interactive: <1s | First token: ~800ms | Page transitions: <100ms
-- AI responses: 5-15s | Analysis: 8-12s | Config changes: Instant (optimistic)
+- AI responses: 5-15s | Summary: 8-12s | Config changes: Instant (optimistic)
 
 ---
 
@@ -885,7 +885,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 - Thread creation → Streaming start
 - Slug polling → URL updates
 - Pre-search blocking → Participant streaming
-- Analysis completion → Navigation trigger
+- Summary completion → Navigation trigger
 - Stop button → In-flight message handling
 
 **Critical Principle**: NO race condition can slip through. Each timing dependency has explicit guards and comprehensive test coverage.
@@ -989,8 +989,8 @@ The chat overview screen orchestrates multiple async operations that must coordi
 - **Test**: `streaming-stop-button-race.test.ts:38-75`
 - **Level**: MEDIUM - UI reflects stop, in-flight messages can arrive
 
-**RACE 4.3: Analysis Trigger Timing**
-- **Risk**: Analysis creation notification lost, flow never sees completion
+**RACE 4.3: Summary Trigger Timing**
+- **Risk**: Summary creation notification lost, flow never sees completion
 - **Protection**: Callback + store subscription dual mechanism
 - **Test**: `streaming-stop-button-race.test.ts:148-173`
 - **Level**: HIGH - Explicit callback + subscription
@@ -999,10 +999,10 @@ The chat overview screen orchestrates multiple async operations that must coordi
 
 #### **5. Navigation Timing**
 
-**RACE 5.1: Analysis Completion Detection**
+**RACE 5.1: Summary Completion Detection**
 - **Detection Logic**:
   ```
-  firstAnalysisCompleted =
+  firstSummaryCompleted =
     status === 'complete' OR
     (status === 'streaming' && elapsed > 60s) OR
     (status === 'pending' && !isStreaming && elapsed > 60s)
@@ -1033,7 +1033,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 |---|---|---|---|---|
 | **Navigation Timing** | queueMicrotask ordering (URL replace vs router.push) | race-conditions-navigation-flow.test.ts | 2 | ✅ PASSING |
 | | hasUpdatedThread flag coordination | race-conditions-navigation-flow.test.ts | 2 | ✅ PASSING |
-| | Analysis completion detection (multi-layer + timeout) | race-conditions-navigation-flow.test.ts | 5 | ✅ PASSING |
+| | Summary completion detection (multi-layer + timeout) | race-conditions-navigation-flow.test.ts | 5 | ✅ PASSING |
 | | Duplicate navigation prevention (hasNavigated flag) | race-conditions-navigation-flow.test.ts | 2 | ✅ PASSING |
 | **Pre-Search Blocking** | Optimistic blocking (orchestrator not synced) | race-conditions-presearch-blocking.test.ts | 4 | ✅ PASSING |
 | | Web search enabled/disabled conditions | race-conditions-presearch-blocking.test.ts | 2 | ✅ PASSING |
@@ -1043,7 +1043,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 | | Concurrent status checks (consistency) | race-conditions-presearch-blocking.test.ts | 1 | ✅ PASSING |
 | **Stop Button** | In-flight message handling after stop | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
 | | Atomic state updates (isStreaming + index) | race-conditions-stop-button.test.ts | 2 | ✅ PASSING |
-| | Analysis trigger prevention when stopped early | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
+| | Summary trigger prevention when stopped early | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
 | | Participant sequence control | race-conditions-stop-button.test.ts | 2 | ✅ PASSING |
 | | Rapid stop/start cycles | race-conditions-stop-button.test.ts | 2 | ✅ PASSING |
 | | Stop button state sync | race-conditions-stop-button.test.ts | 3 | ✅ PASSING |
@@ -1098,21 +1098,21 @@ The chat overview screen orchestrates multiple async operations that must coordi
 | **Provider Execution Conditions** | When to execute pre-search (PENDING) | provider-integration-flow.test.ts | 4 | ✅ PASSING |
 | | When to create pre-search (missing) | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | When to send message (COMPLETE/FAILED) | provider-integration-flow.test.ts | 4 | ✅ PASSING |
-| **Navigation Timing** | Analysis completion detection | provider-integration-flow.test.ts | 3 | ✅ PASSING |
+| **Navigation Timing** | Summary completion detection | provider-integration-flow.test.ts | 3 | ✅ PASSING |
 | | Screen mode transitions | provider-integration-flow.test.ts | 4 | ✅ PASSING |
 | **Stop Button Races** | Stop during pre-search | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | Stop during streaming | provider-integration-flow.test.ts | 3 | ✅ PASSING |
 | | Stop between participants | provider-integration-flow.test.ts | 1 | ✅ PASSING |
-| | Stop during analysis | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Stop during summary | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | **Error Recovery** | Pre-search failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | Participant streaming failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
-| | Analysis failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
+| | Summary failures | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | | Timeout protection | provider-integration-flow.test.ts | 2 | ✅ PASSING |
 | **Documented Race Conditions** | Thread ID availability | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Orchestrator sync timing | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Sequential participant coordination | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Stop during participant switch | provider-integration-flow.test.ts | 1 | ✅ PASSING |
-| | Multi-layer analysis completion | provider-integration-flow.test.ts | 1 | ✅ PASSING |
+| | Multi-layer summary completion | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | **Complete Journey Integration** | 2-round with web search | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Stop mid-round | provider-integration-flow.test.ts | 1 | ✅ PASSING |
 | | Pre-search failure recovery | provider-integration-flow.test.ts | 1 | ✅ PASSING |
@@ -1135,7 +1135,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
    ↓ [GUARD: shouldWaitForPreSearch() with timeout]
 6. Participants stream sequentially
    ↓ [GUARD: currentParticipantIndex increments]
-7. Analysis created + status COMPLETE
+7. Summary created + status COMPLETE
    ↓ [GUARD: Multi-layer detection + 60s timeout]
 8. Navigation to thread detail
 ```
@@ -1143,7 +1143,7 @@ The chat overview screen orchestrates multiple async operations that must coordi
 **Vulnerable Gaps** (All Protected):
 - Gap 2→3: Store state propagation [✅ Explicit sync]
 - Gap 4→5: Orchestrator query timing [✅ Optimistic blocking]
-- Gap 7→8: Analysis visibility [✅ Multi-layer + timeout]
+- Gap 7→8: Summary visibility [✅ Multi-layer + timeout]
 
 ---
 
@@ -1259,7 +1259,7 @@ Backend pre-search handlers were checking `thread.enableWebSearch` (set at threa
 
 **Test Categories Added**:
 - ✅ Provider-level pre-search execution triggering (10 tests)
-- ✅ Navigation timing and analysis completion detection (7 tests)
+- ✅ Navigation timing and summary completion detection (7 tests)
 - ✅ Stop button during all states (7 tests)
 - ✅ Error recovery scenarios (8 tests)
 - ✅ Documented race conditions (5 tests)
@@ -1348,7 +1348,7 @@ New tests cover the full flow from pending message to pre-search completion to m
 **Changes:**
 - Fixed Part 12 (URL Patterns) to match actual implementation
 - Updated navigation flow: router.push (not window.history.replaceState)
-- Clarified polling behavior: starts AFTER streaming + analysis complete
+- Clarified polling behavior: starts AFTER streaming + summary complete
 - Updated test scenarios to reflect two-screen architecture
 
 **Version 2.0** - Focused Chat Journey Documentation

@@ -8,12 +8,9 @@
  * - threads.ts: Thread CRUD operations (list, get, public)
  * - messages.ts: Thread message operations
  * - changelog.ts: Thread configuration changelog
- * - analysis.ts: Thread moderator analysis operations
+ * - summary.ts: Thread round summary operations
  * - feedback-and-roles.ts: Thread feedback and custom roles
  */
-
-// Thread analysis
-export { useThreadAnalysesQuery } from './analysis';
 
 // Thread changelog
 export { useThreadChangelogQuery } from './changelog';
@@ -27,6 +24,9 @@ export {
 
 // Thread messages
 export { useThreadMessagesQuery } from './messages';
+
+// Thread round summaries
+export { useThreadSummariesQuery } from './summary';
 
 // Thread CRUD operations
 export {

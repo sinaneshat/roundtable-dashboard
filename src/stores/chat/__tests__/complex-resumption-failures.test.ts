@@ -21,7 +21,7 @@ type StreamState = {
   completedParticipants: string[];
   pendingParticipants: string[];
   preSearchComplete: boolean;
-  analysisComplete: boolean;
+  summaryComplete: boolean;
   messages: Array<{
     id: string;
     participantId: string;
@@ -199,7 +199,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0'],
         pendingParticipants: ['p1', 'p2'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: 'evt-100',
         timestamp: Date.now(),
@@ -220,7 +220,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: [],
         pendingParticipants: ['p0', 'p1'],
         preSearchComplete: false,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: '',
         timestamp: Date.now(),
@@ -241,7 +241,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0', 'p1'], // p1 in both
         pendingParticipants: ['p1', 'p2'], // p1 duplicate
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: 'evt-50',
         timestamp: Date.now(),
@@ -262,7 +262,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: [],
         pendingParticipants: ['p0'],
         preSearchComplete: false,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [
           { id: '', participantId: 'p0', content: 'test', status: 'complete' as const }, // Missing id
         ],
@@ -285,7 +285,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0', 'p1'],
         pendingParticipants: ['p2'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [
           { id: 'msg-1', participantId: 'p0', content: 'response 1', status: 'complete' as const },
           { id: 'msg-2', participantId: 'p1', content: 'response 2', status: 'complete' as const },
@@ -311,7 +311,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0'],
         pendingParticipants: ['p1', 'p2'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [
           { id: 'msg-1', participantId: 'p0', content: 'test', status: 'complete' as const },
         ],
@@ -377,7 +377,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0', 'p1'],
         pendingParticipants: ['p2'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [
           { id: 'msg-1', participantId: 'p0', content: 'kv response 1', status: 'complete' as const },
           { id: 'msg-2', participantId: 'p1', content: 'kv response 2', status: 'complete' as const },
@@ -411,7 +411,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0'],
         pendingParticipants: ['p1', 'p2'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: 'evt-50',
         timestamp: Date.now(),
@@ -437,7 +437,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0'],
         pendingParticipants: ['p1', 'p2'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [
           { id: 'msg-1', participantId: 'p0', content: 'test', status: 'complete' as const },
         ],
@@ -474,7 +474,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: [],
           pendingParticipants: [],
           preSearchComplete: false,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [],
           lastEventId: '',
           timestamp: Date.now(),
@@ -508,7 +508,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: ['p0'],
           pendingParticipants: ['p1', 'p2'],
           preSearchComplete: true,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [
             { id: 'msg-1', participantId: 'p0', content: 'test', status: 'complete' as const },
           ],
@@ -560,7 +560,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: ['p0'],
           pendingParticipants: ['p1', 'p2'],
           preSearchComplete: true,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [
             { id: 'msg-1', participantId: 'p0', content: 'complete response', status: 'complete' as const },
             { id: 'msg-2', participantId: 'p1', content: 'partial res', status: 'streaming' as const },
@@ -597,7 +597,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: [],
           pendingParticipants: ['p0', 'p1', 'p2'],
           preSearchComplete: true, // Pre-search done
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [],
           lastEventId: 'evt-50',
           timestamp: Date.now(),
@@ -622,7 +622,7 @@ describe('complex Resumption Failure Scenarios', () => {
       expect(result.recoveredState?.completedParticipants).toHaveLength(0);
     });
 
-    it('should recover after all participants but before analysis', async () => {
+    it('should recover after all participants but before summary', async () => {
       const kvData: KVStreamData = {
         state: {
           streamId: 'stream-123',
@@ -632,7 +632,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: ['p0', 'p1', 'p2'],
           pendingParticipants: [],
           preSearchComplete: true,
-          analysisComplete: false, // Analysis not started
+          summaryComplete: false, // Analysis not started
           messages: [
             { id: 'msg-1', participantId: 'p0', content: 'r1', status: 'complete' as const },
             { id: 'msg-2', participantId: 'p1', content: 'r2', status: 'complete' as const },
@@ -657,7 +657,7 @@ describe('complex Resumption Failure Scenarios', () => {
 
       expect(result.success).toBe(true);
       expect(result.recoveredState?.completedParticipants).toHaveLength(3);
-      expect(result.recoveredState?.analysisComplete).toBe(false);
+      expect(result.recoveredState?.summaryComplete).toBe(false);
     });
   });
 
@@ -672,7 +672,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: ['p0'],
           pendingParticipants: ['p1', 'p2'],
           preSearchComplete: true,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [
             // Round 1 messages would be in thread already
             { id: 'msg-r2-1', participantId: 'p0', content: 'round 2 p0', status: 'complete' as const },
@@ -708,7 +708,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: [],
         pendingParticipants: ['p0', 'p1'],
         preSearchComplete: false,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: 'evt-0',
         timestamp: Date.now(),
@@ -737,7 +737,7 @@ describe('complex Resumption Failure Scenarios', () => {
             completedParticipants: [],
             pendingParticipants: ['p0'],
             preSearchComplete: false,
-            analysisComplete: false,
+            summaryComplete: false,
             messages: [],
             lastEventId: '',
             timestamp: Date.now(),
@@ -780,7 +780,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: [],
           pendingParticipants: [],
           preSearchComplete: false,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [],
           lastEventId: '',
           timestamp: Date.now(),
@@ -809,7 +809,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: [],
           pendingParticipants: [],
           preSearchComplete: false,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [],
           lastEventId: '',
           timestamp: Date.now(),
@@ -839,7 +839,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: [],
         pendingParticipants: [], // No participants at all
         preSearchComplete: false,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: '',
         timestamp: Date.now(),
@@ -867,7 +867,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0', 'p1', 'p2'],
         pendingParticipants: [],
         preSearchComplete: true,
-        analysisComplete: true,
+        summaryComplete: true,
         messages: largeMessages,
         lastEventId: 'evt-999999',
         timestamp: Date.now(),
@@ -887,7 +887,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: ['p0'],
         pendingParticipants: ['p1'],
         preSearchComplete: true,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [
           {
             id: 'msg-1',
@@ -914,7 +914,7 @@ describe('complex Resumption Failure Scenarios', () => {
         completedParticipants: [],
         pendingParticipants: ['p-0_test'],
         preSearchComplete: false,
-        analysisComplete: false,
+        summaryComplete: false,
         messages: [],
         lastEventId: 'evt_special-123.456',
         timestamp: Date.now(),
@@ -940,7 +940,7 @@ describe('complex Resumption Failure Scenarios', () => {
             completedParticipants: [],
             pendingParticipants: ['p0'],
             preSearchComplete: false,
-            analysisComplete: false,
+            summaryComplete: false,
             messages: [],
             lastEventId: '',
             timestamp: Date.now(),
@@ -977,7 +977,7 @@ describe('complex Resumption Failure Scenarios', () => {
             completedParticipants: ['p0'],
             pendingParticipants: ['p1'],
             preSearchComplete: true,
-            analysisComplete: false,
+            summaryComplete: false,
             messages: [
               { id: 'msg-1', participantId: 'p0', content: 'kv', status: 'complete' as const },
             ],
@@ -1032,7 +1032,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: [],
           pendingParticipants: ['p0', 'p1', 'p2'],
           preSearchComplete: false, // Pre-search was in progress
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [],
           lastEventId: 'evt-20',
           timestamp: Date.now(),
@@ -1055,7 +1055,7 @@ describe('complex Resumption Failure Scenarios', () => {
       expect(result.recoveredState?.preSearchComplete).toBe(false);
     });
 
-    it('should handle refresh during analysis', async () => {
+    it('should handle refresh during summary', async () => {
       const kvData: KVStreamData = {
         state: {
           streamId: 'stream-123',
@@ -1065,7 +1065,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: ['p0', 'p1', 'p2'],
           pendingParticipants: [],
           preSearchComplete: true,
-          analysisComplete: false, // Analysis in progress
+          summaryComplete: false, // Analysis in progress
           messages: [
             { id: 'msg-1', participantId: 'p0', content: 'r1', status: 'complete' as const },
             { id: 'msg-2', participantId: 'p1', content: 'r2', status: 'complete' as const },
@@ -1089,7 +1089,7 @@ describe('complex Resumption Failure Scenarios', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.recoveredState?.analysisComplete).toBe(false);
+      expect(result.recoveredState?.summaryComplete).toBe(false);
       expect(result.recoveredState?.completedParticipants).toHaveLength(3);
     });
 
@@ -1103,7 +1103,7 @@ describe('complex Resumption Failure Scenarios', () => {
           completedParticipants: [],
           pendingParticipants: ['p0', 'p1'],
           preSearchComplete: false,
-          analysisComplete: false,
+          summaryComplete: false,
           messages: [],
           lastEventId: 'evt-1',
           timestamp: Date.now(),

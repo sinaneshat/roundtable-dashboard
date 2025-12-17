@@ -14,8 +14,8 @@ import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes } from '@/api/core/enums';
-import type { ChatThreadChangelog, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import { ChatModes, MESSAGE_STATUSES } from '@/api/core/enums';
+import type { ChatThreadChangelog, StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
   createTestAssistantMessage,
@@ -77,17 +77,17 @@ function createMockPreSearch(
     roundNumber,
     userQuery: `Query for round ${roundNumber}`,
     status: status === 'pending'
-      ? AnalysisStatuses.PENDING
+      ? MESSAGE_STATUSES.PENDING
       : status === 'streaming'
-        ? AnalysisStatuses.STREAMING
+        ? MESSAGE_STATUSES.STREAMING
         : status === 'complete'
-          ? AnalysisStatuses.COMPLETE
-          : AnalysisStatuses.FAILED,
+          ? MESSAGE_STATUSES.COMPLETE
+          : MESSAGE_STATUSES.FAILED,
     searchData: status === 'complete'
       ? {
           queries: [],
           results: [],
-          analysis: 'Analysis',
+          summary: 'Summary',
           successCount: 1,
           failureCount: 0,
           totalResults: 3,
@@ -100,25 +100,25 @@ function createMockPreSearch(
   } as StoredPreSearch;
 }
 
-function createMockAnalysis(
+function createMockSummary(
   roundNumber: number,
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
   participantMessageIds: string[] = [],
-): StoredModeratorAnalysis {
+): StoredModeratorSummary {
   return {
-    id: `analysis-r${roundNumber}`,
+    id: `summary-r${roundNumber}`,
     threadId: 'thread-123',
     roundNumber,
     mode: ChatModes.DEBATING,
     userQuestion: `Question for round ${roundNumber}`,
     status: status === 'pending'
-      ? AnalysisStatuses.PENDING
+      ? MESSAGE_STATUSES.PENDING
       : status === 'streaming'
-        ? AnalysisStatuses.STREAMING
+        ? MESSAGE_STATUSES.STREAMING
         : status === 'complete'
-          ? AnalysisStatuses.COMPLETE
-          : AnalysisStatuses.FAILED,
-    analysisData: status === 'complete'
+          ? MESSAGE_STATUSES.COMPLETE
+          : MESSAGE_STATUSES.FAILED,
+    summaryData: status === 'complete'
       ? {
           confidence: { overall: 85, reasoning: 'Test' },
           modelVoices: [],
@@ -133,7 +133,7 @@ function createMockAnalysis(
     errorMessage: null,
     completedAt: status === 'complete' ? new Date() : null,
     createdAt: new Date(),
-  } as StoredModeratorAnalysis;
+  } as StoredModeratorSummary;
 }
 
 // ============================================================================
@@ -176,16 +176,16 @@ describe('bug #1: Changelog Display Between Rounds', () => {
         ]),
       ];
 
-      const analyses: StoredModeratorAnalysis[] = [
-        createMockAnalysis(0, 'complete', ['a0p0', 'a0p1', 'a0p2']),
-        createMockAnalysis(1, 'complete', ['a1p0', 'a1p1']),
-        createMockAnalysis(2, 'complete', ['a2p0']),
+      const summaries: StoredModeratorSummary[] = [
+        createMockSummary(0, 'complete', ['a0p0', 'a0p1', 'a0p2']),
+        createMockSummary(1, 'complete', ['a1p0', 'a1p1']),
+        createMockSummary(2, 'complete', ['a2p0']),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          analyses,
+          summaries,
           changelog,
           preSearches: [],
         }),
@@ -237,15 +237,15 @@ describe('bug #1: Changelog Display Between Rounds', () => {
         ]),
       ];
 
-      const analyses: StoredModeratorAnalysis[] = [
-        createMockAnalysis(2, 'complete', ['a2p0']),
-        createMockAnalysis(3, 'complete', ['a3p0']),
+      const summaries: StoredModeratorSummary[] = [
+        createMockSummary(2, 'complete', ['a2p0']),
+        createMockSummary(3, 'complete', ['a3p0']),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          analyses,
+          summaries,
           changelog,
           preSearches: [],
         }),
@@ -267,14 +267,14 @@ describe('bug #1: Changelog Display Between Rounds', () => {
 
 describe('bug #2: Timeline Element Ordering', () => {
   describe('correct element order per round', () => {
-    it('fAILS: timeline should maintain order: changelog -> user -> pre-search -> assistants -> analysis', () => {
+    it('fAILS: timeline should maintain order: changelog -> user -> pre-search -> assistants -> summary', () => {
       /**
        * Expected order for each round:
        * 1. Changelog (if config changed)
        * 2. User message
        * 3. Pre-search card (if web search enabled)
        * 4. Assistant messages (in participant index order)
-       * 5. Analysis card
+       * 5. Summary card
        *
        * Bug: Order is sometimes wrong, especially pre-search position
        */
@@ -288,14 +288,14 @@ describe('bug #2: Timeline Element Ordering', () => {
         createMockPreSearch(0, 'complete'),
       ];
 
-      const analyses: StoredModeratorAnalysis[] = [
-        createMockAnalysis(0, 'complete', ['a0p0', 'a0p1']),
+      const summaries: StoredModeratorSummary[] = [
+        createMockSummary(0, 'complete', ['a0p0', 'a0p1']),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          analyses,
+          summaries,
           changelog: [],
           preSearches,
         }),
@@ -306,10 +306,10 @@ describe('bug #2: Timeline Element Ordering', () => {
       // Get order of elements for round 0
       const round0Items = timeline.filter(item => item.roundNumber === 0);
 
-      // Should have: messages, then analysis
+      // Should have: messages, then summary
       // Pre-search is rendered INSIDE ChatMessageList when messages exist
       // So timeline should NOT have a separate pre-search item when messages exist
-      expect(round0Items.map(item => item.type)).toEqual(['messages', 'analysis']);
+      expect(round0Items.map(item => item.type)).toEqual(['messages', 'summary']);
     });
 
     it('fAILS: pre-search should render at timeline level ONLY when no messages exist (orphaned round)', () => {
@@ -334,7 +334,7 @@ describe('bug #2: Timeline Element Ordering', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          analyses: [createMockAnalysis(0, 'complete', ['a0p0'])],
+          summaries: [createMockSummary(0, 'complete', ['a0p0'])],
           changelog: [],
           preSearches,
         }),
@@ -369,7 +369,7 @@ describe('bug #2: Timeline Element Ordering', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          analyses: [],
+          summaries: [],
           changelog: [],
           preSearches: [],
         }),
@@ -428,10 +428,10 @@ describe('bug #3: Changelog Visibility After New Round Submission', () => {
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
-        analyses: [
-          createMockAnalysis(1, 'complete', ['a1p0']),
-          createMockAnalysis(2, 'complete', ['a2p0']),
-          createMockAnalysis(3, 'complete', ['a3p0']),
+        summaries: [
+          createMockSummary(1, 'complete', ['a1p0']),
+          createMockSummary(2, 'complete', ['a2p0']),
+          createMockSummary(3, 'complete', ['a3p0']),
         ],
         changelog,
         preSearches: [],
@@ -515,12 +515,12 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
 
       // Streaming state
       const streamingPreSearch = createMockPreSearch(0, 'streaming');
-      expect(streamingPreSearch.status).toBe(AnalysisStatuses.STREAMING);
+      expect(streamingPreSearch.status).toBe(MESSAGE_STATUSES.STREAMING);
       expect(streamingPreSearch.searchData).toBeUndefined();
 
       // Complete state
       const completePreSearch = createMockPreSearch(0, 'complete');
-      expect(completePreSearch.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(completePreSearch.status).toBe(MESSAGE_STATUSES.COMPLETE);
       expect(completePreSearch.searchData).toBeDefined();
     });
   });
@@ -615,17 +615,17 @@ describe('production State Reproduction', () => {
       createMockPreSearch(2, 'complete'),
     ];
 
-    const analyses: StoredModeratorAnalysis[] = [
-      createMockAnalysis(0, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r0_p0', '01KCC1FR0V0ZS0X63M794KFE6X_r0_p1', '01KCC1FR0V0ZS0X63M794KFE6X_r0_p2']),
-      createMockAnalysis(1, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r1_p0', '01KCC1FR0V0ZS0X63M794KFE6X_r1_p1']),
-      createMockAnalysis(2, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r2_p0']),
-      createMockAnalysis(3, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r3_p0']),
+    const summaries: StoredModeratorSummary[] = [
+      createMockSummary(0, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r0_p0', '01KCC1FR0V0ZS0X63M794KFE6X_r0_p1', '01KCC1FR0V0ZS0X63M794KFE6X_r0_p2']),
+      createMockSummary(1, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r1_p0', '01KCC1FR0V0ZS0X63M794KFE6X_r1_p1']),
+      createMockSummary(2, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r2_p0']),
+      createMockSummary(3, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r3_p0']),
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
-        analyses,
+        summaries,
         changelog,
         preSearches,
       }),

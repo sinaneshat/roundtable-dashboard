@@ -3,7 +3,7 @@
  *
  * Tests for error handling and recovery during streaming:
  * - Participant streaming errors
- * - Analysis streaming errors
+ * - Summary streaming errors
  * - Pre-search streaming errors
  * - Partial response handling
  * - Error state cleanup
@@ -18,7 +18,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes, FinishReasons, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -164,10 +164,10 @@ describe('participant Streaming Errors', () => {
 });
 
 // ============================================================================
-// ANALYSIS ERROR HANDLING TESTS
+// SUMMARY ERROR HANDLING TESTS
 // ============================================================================
 
-describe('analysis Streaming Errors', () => {
+describe('summary Streaming Errors', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -179,10 +179,10 @@ describe('analysis Streaming Errors', () => {
     state.setShowInitialUI(false);
   });
 
-  it('updates analysis to failed status', () => {
+  it('updates summary to failed status', () => {
     const state = getStoreState(store);
 
-    // Create analysis
+    // Create summary
     const messages: UIMessage[] = [
       createTestUserMessage({ id: 'user', content: 'Q', roundNumber: 0 }),
       createTestAssistantMessage({
@@ -195,7 +195,7 @@ describe('analysis Streaming Errors', () => {
       }),
     ];
     state.setMessages(messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Q',
@@ -204,28 +204,28 @@ describe('analysis Streaming Errors', () => {
     });
 
     // Transition to streaming
-    state.updateAnalysisStatus(0, AnalysisStatuses.STREAMING);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.STREAMING);
+    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
-    // Error occurs - use updateAnalysisError
-    state.updateAnalysisError(0, 'Analysis generation failed');
+    // Error occurs - use updateSummaryError
+    state.updateSummaryError(0, 'Summary generation failed');
 
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.FAILED);
-    expect(getStoreState(store).analyses[0]!.errorMessage).toBe('Analysis generation failed');
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.FAILED);
+    expect(getStoreState(store).summaries[0]!.errorMessage).toBe('Summary generation failed');
   });
 
-  it('clears isCreatingAnalysis flag on error', () => {
+  it('clears isCreatingSummary flag on error', () => {
     const state = getStoreState(store);
 
-    state.setIsCreatingAnalysis(true);
-    expect(getStoreState(store).isCreatingAnalysis).toBe(true);
+    state.setIsCreatingSummary(true);
+    expect(getStoreState(store).isCreatingSummary).toBe(true);
 
     // Error handling should clear flag
-    state.setIsCreatingAnalysis(false);
-    expect(getStoreState(store).isCreatingAnalysis).toBe(false);
+    state.setIsCreatingSummary(false);
+    expect(getStoreState(store).isCreatingSummary).toBe(false);
   });
 
-  it('analysis can be retried after failure', () => {
+  it('summary can be retried after failure', () => {
     const state = getStoreState(store);
 
     const messages: UIMessage[] = [
@@ -240,7 +240,7 @@ describe('analysis Streaming Errors', () => {
       }),
     ];
     state.setMessages(messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Q',
@@ -249,18 +249,18 @@ describe('analysis Streaming Errors', () => {
     });
 
     // First attempt fails
-    state.updateAnalysisError(0, 'First attempt failed');
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.FAILED);
+    state.updateSummaryError(0, 'First attempt failed');
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.FAILED);
 
     // Clear tracking to allow retry
-    state.clearAnalysisTracking(0);
+    state.clearSummaryTracking(0);
 
-    // Retry can mark analysis created again
-    const canRetry = state.tryMarkAnalysisCreated(0);
+    // Retry can mark summary created again
+    const canRetry = state.tryMarkSummaryCreated(0);
     expect(canRetry).toBe(true);
   });
 
-  it('removes analysis for retry with removeAnalysis', () => {
+  it('removes summary for retry with removeSummary', () => {
     const state = getStoreState(store);
 
     const messages: UIMessage[] = [
@@ -275,7 +275,7 @@ describe('analysis Streaming Errors', () => {
       }),
     ];
     state.setMessages(messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Q',
@@ -283,22 +283,22 @@ describe('analysis Streaming Errors', () => {
       mode: ChatModes.ANALYZING,
     });
 
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    expect(getStoreState(store).summaries).toHaveLength(1);
 
-    // Remove failed analysis
-    state.removeAnalysis(0);
-    expect(getStoreState(store).analyses).toHaveLength(0);
+    // Remove failed summary
+    state.removeSummary(0);
+    expect(getStoreState(store).summaries).toHaveLength(0);
 
     // Can create new one
-    state.clearAnalysisTracking(0);
-    state.createPendingAnalysis({
+    state.clearSummaryTracking(0);
+    state.createPendingSummary({
       roundNumber: 0,
       messages,
       userQuestion: 'Q',
       threadId: 'thread-error-123',
       mode: ChatModes.ANALYZING,
     });
-    expect(getStoreState(store).analyses).toHaveLength(1);
+    expect(getStoreState(store).summaries).toHaveLength(1);
   });
 });
 
@@ -324,7 +324,7 @@ describe('pre-Search Errors', () => {
       id: 'presearch-0',
       threadId: 'thread-error-123',
       roundNumber: 0,
-      status: AnalysisStatuses.FAILED,
+      status: MessageStatuses.FAILED,
       userQuery: 'Search query',
       searchData: undefined,
       errorMessage: 'Search timed out',
@@ -335,7 +335,7 @@ describe('pre-Search Errors', () => {
     state.addPreSearch(failedPreSearch);
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
-    expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.FAILED);
+    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.FAILED);
     expect(getStoreState(store).preSearches[0]!.errorMessage).toBe('Search timed out');
   });
 
@@ -347,7 +347,7 @@ describe('pre-Search Errors', () => {
       id: 'presearch-0',
       threadId: 'thread-error-123',
       roundNumber: 0,
-      status: AnalysisStatuses.FAILED,
+      status: MessageStatuses.FAILED,
       userQuery: 'Search query',
       searchData: undefined,
       errorMessage: 'Error',
@@ -362,7 +362,7 @@ describe('pre-Search Errors', () => {
     state.setStreamingRoundNumber(0);
 
     expect(getStoreState(store).isStreaming).toBe(true);
-    expect(getStoreState(store).preSearches[0]!.status).toBe(AnalysisStatuses.FAILED);
+    expect(getStoreState(store).preSearches[0]!.status).toBe(MessageStatuses.FAILED);
   });
 });
 
@@ -592,16 +592,16 @@ describe('complete Error Journey', () => {
       }),
     ];
     state.setMessages(round0Messages);
-    state.createPendingAnalysis({
+    state.createPendingSummary({
       roundNumber: 0,
       messages: round0Messages,
       userQuestion: 'Q0',
       threadId: 'thread-error-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateAnalysisStatus(0, AnalysisStatuses.COMPLETE);
+    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
 
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
 
     // === ROUND 1: Participant 1 errors ===
     const round1UserMessage = createTestUserMessage({
@@ -647,9 +647,9 @@ describe('complete Error Journey', () => {
     expect(getStoreState(store).error).toBeNull();
     expect(getStoreState(store).messages).toHaveLength(6);
 
-    // Round 0 analysis still intact
-    expect(getStoreState(store).analyses).toHaveLength(1);
-    expect(getStoreState(store).analyses[0]!.roundNumber).toBe(0);
-    expect(getStoreState(store).analyses[0]!.status).toBe(AnalysisStatuses.COMPLETE);
+    // Round 0 summary still intact
+    expect(getStoreState(store).summaries).toHaveLength(1);
+    expect(getStoreState(store).summaries[0]!.roundNumber).toBe(0);
+    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
   });
 });

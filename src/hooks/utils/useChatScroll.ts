@@ -1,8 +1,8 @@
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { MessageStatuses } from '@/api/core/enums';
+import type { StoredRoundSummary } from '@/api/routes/chat/schema';
 
 /**
  * Chat scroll management hook - Minimal version
@@ -23,8 +23,8 @@ import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 type UseChatScrollParams = {
   /** Messages array - used to detect new messages */
   messages: UIMessage[];
-  /** Analyses array - used to track seen analyses */
-  analyses: StoredModeratorAnalysis[];
+  /** Summaries array - used to track seen summaries */
+  summaries: StoredRoundSummary[];
   /** Enable near-bottom detection for sticky scroll behavior */
   enableNearBottomDetection?: boolean;
   /** Distance from bottom to consider "at bottom" (default: 100px) */
@@ -36,26 +36,26 @@ type UseChatScrollResult = {
   isAtBottomRef: React.MutableRefObject<boolean>;
   /** Scroll to bottom of the page */
   scrollToBottom: (behavior?: ScrollBehavior) => void;
-  /** Track which analyses have been scrolled to */
-  scrolledToAnalysesRef: React.MutableRefObject<Set<string>>;
+  /** Track which summaries have been scrolled to */
+  scrolledToSummariesRef: React.MutableRefObject<Set<string>>;
   /** Reset all scroll state */
   resetScrollState: () => void;
 };
 
 export function useChatScroll({
   messages,
-  analyses,
+  summaries,
   enableNearBottomDetection = true,
   autoScrollThreshold = 100,
 }: UseChatScrollParams): UseChatScrollResult {
   // Track if user is at bottom (for scroll button visibility)
   const isAtBottomRef = useRef(true);
 
-  // Track which analyses have been scrolled to
-  const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
+  // Track which summaries have been scrolled to
+  const scrolledToSummariesRef = useRef<Set<string>>(new Set());
 
-  // Track which pending analyses have triggered auto-scroll
-  const triggeredPendingAnalysesRef = useRef<Set<string>>(new Set());
+  // Track which pending summaries have triggered auto-scroll
+  const triggeredPendingSummariesRef = useRef<Set<string>>(new Set());
 
   // Track if we're in a programmatic scroll
   const isProgrammaticScrollRef = useRef(false);
@@ -68,8 +68,8 @@ export function useChatScroll({
    */
   const resetScrollState = useCallback(() => {
     isAtBottomRef.current = true;
-    scrolledToAnalysesRef.current = new Set();
-    triggeredPendingAnalysesRef.current = new Set();
+    scrolledToSummariesRef.current = new Set();
+    triggeredPendingSummariesRef.current = new Set();
     lastScrollTopRef.current = 0;
     isProgrammaticScrollRef.current = false;
   }, []);
@@ -154,52 +154,52 @@ export function useChatScroll({
   }, [enableNearBottomDetection]);
 
   // ============================================================================
-  // Track analyses
+  // Track summaries
   // ============================================================================
   useEffect(() => {
-    const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
-    if (newAnalyses.length > 0) {
-      newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
+    const newSummaries = summaries.filter(s => !scrolledToSummariesRef.current.has(s.id));
+    if (newSummaries.length > 0) {
+      newSummaries.forEach(s => scrolledToSummariesRef.current.add(s.id));
     }
-  }, [analyses]);
+  }, [summaries]);
 
   // ============================================================================
-  // ✅ AUTO-SCROLL FIX: Scroll to bottom when new PENDING analysis is ready
+  // ✅ AUTO-SCROLL FIX: Scroll to bottom when new PENDING summary is ready
   // ============================================================================
-  // When a new PENDING analysis is created with participantMessageIds populated,
-  // the round is complete and analysis streaming should start. We need to ensure
-  // the analysis component is rendered (within virtualization viewport) so it
+  // When a new PENDING summary is created with participantMessageIds populated,
+  // the round is complete and summary streaming should start. We need to ensure
+  // the summary component is rendered (within virtualization viewport) so it
   // can trigger the streaming. Scrolling to bottom guarantees this.
   //
-  // This fixes the bug where analysis stays stuck at PENDING when user hasn't
+  // This fixes the bug where summary stays stuck at PENDING when user hasn't
   // scrolled to the bottom of the timeline after a round completes.
   useEffect(() => {
-    // Find PENDING analyses that have participantMessageIds (round is complete)
-    const pendingAnalysesWithMessages = analyses.filter(
-      a => a.status === AnalysisStatuses.PENDING
-        && a.participantMessageIds
-        && a.participantMessageIds.length > 0,
+    // Find PENDING summaries that have participantMessageIds (round is complete)
+    const pendingSummariesWithMessages = summaries.filter(
+      s => s.status === MessageStatuses.PENDING
+        && s.participantMessageIds
+        && s.participantMessageIds.length > 0,
     );
 
-    // Check for new pending analyses we haven't triggered scroll for
-    const newPendingAnalyses = pendingAnalysesWithMessages.filter(
-      a => !triggeredPendingAnalysesRef.current.has(a.id),
+    // Check for new pending summaries we haven't triggered scroll for
+    const newPendingSummaries = pendingSummariesWithMessages.filter(
+      s => !triggeredPendingSummariesRef.current.has(s.id),
     );
 
-    if (newPendingAnalyses.length > 0) {
+    if (newPendingSummaries.length > 0) {
       // Mark as triggered to prevent repeated scrolling
-      newPendingAnalyses.forEach(a => triggeredPendingAnalysesRef.current.add(a.id));
+      newPendingSummaries.forEach(s => triggeredPendingSummariesRef.current.add(s.id));
 
-      // Scroll to bottom so the analysis component renders and triggers streaming
+      // Scroll to bottom so the summary component renders and triggers streaming
       // Use instant scroll for better UX (user expects immediate feedback)
       scrollToBottom('instant');
     }
-  }, [analyses, scrollToBottom]);
+  }, [summaries, scrollToBottom]);
 
   return {
     isAtBottomRef,
     scrollToBottom,
-    scrolledToAnalysesRef,
+    scrolledToSummariesRef,
     resetScrollState,
   };
 }

@@ -110,7 +110,7 @@ export const UsageStatsPayloadSchema = z.object({
       example: 'default',
     }),
   }).openapi({
-    description: 'Analysis generation usage statistics (only for multi-participant conversations)',
+    description: 'Summary generation usage statistics (only for multi-participant conversations)',
   }),
   memories: z.object({
     used: z.number().openapi({

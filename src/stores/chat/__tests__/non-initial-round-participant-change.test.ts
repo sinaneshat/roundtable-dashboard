@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, ChatModes, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import {
@@ -103,7 +103,7 @@ function createPlaceholderPreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: AnalysisStatuses.PENDING,
+    status: MessageStatuses.PENDING,
     searchData: null,
     errorMessage: null,
     createdAt: new Date(),
@@ -463,7 +463,7 @@ describe('pre-search timing with participant changes', () => {
 
       expect(store.getState().preSearches).toHaveLength(1);
       expect(store.getState().preSearches[0]?.roundNumber).toBe(1);
-      expect(store.getState().preSearches[0]?.status).toBe(AnalysisStatuses.PENDING);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.PENDING);
     });
 
     it('should track pre-search execution state independently of participant changes', () => {

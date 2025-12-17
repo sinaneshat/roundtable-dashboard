@@ -1,8 +1,8 @@
 import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
-import type { AnalysisStatus, WebSearchDepth } from '@/api/core/enums';
-import { AnalysisStatuses, MessageRoles, UIMessageRoles, WebSearchDepths } from '@/api/core/enums';
+import type { MessageStatus, WebSearchDepth } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, UIMessageRoles, WebSearchDepths } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 
 /**
@@ -277,12 +277,12 @@ export function setupLocalStorageMock(): void {
  * @param data.id - Pre-search record ID
  * @param data.threadId - Thread ID
  * @param data.roundNumber - Round number
- * @param data.status - Pre-search status (pending, streaming, complete, failed)
+ * @param data.status - Message status (pending, streaming, complete, failed)
  * @param data.userQuery - User's search query
  * @param data.searchData - Optional search data payload
  * @param data.searchData.queries - Optional array of search queries
  * @param data.searchData.results - Optional array of search results
- * @param data.searchData.analysis - Optional analysis string
+ * @param data.searchData.summary - Optional summary string
  * @param data.searchData.successCount - Optional success count
  * @param data.searchData.failureCount - Optional failure count
  * @param data.searchData.totalResults - Optional total results count
@@ -296,7 +296,7 @@ export function createMockPreSearch(data: {
   id: string;
   threadId: string;
   roundNumber: number;
-  status: AnalysisStatus;
+  status: MessageStatus;
   userQuery: string;
   searchData?: {
     queries?: Array<{
@@ -317,7 +317,7 @@ export function createMockPreSearch(data: {
       }>;
       responseTime: number;
     }>;
-    analysis?: string;
+    summary?: string;
     successCount?: number;
     failureCount?: number;
     totalResults?: number;
@@ -330,7 +330,7 @@ export function createMockPreSearch(data: {
   id: string;
   threadId: string;
   roundNumber: number;
-  status: AnalysisStatus;
+  status: MessageStatus;
   userQuery: string;
   searchData?: typeof data.searchData;
   errorMessage: string | null;
@@ -382,7 +382,7 @@ export function createMockSearchData(options?: {
     }>;
     responseTime: number;
   }>;
-  analysis: string;
+  summary: string;
   successCount: number;
   failureCount: number;
   totalResults: number;
@@ -425,7 +425,7 @@ export function createMockSearchData(options?: {
   return {
     queries,
     results,
-    analysis: 'Test analysis summary',
+    summary: 'Test summary',
     successCount: includeResults ? numQueries : 0,
     failureCount: 0,
     totalResults: includeResults ? numQueries * 2 : 0,
@@ -473,17 +473,17 @@ export function mockFetchSSE(events: Array<{
  * Useful for integration tests
  */
 export async function waitForSearchComplete(
-  getStatus: () => AnalysisStatus,
+  getStatus: () => MessageStatus,
   timeout = 5000,
 ): Promise<void> {
   const startTime = Date.now();
   return new Promise<void>((resolve, reject) => {
     const interval = setInterval(() => {
       const status = getStatus();
-      if (status === AnalysisStatuses.COMPLETE) {
+      if (status === MessageStatuses.COMPLETE) {
         clearInterval(interval);
         resolve();
-      } else if (status === AnalysisStatuses.FAILED) {
+      } else if (status === MessageStatuses.FAILED) {
         clearInterval(interval);
         reject(new Error('Search failed'));
       } else if (Date.now() - startTime > timeout) {

@@ -19,13 +19,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { AnalysisStatuses, FinishReasons, MessageRoles, ScreenModes } from '@/api/core/enums';
-import type { ChatParticipant, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import type { ChatParticipant, StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
-  createMockAnalysis,
   createMockParticipant,
   createMockStoredPreSearch,
+  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
@@ -74,7 +74,7 @@ type JourneyState = {
   pendingMessage: string | null;
   messages: Array<TestUserMessage | TestAssistantMessage>;
   preSearches: Array<StoredPreSearch>;
-  analyses: Array<StoredModeratorAnalysis>;
+  summaries: Array<StoredModeratorSummary>;
   participants: Array<ChatParticipant>;
 };
 
@@ -92,7 +92,7 @@ function createInitialJourneyState(): JourneyState {
     pendingMessage: null,
     messages: [],
     preSearches: [],
-    analyses: [],
+    summaries: [],
     participants: [],
   };
 }
@@ -141,7 +141,7 @@ function _createParticipantSSEEvents(
  */
 function _createPreSearchSSEEvents(_roundNumber: number): SSEEvent[] {
   return [
-    { event: 'status', data: { status: AnalysisStatuses.STREAMING } },
+    { event: 'status', data: { status: MessageStatuses.STREAMING } },
     {
       event: 'query-generated',
       data: {
@@ -161,21 +161,20 @@ function _createPreSearchSSEEvents(_roundNumber: number): SSEEvent[] {
         responseTime: 1000,
       },
     },
-    { event: 'analysis', data: { analysis: 'Pre-search analysis complete' } },
-    { event: 'done', data: { status: AnalysisStatuses.COMPLETE } },
+    { event: 'summary', data: { summary: 'Pre-search summary complete' } },
+    { event: 'done', data: { status: MessageStatuses.COMPLETE } },
   ];
 }
 
 /**
- * Creates SSE events for analysis stream
+ * Creates SSE events for summary stream
  */
-function _createAnalysisSSEEvents(_roundNumber: number): SSEEvent[] {
+function _createSummarySSEEvents(_roundNumber: number): SSEEvent[] {
   return [
-    { event: 'status', data: { status: AnalysisStatuses.STREAMING } },
-    { event: 'key-insight', data: { insight: 'Key insight 1' } },
-    { event: 'participant-analysis', data: { participantId: 'participant-0', summary: 'P0 analysis' } },
-    { event: 'verdict', data: { verdict: 'Final verdict' } },
-    { event: 'done', data: { status: AnalysisStatuses.COMPLETE } },
+    { event: 'status', data: { status: MessageStatuses.STREAMING } },
+    { event: 'summary-chunk', data: { chunk: 'Discussion summary' } },
+    { event: 'metrics', data: { engagement: 85, insight: 78, balance: 82, clarity: 90 } },
+    { event: 'done', data: { status: MessageStatuses.COMPLETE } },
   ];
 }
 
@@ -185,7 +184,7 @@ function _createAnalysisSSEEvents(_roundNumber: number): SSEEvent[] {
 
 describe('complete Round 1 Journey', () => {
   describe('overview Screen Flow', () => {
-    it('journey: submit message → URL stays at /chat → streaming → analysis → navigation', () => {
+    it('journey: submit message → URL stays at /chat → streaming → summary → navigation', () => {
       const state = createInitialJourneyState();
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       state.participants = participants;
@@ -259,10 +258,10 @@ describe('complete Round 1 Journey', () => {
       expect(state.isStreaming).toBe(false);
 
       // Step 11: Analysis created and streaming
-      state.analyses.push(createMockAnalysis(0, AnalysisStatuses.STREAMING));
+      state.summaries.push(createMockSummary(0, MessageStatuses.STREAMING));
 
-      // Step 12: Analysis completes
-      state.analyses[0]!.status = AnalysisStatuses.COMPLETE;
+      // Step 12: Summary completes
+      state.summaries[0]!.status = MessageStatuses.COMPLETE;
 
       // Step 13: AI title generated (async)
       state.isAiGeneratedTitle = true;
@@ -270,7 +269,7 @@ describe('complete Round 1 Journey', () => {
 
       // Step 14: Navigation to thread screen
       expect(state.isAiGeneratedTitle).toBe(true);
-      expect(state.analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(state.summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
 
       // Navigation happens: overview → thread screen
       state.hasNavigated = true;
@@ -283,7 +282,7 @@ describe('complete Round 1 Journey', () => {
     it('uRL update sequence: replaceState (slug) → then router.push (navigation)', () => {
       // Per FLOW_DOCUMENTATION.md:
       // 1. window.history.replaceState updates URL in background
-      // 2. router.push happens after analysis completes
+      // 2. router.push happens after summary completes
 
       const urlUpdates: Array<{ type: 'replace' | 'push'; url: string }> = [];
 
@@ -295,7 +294,7 @@ describe('complete Round 1 Journey', () => {
       const aiGeneratedSlug = 'optimized-greeting-response';
       urlUpdates.push({ type: 'replace', url: `/chat/${aiGeneratedSlug}` });
 
-      // Step 3: After analysis complete → router.push
+      // Step 3: After summary complete → router.push
       urlUpdates.push({ type: 'push', url: `/chat/${aiGeneratedSlug}` });
 
       // Verify sequence
@@ -309,33 +308,33 @@ describe('complete Round 1 Journey', () => {
   });
 
   describe('with Web Search Enabled', () => {
-    it('journey: pre-search → participants → analysis', () => {
+    it('journey: pre-search → participants → summary', () => {
       const state = createInitialJourneyState();
       state.participants = [createMockParticipant(0)];
       state.threadId = 'thread-123';
 
       // Step 1: Pre-search created as PENDING
-      state.preSearches.push(createMockStoredPreSearch(0, AnalysisStatuses.PENDING));
+      state.preSearches.push(createMockStoredPreSearch(0, MessageStatuses.PENDING));
 
       // Step 2: Participants blocked while pre-search pending
       const shouldWaitForPreSearch = () => {
         const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
-        return preSearch?.status === AnalysisStatuses.PENDING
-          || preSearch?.status === AnalysisStatuses.STREAMING;
+        return preSearch?.status === MessageStatuses.PENDING
+          || preSearch?.status === MessageStatuses.STREAMING;
       };
 
       expect(shouldWaitForPreSearch()).toBe(true);
 
       // Step 3: Pre-search starts streaming
-      state.preSearches[0]!.status = AnalysisStatuses.STREAMING;
+      state.preSearches[0]!.status = MessageStatuses.STREAMING;
       expect(shouldWaitForPreSearch()).toBe(true);
 
       // Step 4: Pre-search completes
-      state.preSearches[0]!.status = AnalysisStatuses.COMPLETE;
+      state.preSearches[0]!.status = MessageStatuses.COMPLETE;
       state.preSearches[0]!.searchData = {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
         results: [],
-        analysis: 'Analysis',
+        summary: 'Summary',
         successCount: 1,
         failureCount: 0,
         totalResults: 0,
@@ -362,16 +361,16 @@ describe('complete Round 1 Journey', () => {
       state.isStreaming = false;
 
       // Step 7: Analysis begins
-      state.analyses.push(createMockAnalysis(0, AnalysisStatuses.STREAMING));
-      state.analyses[0]!.status = AnalysisStatuses.COMPLETE;
+      state.summaries.push(createMockSummary(0, MessageStatuses.STREAMING));
+      state.summaries[0]!.status = MessageStatuses.COMPLETE;
 
-      expect(state.analyses[0]?.status).toBe(AnalysisStatuses.COMPLETE);
+      expect(state.summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
     });
 
     it('pre-search blocks participants with 10s timeout protection', () => {
       const TIMEOUT_MS = 10000;
       const state = createInitialJourneyState();
-      state.preSearches.push(createMockStoredPreSearch(0, AnalysisStatuses.STREAMING));
+      state.preSearches.push(createMockStoredPreSearch(0, MessageStatuses.STREAMING));
 
       const preSearchStartTime = Date.now() - 11000; // 11 seconds ago
 
@@ -418,7 +417,7 @@ describe('multi-Round Conversation Journey', () => {
           finishReason: FinishReasons.STOP,
         }),
       ];
-      state.analyses.push(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+      state.summaries.push(createMockSummary(0, MessageStatuses.COMPLETE));
 
       // User submits new message for round 1
       state.pendingMessage = 'Follow up question';
@@ -517,7 +516,7 @@ describe('multi-Round Conversation Journey', () => {
       const enableWebSearchForRound1 = true;
 
       if (enableWebSearchForRound1) {
-        state.preSearches.push(createMockStoredPreSearch(1, AnalysisStatuses.PENDING));
+        state.preSearches.push(createMockStoredPreSearch(1, MessageStatuses.PENDING));
       }
 
       // Pre-search exists for round 1
@@ -529,7 +528,7 @@ describe('multi-Round Conversation Journey', () => {
       state.threadId = 'thread-123';
 
       // Round 0 with web search
-      state.preSearches.push(createMockStoredPreSearch(0, AnalysisStatuses.COMPLETE));
+      state.preSearches.push(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
 
       // Round 1 without web search (toggle off)
       const enableWebSearchForRound1 = false;
@@ -589,7 +588,7 @@ describe('stop Button Journey', () => {
       expect(partialMessage?.metadata.finishReason).toBe(FinishReasons.UNKNOWN);
     });
 
-    it('analysis NOT triggered when stopped early', () => {
+    it('summary NOT triggered when stopped early', () => {
       const state = createInitialJourneyState();
       state.threadId = 'thread-123';
       state.participants = [createMockParticipant(0), createMockParticipant(1)];
@@ -610,13 +609,13 @@ describe('stop Button Journey', () => {
       // Stopped before all participants complete
       state.isStreaming = false;
 
-      // Should NOT trigger analysis
+      // Should NOT trigger summary
       const allParticipantsComplete = state.messages.filter(
         m => m.role === 'assistant' && m.metadata.roundNumber === 0,
       ).length === state.participants.length;
 
       expect(allParticipantsComplete).toBe(false);
-      expect(state.analyses).toHaveLength(0);
+      expect(state.summaries).toHaveLength(0);
     });
   });
 
@@ -625,25 +624,25 @@ describe('stop Button Journey', () => {
       const state = createInitialJourneyState();
       state.threadId = 'thread-123';
       state.participants = [createMockParticipant(0)];
-      state.preSearches.push(createMockStoredPreSearch(0, AnalysisStatuses.STREAMING));
+      state.preSearches.push(createMockStoredPreSearch(0, MessageStatuses.STREAMING));
 
       // User clicks stop during pre-search
-      state.preSearches[0]!.status = AnalysisStatuses.FAILED;
+      state.preSearches[0]!.status = MessageStatuses.FAILED;
       state.preSearches[0]!.errorMessage = 'Cancelled by user';
 
-      expect(state.preSearches[0]?.status).toBe(AnalysisStatuses.FAILED);
+      expect(state.preSearches[0]?.status).toBe(MessageStatuses.FAILED);
 
       // Participants should be able to proceed (search failure is non-blocking)
       const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
-      const canProceed = preSearch?.status === AnalysisStatuses.COMPLETE
-        || preSearch?.status === AnalysisStatuses.FAILED;
+      const canProceed = preSearch?.status === MessageStatuses.COMPLETE
+        || preSearch?.status === MessageStatuses.FAILED;
 
       expect(canProceed).toBe(true);
     });
   });
 
   describe('stop During Analysis', () => {
-    it('can stop analysis streaming but round is still complete', () => {
+    it('can stop summary streaming but round is still complete', () => {
       const state = createInitialJourneyState();
       state.threadId = 'thread-123';
       state.participants = [createMockParticipant(0)];
@@ -661,11 +660,11 @@ describe('stop Button Journey', () => {
         }),
       ];
 
-      // Analysis streaming
-      state.analyses.push(createMockAnalysis(0, AnalysisStatuses.STREAMING));
+      // Summary streaming
+      state.summaries.push(createMockSummary(0, MessageStatuses.STREAMING));
 
-      // Stop during analysis
-      state.analyses[0]!.status = AnalysisStatuses.FAILED;
+      // Stop during summary
+      state.summaries[0]!.status = MessageStatuses.FAILED;
 
       // Round is still considered complete (participants finished)
       // ✅ TYPE-SAFE: Use helper to get typed assistant messages
@@ -770,7 +769,7 @@ describe('error Recovery Journey', () => {
           hasError: true,
         }),
       ];
-      state.analyses.push(createMockAnalysis(0, AnalysisStatuses.COMPLETE));
+      state.summaries.push(createMockSummary(0, MessageStatuses.COMPLETE));
 
       // User clicks retry
       // Step 1: Delete all assistant messages for round 0
@@ -778,11 +777,11 @@ describe('error Recovery Journey', () => {
         m => !(m.role === 'assistant' && m.metadata.roundNumber === 0),
       );
 
-      // Step 2: Delete analysis for round 0
-      state.analyses = state.analyses.filter(a => a.roundNumber !== 0);
+      // Step 2: Delete summary for round 0
+      state.summaries = state.summaries.filter(a => a.roundNumber !== 0);
 
       expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(0);
-      expect(state.analyses).toHaveLength(0);
+      expect(state.summaries).toHaveLength(0);
 
       // Step 3: Re-stream all participants
       state.isStreaming = true;
@@ -873,29 +872,29 @@ describe('slug Polling Journey', () => {
 
 describe('navigation Timing Journey', () => {
   describe('navigation Conditions', () => {
-    it('navigates only when both AI title ready AND analysis complete', () => {
+    it('navigates only when both AI title ready AND summary complete', () => {
       const state = createInitialJourneyState();
       state.screenMode = ScreenModes.OVERVIEW;
       state.threadId = 'thread-123';
 
       // Condition 1: AI title not ready
       state.isAiGeneratedTitle = false;
-      state.analyses = [createMockAnalysis(0, AnalysisStatuses.COMPLETE)];
+      state.summaries = [createMockSummary(0, MessageStatuses.COMPLETE)];
 
-      let canNavigate = state.isAiGeneratedTitle && state.analyses[0]?.status === AnalysisStatuses.COMPLETE;
+      let canNavigate = state.isAiGeneratedTitle && state.summaries[0]?.status === MessageStatuses.COMPLETE;
       expect(canNavigate).toBe(false);
 
       // Condition 2: Analysis not complete
       state.isAiGeneratedTitle = true;
-      state.analyses[0]!.status = AnalysisStatuses.STREAMING;
+      state.summaries[0]!.status = MessageStatuses.STREAMING;
 
-      canNavigate = state.isAiGeneratedTitle && state.analyses[0]?.status === AnalysisStatuses.COMPLETE;
+      canNavigate = state.isAiGeneratedTitle && state.summaries[0]?.status === MessageStatuses.COMPLETE;
       expect(canNavigate).toBe(false);
 
       // Condition 3: Both ready
-      state.analyses[0]!.status = AnalysisStatuses.COMPLETE;
+      state.summaries[0]!.status = MessageStatuses.COMPLETE;
 
-      canNavigate = state.isAiGeneratedTitle && state.analyses[0]?.status === AnalysisStatuses.COMPLETE;
+      canNavigate = state.isAiGeneratedTitle && state.summaries[0]?.status === MessageStatuses.COMPLETE;
       expect(canNavigate).toBe(true);
     });
 
@@ -904,7 +903,7 @@ describe('navigation Timing Journey', () => {
       state.screenMode = ScreenModes.OVERVIEW;
       state.threadId = 'thread-123';
       state.isAiGeneratedTitle = true;
-      state.analyses = [createMockAnalysis(0, AnalysisStatuses.COMPLETE)];
+      state.summaries = [createMockSummary(0, MessageStatuses.COMPLETE)];
 
       // First navigation attempt
       expect(state.hasNavigated).toBe(false);

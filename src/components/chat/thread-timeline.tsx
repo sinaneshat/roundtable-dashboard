@@ -17,8 +17,8 @@
 import { useRef } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import { AnalysisStatuses } from '@/api/core/enums';
-import type { ChatParticipant, ModeratorAnalysisPayload, StoredPreSearch } from '@/api/routes/chat/schema';
+import { MessageStatuses } from '@/api/core/enums';
+import type { ChatParticipant, RoundSummaryAIContent, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import { ScrollFadeEntrance } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
@@ -60,9 +60,9 @@ type ThreadTimelineProps = {
   pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
   getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
 
-  // Analysis handlers
-  onAnalysisStreamStart?: (roundNumber: number) => void;
-  onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: unknown) => void;
+  // Summary handlers
+  onSummaryStreamStart?: (roundNumber: number) => void;
+  onSummaryStreamComplete?: (roundNumber: number, data?: RoundSummaryAIContent | null, error?: unknown) => void;
 
   // Error retry
   onRetry?: () => void;
@@ -75,7 +75,7 @@ type ThreadTimelineProps = {
 
   // Demo mode
   demoPreSearchOpen?: boolean;
-  demoAnalysisOpen?: boolean;
+  demoSummaryOpen?: boolean;
 
   // Data readiness
   isDataReady?: boolean;
@@ -100,13 +100,13 @@ export function ThreadTimeline({
   feedbackByRound = EMPTY_FEEDBACK_MAP,
   pendingFeedback = null,
   getFeedbackHandler,
-  onAnalysisStreamStart,
-  onAnalysisStreamComplete,
+  onSummaryStreamStart,
+  onSummaryStreamComplete,
   onRetry,
   isReadOnly = false,
   preSearches = EMPTY_PRE_SEARCHES,
   demoPreSearchOpen,
-  demoAnalysisOpen,
+  demoSummaryOpen,
   isDataReady = true,
   maxContentHeight,
   skipEntranceAnimations = false,
@@ -173,7 +173,7 @@ export function ThreadTimeline({
         // Extract round number for feedback logic
         const roundNumber = item.type === 'messages'
           ? extractRoundNumber(item.data[0]?.metadata)
-          : item.type === 'analysis'
+          : item.type === 'summary'
             ? item.data.roundNumber
             : item.type === 'changelog'
               ? item.data[0]?.roundNumber ?? DEFAULT_ROUND_NUMBER
@@ -256,7 +256,7 @@ export function ThreadTimeline({
                 skipAnimation={!shouldAnimate(virtualItem.key)}
                 enableScrollEffect={false}
               >
-                <div className="space-y-3 pb-2">
+                <div className="space-y-6 pb-4">
                   <UnifiedErrorBoundary context="message-list" onReset={onRetry}>
                     <ChatMessageList
                       messages={item.data}
@@ -281,13 +281,13 @@ export function ThreadTimeline({
                       return parseResult.success && messageHasError(parseResult.data);
                     });
 
-                    // Only show feedback after analysis is complete
-                    const roundAnalysis = timelineItems.find(
-                      ti => ti.type === 'analysis' && ti.data.roundNumber === roundNumber,
+                    // Only show feedback after summary is complete
+                    const roundSummary = timelineItems.find(
+                      ti => ti.type === 'summary' && ti.data.roundNumber === roundNumber,
                     );
-                    const isRoundComplete = roundAnalysis
-                      && roundAnalysis.type === 'analysis'
-                      && roundAnalysis.data.status === AnalysisStatuses.COMPLETE;
+                    const isRoundComplete = roundSummary
+                      && roundSummary.type === 'summary'
+                      && roundSummary.data.status === MessageStatuses.COMPLETE;
 
                     if (!isRoundComplete)
                       return null;
@@ -329,7 +329,7 @@ export function ThreadTimeline({
             )}
 
             {/* Round Summary items */}
-            {item.type === 'analysis' && (
+            {item.type === 'summary' && (
               <ScrollFadeEntrance
                 index={virtualItem.index}
                 skipAnimation={!shouldAnimate(virtualItem.key)}
@@ -339,18 +339,18 @@ export function ThreadTimeline({
               >
                 <div className="w-full mb-4">
                   <RoundSummaryCard
-                    analysis={item.data}
+                    summary={item.data}
                     threadId={threadId}
                     isLatest={virtualItem.index === timelineItems.length - 1}
                     streamingRoundNumber={streamingRoundNumber}
                     onStreamStart={() => {
-                      onAnalysisStreamStart?.(item.data.roundNumber);
+                      onSummaryStreamStart?.(item.data.roundNumber);
                     }}
                     onStreamComplete={(completedData, error) => {
-                      onAnalysisStreamComplete?.(item.data.roundNumber, completedData, error);
+                      onSummaryStreamComplete?.(item.data.roundNumber, completedData, error);
                     }}
-                    demoOpen={demoAnalysisOpen}
-                    demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
+                    demoOpen={demoSummaryOpen}
+                    demoShowContent={demoSummaryOpen ? item.data.summaryData !== undefined : undefined}
                   />
                 </div>
               </ScrollFadeEntrance>

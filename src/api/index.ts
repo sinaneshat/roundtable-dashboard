@@ -73,9 +73,7 @@ import {
 // Chat routes
 import {
   addParticipantHandler,
-  analyzeRoundHandler,
   createCustomRoleHandler,
-  createPreSearchHandler,
   createThreadHandler,
   deleteCustomRoleHandler,
   deleteParticipantHandler,
@@ -83,7 +81,6 @@ import {
   executePreSearchHandler,
   getCustomRoleHandler,
   getPublicThreadHandler,
-  getThreadAnalysesHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
   getThreadFeedbackHandler,
@@ -92,21 +89,21 @@ import {
   getThreadPreSearchesHandler,
   getThreadSlugStatusHandler,
   getThreadStreamResumptionStateHandler,
+  getThreadSummariesHandler,
   listCustomRolesHandler,
   listThreadsHandler,
-  resumeAnalysisStreamHandler,
+  resumeSummaryStreamHandler,
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
   streamChatHandler,
+  summarizeRoundHandler,
   updateCustomRoleHandler,
   updateParticipantHandler,
   updateThreadHandler,
 } from './routes/chat/handler';
 import {
   addParticipantRoute,
-  analyzeRoundRoute,
   createCustomRoleRoute,
-  createPreSearchRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
   deleteParticipantRoute,
@@ -114,7 +111,6 @@ import {
   executePreSearchRoute,
   getCustomRoleRoute,
   getPublicThreadRoute,
-  getThreadAnalysesRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadFeedbackRoute,
@@ -123,12 +119,14 @@ import {
   getThreadRoute,
   getThreadSlugStatusRoute,
   getThreadStreamResumptionStateRoute,
+  getThreadSummariesRoute,
   listCustomRolesRoute,
   listThreadsRoute,
-  resumeAnalysisStreamRoute,
+  resumeSummaryStreamRoute,
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
   streamChatRoute,
+  summarizeRoundRoute,
   updateCustomRoleRoute,
   updateParticipantRoute,
   updateThreadRoute,
@@ -287,10 +285,10 @@ app.use('*', requestId());
 app.use('*', timing());
 // Apply timeout to all routes except streaming endpoints
 app.use('*', async (c, next) => {
-  // Skip timeout for streaming endpoints (chat streaming and moderator analysis)
+  // Skip timeout for streaming endpoints (chat streaming and round summary)
   // AI SDK v5 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
   // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
-  if (c.req.path.includes('/stream') || c.req.path.includes('/analyze') || c.req.path.includes('/chat')) {
+  if (c.req.path.includes('/stream') || c.req.path.includes('/summarize') || c.req.path.includes('/chat')) {
     return next();
   }
   return timeout(15000)(c, next);
@@ -357,8 +355,8 @@ app.use('*', (c, next) => {
 // ETag support - Skip for streaming endpoints to avoid buffering
 app.use('*', async (c, next) => {
   // Skip ETag for streaming endpoints as it buffers the entire response
-  // Must skip for /chat (AI streaming), /stream, and /analyze (moderator streaming)
-  if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/analyze')) {
+  // Must skip for /chat (AI streaming), /stream, and /summarize (round summary streaming)
+  if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/summarize')) {
     return next();
   }
   return etag()(c, next);
@@ -452,10 +450,10 @@ app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
 app.use('/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection, requireSession);
 app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches for thread
 
-// Moderator analysis routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze', csrfProtection, requireSession);
-app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze/resume', requireSession); // GET resume (no CSRF for safe method)
-app.use('/chat/threads/:id/analyses', requireSession); // GET analyses for thread
+// Round summary routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/summarize', csrfProtection, requireSession);
+app.use('/chat/threads/:threadId/rounds/:roundNumber/summarize/resume', requireSession); // GET resume (no CSRF for safe method)
+app.use('/chat/threads/:id/summaries', requireSession); // GET summaries for thread
 
 // Round feedback routes (protected)
 app.use('/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection, requireSession);
@@ -564,14 +562,13 @@ const appRoutes = app
   .openapi(getCustomRoleRoute, getCustomRoleHandler) // Get custom role details
   .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role template
   .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
-  // Pre-search (protected, web search results)
+  // Pre-search (protected, web search results) - execute auto-creates DB record
   .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
-  .openapi(createPreSearchRoute, createPreSearchHandler) // Create PENDING pre-search record (fixes web search ordering)
-  .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution
-  // Moderator Analysis (protected, backend-triggered only)
-  .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)
-  .openapi(analyzeRoundRoute, analyzeRoundHandler) // Stream moderator analysis for a round
-  .openapi(resumeAnalysisStreamRoute, resumeAnalysisStreamHandler) // Resume buffered analysis stream
+  .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)
+  // Round Summary (protected, backend-triggered only)
+  .openapi(getThreadSummariesRoute, getThreadSummariesHandler) // Get persisted round summaries (read-only)
+  .openapi(summarizeRoundRoute, summarizeRoundHandler) // Stream round summary generation
+  .openapi(resumeSummaryStreamRoute, resumeSummaryStreamHandler) // Resume buffered summary stream
   // Round Feedback (protected)
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread
@@ -775,5 +772,5 @@ export default appRoutes;
 // Cloudflare Workflows - REMOVED
 // ============================================================================
 
-// Workflows have been removed in favor of user-initiated streaming analysis
-// Analysis is now triggered exclusively via POST /chat/threads/:id/rounds/:roundNumber/analyze
+// Workflows have been removed in favor of user-initiated streaming summary generation
+// Round summaries are now triggered exclusively via POST /chat/threads/:id/rounds/:roundNumber/summarize

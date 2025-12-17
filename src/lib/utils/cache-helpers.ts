@@ -1,7 +1,7 @@
 /**
  * React Query Cache Manipulation Helpers
  *
- * Consolidates repetitive cache update patterns for analyses.
+ * Consolidates repetitive cache update patterns for round summaries.
  * Single source of truth for cache operations.
  *
  * ✅ PATTERN: Reduces 200+ lines of duplicated cache manipulation code
@@ -9,28 +9,33 @@
  * ✅ REUSABLE: Standardized cache operations across all actions
  *
  * Location: /src/lib/utils/cache-helpers.ts
- * Used by: chat-analysis.ts, analysis-orchestrator.ts
+ * Used by: summary orchestrator and related actions
  */
 
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { StoredRoundSummary } from '@/api/routes/chat/schema';
 import { queryKeys } from '@/lib/data/query-keys';
-import { validateAnalysesCache } from '@/stores/chat';
+import { validateSummariesCache } from '@/stores/chat';
 
 /**
- * Creates an empty analyses cache structure
+ * Creates an empty summaries cache structure
  */
-export function createEmptyAnalysesCache() {
+export function createEmptySummariesCache() {
   return {
     success: true,
     // ✅ TYPE-SAFE: Use satisfies instead of force cast
-    data: { items: [] satisfies StoredModeratorAnalysis[] },
+    data: { items: [] satisfies StoredRoundSummary[] },
   };
 }
 
 /**
- * Updates analyses cache with a transform function
+ * @deprecated Use createEmptySummariesCache instead
+ */
+export const createEmptyAnalysesCache = createEmptySummariesCache;
+
+/**
+ * Updates summaries cache with a transform function
  * Handles validation, error recovery, and cache structure creation
  *
  * @param queryClient - React Query client instance
@@ -42,14 +47,14 @@ export function createEmptyAnalysesCache() {
  * @returns The updated cache data or null if update failed
  *
  * @example
- * updateAnalysesCache(queryClient, threadId, items =>
- *   items.map(a => a.roundNumber === 1 ? { ...a, status: 'complete' } : a)
+ * updateSummariesCache(queryClient, threadId, items =>
+ *   items.map(s => s.roundNumber === 1 ? { ...s, status: 'complete' } : s)
  * );
  */
-export function updateAnalysesCache(
+export function updateSummariesCache(
   queryClient: QueryClient,
   threadId: string,
-  updater: (items: StoredModeratorAnalysis[]) => StoredModeratorAnalysis[],
+  updater: (items: StoredRoundSummary[]) => StoredRoundSummary[],
   options?: {
     /** Whether to create cache if it doesn't exist (default: true) */
     createIfMissing?: boolean;
@@ -60,9 +65,9 @@ export function updateAnalysesCache(
   const { createIfMissing = true, onVersionChange } = options || {};
 
   const updatedData = queryClient.setQueryData(
-    queryKeys.threads.analyses(threadId),
+    queryKeys.threads.summaries(threadId),
     (oldData: unknown) => {
-      const cacheData = validateAnalysesCache(oldData);
+      const cacheData = validateSummariesCache(oldData);
 
       // Handle missing cache
       if (!cacheData) {
@@ -70,7 +75,7 @@ export function updateAnalysesCache(
           return oldData;
         }
 
-        const emptyCache = createEmptyAnalysesCache();
+        const emptyCache = createEmptySummariesCache();
         const updatedItems = updater(emptyCache.data.items);
         return {
           ...emptyCache,
@@ -79,10 +84,10 @@ export function updateAnalysesCache(
       }
 
       // Update existing cache
-      // ✅ TYPE-SAFE: Cast validated cache items to match StoredModeratorAnalysis type
-      // The cache schema has `analysisData: z.unknown()` while StoredModeratorAnalysis
+      // ✅ TYPE-SAFE: Cast validated cache items to match StoredRoundSummary type
+      // The cache schema has `summaryData: z.unknown()` while StoredRoundSummary
       // has a more specific type. This cast is safe because both represent the same data.
-      const updatedItems = updater(cacheData.data.items as unknown as StoredModeratorAnalysis[]);
+      const updatedItems = updater(cacheData.data.items as unknown as StoredRoundSummary[]);
 
       return {
         ...cacheData,
@@ -101,21 +106,26 @@ export function updateAnalysesCache(
 }
 
 /**
- * Adds an analysis to the cache
+ * @deprecated Use updateSummariesCache instead
+ */
+export const updateAnalysesCache = updateSummariesCache;
+
+/**
+ * Adds a summary to the cache
  * Handles duplicate detection and creates cache if missing
  *
  * @example
- * addAnalysisToCache(queryClient, threadId, pendingAnalysis, {
+ * addSummaryToCache(queryClient, threadId, pendingSummary, {
  *   replaceDuplicates: true,
  *   onVersionChange: setCacheVersion
  * });
  */
-export function addAnalysisToCache(
+export function addSummaryToCache(
   queryClient: QueryClient,
   threadId: string,
-  analysis: StoredModeratorAnalysis,
+  summary: StoredRoundSummary,
   options?: {
-    /** Whether to replace existing analysis with same round number (default: false) */
+    /** Whether to replace existing summary with same round number (default: false) */
     replaceDuplicates?: boolean;
     /** Callback when cache version should be incremented */
     onVersionChange?: (incrementer: (v: number) => number) => void;
@@ -123,40 +133,40 @@ export function addAnalysisToCache(
 ) {
   const { replaceDuplicates = false, onVersionChange } = options || {};
 
-  return updateAnalysesCache(
+  return updateSummariesCache(
     queryClient,
     threadId,
     (items) => {
-      // Check for existing analysis with same round number
-      const hasExisting = items.some(a => a.roundNumber === analysis.roundNumber);
+      // Check for existing summary with same round number
+      const hasExisting = items.some(s => s.roundNumber === summary.roundNumber);
 
       if (hasExisting) {
         if (replaceDuplicates) {
-          // Replace existing analysis
-          return items.map(a =>
-            a.roundNumber === analysis.roundNumber ? analysis : a,
+          // Replace existing summary
+          return items.map(s =>
+            s.roundNumber === summary.roundNumber ? summary : s,
           );
         }
         // Don't add duplicate
         return items;
       }
 
-      // Add new analysis
-      return [...items, analysis];
+      // Add new summary
+      return [...items, summary];
     },
     { onVersionChange },
   );
 }
 
 /**
- * Removes an analysis from cache by round number
+ * Removes a summary from cache by round number
  *
  * @example
- * removeAnalysisFromCache(queryClient, threadId, roundNumber, {
+ * removeSummaryFromCache(queryClient, threadId, roundNumber, {
  *   onVersionChange: setCacheVersion
  * });
  */
-export function removeAnalysisFromCache(
+export function removeSummaryFromCache(
   queryClient: QueryClient,
   threadId: string,
   roundNumber: number,
@@ -165,65 +175,65 @@ export function removeAnalysisFromCache(
     onVersionChange?: (incrementer: (v: number) => number) => void;
   },
 ) {
-  return updateAnalysesCache(
+  return updateSummariesCache(
     queryClient,
     threadId,
-    items => items.filter(a => a.roundNumber !== roundNumber),
+    items => items.filter(s => s.roundNumber !== roundNumber),
     { onVersionChange: options?.onVersionChange },
   );
 }
 
 /**
- * Updates a specific analysis by round number
+ * Updates a specific summary by round number
  *
  * @example
- * updateAnalysisInCache(queryClient, threadId, roundNumber, {
- *   status: AnalysisStatuses.COMPLETE,
- *   analysisData: payload
+ * updateSummaryInCache(queryClient, threadId, roundNumber, {
+ *   status: MessageStatuses.COMPLETE,
+ *   summaryData: payload
  * }, { onVersionChange: setCacheVersion });
  */
-export function updateAnalysisInCache(
+export function updateSummaryInCache(
   queryClient: QueryClient,
   threadId: string,
   roundNumber: number,
-  updates: Partial<StoredModeratorAnalysis>,
+  updates: Partial<StoredRoundSummary>,
   options?: {
     /** Callback when cache version should be incremented */
     onVersionChange?: (incrementer: (v: number) => number) => void;
   },
 ) {
-  return updateAnalysesCache(
+  return updateSummariesCache(
     queryClient,
     threadId,
-    items => items.map(a =>
-      a.roundNumber === roundNumber
-        ? { ...a, ...updates }
-        : a,
+    items => items.map(s =>
+      s.roundNumber === roundNumber
+        ? { ...s, ...updates }
+        : s,
     ),
     { onVersionChange: options?.onVersionChange },
   );
 }
 
 /**
- * Filters analyses in cache based on a predicate
+ * Filters summaries in cache based on a predicate
  *
  * @example
- * // Remove failed analyses
- * filterAnalysesInCache(queryClient, threadId,
- *   (a) => a.status !== AnalysisStatuses.FAILED,
+ * // Remove failed summaries
+ * filterSummariesInCache(queryClient, threadId,
+ *   (s) => s.status !== MessageStatuses.FAILED,
  *   { onVersionChange: setCacheVersion }
  * );
  */
-export function filterAnalysesInCache(
+export function filterSummariesInCache(
   queryClient: QueryClient,
   threadId: string,
-  predicate: (analysis: StoredModeratorAnalysis) => boolean,
+  predicate: (summary: StoredRoundSummary) => boolean,
   options?: {
     /** Callback when cache version should be incremented */
     onVersionChange?: (incrementer: (v: number) => number) => void;
   },
 ) {
-  return updateAnalysesCache(
+  return updateSummariesCache(
     queryClient,
     threadId,
     items => items.filter(predicate),
@@ -232,23 +242,33 @@ export function filterAnalysesInCache(
 }
 
 /**
- * Gets current analyses from cache without updating
+ * @deprecated Use filterSummariesInCache instead
+ */
+export const filterAnalysesInCache = filterSummariesInCache;
+
+/**
+ * Gets current summaries from cache without updating
  * Returns empty array if cache doesn't exist or is invalid
  *
  * @example
- * const analyses = getAnalysesFromCache(queryClient, threadId);
+ * const summaries = getSummariesFromCache(queryClient, threadId);
  */
-export function getAnalysesFromCache(
+export function getSummariesFromCache(
   queryClient: QueryClient,
   threadId: string,
-): StoredModeratorAnalysis[] {
-  const cacheData = queryClient.getQueryData(queryKeys.threads.analyses(threadId));
-  const validated = validateAnalysesCache(cacheData);
-  // ✅ TYPE-SAFE: Cast validated cache items to match StoredModeratorAnalysis type
-  // The cache schema has `analysisData: z.unknown()` while StoredModeratorAnalysis
+): StoredRoundSummary[] {
+  const cacheData = queryClient.getQueryData(queryKeys.threads.summaries(threadId));
+  const validated = validateSummariesCache(cacheData);
+  // ✅ TYPE-SAFE: Cast validated cache items to match StoredRoundSummary type
+  // The cache schema has `summaryData: z.unknown()` while StoredRoundSummary
   // has a more specific type. This cast is safe because both represent the same data.
-  return (validated?.data.items as unknown as StoredModeratorAnalysis[]) || [];
+  return (validated?.data.items as unknown as StoredRoundSummary[]) || [];
 }
+
+/**
+ * @deprecated Use getSummariesFromCache instead
+ */
+export const getAnalysesFromCache = getSummariesFromCache;
 
 // ============================================================================
 // CACHE PREFETCH UTILITIES
