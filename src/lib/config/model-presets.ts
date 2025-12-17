@@ -14,8 +14,12 @@ import {
   Brain,
   Code,
   Crown,
+  Eye,
+  FileSearch,
+  Globe,
   Lightbulb,
   Scale,
+  ScrollText,
   Zap,
 } from 'lucide-react';
 
@@ -37,7 +41,14 @@ export type ModelPresetId
     | 'budget'
     | 'technical'
     | 'deep-thinkers'
-    | 'premium';
+    | 'premium'
+    | 'file-research'
+    | 'vision-experts'
+    | 'long-context'
+    | 'web-research';
+
+/** Chat mode preference for presets */
+export type PresetChatMode = 'roundtable' | 'interview' | 'monologue';
 
 export type ModelPreset = {
   id: ModelPresetId;
@@ -53,6 +64,12 @@ export type ModelPreset = {
   ) => BaseModelResponse[];
   /** Maximum models for this preset */
   maxModels: number;
+  /** Recommended chat mode for this preset */
+  recommendedMode?: PresetChatMode;
+  /** Whether web search is recommended for this preset */
+  recommendWebSearch?: boolean;
+  /** Whether this preset requires vision-capable models only */
+  requiresVision?: boolean;
 };
 
 // ============================================================================
@@ -118,6 +135,13 @@ function getHighContextModels(
 }
 
 /**
+ * Get models with vision capability (for file/image processing)
+ */
+function getVisionModels(models: BaseModelResponse[]): BaseModelResponse[] {
+  return models.filter(m => m.capabilities.vision);
+}
+
+/**
  * Get premium/flagship models (highest pricing)
  */
 function getPremiumModels(
@@ -159,6 +183,9 @@ function diversifyByProvider(
 // ============================================================================
 
 export const MODEL_PRESETS: ModelPreset[] = [
+  // ============================================================================
+  // FREE TIER PRESETS
+  // ============================================================================
   {
     id: 'balanced',
     name: 'Balanced Panel',
@@ -167,6 +194,8 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'free',
     order: 1,
     maxModels: 3,
+    recommendedMode: 'roundtable',
+    recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
       // Mix of providers for diverse perspectives
@@ -185,6 +214,8 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'free',
     order: 2,
     maxModels: 3,
+    recommendedMode: 'roundtable',
+    recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
       // Prefer fast models (lower context = usually faster)
@@ -202,12 +233,18 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'free',
     order: 3,
     maxModels: 3,
+    recommendedMode: 'roundtable',
+    recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
       const cheapest = getCheapestModels(accessible, 10);
       return diversifyByProvider(cheapest, 1).slice(0, 3);
     },
   },
+
+  // ============================================================================
+  // STARTER TIER PRESETS
+  // ============================================================================
   {
     id: 'technical',
     name: 'Technical Team',
@@ -216,6 +253,8 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'starter',
     order: 4,
     maxModels: 4,
+    recommendedMode: 'interview',
+    recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
       // Prefer models with tools capability (good for coding)
@@ -228,13 +267,39 @@ export const MODEL_PRESETS: ModelPreset[] = [
     },
   },
   {
+    id: 'web-research',
+    name: 'Web Researchers',
+    description: 'Research team with web search enabled for current info',
+    icon: Globe,
+    requiredTier: 'starter',
+    order: 5,
+    maxModels: 3,
+    recommendedMode: 'roundtable',
+    recommendWebSearch: true,
+    selectModels: (models, userTier) => {
+      const accessible = getAccessibleModels(models, userTier);
+      // Prefer models with reasoning for research analysis
+      const withReasoning = getModelsWithCapabilities(accessible, ['reasoning']);
+      const sorted = withReasoning.length >= 3
+        ? withReasoning
+        : accessible;
+      return diversifyByProvider(sorted, 1).slice(0, 3);
+    },
+  },
+
+  // ============================================================================
+  // PRO TIER PRESETS
+  // ============================================================================
+  {
     id: 'deep-thinkers',
     name: 'Deep Thinkers',
     description: 'Maximum reasoning depth for complex problems',
     icon: Brain,
     requiredTier: 'pro',
-    order: 5,
+    order: 6,
     maxModels: 4,
+    recommendedMode: 'interview',
+    recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
       // Prioritize reasoning models with high context
@@ -247,13 +312,78 @@ export const MODEL_PRESETS: ModelPreset[] = [
     },
   },
   {
+    id: 'file-research',
+    name: 'File Analysts',
+    description: 'Vision-capable models for analyzing images, PDFs, documents',
+    icon: FileSearch,
+    requiredTier: 'pro',
+    order: 7,
+    maxModels: 4,
+    recommendedMode: 'roundtable',
+    recommendWebSearch: false,
+    requiresVision: true,
+    selectModels: (models, userTier) => {
+      const accessible = getAccessibleModels(models, userTier);
+      // ONLY vision-capable models for file research
+      const visionModels = getVisionModels(accessible);
+      // Prefer high context for document analysis
+      const sorted = [...visionModels].sort(
+        (a, b) => b.context_length - a.context_length,
+      );
+      return diversifyByProvider(sorted, 1).slice(0, 4);
+    },
+  },
+  {
+    id: 'vision-experts',
+    name: 'Vision Experts',
+    description: 'Top multimodal models for image understanding and analysis',
+    icon: Eye,
+    requiredTier: 'pro',
+    order: 8,
+    maxModels: 4,
+    recommendedMode: 'interview',
+    recommendWebSearch: false,
+    requiresVision: true,
+    selectModels: (models, userTier) => {
+      const accessible = getAccessibleModels(models, userTier);
+      // ONLY vision-capable models
+      const visionModels = getVisionModels(accessible);
+      // Prefer premium vision models
+      const premium = getPremiumModels(visionModels, 8);
+      return diversifyByProvider(premium, 1).slice(0, 4);
+    },
+  },
+  {
+    id: 'long-context',
+    name: 'Long Context Team',
+    description: 'Models with 500K+ context for analyzing large documents',
+    icon: ScrollText,
+    requiredTier: 'pro',
+    order: 9,
+    maxModels: 4,
+    recommendedMode: 'interview',
+    recommendWebSearch: false,
+    selectModels: (models, userTier) => {
+      const accessible = getAccessibleModels(models, userTier);
+      // Only models with very high context (500K+)
+      const highContext = getHighContextModels(accessible, 500000);
+      return diversifyByProvider(highContext, 1).slice(0, 4);
+    },
+  },
+
+  // ============================================================================
+  // POWER TIER PRESETS
+  // ============================================================================
+  {
     id: 'premium',
     name: 'Premium Think Tank',
     description: 'High-power strategic and analytical thinking',
     icon: Crown,
     requiredTier: 'power',
-    order: 6,
+    order: 10,
     maxModels: 5,
+    recommendedMode: 'roundtable',
+    recommendWebSearch: true,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
       // Get the most premium models
