@@ -629,10 +629,6 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           throw new Error('Failed to generate search queries');
         }
 
-        // Coerce string numbers to actual numbers
-        const rawTotalQueries = typeof multiQueryResult.totalQueries === 'string'
-          ? Number.parseInt(multiQueryResult.totalQueries, 10)
-          : multiQueryResult.totalQueries;
         const rawGeneratedQueries = multiQueryResult.queries;
 
         // ✅ COMPLEXITY-AWARE: Limit queries based on user prompt complexity
@@ -642,8 +638,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         const complexityResult = analyzeQueryComplexity(body.userQuery);
 
         // Apply complexity limits - slice queries to maxQueries
-        const generatedQueries = rawGeneratedQueries.slice(0, complexityResult.maxQueries);
-        const totalQueries = Math.min(rawTotalQueries, complexityResult.maxQueries);
+        // ✅ FIX: Filter out queries with empty/whitespace-only query strings (can occur from partial AI streaming)
+        const generatedQueries = rawGeneratedQueries
+          .slice(0, complexityResult.maxQueries)
+          .filter(q => q.query && q.query.trim().length > 0);
+        const totalQueries = Math.min(generatedQueries.length, complexityResult.maxQueries);
 
         // Apply default search depth and source count to queries that lack them
         for (const query of generatedQueries) {

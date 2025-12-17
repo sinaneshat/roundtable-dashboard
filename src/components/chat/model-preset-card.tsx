@@ -91,10 +91,17 @@ export const ModelPresetCard = memo(({
   const isFullyDisabled = compatibleModelCount === 0;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={isFullyDisabled ? -1 : 0}
       onClick={handleClick}
-      disabled={isFullyDisabled}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
+      aria-disabled={isFullyDisabled}
       className={cn(
         'relative flex flex-col h-full p-4 rounded-xl text-left w-full',
         'border border-transparent',
@@ -186,7 +193,7 @@ export const ModelPresetCard = memo(({
           </Button>
         </div>
       )}
-    </button>
+    </div>
   );
 });
 

@@ -782,6 +782,11 @@ async function searchDuckDuckGo(
   env: ApiEnv['Bindings'],
   params?: Partial<WebSearchParameters>,
 ): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  // ✅ FIX: Early return for empty or whitespace-only queries
+  if (!query || !query.trim()) {
+    return [];
+  }
+
   // Build enhanced query with filters
   let enhancedQuery = query;
 
@@ -866,13 +871,23 @@ async function searchDuckDuckGoFallback(
   maxResults: number,
   country?: string,
 ): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  // ✅ FIX: Early return for empty or whitespace-only queries
+  if (!query || !query.trim()) {
+    return [];
+  }
+
   try {
     let searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     if (country) {
       searchUrl += `&kl=${country.toLowerCase()}-${country.toLowerCase()}`;
     }
 
+    // ✅ FIX: Add timeout to prevent hanging on slow/blocked requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000); // 10 second timeout
+
     const response = await fetch(searchUrl, {
+      signal: controller.signal,
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -883,6 +898,8 @@ async function searchDuckDuckGoFallback(
           : 'en-US,en;q=0.5',
       },
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok)
       return [];
