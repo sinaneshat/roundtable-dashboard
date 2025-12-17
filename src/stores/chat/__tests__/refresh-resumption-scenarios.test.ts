@@ -26,7 +26,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles, StreamStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, StreamStatuses } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import {
   createMockParticipant,

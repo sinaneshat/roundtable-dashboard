@@ -23,7 +23,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MessagePartTypes, MessageRoles, ScreenModes } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 import type { UIMessage } from '@/lib/schemas/message-schemas';
 import { getParticipantModelIds } from '@/lib/utils/participant';

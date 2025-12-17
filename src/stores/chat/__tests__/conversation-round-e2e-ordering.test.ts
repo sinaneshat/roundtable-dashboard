@@ -19,7 +19,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageRoles } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {

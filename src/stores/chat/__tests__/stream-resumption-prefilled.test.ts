@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
 
 // Type definitions for the test
 type MessagePart = {

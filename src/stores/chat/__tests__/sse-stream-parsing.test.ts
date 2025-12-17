@@ -32,7 +32,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
