@@ -181,11 +181,10 @@ describe('iD Collision Prevention', () => {
 
     const changelogItem = result.current.find(item => item.type === 'changelog');
     expect(changelogItem).toBeDefined();
-
-    if (changelogItem?.type === 'changelog') {
-      // Should be deduplicated to 1
-      expect(changelogItem.data).toHaveLength(1);
-    }
+    expect(changelogItem?.type).toBe('changelog');
+    // Should be deduplicated to 1
+    const changelogData = changelogItem?.type === 'changelog' ? changelogItem.data : [];
+    expect(changelogData).toHaveLength(1);
   });
 
   it('should allow same change type with different IDs', () => {
@@ -303,10 +302,9 @@ describe('round Number Consistency', () => {
     // Should still group correctly by metadata roundNumber
     expect(result.current).toHaveLength(1);
     expect(result.current[0]?.roundNumber).toBe(0);
-
-    if (result.current[0]?.type === 'messages') {
-      expect(result.current[0].data).toHaveLength(2);
-    }
+    expect(result.current[0]?.type).toBe('messages');
+    const messagesData = result.current[0]?.type === 'messages' ? result.current[0].data : [];
+    expect(messagesData).toHaveLength(2);
   });
 });
 
@@ -351,15 +349,15 @@ describe('participant Index Consistency', () => {
 
     const messagesItem = result.current.find(item => item.type === 'messages');
     expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
 
-    if (messagesItem?.type === 'messages') {
-      const assistants = messagesItem.data.filter(m => m.role === 'assistant');
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    const assistants = messagesData.filter(m => m.role === 'assistant');
 
-      // Should be sorted: p0, p1, p2
-      expect((assistants[0]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
-      expect((assistants[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);
-      expect((assistants[2]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(2);
-    }
+    // Should be sorted: p0, p1, p2
+    expect((assistants[0]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
+    expect((assistants[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);
+    expect((assistants[2]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(2);
   });
 
   it('should handle missing participantIndex gracefully', () => {
@@ -419,11 +417,11 @@ describe('participant Index Consistency', () => {
     );
 
     const messagesItem = result.current.find(item => item.type === 'messages');
-
-    if (messagesItem?.type === 'messages') {
-      // Both should be present (no dedup by participantIndex)
-      expect(messagesItem.data).toHaveLength(3);
-    }
+    expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
+    // Both should be present (no dedup by participantIndex)
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    expect(messagesData).toHaveLength(3);
   });
 });
 
@@ -455,17 +453,18 @@ describe('metadata Integrity', () => {
     );
 
     const messagesItem = result.current.find(item => item.type === 'messages');
+    expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
 
-    if (messagesItem?.type === 'messages') {
-      const assistantMsg = messagesItem.data.find(m => m.role === 'assistant');
-      const meta = assistantMsg?.metadata as DbAssistantMessageMetadata;
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    const assistantMsg = messagesData.find(m => m.role === 'assistant');
+    const meta = assistantMsg?.metadata as DbAssistantMessageMetadata;
 
-      expect(meta.roundNumber).toBe(1);
-      expect(meta.participantId).toBe('participant-123');
-      expect(meta.participantIndex).toBe(2);
-      expect(meta.model).toBe('gpt-4-turbo');
-      expect(meta.finishReason).toBe(FinishReasons.STOP);
-    }
+    expect(meta.roundNumber).toBe(1);
+    expect(meta.participantId).toBe('participant-123');
+    expect(meta.participantIndex).toBe(2);
+    expect(meta.model).toBe('gpt-4-turbo');
+    expect(meta.finishReason).toBe(FinishReasons.STOP);
   });
 
   it('should preserve user message metadata', () => {
@@ -484,14 +483,15 @@ describe('metadata Integrity', () => {
     );
 
     const messagesItem = result.current.find(item => item.type === 'messages');
+    expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
 
-    if (messagesItem?.type === 'messages') {
-      const userMsg = messagesItem.data.find(m => m.role === 'user');
-      const meta = userMsg?.metadata as DbUserMessageMetadata;
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    const userMsg = messagesData.find(m => m.role === 'user');
+    const userMeta = userMsg?.metadata as DbUserMessageMetadata;
 
-      expect(meta.roundNumber).toBe(5);
-      expect(meta.role).toBe(MessageRoles.USER);
-    }
+    expect(userMeta.roundNumber).toBe(5);
+    expect(userMeta.role).toBe(MessageRoles.USER);
   });
 
   it('should handle null/undefined metadata values', () => {

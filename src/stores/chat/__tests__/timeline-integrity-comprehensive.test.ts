@@ -659,12 +659,10 @@ describe('participant Sequential Execution', () => {
       }).length;
 
       const allComplete = completedCount === participantCount;
+      const isLastParticipant = i === participantCount - 1;
 
-      if (i < participantCount - 1) {
-        expect(allComplete).toBe(false);
-      } else {
-        expect(allComplete).toBe(true);
-      }
+      // Before last participant: not all complete; after last: all complete
+      expect(allComplete).toBe(isLastParticipant);
     }
   });
 });
@@ -980,12 +978,10 @@ describe('summary Trigger Timing', () => {
       }).length;
 
       const shouldTriggerSummary = completedCount === participantCount;
+      const isLastParticipant = i === participantCount - 1;
 
-      if (i < participantCount - 1) {
-        expect(shouldTriggerSummary).toBe(false);
-      } else {
-        expect(shouldTriggerSummary).toBe(true);
-      }
+      // Summary should only trigger after last participant
+      expect(shouldTriggerSummary).toBe(isLastParticipant);
     }
   });
 

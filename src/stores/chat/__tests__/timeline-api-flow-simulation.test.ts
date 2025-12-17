@@ -449,12 +449,12 @@ describe('complete Round Flow Simulation', () => {
     expect(summaryItem).toBeDefined();
 
     // Messages order: user, p0, p1
-    if (messagesItem?.type === 'messages') {
-      expect(messagesItem.data).toHaveLength(3);
-      expect(messagesItem.data[0]?.role).toBe('user');
-      expect((messagesItem.data[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
-      expect((messagesItem.data[2]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);
-    }
+    expect(messagesItem?.type).toBe('messages');
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    expect(messagesData).toHaveLength(3);
+    expect(messagesData[0]?.role).toBe('user');
+    expect((messagesData[1]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(0);
+    expect((messagesData[2]?.metadata as DbAssistantMessageMetadata)?.participantIndex).toBe(1);
   });
 
   it('should simulate complete round with web search', () => {
@@ -596,14 +596,14 @@ describe('resumption Flow Simulation', () => {
     expect(messagesItem).toBeDefined();
 
     // P0 should still be in messages (streaming state)
-    if (messagesItem?.type === 'messages') {
-      const p0 = messagesItem.data.find((m) => {
-        const meta = m.metadata as DbAssistantMessageMetadata;
-        return meta?.participantIndex === 0;
-      });
-      expect(p0).toBeDefined();
-      expect((p0?.metadata as DbAssistantMessageMetadata)?.finishReason).toBeUndefined();
-    }
+    expect(messagesItem?.type).toBe('messages');
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    const p0 = messagesData.find((m) => {
+      const meta = m.metadata as DbAssistantMessageMetadata;
+      return meta?.participantIndex === 0;
+    });
+    expect(p0).toBeDefined();
+    expect((p0?.metadata as DbAssistantMessageMetadata)?.finishReason).toBeUndefined();
   });
 
   it('should resume from summary streaming phase', () => {
@@ -645,16 +645,16 @@ describe('resumption Flow Simulation', () => {
 
     const messagesItem = result.current.find(item => item.type === 'messages');
     expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
 
-    if (messagesItem?.type === 'messages') {
-      const assistants = messagesItem.data.filter(m => m.role === 'assistant');
-      expect(assistants).toHaveLength(2); // P0 and P1
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    const assistants = messagesData.filter(m => m.role === 'assistant');
+    expect(assistants).toHaveLength(2); // P0 and P1
 
-      // P0 complete
-      expect((assistants[0]?.metadata as DbAssistantMessageMetadata)?.finishReason).toBe(FinishReasons.STOP);
-      // P1 streaming
-      expect((assistants[1]?.metadata as DbAssistantMessageMetadata)?.finishReason).toBeUndefined();
-    }
+    // P0 complete
+    expect((assistants[0]?.metadata as DbAssistantMessageMetadata)?.finishReason).toBe(FinishReasons.STOP);
+    // P1 streaming
+    expect((assistants[1]?.metadata as DbAssistantMessageMetadata)?.finishReason).toBeUndefined();
   });
 });
 
@@ -723,14 +723,14 @@ describe('error Recovery Scenarios', () => {
 
     const messagesItem = result.current.find(item => item.type === 'messages');
     expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
 
-    if (messagesItem?.type === 'messages') {
-      const p0 = messagesItem.data.find((m) => {
-        const meta = m.metadata as DbAssistantMessageMetadata;
-        return meta?.participantIndex === 0;
-      });
-      expect((p0?.metadata as DbAssistantMessageMetadata)?.finishReason).toBe(FinishReasons.ERROR);
-    }
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    const p0 = messagesData.find((m) => {
+      const meta = m.metadata as DbAssistantMessageMetadata;
+      return meta?.participantIndex === 0;
+    });
+    expect((p0?.metadata as DbAssistantMessageMetadata)?.finishReason).toBe(FinishReasons.ERROR);
   });
 
   it('should handle empty round (no participants)', () => {
@@ -747,11 +747,11 @@ describe('error Recovery Scenarios', () => {
     // Should still show the user message
     const messagesItem = result.current.find(item => item.type === 'messages');
     expect(messagesItem).toBeDefined();
+    expect(messagesItem?.type).toBe('messages');
 
-    if (messagesItem?.type === 'messages') {
-      expect(messagesItem.data).toHaveLength(1);
-      expect(messagesItem.data[0]?.role).toBe('user');
-    }
+    const messagesData = messagesItem?.type === 'messages' ? messagesItem.data : [];
+    expect(messagesData).toHaveLength(1);
+    expect(messagesData[0]?.role).toBe('user');
   });
 });
 
@@ -807,9 +807,8 @@ describe('timeline Ordering Edge Cases', () => {
     expect(result.current).toHaveLength(1);
     const item = result.current[0];
     expect(item?.type).toBe('messages');
-    if (item?.type === 'messages') {
-      expect(item.data).toHaveLength(1);
-    }
+    const itemData = item?.type === 'messages' ? item.data : [];
+    expect(itemData).toHaveLength(1);
   });
 
   it('should deduplicate identical changelog entries', () => {
@@ -845,10 +844,10 @@ describe('timeline Ordering Edge Cases', () => {
 
     const changelogItem = result.current.find(item => item.type === 'changelog');
     expect(changelogItem).toBeDefined();
+    expect(changelogItem?.type).toBe('changelog');
     // Should be deduplicated to 1 entry
-    if (changelogItem?.type === 'changelog') {
-      expect(changelogItem.data).toHaveLength(1);
-    }
+    const changelogData = changelogItem?.type === 'changelog' ? changelogItem.data : [];
+    expect(changelogData).toHaveLength(1);
   });
 
   it('should handle changelog-only rounds (no messages yet)', () => {

@@ -118,7 +118,7 @@ function createPlaceholderPreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: MESSAGE_STATUSES.PENDING,
+    status: MessageStatuses.PENDING,
     searchData: null,
     errorMessage: null,
     createdAt: new Date(),
@@ -136,7 +136,7 @@ function createCompletePreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: MESSAGE_STATUSES.COMPLETE,
+    status: MessageStatuses.COMPLETE,
     searchData: {
       queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
       results: [],
@@ -164,10 +164,10 @@ function createSummary(
     mode: ChatModes.ANALYZING,
     userQuestion: 'test question',
     status: status === 'pending'
-      ? MESSAGE_STATUSES.PENDING
+      ? MessageStatuses.PENDING
       : status === 'streaming'
-        ? MESSAGE_STATUSES.STREAMING
-        : MESSAGE_STATUSES.COMPLETE,
+        ? MessageStatuses.STREAMING
+        : MessageStatuses.COMPLETE,
     summaryData: status === 'complete'
       ? {
           confidence: { overall: 85, reasoning: 'test' },
@@ -344,8 +344,8 @@ describe('timeline ordering during streaming', () => {
 
       expect(round0PreSearch).toBeDefined();
       expect(round1PreSearch).toBeDefined();
-      expect(round0PreSearch!.status).toBe(MESSAGE_STATUSES.COMPLETE);
-      expect(round1PreSearch!.status).toBe(MESSAGE_STATUSES.PENDING);
+      expect(round0PreSearch!.status).toBe(MessageStatuses.COMPLETE);
+      expect(round1PreSearch!.status).toBe(MessageStatuses.PENDING);
     });
 
     it('should maintain correct order for multi-round conversation', () => {
@@ -397,10 +397,10 @@ describe('timeline ordering during streaming', () => {
       const threadId = 'thread-123';
 
       store.getState().addPreSearch(createPlaceholderPreSearch(threadId, 0, 'test query'));
-      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.PENDING);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.PENDING);
 
-      store.getState().updatePreSearchStatus(0, MESSAGE_STATUSES.STREAMING);
-      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.STREAMING);
+      store.getState().updatePreSearchStatus(0, MessageStatuses.STREAMING);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
 
       store.getState().updatePreSearchData(0, {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
@@ -411,7 +411,7 @@ describe('timeline ordering during streaming', () => {
         totalResults: 0,
         totalTime: 100,
       });
-      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.COMPLETE);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
     });
 
     it('should handle summary status transition from PENDING to STREAMING to COMPLETE', () => {
@@ -419,10 +419,10 @@ describe('timeline ordering during streaming', () => {
       const threadId = 'thread-123';
 
       store.getState().addSummary(createSummary(threadId, 0, 'pending'));
-      expect(store.getState().summaries[0]?.status).toBe(MESSAGE_STATUSES.PENDING);
+      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.PENDING);
 
-      store.getState().updateMessageStatus(0, MESSAGE_STATUSES.STREAMING);
-      expect(store.getState().summaries[0]?.status).toBe(MESSAGE_STATUSES.STREAMING);
+      store.getState().updateMessageStatus(0, MessageStatuses.STREAMING);
+      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.STREAMING);
 
       const completeSummaryData = {
         confidence: { overall: 85, reasoning: 'test' },
@@ -434,7 +434,7 @@ describe('timeline ordering during streaming', () => {
         convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
       };
       store.getState().updateSummaryData(0, completeSummaryData);
-      expect(store.getState().summaries[0]?.status).toBe(MESSAGE_STATUSES.COMPLETE);
+      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 

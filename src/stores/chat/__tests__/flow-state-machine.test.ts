@@ -20,7 +20,6 @@ import type { FlowState } from '@/api/core/enums';
 import {
   FinishReasons,
   FlowStates,
-  MESSAGE_STATUSES,
   MessagePartTypes,
   MessageRoles,
   ScreenModes,
@@ -60,7 +59,7 @@ function determineFlowState(context: FlowContext): FlowState {
   // Priority 2: Ready to navigate (summary done + title ready)
   if (
     context.screenMode === ScreenModes.OVERVIEW
-    && context.summaryStatus === MESSAGE_STATUSES.COMPLETE
+    && context.summaryStatus === MessageStatuses.COMPLETE
     && context.hasAiGeneratedTitle
     && context.threadSlug
   ) {
@@ -69,7 +68,7 @@ function determineFlowState(context: FlowContext): FlowState {
 
   // Priority 3: Summary streaming
   if (
-    context.summaryStatus === MESSAGE_STATUSES.STREAMING
+    context.summaryStatus === MessageStatuses.STREAMING
     || (context.summaryExists && context.isAiSdkStreaming)
   ) {
     return FlowStates.STREAMING_SUMMARY;
@@ -279,7 +278,7 @@ describe('flow State Machine - State Determination', () => {
   describe('streaming Summary State', () => {
     it('returns STREAMING_SUMMARY when summary status is streaming', () => {
       const context = createDefaultContext();
-      context.summaryStatus = MESSAGE_STATUSES.STREAMING;
+      context.summaryStatus = MessageStatuses.STREAMING;
       expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
     });
 
@@ -295,7 +294,7 @@ describe('flow State Machine - State Determination', () => {
     it('returns NAVIGATING when summary complete and has AI title', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.OVERVIEW;
-      context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
+      context.summaryStatus = MessageStatuses.COMPLETE;
       context.hasAiGeneratedTitle = true;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).toBe(FlowStates.NAVIGATING);
@@ -304,7 +303,7 @@ describe('flow State Machine - State Determination', () => {
     it('does NOT navigate without AI-generated title', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.OVERVIEW;
-      context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
+      context.summaryStatus = MessageStatuses.COMPLETE;
       context.hasAiGeneratedTitle = false;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).not.toBe(FlowStates.NAVIGATING);
@@ -313,7 +312,7 @@ describe('flow State Machine - State Determination', () => {
     it('does NOT navigate on thread screen mode', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.THREAD;
-      context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
+      context.summaryStatus = MessageStatuses.COMPLETE;
       context.hasAiGeneratedTitle = true;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).not.toBe(FlowStates.NAVIGATING);
@@ -601,7 +600,7 @@ describe('state Priority', () => {
     context.isAiSdkStreaming = true;
     context.isCreatingThread = true;
     context.allParticipantsResponded = true;
-    context.summaryStatus = MESSAGE_STATUSES.STREAMING;
+    context.summaryStatus = MessageStatuses.STREAMING;
 
     expect(determineFlowState(context)).toBe(FlowStates.COMPLETE);
   });
@@ -609,7 +608,7 @@ describe('state Priority', () => {
   it('nAVIGATING takes precedence over STREAMING_SUMMARY', () => {
     const context = createDefaultContext();
     context.screenMode = ScreenModes.OVERVIEW;
-    context.summaryStatus = MESSAGE_STATUSES.COMPLETE;
+    context.summaryStatus = MessageStatuses.COMPLETE;
     context.hasAiGeneratedTitle = true;
     context.threadSlug = 'test-slug';
     context.isAiSdkStreaming = true;
@@ -619,7 +618,7 @@ describe('state Priority', () => {
 
   it('sTREAMING_ANALYSIS takes precedence over CREATING_SUMMARY', () => {
     const context = createDefaultContext();
-    context.summaryStatus = MESSAGE_STATUSES.STREAMING;
+    context.summaryStatus = MessageStatuses.STREAMING;
     context.allParticipantsResponded = true;
     context.participantCount = 2;
 

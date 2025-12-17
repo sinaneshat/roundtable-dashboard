@@ -14,7 +14,7 @@ import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, MESSAGE_STATUSES } from '@/api/core/enums';
+import { ChatModes } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
@@ -77,12 +77,12 @@ function createMockPreSearch(
     roundNumber,
     userQuery: `Query for round ${roundNumber}`,
     status: status === 'pending'
-      ? MESSAGE_STATUSES.PENDING
+      ? MessageStatuses.PENDING
       : status === 'streaming'
-        ? MESSAGE_STATUSES.STREAMING
+        ? MessageStatuses.STREAMING
         : status === 'complete'
-          ? MESSAGE_STATUSES.COMPLETE
-          : MESSAGE_STATUSES.FAILED,
+          ? MessageStatuses.COMPLETE
+          : MessageStatuses.FAILED,
     searchData: status === 'complete'
       ? {
           queries: [],
@@ -112,12 +112,12 @@ function createMockSummary(
     mode: ChatModes.DEBATING,
     userQuestion: `Question for round ${roundNumber}`,
     status: status === 'pending'
-      ? MESSAGE_STATUSES.PENDING
+      ? MessageStatuses.PENDING
       : status === 'streaming'
-        ? MESSAGE_STATUSES.STREAMING
+        ? MessageStatuses.STREAMING
         : status === 'complete'
-          ? MESSAGE_STATUSES.COMPLETE
-          : MESSAGE_STATUSES.FAILED,
+          ? MessageStatuses.COMPLETE
+          : MessageStatuses.FAILED,
     summaryData: status === 'complete'
       ? {
           confidence: { overall: 85, reasoning: 'Test' },
@@ -515,12 +515,12 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
 
       // Streaming state
       const streamingPreSearch = createMockPreSearch(0, 'streaming');
-      expect(streamingPreSearch.status).toBe(MESSAGE_STATUSES.STREAMING);
+      expect(streamingPreSearch.status).toBe(MessageStatuses.STREAMING);
       expect(streamingPreSearch.searchData).toBeUndefined();
 
       // Complete state
       const completePreSearch = createMockPreSearch(0, 'complete');
-      expect(completePreSearch.status).toBe(MESSAGE_STATUSES.COMPLETE);
+      expect(completePreSearch.status).toBe(MessageStatuses.COMPLETE);
       expect(completePreSearch.searchData).toBeDefined();
     });
   });

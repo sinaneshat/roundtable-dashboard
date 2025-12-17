@@ -23,7 +23,6 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MESSAGE_STATUSES } from '@/api/core/enums';
 import type { PartialPreSearchData, StoredPreSearch } from '@/api/routes/chat/schema';
 
 import { createChatStore } from '../store';
@@ -45,7 +44,7 @@ function createPlaceholderPreSearch(
     threadId,
     roundNumber,
     userQuery,
-    status: MESSAGE_STATUSES.PENDING,
+    status: MessageStatuses.PENDING,
     searchData: null,
     errorMessage: null,
     createdAt: new Date(),
@@ -132,7 +131,7 @@ describe('non-first round progressive UI', () => {
       expect(updatedPreSearch?.searchData?.queries[1]?.query).toBe('Test query 1');
 
       // Status should still be PENDING (not changed by partial update)
-      expect(updatedPreSearch?.status).toBe(MESSAGE_STATUSES.PENDING);
+      expect(updatedPreSearch?.status).toBe(MessageStatuses.PENDING);
     });
 
     it('should update searchData when partial results arrive', () => {
@@ -162,7 +161,7 @@ describe('non-first round progressive UI', () => {
       // Create pre-search with STREAMING status
       const streamingPreSearch = {
         ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
-        status: MESSAGE_STATUSES.STREAMING,
+        status: MessageStatuses.STREAMING,
       };
       store.getState().setPreSearches([streamingPreSearch]);
 
@@ -171,7 +170,7 @@ describe('non-first round progressive UI', () => {
       store.getState().updatePartialPreSearchData(roundNumber, partialData);
 
       // Status should remain STREAMING
-      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.STREAMING);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
     });
 
     it('should preserve existing summary when partial data arrives', () => {
@@ -250,7 +249,7 @@ describe('non-first round progressive UI', () => {
         threadId,
         roundNumber,
         userQuery: 'test query',
-        status: MESSAGE_STATUSES.STREAMING,
+        status: MessageStatuses.STREAMING,
         searchData: null,
         errorMessage: null,
         createdAt: new Date(),
@@ -262,7 +261,7 @@ describe('non-first round progressive UI', () => {
       const updatedPreSearch = store.getState().preSearches.find(
         ps => ps.roundNumber === roundNumber,
       );
-      expect(updatedPreSearch?.status).toBe(MESSAGE_STATUSES.STREAMING);
+      expect(updatedPreSearch?.status).toBe(MessageStatuses.STREAMING);
       // ID should be updated to real ID
       expect(updatedPreSearch?.id).toBe('real-presearch-id');
     });
@@ -276,7 +275,7 @@ describe('non-first round progressive UI', () => {
       const streamingPreSearch = {
         ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
         id: 'original-streaming-id',
-        status: MESSAGE_STATUSES.STREAMING,
+        status: MessageStatuses.STREAMING,
       };
       store.getState().setPreSearches([streamingPreSearch]);
 
@@ -286,7 +285,7 @@ describe('non-first round progressive UI', () => {
         threadId,
         roundNumber,
         userQuery: 'test query',
-        status: MESSAGE_STATUSES.STREAMING,
+        status: MessageStatuses.STREAMING,
         searchData: null,
         errorMessage: null,
         createdAt: new Date(),
@@ -342,7 +341,7 @@ describe('non-first round progressive UI', () => {
 
       // Verify initial state
       expect(store.getState().preSearches).toHaveLength(1);
-      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.PENDING);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.PENDING);
       expect(store.getState().preSearches[0]?.searchData).toBeNull();
 
       // Step 2: Mark as triggered (simulating effect marking)
@@ -350,8 +349,8 @@ describe('non-first round progressive UI', () => {
       expect(store.getState().hasPreSearchBeenTriggered(roundNumber)).toBe(true);
 
       // Step 3: Update to STREAMING status (simulating addPreSearch)
-      store.getState().updatePreSearchStatus(roundNumber, MESSAGE_STATUSES.STREAMING);
-      expect(store.getState().preSearches[0]?.status).toBe(MESSAGE_STATUSES.STREAMING);
+      store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.STREAMING);
+      expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
 
       // Step 4: First partial update - 1 query
       store.getState().updatePartialPreSearchData(roundNumber, {
@@ -369,7 +368,7 @@ describe('non-first round progressive UI', () => {
       let currentState = store.getState().preSearches[0];
       expect(currentState?.searchData?.queries).toHaveLength(1);
       expect(currentState?.searchData?.results).toHaveLength(0);
-      expect(currentState?.status).toBe(MESSAGE_STATUSES.STREAMING); // Still streaming
+      expect(currentState?.status).toBe(MessageStatuses.STREAMING); // Still streaming
 
       // Step 5: Second partial update - 2 queries
       store.getState().updatePartialPreSearchData(roundNumber, {
@@ -434,7 +433,7 @@ describe('non-first round progressive UI', () => {
       currentState = store.getState().preSearches[0];
       expect(currentState?.searchData?.queries).toHaveLength(2);
       expect(currentState?.searchData?.results).toHaveLength(1);
-      expect(currentState?.status).toBe(MESSAGE_STATUSES.STREAMING); // Still streaming
+      expect(currentState?.status).toBe(MessageStatuses.STREAMING); // Still streaming
 
       // Step 7: Final update via updatePreSearchData (marks complete)
       store.getState().updatePreSearchData(roundNumber, {
@@ -495,7 +494,7 @@ describe('non-first round progressive UI', () => {
 
       // Verify final state
       currentState = store.getState().preSearches[0];
-      expect(currentState?.status).toBe(MESSAGE_STATUSES.COMPLETE);
+      expect(currentState?.status).toBe(MessageStatuses.COMPLETE);
       expect(currentState?.searchData?.queries).toHaveLength(2);
       expect(currentState?.searchData?.results).toHaveLength(2);
       expect(currentState?.searchData?.summary).toBe('Search complete. Found relevant resources.');

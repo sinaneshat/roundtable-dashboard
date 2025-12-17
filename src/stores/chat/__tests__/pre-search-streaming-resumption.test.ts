@@ -19,7 +19,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MessageStatus } from '@/api/core/enums';
-import { MESSAGE_STATUSES } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { createMockPreSearch } from '@/lib/testing/helpers';
 
@@ -59,7 +58,7 @@ function createTestPreSearch(overrides: {
     id: overrides.id ?? 'presearch-123',
     threadId: overrides.threadId ?? 'thread-123',
     roundNumber: overrides.roundNumber ?? 0,
-    status: overrides.status ?? MESSAGE_STATUSES.PENDING,
+    status: overrides.status ?? MessageStatuses.PENDING,
     userQuery: overrides.userQuery ?? 'Test query',
     createdAt: overrides.createdAt ?? new Date(),
     completedAt: overrides.completedAt ?? null,
@@ -105,13 +104,13 @@ function needsPreSearchResumption(state: PostRefreshState): boolean {
   const { preSearch, triggeredPreSearchRounds } = state;
 
   // Pre-search is streaming but not tracked locally = needs resumption
-  if (preSearch.status === MESSAGE_STATUSES.STREAMING) {
+  if (preSearch.status === MessageStatuses.STREAMING) {
     const isTrackedLocally = triggeredPreSearchRounds.has(preSearch.roundNumber);
     return !isTrackedLocally;
   }
 
   // Pending pre-search that isn't tracked also needs to be started
-  if (preSearch.status === MESSAGE_STATUSES.PENDING) {
+  if (preSearch.status === MessageStatuses.PENDING) {
     const isTrackedLocally = triggeredPreSearchRounds.has(preSearch.roundNumber);
     return !isTrackedLocally;
   }
@@ -141,11 +140,11 @@ describe('pre-Search Resumption After Refresh', () => {
     it('detects pre-search stuck in streaming state after refresh', () => {
       // Simulate: User refreshed while pre-search was streaming
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
       });
 
       // The pre-search is "streaming" but no local tracking exists
-      expect(state.preSearch.status).toBe(MESSAGE_STATUSES.STREAMING);
+      expect(state.preSearch.status).toBe(MessageStatuses.STREAMING);
       expect(state.triggeredPreSearchRounds.size).toBe(0);
       expect(state.isStreaming).toBe(false);
 
@@ -156,7 +155,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('does NOT flag for resumption when pre-search is tracked locally', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
       });
 
       // If we've already tracked/triggered this pre-search, don't re-trigger
@@ -168,7 +167,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('does NOT flag for resumption when pre-search is complete', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.COMPLETE,
+        preSearchStatus: MessageStatuses.COMPLETE,
       });
 
       const needsResume = needsPreSearchResumption(state);
@@ -177,7 +176,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('does NOT flag for resumption when pre-search failed', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.FAILED,
+        preSearchStatus: MessageStatuses.FAILED,
       });
 
       const needsResume = needsPreSearchResumption(state);
@@ -188,7 +187,7 @@ describe('pre-Search Resumption After Refresh', () => {
   describe('pending Pre-Search After Refresh', () => {
     it('detects pending pre-search needs to be started', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.PENDING,
+        preSearchStatus: MessageStatuses.PENDING,
       });
 
       // Pending pre-search should also be handled (started)
@@ -198,7 +197,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('does NOT restart pending if already tracked', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.PENDING,
+        preSearchStatus: MessageStatuses.PENDING,
       });
 
       state.triggeredPreSearchRounds.add(0);
@@ -211,7 +210,7 @@ describe('pre-Search Resumption After Refresh', () => {
   describe('stale Pre-Search Detection', () => {
     it('detects stale pre-search (created > 2 minutes ago)', () => {
       const preSearch = createTestPreSearch({
-        status: MESSAGE_STATUSES.STREAMING,
+        status: MessageStatuses.STREAMING,
         createdAt: new Date(Date.now() - 150_000), // 2.5 minutes ago
       });
 
@@ -221,7 +220,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('does NOT flag recent pre-search as stale', () => {
       const preSearch = createTestPreSearch({
-        status: MESSAGE_STATUSES.STREAMING,
+        status: MessageStatuses.STREAMING,
         createdAt: new Date(Date.now() - 30_000), // 30 seconds ago
       });
 
@@ -231,7 +230,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('handles stale streaming pre-search after refresh', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
         preSearchCreatedAt: new Date(Date.now() - 150_000), // 2.5 minutes ago
       });
 
@@ -251,7 +250,7 @@ describe('pre-Search Resumption After Refresh', () => {
   describe('multi-Round Pre-Search Resumption', () => {
     it('handles resumption for round 1 pre-search', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
         roundNumber: 1,
       });
 
@@ -265,18 +264,18 @@ describe('pre-Search Resumption After Refresh', () => {
     it('only resumes pre-search for current round', () => {
       // Simulate: Round 0 complete, Round 1 streaming
       const preSearches = [
-        createTestPreSearch({ roundNumber: 0, status: MESSAGE_STATUSES.COMPLETE }),
-        createTestPreSearch({ roundNumber: 1, status: MESSAGE_STATUSES.STREAMING }),
+        createTestPreSearch({ roundNumber: 0, status: MessageStatuses.COMPLETE }),
+        createTestPreSearch({ roundNumber: 1, status: MessageStatuses.STREAMING }),
       ];
       const triggeredRounds = new Set<number>();
       const currentRound = 1;
 
       // Only round 1 pre-search needs resumption
       const currentPreSearch = preSearches.find(ps => ps.roundNumber === currentRound);
-      expect(currentPreSearch?.status).toBe(MESSAGE_STATUSES.STREAMING);
+      expect(currentPreSearch?.status).toBe(MessageStatuses.STREAMING);
 
       const needsResume = currentPreSearch
-        && (currentPreSearch.status === MESSAGE_STATUSES.STREAMING || currentPreSearch.status === MESSAGE_STATUSES.PENDING)
+        && (currentPreSearch.status === MessageStatuses.STREAMING || currentPreSearch.status === MessageStatuses.PENDING)
         && !triggeredRounds.has(currentRound);
 
       expect(needsResume).toBe(true);
@@ -286,7 +285,7 @@ describe('pre-Search Resumption After Refresh', () => {
   describe('integration: Expected Fix Behavior', () => {
     it('fix should attempt resumption when streaming pre-search not tracked', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
         preSearchCreatedAt: new Date(Date.now() - 5_000), // 5 seconds ago (not stale)
       });
 
@@ -317,7 +316,7 @@ describe('pre-Search Resumption After Refresh', () => {
 
     it('fix should auto-complete stale streaming pre-search', () => {
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
         preSearchCreatedAt: new Date(Date.now() - 150_000), // 2.5 minutes ago (stale)
       });
 
@@ -333,7 +332,7 @@ describe('pre-Search Resumption After Refresh', () => {
       // The checkStuckPreSearches already does this, but fix should trigger it immediately
 
       // Simulate the auto-complete
-      const updatedPreSearch = { ...state.preSearch, status: MESSAGE_STATUSES.COMPLETE as MessageStatus };
+      const updatedPreSearch = { ...state.preSearch, status: MessageStatuses.COMPLETE as MessageStatus };
       const updatedState = { ...state, preSearch: updatedPreSearch };
 
       // Now should not need resumption
@@ -356,7 +355,7 @@ describe('pre-Search Resumption After Refresh', () => {
     it('handles rapid refresh during pre-search creation', () => {
       // Pre-search has PENDING status (created but not yet streaming)
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.PENDING,
+        preSearchStatus: MessageStatuses.PENDING,
         preSearchCreatedAt: new Date(Date.now() - 100), // Just created
       });
 
@@ -368,12 +367,12 @@ describe('pre-Search Resumption After Refresh', () => {
     it('handles web search disabled mid-refresh', () => {
       const webSearchEnabled = false;
       const state = createPostRefreshState({
-        preSearchStatus: MESSAGE_STATUSES.STREAMING,
+        preSearchStatus: MessageStatuses.STREAMING,
       });
 
       // If web search disabled, pre-search should be ignored
       const shouldWait = webSearchEnabled
-        && (state.preSearch.status === MESSAGE_STATUSES.PENDING || state.preSearch.status === MESSAGE_STATUSES.STREAMING);
+        && (state.preSearch.status === MessageStatuses.PENDING || state.preSearch.status === MessageStatuses.STREAMING);
 
       expect(shouldWait).toBe(false);
     });
@@ -432,21 +431,21 @@ describe('pre-Search Activity Tracking', () => {
 describe('flow Continuation After Pre-Search Resumption', () => {
   describe('participants Wait For Pre-Search', () => {
     it('participants blocked while pre-search resuming', () => {
-      const preSearchStatus = MESSAGE_STATUSES.STREAMING;
+      const preSearchStatus = MessageStatuses.STREAMING;
       const webSearchEnabled = true;
 
       const shouldWaitForPreSearch = webSearchEnabled
-        && (preSearchStatus === MESSAGE_STATUSES.PENDING || preSearchStatus === MESSAGE_STATUSES.STREAMING);
+        && (preSearchStatus === MessageStatuses.PENDING || preSearchStatus === MessageStatuses.STREAMING);
 
       expect(shouldWaitForPreSearch).toBe(true);
     });
 
     it('participants proceed when pre-search complete', () => {
-      const preSearchStatus = MESSAGE_STATUSES.COMPLETE;
+      const preSearchStatus = MessageStatuses.COMPLETE;
       const webSearchEnabled = true;
 
       const shouldWaitForPreSearch = webSearchEnabled
-        && (preSearchStatus === MESSAGE_STATUSES.PENDING || preSearchStatus === MESSAGE_STATUSES.STREAMING);
+        && (preSearchStatus === MessageStatuses.PENDING || preSearchStatus === MessageStatuses.STREAMING);
 
       expect(shouldWaitForPreSearch).toBe(false);
     });

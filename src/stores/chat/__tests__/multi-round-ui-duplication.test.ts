@@ -900,9 +900,8 @@ describe('optimistic Message Handling', () => {
       m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 1,
     );
 
-    if (round1UserMsg) {
-      // If optimistic message was added, it should have isOptimistic flag
-      expect((round1UserMsg.metadata as { isOptimistic?: boolean }).isOptimistic).toBe(true);
-    }
+    // Optimistic message should exist and have isOptimistic flag
+    expect(round1UserMsg).toBeDefined();
+    expect((round1UserMsg?.metadata as { isOptimistic?: boolean }).isOptimistic).toBe(true);
   });
 });
