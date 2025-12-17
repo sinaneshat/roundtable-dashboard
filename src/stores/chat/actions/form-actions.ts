@@ -124,6 +124,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setHasEarlyOptimisticMessage: s.setHasEarlyOptimisticMessage,
     // ✅ ATTACHMENT CLEARING: Clear attachments after thread/message is created
     clearAttachments: s.clearAttachments,
+    // ✅ THREAD STATE SYNC: Sync thread state (enableWebSearch, mode) after update
+    setThread: s.setThread,
   })));
 
   // Mutations
@@ -469,7 +471,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         text: trimmed,
         fileParts,
       });
-      actions.setMessages([...threadState.messages, optimisticUserMessage]);
+      // ✅ FIX: Use function updater to get CURRENT messages from store
+      // BUG FIX: threadState.messages is captured at function start and could be stale
+      // This caused round 1 to overwrite round 0's assistant messages when they weren't synced yet
+      actions.setMessages(currentMessages => [...currentMessages, optimisticUserMessage]);
 
       // ✅ IMMEDIATE UI FEEDBACK: Set flag to tell prepareForNewMessage not to add duplicate
       // This flag is cleared by prepareForNewMessage after it checks it
@@ -546,8 +551,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
             // ✅ Reset hasPendingConfigChanges since changes are now saved
             actions.setHasPendingConfigChanges(false);
-          } else {
-            actions.setExpectedParticipantIds(getParticipantModelIds(optimisticParticipants));
+          }
+
+          // ✅ FIX: Sync thread state (enableWebSearch, mode) from response
+          // BUG FIX: Store's thread.enableWebSearch stayed stale after toggle
+          if (response?.data?.thread) {
+            actions.setThread(transformChatThread(response.data.thread));
           }
         } else {
           // ✅ CRITICAL FIX: Rollback optimistic update on failure
@@ -566,6 +575,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
               actions.updateParticipants(participantsWithDates);
               const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
               actions.setSelectedParticipants(syncedParticipantConfigs);
+            }
+            // ✅ FIX: Sync thread state in fire-and-forget branch too
+            if (response?.data?.thread) {
+              actions.setThread(transformChatThread(response.data.thread));
             }
             actions.setHasPendingConfigChanges(false);
           }).catch((error) => {

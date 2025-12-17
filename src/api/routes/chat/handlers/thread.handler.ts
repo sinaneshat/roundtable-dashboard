@@ -726,16 +726,6 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // This ensures changelog appears between round N and round N+1 messages
       const nextRoundNumber = currentRoundNumber + 1;
 
-      const changelogEntries = [];
-
-      // Get current enabled participants before the update (for changelog comparison)
-      const oldParticipantsMap = new Map(currentParticipants.map(p => [p.modelId, p]));
-      const newParticipantsMap = new Map(
-        body.participants
-          .filter(p => p.isEnabled !== false)
-          .map(p => [p.modelId, p]),
-      );
-
       // Helper to extract model name from modelId
       const extractModelName = (modelId: string) => {
         const parts = modelId.split('/');
@@ -744,10 +734,36 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
       // ✅ Only create changelog if conversation has actually started
       if (shouldCreateChangelog) {
-        // Detect added participants
-        for (const newP of body.participants.filter(p => p.isEnabled !== false)) {
-          if (!oldParticipantsMap.has(newP.modelId)) {
-            const modelName = extractModelName(newP.modelId);
+        // ✅ LATEST STATE FIX: Compare previous state (before this update) vs new state (after this update)
+        // Delete existing entries for this round and insert fresh ones based on current comparison
+        await db.delete(tables.chatThreadChangelog).where(
+          and(
+            eq(tables.chatThreadChangelog.threadId, id),
+            eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
+            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'participant'`,
+          ),
+        );
+
+        // Previous state = current DB participants (before this update was applied)
+        const prevParticipantsMap = new Map(
+          currentParticipants
+            .filter(p => p.isEnabled)
+            .map(p => [p.modelId, { modelId: p.modelId, role: p.role, id: p.id }]),
+        );
+
+        // New state = request body participants
+        const newParticipantsMap = new Map(
+          body.participants
+            .filter(p => p.isEnabled !== false)
+            .map(p => [p.modelId, { modelId: p.modelId, role: p.role || null }]),
+        );
+
+        const changelogEntries = [];
+
+        // Detect added participants (in new but not in previous)
+        for (const [modelId, newP] of newParticipantsMap) {
+          if (!prevParticipantsMap.has(modelId)) {
+            const modelName = extractModelName(modelId);
             const displayName = newP.role || modelName;
             changelogEntries.push({
               id: ulid(),
@@ -757,19 +773,19 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               changeSummary: `Added ${displayName}`,
               changeData: {
                 type: 'participant' as const,
-                modelId: newP.modelId,
-                role: newP.role || null,
+                modelId,
+                role: newP.role,
               },
               createdAt: now,
             });
           }
         }
 
-        // Detect removed participants
-        for (const current of currentParticipants.filter(p => p.isEnabled)) {
-          if (!newParticipantsMap.has(current.modelId)) {
-            const modelName = extractModelName(current.modelId);
-            const displayName = current.role || modelName;
+        // Detect removed participants (in previous but not in new)
+        for (const [modelId, prevP] of prevParticipantsMap) {
+          if (!newParticipantsMap.has(modelId)) {
+            const modelName = extractModelName(modelId);
+            const displayName = prevP.role || modelName;
             changelogEntries.push({
               id: ulid(),
               threadId: id,
@@ -778,16 +794,16 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               changeSummary: `Removed ${displayName}`,
               changeData: {
                 type: 'participant' as const,
-                participantId: current.id,
-                modelId: current.modelId,
-                role: current.role,
+                participantId: prevP.id,
+                modelId,
+                role: prevP.role,
               },
               createdAt: now,
             });
           }
         }
 
-        // Insert changelog entries if any
+        // Insert changelog entries if any changes exist
         if (changelogEntries.length > 0) {
           await db.insert(tables.chatThreadChangelog).values(changelogEntries);
         }
@@ -823,8 +839,44 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         // Mode change applies to the next round, not the current one
         const nextRoundNumber = currentRoundNumber + 1;
 
-        // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-        await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
+        // ✅ DEDUPLICATION FIX: If mode was changed multiple times before next round,
+        // update the existing entry instead of creating duplicates.
+        // This shows the NET change (original mode → final mode) rather than intermediate steps.
+        const existingModeChange = await db.query.chatThreadChangelog.findFirst({
+          where: and(
+            eq(tables.chatThreadChangelog.threadId, id),
+            eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
+            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'mode_change'`,
+          ),
+        });
+
+        if (existingModeChange) {
+          // Existing entry found - use its oldMode as the baseline
+          const existingData = existingModeChange.changeData as { type: 'mode_change'; oldMode: string; newMode: string };
+          const baselineMode = existingData.oldMode;
+
+          if (baselineMode === body.mode) {
+            // ✅ NO NET CHANGE: Mode changed back to baseline - delete the entry
+            await db.delete(tables.chatThreadChangelog)
+              .where(eq(tables.chatThreadChangelog.id, existingModeChange.id));
+          } else {
+            // ✅ NET CHANGE EXISTS: Update entry with baseline oldMode → new newMode
+            await db.update(tables.chatThreadChangelog)
+              .set({
+                changeSummary: `Changed conversation mode from ${baselineMode} to ${body.mode}`,
+                changeData: {
+                  type: 'mode_change' as const,
+                  oldMode: baselineMode as ChatMode,
+                  newMode: body.mode,
+                },
+                createdAt: now,
+              })
+              .where(eq(tables.chatThreadChangelog.id, existingModeChange.id));
+          }
+        } else {
+          // ✅ SERVICE LAYER: Use thread-changelog.service for new changelog creation
+          await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
+        }
       }
     }
 
@@ -857,8 +909,43 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         // Web search toggle applies to the next round, not the current one
         const nextRoundNumber = currentRoundNumber + 1;
 
-        // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-        await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
+        // ✅ DEDUPLICATION FIX: If web search was toggled multiple times before next round,
+        // update the existing entry instead of creating duplicates.
+        const existingWebSearchChange = await db.query.chatThreadChangelog.findFirst({
+          where: and(
+            eq(tables.chatThreadChangelog.threadId, id),
+            eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
+            sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'web_search'`,
+          ),
+        });
+
+        if (existingWebSearchChange) {
+          // Existing entry found - infer baseline from it
+          // Since web_search is a boolean toggle, baseline = opposite of what was changed TO
+          const existingData = existingWebSearchChange.changeData as { type: 'web_search'; enabled: boolean };
+          const baselineEnabled = !existingData.enabled;
+
+          if (baselineEnabled === body.enableWebSearch) {
+            // ✅ NO NET CHANGE: Web search toggled back to baseline - delete the entry
+            await db.delete(tables.chatThreadChangelog)
+              .where(eq(tables.chatThreadChangelog.id, existingWebSearchChange.id));
+          } else {
+            // ✅ NET CHANGE EXISTS: Update entry with new state
+            await db.update(tables.chatThreadChangelog)
+              .set({
+                changeSummary: body.enableWebSearch ? 'Enabled web search' : 'Disabled web search',
+                changeData: {
+                  type: 'web_search' as const,
+                  enabled: body.enableWebSearch,
+                },
+                createdAt: now,
+              })
+              .where(eq(tables.chatThreadChangelog.id, existingWebSearchChange.id));
+          }
+        } else {
+          // ✅ SERVICE LAYER: Use thread-changelog.service for new changelog creation
+          await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
+        }
       }
     }
 

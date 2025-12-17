@@ -169,13 +169,19 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       if (state.hasEarlyOptimisticMessage)
         return;
 
-      // Filter out isParticipantTrigger messages
+      // Filter out internal messages that shouldn't be in the store
       const filteredMessages = chat.messages.filter((m) => {
-        if (m.role !== MessageRoles.USER)
-          return true;
-        const metadata = m.metadata;
-        if (metadata && typeof metadata === 'object' && 'isParticipantTrigger' in metadata) {
-          return metadata.isParticipantTrigger !== true;
+        // ✅ FIX: Filter out pre-search placeholder messages
+        if (m.id?.startsWith('pre-search-')) {
+          return false;
+        }
+
+        // Filter out isParticipantTrigger messages
+        if (m.role === MessageRoles.USER) {
+          const metadata = m.metadata;
+          if (metadata && typeof metadata === 'object' && 'isParticipantTrigger' in metadata) {
+            return metadata.isParticipantTrigger !== true;
+          }
         }
         return true;
       });
@@ -199,6 +205,10 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         if (chatMessageIds.has(m.id))
           return false;
 
+        // ✅ FIX: Skip pre-search placeholder messages from store
+        if (m.id?.startsWith('pre-search-'))
+          return false;
+
         // Skip optimistic messages (handled separately)
         const metadata = m.metadata;
         if (metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true)
@@ -218,6 +228,37 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       });
 
       const mergedMessages = [...missingMessagesFromStore, ...filteredMessages];
+
+      // ✅ RACE CONDITION FIX: Never drop messages during streaming
+      // If merge would result in fewer messages than store, abort this sync.
+      // This prevents the oscillation bug where two sync paths fight each other.
+      if (chat.isStreaming && mergedMessages.length < currentStoreMessages.length) {
+        // Instead of dropping, ensure all store messages are preserved (except internal messages)
+        const mergedIds = new Set(mergedMessages.map(m => m.id));
+        for (const storeMsg of currentStoreMessages) {
+          if (!mergedIds.has(storeMsg.id) && !storeMsg.id?.startsWith('pre-search-')) {
+            mergedMessages.push(storeMsg);
+          }
+        }
+      }
+
+      // ✅ FIX: Sort messages by round number and participant index to maintain order
+      mergedMessages.sort((a, b) => {
+        const roundA = getRoundNumber(a.metadata) ?? -1;
+        const roundB = getRoundNumber(b.metadata) ?? -1;
+        if (roundA !== roundB)
+          return roundA - roundB;
+
+        // Within same round: user messages first, then by participant index
+        if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+          return -1;
+        if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+          return 1;
+
+        const pIdxA = (a.metadata as { participantIndex?: number })?.participantIndex ?? 0;
+        const pIdxB = (b.metadata as { participantIndex?: number })?.participantIndex ?? 0;
+        return pIdxA - pIdxB;
+      });
 
       for (const optimisticMsg of optimisticMessagesFromStore) {
         const optimisticRound = getRoundNumber(optimisticMsg.metadata);

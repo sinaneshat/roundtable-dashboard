@@ -1,5 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/permissions';
@@ -128,15 +128,56 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
       const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
-      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
-      await logParticipantUpdated(
-        participant.threadId,
-        nextRoundNumber,
-        id,
-        participant.modelId,
-        participant.role,
-        body.role ?? null,
-      );
+      // ✅ DEDUPLICATION FIX: If role was updated multiple times before next round,
+      // update the existing entry instead of creating duplicates.
+      // This shows the NET change (original role → final role).
+      const existingRoleChange = await db.query.chatThreadChangelog.findFirst({
+        where: and(
+          eq(tables.chatThreadChangelog.threadId, participant.threadId),
+          eq(tables.chatThreadChangelog.roundNumber, nextRoundNumber),
+          sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.type') = 'participant_role'`,
+          sql`json_extract(${tables.chatThreadChangelog.changeData}, '$.participantId') = ${id}`,
+        ),
+      });
+
+      if (existingRoleChange) {
+        // Existing entry found - use its oldRole as the baseline
+        const existingData = existingRoleChange.changeData as { type: 'participant_role'; oldRole: string | null; newRole: string | null; participantId: string; modelId: string };
+        const baselineRole = existingData.oldRole;
+        const newRole = body.role ?? null;
+
+        if (baselineRole === newRole) {
+          // ✅ NO NET CHANGE: Role changed back to baseline - delete the entry
+          await db.delete(tables.chatThreadChangelog)
+            .where(eq(tables.chatThreadChangelog.id, existingRoleChange.id));
+        } else {
+          // ✅ NET CHANGE EXISTS: Update entry with baseline oldRole → new newRole
+          const modelName = participant.modelId.split('/').pop() || participant.modelId;
+          await db.update(tables.chatThreadChangelog)
+            .set({
+              changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
+              changeData: {
+                type: 'participant_role' as const,
+                participantId: id,
+                modelId: participant.modelId,
+                oldRole: baselineRole,
+                newRole,
+              },
+              createdAt: new Date(),
+            })
+            .where(eq(tables.chatThreadChangelog.id, existingRoleChange.id));
+        }
+      } else {
+        // ✅ SERVICE LAYER: Use thread-changelog.service for new changelog creation
+        await logParticipantUpdated(
+          participant.threadId,
+          nextRoundNumber,
+          id,
+          participant.modelId,
+          participant.role,
+          body.role ?? null,
+        );
+      }
     }
     return Responses.ok(c, {
       participant: updatedParticipant,

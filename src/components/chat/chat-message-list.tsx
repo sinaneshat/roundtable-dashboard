@@ -1008,7 +1008,14 @@ export const ChatMessageList = memo(
                   // After pre-search completes, there's a brief gap before isStreaming becomes true
                   // During this gap, we still want to show pending cards
                   const isStreamingRound = roundNumber === _streamingRoundNumber;
-                  const isLatestRound = isStreamingRound || preSearchActive || preSearchComplete;
+
+                  // ✅ BUG FIX: Only show pending cards for the ACTUAL latest round
+                  // Previous logic: `isLatestRound = isStreamingRound || preSearchActive || preSearchComplete`
+                  // Bug: ANY round with complete pre-search would show pending cards!
+                  // Fix: Check if this round is >= the maximum round number in messages
+                  const maxRoundInMessages = Math.max(0, ...messages.map(m => getRoundNumber(m.metadata) ?? 0));
+                  const isActuallyLatestRound = roundNumber >= maxRoundInMessages;
+                  const isLatestRound = isActuallyLatestRound && (isStreamingRound || preSearchActive || preSearchComplete);
 
                   if (!isLatestRound || participants.length === 0) {
                     return null;

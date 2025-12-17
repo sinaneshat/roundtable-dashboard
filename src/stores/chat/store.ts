@@ -553,6 +553,7 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     // Use get() to avoid Draft type issues with function callbacks
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
+
     set({ messages: newMessages }, false, 'thread/setMessages');
   },
   setIsStreaming: (isStreaming: boolean) =>
