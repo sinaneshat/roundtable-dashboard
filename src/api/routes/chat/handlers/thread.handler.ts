@@ -1323,10 +1323,18 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       }),
     );
 
+    // ✅ BUG FIX: Include preSearches in response for thread owner
+    // Previously missing, causing web search accordions to disappear after refresh
+    const preSearches = await db.query.chatPreSearch.findMany({
+      where: eq(tables.chatPreSearch.threadId, thread.id),
+      orderBy: [tables.chatPreSearch.roundNumber],
+    });
+
     return Responses.ok(c, {
       thread,
       participants,
       messages,
+      preSearches,
       user: {
         id: user.id,
         name: user.name,

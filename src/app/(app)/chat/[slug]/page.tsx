@@ -102,15 +102,15 @@ export default async function ChatThreadPage({
     // 3. Prefetch all pre-search results - web search results (LIST endpoint)
     // ✅ UNIFIED PATTERN: Prefetch all pre-searches via LIST endpoint (matches analysis pattern)
     // Frontend uses orchestrator to sync to store, components receive from store
-    ...(thread.enableWebSearch
-      ? [
-          queryClient.prefetchQuery({
-            queryKey: queryKeys.threads.preSearches(thread.id),
-            queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
-            staleTime: STALE_TIMES.preSearch, // 30 seconds - matches client-side query
-          }),
-        ]
-      : []),
+    // ✅ BUG FIX: Always prefetch regardless of current enableWebSearch setting
+    // Pre-searches may exist from earlier rounds when web search was enabled
+    // Previously only prefetched when thread.enableWebSearch=true, causing historical
+    // pre-search accordions to disappear after refresh when web search was later disabled
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.preSearches(thread.id),
+      queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
+      staleTime: STALE_TIMES.preSearch, // 30 seconds - matches client-side query
+    }),
 
     // 4. ✅ NEW: Prefetch thread feedback - like/dislike button states
     // This eliminates loading state for feedback buttons

@@ -35,7 +35,6 @@ import { chatParticipantsToConfig, getParticipantModelIds, prepareParticipantUpd
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch, createPlaceholderSummary } from '../utils/placeholder-factories';
-import { getEffectiveWebSearchEnabled } from '../utils/pre-search-execution';
 import { validateInfiniteQueryCache } from './types';
 
 /**
@@ -442,9 +441,20 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // This ensures the pre-search accordion appears in the SAME render cycle as the user message,
       // preventing the "late accordion" issue where user message renders first without pre-search,
       // then pre-search appears in a subsequent render causing layout shift and placeholder duplications
-      // ✅ SINGLE SOURCE OF TRUTH: Use thread state for existing threads, form state for user intent
-      const effectiveWebSearch = getEffectiveWebSearchEnabled(threadState.thread, formState.enableWebSearch);
-      if (effectiveWebSearch) {
+      // ✅ BUG FIX: Use formState.enableWebSearch directly (user's current intent)
+      // Previously used getEffectiveWebSearchEnabled which returned thread.enableWebSearch
+      // But thread hasn't been updated via PATCH yet, causing web search to run when disabled
+      // User's form state IS the source of truth for THIS message submission
+      // 🔍 DEBUG LOG: Trace web search decision at submission
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.debug('[form-actions] preSearch decision:', {
+          formWebSearch: formState.enableWebSearch,
+          threadWebSearch: threadState.thread?.enableWebSearch,
+          round: nextRoundNumber,
+        });
+      }
+      if (formState.enableWebSearch) {
         actions.addPreSearch(createPlaceholderPreSearch({
           threadId,
           roundNumber: nextRoundNumber,
@@ -518,8 +528,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         //
         // Performance impact: Minimal (PATCH typically completes in <100ms)
         // Correctness impact: Critical (prevents duplicate changelogs)
-        // ✅ SINGLE SOURCE OF TRUTH: Use effectiveWebSearch (thread state) not form state
-        const needsWait = updateResult.hasTemporaryIds || webSearchChanged || modeChanged || effectiveWebSearch;
+        // ✅ BUG FIX: Use formState.enableWebSearch (user's intent) instead of stale thread state
+        // Previously used effectiveWebSearch which read from thread state before PATCH updated it
+        const needsWait = updateResult.hasTemporaryIds || webSearchChanged || modeChanged || formState.enableWebSearch;
         if (needsWait) {
           // Wait for response when:
           // 1. Creating new participants (temporary IDs)

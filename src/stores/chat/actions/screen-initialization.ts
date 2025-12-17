@@ -147,14 +147,23 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     deduplicationOptions: { regeneratingRoundNumber },
   });
 
-  const shouldEnablePreSearchOrchestrator
-    = Boolean(thread?.id)
-      && Boolean(thread?.enableWebSearch)
-      && enableOrchestrator;
-
+  // ✅ BUG FIX: Always enable pre-search orchestrator regardless of current enableWebSearch
+  // Pre-searches may exist from earlier rounds when web search was enabled
+  // The orchestrator returns empty array if no pre-searches exist, which is fine
+  // Previously only enabled when thread.enableWebSearch=true, causing historical
+  // pre-search data to disappear after refresh when web search was later disabled
+  const preSearchOrchestratorEnabled = Boolean(thread?.id) && enableOrchestrator;
+  // 🔍 DEBUG LOG: Trace orchestrator enable state
+  if (process.env.NODE_ENV === 'development' && thread?.id) {
+    // eslint-disable-next-line no-console
+    console.debug('[screen-init] preSearch orchestrator:', {
+      enabled: preSearchOrchestratorEnabled,
+      threadWebSearch: thread?.enableWebSearch,
+    });
+  }
   usePreSearchOrchestrator({
     threadId: thread?.id || '',
-    enabled: shouldEnablePreSearchOrchestrator,
+    enabled: preSearchOrchestratorEnabled,
   });
 
   const isStreaming = useChatStore(s => s.isStreaming);

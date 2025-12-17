@@ -423,8 +423,17 @@ const createSummarySlice: SliceCreator<SummarySlice> = set => ({
 const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
   ...PRESEARCH_DEFAULTS,
 
-  setPreSearches: (preSearches: StoredPreSearch[]) =>
-    set({ preSearches }, false, 'preSearch/setPreSearches'),
+  setPreSearches: (preSearches: StoredPreSearch[]) => {
+    // 🔍 DEBUG LOG: Trace when preSearches are synced from server
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.debug('[store] setPreSearches:', {
+        count: preSearches.length,
+        rounds: preSearches.map(ps => ps.roundNumber),
+      });
+    }
+    set({ preSearches }, false, 'preSearch/setPreSearches');
+  },
   // ✅ IMMER: Direct mutations + race condition fix
   addPreSearch: (preSearch: StoredPreSearch) =>
     set((draft) => {

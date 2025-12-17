@@ -1013,7 +1013,16 @@ export const ChatMessageList = memo(
                   // Previous logic: `isLatestRound = isStreamingRound || preSearchActive || preSearchComplete`
                   // Bug: ANY round with complete pre-search would show pending cards!
                   // Fix: Check if this round is >= the maximum round number in messages
-                  const maxRoundInMessages = Math.max(0, ...messages.map(m => getRoundNumber(m.metadata) ?? 0));
+                  // ✅ BUG FIX 2: Include _streamingRoundNumber in max calculation
+                  // Bug: streamingRoundNumber is set BEFORE optimistic user message is added
+                  // This caused previous round to see maxRound=N-1 and think it's latest
+                  // while streamingRoundNumber was already N. By including streamingRoundNumber,
+                  // previous rounds correctly see they're not latest even before message arrives.
+                  const maxRoundInMessages = Math.max(
+                    0,
+                    _streamingRoundNumber ?? 0,
+                    ...messages.map(m => getRoundNumber(m.metadata) ?? 0),
+                  );
                   const isActuallyLatestRound = roundNumber >= maxRoundInMessages;
                   const isLatestRound = isActuallyLatestRound && (isStreamingRound || preSearchActive || preSearchComplete);
 
