@@ -44,6 +44,7 @@ import {
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
+import type { ModelPreset } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
@@ -701,8 +702,8 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled); // Persist to cookie
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  // Preset selection - replaces all selected models with preset's models
-  const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
+  // Preset selection - replaces all selected models with preset's models and preferences
+  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
     // Convert models to participant configs
     const newParticipants: ParticipantConfig[] = models.map((model, index) => ({
       id: model.id,
@@ -717,7 +718,19 @@ export default function ChatOverviewScreen() {
     setPersistedModelIds(modelIds);
     setModelOrder(modelIds);
     setPersistedModelOrder(modelIds);
-  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder]);
+
+    // Apply preset mode if recommended
+    if (preset.recommendedMode) {
+      setSelectedMode(preset.recommendedMode);
+      setPersistedMode(preset.recommendedMode);
+    }
+
+    // Apply preset web search preference
+    if (preset.recommendWebSearch !== undefined) {
+      setEnableWebSearch(preset.recommendWebSearch);
+      setPersistedWebSearch(preset.recommendWebSearch);
+    }
+  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch]);
 
   // ============================================================================
   // MEMOIZED CHAT INPUT PROPS (DRY - shared between desktop and mobile)

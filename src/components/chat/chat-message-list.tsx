@@ -469,6 +469,9 @@ function getParticipantInfoForMessage({
   };
 }
 
+// Stable empty set to prevent render loops
+const EMPTY_COMPLETED_ROUNDS = new Set<number>();
+
 type ChatMessageListProps = {
   messages: UIMessage[];
   user?: {
@@ -490,6 +493,9 @@ type ChatMessageListProps = {
   maxContentHeight?: number;
   /** Skip all entrance animations (for demo that has already completed) */
   skipEntranceAnimations?: boolean;
+  /** ✅ BUG FIX: Set of round numbers that have complete summaries.
+   * Rounds in this set should NEVER show pending cards. */
+  completedRoundNumbers?: Set<number>;
 };
 export const ChatMessageList = memo(
   ({
@@ -508,6 +514,7 @@ export const ChatMessageList = memo(
     demoPreSearchOpen,
     maxContentHeight,
     skipEntranceAnimations = false,
+    completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const tParticipant = useTranslations('chat.participant');
@@ -1054,7 +1061,13 @@ export const ChatMessageList = memo(
                   // - Pre-search COMPLETE but not streaming yet: Keep showing pending (transition phase)
                   // - Streaming: Show participants who haven't started streaming yet
                   // - Stream resumption: isStreamingRound is true but isStreaming may be false during AI SDK resumption
-                  const shouldShowPendingCards = !allParticipantsHaveContentForRound && (preSearchActive || preSearchComplete || isStreaming || isStreamingRound);
+                  //
+                  // ✅ BUG FIX: NEVER show pending cards for rounds that have complete summaries!
+                  // This prevents old rounds from showing pending cards when participant count changes.
+                  // E.g., Round 0 had 1 participant, Round 1 has 3 participants. Without this check,
+                  // Round 0 would show pending cards for 2 "missing" participants after Round 1 completes.
+                  const isRoundComplete = completedRoundNumbers.has(roundNumber);
+                  const shouldShowPendingCards = !isRoundComplete && !allParticipantsHaveContentForRound && (preSearchActive || preSearchComplete || isStreaming || isStreamingRound);
 
                   if (!shouldShowPendingCards) {
                     return null;
@@ -1264,6 +1277,11 @@ export const ChatMessageList = memo(
 
     // Re-render if streamingRoundNumber changes
     if (prevProps.streamingRoundNumber !== nextProps.streamingRoundNumber) {
+      return false;
+    }
+
+    // ✅ BUG FIX: Re-render if completedRoundNumbers changes (new summaries completed)
+    if (prevProps.completedRoundNumbers !== nextProps.completedRoundNumbers) {
       return false;
     }
 

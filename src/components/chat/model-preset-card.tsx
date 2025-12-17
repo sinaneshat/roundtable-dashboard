@@ -1,6 +1,6 @@
 'use client';
 
-import { EyeOff, Lock } from 'lucide-react';
+import { EyeOff, Globe, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
@@ -12,16 +12,23 @@ import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getChatModeById } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { canAccessPreset, getModelsForPreset } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
+/** Selection result includes models and preset preferences */
+export type PresetSelectionResult = {
+  models: BaseModelResponse[];
+  preset: ModelPreset;
+};
+
 type ModelPresetCardProps = {
   preset: ModelPreset;
   allModels: EnhancedModelResponse[];
   userTier: SubscriptionTier;
-  onSelect: (models: BaseModelResponse[]) => void;
+  onSelect: (result: PresetSelectionResult) => void;
   className?: string;
   /** Set of model IDs incompatible with current file attachments (no vision) */
   incompatibleModelIds?: Set<string>;
@@ -84,8 +91,12 @@ export const ModelPresetCard = memo(({
     if (compatibleModelCount === 0) {
       return;
     }
-    onSelect(presetModels);
+    onSelect({ models: presetModels, preset });
   };
+
+  // Get mode config from centralized config
+  const modeConfig = preset.recommendedMode ? getChatModeById(preset.recommendedMode) : null;
+  const ModeIcon = modeConfig?.icon;
 
   // Fully disabled if all models are incompatible
   const isFullyDisabled = compatibleModelCount === 0;
@@ -173,6 +184,24 @@ export const ModelPresetCard = memo(({
         <p className="text-xs text-muted-foreground leading-relaxed flex-1">
           {preset.description}
         </p>
+
+        {/* Mode and Web Search indicators */}
+        {!isLocked && (modeConfig || preset.recommendWebSearch) && (
+          <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5">
+            {modeConfig && ModeIcon && (
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <ModeIcon className="size-3" />
+                <span>{modeConfig.label}</span>
+              </div>
+            )}
+            {preset.recommendWebSearch && (
+              <div className="flex items-center gap-1.5 text-[10px] text-blue-400">
+                <Globe className="size-3" />
+                <span>Web Search</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Upgrade button for locked presets - always at footer */}

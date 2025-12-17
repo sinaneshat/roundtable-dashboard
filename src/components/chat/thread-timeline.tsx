@@ -85,7 +85,14 @@ type ThreadTimelineProps = {
 
   // Skip all entrance animations (for demo that has already completed)
   skipEntranceAnimations?: boolean;
+
+  // ✅ BUG FIX: Set of round numbers that have complete summaries
+  // Used to prevent showing pending cards for rounds that already completed
+  completedRoundNumbers?: Set<number>;
 };
+
+// Stable empty set to prevent render loops
+const EMPTY_COMPLETED_ROUNDS = new Set<number>();
 
 export function ThreadTimeline({
   timelineItems,
@@ -110,6 +117,7 @@ export function ThreadTimeline({
   isDataReady = true,
   maxContentHeight,
   skipEntranceAnimations = false,
+  completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
 }: ThreadTimelineProps) {
   // TanStack Virtual hook - official pattern
   const {
@@ -271,6 +279,7 @@ export function ThreadTimeline({
                       demoPreSearchOpen={demoPreSearchOpen}
                       maxContentHeight={maxContentHeight}
                       skipEntranceAnimations={skipEntranceAnimations}
+                      completedRoundNumbers={completedRoundNumbers}
                     />
                   </UnifiedErrorBoundary>
 

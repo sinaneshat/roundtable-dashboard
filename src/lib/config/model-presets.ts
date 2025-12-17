@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react';
 
+import type { ChatMode } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import {
@@ -47,8 +48,8 @@ export type ModelPresetId
     | 'long-context'
     | 'web-research';
 
-/** Chat mode preference for presets */
-export type PresetChatMode = 'roundtable' | 'interview' | 'monologue';
+/** Chat mode preference for presets - uses actual app ChatMode */
+export type PresetChatMode = ChatMode;
 
 export type ModelPreset = {
   id: ModelPresetId;
@@ -194,7 +195,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'free',
     order: 1,
     maxModels: 3,
-    recommendedMode: 'roundtable',
+    recommendedMode: 'debating',
     recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -214,7 +215,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'free',
     order: 2,
     maxModels: 3,
-    recommendedMode: 'roundtable',
+    recommendedMode: 'brainstorming',
     recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -233,7 +234,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'free',
     order: 3,
     maxModels: 3,
-    recommendedMode: 'roundtable',
+    recommendedMode: 'brainstorming',
     recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -253,7 +254,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'starter',
     order: 4,
     maxModels: 4,
-    recommendedMode: 'interview',
+    recommendedMode: 'solving',
     recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -274,7 +275,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'starter',
     order: 5,
     maxModels: 3,
-    recommendedMode: 'roundtable',
+    recommendedMode: 'analyzing',
     recommendWebSearch: true,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -298,7 +299,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'pro',
     order: 6,
     maxModels: 4,
-    recommendedMode: 'interview',
+    recommendedMode: 'analyzing',
     recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -319,7 +320,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'pro',
     order: 7,
     maxModels: 4,
-    recommendedMode: 'roundtable',
+    recommendedMode: 'analyzing',
     recommendWebSearch: false,
     requiresVision: true,
     selectModels: (models, userTier) => {
@@ -341,7 +342,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'pro',
     order: 8,
     maxModels: 4,
-    recommendedMode: 'interview',
+    recommendedMode: 'analyzing',
     recommendWebSearch: false,
     requiresVision: true,
     selectModels: (models, userTier) => {
@@ -361,7 +362,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'pro',
     order: 9,
     maxModels: 4,
-    recommendedMode: 'interview',
+    recommendedMode: 'analyzing',
     recommendWebSearch: false,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);
@@ -382,7 +383,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     requiredTier: 'power',
     order: 10,
     maxModels: 5,
-    recommendedMode: 'roundtable',
+    recommendedMode: 'debating',
     recommendWebSearch: true,
     selectModels: (models, userTier) => {
       const accessible = getAccessibleModels(models, userTier);

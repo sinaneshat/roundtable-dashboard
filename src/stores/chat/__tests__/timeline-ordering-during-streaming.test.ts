@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 
 import { createChatStore } from '../store';

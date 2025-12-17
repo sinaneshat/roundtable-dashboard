@@ -14,7 +14,7 @@ import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes } from '@/api/core/enums';
+import { ChatModes, MessageStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {

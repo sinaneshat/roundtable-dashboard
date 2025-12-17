@@ -43,6 +43,7 @@ import {
   useVisualViewportPosition,
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
+import type { ModelPreset } from '@/lib/config/model-presets';
 import { queryKeys } from '@/lib/data/query-keys';
 import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, isVisionRequiredMimeType } from '@/lib/utils/file-capability';
@@ -200,6 +201,19 @@ export function ChatView({
     });
     return filtered;
   }, [changelogResponse]);
+
+  // ✅ BUG FIX: Compute completed round numbers from summaries
+  // Rounds with complete summaries should NEVER show pending cards,
+  // regardless of current participant configuration
+  const completedRoundNumbers = useMemo(() => {
+    const completed = new Set<number>();
+    summaries.forEach((summary) => {
+      if (summary.status === MessageStatuses.COMPLETE) {
+        completed.add(summary.roundNumber);
+      }
+    });
+    return completed;
+  }, [summaries]);
 
   // Model ordering for modal - stable references for Motion Reorder
   const orderedModels = useOrderedModels({
@@ -503,8 +517,8 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
-  // Preset selection - replaces all selected models with preset's models
-  const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
+  // Preset selection - replaces all selected models with preset's models and preferences
+  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
     // Convert models to participant configs
     const newParticipants = models.map((model, index) => ({
       id: model.id,
@@ -523,7 +537,25 @@ export function ChatView({
     // Update model order
     const modelIds = newParticipants.map(p => p.modelId);
     setModelOrder(modelIds);
-  }, [mode, threadActions, setSelectedParticipants, setModelOrder]);
+
+    // Apply preset mode if recommended
+    if (preset.recommendedMode) {
+      if (mode === 'thread') {
+        threadActions.handleModeChange(preset.recommendedMode);
+      } else {
+        formActions.handleModeChange(preset.recommendedMode);
+      }
+    }
+
+    // Apply preset web search preference
+    if (preset.recommendWebSearch !== undefined) {
+      if (mode === 'thread') {
+        threadActions.handleWebSearchToggle(preset.recommendWebSearch);
+      } else {
+        formActions.handleWebSearchToggle(preset.recommendWebSearch);
+      }
+    }
+  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder]);
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
     // Allow removing all - validation shown in UI
@@ -593,6 +625,7 @@ export function ChatView({
               onSummaryStreamComplete={handleSummaryStreamComplete}
               preSearches={preSearches}
               isDataReady={isStoreReady}
+              completedRoundNumbers={completedRoundNumbers}
             />
           </div>
 

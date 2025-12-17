@@ -24,6 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCreateCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import type { ModelPreset } from '@/lib/config/model-presets';
 import { MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
@@ -34,6 +35,7 @@ import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import type { OrderedModel } from './model-item';
 import { ModelItem } from './model-item';
+import type { PresetSelectionResult } from './model-preset-card';
 import { ModelPresetCard } from './model-preset-card';
 
 /**
@@ -134,8 +136,8 @@ export type ModelSelectionModalProps = {
   onRoleChange: (modelId: string, role: string, customRoleId?: string) => void;
   /** Callback when role is cleared for a model */
   onClearRole: (modelId: string) => void;
-  /** Callback when a preset is selected - replaces current selection with preset models */
-  onPresetSelect?: (models: BaseModelResponse[]) => void;
+  /** Callback when a preset is selected - replaces current selection with preset models and preferences */
+  onPresetSelect?: (models: BaseModelResponse[], preset: ModelPreset) => void;
   /** Number of currently selected models */
   selectedCount: number;
   /** Maximum models allowed by user's plan */
@@ -295,14 +297,14 @@ export function ModelSelectionModal({
   }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles, customRoleLimit]);
 
   // Handle preset selection - filter out incompatible models before selecting
-  const handlePresetSelect = useCallback((models: BaseModelResponse[]) => {
+  const handlePresetSelect = useCallback((result: PresetSelectionResult) => {
     // Filter out models incompatible with vision files
     const compatibleModels = incompatibleModelIds && incompatibleModelIds.size > 0
-      ? models.filter(m => !incompatibleModelIds.has(m.id))
-      : models;
+      ? result.models.filter(m => !incompatibleModelIds.has(m.id))
+      : result.models;
 
     if (onPresetSelect && compatibleModels.length > 0) {
-      onPresetSelect(compatibleModels);
+      onPresetSelect(compatibleModels, result.preset);
       onOpenChange(false); // Close modal after selection
     }
   }, [onPresetSelect, onOpenChange, incompatibleModelIds]);
