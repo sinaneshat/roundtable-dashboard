@@ -4,6 +4,7 @@ import type { DeepPartial } from 'ai';
 import { memo } from 'react';
 
 import type { RoundSummaryMetrics } from '@/api/routes/chat/schema';
+import { StreamingMessageContent } from '@/components/ui/motion';
 import { StreamingCursor, StreamingText } from '@/components/ui/streaming-text';
 
 type RoundSummaryTextProps = {
@@ -64,7 +65,11 @@ export const RoundSummaryText = memo(({
   }
 
   return (
-    <div className="space-y-3">
+    <StreamingMessageContent
+      isStreaming={isStreaming}
+      layoutId="round-summary-content"
+      className="space-y-3"
+    >
       {/* Summary Text - streams character by character */}
       {summary && (
         <p className="text-sm leading-relaxed text-foreground/80">
@@ -88,6 +93,6 @@ export const RoundSummaryText = memo(({
           ))}
         </div>
       )}
-    </div>
+    </StreamingMessageContent>
   );
 });

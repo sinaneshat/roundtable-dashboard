@@ -12,6 +12,7 @@ import type { UIMessage } from 'ai';
 import {
   extractReasoningMiddleware,
   RetryError,
+  smoothStream,
   streamText,
   wrapLanguageModel,
 } from 'ai';
@@ -705,36 +706,62 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // - onFinish callback handles response-level errors (empty responses, content filters)
       // - No double API calls, no validation overhead, faster response times
       //
-      // ✅ AI SDK v5 REASONING MIDDLEWARE: Extract reasoning tags from model output
+      // ✅ AI SDK v5 REASONING: Model-specific reasoning handling
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/middleware#extract-reasoning-middleware
-      // This prevents raw reasoning tags from being rendered as HTML in the frontend
-      // Different models use different tag names:
-      // - Claude (Anthropic): uses <thinking> tags
-      // - DeepSeek R1: uses <think> tags
-      // The middleware extracts these into structured reasoning events (reasoning-start, reasoning-delta, reasoning-end)
+      // Reference: https://sdk.vercel.ai/providers/ai-sdk-providers/google-vertex (thinkingConfig)
+      //
+      // CRITICAL: extractReasoningMiddleware is ONLY for models that embed reasoning in XML tags
+      // - DeepSeek R1: Uses <think> tags → needs extractReasoningMiddleware
+      // - Google/Gemini: Native reasoning via provider (thought: true) → NO middleware needed
+      // - OpenAI o-series: Native reasoning via provider → NO middleware needed
+      // - xAI/Grok: Native reasoning via provider → NO middleware needed
+      // - Anthropic Claude: Native reasoning via providerOptions.anthropic.thinking → NO middleware needed
+      //
+      // Applying extractReasoningMiddleware to models with native reasoning causes duplicate/conflicting parts
       const baseModel = client.chat(participant.modelId);
 
-      // Determine the reasoning tag based on model provider
-      // DeepSeek models use <think>, Claude/Anthropic use <thinking>
-      const isDeepSeekModel = participant.modelId
-        .toLowerCase()
-        .includes('deepseek');
-      const reasoningTagName = isDeepSeekModel ? 'think' : 'thinking';
+      // ✅ MODEL DETECTION: Identify model providers for conditional handling
+      const modelIdLower = participant.modelId.toLowerCase();
+      const isDeepSeekModel = modelIdLower.includes('deepseek');
+      const isXaiModel
+        = modelIdLower.startsWith('x-ai/') || modelIdLower.includes('grok');
 
-      const modelWithReasoningExtraction = wrapLanguageModel({
-        model: baseModel,
-        middleware: extractReasoningMiddleware({ tagName: reasoningTagName }),
-      });
+      // ✅ REASONING MIDDLEWARE: Only apply to DeepSeek models that use XML tag-based reasoning
+      // DeepSeek uses <think> tags that must be extracted via middleware
+      // All other models (Google, OpenAI, xAI, Anthropic) have native reasoning support
+      const modelForStreaming = isDeepSeekModel
+        ? wrapLanguageModel({
+            model: baseModel,
+            middleware: extractReasoningMiddleware({ tagName: 'think' }),
+          })
+        : baseModel;
 
       // Parameters for streamText
       const streamParams = {
-        model: modelWithReasoningExtraction,
+        model: modelForStreaming,
         system: systemPrompt,
         messages: modelMessages,
         maxOutputTokens,
         ...(modelSupportsTemperature && { temperature: temperatureValue }),
         // ✅ REASONING: Add providerOptions for o1/o3/o4/DeepSeek R1 models
         ...(providerOptions && { providerOptions }),
+        // ✅ CHUNK NORMALIZATION: Normalize streaming chunk delivery for xAI/Grok models
+        // These models buffer responses server-side and send large chunks (sometimes entire responses)
+        // instead of streaming token-by-token like other models.
+        //
+        // Without smoothStream: UI receives massive SSE chunks → blocks main thread → excessive re-renders
+        // With smoothStream: Large chunks are buffered and re-emitted at controlled intervals
+        //
+        // Configuration rationale:
+        // - delayInMs: 25ms balances smoothness vs latency (10ms was too fast, caused UI thrashing)
+        // - chunking: 'line' splits on newlines for natural paragraph flow
+        //   (word-level was too granular for large chunks, causing thousands of micro-updates)
+        ...(isXaiModel && {
+          experimental_transform: smoothStream({
+            delayInMs: 25,
+            chunking: 'line',
+          }),
+        }),
         maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
         // ✅ BACKGROUND STREAMING: Only use timeout signal, NOT HTTP abort signal
         // This allows AI generation to continue even if client disconnects

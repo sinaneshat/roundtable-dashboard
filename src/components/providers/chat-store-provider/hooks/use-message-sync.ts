@@ -90,14 +90,32 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     // Fix: Merge new messages from AI SDK into store instead of blocking
 
     // Validate thread ID before syncing to prevent stale messages
-    if (currentThreadId && chat.messages.length > 0) {
+    // ✅ BUG FIX: Don't clear messages during active streaming or recent streaming
+    // The original check was too aggressive and would clear messages during the
+    // transition between participants (after one finishes, before next starts).
+    // This caused the "disappearing messages" bug where the entire chat would
+    // briefly vanish after a model (especially Grok) finished streaming.
+    //
+    // Fix: Only clear messages when we're NOT streaming AND there's a genuine
+    // thread mismatch. During streaming transitions, preserve messages.
+    if (currentThreadId && chat.messages.length > 0 && !chat.isStreaming) {
       const firstAssistantMsg = chat.messages.find(m => m.role === MessageRoles.ASSISTANT);
       if (firstAssistantMsg?.id) {
         const threadIdPrefix = `${currentThreadId}_r`;
         const hasOurFormat = firstAssistantMsg.id.includes('_r') && firstAssistantMsg.id.includes('_p');
 
         if (hasOurFormat) {
-          if (!firstAssistantMsg.id.startsWith(threadIdPrefix) && !firstAssistantMsg.id.startsWith('optimistic-')) {
+          // ✅ Additional check: Only clear if ALL assistant messages have wrong thread ID
+          // This prevents clearing during transitions where some messages might be updating
+          const allAssistantMsgs = chat.messages.filter(m => m.role === MessageRoles.ASSISTANT);
+          const allHaveWrongThread = allAssistantMsgs.every((msg) => {
+            const msgHasOurFormat = msg.id?.includes('_r') && msg.id?.includes('_p');
+            if (!msgHasOurFormat)
+              return false;
+            return !msg.id?.startsWith(threadIdPrefix) && !msg.id?.startsWith('optimistic-');
+          });
+
+          if (allHaveWrongThread && allAssistantMsgs.length > 0) {
             chat.setMessages?.([]);
             return;
           }

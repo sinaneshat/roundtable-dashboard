@@ -18,6 +18,7 @@ import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
+import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -32,21 +33,29 @@ import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
  *
  * Different AI models have quirks during streaming that cause layout shifts:
  * - Grok (xAI): Sends `[REDACTED]` encrypted reasoning that disappears on completion
- * - Claude: Backend filters `type: 'redacted'` parts, but empty reasoning can still occur
+ * - Claude: Native `type: 'redacted'` parts for encrypted thinking content
  * - DeepSeek: Uses <think> tags handled by extractReasoningMiddleware
- * - Gemini: Can emit empty "thinking" tokens with `thought: true`
+ * - Gemini: Native reasoning with `type: 'redacted'` for encrypted content
  *
  * This unified filter prevents layout shifts from:
  * 1. Empty or whitespace-only reasoning text
  * 2. Placeholder content like `[REDACTED]`
- * 3. Any reasoning that would render as blank/invisible
+ * 3. Parts with `type: 'redacted'` (AI SDK native redacted reasoning)
+ * 4. Any reasoning that would render as blank/invisible
  *
+ * @see AI SDK docs: Reasoning Detail Object supports 'text' and 'redacted' types
  * @see OpenRouter docs: "Encrypted reasoning content might appear as [REDACTED] in streaming"
  * @see message-persistence.service.ts:extractReasoning() for backend normalization
  */
 function isNonRenderableReasoningPart(part: MessagePart): boolean {
   if (part.type !== MessagePartTypes.REASONING) {
     return false;
+  }
+  // Filter reasoning parts with type: 'redacted' (AI SDK native redacted reasoning)
+  // This handles Gemini, Claude, and other models that use native redacted reasoning
+  const reasoningType = (part as { reasoningType?: string }).reasoningType;
+  if (reasoningType === 'redacted') {
+    return true;
   }
   const text = part.text?.trim() ?? '';
   // Filter: empty, whitespace-only, or known placeholder patterns
@@ -188,7 +197,7 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            {/* Content rendering - no nested animations (scroll animation handles entrance) */}
+            {/* Content rendering - StreamingMessageContent handles smooth height transitions */}
             {isPendingWithNoParts
               ? (
                   <div className="py-2 text-muted-foreground text-base">
@@ -197,7 +206,10 @@ export const ModelMessageCard = memo(({
                 )
               : renderableParts.length > 0
                 ? (
-                    <div>
+                    <StreamingMessageContent
+                      isStreaming={isStreaming}
+                      layoutId={messageId ? `msg-content-${messageId}` : undefined}
+                    >
                       {maxContentHeight
                         ? (
                             <ScrollArea
@@ -208,7 +220,7 @@ export const ModelMessageCard = memo(({
                             </ScrollArea>
                           )
                         : renderContentParts()}
-                    </div>
+                    </StreamingMessageContent>
                   )
                 : null}
 
