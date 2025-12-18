@@ -47,7 +47,11 @@ import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
-import { getIncompatibleModelIds } from '@/lib/utils/file-capability';
+import {
+  getIncompatibleModelIds,
+  isVisionRequiredMimeType,
+  threadHasVisionRequiredFiles,
+} from '@/lib/utils/file-capability';
 import {
   useChatFormActions,
   useOverviewActions,
@@ -135,6 +139,7 @@ export default function ChatOverviewScreen() {
 
   const summaries = useChatStore(s => s.summaries);
   const preSearches = useChatStore(s => s.preSearches);
+  const messages = useChatStore(s => s.messages);
 
   // Store actions
   // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
@@ -277,21 +282,27 @@ export default function ChatOverviewScreen() {
   });
 
   // ============================================================================
-  // FILE CAPABILITY: Compute incompatible models based on attachments
+  // FILE CAPABILITY: Compute incompatible models based on attachments AND thread history
   // Models without vision capability cannot process images/PDFs
   // ============================================================================
   const incompatibleModelIds = useMemo(() => {
-    if (chatAttachments.attachments.length === 0) {
+    // Check existing thread messages for vision-required files (images/PDFs)
+    const existingVisionFiles = threadHasVisionRequiredFiles(messages);
+
+    // Check new attachments for vision-required files
+    const newVisionFiles = chatAttachments.attachments.some(att =>
+      isVisionRequiredMimeType(att.file.type),
+    );
+
+    // If no vision files anywhere, no models are incompatible
+    if (!existingVisionFiles && !newVisionFiles) {
       return new Set<string>();
     }
 
-    // Convert attachments to file capability check format
-    const files = chatAttachments.attachments.map(att => ({
-      mimeType: att.file.type,
-    }));
-
+    // Build file list for capability check (placeholder since we know vision is required)
+    const files = [{ mimeType: 'image/png' }];
     return getIncompatibleModelIds(allEnabledModels, files);
-  }, [chatAttachments.attachments, allEnabledModels]);
+  }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   // ============================================================================
   // HOOKS
@@ -500,8 +511,9 @@ export default function ChatOverviewScreen() {
   // For initial UI (no thread): block during thread creation
   // For existing thread (reusing thread screen flow): block during streaming/analysis
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming;
-  const isSubmitBlocked = isStreaming || isCreatingSummary || Boolean(pendingMessage);
+  // ✅ SUBMIT FIX: Include formActions.isSubmitting for immediate blocking on submit click
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting;
+  const isSubmitBlocked = isStreaming || isCreatingSummary || Boolean(pendingMessage) || formActions.isSubmitting;
 
   // ============================================================================
   // LAYOUT EFFECTS (external system sync only - DOM, scroll, navigation)
@@ -603,6 +615,7 @@ export default function ChatOverviewScreen() {
           // ✅ Clear hook local state AFTER thread is created (user request)
           chatAttachments.clearAttachments();
         } catch (error) {
+          console.error('[ChatOverview] Error sending message:', error);
           showApiErrorToast('Error sending message', error);
         }
       } else {
@@ -633,6 +646,7 @@ export default function ChatOverviewScreen() {
           // ✅ Clear hook local state AFTER thread is created (user request)
           chatAttachments.clearAttachments();
         } catch (error) {
+          console.error('[ChatOverview] Error creating thread:', error);
           showApiErrorToast('Error creating thread', error);
         }
       }
@@ -780,6 +794,8 @@ export default function ChatOverviewScreen() {
     enableAttachments: !isInitialUIInputBlocked,
     attachmentClickRef,
     toolbar: chatInputToolbar,
+    isSubmitting: formActions.isSubmitting,
+    isUploading: chatAttachments.isUploading,
   }), [
     inputValue,
     setInputValue,
@@ -793,6 +809,8 @@ export default function ChatOverviewScreen() {
     chatAttachments.removeAttachment,
     attachmentClickRef,
     chatInputToolbar,
+    formActions.isSubmitting,
+    chatAttachments.isUploading,
   ]);
 
   // ============================================================================

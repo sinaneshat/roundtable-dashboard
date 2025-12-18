@@ -49,8 +49,20 @@ export function useStateSync({
     setMessagesRef.current = chat.setMessages;
   }, [chat.sendMessage, chat.startRound, chat.setMessages, sendMessageRef, startRoundRef, setMessagesRef]);
 
-  // Sync isStreaming and currentParticipantIndex from hook to store
-  useEffect(() => {
+  // ✅ CRITICAL FIX: Use useLayoutEffect to sync streaming state BEFORE paint
+  // This prevents race condition where:
+  // 1. AI SDK sets isExplicitlyStreaming=true (during continueFromParticipant)
+  // 2. React renders all components with new state
+  // 3. flow-state-machine's useMemo runs DURING render - reads stale store.isStreaming (false)
+  // 4. flow-state-machine calculates state as CREATING_SUMMARY
+  // 5. If we used useEffect: sync happens AFTER render - too late!
+  //
+  // With useLayoutEffect:
+  // - Sync happens immediately after DOM mutations, BEFORE paint
+  // - Other effects and useMemo calculations in same render cycle see updated value
+  // - Prevents summary from triggering while last participant is streaming
+  //
+  useLayoutEffect(() => {
     const currentState = store.getState();
 
     if (currentState.isStreaming !== chat.isStreaming) {

@@ -1,6 +1,6 @@
 'use client';
 import type { ChatStatus } from 'ai';
-import { ArrowUp, Mic, Square, StopCircle } from 'lucide-react';
+import { ArrowUp, Loader2, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
@@ -65,6 +65,8 @@ type ChatInputProps = {
   isUploading?: boolean;
   /** Suppress validation errors during hydration (prevents flash of "no models" error) */
   isHydrating?: boolean;
+  /** Whether a submission is in progress (API call) - shows loading spinner on submit button */
+  isSubmitting?: boolean;
 };
 
 // ✅ RENDER OPTIMIZATION: Memoize ChatInput to prevent unnecessary re-renders
@@ -97,6 +99,7 @@ export const ChatInput = memo(({
   attachmentClickRef,
   isUploading = false,
   isHydrating = false,
+  isSubmitting = false,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -147,7 +150,8 @@ export const ChatInput = memo(({
   // Character limit validation - aligned with backend MessageContentSchema
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
 
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit;
+  // ✅ SUBMIT DISABLE: Include isSubmitting to disable during API calls
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   // File attachment handlers
@@ -466,8 +470,11 @@ export const ChatInput = memo(({
                           size="icon"
                           disabled={isSubmitDisabled || !hasValidInput}
                           className="size-9 sm:size-10 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
+                          aria-label={isSubmitting ? t('chat.input.submitting') : t('chat.input.send')}
                         >
-                          <ArrowUp className="size-4 sm:size-5" />
+                          {isSubmitting
+                            ? <Loader2 className="size-4 sm:size-5 animate-spin" />
+                            : <ArrowUp className="size-4 sm:size-5" />}
                         </Button>
                       )}
                 </div>

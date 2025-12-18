@@ -291,6 +291,7 @@ export function ModelSelectionModal({
         handleRoleSelect(result.data.customRole.name, result.data.customRole.id);
       }
     } catch (error) {
+      console.error('[ModelSelectionModal] Failed to create custom role:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to create custom role');
       toastManager.error('Failed to create role', errorMessage);
     }
@@ -303,11 +304,20 @@ export function ModelSelectionModal({
       ? result.models.filter(m => !incompatibleModelIds.has(m.id))
       : result.models;
 
+    // Toast when models excluded from preset due to vision incompatibility
+    const filteredCount = result.models.length - compatibleModels.length;
+    if (filteredCount > 0 && compatibleModels.length > 0) {
+      toastManager.warning(
+        tModels('presetModelsExcluded'),
+        tModels('presetModelsExcludedDescription', { count: filteredCount }),
+      );
+    }
+
     if (onPresetSelect && compatibleModels.length > 0) {
       onPresetSelect(compatibleModels, result.preset);
       onOpenChange(false); // Close modal after selection
     }
-  }, [onPresetSelect, onOpenChange, incompatibleModelIds]);
+  }, [onPresetSelect, onOpenChange, incompatibleModelIds, tModels]);
 
   // Get all models for preset cards
   const allModels = useMemo(() => {

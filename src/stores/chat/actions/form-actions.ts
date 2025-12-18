@@ -61,6 +61,8 @@ export type UseChatFormActionsReturn = {
   handleWebSearchToggle: (enabled: boolean) => void;
   /** Check if form is valid for submission */
   isFormValid: boolean;
+  /** Whether a submission is currently in progress (API call pending) */
+  isSubmitting: boolean;
 };
 
 /**
@@ -331,6 +333,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Without this, streaming never starts - system enters deadlock.
       actions.setNextParticipantToTrigger(0);
     } catch (error) {
+      console.error('[handleCreateThread] Error creating thread:', error);
       showApiErrorToast('Error creating thread', error);
       actions.setShowInitialUI(true);
     } finally {
@@ -445,15 +448,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Previously used getEffectiveWebSearchEnabled which returned thread.enableWebSearch
       // But thread hasn't been updated via PATCH yet, causing web search to run when disabled
       // User's form state IS the source of truth for THIS message submission
-      // 🔍 DEBUG LOG: Trace web search decision at submission
-      if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
-        console.debug('[form-actions] preSearch decision:', {
-          formWebSearch: formState.enableWebSearch,
-          threadWebSearch: threadState.thread?.enableWebSearch,
-          round: nextRoundNumber,
-        });
-      }
       if (formState.enableWebSearch) {
         actions.addPreSearch(createPlaceholderPreSearch({
           threadId,
@@ -594,6 +588,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             actions.setHasPendingConfigChanges(false);
           }).catch((error) => {
             // Rollback optimistic update on failure
+            console.error('[handleUpdateThreadAndSend] Failed to save configuration changes:', error);
             actions.updateParticipants(previousParticipants);
             showApiErrorToast('Failed to save configuration changes', error);
           });
@@ -642,6 +637,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // - hasEarlyOptimisticMessage = true (blocks message sync)
       // - pending round in KV (for recovery)
       // We must revert these to restore a usable UI state
+
+      console.error('[handleUpdateThreadAndSend] Error updating thread:', error);
 
       // Clear the optimistic message flag so message sync can resume
       actions.setHasEarlyOptimisticMessage(false);
@@ -693,6 +690,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setEnableWebSearch(enabled);
   }, [actions]);
 
+  // ✅ SUBMIT STATE: Track whether any submission is in progress
+  // This enables immediate UI feedback (loading spinner) on submit button
+  const isSubmitting = createThreadMutation.isPending || updateThreadMutation.isPending;
+
   // Memoize return object to prevent unnecessary re-renders
   return useMemoizedReturn({
     handleCreateThread,
@@ -701,5 +702,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     handleModeChange,
     handleWebSearchToggle,
     isFormValid,
-  }, [handleCreateThread, handleUpdateThreadAndSend, handleResetForm, handleModeChange, handleWebSearchToggle, isFormValid]);
+    isSubmitting,
+  }, [handleCreateThread, handleUpdateThreadAndSend, handleResetForm, handleModeChange, handleWebSearchToggle, isFormValid, isSubmitting]);
 }

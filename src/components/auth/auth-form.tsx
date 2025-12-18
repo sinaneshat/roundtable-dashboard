@@ -77,6 +77,7 @@ function AuthFormContent() {
       setSentEmail(data.email);
       setStep('sent');
     } catch (error) {
+      console.error('[AuthForm] Failed to send magic link:', error);
       const errorDetails = getApiErrorDetails(error);
       form.setError('email', {
         type: 'manual',

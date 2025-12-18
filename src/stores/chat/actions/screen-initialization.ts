@@ -77,17 +77,15 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     initializeThread: s.initializeThread,
   })));
 
-  // ✅ FIX: Check if form-actions already set up streaming state
-  // If these are set, form-actions.handleSubmit already called initializeThread
-  // and set up streaming - we must NOT call initializeThread again or it resets state
+  // ✅ NON-INITIAL ROUND FIX: Check pendingMessage AND streamResumptionPrefilled
+  // - pendingMessage: Set by form-actions prepareForNewMessage(), also persisted by Zustand
+  // - streamResumptionPrefilled: Set by prefill effect AFTER render
   //
-  // ✅ RESUMPTION FIX: Also check streamResumptionPrefilled to distinguish:
-  // - Prefill sets waitingToStartStreaming=true for RESUMPTION → should still initialize
-  // - Form-actions sets waitingToStartStreaming=true for NEW submission → should skip
+  // CRITICAL: Include streamResumptionPrefilled in selector so effect re-runs when prefill
+  // completes. Otherwise, the effect sees stale pendingMessage from persist and thinks
+  // it's an active form submission when it's actually resumption.
   const streamingStateSet = useChatStore(useShallow(s => ({
-    waitingToStartStreaming: s.waitingToStartStreaming,
     pendingMessage: s.pendingMessage,
-    streamingRoundNumber: s.streamingRoundNumber,
     streamResumptionPrefilled: s.streamResumptionPrefilled,
   })));
 
@@ -107,26 +105,31 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     const isReady = threadId && participants.length > 0;
     const alreadyInitialized = initializedThreadIdRef.current === threadId;
 
-    // ✅ FIX: Skip if form-actions already initialized and set up streaming
-    // This prevents race condition where we reset streaming state set by handleSubmit
+    // ✅ FIX: Skip ONLY for active form-actions submission, NOT for resumption
     //
-    // ✅ RESUMPTION FIX: Don't skip when prefill set waitingToStartStreaming!
-    // Prefill is for stream RESUMPTION - we still need to initialize thread data.
-    // Only skip when form-actions set it (new submission in progress).
-    // Detection: streamResumptionPrefilled=true means prefill set the flags, not form-actions.
-    const isFormActionsSubmission
-      = (streamingStateSet.pendingMessage !== null || streamingStateSet.streamingRoundNumber !== null)
-        || (streamingStateSet.waitingToStartStreaming && !streamingStateSet.streamResumptionPrefilled);
+    // Detection logic:
+    // - pendingMessage !== null: Could be active submission OR stale from Zustand persist
+    // - streamResumptionPrefilled: Set by prefill effect when this is a resumption
+    //
+    // If pendingMessage is set BUT prefill also ran, this is resumption (pendingMessage
+    // is stale from persist). If pendingMessage is set AND prefill hasn't run, this is
+    // an active form submission.
+    //
+    // CRITICAL: This effect re-runs when streamResumptionPrefilled changes (it's in the
+    // selector), so even if first run incorrectly detects form submission, the second
+    // run after prefill will correctly detect resumption and call initializeThread.
+    const isFormActionsSubmission = streamingStateSet.pendingMessage !== null
+      && !streamingStateSet.streamResumptionPrefilled;
 
     if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
       initializedThreadIdRef.current = threadId;
       actions.initializeThread(thread, participants, initialMessages);
     }
 
-    // Also mark as initialized if form-actions set it up
-    if (isReady && isFormActionsSubmission && !alreadyInitialized) {
-      initializedThreadIdRef.current = threadId;
-    }
+    // ✅ NON-INITIAL ROUND FIX: Only mark as initialized when we actually called initializeThread
+    // or when there's an active form-actions submission.
+    // Previously, stale waitingToStartStreaming from persist would incorrectly mark as initialized,
+    // preventing initializeThread from ever being called even on re-renders.
 
     // Reset tracking when threadId changes (allows re-init on navigation)
     if (threadId !== initializedThreadIdRef.current && initializedThreadIdRef.current !== null) {
@@ -153,14 +156,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // Previously only enabled when thread.enableWebSearch=true, causing historical
   // pre-search data to disappear after refresh when web search was later disabled
   const preSearchOrchestratorEnabled = Boolean(thread?.id) && enableOrchestrator;
-  // 🔍 DEBUG LOG: Trace orchestrator enable state
-  if (process.env.NODE_ENV === 'development' && thread?.id) {
-    // eslint-disable-next-line no-console
-    console.debug('[screen-init] preSearch orchestrator:', {
-      enabled: preSearchOrchestratorEnabled,
-      threadWebSearch: thread?.enableWebSearch,
-    });
-  }
   usePreSearchOrchestrator({
     threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,

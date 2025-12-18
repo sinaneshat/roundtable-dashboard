@@ -37,7 +37,6 @@ import { cn } from '@/lib/ui/cn';
  *   onOpenChange={setIsOpen}
  *   selectedMode="brainstorming"
  *   onModeSelect={(mode) => {
- *     console.log('Selected:', mode);
  *     setIsOpen(false);
  *   }}
  * />

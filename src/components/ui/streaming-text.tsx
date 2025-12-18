@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -57,15 +57,19 @@ export const StreamingText = memo(function StreamingText({
     const newChars = children.length - prevLengthRef.current;
     if (newChars > 0) {
       setNewCharsCount(Math.min(newChars, shimmerLength));
-      // Reset after animation completes
-      const timer = setTimeout(() => {
-        setNewCharsCount(0);
-      }, shimmerLength * animationDelay * 1000 + 500);
       prevLengthRef.current = children.length;
-      return () => clearTimeout(timer);
     }
     return undefined;
-  }, [children, isStreaming, shimmerLength, animationDelay]);
+  }, [children, isStreaming, shimmerLength]);
+
+  // ✅ FIX: Use callback for animation complete instead of setTimeout
+  // This is called when the LAST character finishes its animation
+  const handleLastCharAnimationComplete = useCallback(() => {
+    // Use rAF to ensure the completed animation frame is painted before state update
+    requestAnimationFrame(() => {
+      setNewCharsCount(0);
+    });
+  }, []);
 
   // If not streaming or no new chars, render plain text
   if (!isStreaming || newCharsCount === 0) {
@@ -75,6 +79,7 @@ export const StreamingText = memo(function StreamingText({
   // Split into stable and animated parts
   const stableText = children.slice(0, -newCharsCount);
   const animatedText = children.slice(-newCharsCount);
+  const lastCharIndex = animatedText.length - 1;
 
   return (
     <span className={className}>
@@ -92,6 +97,8 @@ export const StreamingText = memo(function StreamingText({
             delay: i * animationDelay,
             ease: 'easeOut',
           }}
+          // ✅ FIX: Use onAnimationComplete on the last character instead of timeout
+          onAnimationComplete={i === lastCharIndex ? handleLastCharAnimationComplete : undefined}
         >
           {char}
         </motion.span>
@@ -191,13 +198,28 @@ export const StreamingParagraph = memo(function StreamingParagraph({
 }: StreamingParagraphProps) {
   const lastTextRef = useRef(children);
   const [isGrowing, setIsGrowing] = useState(false);
+  const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (children.length > lastTextRef.current.length) {
       setIsGrowing(true);
-      const timer = setTimeout(() => setIsGrowing(false), 100);
+
+      // ✅ FIX: Use double-rAF pattern instead of setTimeout
+      // This ensures the "growing" visual state is shown for at least one full frame
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = requestAnimationFrame(() => {
+          setIsGrowing(false);
+          rafIdRef.current = null;
+        });
+      });
       lastTextRef.current = children;
-      return () => clearTimeout(timer);
+
+      return () => {
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+      };
     }
     lastTextRef.current = children;
     return undefined;

@@ -49,7 +49,8 @@ const cookieStorage = {
       if (key === name && value) {
         try {
           return decodeURIComponent(value);
-        } catch {
+        } catch (error) {
+          console.error('[cookieStorage.getItem] Failed to decode cookie value:', error);
           return null;
         }
       }
@@ -216,7 +217,8 @@ export function parsePreferencesCookie(
     }
 
     return null;
-  } catch {
+  } catch (error) {
+    console.error('[parsePreferencesCookie] Failed to parse preferences cookie:', error);
     return null;
   }
 }

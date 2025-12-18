@@ -117,7 +117,6 @@ export function hasTimestampExceededTimeout(
  * @example
  * ```ts
  * const age = getTimestampAge(record.createdAt);
- * console.log(`Record age: ${formatAgeMs(age)}`);
  * // Output: "Record age: 45s"
  * ```
  */

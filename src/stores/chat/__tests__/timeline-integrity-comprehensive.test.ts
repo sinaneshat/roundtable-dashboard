@@ -1021,7 +1021,7 @@ describe('summary Trigger Timing', () => {
     expect(summary?.status).toBe(MessageStatuses.STREAMING);
 
     // Summary completes
-    store.getState().updateMessageStatus(0, MessageStatuses.COMPLETE);
+    store.getState().updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
     const completedSummary = store.getState().summaries.find(a => a.roundNumber === 0);
     expect(completedSummary?.status).toBe(MessageStatuses.COMPLETE);

@@ -421,7 +421,7 @@ describe('timeline ordering during streaming', () => {
       store.getState().addSummary(createSummary(threadId, 0, 'pending'));
       expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.PENDING);
 
-      store.getState().updateMessageStatus(0, MessageStatuses.STREAMING);
+      store.getState().updateSummaryStatus(0, MessageStatuses.STREAMING);
       expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.STREAMING);
 
       const completeSummaryData = {

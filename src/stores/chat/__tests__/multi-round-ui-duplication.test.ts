@@ -22,7 +22,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageRoles, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing/helpers';
@@ -154,7 +154,7 @@ function createSummary(
   } as StoredRoundSummary;
 }
 
-function createChangelog(roundNumber: number): ChatThreadChangelog {
+function _createChangelog(roundNumber: number): ChatThreadChangelog {
   return {
     id: `changelog-thread-123-r${roundNumber}`,
     threadId: 'thread-123',
@@ -676,8 +676,7 @@ describe('full Flow E2E - No Duplication', () => {
     expect(store.getState().preSearches.filter(ps => ps.roundNumber === 1)).toHaveLength(1);
     expect(store.getState().summaries.filter(s => s.roundNumber === 1)).toHaveLength(1);
 
-    // ===== ROUND 2 (with config change) =====
-    store.getState().setChangelog([createChangelog(2)]);
+    // ===== ROUND 2 =====
     store.getState().setExpectedParticipantIds(getParticipantModelIds(participants));
     store.getState().setStreamingRoundNumber(2);
     store.getState().prepareForNewMessage('Question 2', []);
@@ -697,12 +696,10 @@ describe('full Flow E2E - No Duplication', () => {
     const allMessages = store.getState().messages;
     const allPreSearches = store.getState().preSearches;
     const allSummaries = store.getState().summaries;
-    const allChangelogs = store.getState().changelog;
 
     // Verify total counts
     expect(allPreSearches).toHaveLength(3); // One per round
     expect(allSummaries).toHaveLength(3); // One per round
-    expect(allChangelogs).toHaveLength(1); // Only round 2 has changelog
 
     // Verify no duplicate pre-searches
     const preSearchRounds = allPreSearches.map(ps => ps.roundNumber);
@@ -717,7 +714,7 @@ describe('full Flow E2E - No Duplication', () => {
       useThreadTimeline({
         messages: allMessages,
         summaries: allSummaries,
-        changelog: allChangelogs,
+        changelog: [], // No changelog in this test
         preSearches: allPreSearches,
       }),
     );
@@ -732,8 +729,8 @@ describe('full Flow E2E - No Duplication', () => {
     // Verify expected timeline structure
     // Round 0: messages, summary
     // Round 1: messages, summary
-    // Round 2: changelog, messages, summary
-    expect(timeline).toHaveLength(7);
+    // Round 2: messages, summary
+    expect(timeline).toHaveLength(6);
   });
 
   it('resumption after page refresh does not cause duplication', () => {

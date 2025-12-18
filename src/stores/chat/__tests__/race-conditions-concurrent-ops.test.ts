@@ -22,8 +22,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { MessageStatuses } from '@/api/core/enums';
-import { FinishReasons, MessageRoles, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatThread } from '@/db/validation';
 import {

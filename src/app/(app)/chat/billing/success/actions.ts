@@ -64,6 +64,7 @@ export async function syncStripeAfterCheckout(): Promise<{
       error: 'Failed to sync subscription data',
     };
   } catch (error) {
+    console.error('[syncStripeAfterCheckout] Sync failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Sync failed',

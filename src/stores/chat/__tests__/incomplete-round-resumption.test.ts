@@ -20,8 +20,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MESSAGE_STATUSES as MessageStatuses } from '@/api/core/enums';
-import { FinishReasons, MessageRoles } from '@/api/core/enums';
+import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import {

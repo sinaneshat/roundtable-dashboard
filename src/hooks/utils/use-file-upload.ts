@@ -276,6 +276,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           throw new Error('Upload failed');
         }
       } catch (error) {
+        console.error('[File Upload] Single upload failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
         updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
@@ -395,6 +396,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           onComplete?.({ ...updatedItem, status: UploadStatuses.COMPLETED });
         }
       } catch (error) {
+        console.error('[File Upload] Multipart upload failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Multipart upload failed';
 
         // Try to abort multipart upload if we have multipartUploadId
@@ -405,8 +407,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
               param: { id: currentItem.uploadId },
               query: { uploadId: currentItem.multipartUploadId },
             });
-          } catch {
-            // Ignore abort errors
+          } catch (abortError) {
+            console.error('[File Upload] Failed to abort multipart upload:', abortError);
           }
         }
 
@@ -496,8 +498,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
             param: { id: item.uploadId },
             query: { uploadId: item.multipartUploadId },
           });
-        } catch {
-          // Ignore abort errors
+        } catch (abortError) {
+          console.error('[File Upload] Failed to abort multipart upload during cancel:', abortError);
         }
       }
 
@@ -507,8 +509,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           await deleteAttachment.mutateAsync({
             param: { id: item.uploadId },
           });
-        } catch {
-          // Ignore delete errors
+        } catch (deleteError) {
+          console.error('[File Upload] Failed to delete upload record during cancel:', deleteError);
         }
       }
     },
@@ -712,7 +714,6 @@ export type UseSingleFileUploadReturn = {
  * @example
  * const { upload, progress, status } = useSingleFileUpload({
  *   threadId: 'thread-123',
- *   onComplete: (id) => console.log('Uploaded:', id),
  * });
  *
  * const handleUpload = async (file: File) => {
@@ -781,6 +782,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
 
         throw new Error('Upload failed');
       } catch (err) {
+        console.error('[File Upload] Single file upload failed:', err);
         const errorMessage = err instanceof Error ? err.message : 'Upload failed';
         setError(errorMessage);
         setStatus(UploadStatuses.FAILED);

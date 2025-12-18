@@ -1,8 +1,5 @@
 import type { Metadata } from 'next';
-import { useTranslations } from 'next-intl';
-import { Suspense } from 'react';
 
-import { PageLoadingFallback } from '@/components/loading';
 import { BRAND } from '@/constants/brand';
 import { AuthErrorScreen } from '@/containers/screens/errors';
 import { createMetadata } from '@/utils/metadata';
@@ -15,6 +12,9 @@ import { createMetadata } from '@/utils/metadata';
  * Force Static Generation
  * - Error page UI is a static shell
  * - Error details are passed via searchParams and handled client-side
+ *
+ * NOTE: No Suspense here - AuthErrorScreen has its own Suspense boundary
+ * for useSearchParams per Next.js 15 requirements. Avoids double loading states.
  */
 export const dynamic = 'force-static';
 
@@ -26,16 +26,6 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-function AuthErrorContent() {
-  const t = useTranslations('states.loading');
-
-  return (
-    <Suspense fallback={<PageLoadingFallback text={t('errorDetails')} />}>
-      <AuthErrorScreen />
-    </Suspense>
-  );
-}
-
 export default function AuthErrorPage() {
-  return <AuthErrorContent />;
+  return <AuthErrorScreen />;
 }

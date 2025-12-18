@@ -47,7 +47,8 @@ function parsePreSearchData(jsonString: string): PreSearchDataPayload | null {
       return result.data;
     }
     return null;
-  } catch {
+  } catch (error) {
+    console.error('[parsePreSearchData] Failed to parse pre-search data:', error);
     return null;
   }
 }
@@ -143,7 +144,8 @@ export async function readPreSearchStreamData(
             } else if (currentEvent === PreSearchSseEvents.DONE) {
               searchData = parsePreSearchData(currentData);
             }
-          } catch {
+          } catch (error) {
+            console.error('[readPreSearchStreamData] Failed to parse event data:', error);
             // Failed to parse event data, continue
           }
           currentEvent = '';
@@ -156,7 +158,8 @@ export async function readPreSearchStreamData(
     if (currentEvent === PreSearchSseEvents.DONE && currentData) {
       searchData = parsePreSearchData(currentData);
     }
-  } catch {
+  } catch (error) {
+    console.error('[readPreSearchStreamData] Stream error:', error);
     // Stream error - return what we have
   }
 

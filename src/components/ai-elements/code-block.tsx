@@ -189,6 +189,7 @@ export function CodeBlockCopyButton({
       }
       timeoutRef.current = setTimeout(() => setIsCopied(false), timeout);
     } catch (error) {
+      console.error('[CodeBlockCopyButton] Failed to copy to clipboard:', error);
       onError?.(error as Error);
     }
   };

@@ -1,5 +1,4 @@
 'use client';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
@@ -19,7 +18,6 @@ import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
-import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -162,50 +160,29 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            {/* ✅ SMOOTH TRANSITION: AnimatePresence prevents flash between loader and content */}
-            <AnimatePresence mode="wait" initial={false}>
-              {isPendingWithNoParts
+            {/* Content rendering - no nested animations (scroll animation handles entrance) */}
+            {isPendingWithNoParts
+              ? (
+                  <div className="py-2 text-muted-foreground text-base">
+                    <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
+                  </div>
+                )
+              : parts.length > 0
                 ? (
-                    <motion.div
-                      key="loader"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{
-                        duration: ANIMATION_DURATION.fast,
-                        ease: ANIMATION_EASE.standard,
-                      }}
-                      className="py-2 text-muted-foreground text-base"
-                    >
-                      <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
-                    </motion.div>
+                    <div>
+                      {maxContentHeight
+                        ? (
+                            <ScrollArea
+                              className="pr-3"
+                              style={{ maxHeight: maxContentHeight }}
+                            >
+                              {renderContentParts()}
+                            </ScrollArea>
+                          )
+                        : renderContentParts()}
+                    </div>
                   )
-                : parts.length > 0
-                  ? (
-                      <motion.div
-                        key="content"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{
-                          duration: ANIMATION_DURATION.normal,
-                          ease: ANIMATION_EASE.enter,
-                        }}
-                      >
-                        {/* ✅ Wrap in ScrollArea when maxContentHeight is provided */}
-                        {maxContentHeight
-                          ? (
-                              <ScrollArea
-                                className="pr-3"
-                                style={{ maxHeight: maxContentHeight }}
-                              >
-                                {renderContentParts()}
-                              </ScrollArea>
-                            )
-                          : renderContentParts()}
-                      </motion.div>
-                    )
-                  : null}
-            </AnimatePresence>
+                : null}
 
             {/* ✅ SOURCES: Show files/context available to AI */}
             {/* Displayed even when AI doesn't cite inline, so users know what files were used */}

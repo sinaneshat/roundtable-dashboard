@@ -204,7 +204,7 @@ describe('summary Streaming Errors', () => {
     });
 
     // Transition to streaming
-    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
     // Error occurs - use updateSummaryError
@@ -599,7 +599,7 @@ describe('complete Error Journey', () => {
       threadId: 'thread-error-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
 

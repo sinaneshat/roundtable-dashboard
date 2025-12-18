@@ -123,6 +123,29 @@ export function isParticipantMessage(
 // ============================================================================
 
 /**
+ * Normalize message part states to 'done'
+ *
+ * ✅ STATE CONSISTENCY FIX: When loading messages from server/store, normalize
+ * any stale 'streaming' states to 'done'. The 'state' property is a runtime-only
+ * AI SDK concept that shouldn't persist across page refreshes.
+ *
+ * This prevents inconsistency where isStreaming=false but message parts have state='streaming'.
+ */
+function normalizeMessagePartStates(parts: UIMessage['parts']): UIMessage['parts'] {
+  if (!parts || parts.length === 0) {
+    return parts;
+  }
+
+  return parts.map((part) => {
+    // If part has a 'state' property, normalize 'streaming' to 'done'
+    if ('state' in part && part.state === 'streaming') {
+      return { ...part, state: 'done' as const };
+    }
+    return part;
+  });
+}
+
+/**
  * Convert a single backend ChatMessage to AI SDK UIMessage format
  *
  * Transforms database message format into AI SDK's UIMessage structure.
@@ -166,10 +189,15 @@ export function chatMessageToUIMessage(
         }
       : null;
 
+  // ✅ STATE CONSISTENCY FIX: Normalize any stale 'streaming' states to 'done'
+  const normalizedParts = normalizeMessagePartStates(
+    (message.parts || []) as UIMessage['parts'],
+  );
+
   return {
     id: message.id,
     role: message.role,
-    parts: (message.parts || []) as UIMessage['parts'],
+    parts: normalizedParts,
     metadata,
   };
 }

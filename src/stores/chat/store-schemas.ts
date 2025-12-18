@@ -501,6 +501,8 @@ export const StreamResumptionActionsSchema = z.object({
   needsMessageSync: z.custom<NeedsMessageSync>(),
   clearStreamResumption: z.custom<ClearStreamResumption>(),
   prefillStreamResumptionState: z.custom<PrefillStreamResumptionState>(),
+  /** Transition from pre-search phase to participants phase, clearing pre-search state */
+  transitionToParticipantsPhase: z.custom<() => void>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);

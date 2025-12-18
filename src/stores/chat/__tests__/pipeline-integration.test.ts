@@ -245,8 +245,8 @@ describe('pipeline Phase Transitions', () => {
         mode: ChatModes.ANALYZING,
       });
 
-      state.updateMessageStatus(0, MessageStatuses.STREAMING);
-      state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+      state.updateSummaryStatus(0, MessageStatuses.STREAMING);
+      state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
       expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
     });
@@ -365,7 +365,7 @@ describe('multi-Round Pipeline', () => {
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
     // Round 1 pipeline
     const preSearch1 = createMockPreSearch(1, MessageStatuses.COMPLETE, true);
@@ -381,7 +381,7 @@ describe('multi-Round Pipeline', () => {
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(1, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(1, MessageStatuses.COMPLETE);
 
     // Verify independence
     expect(getStoreState(store).preSearches).toHaveLength(2);
@@ -582,11 +582,11 @@ describe('complete Pipeline Journey', () => {
 
     // Summary starts streaming
     state.setIsCreatingSummary(true);
-    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
     // Summary completes
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
     state.setIsCreatingSummary(false);
 
     // === VERIFY FINAL STATE ===
@@ -645,7 +645,7 @@ describe('complete Pipeline Journey', () => {
       threadId: 'thread-pipeline-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
     // === VERIFY ===
     const finalState = getStoreState(store);

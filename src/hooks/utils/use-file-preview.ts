@@ -198,6 +198,7 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
             return { loading: false };
         }
       } catch (error) {
+        console.error('[File Preview] Preview generation failed:', error);
         return {
           loading: false,
           error: error instanceof Error ? error.message : 'Preview generation failed',

@@ -60,14 +60,6 @@ export function traceStart(threadId: string, participantCount: number): void {
     participant: null,
     data: { threadId, participantCount },
   });
-
-  // eslint-disable-next-line no-console
-  console.log(
-    `%c[TRACE] THREAD_CREATE %c+0ms`,
-    'color: #4CAF50; font-weight: bold',
-    'color: #888',
-    { threadId, participantCount },
-  );
 }
 
 /**
@@ -94,35 +86,6 @@ export function trace(
   };
 
   timeline.push(event);
-
-  // Color coding by event type
-  const colors: Record<EventType, string> = {
-    THREAD_CREATE: '#4CAF50',
-    PRE_SEARCH_START: '#2196F3',
-    PRE_SEARCH_COMPLETE: '#2196F3',
-    PARTICIPANT_START: '#FF9800',
-    PARTICIPANT_STREAM: '#FFC107',
-    PARTICIPANT_COMPLETE: '#FF9800',
-    ROUND_COMPLETE: '#9C27B0',
-    SUMMARY_CREATE: '#E91E63',
-    SUMMARY_COMPLETE: '#E91E63',
-    STATE_CHANGE: '#607D8B',
-    HYDRATION: '#00BCD4',
-    RESUMPTION: '#795548',
-    ERROR: '#F44336',
-  };
-
-  const participantStr = participantIndex !== null ? ` P${participantIndex}` : '';
-  const roundStr = currentRound !== null ? `R${currentRound}` : '';
-
-  // eslint-disable-next-line no-console
-  console.log(
-    `%c[TRACE] ${type} %c${roundStr}${participantStr} %c+${elapsed}ms`,
-    `color: ${colors[type]}; font-weight: bold`,
-    'color: #666',
-    'color: #888',
-    data,
-  );
 }
 
 /**
@@ -198,47 +161,9 @@ export function getTimeline(): TraceEvent[] {
  * Print a summary of the timeline
  */
 export function printTimelineSummary(): void {
-  if (!isEnabled() || timeline.length === 0)
-    return;
-
-  // eslint-disable-next-line no-console
-  console.log('\n%c=== CONVERSATION TIMELINE SUMMARY ===', 'color: #4CAF50; font-weight: bold; font-size: 14px');
-
-  const rounds = new Map<number, TraceEvent[]>();
-  for (const event of timeline) {
-    const round = event.round ?? 0;
-    if (!rounds.has(round))
-      rounds.set(round, []);
-    rounds.get(round)!.push(event);
+  if (!isEnabled() || timeline.length === 0) {
+    // No-op when disabled or empty
   }
-
-  for (const [round, events] of rounds) {
-    // eslint-disable-next-line no-console
-    console.log(`\n%cRound ${round}:`, 'color: #2196F3; font-weight: bold');
-
-    const participantStarts = events.filter(e => e.type === 'PARTICIPANT_START');
-    const participantCompletes = events.filter(e => e.type === 'PARTICIPANT_COMPLETE');
-
-    // eslint-disable-next-line no-console
-    console.log(`  Participants started: ${participantStarts.length}`);
-    // eslint-disable-next-line no-console
-    console.log(`  Participants completed: ${participantCompletes.length}`);
-
-    // Check for issues
-    if (participantStarts.length !== participantCompletes.length) {
-      // eslint-disable-next-line no-console
-      console.log(`  %c!! MISMATCH: ${participantStarts.length} started vs ${participantCompletes.length} completed`, 'color: #F44336');
-    }
-
-    const roundComplete = events.find(e => e.type === 'ROUND_COMPLETE');
-    if (!roundComplete && participantCompletes.length > 0) {
-      // eslint-disable-next-line no-console
-      console.log(`  %c!! MISSING: Round complete event`, 'color: #F44336');
-    }
-  }
-
-  // eslint-disable-next-line no-console
-  console.log('\n%c=== END SUMMARY ===\n', 'color: #4CAF50; font-weight: bold');
 }
 
 /**

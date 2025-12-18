@@ -30,10 +30,15 @@ import {
   MessageStatuses,
   ScreenModes,
 } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getAssistantMetadata, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+
+import {
+  getParticipantCompletionStatus,
+  logParticipantCompletionStatus,
+} from '../utils/participant-completion-gate';
 
 // ============================================================================
 // FLOW STATE MACHINE TYPES
@@ -63,6 +68,9 @@ export type FlowContext = {
 
   // SDK state
   isAiSdkStreaming: boolean;
+  // ✅ FIX: Track if streaming just completed (within delay window)
+  // Prevents summary from triggering before UI renders final content
+  streamingJustCompleted: boolean;
 
   // Flags
   isCreatingThread: boolean;
@@ -123,8 +131,10 @@ function determineFlowState(context: FlowContext): FlowState {
 
   // Priority 4: Creating summary (participants done, no summary yet)
   // Check if all participants responded for CURRENT round before creating summary
+  // ✅ FIX: Also check streamingJustCompleted to ensure UI has rendered final content
   if (
     !context.isAiSdkStreaming
+    && !context.streamingJustCompleted // Wait for delay after streaming ends
     && context.allParticipantsResponded // All participants must respond for current round
     && context.participantCount > 0
     && !context.summaryExists // Checks current round
@@ -308,8 +318,59 @@ export function useFlowStateMachine(
   const tryMarkSummaryCreated = useChatStore(s => s.tryMarkSummaryCreated);
   const completeStreaming = useChatStore(s => s.completeStreaming);
 
+  // ✅ RACE CONDITION FIX: Get store API for fresh state reads inside effects
+  // Prevents stale closure issues where effect runs with old messages
+  const storeApi = useChatStoreApi();
+
   // Track navigation state
   const [hasNavigated, setHasNavigated] = useState(false);
+
+  // ============================================================================
+  // ✅ FIX: Track streaming completion using frame-based async instead of timeouts
+  // When streaming ends, the UI needs time to render the final content.
+  // Uses requestAnimationFrame to wait for actual browser paint completion.
+  // ============================================================================
+  const [streamingJustCompleted, setStreamingJustCompleted] = useState(false);
+  const rafIdRef = useRef<number | null>(null);
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    // Clean up RAF on unmount
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isAiSdkStreaming) {
+      // Streaming started - track it and clear any pending completion
+      wasStreamingRef.current = true;
+      setStreamingJustCompleted(false);
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    } else if (wasStreamingRef.current && messages.length > 0) {
+      // Streaming just ended - set flag and wait for UI to render
+      // Use double-rAF pattern to ensure browser has painted the final frame
+      wasStreamingRef.current = false;
+      setStreamingJustCompleted(true);
+
+      // First rAF: scheduled for next frame
+      rafIdRef.current = requestAnimationFrame(() => {
+        // Second rAF: ensures previous frame was painted
+        rafIdRef.current = requestAnimationFrame(() => {
+          // Third rAF: extra safety for complex renders
+          rafIdRef.current = requestAnimationFrame(() => {
+            setStreamingJustCompleted(false);
+            rafIdRef.current = null;
+          });
+        });
+      });
+    }
+  }, [isAiSdkStreaming, messages.length]);
 
   // ============================================================================
   // BUILD FLOW CONTEXT
@@ -381,6 +442,7 @@ export function useFlowStateMachine(
       summaryStatus: currentRoundSummary?.status || null,
       summaryExists: !!currentRoundSummary, // ✅ FIX: Round-specific check
       isAiSdkStreaming,
+      streamingJustCompleted, // ✅ FIX: Delay after streaming for UI to render
       isCreatingThread,
       isCreatingSummary,
       hasNavigated,
@@ -393,6 +455,7 @@ export function useFlowStateMachine(
     participants,
     summaries,
     isAiSdkStreaming,
+    streamingJustCompleted,
     isCreatingThread,
     isCreatingSummary,
     hasNavigated,
@@ -424,6 +487,39 @@ export function useFlowStateMachine(
           const { threadId, currentRound } = context;
 
           if (threadId && messages.length > 0) {
+            // ✅ RACE CONDITION FIX: Get FRESH state directly from store
+            // The `messages` from closure might be stale - verify with current state
+            const freshState = storeApi.getState();
+            const freshMessages = freshState.messages;
+            const freshParticipants = freshState.participants;
+
+            // ✅ STRICT STREAMING CHECK: Block summary if AI SDK is still streaming
+            // This is a CRITICAL gate - never create summary while streaming is active.
+            // The message-level check below might miss cases where:
+            // 1. Last participant just started (message created but no streaming parts yet)
+            // 2. Message sync race (parts not updated yet)
+            //
+            // This flag is the source of truth from AI SDK - if true, streaming is active.
+            if (freshState.isStreaming) {
+              return; // Exit effect without updating prevStateRef
+            }
+
+            // ✅ STRICT COMPLETION GATE: Use centralized utility for participant completion check
+            // This is the SINGLE SOURCE OF TRUTH for determining if all participants are done
+            // Prevents race condition where summary starts while a participant is still streaming
+            const completionStatus = getParticipantCompletionStatus(
+              freshMessages,
+              freshParticipants,
+              currentRound,
+            );
+
+            if (!completionStatus.allComplete) {
+              // Participants still streaming - DON'T update prevStateRef so we can retry
+              // The effect will re-run when store updates with completed messages
+              logParticipantCompletionStatus(completionStatus, 'flow-state-machine:CREATE_SUMMARY');
+              return; // Exit effect without updating prevStateRef
+            }
+
             // 🚨 ATOMIC: tryMarkSummaryCreated returns false if already created
             // This prevents race condition where multiple components try to create summary simultaneously
             if (!tryMarkSummaryCreated(currentRound)) {
@@ -432,7 +528,7 @@ export function useFlowStateMachine(
             }
 
             // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
-            const userMessage = messages.findLast(
+            const userMessage = freshMessages.findLast(
               (m: UIMessage) => m.role === MessageRoles.USER,
             );
             // ✅ TYPE-SAFE: Use AI SDK TextPart type for text content extraction
@@ -451,7 +547,7 @@ export function useFlowStateMachine(
 
             createPendingSummary({
               roundNumber: currentRound,
-              messages,
+              messages: freshMessages,
               userQuestion,
               threadId,
               mode: thread?.mode || DEFAULT_CHAT_MODE,
@@ -520,6 +616,7 @@ export function useFlowStateMachine(
     participants,
     thread,
     queryClient,
+    storeApi, // ✅ For fresh state reads inside effect
     tryMarkSummaryCreated,
     createPendingSummary,
     completeStreaming,

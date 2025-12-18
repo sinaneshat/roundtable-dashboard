@@ -210,6 +210,7 @@ export function createProgressToast(options: ProgressToastOptions): {
       });
     },
     error: (error: Error) => {
+      console.error('Progress toast error:', error);
       progressToasts.delete(toastId);
       dismissToast(toastId);
       options.onError?.(error);
@@ -322,6 +323,7 @@ export const toastManager = {
       toastManager.success(messages.success(result));
       return result;
     } catch (error) {
+      console.error('Progress toast error:', error);
       const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       progressToast.error(error instanceof Error ? error : new Error(errorMessage));
       toastManager.error(messages.error(error instanceof Error ? error : new Error(errorMessage)));

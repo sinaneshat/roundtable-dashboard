@@ -144,7 +144,8 @@ export default async function ChatThreadPage({
     if (streamStateResult?.success && streamStateResult.data) {
       streamResumptionState = streamStateResult.data;
     }
-  } catch {
+  } catch (error) {
+    console.error('[ChatThreadPage] Failed to fetch stream resumption state:', error);
     // Graceful degradation - if KV unavailable, continue without resumption state
     // Frontend will handle resumption detection via effects
   }

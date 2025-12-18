@@ -20,7 +20,7 @@ import type { FeedbackType } from '@/api/core/enums';
 import { MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant, RoundSummaryAIContent, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
-import { ScrollFadeEntrance } from '@/components/ui/motion';
+import { ScrollFadeEntrance, ScrollFromBottom, ScrollFromTop } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
@@ -230,14 +230,11 @@ export function ThreadTimeline({
               </ScrollFadeEntrance>
             )}
 
-            {/* Pre-search items */}
+            {/* Pre-search items - slides DOWN from top */}
+            {/* ✅ FIX: Don't use shouldAnimate - let whileInView handle scroll-triggered animation */}
             {item.type === 'pre-search' && (
-              <ScrollFadeEntrance
-                index={virtualItem.index}
-                skipAnimation={!shouldAnimate(virtualItem.key)}
-                enableScrollEffect
-                scrollIntensity={0.1}
-                skipScale
+              <ScrollFromTop
+                skipAnimation={skipEntranceAnimations}
               >
                 <div className="w-full mb-6">
                   <UnifiedErrorBoundary context="pre-search">
@@ -251,7 +248,7 @@ export function ThreadTimeline({
                     />
                   </UnifiedErrorBoundary>
                 </div>
-              </ScrollFadeEntrance>
+              </ScrollFromTop>
             )}
 
             {/* Message items */}
@@ -337,14 +334,11 @@ export function ThreadTimeline({
               </ScrollFadeEntrance>
             )}
 
-            {/* Round Summary items */}
+            {/* Round Summary items - slides UP from bottom */}
+            {/* ✅ FIX: Don't use shouldAnimate - let whileInView handle scroll-triggered animation */}
             {item.type === 'summary' && (
-              <ScrollFadeEntrance
-                index={virtualItem.index}
-                skipAnimation={!shouldAnimate(virtualItem.key)}
-                enableScrollEffect
-                scrollIntensity={0.1}
-                skipScale
+              <ScrollFromBottom
+                skipAnimation={skipEntranceAnimations}
               >
                 <div className="w-full mb-4">
                   <RoundSummaryCard
@@ -362,7 +356,7 @@ export function ThreadTimeline({
                     demoShowContent={demoSummaryOpen ? item.data.summaryData !== undefined : undefined}
                   />
                 </div>
-              </ScrollFadeEntrance>
+              </ScrollFromBottom>
             )}
           </div>
         );

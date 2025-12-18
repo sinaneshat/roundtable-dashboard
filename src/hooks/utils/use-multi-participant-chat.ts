@@ -472,7 +472,6 @@ export function useMultiParticipantChat(
     // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
     if (aiSendMessageRef.current) {
       const sendMessage = aiSendMessageRef.current;
-      // DEBUG: console.log('[triggerNextParticipant] CALLING aiSendMessage', { nextIndex });
 
       queueMicrotask(async () => {
         try {
@@ -531,25 +530,18 @@ export function useMultiParticipantChat(
       // Peek at the next queued index without removing it
       const queuedIndex = participantIndexQueue.current[0];
 
-      // DEBUG: Trace queue state and caller
-      // DEBUG: Verbose queue tracing disabled
-      // console.log('[prepareSendMessagesRequest] ENTRY', { ... });
-
       let participantIndexToUse: number;
 
       if (queuedIndex !== undefined && queuedIndex !== lastUsedParticipantIndex.current) {
         // New participant detected - shift from queue and remember it
         participantIndexToUse = participantIndexQueue.current.shift()!;
         lastUsedParticipantIndex.current = participantIndexToUse;
-        // DEBUG: console.log('[prepareSendMessagesRequest] NEW PARTICIPANT', ...);
       } else if (lastUsedParticipantIndex.current !== null) {
         // Same participant (retry/duplicate call) - reuse last index without shifting queue
         participantIndexToUse = lastUsedParticipantIndex.current;
-        // DEBUG: console.log('[prepareSendMessagesRequest] REUSING LAST', ...);
       } else {
         // Fallback to current index ref (shouldn't normally happen)
         participantIndexToUse = currentIndexRef.current;
-        // DEBUG: console.log('[prepareSendMessagesRequest] FALLBACK', ...);
       }
 
       // ✅ ATTACHMENTS: Only send attachment IDs with first participant (when user message is created)
@@ -672,10 +664,12 @@ export function useMultiParticipantChat(
     // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
     // 2. GET: Returns buffered chunks + polls for new ones until stream completes
     //
-    // ⚠️ DISABLED: Resume causes "Cannot read properties of undefined (reading 'state')" errors
-    // The AI SDK's Chat instance state gets corrupted during resume attempts on new threads
-    // Our store-based resumption handles this case without AI SDK's resume feature
-    resume: false,
+    // ✅ FIX: Only enable resume when we have a valid thread ID
+    // This prevents "Cannot read properties of undefined (reading 'state')" errors
+    // that occur when AI SDK tries to resume on new threads without an ID.
+    // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
+    // When useChatId is valid (existing thread), resume enables automatic reconnection.
+    resume: !!useChatId,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -946,8 +940,6 @@ export function useMultiParticipantChat(
         if (backendRoundNumber === null && roundFromId === null) {
           console.error('[ROUND-DEBUG] onFinish used REF FALLBACK', { msgId: data.message?.id?.slice(-15), refRound: currentRoundRef.current, pIdx: currentIndex });
         }
-
-        // 🐛 DEBUG: Log message ID received from AI SDK
         const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
 
         // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
@@ -1422,7 +1414,6 @@ export function useMultiParticipantChat(
     if (!queuedParticipantsThisRoundRef.current.has(0)) {
       queuedParticipantsThisRoundRef.current.add(0);
       participantIndexQueue.current.push(0);
-      // DEBUG: console.log('[startRound] QUEUE PUSH', ...);
     }
 
     // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
@@ -1498,11 +1489,20 @@ export function useMultiParticipantChat(
       participantsRef.current = participantsOverride;
     }
 
+    // ✅ STALE STREAMING STATE FIX: If AI SDK is ready but we think we're streaming,
+    // the isExplicitlyStreaming state is stale (from page refresh or race condition).
+    // AI SDK status 'ready' means it's NOT streaming, so clear the stale state.
+    // This happens when page refreshes during streaming - isExplicitlyStreaming gets
+    // stuck true while AI SDK resets to 'ready' state.
+    if (status === AiSdkStatuses.READY && isExplicitlyStreaming) {
+      setIsExplicitlyStreaming(false);
+      isStreamingRef.current = false;
+    }
+
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: Require AI SDK to be fully ready before sending
-    // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
-    // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
-    if (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
+    // NOTE: isExplicitlyStreaming removed from guard - handled above by stale state fix
+    if (messages.length === 0 || status !== AiSdkStatuses.READY) {
       isTriggeringRef.current = false;
       return;
     }
@@ -1754,7 +1754,6 @@ export function useMultiParticipantChat(
       if (!queuedParticipantsThisRoundRef.current.has(0)) {
         queuedParticipantsThisRoundRef.current.add(0);
         participantIndexQueue.current.push(0);
-        // DEBUG: console.log('[sendMessage] INITIAL QUEUE PUSH', ...);
       }
 
       // ✅ ATTACHMENTS: Get file parts from ref for AI SDK message creation
@@ -2093,6 +2092,84 @@ export function useMultiParticipantChat(
     };
   }, [status, isExplicitlyStreaming]);
 
+  // ✅ STALE TRIGGER RECOVERY: Reset stuck refs and state
+  // When AI SDK completes processing but our refs/state are stuck, this causes a deadlock:
+  // - isTriggeringRef.current = true blocks new triggers
+  // - isStreamingRef.current = true blocks new streaming
+  // - isExplicitlyStreaming = true prevents triggering next participant
+  //
+  // Recovery: When AI SDK status is 'ready' but state is stuck for 1.5s, reset everything.
+  // This allows incomplete-round-resumption to retry.
+  //
+  // NOTE: We DON'T skip when isExplicitlyStreaming is true - that's exactly the state we
+  // need to recover from when AI SDK resume completes but state wasn't cleared properly.
+  useLayoutEffect(() => {
+    // Only apply when AI SDK says it's ready
+    if (status !== AiSdkStatuses.READY) {
+      return;
+    }
+
+    // Check if any state indicates we think we're processing but AI SDK is done
+    const hasStuckState = isTriggeringRef.current || isStreamingRef.current || isExplicitlyStreaming;
+
+    if (!hasStuckState) {
+      return;
+    }
+
+    // Give a delay to avoid false positives during legitimate operations
+    // Increased to 1.5s to ensure any in-flight operations complete
+    const staleRecoveryTimeoutId = setTimeout(() => {
+      // Double-check AI SDK is still ready (no new operation started)
+      if (status !== AiSdkStatuses.READY) {
+        return;
+      }
+
+      // Reset all stuck state
+      if (isTriggeringRef.current) {
+        isTriggeringRef.current = false;
+      }
+      if (isStreamingRef.current) {
+        isStreamingRef.current = false;
+      }
+      // Always reset isExplicitlyStreaming if we get here - AI SDK is ready but we think we're streaming
+      setIsExplicitlyStreaming(false);
+    }, 1500); // 1.5s delay to avoid false positives
+
+    return () => {
+      clearTimeout(staleRecoveryTimeoutId);
+    };
+  }, [status, isExplicitlyStreaming]);
+
+  // ✅ ERROR STATE RECOVERY: Reset state when AI SDK transitions to error
+  // When AI SDK resume fails (e.g., nothing to resume, network error), status becomes 'error'.
+  // This blocks all retry attempts because isReady checks status === 'ready'.
+  //
+  // Recovery: When status transitions to 'error' and we're not actively streaming,
+  // call setMessages to reset AI SDK state back to 'ready'.
+  // This allows incomplete-round-resumption to retry triggering participants.
+  const previousErrorCheckRef = useRef(status);
+  useLayoutEffect(() => {
+    const prevStatus = previousErrorCheckRef.current;
+    previousErrorCheckRef.current = status;
+
+    // Only handle transitions TO error state (not from initial render)
+    if (status !== AiSdkStatuses.ERROR || prevStatus === AiSdkStatuses.ERROR) {
+      return;
+    }
+
+    // Skip if we're in the middle of explicit streaming (error will be handled by onError callback)
+    if (isExplicitlyStreaming) {
+      return;
+    }
+
+    // Reset AI SDK state by re-setting current messages
+    // This typically causes AI SDK to transition back to 'ready' state
+    // Use a microtask to avoid race conditions with ongoing state updates
+    queueMicrotask(() => {
+      setMessages(messagesRef.current);
+    });
+  }, [status, isExplicitlyStreaming, setMessages]);
+
   // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
   // AI SDK v5 Pattern: status can be 'ready' | 'submitted' | 'streaming' | 'error'
   // - isExplicitlyStreaming: Our manual flag for participant orchestration
@@ -2109,16 +2186,15 @@ export function useMultiParticipantChat(
   // When AI SDK isn't ready, continueFromParticipant returns early silently.
   // Provider needs this flag to wait before calling continueFromParticipant.
   //
-  // ✅ FIX: Relaxed status check to handle 204 resume response edge case
-  // After AI SDK receives 204 from resume endpoint (no active stream), status might not
-  // immediately become 'ready'. We need to allow starting rounds when:
-  // 1. Messages exist (hydration complete)
-  // 2. Not currently streaming/submitted (active operation)
-  // Previously: status === 'ready' && messages.length > 0
-  // Now: messages exist AND status is not actively processing (streaming/submitted)
+  // ✅ BUG FIX: MUST match the internal guard in continueFromParticipant (line 1511)
+  // Internal guard: status !== AiSdkStatuses.READY → return early
+  // External isReady MUST be false when internal guard would trigger
+  // Otherwise: isReady=true, caller proceeds, but continueFromParticipant returns early silently!
+  //
+  // Previously: allowed 'error' status, causing silent failures after AI SDK errors
+  // Now: requires status === 'ready' (matches internal guard)
   const isReady = messages.length > 0
-    && status !== AiSdkStatuses.STREAMING
-    && status !== AiSdkStatuses.SUBMITTED;
+    && status === AiSdkStatuses.READY;
 
   // ✅ INFINITE LOOP FIX: Memoize return value to prevent new object reference on every render
   // Without this, the chat object creates a new reference each render, causing any effect

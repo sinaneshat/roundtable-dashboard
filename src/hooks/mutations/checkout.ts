@@ -80,7 +80,8 @@ export function useSyncAfterCheckoutMutation() {
       try {
         const freshModelsData = await listModelsService({ bypassCache: true });
         queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
-      } catch {
+      } catch (error) {
+        console.error('[Checkout] Failed to refresh models after checkout:', error);
         // Fallback: invalidate and let normal refetch handle it
         queryClient.invalidateQueries({
           queryKey: queryKeys.models.all,

@@ -6,7 +6,7 @@ import { Suspense } from 'react';
 import { ChatHeaderSwitch } from '@/components/chat/chat-header-switch';
 import { AppSidebar } from '@/components/chat/chat-nav';
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
-import { ContentLoadingFallback, SidebarLoadingFallback } from '@/components/loading';
+import { SidebarLoadingFallback } from '@/components/loading';
 import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { LIMITS } from '@/constants/limits';
@@ -138,9 +138,8 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
             <ChatHeaderSwitch />
 
             {/* Screen components manage their own scroll via body */}
-            <Suspense fallback={<ContentLoadingFallback />}>
-              {children}
-            </Suspense>
+            {/* NOTE: No Suspense here - page-level loading.tsx handles loading states */}
+            {children}
           </SidebarInset>
         </SidebarProvider>
       </ThreadHeaderProvider>

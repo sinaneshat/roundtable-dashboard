@@ -1004,8 +1004,6 @@ function injectFileDataIntoModelMessages(
               || partUrl.startsWith('https://')); // HTTPS URL
 
         if (!hasValidUrl) {
-          // Invalid URL and no binary data - log error and filter out this part
-          // ✅ TYPE-SAFE: Use utility function instead of force cast
           const logFilename = getFilenameFromPart(part) ?? 'unknown';
           console.error(
             '[AI Streaming] Filtering out file part with invalid URL:',
@@ -1013,7 +1011,7 @@ function injectFileDataIntoModelMessages(
               filename: logFilename,
               url: partUrl || '(empty)',
               reason:
-                'No valid data URL/HTTP URL and no matching binary data in fileDataMap',
+                'File parts must have data URLs or valid HTTP(S) URLs for AI providers',
             },
           );
           return null; // Will be filtered out below
@@ -1106,10 +1104,9 @@ export async function prepareValidatedMessages(
       }
 
       if (errors.length > 0) {
-        // ✅ ALWAYS log attachment errors to console for debugging
         console.error('[Streaming] Some attachments failed to load:', {
           errorCount: errors.length,
-          errors: errors.slice(0, 5), // Limit to first 5 for console readability
+          errors: errors.slice(0, 5),
           attachmentIds,
         });
         logger?.warn('Some attachments failed to load', {
@@ -1119,7 +1116,6 @@ export async function prepareValidatedMessages(
         });
       }
     } catch (error) {
-      // ✅ ALWAYS log critical errors to console
       console.error('[Streaming] Failed to load attachment content:', {
         error: error instanceof Error ? error.message : 'Unknown error',
         attachmentIds,
@@ -1182,7 +1178,7 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, errors, stats } = await loadAttachmentContent({
+          const { fileParts, stats } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromUrls,
             r2Bucket,
             db,
@@ -1227,7 +1223,13 @@ export async function prepareValidatedMessages(
             {
               error: error instanceof Error ? error.message : 'Unknown error',
               uploadIds: uploadIdsFromUrls,
-              stack: error instanceof Error ? error.stack : undefined,
+            },
+          );
+          logger?.error(
+            'Failed to load participant 1+ attachment content',
+            {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              uploadIds: uploadIdsFromUrls,
             },
           );
         }
@@ -1265,7 +1267,7 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, errors, stats } = await loadAttachmentContent({
+          const { fileParts, stats } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromParts,
             r2Bucket,
             db,
@@ -1309,7 +1311,13 @@ export async function prepareValidatedMessages(
             {
               error: error instanceof Error ? error.message : 'Unknown error',
               uploadIds: uploadIdsFromParts,
-              stack: error instanceof Error ? error.stack : undefined,
+            },
+          );
+          logger?.error(
+            'Failed to load participant 1+ uploadId attachment content',
+            {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              uploadIds: uploadIdsFromParts,
             },
           );
         }

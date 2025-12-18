@@ -569,29 +569,26 @@ export async function deleteStreamBuffer(
  * 3. Stream new chunks to client in real-time
  * 4. Complete when stream is marked as COMPLETED or FAILED
  *
- * ✅ FIX: Added "no new data" timeout to detect dead streams
- * If no new chunks arrive within noNewDataTimeoutMs, assume original stream
- * is dead and send a synthetic finish event so frontend can handle recovery.
+ * ✅ FIX: Uses push-based polling in start() instead of pull()
+ * ReadableStream's pull() is only called when consumer needs data, which
+ * doesn't work for continuous polling. The start() method now runs the
+ * polling loop directly.
  *
  * @param streamId - Stream identifier (format: {threadId}_r{roundNumber}_p{participantIndex})
  * @param env - Cloudflare environment bindings
  * @param pollIntervalMs - How often to check for new chunks (default 100ms)
  * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
- * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 10 seconds)
+ * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 30 seconds for reasoning models)
  */
 export function createLiveParticipantResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
   maxPollDurationMs = 5 * 60 * 1000,
-  noNewDataTimeoutMs = 10 * 1000,
+  noNewDataTimeoutMs = 30 * 1000,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
-  let lastChunkIndex = 0;
-  const startTime = Date.now();
-  let lastNewDataTime = Date.now();
   let isClosed = false;
-  let sentSyntheticFinish = false;
 
   // Helper to safely close controller (handles already-closed state)
   const safeClose = (
@@ -628,6 +625,10 @@ export function createLiveParticipantResumeStream(
 
   return new ReadableStream({
     async start(controller) {
+      let lastChunkIndex = 0;
+      const startTime = Date.now();
+      let lastNewDataTime = Date.now();
+
       try {
         // Send initial buffered chunks
         const initialChunks = await getStreamChunks(streamId, env);
@@ -639,83 +640,76 @@ export function createLiveParticipantResumeStream(
             }
           }
           lastChunkIndex = initialChunks.length;
-        }
-
-        // Check if already complete
-        const metadata = await getStreamMetadata(streamId, env);
-        if (
-          metadata?.status === StreamStatuses.COMPLETED
-          || metadata?.status === StreamStatuses.FAILED
-        ) {
-          safeClose(controller);
-        }
-      } catch {
-        safeClose(controller);
-      }
-    },
-
-    async pull(controller) {
-      if (isClosed) {
-        return;
-      }
-
-      try {
-        // Check timeout
-        if (Date.now() - startTime > maxPollDurationMs) {
-          safeClose(controller);
-          return;
-        }
-
-        // Poll for new chunks
-        const chunks = await getStreamChunks(streamId, env);
-        const metadata = await getStreamMetadata(streamId, env);
-
-        // Send any new chunks
-        if (chunks && chunks.length > lastChunkIndex) {
-          for (let i = lastChunkIndex; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            if (chunk) {
-              if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
-                return; // Client disconnected
-              }
-            }
-          }
-          lastChunkIndex = chunks.length;
-          // ✅ FIX: Reset the "no new data" timer when we receive new chunks
+          // ✅ FIX: Update lastNewDataTime after sending initial chunks
           lastNewDataTime = Date.now();
         }
 
-        // Check if stream is complete
+        // Check if already complete
+        const initialMetadata = await getStreamMetadata(streamId, env);
         if (
-          metadata?.status === StreamStatuses.COMPLETED
-          || metadata?.status === StreamStatuses.FAILED
+          initialMetadata?.status === StreamStatuses.COMPLETED
+          || initialMetadata?.status === StreamStatuses.FAILED
         ) {
           safeClose(controller);
           return;
         }
 
-        // ✅ FIX: Check if original stream appears to be dead (no new data for a while)
-        // This handles the case where user refreshed mid-stream and the original
-        // stream process died. We send a synthetic finish event so the AI SDK
-        // knows to call onFinish and the frontend can handle recovery.
-        const timeSinceLastNewData = Date.now() - lastNewDataTime;
-        if (timeSinceLastNewData > noNewDataTimeoutMs && !sentSyntheticFinish) {
-          sentSyntheticFinish = true;
+        // ✅ PUSH-BASED POLLING: Run polling loop directly in start()
+        // This ensures continuous polling regardless of consumer pull behavior
+        // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified by safeClose/safeEnqueue closures
+        while (!isClosed) {
+          // Check max duration timeout
+          if (Date.now() - startTime > maxPollDurationMs) {
+            safeClose(controller);
+            return;
+          }
 
-          // ✅ AI SDK v5 FORMAT: Send synthetic finish event
-          // Format matches the SSE format used by other chunks (data: + JSON)
-          // The 'unknown' finishReason signals the stream was interrupted
-          // This allows AI SDK to call onFinish so frontend can handle recovery
-          const syntheticFinish = `data: {"type":"finish","finishReason":"unknown","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
-          safeEnqueue(controller, encoder.encode(syntheticFinish));
+          // Poll for new chunks
+          const chunks = await getStreamChunks(streamId, env);
+          const metadata = await getStreamMetadata(streamId, env);
 
-          // Close the stream after sending finish event
-          safeClose(controller);
-          return;
+          // Send any new chunks
+          if (chunks && chunks.length > lastChunkIndex) {
+            for (let i = lastChunkIndex; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              if (chunk) {
+                if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
+                  return; // Client disconnected
+                }
+              }
+            }
+            lastChunkIndex = chunks.length;
+            // Reset the "no new data" timer when we receive new chunks
+            lastNewDataTime = Date.now();
+          }
+
+          // Check if stream is complete
+          if (
+            metadata?.status === StreamStatuses.COMPLETED
+            || metadata?.status === StreamStatuses.FAILED
+          ) {
+            safeClose(controller);
+            return;
+          }
+
+          // Check if original stream appears to be dead (no new data for a while)
+          const timeSinceLastNewData = Date.now() - lastNewDataTime;
+          if (timeSinceLastNewData > noNewDataTimeoutMs) {
+            // ✅ AI SDK v5 FORMAT: Send synthetic finish event
+            // Format matches the SSE format used by other chunks (data: + JSON)
+            // The 'unknown' finishReason signals the stream was interrupted
+            // This allows AI SDK to call onFinish so frontend can handle recovery
+            const syntheticFinish = `data: {"type":"finish","finishReason":"unknown","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            safeEnqueue(controller, encoder.encode(syntheticFinish));
+
+            // Close the stream after sending finish event
+            safeClose(controller);
+            return;
+          }
+
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         }
-
-        // Wait before next poll
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       } catch {
         safeClose(controller);
       }

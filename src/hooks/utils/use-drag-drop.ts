@@ -34,7 +34,6 @@ export type UseDragDropReturn = {
  * @example
  * ```tsx
  * const { isDragging, dragHandlers } = useDragDrop((files) => {
- *   console.log('Files dropped:', files);
  * });
  *
  * return (

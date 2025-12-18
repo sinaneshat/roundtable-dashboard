@@ -1,11 +1,8 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
 import type React from 'react';
-import { Suspense } from 'react';
 
 import { redirectIfAuthenticated } from '@/app/auth/actions';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
-import { PageLoadingFallback } from '@/components/loading';
 import { getQueryClient } from '@/lib/data/query-client';
 
 // Force dynamic rendering - required because:
@@ -19,16 +16,13 @@ type AuthLayoutPageProps = {
   children: React.ReactNode;
 };
 
-function AuthLayoutContent({ children }: { children: React.ReactNode }) {
-  const t = useTranslations('states.loading');
-
-  return (
-    <Suspense fallback={<PageLoadingFallback text={t('authentication')} />}>
-      <AuthShowcaseLayout>{children}</AuthShowcaseLayout>
-    </Suspense>
-  );
-}
-
+/**
+ * Auth Flow Layout - Handles authenticated user redirects
+ *
+ * NOTE: No Suspense here - child components (AuthForm, etc.) have their own
+ * Suspense boundaries for client hooks per Next.js 15 requirements.
+ * Avoids double loading states.
+ */
 export default async function AuthLayoutPage({ children }: AuthLayoutPageProps) {
   // Redirect authenticated users to dashboard
   await redirectIfAuthenticated();
@@ -38,7 +32,7 @@ export default async function AuthLayoutPage({ children }: AuthLayoutPageProps) 
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <AuthLayoutContent>{children}</AuthLayoutContent>
+      <AuthShowcaseLayout>{children}</AuthShowcaseLayout>
     </HydrationBoundary>
   );
 }

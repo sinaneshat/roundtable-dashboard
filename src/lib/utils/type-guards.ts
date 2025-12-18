@@ -361,7 +361,6 @@ export function hasBillingCycleAnchor(
  *
  * if (isMessage(data)) {
  *   // data is now { id: string, content: string }
- *   console.log(data.id);
  * }
  * ```
  */
@@ -386,7 +385,6 @@ export function createZodGuard<T extends z.ZodType>(
  * const user = safeParse(UserSchema, data);
  * if (user) {
  *   // user is typed and validated
- *   console.log(user.email);
  * }
  * ```
  */

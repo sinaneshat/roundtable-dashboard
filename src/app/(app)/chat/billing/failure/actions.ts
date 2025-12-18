@@ -80,6 +80,7 @@ export async function capturePaymentFailure(searchParams?: {
       data: errorData,
     };
   } catch (error) {
+    console.error('[capturePaymentFailure] Failed to process payment failure details:', error);
     return {
       success: false,
       data: {

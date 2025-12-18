@@ -20,7 +20,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { FinishReasons, MESSAGE_STATUSES as MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {

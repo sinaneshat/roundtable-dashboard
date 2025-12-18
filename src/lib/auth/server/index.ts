@@ -124,6 +124,7 @@ export const auth = betterAuth({
           const { emailService } = await import('@/lib/email/ses-service');
           await emailService.sendMagicLink(email, url);
         } catch (error) {
+          console.error('Failed to send magic link email:', error);
           // Better Auth will show this error to the user
           const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
           throw new Error(`Unable to send login email: ${errorMessage}`);

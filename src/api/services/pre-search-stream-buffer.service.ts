@@ -335,6 +335,47 @@ export async function getPreSearchStreamChunks(
   }
 }
 
+/**
+ * Check if pre-search stream buffer is stale (no recent activity)
+ *
+ * A stream is considered stale if:
+ * - No chunks exist, OR
+ * - Last chunk timestamp > maxStaleMs ago
+ *
+ * @param streamId - Stream identifier
+ * @param env - Cloudflare environment bindings
+ * @param maxStaleMs - Maximum time since last chunk (default 5 seconds - fast detection)
+ * @returns true if stale (should restart), false if active
+ */
+export async function isPreSearchBufferStale(
+  streamId: string,
+  env: ApiEnv['Bindings'],
+  maxStaleMs = 5_000,
+): Promise<boolean> {
+  if (!env?.KV) {
+    return true; // No KV = treat as stale
+  }
+
+  try {
+    const chunks = await getPreSearchStreamChunks(streamId, env);
+
+    if (!chunks || chunks.length === 0) {
+      return true; // No chunks = stale
+    }
+
+    // Get last chunk timestamp
+    const lastChunk = chunks[chunks.length - 1];
+    if (!lastChunk?.timestamp) {
+      return true;
+    }
+
+    const timeSinceLastChunk = Date.now() - lastChunk.timestamp;
+    return timeSinceLastChunk > maxStaleMs;
+  } catch {
+    return true; // Error = treat as stale
+  }
+}
+
 // ============================================================================
 // Live Stream Resumption
 // ============================================================================
@@ -351,29 +392,26 @@ export async function getPreSearchStreamChunks(
 /**
  * Create a LIVE SSE streaming response that polls KV for new chunks
  *
- * ✅ FIX: Added "no new data" timeout to detect dead streams
- * If no new chunks arrive within noNewDataTimeoutMs, assume original stream
- * is dead and send a synthetic done event so frontend can handle recovery.
+ * ✅ FIX: Uses push-based polling in start() instead of pull()
+ * ReadableStream's pull() is only called when consumer needs data, which
+ * doesn't work for continuous polling. The start() method now runs the
+ * polling loop directly.
  *
  * @param streamId - Pre-search stream identifier
  * @param env - Cloudflare environment bindings
  * @param pollIntervalMs - How often to check for new chunks (default 100ms)
  * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
- * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 10 seconds)
+ * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 5 seconds - fast detection for better UX)
  */
 export function createLivePreSearchResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
   pollIntervalMs = 100,
   maxPollDurationMs = 5 * 60 * 1000,
-  noNewDataTimeoutMs = 10 * 1000,
+  noNewDataTimeoutMs = 5 * 1000,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
-  let lastChunkIndex = 0;
-  const startTime = Date.now();
-  let lastNewDataTime = Date.now();
   let isClosed = false;
-  let sentSyntheticDone = false;
 
   // Helper to safely close controller (handles already-closed state)
   const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -405,6 +443,10 @@ export function createLivePreSearchResumeStream(
 
   return new ReadableStream({
     async start(controller) {
+      let lastChunkIndex = 0;
+      const startTime = Date.now();
+      let lastNewDataTime = Date.now();
+
       try {
         // Send initial buffered chunks
         const initialChunks = await getPreSearchStreamChunks(streamId, env);
@@ -417,76 +459,69 @@ export function createLivePreSearchResumeStream(
             }
           }
           lastChunkIndex = initialChunks.length;
-        }
-
-        // Check if already complete
-        const metadata = await getPreSearchStreamMetadata(streamId, env);
-        if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
-          safeClose(controller);
-        }
-      } catch {
-        safeClose(controller);
-      }
-    },
-
-    async pull(controller) {
-      if (isClosed) {
-        return;
-      }
-
-      try {
-        // Check timeout
-        if (Date.now() - startTime > maxPollDurationMs) {
-          safeClose(controller);
-          return;
-        }
-
-        // Poll for new chunks
-        const chunks = await getPreSearchStreamChunks(streamId, env);
-        const metadata = await getPreSearchStreamMetadata(streamId, env);
-
-        // Send any new chunks
-        if (chunks && chunks.length > lastChunkIndex) {
-          for (let i = lastChunkIndex; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            if (chunk) {
-              const sseData = `event: ${chunk.event}\ndata: ${chunk.data}\n\n`;
-              if (!safeEnqueue(controller, encoder.encode(sseData))) {
-                return; // Client disconnected
-              }
-            }
-          }
-          lastChunkIndex = chunks.length;
-          // ✅ FIX: Reset the "no new data" timer when we receive new chunks
+          // ✅ FIX: Update lastNewDataTime after sending initial chunks
           lastNewDataTime = Date.now();
         }
 
-        // Check if stream is complete
-        if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+        // Check if already complete
+        const initialMetadata = await getPreSearchStreamMetadata(streamId, env);
+        if (initialMetadata?.status === StreamStatuses.COMPLETED || initialMetadata?.status === StreamStatuses.FAILED) {
           safeClose(controller);
           return;
         }
 
-        // ✅ FIX: Check if original stream appears to be dead (no new data for a while)
-        // This handles the case where user refreshed mid-stream and the original
-        // stream process died. We send a synthetic done event so the frontend
-        // knows the pre-search ended (possibly incomplete).
-        const timeSinceLastNewData = Date.now() - lastNewDataTime;
-        if (timeSinceLastNewData > noNewDataTimeoutMs && !sentSyntheticDone) {
-          sentSyntheticDone = true;
+        // ✅ PUSH-BASED POLLING: Run polling loop directly in start()
+        // This ensures continuous polling regardless of consumer pull behavior
+        // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified by safeClose/safeEnqueue closures
+        while (!isClosed) {
+          // Check max duration timeout
+          if (Date.now() - startTime > maxPollDurationMs) {
+            safeClose(controller);
+            return;
+          }
 
-          // ✅ PRE-SEARCH SSE FORMAT: Send synthetic done event
-          // This signals to the frontend that the stream ended (interrupted)
-          const syntheticDone = `event: done\ndata: {"interrupted":true,"reason":"stream_timeout"}\n\n`;
-          safeEnqueue(controller, encoder.encode(syntheticDone));
+          // Poll for new chunks
+          const chunks = await getPreSearchStreamChunks(streamId, env);
+          const metadata = await getPreSearchStreamMetadata(streamId, env);
 
-          // Close the stream after sending done event
-          safeClose(controller);
-          return;
+          // Send any new chunks
+          if (chunks && chunks.length > lastChunkIndex) {
+            for (let i = lastChunkIndex; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              if (chunk) {
+                const sseData = `event: ${chunk.event}\ndata: ${chunk.data}\n\n`;
+                if (!safeEnqueue(controller, encoder.encode(sseData))) {
+                  return; // Client disconnected
+                }
+              }
+            }
+            lastChunkIndex = chunks.length;
+            // Reset the "no new data" timer when we receive new chunks
+            lastNewDataTime = Date.now();
+          }
+
+          // Check if stream is complete
+          if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+            safeClose(controller);
+            return;
+          }
+
+          // Check if original stream appears to be dead (no new data for a while)
+          const timeSinceLastNewData = Date.now() - lastNewDataTime;
+          if (timeSinceLastNewData > noNewDataTimeoutMs) {
+            // ✅ PRE-SEARCH SSE FORMAT: Send synthetic done event
+            // This signals to the frontend that the stream ended (interrupted)
+            const syntheticDone = `event: done\ndata: {"interrupted":true,"reason":"stream_timeout"}\n\n`;
+            safeEnqueue(controller, encoder.encode(syntheticDone));
+
+            // Close the stream after sending done event
+            safeClose(controller);
+            return;
+          }
+
+          // Wait before next poll
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         }
-
-        // Wait before next poll
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       } catch {
         safeClose(controller);
       }

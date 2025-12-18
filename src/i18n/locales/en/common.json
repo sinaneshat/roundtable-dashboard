@@ -339,6 +339,8 @@
       "modelsDeselectedDescription": "{models} cannot process images/PDFs and were deselected",
       "presetNoVisionAll": "All models in this preset cannot process images/PDFs. Remove visual files to use this preset.",
       "presetNoVisionPartial": "{count} model(s) cannot process images/PDFs and will be excluded.",
+      "presetModelsExcluded": "Models Excluded",
+      "presetModelsExcludedDescription": "{count} model(s) without vision were excluded from preset",
       "minRequired": "Min 3 required",
       "yourPlan": "Your Plan",
       "mostPopular": "Most Popular",
@@ -766,7 +768,9 @@
       "removeAttachment": "Remove attachment",
       "attachmentUploadFailed": "Upload failed",
       "noModelsSelected": "Select at least 1 model to send a message",
-      "messageTooLong": "Message too long. Please shorten to send."
+      "messageTooLong": "Message too long. Please shorten to send.",
+      "send": "Send message",
+      "submitting": "Sending..."
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {

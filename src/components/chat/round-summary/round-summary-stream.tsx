@@ -1,6 +1,5 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef } from 'react';
 
@@ -13,7 +12,6 @@ import type {
 import { RoundSummaryAIContentSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { ANIMATION_DURATION, ANIMATION_EASE } from '@/components/ui/motion';
 import { useBoolean } from '@/hooks/utils';
 import { hasSummaryData } from '@/lib/utils/summary-utils';
 import { getSummaryResumeService } from '@/services/api';
@@ -631,36 +629,26 @@ function RoundSummaryStreamComponent({
   // ✅ Use both DB status AND useObject's isLoading for accurate streaming state
   const isCurrentlyStreaming = summary.status === MessageStatuses.STREAMING || isStreamLoading;
 
+  // ✅ PROGRESSIVE STREAMING: Show content immediately as it arrives
+  // No nested animations - scroll animation at parent level handles entrance
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      {isPendingWithNoData
-        ? (
-            <motion.div
-              key="summary-loader"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: ANIMATION_DURATION.fast, ease: ANIMATION_EASE.standard }}
-              className="flex items-center justify-center py-4 text-muted-foreground text-sm"
-            >
-              <TextShimmer>{isAutoRetrying.value ? t('autoRetryingSummary') : t('pendingSummary')}</TextShimmer>
-            </motion.div>
-          )
-        : (
-            <motion.div
-              key="summary-content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: ANIMATION_DURATION.normal, ease: ANIMATION_EASE.enter }}
-            >
-              <RoundSummaryText
-                summary={summaryText}
-                metrics={metrics}
-                isStreaming={isCurrentlyStreaming}
-              />
-            </motion.div>
-          )}
-    </AnimatePresence>
+    <div className="space-y-2">
+      {/* Show shimmer loader ONLY when truly no data yet */}
+      {isPendingWithNoData && (
+        <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
+          <TextShimmer>{isAutoRetrying.value ? t('autoRetryingSummary') : t('pendingSummary')}</TextShimmer>
+        </div>
+      )}
+
+      {/* Show content as soon as ANY partial data exists - streams in progressively */}
+      {hasData && (
+        <RoundSummaryText
+          summary={summaryText}
+          metrics={metrics}
+          isStreaming={isCurrentlyStreaming}
+        />
+      )}
+    </div>
   );
 }
 export const RoundSummaryStream = memo(RoundSummaryStreamComponent, (prevProps, nextProps) => {

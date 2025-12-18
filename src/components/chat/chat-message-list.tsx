@@ -1,7 +1,7 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
@@ -16,7 +16,7 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ScrollAwareParticipant, ScrollAwareUserMessage } from '@/components/ui/motion';
+import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@/components/ui/motion';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
@@ -120,7 +120,8 @@ function ParticipantHeader({
         if (mounted)
           setColorClass(color);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('[ChatMessageList] Failed to extract color from image:', error);
         if (mounted)
           setColorClass('muted-foreground');
       });
@@ -493,8 +494,10 @@ type ChatMessageListProps = {
   maxContentHeight?: number;
   /** Skip all entrance animations (for demo that has already completed) */
   skipEntranceAnimations?: boolean;
-  /** ✅ BUG FIX: Set of round numbers that have complete summaries.
-   * Rounds in this set should NEVER show pending cards. */
+  /**
+   * ✅ BUG FIX: Set of round numbers that have complete summaries.
+   * Rounds in this set should NEVER show pending cards.
+   */
   completedRoundNumbers?: Set<number>;
 };
 export const ChatMessageList = memo(
@@ -528,28 +531,15 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
-    // ✅ ANIMATION: Track animated messages to prevent re-animation
-    const animatedMessagesRef = useRef<Set<string>>(new Set());
-    const isInitialLoadRef = useRef(true);
-
-    // Mark initial messages as "already animated" on first render
-    if (isInitialLoadRef.current && messages.length > 0) {
-      isInitialLoadRef.current = false;
-      messages.forEach((msg) => {
-        animatedMessagesRef.current.add(msg.id);
-      });
-    }
-
-    // Helper to check if message should animate
-    const shouldAnimateMessage = (messageId: string): boolean => {
+    // ✅ ANIMATION: Using whileInView for scroll-triggered animations
+    // The viewport={{ once: true }} in motion components handles "don't re-animate"
+    // So we always return true here unless explicitly disabled
+    const shouldAnimateMessage = (_messageId: string): boolean => {
       // Skip all animations when explicitly requested (e.g., demo already completed)
       if (skipEntranceAnimations) {
         return false;
       }
-      if (animatedMessagesRef.current.has(messageId)) {
-        return false; // Already animated
-      }
-      animatedMessagesRef.current.add(messageId);
+      // Always animate - whileInView with once:true handles scroll trigger
       return true;
     };
 
@@ -723,8 +713,12 @@ export const ChatMessageList = memo(
     // This is needed to decide whether to skip messages from messageGroups or render them there
     // When all participants have content, we should NOT skip messages (render in messageGroups)
     // When not all have content, we SHOULD skip messages (render in pending cards section)
+    //
+    // ✅ BUG FIX: Must check content even when isStreaming=false but streamingRoundNumber is set
+    // After page refresh with completed round, isStreaming=false but streamingRoundNumber may still
+    // be set (not cleared). If we return false here, messages get skipped incorrectly.
     const allStreamingRoundParticipantsHaveContent = useMemo(() => {
-      if (!isStreaming || _streamingRoundNumber === null || participants.length === 0) {
+      if (_streamingRoundNumber === null || participants.length === 0) {
         return false;
       }
 
@@ -742,7 +736,7 @@ export const ChatMessageList = memo(
       const enabledParticipants = getEnabledParticipants(participants);
 
       return allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
-    }, [deduplicatedMessages, isStreaming, _streamingRoundNumber, participants]);
+    }, [deduplicatedMessages, _streamingRoundNumber, participants]);
 
     // Group consecutive messages by participant for sticky headers
     const messageGroups = useMemo((): MessageGroup[] => {
@@ -975,8 +969,12 @@ export const ChatMessageList = memo(
 
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
                 {/* ✅ mt-8 provides consistent spacing from user message content to PreSearchCard */}
+                {/* ✅ ScrollFromTop wraps card for scroll-triggered slide-down animation */}
                 {preSearch && (
-                  <div className="mt-8">
+                  <ScrollFromTop
+                    skipAnimation={skipEntranceAnimations}
+                    className="mt-8"
+                  >
                     <PreSearchCard
                       key={`pre-search-${roundNumber}`}
                       threadId={_threadId!}
@@ -995,7 +993,7 @@ export const ChatMessageList = memo(
                       demoOpen={demoPreSearchOpen}
                       demoShowContent={demoPreSearchOpen ? preSearch.searchData !== undefined : undefined}
                     />
-                  </div>
+                  </ScrollFromTop>
                 )}
 
                 {/* ✅ EAGER RENDERING: Show pending participant placeholders when waiting for pre-search or streaming
@@ -1177,18 +1175,24 @@ export const ChatMessageList = memo(
 
           // Assistant group with header inside message box
           if (group.type === 'assistant-group') {
+            const firstMessageId = group.messages[0]?.message.id || `group-${groupIndex}`;
             return (
-              <AssistantGroupCard
+              <ScrollAwareParticipant
                 key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
-                group={group}
-                groupIndex={groupIndex}
-                findModel={findModel}
-                userTier={userTier}
-                hideMetadata={hideMetadata}
-                t={t}
-                keyForMessage={keyForMessage}
-                maxContentHeight={maxContentHeight}
-              />
+                index={0}
+                skipAnimation={!shouldAnimateMessage(firstMessageId)}
+              >
+                <AssistantGroupCard
+                  group={group}
+                  groupIndex={groupIndex}
+                  findModel={findModel}
+                  userTier={userTier}
+                  hideMetadata={hideMetadata}
+                  t={t}
+                  keyForMessage={keyForMessage}
+                  maxContentHeight={maxContentHeight}
+                />
+              </ScrollAwareParticipant>
             );
           }
 

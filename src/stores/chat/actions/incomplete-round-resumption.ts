@@ -35,7 +35,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
@@ -44,8 +44,25 @@ import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib
 import { getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantModelIds } from '@/lib/utils/participant';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
+import {
+  getParticipantCompletionStatus,
+  isMessageComplete,
+  logParticipantCompletionStatus,
+} from '../utils/participant-completion-gate';
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
 import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/pre-search-execution';
+
+// ============================================================================
+// DEBUG: Debounced logger for resumption debugging
+// ============================================================================
+const debugLogTimers: Record<string, NodeJS.Timeout> = {};
+function debugLog(key: string, data: Record<string, unknown>, debounceMs = 500) {
+  // eslint-disable-next-line antfu/if-newline
+  if (debugLogTimers[key]) clearTimeout(debugLogTimers[key]);
+  debugLogTimers[key] = setTimeout(() => {
+    // Intentionally empty - debug logging removed
+  }, debounceMs);
+}
 
 // ============================================================================
 // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL NEEDED
@@ -176,6 +193,8 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Actions for phase-based resumption
     clearStreamResumption: s.clearStreamResumption,
     setIsCreatingSummary: s.setIsCreatingSummary,
+    // ✅ PHASE TRANSITION FIX: Clear pre-search state when transitioning
+    transitionToParticipantsPhase: s.transitionToParticipantsPhase,
   })));
 
   // ============================================================================
@@ -185,10 +204,16 @@ export function useIncompleteRoundResumption(
   const orphanedPreSearchRecoveryAttemptedRef = useRef<string | null>(null);
   const orphanedPreSearchUIRecoveryRef = useRef<string | null>(null);
   const activeStreamCheckRef = useRef<string | null>(null);
-  const activeStreamCheckCompleteRef = useRef(false);
+  // ✅ FIX: Use state instead of ref for activeStreamCheckComplete
+  // Refs don't trigger re-renders, so the main resumption effect never re-runs
+  // after the 100ms timeout sets the ref. Using state ensures re-render.
+  const [activeStreamCheckComplete, setActiveStreamCheckComplete] = useState(false);
   // ✅ UNIFIED PHASES: Phase-based resumption tracking
   const preSearchPhaseResumptionAttemptedRef = useRef<string | null>(null);
   const summarizerPhaseResumptionAttemptedRef = useRef<string | null>(null);
+  // ✅ FAILED TRIGGER RECOVERY: Track trigger state for retry detection
+  const wasWaitingRef = useRef(false);
+  const sawStreamingRef = useRef(false);
 
   // Calculate incomplete round state (moved up for use in pending round recovery)
   const enabledParticipants = getEnabledParticipants(participants);
@@ -233,6 +258,14 @@ export function useIncompleteRoundResumption(
     // Mark as checked BEFORE evaluating condition (not after)
     staleWaitingStateRef.current = true;
 
+    // ✅ PREFILL FIX: Don't clear state if it was just prefilled from server
+    // When prefillStreamResumptionState runs, it sets waitingToStartStreaming=true
+    // and streamResumptionPrefilled=true. This is NOT stale state - it's fresh
+    // resumption state that should be preserved for the resumption effects to handle.
+    if (streamResumptionPrefilled) {
+      return;
+    }
+
     // Detect stale state: waiting but no pending message and not streaming
     // This only fires if waitingToStartStreaming was ALREADY true at mount time
     // (leftover from crashed session), not if resumption hook just set it
@@ -247,7 +280,7 @@ export function useIncompleteRoundResumption(
       actions.setStreamingRoundNumber(null);
       actions.setCurrentParticipantIndex(0);
     }
-  }, [waitingToStartStreaming, pendingMessage, isStreaming, actions]);
+  }, [waitingToStartStreaming, pendingMessage, isStreaming, streamResumptionPrefilled, actions]);
 
   // ============================================================================
   // ✅ STALE isStreaming FIX: Clear stale isStreaming on page refresh
@@ -363,53 +396,62 @@ export function useIncompleteRoundResumption(
         const modelId = assistantMetadata?.model;
 
         if (msgRound === currentRoundNumber && participantIndex !== null) {
-          // ✅ FIX: Check if message is actually complete (not still streaming)
-          // AI SDK v5 marks parts with state: 'streaming' while content is being generated
-          // If any part is still streaming, the message is incomplete and participant
-          // has NOT fully responded - we should resume their stream, not trigger next participant
-          const isStillStreaming = msg.parts?.some(
+          // ✅ STRICT COMPLETION GATE: Use isMessageComplete() as the single source of truth
+          // This function checks:
+          // 1. No parts with `state: 'streaming'`
+          // 2. Has text content OR has finishReason
+          //
+          // A message is ONLY counted as "responded" if it passes this strict check.
+          // Messages with streaming parts are NEVER counted as "responded" regardless
+          // of isStreaming flag - they are either "in progress" or not counted.
+          const messageComplete = isMessageComplete(msg);
+
+          // Check for streaming parts (for in-progress detection)
+          const hasStreamingParts = msg.parts?.some(
             p => 'state' in p && p.state === 'streaming',
           ) || false;
 
           // ✅ FIX: Check for truly empty interrupted responses
           // When a stream is interrupted (e.g., page refresh), the backend sends a synthetic
           // finish event with finishReason: 'unknown' and 0 tokens.
-          //
-          // Cases to handle:
-          // 1. Response has actual content → COUNT as responded (don't retry)
-          // 2. Response is empty with finishReason: 'unknown' → DON'T count (retry)
-          // 3. Response is empty with NO finishReason → DON'T count (retry)
-          //    This happens when page refresh occurs before ANY finish event is received
-          //
-          // Check if message has actual text content (not just empty or only whitespace)
           const hasTextContent = msg.parts?.some(
-            p => p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0,
+            p => (p.type === 'text' || p.type === 'reasoning')
+              && 'text' in p
+              && typeof p.text === 'string'
+              && p.text.trim().length > 0,
           ) || false;
 
-          // ✅ FIX: Also check for messages with empty parts (no content generated at all)
-          // This handles the case where page refresh occurred during streaming setup
-          // before any text-delta events were processed into message parts
           const isEmptyResponse = !hasTextContent && (!msg.parts || msg.parts.length === 0);
-
           const isEmptyInterruptedResponse = isEmptyResponse
             || (assistantMetadata?.finishReason === FinishReasons.UNKNOWN
               && assistantMetadata?.usage?.totalTokens === 0
               && !hasTextContent);
 
-          // ✅ AI SDK RESUME FIX: Track participants with streaming parts
-          // These have partial content from AI SDK resume - accept as-is, don't regenerate
-          if (isStillStreaming && hasTextContent) {
-            inProgressParticipantIndices.add(participantIndex);
-            if (modelId) {
-              respondedModelIds.add(modelId);
-            }
-          // Only count as responded if message has content (no empty interrupted responses)
-          } else if (!isStillStreaming && !isEmptyInterruptedResponse && hasTextContent) {
+          if (messageComplete && !isEmptyInterruptedResponse) {
+            // ✅ Message is COMPLETE: All parts are done, has content or finishReason
+            // Count as "responded" - this participant has finished
             respondedParticipantIndices.add(participantIndex);
             if (modelId) {
               respondedModelIds.add(modelId);
             }
+          } else if (hasStreamingParts && hasTextContent) {
+            // ✅ Message has STREAMING parts with content
+            // This participant is "in progress" - the message exists with partial content
+            //
+            // ALWAYS count as "in progress" regardless of isStreaming flag because:
+            // - We don't want to re-trigger this participant (content already exists)
+            // - But we also don't count as "responded" (message isn't complete)
+            //
+            // The SUMMARY CREATION code has its own strict completion gate that checks
+            // for streaming parts via isMessageComplete(), so the summary won't be
+            // created prematurely even if all participants are "accounted for".
+            inProgressParticipantIndices.add(participantIndex);
+            if (modelId) {
+              respondedModelIds.add(modelId);
+            }
           }
+          // If message is incomplete without streaming parts (empty or interrupted),
+          // don't count it - participant needs to be re-triggered
         }
       }
     });
@@ -452,19 +494,52 @@ export function useIncompleteRoundResumption(
   // ✅ INFINITE LOOP FIX: Don't treat round as incomplete during active submission
   // ✅ AI SDK RESUME FIX: Account for in-progress participants (from AI SDK resume)
   // ✅ OPTIMISTIC MESSAGE FIX: Don't resume if last user message is optimistic
+  // ✅ NON-INITIAL ROUND FIX: Allow resumption with stale optimistic if prefilled
   // A round is incomplete only if there are participants that need triggering:
   // Total - Responded - InProgress > 0
   const accountedParticipants = respondedParticipantIndices.size + inProgressParticipantIndices.size;
+
+  // ✅ NON-INITIAL ROUND FIX: When streamResumptionPrefilled is true, the optimistic
+  // message is stale from Zustand persist, not from an active submission. The pre-search
+  // might have completed (proving the submission was received), but the optimistic message
+  // wasn't replaced because messages weren't re-initialized from SSR.
+  // In this case, allow resumption to proceed.
+  //
+  // ✅ PRE-SEARCH EVIDENCE FIX: Even if prefill didn't happen (server didn't detect
+  // incomplete round because user message wasn't saved), if there's a COMPLETE pre-search
+  // for the current round, that proves the submission was received. The user message race
+  // condition (not saved to DB) shouldn't block resumption.
+  const preSearchIndicatesSubmissionReceived = Array.isArray(preSearches)
+    && currentRoundNumber !== null
+    && preSearches.some(ps =>
+      ps.roundNumber === currentRoundNumber && ps.status === MessageStatuses.COMPLETE,
+    );
+
+  const blockOnOptimistic = lastUserMessageIsOptimistic
+    && !streamResumptionPrefilled
+    && !preSearchIndicatesSubmissionReceived;
+
   const isIncomplete
     = enabled
       && !isStreaming
       && !waitingToStartStreaming
       && !isSubmissionInProgress // Don't interfere with normal submissions
-      && !lastUserMessageIsOptimistic // Don't resume optimistic submissions
+      && !blockOnOptimistic // Don't resume active optimistic, but allow stale during resumption
       && currentRoundNumber !== null
       && enabledParticipants.length > 0
       && accountedParticipants < enabledParticipants.length
       && !participantsChangedSinceRound;
+
+  // DEBUG: Log isIncomplete calculation
+  debugLog('INCOMPLETE', {
+    isIncomplete,
+    responded: respondedParticipantIndices.size,
+    inProgress: inProgressParticipantIndices.size,
+    total: enabledParticipants.length,
+    round: currentRoundNumber,
+    streaming: isStreaming,
+    waiting: waitingToStartStreaming,
+  });
 
   // Find the first missing participant index
   // ✅ AI SDK RESUME FIX: Skip BOTH responded AND in-progress participants
@@ -497,7 +572,7 @@ export function useIncompleteRoundResumption(
 
   useEffect(() => {
     activeStreamCheckRef.current = null;
-    activeStreamCheckCompleteRef.current = false;
+    setActiveStreamCheckComplete(false);
     orphanedPreSearchUIRecoveryRef.current = null;
     orphanedPreSearchRecoveryAttemptedRef.current = null;
     resumptionAttemptedRef.current = null;
@@ -506,6 +581,9 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Reset phase-based resumption refs
     preSearchPhaseResumptionAttemptedRef.current = null;
     summarizerPhaseResumptionAttemptedRef.current = null;
+    // ✅ FAILED TRIGGER RECOVERY: Reset trigger tracking refs
+    wasWaitingRef.current = false;
+    sawStreamingRef.current = false;
   }, [threadId]);
 
   // ============================================================================
@@ -515,7 +593,7 @@ export function useIncompleteRoundResumption(
   // 2. Effects run in declaration order
   // 3. Signature reset runs FIRST, clears refs if signature changed
   // 4. Immediate placeholder runs SECOND, sees cleared refs, proceeds to set state
-  // 5. Main resumption effect runs THIRD, sees activeStreamCheckCompleteRef=true, proceeds
+  // 5. Main resumption effect runs THIRD, sees activeStreamCheckComplete=true, proceeds
   //
   // Previously: immediate placeholder ran first, returned early, signature reset ran second
   // and cleared refs, but by then immediate placeholder already returned early!
@@ -533,8 +611,18 @@ export function useIncompleteRoundResumption(
       // But only reset if we're not currently in the middle of resumption
       if (!waitingToStartStreaming && !isStreaming) {
         activeStreamCheckRef.current = null;
-        activeStreamCheckCompleteRef.current = false;
-        resumptionAttemptedRef.current = null;
+        setActiveStreamCheckComplete(false);
+        // ✅ BUG FIX: Do NOT reset resumptionAttemptedRef here!
+        // This was causing an infinite loop:
+        // 1. TRIGGER fires → sets waitingToStartStreaming: true
+        // 2. isIncomplete becomes false (due to !waitingToStartStreaming check)
+        // 3. Signature changes → this effect resets resumptionAttemptedRef = null
+        // 4. waitingToStartStreaming is cleared somewhere → isIncomplete becomes true
+        // 5. TRIGGER fires again because ref was reset → infinite loop!
+        //
+        // resumptionAttemptedRef should ONLY be reset on navigation (threadId change)
+        // which is handled by the ref reset effect above.
+        // resumptionAttemptedRef.current = null; // REMOVED
       }
     }
 
@@ -570,10 +658,19 @@ export function useIncompleteRoundResumption(
       actions.setCurrentParticipantIndex(nextParticipantIndex);
     }
 
-    // Mark as checked - we've made a decision (either incomplete or complete)
-    // AI SDK handles stream resumption via resume:true in useChat
+    // Mark thread as checked
     activeStreamCheckRef.current = threadId;
-    activeStreamCheckCompleteRef.current = true;
+
+    // ✅ RACE CONDITION FIX: Delay marking as complete to allow AI SDK to start resuming
+    // AI SDK's resume:true causes a GET call on mount. If there's data to resume,
+    // isStreaming will become true. We delay briefly to give that a chance to happen
+    // before allowing the main trigger effect to run.
+    // ✅ FIX: Use state setter instead of ref to ensure effect re-runs after timeout
+    const timeoutId = setTimeout(() => {
+      setActiveStreamCheckComplete(true);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
   }, [enabled, threadId, isIncomplete, currentRoundNumber, nextParticipantIndex, actions]);
 
   // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT
@@ -733,6 +830,16 @@ export function useIncompleteRoundResumption(
 
   // Effect to trigger resumption
   useEffect(() => {
+    // DEBUG: Log effect state (debounced)
+    debugLog('EFFECT', {
+      streaming: isStreaming,
+      waiting: waitingToStartStreaming,
+      incomplete: isIncomplete,
+      nextP: nextParticipantIndex,
+      round: currentRoundNumber,
+      ref: resumptionAttemptedRef.current,
+    });
+
     // Skip if not enabled or already streaming
     if (!enabled || isStreaming || waitingToStartStreaming) {
       return;
@@ -755,8 +862,8 @@ export function useIncompleteRoundResumption(
     }
 
     // ✅ OPTIMIZED: Wait for initial check to complete (no longer makes network call)
-    // The check effect sets activeStreamCheckCompleteRef.current = true synchronously
-    if (!activeStreamCheckCompleteRef.current) {
+    // ✅ FIX: Using state instead of ref ensures effect re-runs after 100ms timeout
+    if (!activeStreamCheckComplete) {
       return;
     }
 
@@ -769,16 +876,28 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // Skip if already attempted for this thread
-    if (resumptionAttemptedRef.current === threadId) {
-      return;
-    }
-
     // Use local calculation for next participant (no longer depends on backend ref)
     const effectiveNextParticipant = nextParticipantIndex;
 
+    // Skip if already attempted for this specific participant
+    // ✅ FIX: Track per-participant, not per-thread, so we can trigger subsequent participants
+    // Previously used threadId which blocked ALL subsequent participants after first trigger
+    const resumptionKey = `${threadId}_r${currentRoundNumber}_p${effectiveNextParticipant}`;
+    if (resumptionAttemptedRef.current === resumptionKey) {
+      return;
+    }
+
     // Skip if round is complete
     if (!isIncomplete || effectiveNextParticipant === null || currentRoundNumber === null) {
+      return;
+    }
+
+    // ✅ FIX: Wait for in-progress participants (AI SDK actively resuming) to finish
+    // When page refreshes mid-stream, AI SDK resumes the interrupted stream.
+    // We should NOT trigger new participants until that resume completes.
+    // Otherwise: TRIGGER fires → AI SDK resume sets isStreaming=true → "clear waiting"
+    // effect runs → waitingToStartStreaming=false → new participant never actually starts
+    if (inProgressParticipantIndices.size > 0) {
       return;
     }
 
@@ -864,8 +983,15 @@ export function useIncompleteRoundResumption(
       // Allow triggering to resume/retry this participant
     }
 
-    // Mark as attempted to prevent duplicate triggers
-    resumptionAttemptedRef.current = threadId;
+    // Mark as attempted to prevent duplicate triggers for this specific participant
+    resumptionAttemptedRef.current = resumptionKey;
+
+    // DEBUG: Log when resumption triggers participant
+    debugLog('TRIGGER', {
+      round: currentRoundNumber,
+      nextP: effectiveNextParticipant,
+      key: resumptionKey,
+    });
 
     // Set up store state for resumption
     // The provider's effect watching nextParticipantToTrigger will trigger the participant
@@ -897,10 +1023,52 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Include phase state for proper phase-based resumption
     currentResumptionPhase,
     streamResumptionPrefilled,
-    // Note: refs (activeStreamCheckCompleteRef, backendNextParticipantRef) are not in deps
-    // because they don't cause re-renders - the effect checks their values when it runs
+    // ✅ FIX: Now using state instead of ref, so it's in deps and triggers re-runs
+    activeStreamCheckComplete,
     actions,
   ]);
+
+  // ============================================================================
+  // ✅ FAILED TRIGGER RECOVERY: Clear resumptionAttemptedRef when trigger fails
+  // ============================================================================
+  // Problem: When continueFromParticipant() is called but returns early (e.g., due
+  // to isTriggeringRef being stuck), the resumptionAttemptedRef is already set.
+  // Later when STALE TRIGGER RECOVERY clears state, waitingToStartStreaming goes
+  // false but resumptionAttemptedRef prevents retry.
+  //
+  // Detection: waitingToStartStreaming was set (by us) then cleared (by timeout
+  // or stale recovery) WITHOUT isStreaming ever becoming true.
+  //
+  // Fix: Track if we set waitingToStartStreaming. If it transitions to false
+  // without streaming starting, clear resumptionAttemptedRef to allow retry.
+  // ============================================================================
+  useEffect(() => {
+    if (waitingToStartStreaming) {
+      // We just set waitingToStartStreaming - track it
+      wasWaitingRef.current = true;
+      sawStreamingRef.current = false;
+    } else if (wasWaitingRef.current) {
+      // waitingToStartStreaming just went false
+      wasWaitingRef.current = false;
+
+      if (!sawStreamingRef.current && !isStreaming) {
+        // Trigger failed - waitingToStartStreaming was cleared but streaming never started
+        // Clear resumptionAttemptedRef to allow retry
+        if (resumptionAttemptedRef.current !== null) {
+          debugLog('RETRY_ALLOWED', {
+            reason: 'trigger_failed',
+            clearedKey: resumptionAttemptedRef.current,
+          });
+          resumptionAttemptedRef.current = null;
+        }
+      }
+    }
+
+    if (isStreaming) {
+      // Streaming started successfully
+      sawStreamingRef.current = true;
+    }
+  }, [waitingToStartStreaming, isStreaming]);
 
   // ============================================================================
   // ✅ UNIFIED PHASES: PRE-SEARCH PHASE RESUMPTION EFFECT
@@ -943,10 +1111,9 @@ export function useIncompleteRoundResumption(
       // Mark as attempted
       preSearchPhaseResumptionAttemptedRef.current = resumptionKey;
 
-      // Clear the resumption state - let normal participant triggering take over
-      // Don't clear all resumption state, just the phase-specific parts
-      // The participants phase will be handled by the main resumption effect
-      // Actually, we should NOT clear here - let the participant triggering logic work
+      // ✅ PHASE TRANSITION FIX: Clear pre-search state and transition to participants phase
+      // This prevents stale preSearchResumption.status: 'streaming' when pre-search is complete
+      actions.transitionToParticipantsPhase();
 
       // Set up for participant triggering
       if ((preSearchComplete || prefilledComplete) && resumptionRoundNumber !== null) {
@@ -999,6 +1166,33 @@ export function useIncompleteRoundResumption(
     const resumptionKey = `${threadId}_summarizer_${resumptionRoundNumber}`;
     if (summarizerPhaseResumptionAttemptedRef.current === resumptionKey) {
       return;
+    }
+
+    // ✅ STRICT STREAMING CHECK: Block summarizer if AI SDK is still streaming
+    // This is the FIRST gate - never trigger summarizer while any streaming is active.
+    // This catches cases where:
+    // 1. Last participant just started (message created but no streaming parts yet)
+    // 2. Message sync race (parts not updated yet)
+    if (isStreaming) {
+      debugLog('SUMMARIZER_BLOCKED', { reason: 'isStreaming=true' });
+      return;
+    }
+
+    // ✅ STRICT COMPLETION GATE: Verify all participants have finished BEFORE triggering summarizer
+    // This prevents the race condition where summarizer starts while a participant is still streaming
+    if (resumptionRoundNumber !== null) {
+      const completionStatus = getParticipantCompletionStatus(
+        messages,
+        participants,
+        resumptionRoundNumber,
+      );
+
+      if (!completionStatus.allComplete) {
+        // Participants still streaming - don't trigger summarizer yet
+        // The effect will re-run when messages update with completed participants
+        logParticipantCompletionStatus(completionStatus, 'incomplete-round-resumption:summarizer');
+        return;
+      }
     }
 
     // Check if summary already exists for this round

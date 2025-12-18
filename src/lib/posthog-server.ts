@@ -111,7 +111,8 @@ export function getDistinctIdFromCookie(cookieHeader: string | null): string {
     const parsed = JSON.parse(decodedValue);
 
     return parsed.distinct_id || 'anonymous';
-  } catch {
+  } catch (error) {
+    console.error('Failed to get PostHog distinct ID from cookie:', error);
     return 'anonymous';
   }
 }

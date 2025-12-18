@@ -80,8 +80,6 @@ export async function loadAttachmentContent(
     .from(tables.upload)
     .where(inArray(tables.upload.id, attachmentIds));
 
-  // ✅ ALWAYS log to console for debugging participant 1+ file attachment issues
-  // This helps diagnose "Invalid file URL: filename" errors when uploads aren't found
   if (uploads.length === 0 && attachmentIds.length > 0) {
     console.error(
       '[Attachment] WARNING: No uploads found in DB for given IDs!',
@@ -127,7 +125,6 @@ export async function loadAttachmentContent(
       // Skip files that are too large for base64 conversion
       if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
         const errorMsg = `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`;
-        // ✅ ALWAYS log to console for debugging
         console.error('[Attachment] File too large for base64 conversion:', {
           uploadId: upload.id,
           filename: upload.filename,
@@ -153,7 +150,6 @@ export async function loadAttachmentContent(
       const { data } = await getFile(r2Bucket, upload.r2Key);
 
       if (!data) {
-        // ✅ ALWAYS log to console for debugging
         console.error('[Attachment] File not found in storage:', {
           uploadId: upload.id,
           filename: upload.filename,
@@ -202,7 +198,6 @@ export async function loadAttachmentContent(
     } catch (error) {
       const errorMessage
         = error instanceof Error ? error.message : 'Unknown error';
-      // ✅ ALWAYS log errors to console for debugging (even if logger is not provided)
       console.error('[Attachment] Failed to load attachment content:', {
         uploadId: upload.id,
         filename: upload.filename,
@@ -442,7 +437,6 @@ export async function loadMessageAttachments(
         // Skip files that are too large for base64 conversion
         if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
           const errorMsg = `File too large (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB > ${MAX_BASE64_FILE_SIZE / 1024 / 1024}MB limit)`;
-          // ✅ ALWAYS log to console for debugging
           console.error('[Attachment] File too large for message attachment:', {
             messageId,
             uploadId,
@@ -472,7 +466,6 @@ export async function loadMessageAttachments(
         const { data } = await getFile(r2Bucket, upload.r2Key);
 
         if (!data) {
-          // ✅ ALWAYS log to console for debugging
           console.error('[Attachment] File not found in storage for message:', {
             messageId,
             uploadId,
@@ -528,7 +521,6 @@ export async function loadMessageAttachments(
       } catch (error) {
         const errorMessage
           = error instanceof Error ? error.message : 'Unknown error';
-        // ✅ ALWAYS log to console for debugging
         console.error('[Attachment] Failed to load attachment for message:', {
           messageId,
           uploadId,

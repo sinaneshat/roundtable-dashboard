@@ -66,7 +66,7 @@ describe('store Initialization', () => {
 
     // Summary actions
     expect(typeof state.createPendingSummary).toBe('function');
-    expect(typeof state.updateMessageStatus).toBe('function');
+    expect(typeof state.updateSummaryStatus).toBe('function');
 
     // Tracking actions
     expect(typeof state.tryMarkSummaryCreated).toBe('function');
@@ -328,13 +328,13 @@ describe('summary Creation Flow', () => {
 
     expect(getStoreState(store).summaries).toHaveLength(1);
 
-    // updateMessageStatus takes roundNumber, not summaryId
+    // updateSummaryStatus takes roundNumber, not summaryId
     // Transition to streaming
-    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
     // Transition to complete
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
   });
 });
@@ -772,15 +772,15 @@ describe('complete Round Journey (Integration)', () => {
     expect(getStoreState(store).isStreaming).toBe(false);
 
     // === STEP 6: Summary streaming ===
-    // updateMessageStatus takes roundNumber, not summaryId
+    // updateSummaryStatus takes roundNumber, not summaryId
     state.setIsCreatingSummary(true);
-    state.updateMessageStatus(0, MessageStatuses.STREAMING);
+    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
 
     expect(getStoreState(store).isCreatingSummary).toBe(true);
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
 
     // === STEP 7: Summary complete ===
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
     state.setIsCreatingSummary(false);
 
     expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);

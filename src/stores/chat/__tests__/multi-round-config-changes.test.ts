@@ -109,7 +109,7 @@ describe('participant Configuration Changes', () => {
         threadId: 'thread-config-123',
         mode: ChatModes.ANALYZING,
       });
-      state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+      state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
       expect(getStoreState(store).summaries).toHaveLength(1);
       expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
@@ -419,7 +419,7 @@ describe('complete Configuration Change Journey', () => {
       threadId: 'thread-config-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(0, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
     expect(getStoreState(store).messages).toHaveLength(3);
     expect(getStoreState(store).summaries).toHaveLength(1);
@@ -439,7 +439,7 @@ describe('complete Configuration Change Journey', () => {
       threadId: 'thread-config-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(1, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(1, MessageStatuses.COMPLETE);
 
     expect(getStoreState(store).messages).toHaveLength(7); // 3 + 4
     expect(getStoreState(store).summaries).toHaveLength(2);
@@ -461,7 +461,7 @@ describe('complete Configuration Change Journey', () => {
       threadId: 'thread-config-123',
       mode: ChatModes.ANALYZING,
     });
-    state.updateMessageStatus(2, MessageStatuses.COMPLETE);
+    state.updateSummaryStatus(2, MessageStatuses.COMPLETE);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);

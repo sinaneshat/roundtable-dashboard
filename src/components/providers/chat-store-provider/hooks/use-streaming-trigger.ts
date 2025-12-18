@@ -56,6 +56,10 @@ export function useStreamingTrigger({
   const storeScreenMode = useStore(store, s => s.screenMode);
   const storePendingAnimations = useStore(store, s => s.pendingAnimations);
   const chatIsStreaming = useStore(store, s => s.isStreaming);
+  // ✅ BUG FIX: Subscribe to form state enableWebSearch (user's current intent)
+  // This is the source of truth DURING submission, not thread.enableWebSearch
+  // Thread.enableWebSearch is only updated after PATCH completes
+  const formEnableWebSearch = useStore(store, s => s.enableWebSearch);
 
   // Race condition guard
   const startRoundCalledForRoundRef = useRef<number | null>(null);
@@ -85,7 +89,10 @@ export function useStreamingTrigger({
     }
 
     // Wait for pre-search completion before streaming participants
-    const webSearchEnabled = storeThread?.enableWebSearch ?? false;
+    // ✅ BUG FIX: Use form state (user's current intent) instead of thread.enableWebSearch
+    // During submission, thread.enableWebSearch is stale (not yet updated via PATCH)
+    // Form state is the source of truth for what the user wants NOW
+    const webSearchEnabled = formEnableWebSearch;
     if (webSearchEnabled) {
       const currentRound = getCurrentRoundNumber(storeMessages);
       const currentRoundPreSearch = storePreSearches.find(ps => ps.roundNumber === currentRound);
@@ -300,13 +307,14 @@ export function useStreamingTrigger({
     }
 
     startRoundCalledForRoundRef.current = currentRound;
+
     // ✅ FIX: Use queueMicrotask to run startRound outside React's lifecycle
     // startRound uses flushSync internally which cannot be called during render/effects
     queueMicrotask(() => {
       chat.startRound(storeParticipants);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId]);
+  }, [waitingToStart, chat.startRound, chat.isReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId, formEnableWebSearch]);
 
   // Clear waitingToStartStreaming when streaming begins
   useEffect(() => {

@@ -792,7 +792,7 @@ export async function incrementStreamChunkCount(
  * Check if stream is stale (no heartbeat for specified duration)
  *
  * @param state - Stream state to check
- * @param maxStaleMs - Maximum time without heartbeat (default 30 seconds)
+ * @param maxStaleMs - Maximum time without heartbeat (default 30 seconds, suitable for reasoning models)
  * @returns true if stream is stale
  */
 export function isStreamStale(state: StreamState, maxStaleMs = 30000): boolean {

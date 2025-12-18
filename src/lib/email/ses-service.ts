@@ -119,6 +119,7 @@ class EmailService {
       const result = await response.json();
       return result;
     } catch (error) {
+      console.error('Email sending failed:', error);
       // Re-throw with more context
       if (error instanceof Error) {
         throw new TypeError(`Email sending failed: ${error.message}`);

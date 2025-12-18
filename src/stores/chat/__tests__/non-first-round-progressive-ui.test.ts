@@ -23,6 +23,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { MessageStatuses } from '@/api/core/enums';
 import type { PartialPreSearchData, StoredPreSearch } from '@/api/routes/chat/schema';
 
 import { createChatStore } from '../store';

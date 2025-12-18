@@ -424,14 +424,6 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
   ...PRESEARCH_DEFAULTS,
 
   setPreSearches: (preSearches: StoredPreSearch[]) => {
-    // 🔍 DEBUG LOG: Trace when preSearches are synced from server
-    if (process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
-      console.debug('[store] setPreSearches:', {
-        count: preSearches.length,
-        rounds: preSearches.map(ps => ps.roundNumber),
-      });
-    }
     set({ preSearches }, false, 'preSearch/setPreSearches');
   },
   // ✅ IMMER: Direct mutations + race condition fix
@@ -871,6 +863,14 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       resumptionRoundNumber: null,
     }, false, 'streamResumption/clearStreamResumption'),
 
+  // ✅ PHASE TRANSITION FIX: Clear pre-search state when transitioning to participants
+  // This prevents stale preSearchResumption.status: 'streaming' when pre-search is actually complete
+  transitionToParticipantsPhase: () =>
+    set({
+      currentResumptionPhase: 'participants',
+      preSearchResumption: null,
+    }, false, 'streamResumption/transitionToParticipantsPhase'),
+
   // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
   // Called during SSR to set up state BEFORE AI SDK resume runs
   // ✅ UNIFIED PHASES: Now handles pre-search, participants, and summarizer phases
@@ -1246,10 +1246,15 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       const hasExistingOptimisticMessage = draft.hasEarlyOptimisticMessage;
       const fileParts = providedFileParts || [];
 
-      // ✅ DUPLICATION FIX: Check if optimistic message already exists for this round
-      const hasOptimisticForRound = currentMessages.some(
+      // ✅ DUPLICATION FIX: Check if optimistic message exists for TARGET round
+      // Use explicitly set streamingRoundNumber if available, otherwise calculated nextRoundNumber
+      // This handles:
+      // - Duplicate calls for same round: streamingRoundNumber is set, check against it
+      // - New round after completing previous: new streamingRoundNumber, checks for that round
+      const targetRound = draft.streamingRoundNumber ?? nextRoundNumber;
+      const hasOptimisticForTargetRound = currentMessages.some(
         m => m.role === MessageRoles.USER
-          && (m.metadata as { roundNumber?: number })?.roundNumber === nextRoundNumber
+          && (m.metadata as { roundNumber?: number })?.roundNumber === targetRound
           && (m.metadata as { isOptimistic?: boolean })?.isOptimistic === true,
       );
 
@@ -1284,7 +1289,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         : (isOnThreadScreen ? nextRoundNumber : null);
 
       // Add optimistic user message if needed (prevent duplicates)
-      if (isOnThreadScreen && !hasExistingOptimisticMessage && !hasOptimisticForRound) {
+      if (isOnThreadScreen && !hasExistingOptimisticMessage && !hasOptimisticForTargetRound) {
         draft.messages.push({
           id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
           role: MessageRoles.USER,

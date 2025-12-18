@@ -392,14 +392,33 @@ function PreSearchStreamComponent({
 
               // ✅ FIX: Handle interrupted synthetic done event from KV resume stream
               // When original stream dies, KV sends: {"interrupted":true,"reason":"stream_timeout"}
-              // This is NOT a successful completion - don't call onStreamComplete
-              // The store should NOT be updated to 'complete' status
+              // This is NOT a successful completion - trigger retry instead of just showing error
               if (finalData?.interrupted) {
-                // Treat as failure - clear streaming state, don't update status
-                // This allows incomplete-round-resumption to retry the pre-search
+                // ✅ RETRY: Clear tracking and force retry instead of just setting error
+                // The backend has likely already detected staleness and reset the DB status
+                // We just need to trigger a fresh POST request
+                clearPreSearchTracking(preSearch.roundNumber);
+
+                // Use auto-retry mechanism to restart the stream
+                if (retryCountRef.current < MAX_STREAM_RETRIES) {
+                  retryCountRef.current++;
+                  // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate UI feedback
+                  flushSync(() => {
+                    isAutoRetryingOnTrueRef.current();
+                  });
+
+                  // Force re-run of main effect by incrementing forceRetryCount
+                  // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for immediate effect re-trigger
+                  flushSync(() => {
+                    setForceRetryCount(c => c + 1);
+                  });
+                  return;
+                }
+
+                // Max retries exceeded - show error
                 // eslint-disable-next-line react-dom/no-flush-sync -- Intentional for progressive streaming UI
                 flushSync(() => {
-                  setError(new Error('Pre-search stream interrupted - will retry'));
+                  setError(new Error('Pre-search stream interrupted after multiple retries'));
                 });
                 return;
               }
@@ -477,7 +496,8 @@ function PreSearchStreamComponent({
             clearPreSearchTracking(preSearch.roundNumber);
 
             // Retry by calling startStream again
-            startStream().catch(() => {
+            startStream().catch((error) => {
+              console.error('[PreSearchStream] Retry attempt failed:', error);
               // Retry failed, error state will be handled by next catch
             });
           }, RETRY_INTERVAL_MS);
@@ -491,7 +511,8 @@ function PreSearchStreamComponent({
       }
     };
 
-    startStream().catch(() => {
+    startStream().catch((error) => {
+      console.error('[PreSearchStream] Initial stream start failed:', error);
       // Stream failed, error state already handled
     });
 
@@ -516,7 +537,7 @@ function PreSearchStreamComponent({
   // If we reconnect to a stream that's already running (e.g. after reload),
   // we poll the status until it completes, then sync the data.
   //
-  // ✅ STUCK STREAM RECOVERY: If polling sees STREAMING for too long (30s),
+  // ✅ STUCK STREAM RECOVERY: If polling sees STREAMING for too long,
   // the original stream likely got interrupted by the page refresh.
   // In this case, we clear deduplication flags and trigger a fresh POST request.
   useEffect(() => {
@@ -532,7 +553,7 @@ function PreSearchStreamComponent({
     let timeoutId: NodeJS.Timeout;
     let isMounted = true;
     const pollingStartTime = Date.now();
-    const POLLING_TIMEOUT_MS = 10_000; // 10 seconds - if still STREAMING after this, restart
+    const POLLING_TIMEOUT_MS = 5_000; // 5 seconds - fast detection for better UX when stream dies
 
     // ✅ AUTO-RETRY UI: Show user that we're auto-retrying
     // Use flushSync to force immediate re-render so user sees "Auto-retrying..." text
@@ -746,6 +767,7 @@ function PreSearchStreamComponent({
         <AnimatedStreamingItem
           key="search-config"
           itemKey="search-config"
+          index={0}
         >
           <WebSearchConfigurationDisplay
             queries={validQueries.filter(q => q?.query).map(q => ({
@@ -780,6 +802,7 @@ function PreSearchStreamComponent({
           <AnimatedStreamingItem
             key={uniqueKey}
             itemKey={uniqueKey}
+            index={queryIndex + 1} // +1 because search-config is index 0
           >
             <div className="space-y-2">
               {/* Query header with rationale and depth */}

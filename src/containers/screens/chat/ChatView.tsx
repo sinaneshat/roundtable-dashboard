@@ -110,7 +110,7 @@ export function ChatView({
     })),
   );
 
-  const { streamingRoundNumber, isCreatingSummary, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded } = useChatStore(
+  const { streamingRoundNumber, isCreatingSummary, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded, preSearchResumption, summarizerResumption } = useChatStore(
     useShallow(s => ({
       streamingRoundNumber: s.streamingRoundNumber,
       isCreatingSummary: s.isCreatingSummary,
@@ -118,6 +118,8 @@ export function ChatView({
       isCreatingThread: s.isCreatingThread,
       pendingMessage: s.pendingMessage,
       hasInitiallyLoaded: s.hasInitiallyLoaded,
+      preSearchResumption: s.preSearchResumption,
+      summarizerResumption: s.summarizerResumption,
     })),
   );
 
@@ -364,13 +366,25 @@ export function ChatView({
   });
 
   // Input blocking - unified calculation for both screens
-  // Blocks input during streaming, thread creation, or when loading indicator is visible
+  // Blocks input during streaming, thread creation, resumption, or when loading indicator is visible
+  // ✅ RESUMPTION FIX: Only block when resumption is ACTIVELY in progress
+  // Don't check currentResumptionPhase directly - it can be stale after round completes
+  // Only check actual resumption status states which are properly managed
+  const isResumptionActive = (
+    preSearchResumption?.status === 'streaming'
+    || preSearchResumption?.status === 'pending'
+    || summarizerResumption?.status === 'streaming'
+    || summarizerResumption?.status === 'pending'
+  );
+
   const isInputBlocked = isStreaming
     || isCreatingThread
     || waitingToStartStreaming
     || showLoader
     || isCreatingSummary
-    || Boolean(pendingMessage);
+    || Boolean(pendingMessage)
+    || isResumptionActive
+    || formActions.isSubmitting;
 
   // Mobile keyboard handling
   const keyboardOffset = useVisualViewportPosition();
@@ -578,11 +592,11 @@ export function ChatView({
       if (parseResult.success) {
         updateSummaryData(roundNumber, parseResult.data);
       } else {
-        // Log validation error for debugging (shouldn't happen if stream validated correctly)
         console.error('[Summary] Validation failed:', parseResult.error.flatten());
         updateSummaryError(roundNumber, 'Invalid summary data received. Please try again.');
       }
     } else if (error) {
+      console.error('[Summary] Stream error:', error);
       const errorMessage = error instanceof Error
         ? error.message
         : 'Summary failed. Please try again.';
@@ -658,6 +672,7 @@ export function ChatView({
                 attachmentClickRef={attachmentClickRef}
                 isUploading={chatAttachments.isUploading}
                 isHydrating={mode === 'thread' && !hasInitiallyLoaded}
+                isSubmitting={formActions.isSubmitting}
                 toolbar={(
                   <ChatInputToolbarMenu
                     selectedParticipants={selectedParticipants}

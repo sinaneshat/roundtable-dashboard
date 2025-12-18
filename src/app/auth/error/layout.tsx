@@ -1,9 +1,6 @@
-import { useTranslations } from 'next-intl';
 import type React from 'react';
-import { Suspense } from 'react';
 
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
-import { PageLoadingFallback } from '@/components/loading';
 
 type ErrorLayoutProps = {
   children: React.ReactNode;
@@ -19,17 +16,10 @@ type ErrorLayoutProps = {
  *
  * Per Next.js + OpenNext Cloudflare patterns, pages needing runtime
  * secrets should use force-dynamic, but error pages are better static.
+ *
+ * NOTE: No Suspense here - AuthErrorScreen component has its own
+ * Suspense boundary for useSearchParams per Next.js 15 requirements.
  */
-function ErrorLayoutContent({ children }: { children: React.ReactNode }) {
-  const t = useTranslations('states.loading');
-
-  return (
-    <Suspense fallback={<PageLoadingFallback text={t('errorDetails')} />}>
-      <AuthShowcaseLayout>{children}</AuthShowcaseLayout>
-    </Suspense>
-  );
-}
-
 export default function ErrorLayout({ children }: ErrorLayoutProps) {
-  return <ErrorLayoutContent>{children}</ErrorLayoutContent>;
+  return <AuthShowcaseLayout>{children}</AuthShowcaseLayout>;
 }

@@ -151,3 +151,32 @@ export function getIncompatibleModelIds<T extends { id: string; capabilities: Mo
 
   return incompatibleIds;
 }
+
+// ============================================================================
+// THREAD-LEVEL FILE CHECKING
+// ============================================================================
+
+/**
+ * Check if thread messages contain vision-required files
+ * Used to determine if non-vision models should be disabled for entire thread
+ *
+ * @param messages - Array of messages with optional parts
+ * @returns true if any message contains vision-required files (images/PDFs)
+ */
+export function threadHasVisionRequiredFiles(
+  messages: Array<{ parts?: unknown[] }>,
+): boolean {
+  return messages.some((msg) => {
+    if (!msg.parts)
+      return false;
+    return msg.parts.some((part) => {
+      if (typeof part !== 'object' || part === null)
+        return false;
+      if (!('type' in part) || part.type !== 'file')
+        return false;
+      if (!('mediaType' in part))
+        return false;
+      return isVisionRequiredMimeType(part.mediaType as string);
+    });
+  });
+}

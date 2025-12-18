@@ -1,6 +1,7 @@
 'use client';
 
 import type { DeepPartial } from 'ai';
+import { memo } from 'react';
 
 import type { RoundSummaryMetrics } from '@/api/routes/chat/schema';
 import { StreamingCursor, StreamingText } from '@/components/ui/streaming-text';
@@ -12,22 +13,59 @@ type RoundSummaryTextProps = {
 };
 
 /**
- * RoundSummaryText - Simple Round Summary
- *
- * Shows the summary text and 4 metrics (Engagement, Insight, Balance, Clarity).
+ * MetricItem - Single metric display
+ * No nested animations - scroll animation at parent level handles entrance
  */
-export function RoundSummaryText({
+const MetricItem = memo(({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+  index: number;
+}) => {
+  return (
+    <div className="flex justify-between items-center px-2 py-1 rounded bg-muted/30">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{Math.round(value)}</span>
+    </div>
+  );
+});
+
+/**
+ * RoundSummaryText - Simple Round Summary with Progressive Streaming
+ *
+ * Shows the summary text character-by-character as it streams,
+ * and 4 metrics (Engagement, Insight, Balance, Clarity).
+ * No nested animations - scroll animation at parent level handles entrance.
+ */
+export const RoundSummaryText = memo(({
   summary,
   metrics,
   isStreaming = false,
-}: RoundSummaryTextProps) {
+}: RoundSummaryTextProps) => {
   if (!summary && !metrics) {
     return null;
   }
 
+  // Build metrics array dynamically - each metric appears as it arrives
+  const metricsToShow: { label: string; value: number; key: string }[] = [];
+  if (metrics?.engagement !== undefined) {
+    metricsToShow.push({ label: 'Engagement', value: metrics.engagement, key: 'engagement' });
+  }
+  if (metrics?.insight !== undefined) {
+    metricsToShow.push({ label: 'Insight', value: metrics.insight, key: 'insight' });
+  }
+  if (metrics?.balance !== undefined) {
+    metricsToShow.push({ label: 'Balance', value: metrics.balance, key: 'balance' });
+  }
+  if (metrics?.clarity !== undefined) {
+    metricsToShow.push({ label: 'Clarity', value: metrics.clarity, key: 'clarity' });
+  }
+
   return (
     <div className="space-y-3">
-      {/* Summary Text */}
+      {/* Summary Text - streams character by character */}
       {summary && (
         <p className="text-sm leading-relaxed text-foreground/80">
           <StreamingText isStreaming={isStreaming}>
@@ -37,35 +75,19 @@ export function RoundSummaryText({
         </p>
       )}
 
-      {/* Metrics */}
-      {metrics && (
+      {/* Metrics - displayed as they become available */}
+      {metricsToShow.length > 0 && (
         <div className="grid grid-cols-2 gap-2 text-xs">
-          {metrics.engagement !== undefined && (
-            <div className="flex justify-between items-center px-2 py-1 rounded bg-muted/30">
-              <span className="text-muted-foreground">Engagement</span>
-              <span className="font-medium">{Math.round(metrics.engagement)}</span>
-            </div>
-          )}
-          {metrics.insight !== undefined && (
-            <div className="flex justify-between items-center px-2 py-1 rounded bg-muted/30">
-              <span className="text-muted-foreground">Insight</span>
-              <span className="font-medium">{Math.round(metrics.insight)}</span>
-            </div>
-          )}
-          {metrics.balance !== undefined && (
-            <div className="flex justify-between items-center px-2 py-1 rounded bg-muted/30">
-              <span className="text-muted-foreground">Balance</span>
-              <span className="font-medium">{Math.round(metrics.balance)}</span>
-            </div>
-          )}
-          {metrics.clarity !== undefined && (
-            <div className="flex justify-between items-center px-2 py-1 rounded bg-muted/30">
-              <span className="text-muted-foreground">Clarity</span>
-              <span className="font-medium">{Math.round(metrics.clarity)}</span>
-            </div>
-          )}
+          {metricsToShow.map((metric, index) => (
+            <MetricItem
+              key={metric.key}
+              label={metric.label}
+              value={metric.value}
+              index={index}
+            />
+          ))}
         </div>
       )}
     </div>
   );
-}
+});

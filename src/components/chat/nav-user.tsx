@@ -3,7 +3,7 @@
 import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -94,6 +94,7 @@ export function NavUser({ initialSession }: NavUserProps) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
+      console.error('[NavUser] Failed to create customer portal session:', error);
       showApiErrorToast('Portal Error', error);
     }
   };
@@ -109,10 +110,46 @@ export function NavUser({ initialSession }: NavUserProps) {
         showCancelDialog.onFalse();
       }
     } catch (error) {
+      console.error('[NavUser] Failed to cancel subscription:', error);
       showApiErrorToast('Cancellation Failed', error);
     }
   };
   const subscriptionTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
+
+  // ✅ HYDRATION FIX: Prevent Radix ID mismatch by only rendering DropdownMenu after mount
+  // Radix generates unique IDs that differ between server and client
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
+    setMounted(true);
+  }, []);
+
+  // SSR placeholder - matches the SidebarMenuButton structure without Radix components
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        data-sidebar="menu-button"
+        data-size="lg"
+        className="peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-md p-2 text-left outline-hidden transition-[width,height,padding] h-12 text-sm"
+      >
+        <Avatar className="h-8 w-8 rounded-full">
+          <AvatarImage
+            src={user?.image || undefined}
+            alt={displayName}
+          />
+          <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
+        </Avatar>
+        <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+          <span className="truncate font-semibold">
+            {displayName}
+          </span>
+          <span className="truncate text-xs">{displayEmail}</span>
+        </div>
+        <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+      </button>
+    );
+  }
 
   return (
     <>

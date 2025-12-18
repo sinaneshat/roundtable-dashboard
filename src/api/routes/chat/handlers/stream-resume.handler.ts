@@ -101,7 +101,8 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     });
     const currentRound = latestMessage?.roundNumber ?? 0;
 
-    const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
+    // ✅ FIX: Increased from 15s to 30s to handle reasoning models that may pause longer
+    const STALE_CHUNK_TIMEOUT_MS = 30 * 1000;
 
     // ============================================================================
     // PHASE 1: Check for active PRE-SEARCH stream
@@ -319,7 +320,7 @@ function determineCurrentPhase(
 /**
  * Check if a KV-tracked stream is stale based on last chunk time
  */
-function isStreamStale(lastChunkTime: number, createdTime: number, hasChunks: boolean, staleTimeoutMs = 15000): boolean {
+function isStreamStale(lastChunkTime: number, createdTime: number, hasChunks: boolean, staleTimeoutMs = 30000): boolean {
   if (hasChunks && lastChunkTime > 0) {
     return Date.now() - lastChunkTime > staleTimeoutMs;
   }
@@ -359,7 +360,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
   async (c) => {
     const { user } = c.auth();
     const { threadId } = c.validated.params;
-    const STALE_CHUNK_TIMEOUT_MS = 15 * 1000;
+    // ✅ FIX: Increased from 15s to 30s to handle reasoning models that may pause longer
+    const STALE_CHUNK_TIMEOUT_MS = 30 * 1000;
 
     // Verify thread ownership and get thread config
     const db = await getDbAsync();

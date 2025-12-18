@@ -334,12 +334,12 @@ describe('summary Slice Actions', () => {
     });
   });
 
-  describe('updateMessageStatus', () => {
+  describe('updateSummaryStatus', () => {
     it('updates status for matching round', () => {
       const store = createChatStore();
 
       store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
-      store.getState().updateMessageStatus(0, MessageStatuses.STREAMING);
+      store.getState().updateSummaryStatus(0, MessageStatuses.STREAMING);
 
       expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.STREAMING);
     });
@@ -349,7 +349,7 @@ describe('summary Slice Actions', () => {
 
       store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
       store.getState().addSummary(createMockSummary(1, MessageStatuses.PENDING));
-      store.getState().updateMessageStatus(0, MessageStatuses.COMPLETE);
+      store.getState().updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
       expect(store.getState().summaries[1]?.status).toBe(MessageStatuses.PENDING);
     });

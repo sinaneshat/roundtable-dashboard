@@ -9,6 +9,7 @@
 
 'use client';
 
+import type { QueryClient } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
@@ -22,6 +23,26 @@ import {
   updateAttachmentService,
   uploadPartService,
 } from '@/services/api';
+
+/**
+ * Safe wrapper for useQueryClient that handles edge cases during SSR/HMR
+ *
+ * ✅ HYDRATION FIX: During page refresh or HMR, the component might render
+ * before QueryClientProvider is fully mounted. This wrapper catches the error
+ * and returns null, allowing mutations to work without invalidation.
+ *
+ * The proper fix is architectural (ensure provider mounts first), but this
+ * provides graceful degradation for edge cases.
+ */
+function useSafeQueryClient(): QueryClient | null {
+  try {
+    return useQueryClient();
+  } catch {
+    // QueryClient not available - during SSR edge cases or before provider mounts
+    // This is transient and self-corrects on next render
+    return null;
+  }
+}
 
 // ============================================================================
 // Secure Upload Mutation (Ticket-Based)
@@ -41,15 +62,17 @@ import {
  * Note: Thread/message associations are created via junction tables after upload
  */
 export function useSecureUploadMutation() {
-  const queryClient = useQueryClient();
+  const queryClient = useSafeQueryClient();
 
   return useMutation({
     mutationFn: (file: File) => secureUploadService(file),
     onSuccess: () => {
-      // Invalidate upload queries
-      invalidationPatterns.afterUpload().forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+      // Invalidate upload queries (skip if queryClient unavailable during hydration)
+      if (queryClient) {
+        invalidationPatterns.afterUpload().forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+      }
     },
     retry: false,
     throwOnError: false,
@@ -65,11 +88,15 @@ export function useSecureUploadMutation() {
  * - Invalidates specific attachment and lists
  */
 export function useUpdateAttachmentMutation() {
-  const queryClient = useQueryClient();
+  const queryClient = useSafeQueryClient();
 
   return useMutation({
     mutationFn: updateAttachmentService,
     onSuccess: (response, variables) => {
+      // Skip cache operations if queryClient unavailable during hydration
+      if (!queryClient)
+        return;
+
       // Immediately update cache with updated data
       if (response.success && response.data) {
         const updatedAttachment = response.data;
@@ -123,11 +150,15 @@ export function useUpdateAttachmentMutation() {
  * - Invalidates attachment lists
  */
 export function useDeleteAttachmentMutation() {
-  const queryClient = useQueryClient();
+  const queryClient = useSafeQueryClient();
 
   return useMutation({
     mutationFn: deleteAttachmentService,
     onMutate: async (data) => {
+      // Skip optimistic updates if queryClient unavailable during hydration
+      if (!queryClient)
+        return;
+
       const attachmentId = data.param?.id;
       if (!attachmentId)
         return;
@@ -163,6 +194,10 @@ export function useDeleteAttachmentMutation() {
       return { previousAttachments };
     },
     onError: (_error, _data, context) => {
+      // Skip rollback if queryClient unavailable
+      if (!queryClient)
+        return;
+
       // Rollback on error
       if (context?.previousAttachments) {
         queryClient.setQueryData(
@@ -172,6 +207,10 @@ export function useDeleteAttachmentMutation() {
       }
     },
     onSettled: () => {
+      // Skip invalidation if queryClient unavailable
+      if (!queryClient)
+        return;
+
       // Ensure server state is in sync
       void queryClient.invalidateQueries({
         queryKey: queryKeys.uploads.all,
@@ -233,15 +272,17 @@ export function useUploadPartMutation() {
  * - Invalidates attachment lists
  */
 export function useCompleteMultipartUploadMutation() {
-  const queryClient = useQueryClient();
+  const queryClient = useSafeQueryClient();
 
   return useMutation({
     mutationFn: completeMultipartUploadService,
     onSuccess: () => {
-      // Invalidate all attachment queries
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.uploads.all,
-      });
+      // Skip invalidation if queryClient unavailable during hydration
+      if (queryClient) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.uploads.all,
+        });
+      }
     },
     retry: false,
     throwOnError: false,
@@ -255,15 +296,17 @@ export function useCompleteMultipartUploadMutation() {
  * Cleans up any uploaded parts
  */
 export function useAbortMultipartUploadMutation() {
-  const queryClient = useQueryClient();
+  const queryClient = useSafeQueryClient();
 
   return useMutation({
     mutationFn: abortMultipartUploadService,
     onSuccess: () => {
-      // Invalidate to remove any partial upload records
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.uploads.all,
-      });
+      // Skip invalidation if queryClient unavailable during hydration
+      if (queryClient) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.uploads.all,
+        });
+      }
     },
     retry: false,
     throwOnError: false,

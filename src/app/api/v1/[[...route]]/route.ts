@@ -36,7 +36,8 @@ function createApiHandler() {
       if (!executionCtx || !executionCtx.waitUntil) {
         throw new Error('Incomplete Cloudflare context');
       }
-    } catch {
+    } catch (error) {
+      console.error('[API Route] Cloudflare context unavailable, using fallback:', error);
       // Fallback for environments where Cloudflare context isn't available (local Next.js dev)
       env = process.env as unknown as CloudflareEnv;
 

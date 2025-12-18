@@ -17,13 +17,11 @@ const ROOT_DIR = join(__dirname, '..');
 // This prevents heap out of memory errors during Next.js build
 if (!process.env.NODE_OPTIONS) {
   process.env.NODE_OPTIONS = '--max-old-space-size=4096';
-  console.log('✓ Set Node.js heap size to 4096 MB');
 }
 
 // Clear Next.js cache
 try {
   execSync('rm -rf .next', { cwd: ROOT_DIR, stdio: 'inherit' });
-  console.log('✓ Cleared .next cache');
 } catch {
   // No cache to clear
 }
@@ -36,6 +34,3 @@ const buildTime = new Date().toISOString();
 // Export as environment variables for the build process
 process.env.NEXT_PUBLIC_SW_VERSION = swVersion;
 process.env.NEXT_PUBLIC_BUILD_TIME = buildTime;
-
-console.log(`✓ Generated SW version: ${swVersion}`);
-console.log(`✓ Build time: ${buildTime}`);

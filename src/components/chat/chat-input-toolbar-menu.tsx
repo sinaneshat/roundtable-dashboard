@@ -89,8 +89,27 @@ export const ChatInputToolbarMenu = memo(({
     setMounted(true);
   }, []);
 
+  // ✅ HYDRATION FIX: Show placeholder during SSR to prevent Radix ID mismatch
+  // Radix components (Drawer, Dialog, Tooltip) generate unique IDs that differ between
+  // server and client, causing hydration errors. Render a static placeholder until mounted.
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className={cn(
+          'flex items-center justify-center size-8 rounded-full',
+          'bg-white/5 hover:bg-white/10 active:bg-white/15',
+          'transition-colors disabled:opacity-50',
+        )}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+    );
+  }
+
   // After mount, show desktop version
-  if (mounted && isDesktop) {
+  if (isDesktop) {
     return (
       <TooltipProvider delayDuration={300}>
         <div className="flex items-center gap-2">

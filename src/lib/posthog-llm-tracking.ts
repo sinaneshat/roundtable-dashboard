@@ -547,6 +547,7 @@ export async function trackLLMGeneration(
 
     return { traceId, success: true };
   } catch (error) {
+    console.error('PostHog LLM tracking error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return { traceId, success: false, errorMessage };
   }

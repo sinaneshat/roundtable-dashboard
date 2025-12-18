@@ -75,6 +75,7 @@ export default function PricingScreen() {
         }
       }
     } catch (error) {
+      console.error('[Pricing] Subscribe failed:', error);
       toastManager.error(t('billing.errors.subscribeFailed'), getApiErrorMessage(error));
     } finally {
       setProcessingPriceId(null);
@@ -89,6 +90,7 @@ export default function PricingScreen() {
         json: { immediately: false },
       });
     } catch (error) {
+      console.error('[Pricing] Cancel subscription failed:', error);
       toastManager.error(t('billing.errors.cancelFailed'), getApiErrorMessage(error));
     } finally {
       setCancelingSubscriptionId(null);
@@ -108,6 +110,7 @@ export default function PricingScreen() {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
+      console.error('[Pricing] Manage billing failed:', error);
       toastManager.error(t('billing.errors.manageBillingFailed'), getApiErrorMessage(error));
     } finally {
       setIsManagingBilling(false);

@@ -47,6 +47,7 @@ import {
   generatePreSearchStreamId,
   getActivePreSearchStreamId,
   initializePreSearchStreamBuffer,
+  isPreSearchBufferStale,
 } from '@/api/services/pre-search-stream-buffer.service';
 import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT } from '@/api/services/prompts.service';
 import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
@@ -283,22 +284,41 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         const existingStreamId = await getActivePreSearchStreamId(threadId, roundNum, c.env);
 
         if (existingStreamId) {
-          // LIVE STREAM RESUMPTION: Return a live stream that polls for new chunks
-          // ✅ PATTERN: Uses Responses.sse() builder for consistent SSE headers
-          const liveStream = createLivePreSearchResumeStream(existingStreamId, c.env);
-          return Responses.sse(liveStream, {
-            streamId: existingStreamId,
-            resumedFromBuffer: true,
+          // ✅ FIX: Check if buffer is stale BEFORE attempting live resume
+          // If no new chunks in 5 seconds, original stream likely dead - reset and restart
+          // Short timeout (5s) for fast detection when user refreshes mid-stream
+          const bufferIsStale = await isPreSearchBufferStale(existingStreamId, c.env, 5_000);
+
+          if (bufferIsStale) {
+            // Buffer is stale - original stream died (page refresh killed it)
+            // Clear KV tracking and reset DB status to allow fresh start
+            await clearActivePreSearchStream(threadId, roundNum, c.env);
+            await db.update(tables.chatPreSearch)
+              .set({
+                status: MessageStatuses.PENDING,
+                errorMessage: null,
+              })
+              .where(eq(tables.chatPreSearch.id, existingSearch.id));
+
+            // Continue to start fresh stream below (don't return here)
+          } else {
+            // Buffer is active - return live resume stream
+            // ✅ PATTERN: Uses Responses.sse() builder for consistent SSE headers
+            const liveStream = createLivePreSearchResumeStream(existingStreamId, c.env);
+            return Responses.sse(liveStream, {
+              streamId: existingStreamId,
+              resumedFromBuffer: true,
+            });
+          }
+        } else {
+          // FALLBACK: No active stream ID (KV not available in local dev)
+          return Responses.polling(c, {
+            status: 'streaming',
+            resourceId: existingSearch.id,
+            message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
+            retryAfterMs: 2000,
           });
         }
-
-        // FALLBACK: No active stream ID (KV not available in local dev)
-        return Responses.polling(c, {
-          status: 'streaming',
-          resourceId: existingSearch.id,
-          message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
-          retryAfterMs: 2000,
-        });
       }
     }
 

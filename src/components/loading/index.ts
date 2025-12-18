@@ -6,8 +6,12 @@
  *
  * Available Components:
  * - PageLoadingFallback: Full-page loading (auth, errors, redirects)
- * - ContentLoadingFallback: Content area loading (main content within layouts)
  * - SidebarLoadingFallback: Sidebar loading (navigation, chat sidebar)
+ *
+ * IMPORTANT - Next.js 15/16 Loading Pattern:
+ * - Use loading.tsx files at route level for page loading states
+ * - Use Suspense only for specific async components (useSearchParams, etc.)
+ * - Do NOT wrap layout children in Suspense - causes double loading states
  *
  * Usage Pattern:
  * ```tsx
@@ -19,6 +23,5 @@
  * ```
  */
 
-export { ContentLoadingFallback } from './content-loading-fallback';
 export { PageLoadingFallback } from './page-loading-fallback';
 export { SidebarLoadingFallback } from './sidebar-loading-fallback';
