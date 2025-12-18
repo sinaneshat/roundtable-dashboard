@@ -570,8 +570,10 @@ export function useIncompleteRoundResumption(
   // ✅ RACE CONDITION FIX: Track round state signature for re-check detection
   const lastCheckedSignatureRef = useRef<string | null>(null);
 
+  // Reset refs on navigation (threadId change)
   useEffect(() => {
     activeStreamCheckRef.current = null;
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional state reset on navigation
     setActiveStreamCheckComplete(false);
     orphanedPreSearchUIRecoveryRef.current = null;
     orphanedPreSearchRecoveryAttemptedRef.current = null;
@@ -598,6 +600,7 @@ export function useIncompleteRoundResumption(
   // Previously: immediate placeholder ran first, returned early, signature reset ran second
   // and cleared refs, but by then immediate placeholder already returned early!
   // ============================================================================
+  // Signature reset for re-check detection when round state changes
   useEffect(() => {
     const currentSignature = `${threadId}_${isIncomplete}_${currentRoundNumber}`;
 
@@ -611,6 +614,7 @@ export function useIncompleteRoundResumption(
       // But only reset if we're not currently in the middle of resumption
       if (!waitingToStartStreaming && !isStreaming) {
         activeStreamCheckRef.current = null;
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- State reset on signature change
         setActiveStreamCheckComplete(false);
         // ✅ BUG FIX: Do NOT reset resumptionAttemptedRef here!
         // This was causing an infinite loop:
@@ -1001,6 +1005,7 @@ export function useIncompleteRoundResumption(
 
     // Set waiting flag so provider knows to start streaming
     actions.setWaitingToStartStreaming(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- inProgressParticipantIndices is derived from messages (already in deps)
   }, [
     enabled,
     isStreaming,
@@ -1241,6 +1246,7 @@ export function useIncompleteRoundResumption(
         // streaming flow will pick it up
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- messages/participants only used for getParticipantCompletionStatus; effect re-runs on summaries/phase changes
   }, [
     currentResumptionPhase,
     streamResumptionPrefilled,

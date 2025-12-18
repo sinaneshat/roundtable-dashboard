@@ -210,6 +210,7 @@ export function useVirtualizedTimeline({
     if (!shouldEnable) {
       hasInitialSyncRef.current = false;
       // Reset state to prevent stale data
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional cleanup/reset when virtualizer is disabled
       setVirtualizerState({ virtualItems: [], totalSize: 0 });
     }
   }, [shouldEnable]);

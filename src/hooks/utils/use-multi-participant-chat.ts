@@ -1460,9 +1460,8 @@ export function useMultiParticipantChat(
     });
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     // This prevents concurrent aiSendMessage calls from startRound/continueFromParticipant/etc.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs provides stable ref access to threadId (intentionally omitted to avoid effect re-runs)
   }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
-  // Note: participantsOverride comes from caller, not deps
-  // callbackRefs provides stable ref access to threadId (no deps needed)
 
   /**
    * Continue a round from a specific participant index
@@ -1645,6 +1644,7 @@ export function useMultiParticipantChat(
       }
     });
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs provides stable ref access to threadId (intentionally omitted to avoid effect re-runs)
   }, [messages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
 
   /**

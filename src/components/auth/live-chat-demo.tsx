@@ -183,7 +183,7 @@ export function LiveChatDemo() {
     return () => clearTimeout(timeout);
   }, []);
 
-  // Animation function
+  // Animation function - setState calls are inside async callbacks (setInterval/setTimeout)
   const runAnimation = useCallback((index: number) => {
     const fullText = DEMO_RESPONSES[index] || '';
     let charIndex = 0;
@@ -197,6 +197,7 @@ export function LiveChatDemo() {
 
       if (charIndex >= fullText.length) {
         charIndex = fullText.length;
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Inside setInterval callback (async)
         setStreamedText((prev) => {
           const next = [...prev];
           next[index] = fullText;
@@ -210,9 +211,11 @@ export function LiveChatDemo() {
 
         // Next participant after pause
         setTimeout(() => {
+          // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Inside setTimeout callback (async)
           setActiveParticipant(index + 1);
         }, 300);
       } else {
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Inside setInterval callback (async)
         setStreamedText((prev) => {
           const next = [...prev];
           next[index] = fullText.slice(0, charIndex);

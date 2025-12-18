@@ -1178,7 +1178,7 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats } = await loadAttachmentContent({
+          const { fileParts, stats, errors: loadErrors } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromUrls,
             r2Bucket,
             db,
@@ -1207,12 +1207,12 @@ export async function prepareValidatedMessages(
             );
           }
 
-          if (errors.length > 0) {
+          if (loadErrors.length > 0) {
             console.error(
               '[Streaming] Some participant 1+ attachments failed to load:',
               {
-                errorCount: errors.length,
-                errors: errors.slice(0, 5),
+                errorCount: loadErrors.length,
+                errors: loadErrors.slice(0, 5),
                 uploadIds: uploadIdsFromUrls,
               },
             );
@@ -1267,7 +1267,7 @@ export async function prepareValidatedMessages(
         );
 
         try {
-          const { fileParts, stats } = await loadAttachmentContent({
+          const { fileParts, stats, errors: loadErrors } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromParts,
             r2Bucket,
             db,
@@ -1295,12 +1295,12 @@ export async function prepareValidatedMessages(
             );
           }
 
-          if (errors.length > 0) {
+          if (loadErrors.length > 0) {
             console.error(
               '[Streaming] Some participant 1+ uploadId attachments failed to load:',
               {
-                errorCount: errors.length,
-                errors: errors.slice(0, 5),
+                errorCount: loadErrors.length,
+                errors: loadErrors.slice(0, 5),
                 uploadIds: uploadIdsFromParts,
               },
             );

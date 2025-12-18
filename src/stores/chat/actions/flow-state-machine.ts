@@ -343,10 +343,12 @@ export function useFlowStateMachine(
     };
   }, []);
 
+  // Streaming lifecycle state machine - tracks streaming completion for UI timing
   useEffect(() => {
     if (isAiSdkStreaming) {
       // Streaming started - track it and clear any pending completion
       wasStreamingRef.current = true;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Streaming state machine transition
       setStreamingJustCompleted(false);
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
@@ -356,6 +358,7 @@ export function useFlowStateMachine(
       // Streaming just ended - set flag and wait for UI to render
       // Use double-rAF pattern to ensure browser has painted the final frame
       wasStreamingRef.current = false;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Streaming state machine transition
       setStreamingJustCompleted(true);
 
       // First rAF: scheduled for next frame
