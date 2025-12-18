@@ -371,10 +371,10 @@ export function ChatView({
   // Don't check currentResumptionPhase directly - it can be stale after round completes
   // Only check actual resumption status states which are properly managed
   const isResumptionActive = (
-    preSearchResumption?.status === 'streaming'
-    || preSearchResumption?.status === 'pending'
-    || summarizerResumption?.status === 'streaming'
-    || summarizerResumption?.status === 'pending'
+    preSearchResumption?.status === MessageStatuses.STREAMING
+    || preSearchResumption?.status === MessageStatuses.PENDING
+    || summarizerResumption?.status === MessageStatuses.STREAMING
+    || summarizerResumption?.status === MessageStatuses.PENDING
   );
 
   const isInputBlocked = isStreaming

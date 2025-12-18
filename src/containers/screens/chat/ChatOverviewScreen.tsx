@@ -536,7 +536,7 @@ export default function ChatOverviewScreen() {
       const isFormSubmitting = currentState.pendingMessage !== null && !currentState.hasSentPendingMessage;
       const isStreamingActive = currentState.isStreaming || currentState.streamingRoundNumber !== null;
       const hasActivePreSearch = currentState.preSearches.some(
-        ps => ps.status === 'pending' || ps.status === 'streaming',
+        ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
       );
 
       if (hasActiveConversation || isFormSubmitting || isStreamingActive || hasActivePreSearch) {

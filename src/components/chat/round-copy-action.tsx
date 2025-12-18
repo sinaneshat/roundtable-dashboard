@@ -5,7 +5,7 @@ import { Check, Copy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useCallback, useState } from 'react';
 
-import { MessagePartTypes } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { Action } from '@/components/ai-elements/actions';
 import { toastManager } from '@/lib/toast';
@@ -93,12 +93,12 @@ function formatRoundAsMarkdown(
     if (!content.trim())
       continue;
 
-    if (message.role === 'user') {
+    if (message.role === MessageRoles.USER) {
       lines.push('### User');
       lines.push('');
       lines.push(content);
       lines.push('');
-    } else if (message.role === 'assistant') {
+    } else if (message.role === MessageRoles.ASSISTANT) {
       const participant = getParticipantFromMessage(message, participants);
       const displayName = getParticipantDisplayName(participant);
       lines.push(`### ${displayName}`);

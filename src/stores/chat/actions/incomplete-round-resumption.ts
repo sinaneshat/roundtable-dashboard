@@ -1109,8 +1109,8 @@ export function useIncompleteRoundResumption(
 
     // Also check the prefilled resumption state for initial status
     // This handles the case where preSearches array hasn't been populated yet
-    const prefilledComplete = preSearchResumption?.status === 'complete';
-    const prefilledFailed = preSearchResumption?.status === 'failed';
+    const prefilledComplete = preSearchResumption?.status === MessageStatuses.COMPLETE;
+    const prefilledFailed = preSearchResumption?.status === MessageStatuses.FAILED;
 
     if (preSearchComplete || preSearchFailed || prefilledComplete || prefilledFailed) {
       // Mark as attempted

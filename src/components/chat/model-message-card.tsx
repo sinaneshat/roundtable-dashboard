@@ -27,6 +27,19 @@ import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { hasCitations } from '@/lib/utils/citation-parser';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
+/**
+ * ✅ GROK FIX: Check if a reasoning part should be filtered out
+ * OpenRouter docs: "Encrypted reasoning content might appear as [REDACTED] in streaming"
+ * Grok models send redacted thinking that disappears on completion, causing layout shifts
+ */
+function isRedactedReasoningPart(part: MessagePart): boolean {
+  if (part.type !== MessagePartTypes.REASONING) {
+    return false;
+  }
+  const text = part.text?.trim() ?? '';
+  return !text || text === '[REDACTED]' || /^\[REDACTED\]$/i.test(text);
+}
+
 type ModelMessageCardProps = {
   model?: EnhancedModelResponse;
   role?: string | null;
@@ -68,7 +81,9 @@ export const ModelMessageCard = memo(({
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
-  const isPendingWithNoParts = showStatusIndicator && parts.length === 0;
+  // ✅ GROK FIX: Use filtered parts count to prevent showing empty content when only redacted parts exist
+  const renderableParts = parts.filter(part => !isRedactedReasoningPart(part));
+  const isPendingWithNoParts = showStatusIndicator && renderableParts.length === 0;
   const isError = status === MessageStatuses.FAILED;
   const isStreaming = status === MessageStatuses.STREAMING;
 
@@ -167,7 +182,7 @@ export const ModelMessageCard = memo(({
                     <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
                   </div>
                 )
-              : parts.length > 0
+              : renderableParts.length > 0
                 ? (
                     <div>
                       {maxContentHeight
@@ -198,7 +213,8 @@ export const ModelMessageCard = memo(({
 
   // ✅ Helper function to render content parts (extracted for ScrollArea wrapping)
   function renderContentParts() {
-    const sortedParts = [...parts].sort((a, b) => {
+    // ✅ GROK FIX: Use pre-filtered renderableParts (redacted reasoning already excluded)
+    const sortedParts = [...renderableParts].sort((a, b) => {
       const order = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
       const aOrder = order[a.type as keyof typeof order] ?? 4;
       const bOrder = order[b.type as keyof typeof order] ?? 4;
