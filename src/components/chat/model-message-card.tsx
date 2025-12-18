@@ -28,15 +28,28 @@ import { hasCitations } from '@/lib/utils/citation-parser';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
 /**
- * ✅ GROK FIX: Check if a reasoning part should be filtered out
- * OpenRouter docs: "Encrypted reasoning content might appear as [REDACTED] in streaming"
- * Grok models send redacted thinking that disappears on completion, causing layout shifts
+ * ✅ MODEL NORMALIZATION: Filter non-renderable reasoning parts
+ *
+ * Different AI models have quirks during streaming that cause layout shifts:
+ * - Grok (xAI): Sends `[REDACTED]` encrypted reasoning that disappears on completion
+ * - Claude: Backend filters `type: 'redacted'` parts, but empty reasoning can still occur
+ * - DeepSeek: Uses <think> tags handled by extractReasoningMiddleware
+ * - Gemini: Can emit empty "thinking" tokens with `thought: true`
+ *
+ * This unified filter prevents layout shifts from:
+ * 1. Empty or whitespace-only reasoning text
+ * 2. Placeholder content like `[REDACTED]`
+ * 3. Any reasoning that would render as blank/invisible
+ *
+ * @see OpenRouter docs: "Encrypted reasoning content might appear as [REDACTED] in streaming"
+ * @see message-persistence.service.ts:extractReasoning() for backend normalization
  */
-function isRedactedReasoningPart(part: MessagePart): boolean {
+function isNonRenderableReasoningPart(part: MessagePart): boolean {
   if (part.type !== MessagePartTypes.REASONING) {
     return false;
   }
   const text = part.text?.trim() ?? '';
+  // Filter: empty, whitespace-only, or known placeholder patterns
   return !text || text === '[REDACTED]' || /^\[REDACTED\]$/i.test(text);
 }
 
@@ -81,8 +94,8 @@ export const ModelMessageCard = memo(({
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
-  // ✅ GROK FIX: Use filtered parts count to prevent showing empty content when only redacted parts exist
-  const renderableParts = parts.filter(part => !isRedactedReasoningPart(part));
+  // ✅ MODEL NORMALIZATION: Filter non-renderable reasoning to prevent layout shifts
+  const renderableParts = parts.filter(part => !isNonRenderableReasoningPart(part));
   const isPendingWithNoParts = showStatusIndicator && renderableParts.length === 0;
   const isError = status === MessageStatuses.FAILED;
   const isStreaming = status === MessageStatuses.STREAMING;
@@ -213,7 +226,7 @@ export const ModelMessageCard = memo(({
 
   // ✅ Helper function to render content parts (extracted for ScrollArea wrapping)
   function renderContentParts() {
-    // ✅ GROK FIX: Use pre-filtered renderableParts (redacted reasoning already excluded)
+    // ✅ MODEL NORMALIZATION: Uses pre-filtered renderableParts (non-renderable reasoning excluded)
     const sortedParts = [...renderableParts].sort((a, b) => {
       const order = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
       const aOrder = order[a.type as keyof typeof order] ?? 4;

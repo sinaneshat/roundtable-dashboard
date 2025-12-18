@@ -275,7 +275,16 @@ function RoundSummaryStreamComponent({
           if (streamError.name === 'AbortError' || errorMessage.includes('aborted')) {
             errorType = StreamErrorTypes.ABORT;
           } else if (streamError.name === 'TypeValidationError' || errorMessage.includes('validation') || errorMessage.includes('invalid_type')) {
-            // For validation errors, try to use partial data
+            // =========================================================================
+            // ✅ VALIDATION ERROR: Schema validation failed during streaming
+            // =========================================================================
+            // This often happens when:
+            // - AI model returns incomplete JSON early in stream
+            // - Stream terminates before complete object is built
+            // - Model hallucinated invalid JSON structure
+            // Retry to give the model another chance to complete properly.
+
+            // First, try to use partial data if available
             const fallbackData = partialSummaryRef.current;
             if (fallbackData && hasSummaryData(fallbackData)) {
               const validated = RoundSummaryAIContentSchema.safeParse(fallbackData);
@@ -285,7 +294,35 @@ function RoundSummaryStreamComponent({
                 return;
               }
             }
+
+            // ✅ AUTO-RETRY: Retry validation errors like empty responses
+            // Validation errors during streaming often resolve on retry as the model
+            // produces complete JSON on subsequent attempts
+            if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
+              emptyResponseRetryCountRef.current++;
+              isAutoRetrying.onTrue();
+
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+              }
+
+              retryTimeoutRef.current = setTimeout(() => {
+                hasStartedStreamingRef.current = false;
+                const messageIds = summary.participantMessageIds;
+                if (messageIds?.length && submitRef.current) {
+                  submitRef.current({ participantMessageIds: messageIds });
+                }
+              }, RETRY_INTERVAL_MS);
+              return;
+            }
+
+            // Max retries exceeded - report validation error
             errorType = StreamErrorTypes.VALIDATION;
+            streamErrorTypeRef.current = errorType;
+            emptyResponseRetryCountRef.current = 0;
+            isAutoRetrying.onFalse();
+            onStreamCompleteRef.current?.(null, new Error(t('errors.validationError')));
+            return;
           } else if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
             // =========================================================================
             // ✅ 409 CONFLICT: Another stream is actively generating
@@ -345,7 +382,35 @@ function RoundSummaryStreamComponent({
             onStreamCompleteRef.current?.(null, new Error('Summary stream not available. Please try again.'));
             return;
           } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+            // =========================================================================
+            // ✅ NETWORK ERROR: Connection/fetch failure during streaming
+            // =========================================================================
+            // Network errors are often transient - retry before failing
+            if (emptyResponseRetryCountRef.current < MAX_EMPTY_RESPONSE_RETRIES) {
+              emptyResponseRetryCountRef.current++;
+              isAutoRetrying.onTrue();
+
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+              }
+
+              retryTimeoutRef.current = setTimeout(() => {
+                hasStartedStreamingRef.current = false;
+                const messageIds = summary.participantMessageIds;
+                if (messageIds?.length && submitRef.current) {
+                  submitRef.current({ participantMessageIds: messageIds });
+                }
+              }, RETRY_INTERVAL_MS);
+              return;
+            }
+
+            // Max retries exceeded - report network error
             errorType = StreamErrorTypes.NETWORK;
+            streamErrorTypeRef.current = errorType;
+            emptyResponseRetryCountRef.current = 0;
+            isAutoRetrying.onFalse();
+            onStreamCompleteRef.current?.(null, new Error(t('errors.networkError')));
+            return;
           }
         }
 
