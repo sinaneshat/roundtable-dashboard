@@ -736,17 +736,19 @@ export default function ChatOverviewScreen() {
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
   // Preset selection - replaces all selected models with preset's models and preferences
-  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    // ✅ VISION COMPATIBILITY: Double-check filtering at execution time
-    // The modal filters before calling this, but use ref to ensure latest state
+  const handlePresetSelect = useCallback((preset: ModelPreset) => {
+    // Get model IDs from preset's modelRoles
+    const presetModelIds = preset.modelRoles.map(mr => mr.modelId);
+
+    // ✅ VISION COMPATIBILITY: Filter out models incompatible with uploaded files
     const latestIncompatible = incompatibleModelIdsRef.current;
-    const compatibleModels = latestIncompatible.size > 0
-      ? models.filter(m => !latestIncompatible.has(m.id))
-      : models;
+    const compatibleModelIds = latestIncompatible.size > 0
+      ? presetModelIds.filter(id => !latestIncompatible.has(id))
+      : presetModelIds;
 
     // Show warning if any models were filtered
-    const filteredCount = models.length - compatibleModels.length;
-    if (filteredCount > 0 && compatibleModels.length > 0) {
+    const filteredCount = presetModelIds.length - compatibleModelIds.length;
+    if (filteredCount > 0 && compatibleModelIds.length > 0) {
       toastManager.warning(
         t('chat.models.presetModelsExcluded'),
         t('chat.models.presetModelsExcludedDescription', { count: filteredCount }),
@@ -754,7 +756,7 @@ export default function ChatOverviewScreen() {
     }
 
     // If ALL models are incompatible, don't apply preset
-    if (compatibleModels.length === 0) {
+    if (compatibleModelIds.length === 0) {
       toastManager.error(
         t('chat.models.presetIncompatible'),
         t('chat.models.presetIncompatibleDescription'),
@@ -762,13 +764,15 @@ export default function ChatOverviewScreen() {
       return;
     }
 
-    // Convert models to participant configs
-    const newParticipants: ParticipantConfig[] = compatibleModels.map((model, index) => ({
-      id: model.id,
-      modelId: model.id,
-      role: '',
-      priority: index,
-    }));
+    // Build participant configs from preset's modelRoles (preserves role assignments)
+    const newParticipants: ParticipantConfig[] = preset.modelRoles
+      .filter(mr => compatibleModelIds.includes(mr.modelId))
+      .map((mr, index) => ({
+        id: mr.modelId,
+        modelId: mr.modelId,
+        role: mr.role || '',
+        priority: index,
+      }));
 
     // Update store and persist
     setSelectedParticipants(newParticipants);

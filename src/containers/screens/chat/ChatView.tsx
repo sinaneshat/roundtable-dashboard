@@ -548,16 +548,19 @@ export function ChatView({
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
   // Preset selection - replaces all selected models with preset's models and preferences
-  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    // ✅ VISION COMPATIBILITY: Double-check filtering at execution time
+  const handlePresetSelect = useCallback((preset: ModelPreset) => {
+    // Get model IDs from preset's modelRoles
+    const presetModelIds = preset.modelRoles.map(mr => mr.modelId);
+
+    // ✅ VISION COMPATIBILITY: Filter out models incompatible with uploaded files
     const latestIncompatible = incompatibleModelIdsRef.current;
-    const compatibleModels = latestIncompatible.size > 0
-      ? models.filter(m => !latestIncompatible.has(m.id))
-      : models;
+    const compatibleModelIds = latestIncompatible.size > 0
+      ? presetModelIds.filter(id => !latestIncompatible.has(id))
+      : presetModelIds;
 
     // Show warning if any models were filtered
-    const filteredCount = models.length - compatibleModels.length;
-    if (filteredCount > 0 && compatibleModels.length > 0) {
+    const filteredCount = presetModelIds.length - compatibleModelIds.length;
+    if (filteredCount > 0 && compatibleModelIds.length > 0) {
       toastManager.warning(
         t('models.presetModelsExcluded'),
         t('models.presetModelsExcludedDescription', { count: filteredCount }),
@@ -565,7 +568,7 @@ export function ChatView({
     }
 
     // If ALL models are incompatible, don't apply preset
-    if (compatibleModels.length === 0) {
+    if (compatibleModelIds.length === 0) {
       toastManager.error(
         t('models.presetIncompatible'),
         t('models.presetIncompatibleDescription'),
@@ -573,13 +576,15 @@ export function ChatView({
       return;
     }
 
-    // Convert models to participant configs
-    const newParticipants = compatibleModels.map((model, index) => ({
-      id: model.id,
-      modelId: model.id,
-      role: '',
-      priority: index,
-    }));
+    // Build participant configs from preset's modelRoles (preserves role assignments)
+    const newParticipants = preset.modelRoles
+      .filter(mr => compatibleModelIds.includes(mr.modelId))
+      .map((mr, index) => ({
+        id: mr.modelId,
+        modelId: mr.modelId,
+        role: mr.role || '',
+        priority: index,
+      }));
 
     // Update store based on mode
     if (mode === 'thread') {
