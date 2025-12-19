@@ -9,6 +9,10 @@ type AvatarGroupProps = {
   maxVisible?: number;
   size?: 'sm' | 'md';
   className?: string;
+  /** Whether to show the total count badge (default: true) */
+  showCount?: boolean;
+  /** Whether to overlap avatars (default: true) */
+  overlap?: boolean;
 };
 
 export function AvatarGroup({
@@ -17,6 +21,8 @@ export function AvatarGroup({
   maxVisible = 3,
   size = 'sm',
   className,
+  showCount = true,
+  overlap = true,
 }: AvatarGroupProps) {
   const sizeClasses = {
     sm: 'size-6',
@@ -33,6 +39,7 @@ export function AvatarGroup({
 
   const totalCount = participants.length;
   const overlapOffset = size === 'sm' ? -8 : -12;
+  const gapSize = size === 'sm' ? 8 : 12;
 
   return (
     <div className={cn('flex items-center', className)}>
@@ -46,14 +53,15 @@ export function AvatarGroup({
             key={participant.id}
             className="relative"
             style={{
-              zIndex: visibleParticipants.length - index,
-              marginLeft: index === 0 ? '0px' : `${overlapOffset}px`,
+              zIndex: overlap ? visibleParticipants.length - index : undefined,
+              marginLeft: index === 0 ? '0px' : overlap ? `${overlapOffset}px` : `${gapSize}px`,
             }}
           >
             <Avatar
               className={cn(
                 sizeClasses[size],
-                'relative bg-card border-2 border-card transition-transform hover:scale-110 hover:z-50',
+                'relative bg-card',
+                overlap && 'border-2 border-card',
               )}
             >
               <AvatarImage
@@ -69,17 +77,19 @@ export function AvatarGroup({
         );
       })}
       {/* Total count badge */}
-      <div
-        className={cn(
-          sizeClasses[size],
-          'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
-          size === 'sm' ? 'ml-2' : 'ml-3',
-        )}
-      >
-        <span className={cn(textSizeClasses[size], 'tabular-nums')}>
-          {totalCount}
-        </span>
-      </div>
+      {showCount && (
+        <div
+          className={cn(
+            sizeClasses[size],
+            'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
+            size === 'sm' ? 'ml-2' : 'ml-3',
+          )}
+        >
+          <span className={cn(textSizeClasses[size], 'tabular-nums')}>
+            {totalCount}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

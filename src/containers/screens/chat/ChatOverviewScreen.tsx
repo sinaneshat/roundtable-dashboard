@@ -21,7 +21,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
@@ -716,13 +715,13 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled); // Persist to cookie
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  // Preset selection - replaces all selected models with preset's models and preferences
-  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    // Convert models to participant configs
-    const newParticipants: ParticipantConfig[] = models.map((model, index) => ({
-      id: model.id,
-      modelId: model.id,
-      role: '',
+  // Preset selection - replaces all selected models with preset's model-role configs
+  const handlePresetSelect = useCallback((preset: ModelPreset) => {
+    // Convert preset modelRoles to participant configs with roles
+    const newParticipants: ParticipantConfig[] = preset.modelRoles.map((mr, index) => ({
+      id: mr.modelId,
+      modelId: mr.modelId,
+      role: mr.role,
       priority: index,
     }));
 
@@ -733,16 +732,19 @@ export default function ChatOverviewScreen() {
     setModelOrder(modelIds);
     setPersistedModelOrder(modelIds);
 
-    // Apply preset mode if recommended
-    if (preset.recommendedMode) {
-      setSelectedMode(preset.recommendedMode);
-      setPersistedMode(preset.recommendedMode);
-    }
+    // Apply preset mode (required field)
+    setSelectedMode(preset.mode);
+    setPersistedMode(preset.mode);
 
-    // Apply preset web search preference
-    if (preset.recommendWebSearch !== undefined) {
-      setEnableWebSearch(preset.recommendWebSearch);
-      setPersistedWebSearch(preset.recommendWebSearch);
+    // Apply preset web search setting
+    if (preset.searchEnabled === true || preset.searchEnabled === false) {
+      setEnableWebSearch(preset.searchEnabled);
+      setPersistedWebSearch(preset.searchEnabled);
+    }
+    // 'conditional' means default ON, user can toggle
+    if (preset.searchEnabled === 'conditional') {
+      setEnableWebSearch(true);
+      setPersistedWebSearch(true);
     }
   }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch]);
 

@@ -1,26 +1,21 @@
 'use client';
 
-import { EyeOff, Globe, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
 
-import type { BaseModelResponse, EnhancedModelResponse } from '@/api/routes/models/schema';
+import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getChatModeById } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
-import { canAccessPreset, getModelsForPreset } from '@/lib/config/model-presets';
+import { canAccessPreset } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 
-/** Selection result includes models and preset preferences */
+/** Selection result includes preset with model-role mappings */
 export type PresetSelectionResult = {
-  models: BaseModelResponse[];
   preset: ModelPreset;
 };
 
@@ -30,6 +25,8 @@ type ModelPresetCardProps = {
   userTier: SubscriptionTier;
   onSelect: (result: PresetSelectionResult) => void;
   className?: string;
+  /** Whether this preset is currently selected */
+  isSelected?: boolean;
   /** Set of model IDs incompatible with current file attachments (no vision) */
   incompatibleModelIds?: Set<string>;
 };
@@ -37,8 +34,12 @@ type ModelPresetCardProps = {
 /**
  * ModelPresetCard Component
  *
- * Displays a preset card with icon, name, description, and model avatars.
- * Handles tier-based locking with upgrade prompts.
+ * Displays a conversation preset card:
+ * - Dark card with subtle border
+ * - Title row
+ * - Model avatars below
+ * - Description at bottom
+ * - Selection ring when selected
  */
 export const ModelPresetCard = memo(({
   preset,
@@ -46,39 +47,27 @@ export const ModelPresetCard = memo(({
   userTier,
   onSelect,
   className,
+  isSelected = false,
   incompatibleModelIds,
 }: ModelPresetCardProps) => {
   const router = useRouter();
-  const t = useTranslations('chat.models');
   const isLocked = !canAccessPreset(preset, userTier);
-  const Icon = preset.icon;
 
-  // Get models for this preset (use power tier to show what models would be included)
-  const presetModels = getModelsForPreset(
-    preset,
-    allModels,
-    isLocked ? 'power' : userTier,
-  );
-
-  // Check if any models in this preset are incompatible with vision files
-  const hasIncompatibleModels = useMemo(() => {
-    if (!incompatibleModelIds || incompatibleModelIds.size === 0)
-      return false;
-    return presetModels.some(model => incompatibleModelIds.has(model.id));
-  }, [presetModels, incompatibleModelIds]);
+  // Get models for this preset from modelRoles
+  const presetModelIds = preset.modelRoles.map(mr => mr.modelId);
 
   // Count how many models will be available after filtering incompatible ones
   const compatibleModelCount = useMemo(() => {
     if (!incompatibleModelIds || incompatibleModelIds.size === 0)
-      return presetModels.length;
-    return presetModels.filter(m => !incompatibleModelIds.has(m.id)).length;
-  }, [presetModels, incompatibleModelIds]);
+      return presetModelIds.length;
+    return presetModelIds.filter(id => !incompatibleModelIds.has(id)).length;
+  }, [presetModelIds, incompatibleModelIds]);
 
-  // Convert models to participant config format for AvatarGroup
-  const participants: ParticipantConfig[] = presetModels.map((model, index) => ({
+  // Convert to participant config format for AvatarGroup
+  const participants: ParticipantConfig[] = preset.modelRoles.map((mr, index) => ({
     id: `preset-${preset.id}-${index}`,
-    modelId: model.id,
-    role: '',
+    modelId: mr.modelId,
+    role: mr.role,
     priority: index,
   }));
 
@@ -91,12 +80,8 @@ export const ModelPresetCard = memo(({
     if (compatibleModelCount === 0) {
       return;
     }
-    onSelect({ models: presetModels, preset });
+    onSelect({ preset });
   };
-
-  // Get mode config from centralized config
-  const modeConfig = preset.recommendedMode ? getChatModeById(preset.recommendedMode) : null;
-  const ModeIcon = modeConfig?.icon;
 
   // Fully disabled if all models are incompatible
   const isFullyDisabled = compatibleModelCount === 0;
@@ -113,104 +98,66 @@ export const ModelPresetCard = memo(({
         }
       }}
       aria-disabled={isFullyDisabled}
+      aria-pressed={isSelected}
       className={cn(
-        'relative flex flex-col h-full p-4 rounded-xl text-left w-full',
-        'border border-transparent',
-        'transition-all duration-200 ease-out',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
-        !isLocked && !isFullyDisabled && 'hover:bg-white/[0.08] hover:border-white/[0.12] hover:backdrop-blur-md cursor-pointer',
-        isLocked && 'opacity-70 cursor-pointer hover:opacity-80 hover:bg-white/[0.05]',
+        // Base card styles
+        'group relative flex flex-col p-4 rounded-2xl text-left w-full',
+        'bg-card border transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        // Default border
+        !isSelected && 'border-border/50',
+        // Hover state (when not locked/disabled/selected) - matches composer button pattern
+        !isLocked && !isFullyDisabled && !isSelected && 'hover:bg-white/10 hover:border-border cursor-pointer',
+        // Selected state - white border + background
+        isSelected && !isLocked && 'bg-white/10 border-white/70 cursor-pointer',
+        // Locked state
+        isLocked && 'opacity-70 cursor-pointer hover:opacity-80',
+        // Disabled state
         isFullyDisabled && 'opacity-50 cursor-not-allowed',
         className,
       )}
     >
-      {/* Locked overlay badge */}
-      {isLocked && (
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/20 border border-amber-500/30">
-          <Lock className="size-3 text-amber-400" />
-          <span className="text-[10px] font-medium text-amber-400">
-            {SUBSCRIPTION_TIER_NAMES[preset.requiredTier]}
-          </span>
-        </div>
-      )}
+      {/* Header row: Title */}
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <h3 className="text-base font-semibold text-foreground leading-tight">
+          {preset.name}
+        </h3>
 
-      {/* Vision incompatibility warning badge */}
-      {!isLocked && hasIncompatibleModels && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="absolute top-3 right-3">
-              <Badge
-                variant="outline"
-                className="text-[10px] px-2 py-0.5 h-5 border-destructive/50 text-destructive gap-1"
-              >
-                <EyeOff className="size-3" />
-                {compatibleModelCount === 0
-                  ? t('noVision')
-                  : `${compatibleModelCount}/${presetModels.length}`}
-              </Badge>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[220px]">
-            {compatibleModelCount === 0
-              ? t('presetNoVisionAll')
-              : t('presetNoVisionPartial', { count: presetModels.length - compatibleModelCount })}
-          </TooltipContent>
-        </Tooltip>
-      )}
-
-      {/* Content wrapper - grows to fill space */}
-      <div className="flex-1 flex flex-col">
-        {/* Header: Icon + Name */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/5">
-            <Icon className="size-5 text-white/70" />
-          </div>
-          <h3 className="text-sm font-semibold text-foreground pr-16">
-            {preset.name}
-          </h3>
-        </div>
-
-        {/* Model Avatars */}
-        <div className="mb-3">
-          <AvatarGroup
-            participants={participants}
-            allModels={allModels}
-            maxVisible={5}
-            size="sm"
-          />
-        </div>
-
-        {/* Description */}
-        <p className="text-xs text-muted-foreground leading-relaxed flex-1">
-          {preset.description}
-        </p>
-
-        {/* Mode and Web Search indicators */}
-        {!isLocked && (modeConfig || preset.recommendWebSearch) && (
-          <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5">
-            {modeConfig && ModeIcon && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <ModeIcon className="size-3" />
-                <span>{modeConfig.label}</span>
-              </div>
-            )}
-            {preset.recommendWebSearch && (
-              <div className="flex items-center gap-1.5 text-[10px] text-blue-400">
-                <Globe className="size-3" />
-                <span>Web Search</span>
-              </div>
-            )}
+        {/* Lock indicator for locked presets */}
+        {isLocked && (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 shrink-0">
+            <Lock className="size-3 text-amber-400" />
+            <span className="text-[10px] font-medium text-amber-400">
+              {SUBSCRIPTION_TIER_NAMES[preset.requiredTier]}
+            </span>
           </div>
         )}
       </div>
 
-      {/* Upgrade button for locked presets - always at footer */}
+      {/* Model Avatars */}
+      <div className="mb-3">
+        <AvatarGroup
+          participants={participants}
+          allModels={allModels}
+          maxVisible={5}
+          size="sm"
+          showCount={false}
+          overlap={false}
+        />
+      </div>
+
+      {/* Description */}
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        {preset.description}
+      </p>
+
+      {/* Upgrade button for locked presets */}
       {isLocked && (
-        <div className="mt-3 shrink-0">
+        <div className="mt-3">
           <Button
             variant="outline"
             size="sm"
-            className="w-full h-8 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+            className="w-full h-7 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
             onClick={(e) => {
               e.stopPropagation();
               router.push('/chat/pricing');

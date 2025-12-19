@@ -23,7 +23,6 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
 import { RoundSummaryAIContentSchema } from '@/api/routes/chat/schema';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
@@ -531,13 +530,13 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
-  // Preset selection - replaces all selected models with preset's models and preferences
-  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    // Convert models to participant configs
-    const newParticipants = models.map((model, index) => ({
-      id: model.id,
-      modelId: model.id,
-      role: '',
+  // Preset selection - replaces all selected models with preset's model-role configs
+  const handlePresetSelect = useCallback((preset: ModelPreset) => {
+    // Convert preset modelRoles to participant configs with roles
+    const newParticipants = preset.modelRoles.map((mr, index) => ({
+      id: mr.modelId,
+      modelId: mr.modelId,
+      role: mr.role,
       priority: index,
     }));
 
@@ -552,22 +551,19 @@ export function ChatView({
     const modelIds = newParticipants.map(p => p.modelId);
     setModelOrder(modelIds);
 
-    // Apply preset mode if recommended
-    if (preset.recommendedMode) {
-      if (mode === 'thread') {
-        threadActions.handleModeChange(preset.recommendedMode);
-      } else {
-        formActions.handleModeChange(preset.recommendedMode);
-      }
+    // Apply preset mode (required field)
+    if (mode === 'thread') {
+      threadActions.handleModeChange(preset.mode);
+    } else {
+      formActions.handleModeChange(preset.mode);
     }
 
-    // Apply preset web search preference
-    if (preset.recommendWebSearch !== undefined) {
-      if (mode === 'thread') {
-        threadActions.handleWebSearchToggle(preset.recommendWebSearch);
-      } else {
-        formActions.handleWebSearchToggle(preset.recommendWebSearch);
-      }
+    // Apply preset web search setting
+    const searchEnabled = preset.searchEnabled === 'conditional' ? true : preset.searchEnabled;
+    if (mode === 'thread') {
+      threadActions.handleWebSearchToggle(searchEnabled);
+    } else {
+      formActions.handleWebSearchToggle(searchEnabled);
     }
   }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder]);
 

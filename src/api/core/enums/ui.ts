@@ -10,7 +10,7 @@ import { z } from '@hono/zod-openapi';
 // COMPONENT VARIANT
 // ============================================================================
 
-export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'success', 'warning', 'glass'] as const;
+export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'white', 'success', 'warning', 'glass'] as const;
 
 export const ComponentVariantSchema = z.enum(COMPONENT_VARIANTS);
 
@@ -23,6 +23,7 @@ export const ComponentVariants = {
   SECONDARY: 'secondary' as const,
   GHOST: 'ghost' as const,
   LINK: 'link' as const,
+  WHITE: 'white' as const,
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
   GLASS: 'glass' as const,

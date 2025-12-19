@@ -52,6 +52,8 @@ export type ModelItemProps = {
   onOpenRolePanel?: () => void;
   /** Whether model is incompatible with current file attachments (e.g., no vision for images/PDFs) */
   isIncompatibleWithFiles?: boolean;
+  /** Pending role for models not yet toggled on - allows role assignment independently of selection */
+  pendingRole?: { role: string; customRoleId?: string };
 };
 
 export function ModelItem({
@@ -60,13 +62,14 @@ export function ModelItem({
   customRoles: _customRoles,
   onToggle,
   onRoleChange: _onRoleChange,
-  onClearRole: _onClearRole,
+  onClearRole,
   selectedCount,
   maxModels,
   enableDrag = true,
   userTierInfo: _userTierInfo,
   onOpenRolePanel,
   isIncompatibleWithFiles = false,
+  pendingRole,
 }: ModelItemProps) {
   const tModels = useTranslations('chat.models');
   const dragControls = useDragControls();
@@ -132,61 +135,61 @@ export function ModelItem({
               </Tooltip>
             )}
 
-            {/* Role badges or Add Role button - always rendered to prevent layout shift */}
-            {!isDisabledDueToTier && (
-              <div
-                className={cn(
-                  'shrink-0 flex items-center gap-0.5 sm:gap-1',
-                  !isSelected && 'invisible',
-                )}
-                onClick={e => e.stopPropagation()}
-                // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
-                onPointerDownCapture={e => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                  }
-                }}
-                role="presentation"
-              >
-                {participant?.role
-                  ? (
-                      <div className="inline-flex items-center gap-0.5 sm:gap-1">
+            {/* Role badges or Add Role button - always visible */}
+            {!isDisabledDueToTier && (() => {
+              // Use participant role if selected, otherwise use pending role
+              const displayRole = participant?.role ?? pendingRole?.role;
+
+              return (
+                <div
+                  className="shrink-0 flex items-center gap-0.5 sm:gap-1"
+                  onClick={e => e.stopPropagation()}
+                  // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
+                  onPointerDownCapture={e => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                    }
+                  }}
+                  role="presentation"
+                >
+                  {displayRole
+                    ? (
                         <Badge
-                          className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full"
-                          style={getRoleBadgeStyle(participant.role)}
+                          className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1"
+                          style={getRoleBadgeStyle(displayRole)}
                           onClick={() => onOpenRolePanel?.()}
                         >
-                          {participant.role}
+                          {displayRole}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onClearRole();
+                            }}
+                            className="shrink-0 p-0.5 rounded-full hover:bg-black/20 transition-colors"
+                            aria-label="Clear role"
+                          >
+                            <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                          </button>
                         </Badge>
+                      )
+                    : (
                         <button
                           type="button"
+                          className="inline-flex items-center gap-0.5 sm:gap-1 h-5 sm:h-6 px-1.5 sm:px-2.5 rounded-full text-[9px] sm:text-[11px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
-                            _onClearRole();
+                            onOpenRolePanel?.();
                           }}
-                          className="shrink-0 p-0.5 rounded-full hover:bg-white/10 transition-colors"
-                          aria-label="Clear role"
                         >
-                          <X className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground" />
+                          <Plus className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
+                          {tModels('addRole')}
                         </button>
-                      </div>
-                    )
-                  : (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-0.5 sm:gap-1 h-5 sm:h-6 px-1.5 sm:px-2.5 rounded-full text-[9px] sm:text-[11px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenRolePanel?.();
-                        }}
-                      >
-                        <Plus className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
-                        {tModels('addRole')}
-                      </button>
-                    )}
-              </div>
-            )}
+                      )}
+                </div>
+              );
+            })()}
           </div>
           <div className="text-[10px] sm:text-xs text-muted-foreground truncate w-full min-w-0">
             {model.description}
