@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Briefcase, GraduationCap, Hammer, Lightbulb, MessageSquare, Search, Sparkles, Target, TrendingUp, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, BookOpen, Briefcase, GraduationCap, Hammer, HelpCircle, Lightbulb, MessageSquare, Search, ShieldAlert, Sparkles, Target, Trash2, TrendingUp, Users, X } from 'lucide-react';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -21,15 +21,22 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCreateCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
+import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { UserPreset } from '@/lib/storage/user-presets';
+import {
+  createUserPreset,
+  deleteUserPreset,
+  getUserPresets,
+  updateUserPreset,
+} from '@/lib/storage/user-presets';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
-import { getRoleColors } from '@/lib/utils/role-colors';
+import { getRoleColors, getShortRoleName } from '@/lib/utils/role-colors';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import type { OrderedModel } from './model-item';
@@ -114,6 +121,26 @@ const PREDEFINED_ROLES = [
     icon: TrendingUp,
     description: 'Analyze data and provide insights',
   },
+  {
+    name: 'Researcher',
+    icon: Search,
+    description: 'Focus on accuracy, fact-checking, and verifying claims',
+  },
+  {
+    name: 'Simplifier',
+    icon: BookOpen,
+    description: 'Break down complex topics, make ideas accessible',
+  },
+  {
+    name: 'Risk Assessor',
+    icon: ShieldAlert,
+    description: 'Identify failure modes, edge cases, potential problems',
+  },
+  {
+    name: 'Questioner',
+    icon: HelpCircle,
+    description: 'Socratic approach, probing questions to deepen understanding',
+  },
 ] as const;
 
 export type ModelSelectionModalProps = {
@@ -197,8 +224,21 @@ export function ModelSelectionModal({
   // Allows assigning roles independently of selection state
   const [pendingRoles, setPendingRoles] = useState<Record<string, { role: string; customRoleId?: string }>>({});
 
-  // Custom role creation mutation
+  // User presets state
+  const [userPresets, setUserPresets] = useState<UserPreset[]>([]);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  // Edit mode - tracks which user preset is being edited
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+
+  // Load user presets on mount
+  useEffect(() => {
+    setUserPresets(getUserPresets());
+  }, []);
+
+  // Custom role mutations
   const createRoleMutation = useCreateCustomRoleMutation();
+  const deleteRoleMutation = useDeleteCustomRoleMutation();
 
   // Usage stats for custom role limits
   const { data: usageData } = useUsageStatsQuery();
@@ -314,6 +354,18 @@ export function ModelSelectionModal({
     }
   }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles, customRoleLimit]);
 
+  // Handle deleting a custom role
+  const handleDeleteCustomRole = useCallback(async (roleId: string, roleName: string) => {
+    try {
+      await deleteRoleMutation.mutateAsync({ param: { id: roleId } });
+      toastManager.success('Role deleted', `"${roleName}" has been deleted`);
+    } catch (error) {
+      console.error('[ModelSelectionModal] Failed to delete custom role:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to delete custom role');
+      toastManager.error('Failed to delete role', errorMessage);
+    }
+  }, [deleteRoleMutation]);
+
   // Handle clearing role - either from participant or pendingRoles
   const handleClearRoleInternal = useCallback((modelId: string) => {
     const modelData = orderedModels.find(om => om.model.id === modelId);
@@ -367,12 +419,89 @@ export function ModelSelectionModal({
   }, [selectedPresetId]);
 
   // Handle customize preset - apply preset and switch to Build Custom tab
-  const handleCustomizePreset = useCallback((result: PresetSelectionResult) => {
+  // If user preset, enter edit mode to allow updating
+  const handleCustomizePreset = useCallback((result: PresetSelectionResult, isUserPreset?: boolean) => {
     if (onPresetSelect) {
       onPresetSelect(result.preset);
     }
+    if (isUserPreset) {
+      setEditingPresetId(result.preset.id);
+    } else {
+      setEditingPresetId(null);
+    }
     setActiveTab('custom');
   }, [onPresetSelect]);
+
+  // Handle saving current configuration as a user preset
+  const handleSaveAsPreset = useCallback(() => {
+    const trimmedName = newPresetName.trim();
+    if (!trimmedName)
+      return;
+
+    // Get current selected models with their roles
+    const selectedModels = orderedModels.filter(om => om.participant !== null);
+    if (selectedModels.length === 0) {
+      toastManager.error('No models selected', 'Select at least one model to save as a preset');
+      return;
+    }
+
+    const modelRoles = selectedModels.map(om => ({
+      modelId: om.model.id,
+      role: om.participant?.role ?? '',
+    }));
+
+    // Create the user preset
+    createUserPreset(trimmedName, modelRoles, 'analyzing');
+
+    // Refresh the list
+    setUserPresets(getUserPresets());
+
+    // Reset state
+    setNewPresetName('');
+    setIsSavingPreset(false);
+
+    toastManager.success('Preset saved', `"${trimmedName}" has been saved to your presets`);
+  }, [newPresetName, orderedModels]);
+
+  // Handle updating an existing user preset
+  const handleUpdatePreset = useCallback(() => {
+    if (!editingPresetId)
+      return;
+
+    // Get current selected models with their roles
+    const selectedModels = orderedModels.filter(om => om.participant !== null);
+    if (selectedModels.length === 0) {
+      toastManager.error('No models selected', 'Select at least one model to update the preset');
+      return;
+    }
+
+    const modelRoles = selectedModels.map(om => ({
+      modelId: om.model.id,
+      role: om.participant?.role ?? '',
+    }));
+
+    // Find the preset name for the toast
+    const existingPreset = userPresets.find(p => p.id === editingPresetId);
+    const presetName = existingPreset?.name ?? 'Preset';
+
+    // Update the user preset
+    updateUserPreset(editingPresetId, { modelRoles });
+
+    // Refresh the list
+    setUserPresets(getUserPresets());
+
+    // Clear edit mode
+    setEditingPresetId(null);
+
+    toastManager.success('Preset updated', `"${presetName}" has been updated`);
+  }, [editingPresetId, orderedModels, userPresets]);
+
+  // Handle deleting a user preset
+  const handleDeleteUserPreset = useCallback((presetId: string) => {
+    deleteUserPreset(presetId);
+    setUserPresets(getUserPresets());
+    toastManager.success('Preset deleted', 'Your preset has been removed');
+  }, []);
 
   // Get all models for preset cards
   const allModels = useMemo(() => {
@@ -381,6 +510,13 @@ export function ModelSelectionModal({
 
   // Get user tier for preset access checks
   const userTier = userTierInfo?.current_tier ?? 'free';
+
+  // Get editing preset name for footer display
+  const editingPresetName = useMemo(() => {
+    if (!editingPresetId)
+      return null;
+    return userPresets.find(p => p.id === editingPresetId)?.name ?? null;
+  }, [editingPresetId, userPresets]);
 
   // Get selected preset for footer display
   const selectedPreset = useMemo(() => {
@@ -498,64 +634,72 @@ export function ModelSelectionModal({
                     transition={{ duration: 0.15 }}
                     className="flex flex-col flex-1 min-h-0"
                   >
-                    {/* Scrollable role list - NO padding */}
-                    <ScrollArea className="h-[420px]">
-                      <div className="flex flex-col">
-                        {/* Predefined roles */}
-                        {PREDEFINED_ROLES.map((role) => {
-                          const Icon = role.icon;
-                          // Check both participant role and pending role
-                          const currentRole = selectedModelData?.participant?.role
-                            ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
-                          const isSelected = currentRole === role.name;
-                          const colors = getRoleColors(role.name);
+                    {/* Scrollable role list */}
+                    <ScrollArea className="h-[420px] -mr-3">
+                      <div className="flex flex-col pt-1 pr-3">
+                        {/* Predefined roles - deduplicated by short name */}
+                        {PREDEFINED_ROLES
+                          .filter((role, index, arr) => {
+                            // Keep only first occurrence of each short name
+                            const shortName = getShortRoleName(role.name);
+                            return arr.findIndex(r => getShortRoleName(r.name) === shortName) === index;
+                          })
+                          .map((role) => {
+                            const Icon = role.icon;
+                            // Use short name for display consistency with badges
+                            const shortName = getShortRoleName(role.name);
+                            const colors = getRoleColors(shortName);
+                            // Check both participant role and pending role - match by short name
+                            const currentRole = selectedModelData?.participant?.role
+                              ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
+                            const isSelected = currentRole ? getShortRoleName(currentRole) === shortName : false;
 
-                          return (
-                            <button
-                              type="button"
-                              key={role.name}
-                              onClick={() => {
+                            return (
+                              <button
+                                type="button"
+                                key={role.name}
+                                onClick={() => {
                                 // Toggle: if already selected, clear it
-                                if (isSelected) {
-                                  handleClearRoleInternal(selectedModelForRole!);
-                                  handleBackToModelList();
-                                } else {
-                                  handleRoleSelect(role.name);
-                                }
-                              }}
-                              className={cn(
-                                'w-full p-3 transition-all text-left rounded-lg',
-                                'hover:bg-white/5 hover:backdrop-blur-sm',
-                                isSelected && 'bg-white/10',
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className="flex size-8 shrink-0 items-center justify-center rounded-full"
-                                  style={{ backgroundColor: colors.bgColor }}
-                                >
-                                  <Icon className="size-4" style={{ color: colors.iconColor }} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-base font-normal">{role.name}</h4>
-                                </div>
-                                {isSelected && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleClearRoleInternal(selectedModelForRole!);
-                                      handleBackToModelList();
-                                    }}
-                                    className="shrink-0 p-1 rounded-full hover:bg-white/10 transition-colors"
-                                  >
-                                    <X className="h-4 w-4 text-muted-foreground" />
-                                  </button>
+                                  if (isSelected) {
+                                    handleClearRoleInternal(selectedModelForRole!);
+                                    handleBackToModelList();
+                                  } else {
+                                    handleRoleSelect(role.name);
+                                  }
+                                }}
+                                className={cn(
+                                  'w-full p-3 transition-all text-left rounded-lg',
+                                  'hover:bg-white/5 hover:backdrop-blur-sm',
+                                  isSelected && 'bg-white/10',
                                 )}
-                              </div>
-                            </button>
-                          );
-                        })}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className="flex size-8 shrink-0 items-center justify-center rounded-full"
+                                    style={{ backgroundColor: colors.bgColor }}
+                                  >
+                                    <Icon className="size-4" style={{ color: colors.iconColor }} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="text-base font-normal">{shortName}</h4>
+                                  </div>
+                                  {isSelected && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClearRoleInternal(selectedModelForRole!);
+                                        handleBackToModelList();
+                                      }}
+                                      className="shrink-0 p-1 rounded-full hover:bg-white/10 transition-colors"
+                                    >
+                                      <X className="h-4 w-4 text-muted-foreground" />
+                                    </button>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
 
                         {/* Custom roles */}
                         {customRoles.map((role) => {
@@ -563,6 +707,7 @@ export function ModelSelectionModal({
                           const currentRole = selectedModelData?.participant?.role
                             ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
                           const isSelected = currentRole === role.name;
+                          const colors = getRoleColors(role.name);
 
                           return (
                             <button
@@ -578,28 +723,35 @@ export function ModelSelectionModal({
                                 }
                               }}
                               className={cn(
-                                'w-full p-3 transition-all text-left rounded-lg',
+                                'group w-full p-3 transition-all text-left rounded-lg',
                                 'hover:bg-white/5 hover:backdrop-blur-sm',
                                 isSelected && 'bg-white/10',
                               )}
                             >
                               <div className="flex items-center gap-3">
-                                {(() => {
-                                  const colors = getRoleColors(role.name);
-                                  return (
-                                    <div
-                                      className="flex size-8 shrink-0 items-center justify-center rounded-full"
-                                      style={{ backgroundColor: colors.bgColor }}
-                                    >
-                                      <span className="font-semibold text-[11px]" style={{ color: colors.iconColor }}>
-                                        {role.name.charAt(0).toUpperCase()}
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-base font-normal">{role.name}</h4>
+                                <div
+                                  className="flex size-8 shrink-0 items-center justify-center rounded-full"
+                                  style={{ backgroundColor: colors.bgColor }}
+                                >
+                                  <span className="font-semibold text-[11px]" style={{ color: colors.iconColor }}>
+                                    {role.name.charAt(0).toUpperCase()}
+                                  </span>
                                 </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-base font-normal truncate">{role.name}</h4>
+                                </div>
+                                {/* Delete button - shows on hover */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCustomRole(role.id, role.name);
+                                  }}
+                                  className="shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
+                                  aria-label="Delete custom role"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </button>
                                 {isSelected && (
                                   <button
                                     type="button"
@@ -660,6 +812,7 @@ export function ModelSelectionModal({
                               <Button
                                 onClick={handleCustomRoleCreate}
                                 disabled={!customRoleInput.trim() || !canCreateCustomRoles}
+                                variant="white"
                                 size="sm"
                                 className="h-8 shrink-0"
                               >
@@ -693,19 +846,68 @@ export function ModelSelectionModal({
                       {/* Presets Tab Content */}
                       <TabsContent value="presets" className="mt-0 h-[520px] flex flex-col">
                         <ScrollArea className="flex-1 -mr-3">
-                          <div className="grid grid-cols-2 gap-3 pr-3 pb-4">
-                            {MODEL_PRESETS.map(preset => (
-                              <ModelPresetCard
-                                key={preset.id}
-                                preset={preset}
-                                allModels={allModels}
-                                userTier={userTier}
-                                onSelect={handlePresetCardClick}
-                                isSelected={selectedPresetId === preset.id}
-                                incompatibleModelIds={incompatibleModelIds}
-                                onCustomize={handleCustomizePreset}
-                              />
-                            ))}
+                          <div className="pr-3 pb-4 space-y-4">
+                            {/* My Presets Section */}
+                            {userPresets.length > 0 && (
+                              <div>
+                                <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                                  My Presets
+                                </h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                  {userPresets.map((userPreset) => {
+                                    // Convert UserPreset to ModelPreset-like format for the card
+                                    const presetForCard = {
+                                      id: userPreset.id as ModelPreset['id'],
+                                      name: userPreset.name,
+                                      description: `${userPreset.modelRoles.length} models`,
+                                      icon: Sparkles,
+                                      requiredTier: 'free' as const,
+                                      order: 0,
+                                      mode: userPreset.mode,
+                                      searchEnabled: false as const,
+                                      modelRoles: userPreset.modelRoles,
+                                    };
+                                    return (
+                                      <ModelPresetCard
+                                        key={userPreset.id}
+                                        preset={presetForCard}
+                                        allModels={allModels}
+                                        userTier={userTier}
+                                        onSelect={handlePresetCardClick}
+                                        isSelected={selectedPresetId === userPreset.id}
+                                        incompatibleModelIds={incompatibleModelIds}
+                                        onCustomize={result => handleCustomizePreset(result, true)}
+                                        isUserPreset
+                                        onDelete={() => handleDeleteUserPreset(userPreset.id)}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* System Presets Section */}
+                            <div>
+                              {userPresets.length > 0 && (
+                                <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                                  Presets
+                                </h4>
+                              )}
+                              <div className="grid grid-cols-2 gap-3">
+                                {MODEL_PRESETS.map(preset => (
+                                  <ModelPresetCard
+                                    key={preset.id}
+                                    preset={preset}
+                                    allModels={allModels}
+                                    userTier={userTier}
+                                    onSelect={handlePresetCardClick}
+                                    isSelected={selectedPresetId === preset.id}
+                                    incompatibleModelIds={incompatibleModelIds}
+                                    onCustomize={handleCustomizePreset}
+                                  />
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         </ScrollArea>
 
@@ -828,14 +1030,94 @@ export function ModelSelectionModal({
         {/* Footer - outside DialogBody for full-width border */}
         {!selectedModelForRole && (
           <div className="-mx-6 -mb-6 border-t border-border">
-            <div className="flex items-center justify-end px-6 py-4">
+            <div className="flex items-center justify-between gap-3 px-6 py-4">
+              {/* Left side - Preset actions (Build Custom tab only) */}
+              <div className="flex items-center gap-2">
+                {activeTab === 'custom' && (
+                  editingPresetId
+                    ? (
+                        // Edit mode - show Update and Save as New buttons
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUpdatePreset}
+                            disabled={selectedCount === 0}
+                          >
+                            {`Update "${editingPresetName}"`}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingPresetId(null);
+                              setIsSavingPreset(true);
+                            }}
+                            disabled={selectedCount === 0}
+                          >
+                            Save as New
+                          </Button>
+                        </>
+                      )
+                    : isSavingPreset
+                      ? (
+                          <>
+                            <Input
+                              placeholder="Preset name..."
+                              value={newPresetName}
+                              onChange={e => setNewPresetName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newPresetName.trim()) {
+                                  handleSaveAsPreset();
+                                }
+                                if (e.key === 'Escape') {
+                                  setIsSavingPreset(false);
+                                  setNewPresetName('');
+                                }
+                              }}
+                              className="h-8 w-40 text-sm"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setIsSavingPreset(false);
+                                setNewPresetName('');
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleSaveAsPreset}
+                              disabled={!newPresetName.trim()}
+                            >
+                              Save
+                            </Button>
+                          </>
+                        )
+                      : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsSavingPreset(true)}
+                            disabled={selectedCount === 0}
+                          >
+                            Save as Preset
+                          </Button>
+                        )
+                )}
+              </div>
+
+              {/* Right side - Main action button */}
               <Button
                 onClick={activeTab === 'presets' ? handleApplyPreset : () => onOpenChange(false)}
                 disabled={activeTab === 'presets' && !selectedPreset}
                 variant="white"
                 size="sm"
               >
-                Save
+                {activeTab === 'presets' ? 'Save' : 'Done'}
               </Button>
             </div>
           </div>

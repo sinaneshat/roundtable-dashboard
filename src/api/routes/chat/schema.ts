@@ -839,7 +839,7 @@ export const CreateCustomRoleRequestSchema = z.object({
   description: z.string().max(500).nullable().optional().openapi({
     description: 'Optional description',
   }),
-  systemPrompt: z.string().min(1).max(4000).openapi({
+  systemPrompt: z.string().min(1).max(8000).openapi({
     description: 'System prompt for the role',
   }),
   metadata: DbCustomRoleMetadataSchema.nullable().optional().openapi({
@@ -858,7 +858,7 @@ export const UpdateCustomRoleRequestSchema = z.object({
   description: z.string().max(500).nullable().optional().openapi({
     description: 'Optional description',
   }),
-  systemPrompt: z.string().min(1).max(4000).optional().openapi({
+  systemPrompt: z.string().min(1).max(8000).optional().openapi({
     description: 'System prompt for the role',
   }),
   metadata: DbCustomRoleMetadataSchema.nullable().optional().openapi({

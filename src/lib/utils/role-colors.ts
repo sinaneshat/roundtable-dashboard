@@ -24,6 +24,10 @@ const PREDEFINED_ROLE_COLORS: Record<string, { bgColor: string; iconColor: strin
   'Analyst': { bgColor: 'rgba(6, 182, 212, 0.2)', iconColor: '#22d3ee' }, // cyan
   'Builder': { bgColor: 'rgba(249, 115, 22, 0.2)', iconColor: '#fb923c' }, // orange
   'Critic': { bgColor: 'rgba(236, 72, 153, 0.2)', iconColor: '#f472b6' }, // pink
+  'Researcher': { bgColor: 'rgba(139, 92, 246, 0.2)', iconColor: '#a78bfa' }, // violet
+  'Simplifier': { bgColor: 'rgba(20, 184, 166, 0.2)', iconColor: '#2dd4bf' }, // teal
+  'Risk Assessor': { bgColor: 'rgba(239, 68, 68, 0.2)', iconColor: '#f87171' }, // red
+  'Questioner': { bgColor: 'rgba(251, 191, 36, 0.2)', iconColor: '#fbbf24' }, // amber
 
   // Legacy full role names (for backwards compatibility)
   'The Ideator': { bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green
@@ -140,6 +144,12 @@ export function getShortRoleName(role: string): string {
     'Builder': 'Builder',
     'Implementer': 'Builder',
     'Synthesizer': 'Builder',
+
+    // New roles (identity mappings - already short)
+    'Researcher': 'Researcher',
+    'Simplifier': 'Simplifier',
+    'Risk Assessor': 'Risk Assessor',
+    'Questioner': 'Questioner',
 
     // Critical/Skeptical roles → Critic
     'Devil\'s Advocate': 'Critic',

@@ -177,7 +177,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-oss-120b',
     name: 'GPT-OSS 120B',
-    description: 'Open-weight 117B MoE. Ultra-cheap, high-reasoning.',
+    description: 'Budget-friendly thinker. Good for everyday questions and quick reasoning tasks.',
     context_length: 131072,
     created: 1733097600,
     pricing: { prompt: '0.000000039', completion: '0.00000019' },
@@ -197,7 +197,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5-nano',
     name: 'GPT-5 Nano',
-    description: 'Smallest, fastest GPT-5 variant. Ultra-low latency.',
+    description: 'Lightning-fast responder. Perfect for quick answers and simple tasks.',
     context_length: 400000,
     created: 1723075200,
     pricing: { prompt: '0.00000005', completion: '0.00000040' },
@@ -217,7 +217,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-2.0-flash-001',
     name: 'Gemini 2.0 Flash',
-    description: 'Ultra-fast, ultra-cheap. 1M context multimodal.',
+    description: 'Speed champion. Great for rapid brainstorming and processing images.',
     context_length: 1048576,
     created: 1738540800,
     pricing: { prompt: '0.00000010', completion: '0.00000040' },
@@ -237,7 +237,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4.1-nano',
     name: 'GPT-4.1 Nano',
-    description: 'Fastest, cheapest GPT-4.1. Classification & autocompletion.',
+    description: 'Efficient helper. Ideal for sorting ideas and finishing your sentences.',
     context_length: 1047576,
     created: 1713052800,
     pricing: { prompt: '0.00000010', completion: '0.00000040' },
@@ -257,7 +257,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4o-mini',
     name: 'GPT-4o Mini',
-    description: 'Budget champion. 60% cheaper than GPT-3.5 Turbo.',
+    description: 'Reliable all-rounder. Balanced performance for most everyday tasks.',
     context_length: 128000,
     created: 1715385600,
     pricing: { prompt: '0.00000015', completion: '0.00000060' },
@@ -277,7 +277,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-4-fast',
     name: 'Grok 4 Fast',
-    description: 'xAI multimodal with 2M context. Best cost-efficiency.',
+    description: 'Memory powerhouse. Can remember extremely long conversations.',
     context_length: 2000000,
     created: 1735689600,
     pricing: { prompt: '0.00000020', completion: '0.00000050' },
@@ -297,7 +297,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-4.1-fast',
     name: 'Grok 4.1 Fast',
-    description: 'xAI latest. 2M context, agentic tool calling.',
+    description: 'Smart assistant. Handles long docs and can take actions for you.',
     context_length: 2000000,
     created: 1733097600,
     pricing: { prompt: '0.00000020', completion: '0.00000050' },
@@ -317,7 +317,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-code-fast-1',
     name: 'Grok Code Fast',
-    description: 'xAI agentic coding model. Visible reasoning traces.',
+    description: 'Code specialist. Shows its thinking while solving programming problems.',
     context_length: 256000,
     created: 1740441600,
     pricing: { prompt: '0.00000020', completion: '0.00000150' },
@@ -337,7 +337,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'deepseek/deepseek-chat-v3-0324',
     name: 'DeepSeek Chat V3',
-    description: '685B MoE model. Fast, affordable, great for chat.',
+    description: 'Friendly conversationalist. Natural dialogue at an affordable price.',
     context_length: 163840,
     created: 1742860800,
     pricing: { prompt: '0.00000020', completion: '0.00000088' },
@@ -357,7 +357,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'deepseek/deepseek-r1-0528',
     name: 'DeepSeek R1 0528',
-    description: 'Latest R1. 671B params, open-source reasoning.',
+    description: 'Deep thinker. Takes time to reason through complex problems carefully.',
     context_length: 163840,
     created: 1748390400,
     pricing: { prompt: '0.00000020', completion: '0.00000450' },
@@ -377,7 +377,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'deepseek/deepseek-v3.2',
     name: 'DeepSeek V3.2',
-    description: 'Latest V3 with Sparse Attention. Long-context optimized.',
+    description: 'Context master. Excels at analyzing long documents and conversations.',
     context_length: 163840,
     created: 1733097600,
     pricing: { prompt: '0.00000027', completion: '0.00000040' },
@@ -397,7 +397,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
-    description: '1M context with thinking. Best for coding and math.',
+    description: 'Analytical mind. Strong at math, coding, and technical problems.',
     context_length: 1048576,
     created: 1740441600,
     pricing: { prompt: '0.00000030', completion: '0.00000250' },
@@ -421,7 +421,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5-mini',
     name: 'GPT-5 Mini',
-    description: 'Compact GPT-5. Lighter reasoning, lower latency.',
+    description: 'Smart and snappy. Balanced intelligence with quick responses.',
     context_length: 400000,
     created: 1723075200,
     pricing: { prompt: '0.00000025', completion: '0.00000200' },
@@ -441,7 +441,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4.1-mini',
     name: 'GPT-4.1 Mini',
-    description: 'Mid-tier GPT-4.1. Competitive with GPT-4o at lower cost.',
+    description: 'Capable workhorse. Handles complex tasks without breaking the bank.',
     context_length: 1047576,
     created: 1713052800,
     pricing: { prompt: '0.00000040', completion: '0.00000160' },
@@ -461,7 +461,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'mistralai/mistral-large-2512',
     name: 'Mistral Large 3 2512',
-    description: '675B MoE, 41B active. Apache 2.0 licensed.',
+    description: 'European powerhouse. Great for multilingual and creative writing.',
     context_length: 262144,
     created: 1733097600,
     pricing: { prompt: '0.00000050', completion: '0.00000150' },
@@ -481,7 +481,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-3-flash-preview',
     name: 'Gemini 3 Flash Preview',
-    description: 'High-speed thinking model. Configurable reasoning levels.',
+    description: 'Flexible thinker. Adjusts how deeply it thinks based on your needs.',
     context_length: 1048576,
     created: 1734393600,
     pricing: { prompt: '0.00000050', completion: '0.00000300' },
@@ -501,7 +501,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-haiku-4.5',
     name: 'Claude Haiku 4.5',
-    description: 'Latest Haiku. 73% SWE-bench. Extended thinking.',
+    description: 'Quick but thoughtful. Fast responses with careful reasoning.',
     context_length: 200000,
     created: 1733097600,
     pricing: { prompt: '0.00000100', completion: '0.00000500' },
@@ -521,7 +521,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o3-mini',
     name: 'OpenAI o3-mini',
-    description: 'Cost-efficient STEM reasoning. Adjustable reasoning effort.',
+    description: 'Science whiz. Excellent for math, physics, and technical questions.',
     context_length: 200000,
     created: 1748390400,
     pricing: { prompt: '0.00000110', completion: '0.00000440' },
@@ -541,7 +541,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o4-mini',
     name: 'OpenAI o4-mini',
-    description: 'Compact o-series reasoning. Fast multimodal with vision.',
+    description: 'Visual problem solver. Reasons through images and diagrams.',
     context_length: 200000,
     created: 1748390400,
     pricing: { prompt: '0.00000110', completion: '0.00000440' },
@@ -565,7 +565,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
-    description: 'Google flagship. #1 on LMArena. Top reasoning.',
+    description: 'Top performer. Excels at complex reasoning across all domains.',
     context_length: 1048576,
     created: 1740441600,
     pricing: { prompt: '0.00000125', completion: '0.00001000' },
@@ -585,7 +585,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5',
     name: 'GPT-5',
-    description: 'OpenAI frontier model. Major improvements in reasoning.',
+    description: 'Premium intelligence. Exceptional at nuanced, complex tasks.',
     context_length: 400000,
     created: 1723075200,
     pricing: { prompt: '0.00000125', completion: '0.00001000' },
@@ -605,7 +605,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5.1',
     name: 'GPT-5.1',
-    description: 'GPT-5 with adaptive reasoning. Natural conversational style.',
+    description: 'Natural conversationalist. Thoughtful responses that feel human.',
     context_length: 400000,
     created: 1748390400,
     pricing: { prompt: '0.00000125', completion: '0.00001000' },
@@ -625,7 +625,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5.2',
     name: 'GPT-5.2',
-    description: 'Latest GPT-5. Enhanced agentic and long-context performance.',
+    description: 'Power user\'s choice. Handles complex projects and long documents.',
     context_length: 400000,
     created: 1733788800,
     pricing: { prompt: '0.00000175', completion: '0.00001400' },
@@ -645,7 +645,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o3',
     name: 'OpenAI o3',
-    description: 'Latest reasoning model. Math, science, coding, visual.',
+    description: 'Ultimate problem solver. Excels at math, science, and coding challenges.',
     context_length: 200000,
     created: 1744761600,
     pricing: { prompt: '0.00000200', completion: '0.00000800' },
@@ -665,7 +665,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4.1',
     name: 'GPT-4.1',
-    description: 'OpenAI flagship. 1M context, 54.6% SWE-bench.',
+    description: 'Versatile expert. Strong across writing, analysis, and coding.',
     context_length: 1047576,
     created: 1744675200,
     pricing: { prompt: '0.00000200', completion: '0.00000800' },
@@ -685,7 +685,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-3-pro-preview',
     name: 'Gemini 3 Pro Preview',
-    description: 'Google flagship frontier. 1M context, multimodal.',
+    description: 'Multimedia master. Analyzes text, images, video, and audio together.',
     context_length: 1048576,
     created: 1733097600,
     pricing: { prompt: '0.00000200', completion: '0.00001200' },
@@ -705,7 +705,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-3',
     name: 'Grok 3',
-    description: 'xAI flagship. Deep domain knowledge in finance, healthcare, law.',
+    description: 'Domain specialist. Deep expertise in finance, healthcare, and law.',
     context_length: 131072,
     created: 1736294400,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -725,7 +725,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-4',
     name: 'Grok 4',
-    description: 'xAI latest reasoning model. 256K context, parallel tools.',
+    description: 'Advanced reasoner. Tackles tough problems with multiple tools at once.',
     context_length: 256000,
     created: 1752019200,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -745,7 +745,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-sonnet-4',
     name: 'Claude Sonnet 4',
-    description: 'Anthropic flagship. 1M context, best for coding and agents.',
+    description: 'Coding champion. Excels at software development and agentic tasks.',
     context_length: 1000000,
     created: 1747958400,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -765,7 +765,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-sonnet-4.5',
     name: 'Claude Sonnet 4.5',
-    description: 'Latest Sonnet. 1M context, agent-optimized.',
+    description: 'Balanced brilliance. Thoughtful, nuanced, and great at writing.',
     context_length: 1000000,
     created: 1733097600,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -789,7 +789,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-opus-4.5',
     name: 'Claude Opus 4.5',
-    description: 'Latest Opus. 80.9% SWE-bench. Advanced reasoning.',
+    description: 'The deep thinker. Best for complex analysis and creative projects.',
     context_length: 200000,
     created: 1733097600,
     pricing: { prompt: '0.00000500', completion: '0.00002500' },
@@ -809,7 +809,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o1',
     name: 'OpenAI o1',
-    description: 'PhD-level reasoning. Best for STEM, physics, chemistry, biology.',
+    description: 'Maximum reasoning. For the most challenging problems requiring deep thought.',
     context_length: 200000,
     created: 1726099200,
     pricing: { prompt: '0.00001500', completion: '0.00006000' },
@@ -829,7 +829,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-opus-4',
     name: 'Claude Opus 4',
-    description: 'World\'s best coding model. 72.5% SWE-bench, 43.2% Terminal-bench.',
+    description: 'Elite coder. The world\'s top model for software engineering.',
     context_length: 200000,
     created: 1747958400,
     pricing: { prompt: '0.00001500', completion: '0.00007500' },

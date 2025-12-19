@@ -156,11 +156,13 @@ export function ModelItem({
                   {displayRole
                     ? (
                         <Badge
-                          className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1"
+                          className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1 max-w-[100px] sm:max-w-[120px]"
                           style={getRoleBadgeStyle(getShortRoleName(displayRole))}
                           onClick={() => onOpenRolePanel?.()}
                         >
-                          {getShortRoleName(displayRole)}
+                          <span className="truncate">
+                            {getShortRoleName(displayRole)}
+                          </span>
                           <button
                             type="button"
                             onClick={(e) => {
