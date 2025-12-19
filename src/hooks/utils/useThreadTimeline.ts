@@ -1,7 +1,7 @@
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
-import { MessageStatuses } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
 import { getParticipantIndex } from '@/lib/utils/metadata';
 import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
@@ -133,13 +133,13 @@ export function useThreadTimeline({
     messagesByRound.forEach((roundMessages, _roundNumber) => {
       roundMessages.sort((a, b) => {
         // User messages come first
-        if (a.role === 'user' && b.role !== 'user')
+        if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
           return -1;
-        if (a.role !== 'user' && b.role === 'user')
+        if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
           return 1;
 
         // For assistant messages, sort by participantIndex
-        if (a.role === 'assistant' && b.role === 'assistant') {
+        if (a.role === MessageRoles.ASSISTANT && b.role === MessageRoles.ASSISTANT) {
           const indexA = getParticipantIndex(a.metadata) ?? 0;
           const indexB = getParticipantIndex(b.metadata) ?? 0;
           return indexA - indexB;

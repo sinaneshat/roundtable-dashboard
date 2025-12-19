@@ -254,6 +254,12 @@ export function ChatView({
     return getIncompatibleModelIds(allEnabledModels, files);
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
+  // ✅ STALE CLOSURE FIX: Track latest incompatibleModelIds in ref for callbacks
+  const incompatibleModelIdsRef = useRef(incompatibleModelIds);
+  useEffect(() => {
+    incompatibleModelIdsRef.current = incompatibleModelIds;
+  }, [incompatibleModelIds]);
+
   // Timeline with messages, summaries, changelog, and pre-searches
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
   // This enables rendering pre-search cards even when user message
@@ -370,10 +376,10 @@ export function ChatView({
   // Don't check currentResumptionPhase directly - it can be stale after round completes
   // Only check actual resumption status states which are properly managed
   const isResumptionActive = (
-    preSearchResumption?.status === 'streaming'
-    || preSearchResumption?.status === 'pending'
-    || summarizerResumption?.status === 'streaming'
-    || summarizerResumption?.status === 'pending'
+    preSearchResumption?.status === MessageStatuses.STREAMING
+    || preSearchResumption?.status === MessageStatuses.PENDING
+    || summarizerResumption?.status === MessageStatuses.STREAMING
+    || summarizerResumption?.status === MessageStatuses.PENDING
   );
 
   const isInputBlocked = isStreaming
@@ -473,8 +479,9 @@ export function ChatView({
 
   const handleModelToggle = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
-    if (!orderedModel)
+    if (!orderedModel) {
       return;
+    }
 
     let updatedParticipants;
     if (orderedModel.participant) {
@@ -486,6 +493,16 @@ export function ChatView({
       });
       updatedParticipants = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
     } else {
+      // ✅ VISION COMPATIBILITY: Block selection if model is incompatible with uploaded files
+      const latestIncompatible = incompatibleModelIdsRef.current;
+      if (latestIncompatible.has(modelId)) {
+        toastManager.warning(
+          t('models.cannotSelectModel'),
+          t('models.modelIncompatibleWithFiles'),
+        );
+        return;
+      }
+
       // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
       const newParticipant = {
         id: modelId,
@@ -506,7 +523,7 @@ export function ChatView({
     } else {
       setSelectedParticipants(updatedParticipants);
     }
-  }, [orderedModels, selectedParticipants, modelOrder, mode, threadActions, setSelectedParticipants]);
+  }, [orderedModels, selectedParticipants, modelOrder, mode, threadActions, setSelectedParticipants, t]);
 
   const handleModelRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
     const updated = selectedParticipants.map(p =>
@@ -530,13 +547,37 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
-  // Preset selection - replaces all selected models with preset's model-role configs
-  const handlePresetSelect = useCallback((preset: ModelPreset) => {
-    // Convert preset modelRoles to participant configs with roles
-    const newParticipants = preset.modelRoles.map((mr, index) => ({
-      id: mr.modelId,
-      modelId: mr.modelId,
-      role: mr.role,
+  // Preset selection - replaces all selected models with preset's models and preferences
+  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
+    // ✅ VISION COMPATIBILITY: Double-check filtering at execution time
+    const latestIncompatible = incompatibleModelIdsRef.current;
+    const compatibleModels = latestIncompatible.size > 0
+      ? models.filter(m => !latestIncompatible.has(m.id))
+      : models;
+
+    // Show warning if any models were filtered
+    const filteredCount = models.length - compatibleModels.length;
+    if (filteredCount > 0 && compatibleModels.length > 0) {
+      toastManager.warning(
+        t('models.presetModelsExcluded'),
+        t('models.presetModelsExcludedDescription', { count: filteredCount }),
+      );
+    }
+
+    // If ALL models are incompatible, don't apply preset
+    if (compatibleModels.length === 0) {
+      toastManager.error(
+        t('models.presetIncompatible'),
+        t('models.presetIncompatibleDescription'),
+      );
+      return;
+    }
+
+    // Convert models to participant configs
+    const newParticipants = compatibleModels.map((model, index) => ({
+      id: model.id,
+      modelId: model.id,
+      role: '',
       priority: index,
     }));
 
@@ -565,7 +606,7 @@ export function ChatView({
     } else {
       formActions.handleWebSearchToggle(searchEnabled);
     }
-  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder]);
+  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder, t]);
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
     // Allow removing all - validation shown in UI

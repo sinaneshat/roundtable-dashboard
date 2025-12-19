@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { MessagePartTypes } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -117,11 +117,11 @@ function createUserMessage(): ChatMessage {
     id: 'msg-demo-user',
     threadId: 'demo-thread',
     participantId: null,
-    role: 'user',
+    role: MessageRoles.USER,
     parts: [{ type: 'text', text: DEMO_USER_MESSAGE_CONTENT }],
     roundNumber: 1,
     createdAt: new Date(),
-    metadata: { role: 'user', roundNumber: 1 },
+    metadata: { role: MessageRoles.USER, roundNumber: 1 },
   };
 }
 
@@ -130,12 +130,12 @@ function createParticipantMessage(index: number, text: string): ChatMessage {
     id: `msg-demo-participant-${index}`,
     threadId: 'demo-thread',
     participantId: `participant-${index}`,
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     parts: [{ type: MessagePartTypes.TEXT, text }],
     roundNumber: 1,
     createdAt: new Date(),
     metadata: {
-      role: 'assistant' as const,
+      role: MessageRoles.ASSISTANT,
       roundNumber: 1,
       participantId: `participant-${index}`,
       participantIndex: index,

@@ -19,6 +19,7 @@ import type { FeedbackType } from '@/api/core/enums';
 import {
   ChatModeSchema,
   FeedbackTypeSchema,
+  MESSAGE_STATUSES,
   ScreenModeSchema,
   StreamStatusSchema,
 } from '@/api/core/enums';
@@ -450,10 +451,11 @@ export type StreamResumptionState = z.infer<typeof StreamResumptionStateEntitySc
 
 /**
  * Pre-search resumption state for phase-based tracking
+ * Uses MESSAGE_STATUSES for consistency with message lifecycle
  */
 export const PreSearchResumptionStateSchema = z.object({
   enabled: z.boolean(),
-  status: z.enum(['pending', 'streaming', 'complete', 'failed']).nullable(),
+  status: z.enum(MESSAGE_STATUSES).nullable(),
   streamId: z.string().nullable(),
   preSearchId: z.string().nullable(),
 });
@@ -462,9 +464,10 @@ export type PreSearchResumptionState = z.infer<typeof PreSearchResumptionStateSc
 
 /**
  * Summarizer resumption state for phase-based tracking
+ * Uses MESSAGE_STATUSES for consistency with message lifecycle
  */
 export const SummarizerResumptionStateSchema = z.object({
-  status: z.enum(['pending', 'streaming', 'complete', 'failed']).nullable(),
+  status: z.enum(MESSAGE_STATUSES).nullable(),
   streamId: z.string().nullable(),
   summaryId: z.string().nullable(),
 });

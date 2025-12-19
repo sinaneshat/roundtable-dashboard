@@ -1,10 +1,13 @@
 'use client';
 
 import type { HTMLMotionProps, Variants } from 'motion/react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/ui/cn';
+
+// Re-export LayoutGroup for use in parent components that need to coordinate animations
+export { LayoutGroup };
 
 // =============================================================================
 // ANIMATION CONSTANTS - Consistent timing and easing across all components
@@ -27,61 +30,56 @@ export const ANIMATION_EASE = {
 // =============================================================================
 
 /**
- * User message entrance - slides from RIGHT
+ * User message entrance - fade in
  */
 export const userMessageVariants: Variants = {
-  initial: { opacity: 0, x: 16 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    x: 0,
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
 
 /**
- * Participant message entrance - slides from LEFT
+ * Participant message entrance - fade in
  */
 export const participantMessageVariants: Variants = {
-  initial: { opacity: 0, x: -16 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    x: 0,
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
 
 /**
- * Summary/Search cards - slides UP
+ * Summary/Search cards - fade in
  */
 export const slideUpVariants: Variants = {
-  initial: { opacity: 0, y: 12 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    y: 0,
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
 
 /**
- * Timeline entrance - subtle slide up
+ * Timeline entrance - fade in
  */
 export const timelineEntranceVariants: Variants = {
-  initial: { opacity: 0, y: 8 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    y: 0,
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
 
 /**
- * Accordion card entrance (PreSearch, RoundSummary)
+ * Accordion card entrance (PreSearch, RoundSummary) - fade in
  */
 export const accordionCardVariants: Variants = {
-  initial: { opacity: 0, y: 6 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    y: 0,
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
@@ -105,7 +103,7 @@ type SimpleEntranceProps = {
 const VIEWPORT_THRESHOLD = 0.05;
 
 /**
- * User message - slides from right when scrolled into view
+ * User message - fade in when scrolled into view
  */
 export function ScrollAwareUserMessage({
   children,
@@ -118,10 +116,10 @@ export function ScrollAwareUserMessage({
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: 24 }}
-      whileInView={{ opacity: 1, x: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
-      transition={{ duration: 0.3, ease: ANIMATION_EASE.enter }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
       {children}
@@ -130,7 +128,7 @@ export function ScrollAwareUserMessage({
 }
 
 /**
- * Participant message - slides from left when scrolled into view
+ * Participant message - fade in when scrolled into view
  */
 export function ScrollAwareParticipant({
   children,
@@ -144,10 +142,10 @@ export function ScrollAwareParticipant({
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -24 }}
-      whileInView={{ opacity: 1, x: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
-      transition={{ duration: 0.3, delay: index * 0.05, ease: ANIMATION_EASE.enter }}
+      transition={{ duration: 0.25, delay: index * 0.05, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
       {children}
@@ -156,7 +154,7 @@ export function ScrollAwareParticipant({
 }
 
 /**
- * Timeline entrance - slides up when scrolled into view
+ * Timeline entrance - fade in when scrolled into view
  */
 export function TimelineEntrance({
   children,
@@ -170,10 +168,10 @@ export function TimelineEntrance({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
-      transition={{ duration: 0.3, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
+      transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
       className={cn(className)}
     >
       {children}
@@ -182,7 +180,7 @@ export function TimelineEntrance({
 }
 
 /**
- * PreSearch card - slides DOWN from top when scrolled into view
+ * PreSearch card - fade in when scrolled into view
  */
 export function ScrollFromTop({
   children,
@@ -195,10 +193,10 @@ export function ScrollFromTop({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
-      transition={{ duration: 0.3, ease: ANIMATION_EASE.enter }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
       {children}
@@ -207,7 +205,7 @@ export function ScrollFromTop({
 }
 
 /**
- * Summary card - slides UP from bottom when scrolled into view
+ * Summary card - fade in when scrolled into view
  */
 export function ScrollFromBottom({
   children,
@@ -220,10 +218,10 @@ export function ScrollFromBottom({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
-      transition={{ duration: 0.3, ease: ANIMATION_EASE.enter }}
+      transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
       {children}
@@ -263,7 +261,7 @@ export function ParticipantEntrance({
 }
 
 /**
- * Accordion card entrance - slides up when scrolled into view
+ * Accordion card entrance - fade in when scrolled into view
  */
 export function AccordionEntrance({
   children,
@@ -276,8 +274,8 @@ export function AccordionEntrance({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
       transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn(className)}
@@ -288,7 +286,7 @@ export function AccordionEntrance({
 }
 
 // =============================================================================
-// STREAMING LIST COMPONENTS - Simple, no layout animations
+// STREAMING LIST COMPONENTS - Layout animations for smooth height transitions
 // =============================================================================
 
 type AnimatedStreamingListProps = {
@@ -299,13 +297,31 @@ type AnimatedStreamingListProps = {
 };
 
 /**
- * Container for streaming lists - just a wrapper, no animations
+ * Container for streaming lists - uses layout animation for smooth content changes
+ * The layout prop ensures smooth height transitions as items are added/removed
  */
 export function AnimatedStreamingList({
   children,
   className,
+  groupId,
 }: AnimatedStreamingListProps) {
-  return <div className={cn(className)}>{children}</div>;
+  return (
+    <motion.div
+      layout
+      layoutId={groupId}
+      transition={{
+        layout: {
+          type: 'spring',
+          stiffness: 400,
+          damping: 30,
+          mass: 0.8,
+        },
+      }}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 type AnimatedStreamingItemProps = {
@@ -319,11 +335,13 @@ type AnimatedStreamingItemProps = {
 };
 
 /**
- * Individual streaming item - simple fade in
+ * Individual streaming item - fade in with layout animation
+ * Layout prop prevents height jumps when content size changes
  */
 export function AnimatedStreamingItem({
   children,
   className,
+  itemKey,
   index = 0,
   delay = 0,
   staggerDelay = 0.03,
@@ -335,11 +353,22 @@ export function AnimatedStreamingItem({
 
   return (
     <motion.div
+      layout
+      layoutId={itemKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{
-        duration: ANIMATION_DURATION.fast,
-        delay: delay + index * staggerDelay,
+        opacity: {
+          duration: ANIMATION_DURATION.normal,
+          delay: delay + index * staggerDelay,
+          ease: ANIMATION_EASE.enter,
+        },
+        layout: {
+          type: 'spring',
+          stiffness: 400,
+          damping: 30,
+          mass: 0.8,
+        },
       }}
       className={cn(className)}
     >
@@ -349,7 +378,7 @@ export function AnimatedStreamingItem({
 }
 
 // =============================================================================
-// ACCORDION CONTENT - Simple open/close with AnimatePresence
+// ACCORDION CONTENT - Smooth height animations with AnimatePresence
 // =============================================================================
 
 type AnimatedAccordionContentProps = {
@@ -361,29 +390,103 @@ type AnimatedAccordionContentProps = {
 };
 
 /**
- * Animated accordion content - simple fade, no height animations
+ * Animated accordion content - smooth height transition using auto height
+ * Uses Motion's unique ability to animate to/from height: 'auto'
  */
 export function AnimatedAccordionContent({
   children,
   className,
   isOpen,
+  isStreaming,
   onAnimationComplete,
 }: AnimatedAccordionContentProps) {
   return (
     <AnimatePresence mode="wait" initial={false}>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: ANIMATION_DURATION.fast }}
+          layout
+          initial={{ opacity: 0, height: 0 }}
+          animate={{
+            opacity: 1,
+            height: 'auto',
+            transition: {
+              height: {
+                type: 'spring',
+                stiffness: 500,
+                damping: 40,
+                mass: 0.8,
+              },
+              opacity: { duration: 0.2, ease: ANIMATION_EASE.enter },
+            },
+          }}
+          exit={{
+            opacity: 0,
+            height: 0,
+            transition: {
+              height: { duration: 0.2, ease: ANIMATION_EASE.exit },
+              opacity: { duration: 0.15, ease: ANIMATION_EASE.exit },
+            },
+          }}
           onAnimationComplete={onAnimationComplete}
-          className={cn(className)}
+          className={cn('overflow-hidden', className)}
         >
-          {children}
+          {/* Inner container with layout for smooth content changes during streaming */}
+          <motion.div
+            layout={isStreaming}
+            transition={{
+              layout: {
+                type: 'spring',
+                stiffness: 400,
+                damping: 30,
+              },
+            }}
+          >
+            {children}
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// =============================================================================
+// STREAMING MESSAGE CONTENT - Smooth height transitions during text streaming
+// =============================================================================
+
+type StreamingMessageContentProps = {
+  children: ReactNode;
+  className?: string;
+  isStreaming?: boolean;
+  layoutId?: string;
+};
+
+/**
+ * Wrapper for streaming message content that smoothly animates height changes
+ * Use this around text content that grows as tokens stream in
+ * Prevents jarring height jumps during AI response streaming
+ */
+export function StreamingMessageContent({
+  children,
+  className,
+  isStreaming = false,
+  layoutId,
+}: StreamingMessageContentProps) {
+  return (
+    <motion.div
+      layout={isStreaming ? 'position' : false}
+      layoutId={layoutId}
+      transition={{
+        layout: {
+          type: 'spring',
+          stiffness: 500,
+          damping: 35,
+          mass: 0.8,
+        },
+      }}
+      className={cn(className)}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -400,21 +503,29 @@ type AnimatedSectionProps = {
 };
 
 /**
- * Animated section - simple slide up
+ * Animated section - fade in with layout support
  */
 export function AnimatedSection({
   children,
   className,
+  sectionKey,
   index = 0,
 }: AnimatedSectionProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
+      layout
+      layoutId={sectionKey}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{
         duration: 0.2,
         delay: index * 0.05,
         ease: ANIMATION_EASE.enter,
+        layout: {
+          type: 'spring',
+          stiffness: 400,
+          damping: 30,
+        },
       }}
       className={cn(className)}
     >
@@ -471,10 +582,9 @@ type AnimatedStaggerItemProps = {
 };
 
 const staggerItemVariants: Variants = {
-  initial: { opacity: 0, y: 8 },
+  initial: { opacity: 0 },
   animate: {
     opacity: 1,
-    y: 0,
     transition: { duration: 0.2, ease: ANIMATION_EASE.enter },
   },
 };
@@ -556,7 +666,7 @@ export function ScaleIn({
 }
 
 /**
- * Slide in from left
+ * Fade in (formerly slide in)
  */
 export function SlideIn({
   children,
@@ -567,9 +677,9 @@ export function SlideIn({
 }: MotionComponentProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: -12 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 12 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       transition={{ duration, delay, ease: ANIMATION_EASE.enter }}
       className={cn(className)}
       {...props}
@@ -683,10 +793,10 @@ export function ScrollFadeEntrance({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ amount: VIEWPORT_THRESHOLD }}
-      transition={{ duration: 0.3, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
+      transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
       {children}

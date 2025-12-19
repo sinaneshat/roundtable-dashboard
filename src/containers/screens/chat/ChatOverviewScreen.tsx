@@ -303,6 +303,14 @@ export default function ChatOverviewScreen() {
     return getIncompatibleModelIds(allEnabledModels, files);
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
+  // ✅ STALE CLOSURE FIX: Track latest incompatibleModelIds in ref for callbacks
+  // Callbacks created with useCallback may have stale closure references.
+  // This ref ensures we always check the latest incompatibility state.
+  const incompatibleModelIdsRef = useRef(incompatibleModelIds);
+  useEffect(() => {
+    incompatibleModelIdsRef.current = incompatibleModelIds;
+  }, [incompatibleModelIds]);
+
   // ============================================================================
   // HOOKS
   // ============================================================================
@@ -535,7 +543,7 @@ export default function ChatOverviewScreen() {
       const isFormSubmitting = currentState.pendingMessage !== null && !currentState.hasSentPendingMessage;
       const isStreamingActive = currentState.isStreaming || currentState.streamingRoundNumber !== null;
       const hasActivePreSearch = currentState.preSearches.some(
-        ps => ps.status === 'pending' || ps.status === 'streaming',
+        ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
       );
 
       if (hasActiveConversation || isFormSubmitting || isStreamingActive || hasActivePreSearch) {
@@ -657,8 +665,9 @@ export default function ChatOverviewScreen() {
   // ✅ STALE CLOSURE FIX: Use store actions instead of closure-based state manipulation
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
-    if (!orderedModel)
+    if (!orderedModel) {
       return;
+    }
 
     if (orderedModel.participant) {
       // Use store action to remove - avoids stale closure
@@ -667,6 +676,17 @@ export default function ChatOverviewScreen() {
       const currentParticipants = storeApi.getState().selectedParticipants;
       setPersistedModelIds(currentParticipants.map(p => p.modelId));
     } else {
+      // ✅ VISION COMPATIBILITY: Block selection if model is incompatible with uploaded files
+      // Use ref to get latest incompatibility state (avoids stale closure)
+      const latestIncompatible = incompatibleModelIdsRef.current;
+      if (latestIncompatible.has(modelId)) {
+        toastManager.warning(
+          t('chat.models.cannotSelectModel'),
+          t('chat.models.modelIncompatibleWithFiles'),
+        );
+        return;
+      }
+
       // Use store action to add - avoids stale closure
       const newParticipant: ParticipantConfig = {
         id: modelId,
@@ -679,7 +699,7 @@ export default function ChatOverviewScreen() {
       const currentParticipants = storeApi.getState().selectedParticipants;
       setPersistedModelIds(currentParticipants.map(p => p.modelId));
     }
-  }, [orderedModels, removeParticipant, addParticipant, setPersistedModelIds, storeApi]);
+  }, [orderedModels, removeParticipant, addParticipant, setPersistedModelIds, storeApi, t]);
 
   // ✅ STALE CLOSURE FIX: Use store action instead of closure-based map
   // The old pattern captured selectedParticipants in closure, causing deselection bugs
@@ -715,13 +735,38 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled); // Persist to cookie
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  // Preset selection - replaces all selected models with preset's model-role configs
-  const handlePresetSelect = useCallback((preset: ModelPreset) => {
-    // Convert preset modelRoles to participant configs with roles
-    const newParticipants: ParticipantConfig[] = preset.modelRoles.map((mr, index) => ({
-      id: mr.modelId,
-      modelId: mr.modelId,
-      role: mr.role,
+  // Preset selection - replaces all selected models with preset's models and preferences
+  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
+    // ✅ VISION COMPATIBILITY: Double-check filtering at execution time
+    // The modal filters before calling this, but use ref to ensure latest state
+    const latestIncompatible = incompatibleModelIdsRef.current;
+    const compatibleModels = latestIncompatible.size > 0
+      ? models.filter(m => !latestIncompatible.has(m.id))
+      : models;
+
+    // Show warning if any models were filtered
+    const filteredCount = models.length - compatibleModels.length;
+    if (filteredCount > 0 && compatibleModels.length > 0) {
+      toastManager.warning(
+        t('chat.models.presetModelsExcluded'),
+        t('chat.models.presetModelsExcludedDescription', { count: filteredCount }),
+      );
+    }
+
+    // If ALL models are incompatible, don't apply preset
+    if (compatibleModels.length === 0) {
+      toastManager.error(
+        t('chat.models.presetIncompatible'),
+        t('chat.models.presetIncompatibleDescription'),
+      );
+      return;
+    }
+
+    // Convert models to participant configs
+    const newParticipants: ParticipantConfig[] = compatibleModels.map((model, index) => ({
+      id: model.id,
+      modelId: model.id,
+      role: '',
       priority: index,
     }));
 
@@ -746,7 +791,7 @@ export default function ChatOverviewScreen() {
       setEnableWebSearch(true);
       setPersistedWebSearch(true);
     }
-  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch]);
+  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch, t]);
 
   // ============================================================================
   // MEMOIZED CHAT INPUT PROPS (DRY - shared between desktop and mobile)

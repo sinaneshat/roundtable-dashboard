@@ -18,6 +18,7 @@ import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
+import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
@@ -26,6 +27,40 @@ import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { hasCitations } from '@/lib/utils/citation-parser';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
+
+/**
+ * ✅ MODEL NORMALIZATION: Filter non-renderable reasoning parts
+ *
+ * Different AI models have quirks during streaming that cause layout shifts:
+ * - Grok (xAI): Sends `[REDACTED]` encrypted reasoning that disappears on completion
+ * - Claude: Native `type: 'redacted'` parts for encrypted thinking content
+ * - DeepSeek: Uses <think> tags handled by extractReasoningMiddleware
+ * - Gemini: Native reasoning with `type: 'redacted'` for encrypted content
+ *
+ * This unified filter prevents layout shifts from:
+ * 1. Empty or whitespace-only reasoning text
+ * 2. Placeholder content like `[REDACTED]`
+ * 3. Parts with `type: 'redacted'` (AI SDK native redacted reasoning)
+ * 4. Any reasoning that would render as blank/invisible
+ *
+ * @see AI SDK docs: Reasoning Detail Object supports 'text' and 'redacted' types
+ * @see OpenRouter docs: "Encrypted reasoning content might appear as [REDACTED] in streaming"
+ * @see message-persistence.service.ts:extractReasoning() for backend normalization
+ */
+function isNonRenderableReasoningPart(part: MessagePart): boolean {
+  if (part.type !== MessagePartTypes.REASONING) {
+    return false;
+  }
+  // Filter reasoning parts with type: 'redacted' (AI SDK native redacted reasoning)
+  // This handles Gemini, Claude, and other models that use native redacted reasoning
+  const reasoningType = (part as { reasoningType?: string }).reasoningType;
+  if (reasoningType === 'redacted') {
+    return true;
+  }
+  const text = part.text?.trim() ?? '';
+  // Filter: empty, whitespace-only, or known placeholder patterns
+  return !text || text === '[REDACTED]' || /^\[REDACTED\]$/i.test(text);
+}
 
 type ModelMessageCardProps = {
   model?: EnhancedModelResponse;
@@ -68,7 +103,9 @@ export const ModelMessageCard = memo(({
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
-  const isPendingWithNoParts = showStatusIndicator && parts.length === 0;
+  // ✅ MODEL NORMALIZATION: Filter non-renderable reasoning to prevent layout shifts
+  const renderableParts = parts.filter(part => !isNonRenderableReasoningPart(part));
+  const isPendingWithNoParts = showStatusIndicator && renderableParts.length === 0;
   const isError = status === MessageStatuses.FAILED;
   const isStreaming = status === MessageStatuses.STREAMING;
 
@@ -160,16 +197,19 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            {/* Content rendering - no nested animations (scroll animation handles entrance) */}
+            {/* Content rendering - StreamingMessageContent handles smooth height transitions */}
             {isPendingWithNoParts
               ? (
                   <div className="py-2 text-muted-foreground text-base">
                     <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
                   </div>
                 )
-              : parts.length > 0
+              : renderableParts.length > 0
                 ? (
-                    <div>
+                    <StreamingMessageContent
+                      isStreaming={isStreaming}
+                      layoutId={messageId ? `msg-content-${messageId}` : undefined}
+                    >
                       {maxContentHeight
                         ? (
                             <ScrollArea
@@ -180,7 +220,7 @@ export const ModelMessageCard = memo(({
                             </ScrollArea>
                           )
                         : renderContentParts()}
-                    </div>
+                    </StreamingMessageContent>
                   )
                 : null}
 
@@ -198,7 +238,8 @@ export const ModelMessageCard = memo(({
 
   // ✅ Helper function to render content parts (extracted for ScrollArea wrapping)
   function renderContentParts() {
-    const sortedParts = [...parts].sort((a, b) => {
+    // ✅ MODEL NORMALIZATION: Uses pre-filtered renderableParts (non-renderable reasoning excluded)
+    const sortedParts = [...renderableParts].sort((a, b) => {
       const order = { 'reasoning': 0, 'text': 1, 'tool-call': 2, 'tool-result': 3 };
       const aOrder = order[a.type as keyof typeof order] ?? 4;
       const bOrder = order[b.type as keyof typeof order] ?? 4;
