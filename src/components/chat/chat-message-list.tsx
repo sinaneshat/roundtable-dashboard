@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import type { MessageStatus } from '@/api/core/enums';
+import type { FeedbackType, MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -131,7 +131,7 @@ function ParticipantHeader({
   }, [avatarSrc]);
 
   return (
-    <div className="flex items-center gap-3 mb-6">
+    <div className="flex items-center gap-3 mb-3">
       <Avatar className={cn('size-8', `drop-shadow-[0_0_12px_hsl(var(--${colorClass})/0.3)]`)}>
         <AvatarImage src={avatarSrc} alt={avatarName} className="object-contain p-0.5" />
         <AvatarFallback className="text-[8px] bg-muted">
@@ -183,6 +183,16 @@ type ParticipantMessageWrapperProps = {
   loadingText?: string;
   /** Max height for scrollable content */
   maxContentHeight?: number;
+  /** Feedback props for like/dislike buttons */
+  feedbackProps?: {
+    threadId: string;
+    roundNumber: number;
+    currentFeedback: FeedbackType | null;
+    onFeedbackChange: (feedbackType: FeedbackType | null) => void;
+    disabled?: boolean;
+    isPending?: boolean;
+    pendingType?: FeedbackType | null;
+  };
 };
 
 /**
@@ -200,6 +210,7 @@ function ParticipantMessageWrapper({
   metadata,
   loadingText,
   maxContentHeight,
+  feedbackProps,
 }: ParticipantMessageWrapperProps) {
   const avatarProps = getAvatarPropsFromModelId(
     MessageRoles.ASSISTANT,
@@ -240,6 +251,8 @@ function ParticipantMessageWrapper({
           hideAvatar
           loadingText={loadingText}
           maxContentHeight={maxContentHeight}
+          showActions
+          feedbackProps={feedbackProps}
         />
       </div>
     </div>
@@ -263,6 +276,8 @@ function AssistantGroupCard({
   t,
   keyForMessage,
   maxContentHeight,
+  threadId,
+  feedbackProps,
 }: {
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
@@ -272,6 +287,15 @@ function AssistantGroupCard({
   t: (key: string) => string;
   keyForMessage: (message: UIMessage, index: number) => string;
   maxContentHeight?: number;
+  threadId?: string | null;
+  feedbackProps?: {
+    roundNumber: number;
+    currentFeedback: FeedbackType | null;
+    onFeedbackChange: (feedbackType: FeedbackType | null) => void;
+    disabled?: boolean;
+    isPending?: boolean;
+    pendingType?: FeedbackType | null;
+  };
 }) {
   // Determine if any message in group is streaming or has error
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
@@ -343,6 +367,18 @@ function AssistantGroupCard({
                   hideInlineHeader
                   hideAvatar
                   maxContentHeight={maxContentHeight}
+                  showActions
+                  feedbackProps={feedbackProps && threadId
+                    ? {
+                        threadId,
+                        roundNumber: feedbackProps.roundNumber,
+                        currentFeedback: feedbackProps.currentFeedback,
+                        onFeedbackChange: feedbackProps.onFeedbackChange,
+                        disabled: feedbackProps.disabled,
+                        isPending: feedbackProps.isPending,
+                        pendingType: feedbackProps.pendingType,
+                      }
+                    : undefined}
                 />
                 {sourceParts.length > 0 && (
                   <div className="mt-2 ml-12 space-y-1">
@@ -499,7 +535,15 @@ type ChatMessageListProps = {
    * Rounds in this set should NEVER show pending cards.
    */
   completedRoundNumbers?: Set<number>;
+  // Feedback handlers for per-participant like/dislike buttons
+  feedbackByRound?: Map<number, FeedbackType>;
+  pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
+  getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
+  isReadOnly?: boolean;
 };
+// Stable empty feedback map
+const EMPTY_FEEDBACK_MAP = new Map<number, FeedbackType>();
+
 export const ChatMessageList = memo(
   ({
     messages,
@@ -518,6 +562,10 @@ export const ChatMessageList = memo(
     maxContentHeight,
     skipEntranceAnimations = false,
     completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
+    feedbackByRound = EMPTY_FEEDBACK_MAP,
+    pendingFeedback = null,
+    getFeedbackHandler,
+    isReadOnly = false,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const tParticipant = useTranslations('chat.participant');
@@ -884,7 +932,7 @@ export const ChatMessageList = memo(
     });
 
     return (
-      <div className="touch-pan-y space-y-8">
+      <div className="touch-pan-y space-y-12">
         {messageGroups.map((group, groupIndex) => {
           const roundNumber = group.type === 'user-group'
             ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
@@ -1077,8 +1125,8 @@ export const ChatMessageList = memo(
                   const currentStreamingParticipantForRound = enabledParticipants[effectiveParticipantIndex];
 
                   return (
-                    // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
-                    <div className="mt-8 space-y-8">
+                    // mt-12 provides consistent 3rem spacing from user message (matches space-y-12 between participants)
+                    <div className="mt-12 space-y-12">
                       {enabledParticipants.map((participant, participantIdx) => {
                         const model = findModel(participant.modelId);
                         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
@@ -1145,6 +1193,21 @@ export const ChatMessageList = memo(
 
                         // ✅ Use ParticipantMessageWrapper for consistent header rendering
                         // ✅ ANIMATION: Staggered entrance + scroll magnifier effect
+                        // Build feedback props for this round
+                        const participantFeedbackProps = !isReadOnly && _threadId && getFeedbackHandler
+                          ? {
+                              threadId: _threadId,
+                              roundNumber,
+                              currentFeedback: feedbackByRound.get(roundNumber) ?? null,
+                              onFeedbackChange: getFeedbackHandler(roundNumber),
+                              disabled: isStreaming,
+                              isPending: pendingFeedback?.roundNumber === roundNumber,
+                              pendingType: pendingFeedback?.roundNumber === roundNumber
+                                ? pendingFeedback?.type ?? null
+                                : null,
+                            }
+                          : undefined;
+
                         return (
                           <ScrollAwareParticipant
                             key={`participant-${participant.id}`}
@@ -1162,6 +1225,7 @@ export const ChatMessageList = memo(
                               messageId={participantMessage?.id}
                               loadingText={loadingText}
                               maxContentHeight={maxContentHeight}
+                              feedbackProps={participantFeedbackProps}
                             />
                           </ScrollAwareParticipant>
                         );
@@ -1176,6 +1240,22 @@ export const ChatMessageList = memo(
           // Assistant group with header inside message box
           if (group.type === 'assistant-group') {
             const firstMessageId = group.messages[0]?.message.id || `group-${groupIndex}`;
+            const groupRoundNumber = getRoundNumber(group.messages[0]?.message.metadata) ?? 0;
+
+            // Build feedback props for this assistant group
+            const groupFeedbackProps = !isReadOnly && _threadId && getFeedbackHandler
+              ? {
+                  roundNumber: groupRoundNumber,
+                  currentFeedback: feedbackByRound.get(groupRoundNumber) ?? null,
+                  onFeedbackChange: getFeedbackHandler(groupRoundNumber),
+                  disabled: isStreaming,
+                  isPending: pendingFeedback?.roundNumber === groupRoundNumber,
+                  pendingType: pendingFeedback?.roundNumber === groupRoundNumber
+                    ? pendingFeedback?.type ?? null
+                    : null,
+                }
+              : undefined;
+
             return (
               <ScrollAwareParticipant
                 key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
@@ -1191,6 +1271,8 @@ export const ChatMessageList = memo(
                   t={t}
                   keyForMessage={keyForMessage}
                   maxContentHeight={maxContentHeight}
+                  threadId={_threadId}
+                  feedbackProps={groupFeedbackProps}
                 />
               </ScrollAwareParticipant>
             );
@@ -1286,6 +1368,14 @@ export const ChatMessageList = memo(
 
     // ✅ BUG FIX: Re-render if completedRoundNumbers changes (new summaries completed)
     if (prevProps.completedRoundNumbers !== nextProps.completedRoundNumbers) {
+      return false;
+    }
+
+    // Re-render if feedback state changes
+    if (prevProps.feedbackByRound !== nextProps.feedbackByRound) {
+      return false;
+    }
+    if (prevProps.pendingFeedback !== nextProps.pendingFeedback) {
       return false;
     }
 

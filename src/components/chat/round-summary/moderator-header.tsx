@@ -1,9 +1,10 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { BRAND } from '@/constants/brand';
 
-import { MODERATOR_NAME } from './moderator-constants';
+import { MODERATOR_BADGE, MODERATOR_NAME } from './moderator-constants';
 
 type ModeratorHeaderProps = {
   isStreaming?: boolean;
@@ -18,7 +19,7 @@ export function ModeratorHeader({
   hasError = false,
 }: ModeratorHeaderProps) {
   return (
-    <div className="flex items-center gap-3 mb-6">
+    <div className="flex items-center gap-3 mb-3">
       <Avatar className="size-8 drop-shadow-[0_0_12px_hsl(var(--primary)/0.3)]">
         <AvatarImage src={BRAND.logos.main} alt={MODERATOR_NAME} className="object-contain p-0.5" />
         <AvatarFallback className="text-[8px] bg-muted">
@@ -27,6 +28,12 @@ export function ModeratorHeader({
       </Avatar>
       <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
         <span className="text-xl font-semibold text-muted-foreground">{MODERATOR_NAME}</span>
+        <Badge
+          variant="outline"
+          className="text-xs font-medium bg-primary/10 text-primary border-primary/20"
+        >
+          {MODERATOR_BADGE}
+        </Badge>
         {isStreaming && (
           <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
         )}

@@ -3,16 +3,19 @@ import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
 
-import type { MessageStatus } from '@/api/core/enums';
+import type { FeedbackType, MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
+import { Actions } from '@/components/ai-elements/actions';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { CitedMessageContent } from '@/components/chat/cited-message-content';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
+import { MessageCopyAction } from '@/components/chat/message-copy-action';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { MessageSources } from '@/components/chat/message-sources';
+import { RoundFeedback } from '@/components/chat/round-feedback';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
@@ -80,6 +83,18 @@ type ModelMessageCardProps = {
   loadingText?: string;
   /** Max height for scrollable content area. When set, wraps content in ScrollArea */
   maxContentHeight?: number;
+  /** Whether to show action buttons (copy, etc.) */
+  showActions?: boolean;
+  /** Optional: Round feedback props for displaying like/dislike buttons */
+  feedbackProps?: {
+    threadId: string;
+    roundNumber: number;
+    currentFeedback: FeedbackType | null;
+    onFeedbackChange: (feedbackType: FeedbackType | null) => void;
+    disabled?: boolean;
+    isPending?: boolean;
+    pendingType?: FeedbackType | null;
+  };
 };
 const DEFAULT_PARTS: MessagePart[] = [];
 
@@ -99,6 +114,8 @@ export const ModelMessageCard = memo(({
   hideAvatar = false,
   loadingText,
   maxContentHeight,
+  showActions = false,
+  feedbackProps,
 }: ModelMessageCardProps) => {
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
@@ -228,6 +245,24 @@ export const ModelMessageCard = memo(({
             {/* Displayed even when AI doesn't cite inline, so users know what files were used */}
             {assistantMetadata?.availableSources && assistantMetadata.availableSources.length > 0 && (
               <MessageSources sources={assistantMetadata.availableSources} />
+            )}
+
+            {/* Actions: Feedback + Copy buttons in one row */}
+            {showActions && status === MessageStatuses.COMPLETE && renderableParts.length > 0 && (
+              <Actions className="mt-1">
+                {feedbackProps && (
+                  <RoundFeedback
+                    threadId={feedbackProps.threadId}
+                    roundNumber={feedbackProps.roundNumber}
+                    currentFeedback={feedbackProps.currentFeedback}
+                    onFeedbackChange={feedbackProps.onFeedbackChange}
+                    disabled={feedbackProps.disabled}
+                    isPending={feedbackProps.isPending}
+                    pendingType={feedbackProps.pendingType}
+                  />
+                )}
+                <MessageCopyAction parts={renderableParts} />
+              </Actions>
             )}
           </>
         </MessageContent>

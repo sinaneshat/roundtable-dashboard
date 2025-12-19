@@ -38,7 +38,7 @@ export type ActionsProps = HTMLAttributes<HTMLDivElement>;
 export function Actions({ children, className, ...props }: ActionsProps) {
   return (
     <div
-      className={cn('flex items-center gap-1 mt-2', className)}
+      className={cn('flex items-center gap-2 mt-2', className)}
       {...props}
     >
       <TooltipProvider>
@@ -81,7 +81,7 @@ export function Action({
             variant="ghost"
             size="sm"
             className={cn(
-              'h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground',
+              'h-9 w-9 p-0 rounded-full text-muted-foreground hover:text-foreground',
               className,
             )}
             aria-label={label}
@@ -102,7 +102,7 @@ export function Action({
       variant="ghost"
       size="sm"
       className={cn(
-        'h-7 w-7 p-0 rounded-full text-muted-foreground hover:text-foreground',
+        'h-9 w-9 p-0 rounded-full text-muted-foreground hover:text-foreground',
         className,
       )}
       aria-label={label}

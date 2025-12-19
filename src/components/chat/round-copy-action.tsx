@@ -173,7 +173,7 @@ function RoundCopyActionComponent({
       onClick={handleCopy}
       className={className}
     >
-      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+      {copied ? <Check className="size-5" /> : <Copy className="size-5" />}
     </Action>
   );
 }

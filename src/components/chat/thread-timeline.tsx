@@ -19,7 +19,6 @@ import { useRef } from 'react';
 import type { FeedbackType } from '@/api/core/enums';
 import { MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant, RoundSummaryAIContent, StoredPreSearch } from '@/api/routes/chat/schema';
-import { Actions } from '@/components/ai-elements/actions';
 import { ScrollFadeEntrance, ScrollFromBottom, ScrollFromTop } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
@@ -29,8 +28,6 @@ import { messageHasError } from '@/lib/schemas/message-metadata';
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
 import { PreSearchCard } from './pre-search-card';
-import { RoundCopyAction } from './round-copy-action';
-import { RoundFeedback } from './round-feedback';
 import { RoundSummaryCard } from './round-summary/round-summary-card';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
@@ -98,7 +95,7 @@ export function ThreadTimeline({
   user,
   participants,
   threadId,
-  threadTitle,
+  threadTitle: _threadTitle,
   isStreaming = false,
   currentParticipantIndex = 0,
   currentStreamingParticipant = null,
@@ -265,6 +262,10 @@ export function ThreadTimeline({
                       maxContentHeight={maxContentHeight}
                       skipEntranceAnimations={skipEntranceAnimations}
                       completedRoundNumbers={completedRoundNumbers}
+                      feedbackByRound={feedbackByRound}
+                      pendingFeedback={pendingFeedback}
+                      getFeedbackHandler={getFeedbackHandler}
+                      isReadOnly={isReadOnly}
                     />
                   </UnifiedErrorBoundary>
                 </div>
@@ -277,7 +278,7 @@ export function ThreadTimeline({
               <ScrollFromBottom
                 skipAnimation={skipEntranceAnimations}
               >
-                <div className="w-full mb-4">
+                <div className="w-full mt-12 mb-4">
                   <RoundSummaryCard
                     summary={item.data}
                     threadId={threadId}
@@ -287,56 +288,43 @@ export function ThreadTimeline({
                     onStreamComplete={(completedData, error) => {
                       onSummaryStreamComplete?.(item.data.roundNumber, completedData, error);
                     }}
+                    feedbackProps={(() => {
+                      // Only show feedback after summary completes, not streaming, not read-only
+                      if (isStreaming || isReadOnly || item.data.status !== MessageStatuses.COMPLETE) {
+                        return undefined;
+                      }
+
+                      // Check if round has errors
+                      const messagesItem = timelineItems.find(
+                        ti => ti.type === 'messages' && ti.roundNumber === item.data.roundNumber,
+                      );
+                      if (!messagesItem || messagesItem.type !== 'messages') {
+                        return undefined;
+                      }
+
+                      const messages = messagesItem.data;
+                      const hasRoundError = messages.some((msg) => {
+                        const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
+                        return parseResult.success && messageHasError(parseResult.data);
+                      });
+
+                      if (hasRoundError) {
+                        return undefined;
+                      }
+
+                      return {
+                        currentFeedback: feedbackByRound.get(item.data.roundNumber) ?? null,
+                        onFeedbackChange: !getFeedbackHandler
+                          ? () => {}
+                          : getFeedbackHandler(item.data.roundNumber),
+                        disabled: isStreaming,
+                        isPending: pendingFeedback?.roundNumber === item.data.roundNumber,
+                        pendingType: pendingFeedback?.roundNumber === item.data.roundNumber
+                          ? pendingFeedback?.type ?? null
+                          : null,
+                      };
+                    })()}
                   />
-
-                  {/* Round feedback and copy actions - shown after summary completes */}
-                  {!isStreaming && !isReadOnly && item.data.status === MessageStatuses.COMPLETE && (() => {
-                    // Find the messages for this round
-                    const messagesItem = timelineItems.find(
-                      ti => ti.type === 'messages' && ti.roundNumber === item.data.roundNumber,
-                    );
-                    if (!messagesItem || messagesItem.type !== 'messages')
-                      return null;
-
-                    const messages = messagesItem.data;
-                    const hasRoundError = messages.some((msg) => {
-                      const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
-                      return parseResult.success && messageHasError(parseResult.data);
-                    });
-
-                    return (
-                      <Actions className="mt-3 mb-2">
-                        {!hasRoundError && (
-                          <RoundFeedback
-                            key={`feedback-${threadId}-${item.data.roundNumber}`}
-                            threadId={threadId}
-                            roundNumber={item.data.roundNumber}
-                            currentFeedback={feedbackByRound.get(item.data.roundNumber) ?? null}
-                            onFeedbackChange={
-                              !getFeedbackHandler
-                                ? () => {}
-                                : getFeedbackHandler(item.data.roundNumber)
-                            }
-                            disabled={isStreaming}
-                            isPending={pendingFeedback?.roundNumber === item.data.roundNumber}
-                            pendingType={
-                              pendingFeedback?.roundNumber === item.data.roundNumber
-                                ? pendingFeedback?.type ?? null
-                                : null
-                            }
-                          />
-                        )}
-                        <RoundCopyAction
-                          key={`copy-${threadId}-${item.data.roundNumber}`}
-                          messages={messages}
-                          participants={participants}
-                          roundNumber={item.data.roundNumber}
-                          threadTitle={threadTitle}
-                          summaryText={item.data.summaryData?.summary}
-                        />
-                      </Actions>
-                    );
-                  })()}
                 </div>
               </ScrollFromBottom>
             )}

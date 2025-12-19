@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
-import type { MessageStatus } from '@/api/core/enums';
+import type { FeedbackType, MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { RoundSummaryAIContent, StoredRoundSummary } from '@/api/routes/chat/schema';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
@@ -22,6 +22,14 @@ type RoundSummaryCardProps = {
   className?: string;
   onStreamStart?: () => void;
   onStreamComplete?: (completedSummaryData?: RoundSummaryAIContent | null, error?: Error | null) => void;
+  /** Optional: Round feedback props for displaying like/dislike buttons inline */
+  feedbackProps?: {
+    currentFeedback: FeedbackType | null;
+    onFeedbackChange: (feedbackType: FeedbackType | null) => void;
+    disabled?: boolean;
+    isPending?: boolean;
+    pendingType?: FeedbackType | null;
+  };
 };
 
 /**
@@ -38,6 +46,7 @@ export function RoundSummaryCard({
   className,
   onStreamStart,
   onStreamComplete,
+  feedbackProps,
 }: RoundSummaryCardProps) {
   const t = useTranslations('moderator');
 
@@ -115,6 +124,18 @@ export function RoundSummaryCard({
             loadingText={t('analyzing')}
             hideInlineHeader
             hideAvatar
+            showActions
+            feedbackProps={feedbackProps
+              ? {
+                  threadId,
+                  roundNumber: summary.roundNumber,
+                  currentFeedback: feedbackProps.currentFeedback,
+                  onFeedbackChange: feedbackProps.onFeedbackChange,
+                  disabled: feedbackProps.disabled,
+                  isPending: feedbackProps.isPending,
+                  pendingType: feedbackProps.pendingType,
+                }
+              : undefined}
           />
         </div>
       </div>

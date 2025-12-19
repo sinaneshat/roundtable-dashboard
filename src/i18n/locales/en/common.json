@@ -318,7 +318,11 @@
       }
     },
     "actions": {
-      "copy": "Copy message",
+      "copy": "Copy",
+      "copySuccess": "Copied",
+      "copySuccessDescription": "Content copied to clipboard",
+      "copyError": "Copy failed",
+      "copyErrorDescription": "Failed to copy content to clipboard",
       "messageCopied": "Message copied",
       "messageCopiedDescription": "Message content copied to clipboard",
       "scrollToBottom": "Scroll to bottom"
