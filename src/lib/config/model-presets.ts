@@ -81,9 +81,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     mode: 'analyzing',
     searchEnabled: false,
     modelRoles: [
-      { modelId: 'openai/gpt-5-nano', role: 'Framer' },
+      { modelId: 'google/gemini-2.5-flash', role: 'Structured Reasoner' },
+      { modelId: 'deepseek/deepseek-r1-0528', role: 'Deep Reasoner' },
       { modelId: 'google/gemini-2.0-flash-001', role: 'Alternative Lens' },
-      { modelId: 'openai/gpt-4o-mini', role: 'Nuancer' },
     ],
   },
 
@@ -117,7 +117,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     modelRoles: [
       { modelId: 'anthropic/claude-sonnet-4', role: 'Ideator' },
       { modelId: 'google/gemini-3-flash-preview', role: 'Lateral Thinker' },
-      { modelId: 'openai/gpt-5-mini', role: 'Grounding Voice' },
+      { modelId: 'openai/gpt-5-mini', role: 'Synthesizer' },
     ],
   },
 
@@ -152,7 +152,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     modelRoles: [
       { modelId: 'openai/gpt-5.1', role: 'Proposer' },
       { modelId: 'anthropic/claude-sonnet-4.5', role: 'Skeptic' },
-      { modelId: 'google/gemini-2.5-pro', role: 'Mediator' },
+      { modelId: 'google/gemini-2.5-pro', role: 'Trade-Off Analyst' },
     ],
   },
   {
@@ -167,7 +167,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     modelRoles: [
       { modelId: 'openai/o1', role: 'Deep Reasoner' },
       { modelId: 'anthropic/claude-opus-4', role: 'Systems Thinker' },
-      { modelId: 'deepseek/deepseek-r1-0528', role: 'Secondary Theorist' },
+      { modelId: 'deepseek/deepseek-r1-0528', role: 'Alternative Lens' },
     ],
   },
   {
@@ -175,14 +175,14 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Research & Evidence Review',
     description: 'Fact-finding with source comparison and synthesis',
     icon: FileSearch,
-    requiredTier: 'power',
+    requiredTier: 'pro',
     order: 7,
     mode: 'analyzing',
     searchEnabled: true,
     modelRoles: [
       { modelId: 'openai/gpt-4.1', role: 'Evidence Gatherer' },
       { modelId: 'google/gemini-2.5-pro', role: 'Cross-Checker' },
-      { modelId: 'anthropic/claude-opus-4', role: 'Synthesizer' },
+      { modelId: 'anthropic/claude-sonnet-4.5', role: 'Synthesizer' },
     ],
   },
   {

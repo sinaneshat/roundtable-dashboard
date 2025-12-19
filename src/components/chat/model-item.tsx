@@ -23,7 +23,7 @@ import {
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
+import { getRoleBadgeStyle, getShortRoleName } from '@/lib/utils/role-colors';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
@@ -157,10 +157,10 @@ export function ModelItem({
                     ? (
                         <Badge
                           className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1"
-                          style={getRoleBadgeStyle(displayRole)}
+                          style={getRoleBadgeStyle(getShortRoleName(displayRole))}
                           onClick={() => onOpenRolePanel?.()}
                         >
-                          {displayRole}
+                          {getShortRoleName(displayRole)}
                           <button
                             type="button"
                             onClick={(e) => {

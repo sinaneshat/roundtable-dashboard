@@ -1,18 +1,19 @@
 'use client';
 
-import { Lock } from 'lucide-react';
+import { Lock, SlidersHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { memo, useMemo } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
-import { AvatarGroup } from '@/components/chat/avatar-group';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { canAccessPreset } from '@/lib/config/model-presets';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
+import { getProviderIcon } from '@/lib/utils/ai-display';
+import { getRoleColors, getShortRoleName } from '@/lib/utils/role-colors';
 
 /** Selection result includes preset with model-role mappings */
 export type PresetSelectionResult = {
@@ -29,6 +30,8 @@ type ModelPresetCardProps = {
   isSelected?: boolean;
   /** Set of model IDs incompatible with current file attachments (no vision) */
   incompatibleModelIds?: Set<string>;
+  /** Callback to customize this preset in Build Custom tab */
+  onCustomize?: (result: PresetSelectionResult) => void;
 };
 
 /**
@@ -49,6 +52,7 @@ export const ModelPresetCard = memo(({
   className,
   isSelected = false,
   incompatibleModelIds,
+  onCustomize,
 }: ModelPresetCardProps) => {
   const router = useRouter();
   const isLocked = !canAccessPreset(preset, userTier);
@@ -62,14 +66,6 @@ export const ModelPresetCard = memo(({
       return presetModelIds.length;
     return presetModelIds.filter(id => !incompatibleModelIds.has(id)).length;
   }, [presetModelIds, incompatibleModelIds]);
-
-  // Convert to participant config format for AvatarGroup
-  const participants: ParticipantConfig[] = preset.modelRoles.map((mr, index) => ({
-    id: `preset-${preset.id}-${index}`,
-    modelId: mr.modelId,
-    role: mr.role,
-    priority: index,
-  }));
 
   const handleClick = () => {
     if (isLocked) {
@@ -117,33 +113,71 @@ export const ModelPresetCard = memo(({
         className,
       )}
     >
-      {/* Header row: Title */}
+      {/* Header row: Title + Actions */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <h3 className="text-base font-semibold text-foreground leading-tight">
           {preset.name}
         </h3>
 
-        {/* Lock indicator for locked presets */}
-        {isLocked && (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 shrink-0">
-            <Lock className="size-3 text-amber-400" />
-            <span className="text-[10px] font-medium text-amber-400">
-              {SUBSCRIPTION_TIER_NAMES[preset.requiredTier]}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Customize icon - shows on hover */}
+          {!isLocked && !isFullyDisabled && onCustomize && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCustomize({ preset });
+              }}
+              className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-all"
+              aria-label="Customize preset"
+            >
+              <SlidersHorizontal className="size-4 text-muted-foreground" />
+            </button>
+          )}
+
+          {/* Lock indicator for locked presets */}
+          {isLocked && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20">
+              <Lock className="size-3 text-amber-400" />
+              <span className="text-[10px] font-medium text-amber-400">
+                {SUBSCRIPTION_TIER_NAMES[preset.requiredTier]}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Model Avatars */}
-      <div className="mb-3">
-        <AvatarGroup
-          participants={participants}
-          allModels={allModels}
-          maxVisible={5}
-          size="sm"
-          showCount={false}
-          overlap={false}
-        />
+      {/* Model Avatars with Role Labels */}
+      <div className="flex items-start gap-4 mb-3">
+        {preset.modelRoles.slice(0, 5).map((modelRole) => {
+          const model = allModels.find(m => m.id === modelRole.modelId);
+          if (!model)
+            return null;
+
+          const shortRole = getShortRoleName(modelRole.role);
+          const roleColors = getRoleColors(shortRole);
+
+          return (
+            <div key={modelRole.modelId} className="flex flex-col items-center gap-1.5">
+              <Avatar className="size-8 bg-card">
+                <AvatarImage
+                  src={getProviderIcon(model.provider)}
+                  alt={model.name}
+                  className="object-contain p-1"
+                />
+                <AvatarFallback className="text-xs bg-card font-semibold">
+                  {model.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span
+                className="text-[10px] font-medium leading-none"
+                style={{ color: roleColors.iconColor }}
+              >
+                {shortRole}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Description */}

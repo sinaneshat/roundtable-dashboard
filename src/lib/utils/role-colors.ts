@@ -16,15 +16,23 @@ import randomColor from 'randomcolor';
  */
 
 // Predefined role colors - using rgba format for inline styles
+// Standard short role names (used in preset cards) - 5 categories
 const PREDEFINED_ROLE_COLORS: Record<string, { bgColor: string; iconColor: string }> = {
-  'The Ideator': { bgColor: 'rgba(234, 179, 8, 0.2)', iconColor: '#facc15' }, // yellow
-  'Devil\'s Advocate': { bgColor: 'rgba(239, 68, 68, 0.2)', iconColor: '#f87171' }, // red
-  'Builder': { bgColor: 'rgba(59, 130, 246, 0.2)', iconColor: '#60a5fa' }, // blue
-  'Practical Evaluator': { bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green
-  'Visionary Thinker': { bgColor: 'rgba(168, 85, 247, 0.2)', iconColor: '#c084fc' }, // purple
-  'Domain Expert': { bgColor: 'rgba(99, 102, 241, 0.2)', iconColor: '#818cf8' }, // indigo
-  'User Advocate': { bgColor: 'rgba(20, 184, 166, 0.2)', iconColor: '#2dd4bf' }, // teal
-  'Implementation Strategist': { bgColor: 'rgba(249, 115, 22, 0.2)', iconColor: '#fb923c' }, // orange
+  // Standard short role names (for preset card display)
+  'Ideator': { bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green
+  'Strategist': { bgColor: 'rgba(59, 130, 246, 0.2)', iconColor: '#60a5fa' }, // blue
+  'Analyst': { bgColor: 'rgba(6, 182, 212, 0.2)', iconColor: '#22d3ee' }, // cyan
+  'Builder': { bgColor: 'rgba(249, 115, 22, 0.2)', iconColor: '#fb923c' }, // orange
+  'Critic': { bgColor: 'rgba(236, 72, 153, 0.2)', iconColor: '#f472b6' }, // pink
+
+  // Legacy full role names (for backwards compatibility)
+  'The Ideator': { bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green
+  'Devil\'s Advocate': { bgColor: 'rgba(236, 72, 153, 0.2)', iconColor: '#f472b6' }, // pink
+  'Practical Evaluator': { bgColor: 'rgba(236, 72, 153, 0.2)', iconColor: '#f472b6' }, // pink
+  'Visionary Thinker': { bgColor: 'rgba(34, 197, 94, 0.2)', iconColor: '#4ade80' }, // green
+  'Domain Expert': { bgColor: 'rgba(6, 182, 212, 0.2)', iconColor: '#22d3ee' }, // cyan
+  'User Advocate': { bgColor: 'rgba(6, 182, 212, 0.2)', iconColor: '#22d3ee' }, // cyan
+  'Implementation Strategist': { bgColor: 'rgba(59, 130, 246, 0.2)', iconColor: '#60a5fa' }, // blue
   'The Data Analyst': { bgColor: 'rgba(6, 182, 212, 0.2)', iconColor: '#22d3ee' }, // cyan
 } as const;
 
@@ -96,6 +104,62 @@ export const NO_ROLE_COLOR = {
   bgColor: 'rgba(100, 116, 139, 0.2)', // slate with 20% opacity
   iconColor: '#94a3b8', // slate-400
 } as const;
+
+/**
+ * Shorten role names for compact display
+ * Maps verbose role names to single-word display labels
+ */
+export function getShortRoleName(role: string): string {
+  const roleMap: Record<string, string> = {
+    // Ideation/Creative roles → Ideator
+    'The Ideator': 'Ideator',
+    'Ideator': 'Ideator',
+    'Lateral Thinker': 'Ideator',
+    'Visionary Thinker': 'Ideator',
+    'Framer': 'Ideator',
+    'Alternative Framer': 'Ideator',
+
+    // Strategy/Reasoning roles → Strategist
+    'Structured Reasoner': 'Strategist',
+    'Deep Reasoner': 'Strategist',
+    'Systems Thinker': 'Strategist',
+    'Position Advocate': 'Strategist',
+    'Proposer': 'Strategist',
+    'Implementation Strategist': 'Strategist',
+
+    // Analysis roles → Analyst
+    'The Data Analyst': 'Analyst',
+    'Trade-Off Analyst': 'Analyst',
+    'Trade-off Clarifier': 'Analyst',
+    'Evidence Gatherer': 'Analyst',
+    'Cross-Checker': 'Analyst',
+    'Alternative Lens': 'Analyst',
+    'Nuancer': 'Analyst',
+
+    // Building/Implementation roles → Builder
+    'Builder': 'Builder',
+    'Implementer': 'Builder',
+    'Synthesizer': 'Builder',
+
+    // Critical/Skeptical roles → Critic
+    'Devil\'s Advocate': 'Critic',
+    'Assumption Challenger': 'Critic',
+    'Assumption Critic': 'Critic',
+    'Skeptic': 'Critic',
+    'Contrarian': 'Critic',
+    'Correctness Reviewer': 'Critic',
+    'Practical Evaluator': 'Critic',
+
+    // Legacy moderation roles → redistributed to other categories
+    'Mediator': 'Analyst',
+    'Grounding Voice': 'Critic',
+    'User Advocate': 'Analyst',
+    'Domain Expert': 'Analyst',
+    'Secondary Theorist': 'Analyst',
+  };
+
+  return roleMap[role] || role;
+}
 
 /**
  * Lighten a hex color by a percentage

@@ -366,6 +366,14 @@ export function ModelSelectionModal({
     }
   }, [selectedPresetId]);
 
+  // Handle customize preset - apply preset and switch to Build Custom tab
+  const handleCustomizePreset = useCallback((result: PresetSelectionResult) => {
+    if (onPresetSelect) {
+      onPresetSelect(result.preset);
+    }
+    setActiveTab('custom');
+  }, [onPresetSelect]);
+
   // Get all models for preset cards
   const allModels = useMemo(() => {
     return orderedModels.map(om => om.model);
@@ -447,7 +455,7 @@ export function ModelSelectionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn('!max-w-3xl !w-[calc(100vw-2.5rem)] gap-0', className)}
+        className={cn('!max-w-4xl !w-[calc(100vw-2.5rem)] gap-0', className)}
       >
         <DialogHeader>
           {selectedModelForRole
@@ -683,9 +691,9 @@ export function ModelSelectionModal({
                       </TabsList>
 
                       {/* Presets Tab Content */}
-                      <TabsContent value="presets" className="mt-0 h-[480px] flex flex-col">
+                      <TabsContent value="presets" className="mt-0 h-[520px] flex flex-col">
                         <ScrollArea className="flex-1 -mr-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr pr-3 pb-4">
+                          <div className="grid grid-cols-2 gap-3 pr-3 pb-4">
                             {MODEL_PRESETS.map(preset => (
                               <ModelPresetCard
                                 key={preset.id}
@@ -695,6 +703,7 @@ export function ModelSelectionModal({
                                 onSelect={handlePresetCardClick}
                                 isSelected={selectedPresetId === preset.id}
                                 incompatibleModelIds={incompatibleModelIds}
+                                onCustomize={handleCustomizePreset}
                               />
                             ))}
                           </div>
@@ -703,7 +712,7 @@ export function ModelSelectionModal({
                       </TabsContent>
 
                       {/* Build Custom Tab Content */}
-                      <TabsContent value="custom" className="mt-0 h-[480px] flex flex-col">
+                      <TabsContent value="custom" className="mt-0 h-[520px] flex flex-col">
                         {/* Search Input */}
                         <div className="shrink-0 mb-4">
                           <Input
