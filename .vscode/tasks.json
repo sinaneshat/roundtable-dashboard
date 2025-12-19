@@ -1,0 +1,133 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Startup: 0 - Kill All Terminals",
+      "type": "shell",
+      "command": "echo 'Cleaning up old terminals...' && rm -f /tmp/roundtable-merged.flag",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "echo": true,
+        "showReuseMessage": false,
+        "clear": true,
+        "close": true
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Startup: 1 - Sync Preview Branch",
+      "type": "shell",
+      "command": "echo 'Step 1/5: Checking preview branch...' && git fetch origin preview 2>/dev/null && PREVIEW_COMMITS=$(git log soheil..origin/preview --oneline 2>/dev/null | head -20) && if [ -z \"$PREVIEW_COMMITS\" ]; then echo 'soheil is up to date with preview - no merge needed'; else echo 'Preview has new commits:' && echo \"$PREVIEW_COMMITS\" && git merge origin/preview --no-edit 2>&1; if [ $? -eq 0 ]; then echo 'Merged preview into soheil' && touch /tmp/roundtable-merged.flag; else echo 'WARNING: MERGE CONFLICT! Resolve manually.' && exit 1; fi; fi",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "echo": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": [],
+      "dependsOn": ["Startup: 0 - Kill All Terminals"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Startup: 2 - Clean and Kill Processes",
+      "type": "shell",
+      "command": "echo 'Step 2/5: Killing processes and cleaning cache...' && lsof -ti:3000 | xargs kill -9 2>/dev/null || true && lsof -ti:8787 | xargs kill -9 2>/dev/null || true && pnpm clean && rm -rf .next .swc .turbo out && echo 'Cache cleaned and processes killed'",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "echo": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": [],
+      "dependsOn": ["Startup: 1 - Sync Preview Branch"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Startup: 3 - Install and Conditional DB Reset",
+      "type": "shell",
+      "command": "echo 'Step 3/5: Installing dependencies...' && pnpm i && if [ -f /tmp/roundtable-merged.flag ]; then echo 'Merge detected - nuking and reseeding local database...' && pnpm local:nuclear-reset && rm -f /tmp/roundtable-merged.flag && echo 'DB reset complete'; else echo 'No merge - skipping DB reset'; fi",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "echo": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": [],
+      "dependsOn": ["Startup: 2 - Clean and Kill Processes"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Startup: 4 - Dev Server",
+      "type": "shell",
+      "command": "echo 'Step 4/5: Starting dev server...' && pnpm dev",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "echo": true,
+        "showReuseMessage": false,
+        "group": "dev-server"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Starting dev server",
+          "endsPattern": "Ready|Local:"
+        }
+      },
+      "dependsOn": ["Startup: 3 - Install and Conditional DB Reset"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Startup: 5 - Claude Agent",
+      "type": "shell",
+      "command": "echo 'Step 5/5: Starting Claude agent...' && sleep 3 && claude --dangerously-skip-permissions",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "echo": true,
+        "showReuseMessage": false,
+        "group": "claude-agent"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "dependsOn": ["Startup: 3 - Install and Conditional DB Reset"],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}

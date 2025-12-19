@@ -617,6 +617,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const { systemPrompt, citationSourceMap, citableSources }
         = await buildSystemPromptWithContext({
           participant,
+          allParticipants: participants, // ✅ V2.4: Inject roster for mandatory named positioning
           thread,
           userQuery,
           previousDbMessages,

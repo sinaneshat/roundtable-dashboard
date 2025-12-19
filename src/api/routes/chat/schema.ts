@@ -932,21 +932,23 @@ export const RoundSummaryMetricsSchema = z.object({
  * Round Summary AI Content - What the AI model generates
  * ✅ STREAMING: Use this schema for streamObject - contains ONLY AI-generated fields
  * Server adds roundNumber, mode, userQuestion metadata after generation
+ * ✅ COMPREHENSIVE: Supports 8-section LLM Council summary format (~4096 tokens = ~20000 chars)
  */
 export const RoundSummaryAIContentSchema = z.object({
-  summary: z.string().describe('Concise text summary of the round conversation (2-3 sentences)'),
+  summary: z.string().describe('Comprehensive structured summary including: Question Overview, Participants, Individual Perspectives, Areas of Agreement, Areas of Disagreement, Points of Convergence, Consensus/Conclusion, and Open Questions'),
   metrics: RoundSummaryMetricsSchema.describe('Ratings for engagement, insight, balance, and clarity (0-100 each)'),
 }).openapi('RoundSummaryAIContent');
 
 /**
  * Round Summary Payload - Full payload with metadata
  * Used for stored/completed summaries, NOT for streaming
+ * ✅ COMPREHENSIVE: Supports 8-section LLM Council summary format
  */
 export const RoundSummaryPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
   mode: z.string(),
   userQuestion: z.string(),
-  summary: z.string().describe('Concise text summary of the round conversation'),
+  summary: z.string().describe('Comprehensive structured summary including: Question Overview, Participants, Individual Perspectives, Areas of Agreement, Areas of Disagreement, Points of Convergence, Consensus/Conclusion, and Open Questions'),
   metrics: RoundSummaryMetricsSchema,
 }).openapi('RoundSummaryPayload');
 

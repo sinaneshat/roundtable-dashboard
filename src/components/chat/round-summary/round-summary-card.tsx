@@ -1,167 +1,123 @@
 'use client';
-import { Clock } from 'lucide-react';
+
 import { useTranslations } from 'next-intl';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
-import { MessageStatuses } from '@/api/core/enums';
+import type { MessageStatus } from '@/api/core/enums';
+import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { RoundSummaryAIContent, StoredRoundSummary } from '@/api/routes/chat/schema';
-import {
-  ChainOfThought,
-  ChainOfThoughtContent,
-  ChainOfThoughtHeader,
-} from '@/components/ai-elements/chain-of-thought';
-import { Badge } from '@/components/ui/badge';
-import { FadeIn } from '@/components/ui/motion';
-import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
+import { ModelMessageCard } from '@/components/chat/model-message-card';
+import { BRAND } from '@/constants/brand';
+import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
+import { hasSummaryData } from '@/lib/utils/summary-utils';
 
-import { RoundSummaryPanel } from './round-summary-panel';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from './moderator-constants';
+import { ModeratorHeader } from './moderator-header';
 import { RoundSummaryStream } from './round-summary-stream';
 
 type RoundSummaryCardProps = {
   summary: StoredRoundSummary;
   threadId: string;
-  isLatest?: boolean;
   className?: string;
   onStreamStart?: () => void;
   onStreamComplete?: (completedSummaryData?: RoundSummaryAIContent | null, error?: Error | null) => void;
-  streamingRoundNumber?: number | null;
-  demoOpen?: boolean;
-  demoShowContent?: boolean;
 };
 
 /**
- * RoundSummaryCard - Accordion component for round summary
+ * RoundSummaryCard - Uses ModelMessageCard for consistent participant-style display
  *
- * Displays a simple summary of what happened in each round.
+ * Displays round summary exactly like a participant message with:
+ * - Roundtable logo as avatar (left side with glow)
+ * - "Council Moderator" as the name
+ * - Summary text as message content with markdown
  */
 export function RoundSummaryCard({
   summary,
   threadId,
-  isLatest = false,
   className,
   onStreamStart,
   onStreamComplete,
-  streamingRoundNumber,
-  demoOpen,
-  demoShowContent,
 }: RoundSummaryCardProps) {
   const t = useTranslations('moderator');
 
-  // Status configuration for badge styling
-  const statusConfig = {
-    pending: {
-      label: t('summarizing'),
-      color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    },
-    streaming: {
-      label: t('summarizing'),
-      color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    },
-    complete: {
-      label: t('completed'),
-      color: 'bg-green-500/10 text-green-500 border-green-500/20',
-    },
-    failed: {
-      label: t('failed'),
-      color: 'bg-red-500/10 text-red-500 border-red-500/20',
-    },
-  } as const;
-  const config = statusConfig[summary.status as keyof typeof statusConfig];
+  // Map summary status to MessageStatus
+  const status: MessageStatus = summary.status as MessageStatus;
 
-  // Manual control state with round tracking
-  const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
+  // Check if streaming/pending - show stream component
+  const isStreamingOrPending = status === MessageStatuses.STREAMING || status === MessageStatuses.PENDING;
 
-  // Derive if manual control is still valid
-  const isManualControlValid = useMemo(() => {
-    if (!manualControl)
-      return false;
-    if (streamingRoundNumber != null && streamingRoundNumber > manualControl.round) {
-      return false;
+  // Build message parts from summary data
+  const parts: MessagePart[] = useMemo(() => {
+    if (!hasSummaryData(summary.summaryData)) {
+      return [];
     }
-    return true;
-  }, [manualControl, streamingRoundNumber]);
+    return [{
+      type: MessagePartTypes.TEXT,
+      text: summary.summaryData.summary,
+    }];
+  }, [summary.summaryData]);
 
-  // Disable accordion interaction during streaming/pending
-  const isStreamingOrPending = summary.status === MessageStatuses.STREAMING
-    || summary.status === MessageStatuses.PENDING;
+  // For streaming state, render the stream component
+  if (isStreamingOrPending) {
+    return (
+      <div className={cn('w-full', className)}>
+        <RoundSummaryStream
+          threadId={threadId}
+          summary={summary}
+          onStreamStart={onStreamStart}
+          onStreamComplete={onStreamComplete}
+        />
+      </div>
+    );
+  }
 
-  const handleOpenChange = useCallback((open: boolean) => {
-    if (isStreamingOrPending)
-      return;
-    setManualControl({ round: summary.roundNumber, open });
-  }, [isStreamingOrPending, summary.roundNumber]);
+  const isError = status === MessageStatuses.FAILED;
 
-  // Derived accordion state: demoOpen > valid manual control > isLatest
-  const isOpen = useMemo(() => {
-    if (demoOpen !== undefined)
-      return demoOpen;
-    if (isManualControlValid && manualControl)
-      return manualControl.open;
-    return isLatest;
-  }, [demoOpen, isManualControlValid, manualControl, isLatest]);
-
-  return (
-    <div className={cn('w-full pt-6 pb-1.5', className)}>
-      <ChainOfThought
-        open={isOpen}
-        onOpenChange={handleOpenChange}
-        disabled={isStreamingOrPending}
-        className={cn(isStreamingOrPending && 'cursor-default')}
-      >
-        <div className="relative">
-          <ChainOfThoughtHeader>
-            <div className="flex items-center gap-2 w-full min-w-0">
-              <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm font-medium whitespace-nowrap">
-                {t('roundSummary', { number: getDisplayRoundNumber(summary.roundNumber) })}
-              </span>
-              <Badge
-                variant="outline"
-                className={cn(
-                  'text-[10px] sm:text-xs h-5 px-1.5 sm:px-2 flex-shrink-0',
-                  config.color,
-                )}
-              >
-                {config.label}
-              </Badge>
-              <div className="hidden sm:flex items-center gap-2 flex-shrink-0 ml-auto">
-                <span className="text-sm text-muted-foreground">•</span>
-                <span className="text-xs text-muted-foreground capitalize">
-                  {t(`mode.${summary.mode}`)}
-                </span>
-              </div>
-            </div>
-          </ChainOfThoughtHeader>
+  // For failed state with no data
+  if (isError || (status === MessageStatuses.COMPLETE && !hasSummaryData(summary.summaryData))) {
+    return (
+      <div className={cn('w-full', className)}>
+        <div className="flex justify-start">
+          <div className="w-full">
+            <ModeratorHeader hasError />
+            <ModelMessageCard
+              avatarSrc={BRAND.logos.main}
+              avatarName={MODERATOR_NAME}
+              participantIndex={MODERATOR_PARTICIPANT_INDEX}
+              status={MessageStatuses.FAILED}
+              parts={[{
+                type: MessagePartTypes.TEXT,
+                text: t('errorSummarizing'),
+              }]}
+              loadingText={t('analyzing')}
+              hideInlineHeader
+              hideAvatar
+            />
+          </div>
         </div>
-        <ChainOfThoughtContent>
-          {(demoShowContent === undefined || demoShowContent) && (
-            <FadeIn duration={0.25}>
-              {(summary.status === MessageStatuses.PENDING || summary.status === MessageStatuses.STREAMING)
-                ? (
-                    <RoundSummaryStream
-                      threadId={threadId}
-                      summary={summary}
-                      onStreamStart={onStreamStart}
-                      onStreamComplete={onStreamComplete}
-                    />
-                  )
-                : summary.status === MessageStatuses.COMPLETE && summary.summaryData
-                  ? (
-                      <RoundSummaryPanel summary={summary} />
-                    )
-                  : (summary.status === MessageStatuses.FAILED || (summary.status === MessageStatuses.COMPLETE && !summary.summaryData))
-                      ? (
-                          <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                            <span className="size-1.5 rounded-full bg-destructive/80" />
-                            <span>{t('errorSummarizing')}</span>
-                          </div>
-                        )
-                      : null}
-            </FadeIn>
-          )}
-        </ChainOfThoughtContent>
-      </ChainOfThought>
+      </div>
+    );
+  }
+
+  // For complete state with data
+  return (
+    <div className={cn('w-full', className)}>
+      <div className="flex justify-start">
+        <div className="w-full">
+          <ModeratorHeader />
+          <ModelMessageCard
+            avatarSrc={BRAND.logos.main}
+            avatarName={MODERATOR_NAME}
+            participantIndex={MODERATOR_PARTICIPANT_INDEX}
+            status={status}
+            parts={parts}
+            loadingText={t('analyzing')}
+            hideInlineHeader
+            hideAvatar
+          />
+        </div>
+      </div>
     </div>
   );
 }

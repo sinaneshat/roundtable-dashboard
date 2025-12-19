@@ -4,19 +4,21 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef } from 'react';
 
 import type { StreamErrorType } from '@/api/core/enums';
-import { MessageStatuses, StreamErrorTypes } from '@/api/core/enums';
+import { MessagePartTypes, MessageStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type {
   RoundSummaryAIContent,
   StoredRoundSummary,
 } from '@/api/routes/chat/schema';
 import { RoundSummaryAIContentSchema } from '@/api/routes/chat/schema';
-import { TextShimmer } from '@/components/ai-elements/shimmer';
+import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useChatStore } from '@/components/providers/chat-store-provider';
+import { BRAND } from '@/constants/brand';
 import { useBoolean } from '@/hooks/utils';
 import { hasSummaryData } from '@/lib/utils/summary-utils';
 import { getSummaryResumeService } from '@/services/api';
 
-import { RoundSummaryText } from './round-summary-text';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from './moderator-constants';
+import { ModeratorHeader } from './moderator-header';
 
 // ============================================================================
 // RESUMABLE STREAMS: Attempt to resume summary from buffer on page reload
@@ -614,40 +616,40 @@ function RoundSummaryStreamComponent({
 
   const hasData = hasSummaryData(displayData);
 
-  // ✅ Determine loading state for AnimatePresence
-  const isPendingWithNoData = (summary.status === MessageStatuses.PENDING || summary.status === MessageStatuses.STREAMING) && !hasData;
-
-  // Don't render if no data and not pending/streaming
-  if (!hasData && !isPendingWithNoData) {
-    return null;
-  }
-
-  // Extract summary text and metrics for display
+  // Extract summary text for display
   const summaryText = displayData?.summary;
-  const metrics = displayData?.metrics;
 
   // ✅ Use both DB status AND useObject's isLoading for accurate streaming state
   const isCurrentlyStreaming = summary.status === MessageStatuses.STREAMING || isStreamLoading;
 
-  // ✅ PROGRESSIVE STREAMING: Show content immediately as it arrives
-  // No nested animations - scroll animation at parent level handles entrance
-  return (
-    <div className="space-y-2">
-      {/* Show shimmer loader ONLY when truly no data yet */}
-      {isPendingWithNoData && (
-        <div className="flex items-center justify-center py-4 text-muted-foreground text-sm">
-          <TextShimmer>{isAutoRetrying.value ? t('autoRetryingSummary') : t('pendingSummary')}</TextShimmer>
-        </div>
-      )}
+  // Build message parts for ModelMessageCard
+  const parts = summaryText
+    ? [{ type: MessagePartTypes.TEXT, text: summaryText }]
+    : [];
 
-      {/* Show content as soon as ANY partial data exists - streams in progressively */}
-      {hasData && (
-        <RoundSummaryText
-          summary={summaryText}
-          metrics={metrics}
-          isStreaming={isCurrentlyStreaming}
+  // Determine status for ModelMessageCard
+  const cardStatus = isCurrentlyStreaming
+    ? MessageStatuses.STREAMING
+    : hasData
+      ? MessageStatuses.COMPLETE
+      : MessageStatuses.PENDING;
+
+  // ✅ PROGRESSIVE STREAMING: Use ModelMessageCard with ModeratorHeader for consistent display
+  return (
+    <div className="flex justify-start">
+      <div className="w-full">
+        <ModeratorHeader isStreaming={isCurrentlyStreaming} />
+        <ModelMessageCard
+          avatarSrc={BRAND.logos.main}
+          avatarName={MODERATOR_NAME}
+          participantIndex={MODERATOR_PARTICIPANT_INDEX}
+          status={cardStatus}
+          parts={parts}
+          loadingText={isAutoRetrying.value ? t('autoRetryingSummary') : t('pendingSummary')}
+          hideInlineHeader
+          hideAvatar
         />
-      )}
+      </div>
     </div>
   );
 }

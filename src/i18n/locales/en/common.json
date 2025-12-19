@@ -1094,6 +1094,9 @@
   "moderator": {
     "summarizeRound": "Generate Summary",
     "summarizing": "Generating",
+    "analyzing": "Analyzing conversation...",
+    "showDetails": "Show Details",
+    "hideDetails": "Hide Details",
     "pendingSummary": "Generating summary...",
     "autoRetryingSummary": "Summary in progress, auto-retrying...",
     "waitingForParticipants": "Waiting for participants to finish",
