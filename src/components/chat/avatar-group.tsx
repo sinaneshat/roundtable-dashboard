@@ -53,7 +53,7 @@ export function AvatarGroup({
             key={participant.id}
             className="relative"
             style={{
-              zIndex: overlap ? visibleParticipants.length - index : undefined,
+              zIndex: overlap ? index + 1 : undefined,
               marginLeft: index === 0 ? '0px' : overlap ? `${overlapOffset}px` : `${gapSize}px`,
             }}
           >
