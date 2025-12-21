@@ -175,6 +175,47 @@ export function createTestAssistantMessage(data: {
 }
 
 /**
+ * Creates a properly typed UIMessage for testing with moderator metadata
+ * ✅ ENUM PATTERN: Uses UIMessageRoles.ASSISTANT for UI messages (moderators use assistant role)
+ * ✅ ENUM PATTERN: Uses MessageRoles.ASSISTANT for metadata (database pattern)
+ * ✅ TYPE SAFETY: Always provides parts array (never undefined)
+ * ✅ TEXT STREAMING: Moderator messages are stored in messages array with isModerator: true
+ * Pattern from: src/db/schemas/chat-metadata.ts:257 (DbModeratorMessageMetadataSchema)
+ */
+export function createTestModeratorMessage(data: {
+  id: string;
+  content: string;
+  roundNumber: number;
+  model?: string;
+  finishReason?: DbAssistantMessageMetadata['finishReason'];
+  hasError?: boolean;
+  createdAt?: string;
+  parts?: Array<{ type: 'text'; text: string }>;
+}): UIMessage {
+  const parts: Array<{ type: 'text'; text: string }> = data.parts ?? [{ type: 'text', text: data.content }];
+  return {
+    id: data.id,
+    role: UIMessageRoles.ASSISTANT, // ✅ Moderator uses assistant role
+    parts, // ✅ Explicitly typed as non-undefined array
+    metadata: {
+      role: MessageRoles.ASSISTANT, // ✅ Database metadata role enum
+      isModerator: true, // ✅ Discriminator: marks this as moderator message
+      roundNumber: data.roundNumber,
+      model: data.model ?? 'gemini-2.0-flash-thinking-exp-1219',
+      finishReason: data.finishReason ?? 'stop',
+      usage: {
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+      },
+      hasError: data.hasError ?? false,
+      // ✅ FIX: Only include createdAt if provided (Zod optional expects absent key, not undefined)
+      ...(data.createdAt !== undefined && { createdAt: data.createdAt }),
+    },
+  };
+}
+
+/**
  * Creates mock translation messages for testing
  */
 export function createMockMessages(customMessages?: AbstractIntlMessages): AbstractIntlMessages {
@@ -269,86 +310,9 @@ export function setupLocalStorageMock(): void {
 // ============================================================================
 
 /**
- * Creates a mock pre-search record for testing
- * ✅ ZOD-FIRST: Uses Zod-inferred types from StoredPreSearchSchema
- * ✅ TYPE-SAFE: No inline hardcoded types, imports from source of truth
- *
- * @param data - Partial pre-search data
- * @param data.id - Pre-search record ID
- * @param data.threadId - Thread ID
- * @param data.roundNumber - Round number
- * @param data.status - Message status (pending, streaming, complete, failed)
- * @param data.userQuery - User's search query
- * @param data.searchData - Optional search data payload
- * @param data.searchData.queries - Optional array of search queries
- * @param data.searchData.results - Optional array of search results
- * @param data.searchData.summary - Optional summary string
- * @param data.searchData.successCount - Optional success count
- * @param data.searchData.failureCount - Optional failure count
- * @param data.searchData.totalResults - Optional total results count
- * @param data.searchData.totalTime - Optional total time
- * @param data.errorMessage - Optional error message
- * @param data.createdAt - Optional creation timestamp
- * @param data.completedAt - Optional completion timestamp
- * @returns Fully-typed StoredPreSearch object
+ * NOTE: createMockPreSearch moved to api-mocks.ts to avoid duplication
+ * Import from @/lib/testing or use api-mocks.ts directly
  */
-export function createMockPreSearch(data: {
-  id: string;
-  threadId: string;
-  roundNumber: number;
-  status: MessageStatus;
-  userQuery: string;
-  searchData?: {
-    queries?: Array<{
-      query: string;
-      rationale: string;
-      searchDepth: WebSearchDepth;
-      index: number;
-      total: number;
-    }>;
-    results?: Array<{
-      query: string;
-      answer: string | null;
-      results: Array<{
-        title: string;
-        url: string;
-        content: string;
-        score: number;
-      }>;
-      responseTime: number;
-    }>;
-    summary?: string;
-    successCount?: number;
-    failureCount?: number;
-    totalResults?: number;
-    totalTime?: number;
-  };
-  errorMessage?: string | null;
-  createdAt?: Date | string;
-  completedAt?: Date | string | null;
-}): {
-  id: string;
-  threadId: string;
-  roundNumber: number;
-  status: MessageStatus;
-  userQuery: string;
-  searchData?: typeof data.searchData;
-  errorMessage: string | null;
-  createdAt: Date | string;
-  completedAt: Date | string | null;
-} {
-  return {
-    id: data.id,
-    threadId: data.threadId,
-    roundNumber: data.roundNumber,
-    status: data.status,
-    userQuery: data.userQuery,
-    searchData: data.searchData,
-    errorMessage: data.errorMessage ?? null,
-    createdAt: data.createdAt ?? new Date(),
-    completedAt: data.completedAt ?? null,
-  };
-}
 
 /**
  * Creates mock search data payload for testing

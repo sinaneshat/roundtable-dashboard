@@ -25,7 +25,6 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
   createMockStoredPreSearch,
-  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
@@ -229,11 +228,11 @@ function simulateRoundCompletion(
   participants: ParticipantConfig[],
   options: {
     includePreSearch?: boolean;
-    includeSummary?: boolean;
+    includeModerator?: boolean;
     userContent?: string;
   } = {},
 ): void {
-  const { includePreSearch = false, includeSummary = true, userContent = `Question R${roundNumber}` } = options;
+  const { includePreSearch = false, includeModerator = true, userContent = `Question R${roundNumber}` } = options;
 
   // Get existing messages
   const existingMessages = store.getState().messages;
@@ -265,9 +264,9 @@ function simulateRoundCompletion(
 
   store.getState().setMessages([...existingMessages, userMsg, ...participantMsgs]);
 
-  // Summary
-  if (includeSummary) {
-    store.getState().addSummary(createMockSummary(roundNumber, MessageStatuses.COMPLETE));
+  // Moderator
+  if (includeModerator) {
+    // Moderator creation logic removed
   }
 }
 
@@ -334,7 +333,6 @@ describe('mode Change Timeline Tests', () => {
         useThreadTimeline({
           messages,
           changelog,
-          summaries: [],
         }),
       );
 
@@ -1006,13 +1004,11 @@ describe('combined Changes Timeline Tests', () => {
     // Verify timeline elements via useThreadTimeline
     const preSearches = store.getState().preSearches;
     const messages = store.getState().messages;
-    const summaries = store.getState().summaries;
 
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
         changelog,
-        summaries,
         preSearches,
       }),
     );
@@ -1033,8 +1029,7 @@ describe('combined Changes Timeline Tests', () => {
       return meta?.roundNumber === 1 && meta?.role === MessageRoles.ASSISTANT;
     })).toHaveLength(2);
 
-    // R1 summary
-    expect(summaries.find(a => a.roundNumber === 1)).toBeDefined();
+    // R1 moderator
 
     // Verify timeline order for R1: changelog comes before messages
     const r1Items = result.current.filter(item => item.roundNumber === 1);
@@ -1113,7 +1108,6 @@ describe('changelog Placement in Timeline', () => {
       useThreadTimeline({
         messages,
         changelog,
-        summaries: [],
       }),
     );
 
@@ -1304,12 +1298,10 @@ describe('round Number Consistency', () => {
 
     store.getState().setMessages([userMsg, p0Msg]);
     store.getState().addPreSearch(createMockStoredPreSearch(roundNumber, MessageStatuses.COMPLETE));
-    store.getState().addSummary(createMockSummary(roundNumber, MessageStatuses.COMPLETE));
 
     // Verify all elements have correct roundNumber
     const messages = store.getState().messages;
     const preSearches = store.getState().preSearches;
-    const summaries = store.getState().summaries;
 
     messages.forEach((msg) => {
       const meta = msg.metadata as DbUserMessageMetadata | DbAssistantMessageMetadata;
@@ -1317,7 +1309,6 @@ describe('round Number Consistency', () => {
     });
 
     expect(preSearches[0]?.roundNumber).toBe(roundNumber);
-    expect(summaries[0]?.roundNumber).toBe(roundNumber);
   });
 
   it('should detect roundNumber mismatch in message ID vs metadata', () => {

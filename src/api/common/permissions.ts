@@ -25,7 +25,7 @@ import { eq } from 'drizzle-orm';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import type { ChatCustomRole, ChatParticipant, ChatProject, ChatThread } from '@/db/validation';
 
 // ============================================================================

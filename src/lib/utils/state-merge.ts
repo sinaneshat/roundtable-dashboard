@@ -9,7 +9,7 @@
  * ✅ PERFORMANCE: Shallow comparison (no JSON.stringify)
  *
  * Location: /src/lib/utils/state-merge.ts
- * Used by: summary-orchestrator.ts, pre-search-orchestrator.ts
+ * Used by: moderator-orchestrator.ts, pre-search-orchestrator.ts
  */
 
 /**
@@ -28,8 +28,8 @@
  *
  * @example
  * const { mergedItems, hasChanges } = mergeServerClientState(
- *   serverAnalyses,
- *   clientAnalyses,
+ *   serverModerators,
+ *   clientModerators,
  *   (item) => item.roundNumber,
  *   (item) => getStatusPriority(item.status)
  * );
@@ -119,9 +119,9 @@ export function mergeServerClientState<T, K extends string | number>(
  *
  * @example
  * const changed = hasStateChanged(
- *   prevSummaries,
- *   nextSummaries,
- *   ['roundNumber', 'status', 'id', 'summaryData']
+ *   prevModerators,
+ *   nextModerators,
+ *   ['roundNumber', 'status', 'id', 'moderatorData']
  * );
  */
 export function hasStateChanged<T>(
@@ -146,7 +146,7 @@ export function hasStateChanged<T>(
       const prevValue = prevItem[key];
       const nextValue = nextItem[key];
 
-      // Handle boolean conversion for nullable fields (e.g., !!summaryData)
+      // Handle boolean conversion for nullable fields (e.g., !!moderatorData)
       if (typeof prevValue === 'object' && typeof nextValue === 'object') {
         return Boolean(prevValue) !== Boolean(nextValue);
       }

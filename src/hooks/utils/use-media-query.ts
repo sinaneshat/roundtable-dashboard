@@ -33,16 +33,8 @@ export function useMediaQuery(query: string): boolean {
       setMatches(event.matches);
     };
 
-    // Add resize listener (no need to check on mount, already done in lazy init)
-    // Modern browsers
-    if (media.addEventListener) {
-      media.addEventListener('change', listener);
-      return () => media.removeEventListener('change', listener);
-    } else {
-      // Legacy browsers (Safari < 14)
-      media.addListener(listener);
-      return () => media.removeListener(listener);
-    }
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
   }, [query]);
 
   return matches;

@@ -28,9 +28,6 @@ export {
 // Chat message queries (protected)
 export { useThreadMessagesQuery } from './chat/messages';
 
-// Chat round summary queries (protected)
-export { useThreadSummariesQuery } from './chat/summary';
-
 // Chat thread queries (protected)
 export {
   usePublicThreadQuery,

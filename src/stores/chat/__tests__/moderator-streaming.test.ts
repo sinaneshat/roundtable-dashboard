@@ -1,30 +1,46 @@
 /**
- * Summary Streaming Tests
+ * Moderator Message Streaming Tests
  *
- * Tests for progressive object streaming during summary generation:
+ * Tests for progressive object streaming during moderator message generation.
+ * The moderator now renders inline via ChatMessageList (not separate summary components).
+ *
+ * Tests for progressive object streaming behavior:
  * - UI should update progressively as fields stream in
- * - hasSummaryData should return true as soon as ANY displayable content exists
+ * - hasModeratorData should return true as soon as ANY displayable content exists
  * - Streaming buffer should pass through chunks immediately
  * - Partial objects should render UI elements progressively
  *
  * These tests verify that:
- * 1. Summary UI shows content as soon as first displayable field arrives
- * 2. hasSummaryData detects various partial states correctly
+ * 1. Moderator content shows as soon as first displayable field arrives
+ * 2. hasModeratorData detects various partial states correctly
  * 3. Different schema fields trigger display at appropriate times
  * 4. Empty/placeholder states don't incorrectly trigger display
+ *
+ * Architecture:
+ * - Moderator message has `isModerator: true` in metadata
+ * - Moderator renders inline via ChatMessageList
+ * - useModeratorStream triggers the /summarize endpoint
+ * - useThreadTimeline puts moderator LAST in messages array for each round
  */
 
 import type { DeepPartial } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import type { ModeratorSummaryPayload } from '@/api/routes/chat/schema';
-import { hasSummaryData } from '@/lib/utils/summary-utils';
+import type { ModeratorPayload } from '@/api/routes/chat/schema';
+import type { TestModeratorMetrics } from '@/lib/testing/chat-test-factories';
+import {
+  createMockModeratorMetrics,
+  createMockModeratorPayload,
+  createPartialModeratorPayload,
+} from '@/lib/testing/chat-test-factories';
+import { createTestModeratorMessage } from '@/lib/testing/helpers';
+import { hasModeratorData } from '@/lib/utils/moderator-utils';
 
 // ============================================================================
 // TEST HELPERS - Simulate progressive streaming states
 // ============================================================================
 
-type PartialSummary = DeepPartial<ModeratorSummaryPayload>;
+type PartialSummary = DeepPartial<ModeratorPayload>;
 
 /**
  * Simulate streaming progression states
@@ -111,50 +127,50 @@ function createStreamingStates(): PartialSummary[] {
 // TEST SUITES
 // ============================================================================
 
-describe('hasSummaryData - Progressive Detection', () => {
+describe('hasModeratorData - Progressive Detection', () => {
   describe('empty and Null States', () => {
     it('returns false for null', () => {
-      expect(hasSummaryData(null)).toBe(false);
+      expect(hasModeratorData(null)).toBe(false);
     });
 
     it('returns false for undefined', () => {
-      expect(hasSummaryData(undefined)).toBe(false);
+      expect(hasModeratorData(undefined)).toBe(false);
     });
 
     it('returns false for empty object', () => {
-      expect(hasSummaryData({})).toBe(false);
+      expect(hasModeratorData({})).toBe(false);
     });
 
     it('returns false for object with only empty nested objects', () => {
-      expect(hasSummaryData({ metrics: {} })).toBe(false);
+      expect(hasModeratorData({ metrics: {} })).toBe(false);
     });
 
     it('returns false for empty summary string', () => {
-      expect(hasSummaryData({ summary: '' })).toBe(false);
+      expect(hasModeratorData({ summary: '' })).toBe(false);
     });
   });
 
-  describe('summary Field Detection', () => {
-    it('returns true when summary has content', () => {
+  describe('moderator Field Detection', () => {
+    it('returns true when moderator text has content', () => {
       const partial: PartialSummary = {
         summary: 'Test summary content',
       };
-      expect(hasSummaryData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBe(true);
     });
 
-    it('returns false when summary is empty string', () => {
+    it('returns false when moderator text is empty string', () => {
       const partial: PartialSummary = {
         summary: '',
       };
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
 
-    it('returns false when summary is only whitespace', () => {
+    it('returns false when moderator text is only whitespace', () => {
       const partial: PartialSummary = {
         summary: '   ',
       };
       // Current implementation uses .trim().length > 0
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
   });
 
@@ -163,21 +179,21 @@ describe('hasSummaryData - Progressive Detection', () => {
       const partial: PartialSummary = {
         metrics: { engagement: 50 },
       };
-      expect(hasSummaryData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBe(true);
     });
 
     it('returns false when all metrics are 0', () => {
       const partial: PartialSummary = {
         metrics: { engagement: 0, insight: 0, balance: 0, clarity: 0 },
       };
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
 
     it('returns false when metrics is empty object', () => {
       const partial: PartialSummary = {
         metrics: {},
       };
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
 
     it('returns true when multiple metrics have values', () => {
@@ -189,22 +205,22 @@ describe('hasSummaryData - Progressive Detection', () => {
           clarity: 90,
         },
       };
-      expect(hasSummaryData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBe(true);
     });
   });
 
   describe('progressive Streaming Simulation', () => {
     it('transitions from false to true at the right streaming step', () => {
       const streamingStates = createStreamingStates();
-      const results = streamingStates.map(state => hasSummaryData(state));
+      const results = streamingStates.map(state => hasModeratorData(state));
 
       // Step 0: Empty - should be false
       expect(results[0]).toBe(false);
 
-      // Step 1: summary: '' - should be false (no actual content)
+      // Step 1: moderator text: '' - should be false (no actual content)
       expect(results[1]).toBe(false);
 
-      // Step 2: summary with partial content - should be TRUE (first displayable data)
+      // Step 2: moderator text with partial content - should be TRUE (first displayable data)
       expect(results[2]).toBe(true);
 
       // All subsequent steps should be true
@@ -216,13 +232,13 @@ describe('hasSummaryData - Progressive Detection', () => {
     it('detects display-ready state at earliest possible moment', () => {
       const streamingStates = createStreamingStates();
 
-      // Find first state where hasSummaryData returns true
-      const firstTrueIndex = streamingStates.findIndex(state => hasSummaryData(state));
+      // Find first state where hasModeratorData returns true
+      const firstTrueIndex = streamingStates.findIndex(state => hasModeratorData(state));
 
-      // Should be step 2 (summary has partial content)
+      // Should be step 2 (moderator text has partial content)
       expect(firstTrueIndex).toBe(2);
 
-      // Verify the state at that index has summary content
+      // Verify the state at that index has moderator text content
       const firstDisplayableState = streamingStates[firstTrueIndex];
       expect(firstDisplayableState?.summary).toBe('The participants provided');
     });
@@ -231,18 +247,18 @@ describe('hasSummaryData - Progressive Detection', () => {
   describe('combined Field Detection (OR logic)', () => {
     it('returns true if ANY displayable field has content', () => {
       // Only summary
-      expect(hasSummaryData({ summary: 'Test' })).toBe(true);
+      expect(hasModeratorData({ summary: 'Test' })).toBe(true);
 
       // Only metrics
-      expect(hasSummaryData({ metrics: { engagement: 50 } })).toBe(true);
+      expect(hasModeratorData({ metrics: { engagement: 50 } })).toBe(true);
 
       // Both
-      expect(hasSummaryData({ summary: 'Test', metrics: { engagement: 50 } })).toBe(true);
+      expect(hasModeratorData({ summary: 'Test', metrics: { engagement: 50 } })).toBe(true);
     });
   });
 });
 
-describe('streaming Chunk Buffer Behavior', () => {
+describe('moderator Streaming Chunk Buffer Behavior', () => {
   describe('transform Stream Pass-Through', () => {
     it('verifies chunk ordering is preserved', () => {
       // Test that chunk order is preserved through array operations
@@ -305,9 +321,121 @@ describe('streaming Chunk Buffer Behavior', () => {
   });
 });
 
-describe('jSON Streaming Limitation - Why Progressive Updates May Not Work', () => {
+describe('moderator Factory Integration Tests', () => {
+  describe('complete Moderator Flow with Factories', () => {
+    it('creates moderator message and payload data together', () => {
+      const payload = createMockModeratorPayload({
+        summary: 'Test summary content',
+        metrics: createMockModeratorMetrics({
+          engagement: 95,
+          insight: 88,
+        }),
+      });
+
+      const message = createTestModeratorMessage({
+        id: 'moderator-r0',
+        content: payload.summary,
+        roundNumber: 0,
+      });
+
+      // Verify moderator message structure
+      expect(message.metadata.isModerator).toBe(true);
+      expect(message.metadata.roundNumber).toBe(0);
+
+      // Verify payload data
+      expect(payload.summary).toBe('Test summary content');
+      expect(payload.metrics.engagement).toBe(95);
+      expect(payload.metrics.insight).toBe(88);
+
+      // Verify data is displayable
+      expect(hasModeratorData(payload)).toBe(true);
+    });
+
+    it('simulates progressive streaming with partial payloads', () => {
+      // Streaming step 1: Just summary
+      const step1 = createPartialModeratorPayload({
+        summary: 'The discussion explored',
+      });
+      expect(hasModeratorData(step1)).toBe(true);
+
+      // Streaming step 2: Summary complete, metrics starting
+      const step2 = createPartialModeratorPayload({
+        summary: 'The discussion explored key concepts.',
+        metrics: createMockModeratorMetrics({ engagement: 80 }) as Partial<TestModeratorMetrics>,
+      });
+      expect(hasModeratorData(step2)).toBe(true);
+
+      // Streaming step 3: Complete
+      const step3 = createMockModeratorPayload({
+        summary: 'The discussion explored key concepts.',
+        metrics: createMockModeratorMetrics({
+          engagement: 80,
+          insight: 85,
+          balance: 75,
+          clarity: 90,
+        }),
+      });
+      expect(hasModeratorData(step3)).toBe(true);
+    });
+
+    it('creates empty/invalid states correctly', () => {
+      // Empty partial
+      const emptyPartial = createPartialModeratorPayload();
+      expect(hasModeratorData(emptyPartial)).toBe(false);
+
+      // Partial with empty summary
+      const emptyText = createPartialModeratorPayload({ summary: '' });
+      expect(hasModeratorData(emptyText)).toBe(false);
+
+      // Partial with whitespace summary
+      const whitespace = createPartialModeratorPayload({ summary: '   ' });
+      expect(hasModeratorData(whitespace)).toBe(false);
+
+      // Zero metrics
+      const zeroMetrics = createPartialModeratorPayload({
+        metrics: createMockModeratorMetrics({
+          engagement: 0,
+          insight: 0,
+          balance: 0,
+          clarity: 0,
+        }) as Partial<TestModeratorMetrics>,
+      });
+      expect(hasModeratorData(zeroMetrics)).toBe(false);
+    });
+  });
+
+  describe('factory Consistency with Implementation', () => {
+    it('factory creates data matching ModeratorPayload schema structure', () => {
+      const payload = createMockModeratorPayload();
+
+      // Verify structure matches schema
+      expect(payload).toHaveProperty('summary');
+      expect(payload).toHaveProperty('metrics');
+      expect(payload.metrics).toHaveProperty('engagement');
+      expect(payload.metrics).toHaveProperty('insight');
+      expect(payload.metrics).toHaveProperty('balance');
+      expect(payload.metrics).toHaveProperty('clarity');
+    });
+
+    it('factory creates message matching isModerator pattern', () => {
+      const message = createTestModeratorMessage({
+        id: 'mod-test',
+        content: 'Test',
+        roundNumber: 1,
+      });
+
+      // Verify pattern matches implementation
+      expect(message.role).toBe('assistant');
+      expect(message.metadata.role).toBe('assistant');
+      expect(message.metadata.isModerator).toBe(true);
+      expect(typeof message.metadata.roundNumber).toBe('number');
+    });
+  });
+});
+
+describe('moderator JSON Streaming Limitation - Why Progressive Updates May Not Work', () => {
   /**
-   * This test documents the fundamental limitation of JSON streaming:
+   * This test documents the fundamental limitation of JSON streaming for moderator data:
    * Standard JSON.parse() can only succeed when JSON is structurally complete.
    *
    * AI SDK's useObject uses a special partial JSON parser that can extract
@@ -346,14 +474,14 @@ describe('jSON Streaming Limitation - Why Progressive Updates May Not Work', () 
       // This is why schema field ORDER matters - fields that complete first
       // will be available for display earlier.
       //
-      // Our schema puts summary FIRST specifically for this reason.
+      // Our schema puts moderator text FIRST specifically for this reason.
 
       const simulatedPartialParse = (text: string): Record<string, unknown> | null => {
         // Simplified simulation - real AI SDK parser is more sophisticated
         // Try to extract completed top-level fields
         const result: Record<string, unknown> = {};
 
-        // Try to find completed summary field
+        // Try to find completed moderator text field
         const summaryMatch = text.match(/"summary":\s*"([^"]*)"/);
         if (summaryMatch && summaryMatch[1]) {
           result.summary = summaryMatch[1];
@@ -371,18 +499,18 @@ describe('jSON Streaming Limitation - Why Progressive Updates May Not Work', () 
     });
   });
 
-  describe('streaming Update Frequency Expectations', () => {
-    it('documents expected update points during streaming', () => {
-      // During ideal streaming, useObject should update when:
+  describe('moderator Streaming Update Frequency Expectations', () => {
+    it('documents expected update points during moderator streaming', () => {
+      // During ideal moderator streaming, useObject should update when:
       // 1. A top-level field completes
       // 2. An object field completes
       // 3. A nested value completes
       //
-      // NEW STREAMING ORDER (summary first for immediate value):
-      // summary → metrics (engagement → insight → balance → clarity)
+      // NEW STREAMING ORDER (moderator text first for immediate value):
+      // moderator text → metrics (engagement → insight → balance → clarity)
       const expectedUpdatePoints = [
-        // Update 1: summary starts streaming (IMMEDIATE VALUE)
-        { field: 'summary', trigger: 'when summary content starts arriving' },
+        // Update 1: moderator text starts streaming (IMMEDIATE VALUE)
+        { field: 'summary', trigger: 'when moderator text content starts arriving' },
         // Update 2: metrics object starts
         { field: 'metrics', trigger: 'when engagement completes' },
         // Update 3: more metrics
@@ -397,19 +525,19 @@ describe('jSON Streaming Limitation - Why Progressive Updates May Not Work', () 
       expect(expectedUpdatePoints.length).toBeGreaterThan(0);
     });
 
-    it('verifies hasSummaryData triggers at first update point', () => {
-      // The EARLIEST we can display content is when summary has content
-      // Summary streams FIRST in the new schema order for immediate user value
+    it('verifies hasModeratorData triggers at first update point', () => {
+      // The EARLIEST we can display content is when moderator text has content
+      // Moderator text streams FIRST in the new schema order for immediate user value
 
-      const firstMeaningfulUpdate: DeepPartial<ModeratorSummaryPayload> = {
+      const firstMeaningfulUpdate: DeepPartial<ModeratorPayload> = {
         summary: 'Key insights from discussion',
       };
 
       // This should trigger content display
-      expect(hasSummaryData(firstMeaningfulUpdate)).toBe(true);
+      expect(hasModeratorData(firstMeaningfulUpdate)).toBe(true);
 
       // These intermediate states should NOT trigger display
-      const intermediateStates: Array<DeepPartial<ModeratorSummaryPayload>> = [
+      const intermediateStates: Array<DeepPartial<ModeratorPayload>> = [
         {},
         { summary: '' },
         { summary: '   ' },
@@ -417,13 +545,92 @@ describe('jSON Streaming Limitation - Why Progressive Updates May Not Work', () 
       ];
 
       for (const state of intermediateStates) {
-        expect(hasSummaryData(state)).toBe(false);
+        expect(hasModeratorData(state)).toBe(false);
       }
     });
   });
 });
 
-describe('edge Cases for Progressive UI Updates', () => {
+describe('moderator Message Structure Tests', () => {
+  describe('moderator Message Factory', () => {
+    it('creates moderator message with isModerator: true metadata', () => {
+      const moderatorMsg = createTestModeratorMessage({
+        id: 'moderator-123',
+        content: 'Test moderator content',
+        roundNumber: 0,
+      });
+
+      expect(moderatorMsg.metadata).toBeDefined();
+      expect(moderatorMsg.metadata.isModerator).toBe(true);
+      expect(moderatorMsg.metadata.roundNumber).toBe(0);
+      expect(moderatorMsg.role).toBe('assistant');
+    });
+
+    it('creates moderator message with proper parts array', () => {
+      const moderatorMsg = createTestModeratorMessage({
+        id: 'moderator-123',
+        content: 'Test content',
+        roundNumber: 0,
+      });
+
+      expect(moderatorMsg.parts).toBeDefined();
+      expect(Array.isArray(moderatorMsg.parts)).toBe(true);
+      expect(moderatorMsg.parts.length).toBeGreaterThan(0);
+      expect(moderatorMsg.parts[0]?.type).toBe('text');
+      expect(moderatorMsg.parts[0]?.text).toBe('Test content');
+    });
+  });
+
+  describe('moderator Payload Factory', () => {
+    it('creates complete moderator payload with summary and metrics', () => {
+      const payload = createMockModeratorPayload();
+
+      expect(payload.summary).toBeDefined();
+      expect(typeof payload.summary).toBe('string');
+      expect(payload.summary.length).toBeGreaterThan(0);
+
+      expect(payload.metrics).toBeDefined();
+      expect(payload.metrics.engagement).toBeGreaterThan(0);
+      expect(payload.metrics.insight).toBeGreaterThan(0);
+      expect(payload.metrics.balance).toBeGreaterThan(0);
+      expect(payload.metrics.clarity).toBeGreaterThan(0);
+    });
+
+    it('creates partial moderator payload for streaming states', () => {
+      const partial = createPartialModeratorPayload({
+        summary: 'Partial text',
+      });
+
+      expect(partial.summary).toBe('Partial text');
+      expect(partial.metrics).toBeUndefined();
+    });
+
+    it('creates moderator metrics with valid ranges', () => {
+      const metrics = createMockModeratorMetrics();
+
+      expect(metrics.engagement).toBeGreaterThanOrEqual(0);
+      expect(metrics.engagement).toBeLessThanOrEqual(100);
+      expect(metrics.insight).toBeGreaterThanOrEqual(0);
+      expect(metrics.insight).toBeLessThanOrEqual(100);
+      expect(metrics.balance).toBeGreaterThanOrEqual(0);
+      expect(metrics.balance).toBeLessThanOrEqual(100);
+      expect(metrics.clarity).toBeGreaterThanOrEqual(0);
+      expect(metrics.clarity).toBeLessThanOrEqual(100);
+    });
+
+    it('allows overriding moderator metrics', () => {
+      const metrics = createMockModeratorMetrics({
+        engagement: 50,
+        clarity: 75,
+      });
+
+      expect(metrics.engagement).toBe(50);
+      expect(metrics.clarity).toBe(75);
+    });
+  });
+});
+
+describe('moderator Edge Cases for Progressive UI Updates', () => {
   describe('zero Values', () => {
     it('metrics with all 0s should NOT trigger display', () => {
       // 0 is falsy but could be a valid generated value
@@ -431,31 +638,31 @@ describe('edge Cases for Progressive UI Updates', () => {
       const partial: PartialSummary = {
         metrics: { engagement: 0, insight: 0, balance: 0, clarity: 0 },
       };
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
 
     it('metrics with any value > 0 should trigger display', () => {
       const partial: PartialSummary = {
         metrics: { engagement: 1 },
       };
-      expect(hasSummaryData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBe(true);
     });
   });
 
   describe('whitespace Strings', () => {
-    it('summary with only whitespace should NOT trigger display', () => {
+    it('moderator text with only whitespace should NOT trigger display', () => {
       const partial: PartialSummary = {
         summary: '   ',
       };
       // Implementation uses .trim().length > 0
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
 
-    it('summary with whitespace and content should trigger display', () => {
+    it('moderator text with whitespace and content should trigger display', () => {
       const partial: PartialSummary = {
         summary: '  Test  ',
       };
-      expect(hasSummaryData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBe(true);
     });
   });
 
@@ -466,7 +673,7 @@ describe('edge Cases for Progressive UI Updates', () => {
         metrics: { engagement: '75' as unknown as number },
       };
       // typeof '75' === 'string', not 'number', so this should fail
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
 
     it('handles NaN for metrics', () => {
@@ -474,7 +681,7 @@ describe('edge Cases for Progressive UI Updates', () => {
         metrics: { engagement: Number.NaN },
       };
       // NaN > 0 is false
-      expect(hasSummaryData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBe(false);
     });
   });
 });

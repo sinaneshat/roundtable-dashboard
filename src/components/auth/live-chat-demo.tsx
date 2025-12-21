@@ -264,7 +264,6 @@ export function LiveChatDemo() {
   const uiMessages = chatMessagesToUIMessages(messages, PARTICIPANT_CONTEXT);
   const timelineItems = useThreadTimeline({
     messages: uiMessages,
-    summaries: [],
     changelog: [],
   });
 

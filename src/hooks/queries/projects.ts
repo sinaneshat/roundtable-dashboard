@@ -179,7 +179,7 @@ export function useProjectMemoriesQuery(
 
 /**
  * Hook to fetch aggregated project context (for RAG)
- * Includes memories, cross-chat history, search results, and analyses
+ * Includes memories, cross-chat history, search results, and moderator
  * Protected endpoint - requires authentication
  *
  * @param projectId - Project ID

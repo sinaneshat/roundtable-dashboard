@@ -883,7 +883,8 @@
       "waitingNamed": "Thinking...",
       "generating": "Thinking...",
       "gatheringThoughts": "Thinking...",
-      "waitingForWebResults": "Searching..."
+      "waitingForWebResults": "Searching...",
+      "moderatorObserving": "Observing..."
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -1096,98 +1097,11 @@
   "makePublic": "Make Public",
   "manageBilling": "Manage Billing",
   "moderator": {
-    "summarizeRound": "Generate Summary",
-    "summarizing": "Generating",
-    "pendingSummary": "Generating summary...",
-    "autoRetryingSummary": "Summary in progress, auto-retrying...",
-    "waitingForParticipants": "Waiting for participants to finish",
-    "roundSummary": "Round {number} Summary",
-    "metrics": {
-      "engagement": "Engagement",
-      "insight": "Insight",
-      "balance": "Balance",
-      "clarity": "Clarity"
-    },
-    "overallRating": "Overall Rating",
-    "rating": "Rating",
-    "outOfTen": "out of 10",
-    "strengths": "Strengths",
-    "areasForImprovement": "Areas for Improvement",
-    "leaderboard": "Leaderboard",
-    "rank": "Rank #{rank}",
-    "summary": "Summary",
-    "conclusion": "Conclusion",
-    "tradeoffs": "Trade-offs & Considerations",
-    "decisionFramework": "Decision Framework",
-    "criteriaToConsider": "Criteria to Consider",
-    "scenarioRecommendations": "Scenario-Based Recommendations",
-    "recommendedActions": "Recommended Next Steps",
-    "topPerformer": "Top Performer",
-    "participantNumber": "Participant #{number}",
-    "participants": "Participants",
-    "noParticipants": "No participants to display",
-    "noSummary": "Click 'Generate Summary' to see a summary of this round",
-    "errorSummarizing": "Failed to generate summary. Please try again.",
-    "stop": "Stop",
-    "stopSummary": "Stop",
-    "retry": "Retry",
-    "viewFullSummary": "View Details",
-    "participantSummary": "Participant Details",
-    "completed": "Completed",
-    "failed": "Failed",
-    "pending": "Pending",
-    "errors": {
-      "summaryError": "Summary Error",
-      "summaryErrorDescription": "Something went wrong while displaying the summary. The data may be corrupted or incomplete.",
-      "streamError": "Stream Error",
-      "streamErrorDescription": "Failed to stream summary data. Please try again.",
-      "dismissError": "Dismiss",
-      "showDetails": "Show Details",
-      "hideDetails": "Hide Details",
-      "corruptedState": "The summary state appears to be corrupted. Please retry.",
-      "invalidData": "Invalid summary data received. Please regenerate.",
-      "networkError": "Network error occurred. Please check your connection and try again.",
-      "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists.",
-      "emptyResponseError": "Summary generation failed. The AI model did not return a response. Please try again.",
-      "streamTimeout": "Summary stream timed out. The connection was interrupted. Please try again.",
-      "validationError": "Summary generation failed due to invalid response format. Please try again."
-    },
     "mode": {
       "analyzing": "Analyzing",
       "brainstorming": "Brainstorming",
       "debating": "Debating",
       "solving": "Problem Solving"
-    },
-    "keyInsights": {
-      "title": "Key Insights & Recommendations",
-      "insightsIdentified": "{count} key insights identified",
-      "recommendation": "Recommendation {number}"
-    },
-    "aboutFramework": {
-      "title": "About This Framework",
-      "subtitle": "Understanding multi-model deliberation methodology.",
-      "description": "This report synthesizes deliberation from multiple AI models operating in distinct roles. Each contributor evaluates the topic through their specialized lens, and consensus emerges through structured debate phases.",
-      "howItWorks": "How It Works",
-      "roles": {
-        "analyst": {
-          "name": "Analyst",
-          "description": "Evaluates ideas through rigorous, evidence-based assessment and data analysis."
-        },
-        "innovator": {
-          "name": "Innovator",
-          "description": "Explores creative possibilities, novel applications, and unconventional approaches."
-        },
-        "skeptic": {
-          "name": "Skeptic",
-          "description": "Tests assumptions, identifies potential weaknesses, and challenges conclusions."
-        },
-        "builder": {
-          "name": "Builder",
-          "description": "Focuses on practical implementation, feasibility, and actionable next steps."
-        }
-      },
-      "confidenceExplanation": "Confidence Score reflects weighted consensus across models, factoring in evidence strength and reasoning quality.",
-      "noContributors": "Multiple AI models collaborate through structured debate phases to reach consensus."
     }
   },
   "mostPopular": "Most Popular",

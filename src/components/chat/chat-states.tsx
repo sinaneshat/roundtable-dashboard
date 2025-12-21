@@ -15,6 +15,8 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
 
+import type { ComponentSize, ErrorSeverity, NetworkErrorType } from '@/api/core/enums';
+import { ComponentSizes, ErrorSeverities, NetworkErrorTypes } from '@/api/core/enums';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,14 +30,14 @@ type LoadingStateProps = {
   message?: string;
   variant?: 'inline' | 'centered' | 'card';
   className?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: ComponentSize;
 };
 
 const sizeConfig = {
-  sm: { spinner: 'size-4', title: 'text-sm', container: 'py-4 gap-2' },
-  md: { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' },
-  lg: { spinner: 'size-8', title: 'text-lg', container: 'py-12 gap-4' },
-};
+  [ComponentSizes.SM]: { spinner: 'size-4', title: 'text-sm', container: 'py-4 gap-2' },
+  [ComponentSizes.MD]: { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' },
+  [ComponentSizes.LG]: { spinner: 'size-8', title: 'text-lg', container: 'py-12 gap-4' },
+} as const satisfies Record<'sm' | 'md' | 'lg', { spinner: string; title: string; container: string }>;
 
 /**
  * LoadingState - Unified loading indicator
@@ -50,12 +52,12 @@ export function LoadingState({
   message,
   variant = 'centered',
   className,
-  size = 'md',
+  size = ComponentSizes.MD,
 }: LoadingStateProps) {
   const t = useTranslations();
   const defaultTitle = title || t('states.loading.default');
   const defaultMessage = message || t('states.loading.please_wait');
-  const config = sizeConfig[size];
+  const config = sizeConfig[size as 'sm' | 'md' | 'lg'] || sizeConfig[ComponentSizes.MD];
 
   if (variant === 'inline') {
     return (
@@ -107,10 +109,10 @@ type ErrorStateProps = {
   onRetry?: () => void;
   retryLabel?: string;
   variant?: 'alert' | 'card' | 'network' | 'boundary';
-  severity?: 'failed' | 'warning' | 'info';
-  networkType?: 'offline' | 'timeout' | 'connection';
+  severity?: ErrorSeverity;
+  networkType?: NetworkErrorType;
   className?: string;
-  icon?: ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
 };
 export function ErrorState({
   title,
@@ -118,59 +120,59 @@ export function ErrorState({
   onRetry,
   retryLabel,
   variant = 'card',
-  severity = 'failed',
-  networkType = 'connection',
+  severity = ErrorSeverities.FAILED,
+  networkType = NetworkErrorTypes.CONNECTION,
   className,
   icon,
 }: ErrorStateProps) {
   const t = useTranslations();
   const defaultRetryLabel = retryLabel || t('actions.tryAgain');
   const networkConfig = {
-    offline: {
+    [NetworkErrorTypes.OFFLINE]: {
       icon: WifiOff,
       title: t('states.error.offline'),
       description: t('states.error.offlineDescription'),
       badge: t('networkStatus.offline'),
       badgeVariant: 'destructive' as const,
     },
-    timeout: {
+    [NetworkErrorTypes.TIMEOUT]: {
       icon: Clock,
       title: t('states.error.timeout'),
       description: t('states.error.timeoutDescription'),
       badge: t('networkStatus.timeout'),
       badgeVariant: 'secondary' as const,
     },
-    connection: {
+    [NetworkErrorTypes.CONNECTION]: {
       icon: Wifi,
       title: t('states.error.network'),
       description: t('states.error.networkDescription'),
       badge: t('networkStatus.connectionError'),
       badgeVariant: 'destructive' as const,
     },
-  };
+  } as const satisfies Record<NetworkErrorType, { icon: typeof WifiOff | typeof Clock | typeof Wifi; title: string; description: string; badge: string; badgeVariant: 'destructive' | 'secondary' }>;
   const severityConfig = {
-    failed: {
+    [ErrorSeverities.FAILED]: {
       icon: XCircle,
       title: t('states.error.default'),
       description: t('states.error.description'),
       alertVariant: 'destructive' as const,
       iconColor: 'text-destructive',
     },
-    warning: {
+    [ErrorSeverities.WARNING]: {
       icon: AlertTriangle,
       title: t('status.warning'),
       description: t('states.error.description'),
       alertVariant: 'default' as const,
       iconColor: 'text-chart-2',
     },
-    info: {
+    [ErrorSeverities.INFO]: {
       icon: Info,
       title: t('status.info'),
       description: t('states.error.description'),
       alertVariant: 'default' as const,
       iconColor: 'text-primary',
     },
-  };
+  } as const satisfies Record<ErrorSeverity, { icon: typeof XCircle | typeof AlertTriangle | typeof Info; title: string; description: string; alertVariant: 'destructive' | 'default'; iconColor: string }>;
   if (variant === 'network') {
     const config = networkConfig[networkType];
     const Icon = config.icon;
@@ -204,7 +206,7 @@ export function ErrorState({
   }
   if (variant === 'alert') {
     const config = severityConfig[severity];
-    const IconComponent = (icon || config.icon) as React.ComponentType<{ className?: string }>;
+    const IconComponent = icon || config.icon;
     return (
       <Alert variant={config.alertVariant} className={className}>
         <IconComponent className={cn('h-4 w-4', config.iconColor)} />

@@ -9,7 +9,7 @@
 import { eq } from 'drizzle-orm';
 
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 
 /**
  * Convert string to kebab-case

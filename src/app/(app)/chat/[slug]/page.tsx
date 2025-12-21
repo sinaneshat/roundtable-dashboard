@@ -7,7 +7,7 @@ import { ChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadStreamResumptionStateService, getThreadSummariesService } from '@/services/api';
+import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadStreamResumptionStateService } from '@/services/api';
 import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
 import { createMetadata } from '@/utils/metadata';
 
@@ -92,14 +92,7 @@ export default async function ChatThreadPage({
       staleTime: STALE_TIMES.changelog, // 30 seconds - matches client-side query
     }),
 
-    // 2. Prefetch round summaries - round summary cards
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.summaries(thread.id),
-      queryFn: () => getThreadSummariesService({ param: { id: thread.id } }),
-      staleTime: STALE_TIMES.summaries, // 30 seconds - matches client-side query
-    }),
-
-    // 3. Prefetch all pre-search results - web search results (LIST endpoint)
+    // 2. Prefetch all pre-search results - web search results (LIST endpoint)
     // ✅ UNIFIED PATTERN: Prefetch all pre-searches via LIST endpoint (matches analysis pattern)
     // Frontend uses orchestrator to sync to store, components receive from store
     // ✅ BUG FIX: Always prefetch regardless of current enableWebSearch setting

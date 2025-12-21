@@ -1,4 +1,5 @@
 {
+  "task.allowAutomaticTasks": "on",
   "editor.tabSize": 2,
   "editor.detectIndentation": false,
   "search.exclude": {

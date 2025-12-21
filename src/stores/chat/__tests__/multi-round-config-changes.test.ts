@@ -14,7 +14,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ChatModes, FinishReasons, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipant,
   createMockParticipants,
@@ -93,7 +93,7 @@ describe('participant Configuration Changes', () => {
       expect(getStoreState(store).messages).toHaveLength(3);
     });
 
-    it('preserves round 0 summary when participant added', () => {
+    it('preserves round 0 moderator when participant added', () => {
       const state = getStoreState(store);
 
       // Round 0 with 2 participants
@@ -101,25 +101,22 @@ describe('participant Configuration Changes', () => {
       const round0Messages = createRoundMessages(0, 2);
       state.setMessages(round0Messages);
 
-      // Create summary for round 0
-      state.createPendingSummary({
-        roundNumber: 0,
-        messages: round0Messages,
-        userQuestion: 'Question for round 0',
-        threadId: 'thread-config-123',
-        mode: ChatModes.ANALYZING,
-      });
-      state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
-
-      expect(getStoreState(store).summaries).toHaveLength(1);
-      expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+      // Mark moderator as created for round 0
+      state.tryMarkModeratorCreated(0);
 
       // Add participant
       state.setParticipants(createMockParticipants(3));
 
-      // Summary preserved
-      expect(getStoreState(store).summaries).toHaveLength(1);
-      expect(getStoreState(store).summaries[0]!.roundNumber).toBe(0);
+      // Round 0 messages preserved (1 user + 2 assistant)
+      const round0MessagesInStore = getStoreState(store).messages.filter(
+        m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 0,
+      );
+      expect(round0MessagesInStore).toHaveLength(3);
+      // 2 participant messages in round 0
+      const round0ParticipantMessages = round0MessagesInStore.filter(
+        m => m.role === 'assistant',
+      );
+      expect(round0ParticipantMessages).toHaveLength(2);
     });
 
     it('round 1 uses new participant count', () => {
@@ -137,17 +134,17 @@ describe('participant Configuration Changes', () => {
       const round1Messages = createRoundMessages(1, 3);
       state.setMessages([...round0Messages, ...round1Messages]);
 
-      // Create summary for round 1 - should find 3 participant messages
-      state.createPendingSummary({
-        roundNumber: 1,
-        messages: [...round0Messages, ...round1Messages],
-        userQuestion: 'Question for round 1',
-        threadId: 'thread-config-123',
-        mode: ChatModes.ANALYZING,
-      });
+      // Verify round 1 has 3 participant messages
+      const round1MessagesInStore = getStoreState(store).messages.filter(
+        m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1,
+      );
+      const round1ParticipantMessages = round1MessagesInStore.filter(
+        m => m.role === 'assistant',
+      );
+      expect(round1ParticipantMessages).toHaveLength(3);
 
-      expect(getStoreState(store).summaries).toHaveLength(1);
-      expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(3);
+      // Mark moderator created for round 1
+      state.tryMarkModeratorCreated(1);
     });
   });
 
@@ -179,20 +176,20 @@ describe('participant Configuration Changes', () => {
       const round0Messages = createRoundMessages(0, 3);
       state.setMessages(round0Messages);
 
-      // Create summary for round 0
-      state.createPendingSummary({
-        roundNumber: 0,
-        messages: round0Messages,
-        userQuestion: 'Question for round 0',
-        threadId: 'thread-config-123',
-        mode: ChatModes.ANALYZING,
-      });
+      // Mark moderator as created for round 0
+      state.tryMarkModeratorCreated(0);
 
       // Remove participant
       state.setParticipants(createMockParticipants(2));
 
-      // Round 0 summary preserved with original 3 participant message IDs
-      expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(3);
+      // Round 0 messages still preserved with original 3 participant messages
+      const round0MessagesInStore = getStoreState(store).messages.filter(
+        m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 0,
+      );
+      const round0ParticipantMessages = round0MessagesInStore.filter(
+        m => m.role === 'assistant',
+      );
+      expect(round0ParticipantMessages).toHaveLength(3);
     });
 
     it('round 1 uses reduced participant count', () => {
@@ -210,18 +207,17 @@ describe('participant Configuration Changes', () => {
       const round1Messages = createRoundMessages(1, 2);
       state.setMessages([...round0Messages, ...round1Messages]);
 
-      // Create summary for round 1 - should find 2 participant messages
-      state.createPendingSummary({
-        roundNumber: 1,
-        messages: [...round0Messages, ...round1Messages],
-        userQuestion: 'Question for round 1',
-        threadId: 'thread-config-123',
-        mode: ChatModes.ANALYZING,
-      });
+      // Verify round 1 has 2 participant messages
+      const round1MessagesInStore = getStoreState(store).messages.filter(
+        m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1,
+      );
+      const round1ParticipantMessages = round1MessagesInStore.filter(
+        m => m.role === 'assistant',
+      );
+      expect(round1ParticipantMessages).toHaveLength(2);
 
-      // Find round 1 summary
-      const round1Summary = getStoreState(store).summaries.find(a => a.roundNumber === 1);
-      expect(round1Summary!.participantMessageIds).toHaveLength(2);
+      // Mark moderator created for round 1
+      state.tryMarkModeratorCreated(1);
     });
   });
 
@@ -335,7 +331,7 @@ describe('chat Mode Changes', () => {
     expect(getStoreState(store).selectedMode).toBe(ChatModes.BRAINSTORMING);
   });
 
-  it('summary uses mode at time of creation', () => {
+  it('moderator uses mode at time of creation', () => {
     const state = getStoreState(store);
 
     // Round 0 in ANALYZING mode
@@ -343,34 +339,24 @@ describe('chat Mode Changes', () => {
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Question for round 0',
-      threadId: 'thread-config-123',
-      mode: ChatModes.ANALYZING, // Mode at creation time
-    });
+    // Mark moderator created for round 0 (server creates with ANALYZING mode)
+    state.tryMarkModeratorCreated(0);
 
     // Change mode
     state.setSelectedMode(ChatModes.DEBATING);
 
-    // Round 0 summary still has ANALYZING mode
-    expect(getStoreState(store).summaries[0]!.mode).toBe(ChatModes.ANALYZING);
+    // Round 0 moderator tracking preserved (server-side moderator has ANALYZING mode)
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
   });
 
   it('subsequent round uses new mode', () => {
     const state = getStoreState(store);
 
     // Round 0 in ANALYZING mode
+    state.setSelectedMode(ChatModes.ANALYZING);
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q0',
-      threadId: 'thread-config-123',
-      mode: ChatModes.ANALYZING,
-    });
+    state.tryMarkModeratorCreated(0);
 
     // Change to DEBATING
     state.setSelectedMode(ChatModes.DEBATING);
@@ -378,17 +364,11 @@ describe('chat Mode Changes', () => {
     // Round 1 in DEBATING mode
     const round1Messages = createRoundMessages(1, 2);
     state.setMessages([...round0Messages, ...round1Messages]);
-    state.createPendingSummary({
-      roundNumber: 1,
-      messages: [...round0Messages, ...round1Messages],
-      userQuestion: 'Q1',
-      threadId: 'thread-config-123',
-      mode: ChatModes.DEBATING,
-    });
+    state.tryMarkModeratorCreated(1);
 
-    // Each round has its mode preserved
-    expect(getStoreState(store).summaries[0]!.mode).toBe(ChatModes.ANALYZING);
-    expect(getStoreState(store).summaries[1]!.mode).toBe(ChatModes.DEBATING);
+    // Both rounds tracked independently
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
   });
 });
 
@@ -411,19 +391,9 @@ describe('complete Configuration Change Journey', () => {
     // === ROUND 0: 2 participants, no web search ===
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
-
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q0',
-      threadId: 'thread-config-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
+    state.tryMarkModeratorCreated(0);
 
     expect(getStoreState(store).messages).toHaveLength(3);
-    expect(getStoreState(store).summaries).toHaveLength(1);
-    expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(2);
 
     // === CONFIG CHANGE: Add participant ===
     state.setParticipants(createMockParticipants(3));
@@ -431,19 +401,9 @@ describe('complete Configuration Change Journey', () => {
     // === ROUND 1: 3 participants, no web search ===
     const round1Messages = createRoundMessages(1, 3);
     state.setMessages([...round0Messages, ...round1Messages]);
-
-    state.createPendingSummary({
-      roundNumber: 1,
-      messages: [...round0Messages, ...round1Messages],
-      userQuestion: 'Q1',
-      threadId: 'thread-config-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(1, MessageStatuses.COMPLETE);
+    state.tryMarkModeratorCreated(1);
 
     expect(getStoreState(store).messages).toHaveLength(7); // 3 + 4
-    expect(getStoreState(store).summaries).toHaveLength(2);
-    expect(getStoreState(store).summaries[1]!.participantMessageIds).toHaveLength(3);
 
     // === CONFIG CHANGE: Enable web search ===
     state.setEnableWebSearch(true);
@@ -453,27 +413,29 @@ describe('complete Configuration Change Journey', () => {
 
     const round2Messages = createRoundMessages(2, 3);
     state.setMessages([...round0Messages, ...round1Messages, ...round2Messages]);
-
-    state.createPendingSummary({
-      roundNumber: 2,
-      messages: [...round0Messages, ...round1Messages, ...round2Messages],
-      userQuestion: 'Q2',
-      threadId: 'thread-config-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(2, MessageStatuses.COMPLETE);
+    state.tryMarkModeratorCreated(2);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
 
     // All rounds preserved
     expect(finalState.messages).toHaveLength(11); // 3 + 4 + 4
-    expect(finalState.summaries).toHaveLength(3);
 
     // Each round has correct participant count
-    expect(finalState.summaries[0]!.participantMessageIds).toHaveLength(2);
-    expect(finalState.summaries[1]!.participantMessageIds).toHaveLength(3);
-    expect(finalState.summaries[2]!.participantMessageIds).toHaveLength(3);
+    const round0Participants = finalState.messages.filter(
+      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 0 && m.role === 'assistant',
+    );
+    expect(round0Participants).toHaveLength(2);
+
+    const round1Participants = finalState.messages.filter(
+      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 1 && m.role === 'assistant',
+    );
+    expect(round1Participants).toHaveLength(3);
+
+    const round2Participants = finalState.messages.filter(
+      m => m.metadata && 'roundNumber' in m.metadata && m.metadata.roundNumber === 2 && m.role === 'assistant',
+    );
+    expect(round2Participants).toHaveLength(3);
 
     // Pre-search was triggered for round 2
     expect(finalState.triggeredPreSearchRounds.has(2)).toBe(true);
@@ -498,22 +460,22 @@ describe('tracking State Isolation Between Rounds', () => {
     state.setScreenMode(ScreenModes.THREAD);
   });
 
-  it('summary tracking per round is independent', () => {
+  it('moderator tracking per round is independent', () => {
     const state = getStoreState(store);
 
     // Mark round 0 as created
-    expect(state.tryMarkSummaryCreated(0)).toBe(true);
-    expect(state.tryMarkSummaryCreated(0)).toBe(false); // Already marked
+    expect(state.tryMarkModeratorCreated(0)).toBe(true);
+    expect(state.tryMarkModeratorCreated(0)).toBe(false); // Already marked
 
     // Round 1 is independent
-    expect(state.tryMarkSummaryCreated(1)).toBe(true);
-    expect(state.tryMarkSummaryCreated(1)).toBe(false);
+    expect(state.tryMarkModeratorCreated(1)).toBe(true);
+    expect(state.tryMarkModeratorCreated(1)).toBe(false);
 
     // Round 2 is independent
-    expect(state.tryMarkSummaryCreated(2)).toBe(true);
+    expect(state.tryMarkModeratorCreated(2)).toBe(true);
 
     // Check all are tracked
-    expect(getStoreState(store).createdSummaryRounds.size).toBe(3);
+    expect(getStoreState(store).createdModeratorRounds.size).toBe(3);
   });
 
   it('pre-search tracking per round is independent', () => {

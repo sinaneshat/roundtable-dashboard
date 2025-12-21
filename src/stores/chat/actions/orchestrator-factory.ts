@@ -2,7 +2,7 @@
  * Generic Orchestrator Factory
  *
  * Creates type-safe orchestrator hooks for syncing server data to Zustand store.
- * Eliminates code duplication between summary-orchestrator.ts and pre-search-orchestrator.ts
+ * Eliminates code duplication between different orchestrators (pre-search, etc.)
  *
  * PATTERN: Factory function with generics for reusable orchestration logic
  * USAGE: Create specialized orchestrators by providing configuration
@@ -12,16 +12,16 @@
  * PERFORMANCE: Shallow comparison, optimized merging
  *
  * @example
- * const useSummaryOrchestrator = createOrchestrator({
- *   queryHook: useThreadSummariesQuery,
- *   storeSelector: s => s.summaries,
- *   storeSetter: s => s.setSummaries,
+ * const usePreSearchOrchestrator = createOrchestrator({
+ *   queryHook: useThreadPreSearchesQuery,
+ *   storeSelector: s => s.preSearches,
+ *   storeSetter: s => s.setPreSearches,
  *   extractItems: response => response?.data?.items || [],
- *   transformItems: transformRoundSummaries,
+ *   transformItems: transformPreSearches,
  *   getItemKey: item => item.roundNumber,
  *   getItemPriority: item => getStatusPriority(item.status),
- *   compareKeys: ['roundNumber', 'status', 'id', 'summaryData'],
- *   deduplicationHook: useSummaryDeduplication,
+ *   compareKeys: ['roundNumber', 'status', 'id', 'searchData'],
+ *   deduplicationHook: usePreSearchDeduplication,
  * });
  */
 
@@ -53,7 +53,7 @@ export type OrchestratorConfig<
 > = {
   /**
    * TanStack Query hook that fetches data from server
-   * @example useThreadAnalysesQuery
+   * @example useThreadModeratorsQuery
    */
   queryHook: (threadId: string, enabled: boolean, ...args: TQueryArgs) => UseQueryResult<TResponse>;
 
@@ -66,13 +66,13 @@ export type OrchestratorConfig<
 
   /**
    * Zustand store selector to get current items from store
-   * @example s => s.analyses
+   * @example s => s.moderators
    */
   storeSelector: (store: ChatStore) => TItem[];
 
   /**
    * Zustand store setter to update items in store
-   * @example s => s.setAnalyses
+   * @example s => s.setModerators
    */
   storeSetter: (store: ChatStore) => (items: TItem[]) => void;
 
@@ -84,7 +84,7 @@ export type OrchestratorConfig<
 
   /**
    * Transform raw server items to store format (e.g., date transformation)
-   * @example transformModeratorAnalyses
+   * @example transformModerators
    */
   transformItems: (items: TRaw[]) => TItem[];
 
@@ -102,14 +102,14 @@ export type OrchestratorConfig<
 
   /**
    * Properties to compare for change detection
-   * @example ['roundNumber', 'status', 'id', 'summaryData']
+   * @example ['roundNumber', 'status', 'id', 'searchData']
    */
   compareKeys: (keyof TItem)[];
 
   /**
    * Optional deduplication hook for additional processing
    * TYPE-SAFE: Uses generic TDeduplicationOptions instead of Record<string, unknown>
-   * @example useSummaryDeduplication
+   * @example usePreSearchDeduplication
    */
   deduplicationHook?: (
     items: TItem[],
@@ -174,21 +174,21 @@ export type OrchestratorReturn = {
  * @returns Hook function for orchestrating data sync
  *
  * @example
- * // Create summary orchestrator
- * const useSummaryOrchestrator = createOrchestrator({
- *   queryHook: useThreadSummariesQuery,
- *   storeSelector: s => s.summaries,
- *   storeSetter: s => s.setSummaries,
+ * // Create pre-search orchestrator
+ * const usePreSearchOrchestrator = createOrchestrator({
+ *   queryHook: useThreadPreSearchesQuery,
+ *   storeSelector: s => s.preSearches,
+ *   storeSetter: s => s.setPreSearches,
  *   extractItems: response => response?.data?.items || [],
- *   transformItems: transformRoundSummaries,
+ *   transformItems: transformPreSearches,
  *   getItemKey: item => item.roundNumber,
  *   getItemPriority: item => getStatusPriority(item.status),
- *   compareKeys: ['roundNumber', 'status', 'id', 'summaryData'],
- *   deduplicationHook: useSummaryDeduplication,
+ *   compareKeys: ['roundNumber', 'status', 'id', 'searchData'],
+ *   deduplicationHook: usePreSearchDeduplication,
  * });
  *
  * // Use in component
- * const { isLoading } = useSummaryOrchestrator({
+ * const { isLoading } = usePreSearchOrchestrator({
  *   threadId: 'thread-123',
  *   enabled: true
  * });

@@ -6,7 +6,7 @@
  *
  * Root causes of rate limit issues during streaming:
  * 1. Download URL queries with staleTime: 0 refetch on every component remount
- * 2. Messages/analyses fetches in handleComplete without staleTime cause redundant requests
+ * 2. Messages/moderators fetches in handleComplete without staleTime cause redundant requests
  * 3. Rapid component re-renders during streaming trigger multiple concurrent API calls
  *
  * These tests verify the staleTime configurations are correct to prevent rate limits.
@@ -23,9 +23,9 @@ describe('rate limit prevention', () => {
       expect(STALE_TIMES.threadMessages).toBeGreaterThanOrEqual(5 * 1000);
     });
 
-    it('threadSummaries should be Infinity for ONE-WAY DATA FLOW pattern', () => {
-      // Summaries use ONE-WAY DATA FLOW: store is source of truth, not query cache
-      expect(STALE_TIMES.threadSummaries).toBe(Infinity);
+    it('threadModerators should be Infinity for ONE-WAY DATA FLOW pattern', () => {
+      // Moderators use ONE-WAY DATA FLOW: store is source of truth, not query cache
+      expect(STALE_TIMES.threadModerators).toBe(Infinity);
     });
 
     it('usage should have reasonable staleTime to prevent abuse', () => {
@@ -54,7 +54,7 @@ describe('rate limit prevention', () => {
   describe('handle complete fetch behavior', () => {
     it('handleComplete fetches should use staleTime > 0 to prevent redundant requests', () => {
       // The FETCH_STALE_TIME constant in provider.tsx should be > 0
-      // This prevents multiple fetches during the streaming → summary transition
+      // This prevents multiple fetches during the streaming → moderator transition
       const EXPECTED_FETCH_STALE_TIME = 5 * 1000; // 5 seconds (from provider.tsx)
 
       // This test documents the expected behavior

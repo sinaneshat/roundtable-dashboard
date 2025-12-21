@@ -7,7 +7,6 @@
  * Key Areas:
  * - Form slice actions (participants, mode, input)
  * - Thread slice actions (messages, streaming state)
- * - Summary slice actions (creation, updates, status)
  * - PreSearch slice actions (creation, status, data)
  * - Tracking slice actions (deduplication, round tracking)
  * - Operations slice actions (composite operations)
@@ -26,7 +25,6 @@ import { ChatModes, FinishReasons, MessageStatuses, ScreenModes, StreamStatuses 
 import {
   createMockParticipant,
   createMockStoredPreSearch,
-  createMockSummary,
   createMockThread,
   createParticipantConfig,
   createTestAssistantMessage,
@@ -36,10 +34,10 @@ import {
 import { createChatStore } from '../store';
 import {
   FORM_DEFAULTS,
+  MODERATOR_STATE_RESET,
   PENDING_MESSAGE_STATE_RESET,
   REGENERATION_STATE_RESET,
   STREAMING_STATE_RESET,
-  SUMMARY_STATE_RESET,
   THREAD_NAVIGATION_RESET_STATE,
 } from '../store-defaults';
 
@@ -300,89 +298,6 @@ describe('thread Slice Actions', () => {
 });
 
 // ============================================================================
-// SUMMARY SLICE TESTS
-// ============================================================================
-
-describe('summary Slice Actions', () => {
-  describe('addSummary', () => {
-    it('adds new summary', () => {
-      const store = createChatStore();
-      const summary = createMockSummary(0, MessageStatuses.PENDING);
-
-      store.getState().addSummary(summary);
-
-      expect(store.getState().summaries).toHaveLength(1);
-    });
-
-    it('deduplicates by roundNumber and threadId', () => {
-      const store = createChatStore();
-      const summary = createMockSummary(0, MessageStatuses.PENDING);
-
-      store.getState().addSummary(summary);
-      store.getState().addSummary(summary);
-
-      expect(store.getState().summaries).toHaveLength(1);
-    });
-
-    it('allows different rounds', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
-      store.getState().addSummary(createMockSummary(1, MessageStatuses.PENDING));
-
-      expect(store.getState().summaries).toHaveLength(2);
-    });
-  });
-
-  describe('updateSummaryStatus', () => {
-    it('updates status for matching round', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
-      store.getState().updateSummaryStatus(0, MessageStatuses.STREAMING);
-
-      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.STREAMING);
-    });
-
-    it('does not affect other rounds', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
-      store.getState().addSummary(createMockSummary(1, MessageStatuses.PENDING));
-      store.getState().updateSummaryStatus(0, MessageStatuses.COMPLETE);
-
-      expect(store.getState().summaries[1]?.status).toBe(MessageStatuses.PENDING);
-    });
-  });
-
-  describe('updateSummaryError', () => {
-    it('sets failed status and error message', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.STREAMING));
-      store.getState().updateSummaryError(0, 'Connection failed');
-
-      const summary = store.getState().summaries[0];
-      expect(summary?.status).toBe(MessageStatuses.FAILED);
-      expect(summary?.errorMessage).toBe('Connection failed');
-    });
-  });
-
-  describe('removeSummary', () => {
-    it('removes summary by roundNumber', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
-      store.getState().addSummary(createMockSummary(1, MessageStatuses.COMPLETE));
-      store.getState().removeSummary(0);
-
-      expect(store.getState().summaries).toHaveLength(1);
-      expect(store.getState().summaries[0]?.roundNumber).toBe(1);
-    });
-  });
-});
-
-// ============================================================================
 // PRESEARCH SLICE TESTS
 // ============================================================================
 
@@ -448,81 +363,81 @@ describe('preSearch Slice Actions', () => {
 // ============================================================================
 
 describe('tracking Slice Actions', () => {
-  describe('markSummaryCreated', () => {
+  describe('markModeratorCreated', () => {
     it('tracks round as created', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
+      store.getState().markModeratorCreated(0);
 
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
-      expect(store.getState().hasSummaryBeenCreated(1)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
     });
 
     it('prevents duplicate creation', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
+      store.getState().markModeratorCreated(0);
 
       // Second call should be idempotent
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
     });
   });
 
-  describe('tryMarkSummaryCreated (atomic check-and-mark)', () => {
+  describe('tryMarkModeratorCreated (atomic check-and-mark)', () => {
     it('returns true and marks round when not already created', () => {
       const store = createChatStore();
 
-      const result = store.getState().tryMarkSummaryCreated(0);
+      const result = store.getState().tryMarkModeratorCreated(0);
 
       expect(result).toBe(true);
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
     });
 
     it('returns false when round already created (prevents race condition)', () => {
       const store = createChatStore();
 
       // First call succeeds
-      const firstResult = store.getState().tryMarkSummaryCreated(0);
+      const firstResult = store.getState().tryMarkModeratorCreated(0);
       expect(firstResult).toBe(true);
 
       // Second call fails - round already marked
-      const secondResult = store.getState().tryMarkSummaryCreated(0);
+      const secondResult = store.getState().tryMarkModeratorCreated(0);
       expect(secondResult).toBe(false);
 
       // State still shows created
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
     });
 
     it('handles multiple rounds independently', () => {
       const store = createChatStore();
 
       // Mark round 0
-      expect(store.getState().tryMarkSummaryCreated(0)).toBe(true);
+      expect(store.getState().tryMarkModeratorCreated(0)).toBe(true);
 
       // Can still mark round 1
-      expect(store.getState().tryMarkSummaryCreated(1)).toBe(true);
+      expect(store.getState().tryMarkModeratorCreated(1)).toBe(true);
 
       // Cannot re-mark round 0
-      expect(store.getState().tryMarkSummaryCreated(0)).toBe(false);
+      expect(store.getState().tryMarkModeratorCreated(0)).toBe(false);
 
       // Both rounds are marked
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
-      expect(store.getState().hasSummaryBeenCreated(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
     });
 
-    it('respects clearSummaryTracking', () => {
+    it('respects clearModeratorTracking', () => {
       const store = createChatStore();
 
       // Mark round 0
-      store.getState().tryMarkSummaryCreated(0);
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
+      store.getState().tryMarkModeratorCreated(0);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
 
       // Clear tracking
-      store.getState().clearSummaryTracking(0);
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
+      store.getState().clearModeratorTracking(0);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
 
       // Can mark again after clearing
-      expect(store.getState().tryMarkSummaryCreated(0)).toBe(true);
+      expect(store.getState().tryMarkModeratorCreated(0)).toBe(true);
     });
   });
 
@@ -536,27 +451,27 @@ describe('tracking Slice Actions', () => {
     });
   });
 
-  describe('markSummaryStreamTriggered', () => {
-    it('tracks both summary ID and round number', () => {
+  describe('markModeratorStreamTriggered', () => {
+    it('tracks both moderator ID and round number', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryStreamTriggered('summary-123', 0);
+      store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
-      expect(store.getState().hasSummaryStreamBeenTriggered('summary-123', 0)).toBe(true);
-      expect(store.getState().hasSummaryStreamBeenTriggered('different-id', 0)).toBe(true); // Same round
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBe(true); // Same round
     });
   });
 
-  describe('clearSummaryTracking', () => {
+  describe('clearModeratorTracking', () => {
     it('clears tracking for specific round', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
-      store.getState().markSummaryCreated(1);
-      store.getState().clearSummaryTracking(0);
+      store.getState().markModeratorCreated(0);
+      store.getState().markModeratorCreated(1);
+      store.getState().clearModeratorTracking(0);
 
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
-      expect(store.getState().hasSummaryBeenCreated(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
     });
   });
 });
@@ -666,7 +581,7 @@ describe('operations Slice Actions', () => {
   });
 
   describe('completeStreaming', () => {
-    it('clears all streaming and summary state', () => {
+    it('clears all streaming and moderator state', () => {
       const store = createChatStore();
 
       // Set up active streaming state
@@ -678,7 +593,7 @@ describe('operations Slice Actions', () => {
       expect(store.getState().isStreaming).toBe(false);
       expect(store.getState().currentParticipantIndex).toBe(0);
       expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().isCreatingSummary).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBe(false);
       expect(store.getState().pendingMessage).toBeNull();
     });
   });
@@ -687,14 +602,14 @@ describe('operations Slice Actions', () => {
     it('sets regeneration state and clears tracking', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
+      store.getState().markModeratorCreated(0);
       store.getState().markPreSearchTriggered(0);
 
       store.getState().startRegeneration(0);
 
       expect(store.getState().isRegenerating).toBe(true);
       expect(store.getState().regeneratingRoundNumber).toBe(0);
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
       expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
     });
   });
@@ -737,13 +652,11 @@ describe('operations Slice Actions', () => {
 
       store.getState().setThread(createMockThread());
       store.getState().setMessages([createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 })]);
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
 
       store.getState().resetForThreadNavigation();
 
       expect(store.getState().thread).toBeNull();
       expect(store.getState().messages).toHaveLength(0);
-      expect(store.getState().summaries).toHaveLength(0);
     });
   });
 });
@@ -950,10 +863,10 @@ describe('reset State Groups', () => {
     });
   });
 
-  describe('sUMMARY_STATE_RESET', () => {
-    it('contains summary creation flags', () => {
-      expect(SUMMARY_STATE_RESET).toHaveProperty('isCreatingSummary');
-      expect(SUMMARY_STATE_RESET).toHaveProperty('isWaitingForChangelog');
+  describe('moderator state reset', () => {
+    it('contains moderator creation flags', () => {
+      expect(MODERATOR_STATE_RESET).toHaveProperty('isModeratorStreaming');
+      expect(MODERATOR_STATE_RESET).toHaveProperty('isWaitingForChangelog');
     });
   });
 
@@ -978,7 +891,6 @@ describe('reset State Groups', () => {
       expect(THREAD_NAVIGATION_RESET_STATE).toHaveProperty('thread');
       expect(THREAD_NAVIGATION_RESET_STATE).toHaveProperty('participants');
       expect(THREAD_NAVIGATION_RESET_STATE).toHaveProperty('messages');
-      expect(THREAD_NAVIGATION_RESET_STATE).toHaveProperty('summaries');
       expect(THREAD_NAVIGATION_RESET_STATE).toHaveProperty('preSearches');
     });
   });

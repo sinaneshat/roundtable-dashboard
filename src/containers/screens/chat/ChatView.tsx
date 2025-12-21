@@ -10,19 +10,17 @@
  * ARCHITECTURE:
  * - Reads all state from Zustand store (single source of truth)
  * - Handles message rendering via ThreadTimeline
- * - Manages summary streaming and completion
+ * - Manages moderator streaming and completion
  * - Provides unified input with toolbar and modals
  * - Consistent loading indicators and scroll behavior
  */
 
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
-import { RoundSummaryAIContentSchema } from '@/api/routes/chat/schema';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -44,11 +42,10 @@ import {
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
-import { queryKeys } from '@/lib/data/query-keys';
 import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, isVisionRequiredMimeType } from '@/lib/utils/file-capability';
+import { getModeratorMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils/metadata';
 import {
-  SummaryTimeouts,
   useChatFormActions,
   useFeedbackActions,
   useFlowLoading,
@@ -78,7 +75,6 @@ export function ChatView({
   onSubmit,
   chatAttachments,
 }: ChatViewProps) {
-  const queryClient = useQueryClient();
   const t = useTranslations('chat');
 
   // Modal state
@@ -101,7 +97,6 @@ export function ChatView({
   // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
   const contextParticipants = useChatStore(s => s.participants);
   const preSearches = useChatStore(s => s.preSearches);
-  const summaries = useChatStore(s => s.summaries);
 
   const { thread, createdThreadId } = useChatStore(
     useShallow(s => ({
@@ -110,16 +105,19 @@ export function ChatView({
     })),
   );
 
-  const { streamingRoundNumber, isCreatingSummary, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded, preSearchResumption, summarizerResumption } = useChatStore(
+  // ✅ MODERATOR FLAG: Track moderator streaming state for input blocking
+  // Moderator message now renders via normal message flow (added to messages array)
+  const isModeratorStreaming = useChatStore(s => s.isModeratorStreaming);
+
+  const { streamingRoundNumber, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded, preSearchResumption, moderatorResumption } = useChatStore(
     useShallow(s => ({
       streamingRoundNumber: s.streamingRoundNumber,
-      isCreatingSummary: s.isCreatingSummary,
       waitingToStartStreaming: s.waitingToStartStreaming,
       isCreatingThread: s.isCreatingThread,
       pendingMessage: s.pendingMessage,
       hasInitiallyLoaded: s.hasInitiallyLoaded,
       preSearchResumption: s.preSearchResumption,
-      summarizerResumption: s.summarizerResumption,
+      moderatorResumption: s.moderatorResumption,
     })),
   );
 
@@ -134,11 +132,6 @@ export function ChatView({
   const modelOrder = useChatStore(s => s.modelOrder);
   const setModelOrder = useChatStore(s => s.setModelOrder);
   const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
-
-  // Summary actions
-  const updateSummaryData = useChatStore(s => s.updateSummaryData);
-  const updateSummaryStatus = useChatStore(s => s.updateSummaryStatus);
-  const updateSummaryError = useChatStore(s => s.updateSummaryError);
 
   // ============================================================================
   // DERIVED STATE
@@ -204,18 +197,25 @@ export function ChatView({
     return filtered;
   }, [changelogResponse]);
 
-  // ✅ BUG FIX: Compute completed round numbers from summaries
-  // Rounds with complete summaries should NEVER show pending cards,
-  // regardless of current participant configuration
+  // ✅ TEXT STREAMING: Compute completed round numbers from moderator messages
+  // Moderator messages have metadata.isModerator: true and appear inline in messages array
+  // Rounds with completed moderator messages should NEVER show pending cards
   const completedRoundNumbers = useMemo(() => {
     const completed = new Set<number>();
-    summaries.forEach((summary) => {
-      if (summary.status === MessageStatuses.COMPLETE) {
-        completed.add(summary.roundNumber);
+    messages.forEach((msg) => {
+      if (isModeratorMessage(msg)) {
+        const moderatorMeta = getModeratorMetadata(msg.metadata);
+        // Only mark round as complete if moderator has finished (has finishReason)
+        if (moderatorMeta?.finishReason) {
+          const roundNum = getRoundNumber(msg.metadata);
+          if (roundNum !== null) {
+            completed.add(roundNum);
+          }
+        }
       }
     });
     return completed;
-  }, [summaries]);
+  }, [messages]);
 
   // Model ordering for modal - stable references for Motion Reorder
   const orderedModels = useOrderedModels({
@@ -261,13 +261,14 @@ export function ChatView({
     incompatibleModelIdsRef.current = incompatibleModelIds;
   }, [incompatibleModelIds]);
 
-  // Timeline with messages, summaries, changelog, and pre-searches
+  // Timeline with messages, changelog, and pre-searches
+  // ✅ TEXT STREAMING: Moderator messages (with isModerator: true metadata) appear in messages array
+  // and are rendered inline by ChatMessageList via ModelMessageCard
   // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
   // This enables rendering pre-search cards even when user message
   // hasn't been persisted yet (e.g., page refresh during web search phase)
   const timelineItems: TimelineItem[] = useThreadTimeline({
     messages,
-    summaries,
     changelog,
     preSearches,
   });
@@ -303,7 +304,7 @@ export function ChatView({
   // Thread actions (for both screens - manages changelog waiting flag)
   const threadActions = useThreadActions({
     slug: slug || '',
-    isRoundInProgress: isStreaming || isCreatingSummary,
+    isRoundInProgress: isStreaming || isModeratorStreaming,
     isChangelogFetching,
   });
 
@@ -365,9 +366,10 @@ export function ChatView({
   // Initial scroll and virtualization handled by useVirtualizedTimeline
   const isStoreReady = mode === 'thread' ? (hasInitiallyLoaded && messages.length > 0) : true;
 
+  // ✅ TEXT STREAMING: Moderator messages now in messages array with isModerator: true metadata
+  // Rendered inline by ChatMessageList, no separate moderator tracking needed for scroll
   useChatScroll({
     messages,
-    summaries,
     enableNearBottomDetection: true,
   });
 
@@ -379,15 +381,15 @@ export function ChatView({
   const isResumptionActive = (
     preSearchResumption?.status === MessageStatuses.STREAMING
     || preSearchResumption?.status === MessageStatuses.PENDING
-    || summarizerResumption?.status === MessageStatuses.STREAMING
-    || summarizerResumption?.status === MessageStatuses.PENDING
+    || moderatorResumption?.status === MessageStatuses.STREAMING
+    || moderatorResumption?.status === MessageStatuses.PENDING
   );
 
   const isInputBlocked = isStreaming
     || isCreatingThread
     || waitingToStartStreaming
     || showLoader
-    || isCreatingSummary
+    || isModeratorStreaming
     || Boolean(pendingMessage)
     || isResumptionActive
     || formActions.isSubmitting;
@@ -395,35 +397,8 @@ export function ChatView({
   // Mobile keyboard handling
   const keyboardOffset = useVisualViewportPosition();
 
-  // Stuck summary cleanup - timer-based cleanup for summaries that get stuck streaming
-  // React 19: Valid effect for timer (external system)
-  // Uses interval to periodically check for stuck summaries
-  useEffect(() => {
-    const checkStuckSummaries = () => {
-      const stuckSummaries = summaries.filter((summary) => {
-        if (summary.status !== MessageStatuses.STREAMING)
-          return false;
-        const createdTime = summary.createdAt instanceof Date
-          ? summary.createdAt.getTime()
-          : new Date(summary.createdAt).getTime();
-        const elapsed = Date.now() - createdTime;
-        return elapsed > SummaryTimeouts.STUCK_THRESHOLD_MS;
-      });
-
-      if (stuckSummaries.length > 0) {
-        stuckSummaries.forEach((summary) => {
-          // Mark as FAILED with error message (not COMPLETE - that's incorrect for stuck streams)
-          updateSummaryError(summary.roundNumber, 'Summary timed out. The stream was interrupted. Please try again.');
-        });
-      }
-    };
-
-    // Check immediately and set up interval
-    checkStuckSummaries();
-    const intervalId = setInterval(checkStuckSummaries, SummaryTimeouts.CHECK_INTERVAL_MS);
-
-    return () => clearInterval(intervalId);
-  }, [summaries, updateSummaryError]);
+  // ✅ TEXT STREAMING: Moderator triggered by useModeratorTrigger hook after participants complete
+  // Moderator message rendered inline in ChatMessageList when it has isModerator: true metadata
 
   // ============================================================================
   // CALLBACKS
@@ -620,32 +595,9 @@ export function ChatView({
     }
   }, [removeParticipant, mode, setHasPendingConfigChanges]);
 
-  const handleSummaryStreamStart = useCallback((roundNumber: number) => {
-    updateSummaryStatus(roundNumber, MessageStatuses.STREAMING);
-    queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
-  }, [updateSummaryStatus, queryClient]);
-
-  const handleSummaryStreamComplete = useCallback((roundNumber: number, completedData?: unknown, error?: unknown) => {
-    if (completedData) {
-      // Data already validated by AI SDK's useObject with same schema
-      // This safeParse is defensive - should always pass if stream component worked correctly
-      const parseResult = RoundSummaryAIContentSchema.safeParse(completedData);
-      if (parseResult.success) {
-        updateSummaryData(roundNumber, parseResult.data);
-      } else {
-        console.error('[Summary] Validation failed:', parseResult.error.flatten());
-        updateSummaryError(roundNumber, 'Invalid summary data received. Please try again.');
-      }
-    } else if (error) {
-      console.error('[Summary] Stream error:', error);
-      const errorMessage = error instanceof Error
-        ? error.message
-        : 'Summary failed. Please try again.';
-      updateSummaryError(roundNumber, errorMessage);
-    } else {
-      updateSummaryError(roundNumber, 'Summary completed without data. Please try again.');
-    }
-  }, [updateSummaryData, updateSummaryError]);
+  // ✅ TEXT STREAMING: Moderator triggered via useModeratorTrigger hook, not component rendering
+  // After streaming completes, messages refetched and moderator appears in array with isModerator: true
+  // ChatMessageList renders moderator inline using ModelMessageCard component
 
   // ============================================================================
   // RENDER
@@ -676,11 +628,10 @@ export function ChatView({
               )}
               pendingFeedback={pendingFeedback}
               getFeedbackHandler={feedbackActions.getFeedbackHandler}
-              onSummaryStreamStart={handleSummaryStreamStart}
-              onSummaryStreamComplete={handleSummaryStreamComplete}
               preSearches={preSearches}
               isDataReady={isStoreReady}
               completedRoundNumbers={completedRoundNumbers}
+              isModeratorStreaming={isModeratorStreaming}
             />
           </div>
 

@@ -25,9 +25,7 @@ import {
   PreSearchResponseSchema,
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
-  RoundSummaryListResponseSchema,
-  RoundSummaryPayloadSchema,
-  RoundSummaryRequestSchema,
+  RoundModeratorRequestSchema,
   SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
@@ -656,38 +654,40 @@ export const deleteCustomRoleRoute = createRoute({
 });
 export const summarizeRoundRoute = createRoute({
   method: 'post',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/summarize',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/moderator',
   tags: ['chat'],
-  summary: 'Generate round summary (streaming)',
-  description: 'Generate a concise summary with metrics for all participant responses in a conversation round. Streams summary text and metrics in real-time using AI SDK streamObject(). Returns completed summary immediately if already exists.',
+  summary: 'Generate moderator summary (streaming)',
+  description: 'Generate an executive-grade moderator summary of all participant responses in a round. Streams moderator text in real-time as a chatMessage with metadata.isModerator: true. Frontend renders via ChatMessageList component alongside participant messages. Returns immediately if moderator message already exists for this round.',
   request: {
     params: ThreadRoundParamSchema,
     body: {
       required: false,
       content: {
         'application/json': {
-          schema: RoundSummaryRequestSchema,
+          schema: RoundModeratorRequestSchema,
         },
       },
     },
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Summary streaming in progress OR completed summary returned (if already exists). Content-Type: text/plain for streaming, application/json for completed.',
+      description: 'Moderator summary streaming in progress OR existing moderator message returned. Streams as text/event-stream following AI SDK UIMessageStream protocol. If moderator message already exists for this round, returns the chatMessage data as JSON.',
       content: {
-        'text/plain': {
-          schema: z.string().describe('Streaming summary data (AI SDK format)'),
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'AI SDK UIMessageStream format for moderator summary. Dynamic SSE protocol - cannot be represented with static schema.',
+          }),
         },
         'application/json': {
-          schema: createApiResponseSchema(RoundSummaryPayloadSchema).describe('Completed summary (if already exists)'),
-        },
-      },
-    },
-    [HttpStatusCodes.CONFLICT]: {
-      description: 'Summary already in progress or completed for this round',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
+          schema: z.object({
+            id: z.string(),
+            role: z.string(),
+            parts: z.array(z.any()),
+            metadata: z.any(),
+            roundNumber: z.number(),
+          }).openapi({
+            description: 'Existing moderator message (if already persisted)',
+          }),
         },
       },
     },
@@ -718,25 +718,6 @@ export const getThreadPreSearchesRoute = createRoute({
   },
 });
 
-export const getThreadSummariesRoute = createRoute({
-  method: 'get',
-  path: '/chat/threads/:id/summaries',
-  tags: ['chat'],
-  summary: 'Get round summaries for thread',
-  description: 'Retrieve all round summaries for a thread, showing past summary results for each round',
-  request: {
-    params: IdParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Summaries retrieved successfully',
-      content: {
-        'application/json': { schema: RoundSummaryListResponseSchema },
-      },
-    },
-    ...createProtectedRouteResponses(),
-  },
-});
 export const setRoundFeedbackRoute = createRoute({
   method: 'put',
   path: '/chat/threads/:threadId/rounds/:roundNumber/feedback',
@@ -884,49 +865,6 @@ Returns \`ThreadStreamResumptionState\` with:
       content: {
         'application/json': { schema: ThreadStreamResumptionStateResponseSchema },
       },
-    },
-    ...createProtectedRouteResponses(),
-  },
-});
-
-/**
- * GET /chat/threads/:threadId/rounds/:roundNumber/summarize/resume
- * ✅ RESUMABLE STREAMS: Resume buffered summary stream (object stream)
- */
-export const resumeSummaryStreamRoute = createRoute({
-  method: 'get',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/summarize/resume',
-  tags: ['chat'],
-  summary: 'Resume buffered summary stream',
-  description: `Resume a round summary stream from buffered chunks. Returns the full stream as text for client consumption.
-
-This endpoint enables summary stream resumption after page reload. Unlike chat streams which use SSE format, summary streams use plain text (JSON being built incrementally).
-
-**Response Types**:
-- text/plain: Text stream with buffered chunks (if stream has data)
-- 204 No Content: No stream buffer exists or stream has no chunks
-
-**Usage Pattern**:
-1. Frontend detects page reload during summary streaming
-2. Calls this endpoint to check for and resume active stream
-3. If 200: Receives buffered chunks, continues rendering
-4. If 204: No active stream, may need to retry summary
-
-**Example**: GET /chat/threads/thread_123/rounds/0/summarize/resume`,
-  request: {
-    params: ThreadRoundParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Buffered stream chunks returned as text',
-      content: {
-        'text/plain': {
-          schema: z.string().describe('Text stream with buffered JSON object chunks'),
-        },
-      },
-    },
-    [HttpStatusCodes.NO_CONTENT]: {
-      description: 'No stream buffer exists or stream has no chunks',
     },
     ...createProtectedRouteResponses(),
   },

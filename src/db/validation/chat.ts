@@ -9,7 +9,7 @@
  */
 
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import { FeedbackTypeSchema, MessageRoleSchema } from '@/api/core/enums';
 import {
@@ -22,7 +22,6 @@ import {
 import {
   chatCustomRole,
   chatMessage,
-  chatModeratorAnalysis,
   chatParticipant,
   chatPreSearch,
   chatRoundFeedback,
@@ -106,7 +105,7 @@ export const chatCustomRoleSelectSchema = createSelectSchema(chatCustomRole).ext
 });
 export const chatCustomRoleInsertSchema = createInsertSchema(chatCustomRole, {
   name: Refinements.name(),
-  systemPrompt: Refinements.systemPrompt(),
+  systemPrompt: Refinements.systemPromptOptional(),
   description: Refinements.descriptionOptional(),
   // metadata validated by DbCustomRoleMetadataSchema
 });
@@ -115,43 +114,6 @@ export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
   systemPrompt: Refinements.systemPromptOptional(),
   description: Refinements.descriptionOptional(),
   // metadata validated by DbCustomRoleMetadataSchema
-});
-
-/**
- * Moderator Summary Schemas
- * AI-generated summary results for conversation rounds
- *
- * ✅ SIMPLIFIED STRUCTURE: Refactored from complex analysisData to simple summaryData
- * Note: Table name `chatModeratorAnalysis` unchanged for migration simplicity
- */
-export const DbSummaryDataSchema = z.object({
-  summary: z.string(),
-  metrics: z.object({
-    engagement: z.number().min(0).max(10),
-    insight: z.number().min(0).max(10),
-    balance: z.number().min(0).max(10),
-    clarity: z.number().min(0).max(10),
-  }),
-});
-
-export type DbSummaryData = z.infer<typeof DbSummaryDataSchema>;
-
-export const chatModeratorAnalysisSelectSchema = createSelectSchema(chatModeratorAnalysis).extend({
-  // ✅ TYPE-SAFE: Use strictly typed summary data schema
-  summaryData: DbSummaryDataSchema.nullable().optional(),
-});
-
-export const chatModeratorAnalysisInsertSchema = createInsertSchema(chatModeratorAnalysis, {
-  roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
-  userQuestion: Refinements.content(),
-}).extend({
-  // ✅ TYPE-SAFE: Use strictly typed summary data schema
-  summaryData: DbSummaryDataSchema.nullable().optional(),
-});
-
-export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis).extend({
-  // ✅ TYPE-SAFE: Use strictly typed summary data schema
-  summaryData: DbSummaryDataSchema.nullable().optional(),
 });
 
 /**
@@ -200,10 +162,6 @@ export type ChatThreadChangelogUpdate = z.infer<typeof chatThreadChangelogUpdate
 export type ChatCustomRole = z.infer<typeof chatCustomRoleSelectSchema>;
 export type ChatCustomRoleInsert = z.infer<typeof chatCustomRoleInsertSchema>;
 export type ChatCustomRoleUpdate = z.infer<typeof chatCustomRoleUpdateSchema>;
-
-export type ChatModeratorAnalysis = z.infer<typeof chatModeratorAnalysisSelectSchema>;
-export type ChatModeratorAnalysisInsert = z.infer<typeof chatModeratorAnalysisInsertSchema>;
-export type ChatModeratorAnalysisUpdate = z.infer<typeof chatModeratorAnalysisUpdateSchema>;
 
 export type ChatPreSearch = z.infer<typeof chatPreSearchSelectSchema>;
 export type ChatPreSearchInsert = z.infer<typeof chatPreSearchInsertSchema>;

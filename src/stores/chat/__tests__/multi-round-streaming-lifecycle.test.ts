@@ -42,22 +42,22 @@ type PreSearchStatus = {
   };
 };
 
-type MessageStatus = {
+type ModeratorStatus = {
   roundNumber: number;
   status: 'pending' | 'streaming' | 'complete' | 'failed';
   data?: {
     leaderboard: unknown[];
-    summary: string;
+    moderator: string;
   };
 };
 
 type RoundState = {
   roundNumber: number;
-  status: 'pending' | 'pre_search' | 'streaming' | 'summary' | 'complete' | 'error';
+  status: 'pending' | 'pre_search' | 'streaming' | 'moderator' | 'complete' | 'error';
   userMessage?: Message;
   participantMessages: Message[];
   preSearch?: PreSearchStatus;
-  summary?: MessageStatus;
+  moderator?: ModeratorStatus;
   startedAt: Date;
   completedAt?: Date;
 };
@@ -197,13 +197,13 @@ function advanceToNextParticipant(state: ConversationState): ConversationState {
   return state;
 }
 
-function startSummary(state: ConversationState, roundNumber: number): ConversationState {
+function startModerator(state: ConversationState, roundNumber: number): ConversationState {
   const round = state.rounds.get(roundNumber);
   if (!round)
     return state;
 
-  round.status = 'summary';
-  round.summary = {
+  round.status = 'moderator';
+  round.moderator = {
     roundNumber,
     status: 'streaming',
   };
@@ -211,17 +211,17 @@ function startSummary(state: ConversationState, roundNumber: number): Conversati
   return state;
 }
 
-function completeSummary(
+function completeModerator(
   state: ConversationState,
   roundNumber: number,
-  data: MessageStatus['data'],
+  data: ModeratorStatus['data'],
 ): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round || !round.summary)
+  if (!round || !round.moderator)
     return state;
 
-  round.summary.status = 'complete';
-  round.summary.data = data;
+  round.moderator.status = 'complete';
+  round.moderator.data = data;
 
   return state;
 }
@@ -483,8 +483,8 @@ describe('multi-Round Streaming Lifecycle', () => {
     });
   });
 
-  describe('summary Phase', () => {
-    it('should trigger summary after all participants complete', () => {
+  describe('moderator Phase', () => {
+    it('should trigger moderator after all participants complete', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
@@ -508,15 +508,15 @@ describe('multi-Round Streaming Lifecycle', () => {
           state = advanceToNextParticipant(state);
       }
 
-      // Start summary
-      state = startSummary(state, 0);
+      // Start moderator
+      state = startModerator(state, 0);
 
       const round = state.rounds.get(0);
-      expect(round?.status).toBe('summary');
-      expect(round?.summary?.status).toBe('streaming');
+      expect(round?.status).toBe('moderator');
+      expect(round?.moderator?.status).toBe('streaming');
     });
 
-    it('should complete round after summary finishes', () => {
+    it('should complete round after moderator finishes', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
@@ -539,16 +539,16 @@ describe('multi-Round Streaming Lifecycle', () => {
           state = advanceToNextParticipant(state);
       }
 
-      state = startSummary(state, 0);
-      state = completeSummary(state, 0, {
+      state = startModerator(state, 0);
+      state = completeModerator(state, 0, {
         leaderboard: [{ participantId: 'p1', score: 9 }],
-        summary: 'Great discussion',
+        moderator: 'Great discussion',
       });
       state = completeRound(state, 0);
 
       const round = state.rounds.get(0);
       expect(round?.status).toBe('complete');
-      expect(round?.summary?.status).toBe('complete');
+      expect(round?.moderator?.status).toBe('complete');
       expect(round?.completedAt).toBeDefined();
       expect(state.isStreaming).toBe(false);
     });
@@ -575,8 +575,8 @@ describe('multi-Round Streaming Lifecycle', () => {
         if (i < 2)
           state = advanceToNextParticipant(state);
       }
-      state = startSummary(state, 0);
-      state = completeSummary(state, 0, { leaderboard: [], summary: 'R0' });
+      state = startModerator(state, 0);
+      state = completeModerator(state, 0, { leaderboard: [], moderator: 'R0' });
       state = completeRound(state, 0);
 
       // Complete Round 1
@@ -596,8 +596,8 @@ describe('multi-Round Streaming Lifecycle', () => {
         if (i < 2)
           state = advanceToNextParticipant(state);
       }
-      state = startSummary(state, 1);
-      state = completeSummary(state, 1, { leaderboard: [], summary: 'R1' });
+      state = startModerator(state, 1);
+      state = completeModerator(state, 1, { leaderboard: [], moderator: 'R1' });
       state = completeRound(state, 1);
 
       // Complete Round 2
@@ -617,8 +617,8 @@ describe('multi-Round Streaming Lifecycle', () => {
         if (i < 2)
           state = advanceToNextParticipant(state);
       }
-      state = startSummary(state, 2);
-      state = completeSummary(state, 2, { leaderboard: [], summary: 'R2' });
+      state = startModerator(state, 2);
+      state = completeModerator(state, 2, { leaderboard: [], moderator: 'R2' });
       state = completeRound(state, 2);
 
       // Verify all rounds exist and are complete
@@ -629,7 +629,7 @@ describe('multi-Round Streaming Lifecycle', () => {
         const round = state.rounds.get(r);
         expect(round?.status).toBe('complete');
         expect(round?.participantMessages).toHaveLength(3);
-        expect(round?.summary?.status).toBe('complete');
+        expect(round?.moderator?.status).toBe('complete');
       }
     });
 
@@ -664,8 +664,8 @@ describe('multi-Round Streaming Lifecycle', () => {
       state = appendToMessage(state, msgId2, 'Key concepts include...');
       state = completeMessage(state, msgId2);
 
-      state = startSummary(state, 0);
-      state = completeSummary(state, 0, { leaderboard: [], summary: 'Good overview' });
+      state = startModerator(state, 0);
+      state = completeModerator(state, 0, { leaderboard: [], moderator: 'Good overview' });
       state = completeRound(state, 0);
 
       // Start Round 1
@@ -803,8 +803,8 @@ describe('multi-Round Streaming Lifecycle', () => {
       }
 
       // Third participant fails, round still completes
-      state = startSummary(state, 0);
-      state = completeSummary(state, 0, { leaderboard: [], summary: 'Partial' });
+      state = startModerator(state, 0);
+      state = completeModerator(state, 0, { leaderboard: [], moderator: 'Partial' });
       state = completeRound(state, 0);
 
       const round = state.rounds.get(0);

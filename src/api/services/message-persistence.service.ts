@@ -7,43 +7,37 @@
  * This service handles:
  * - Saving AI assistant messages after streaming completes
  * - Extracting reasoning from multiple sources (deltas, finishResult, providerMetadata)
- * - Creating pending summary records for completed rounds
+ * - Citation resolution for RAG sources
+ *
+ * Note: Moderators are saved as chatMessage entries with metadata.isModerator: true
+ * by the moderator handler, not this service. This service only persists participant messages.
  *
  * @see /src/api/types/citations.ts for citation type definitions
  */
 
-import { and, asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
 import type { z } from 'zod';
 
 import {
-  ChatModeSchema,
   MessagePartTypes,
   MessageRoles,
-  MessageStatuses,
 } from '@/api/core/enums';
 import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
-import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
-import {
-  getUserUsageStats,
-  incrementMessageUsage,
-} from '@/api/services/usage-tracking.service';
+import { incrementMessageUsage } from '@/api/services/usage-tracking.service';
 import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
-import type { ChatMessage } from '@/db/validation';
+import * as tables from '@/db';
 import type { MessagePartSchema, StreamingFinishResult } from '@/lib/schemas/message-schemas';
-import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import {
   hasCitations,
   parseCitations,
   toDbCitations,
 } from '@/lib/utils/citation-parser';
-import { hasError } from '@/lib/utils/metadata';
 import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
-import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
+import { isObject } from '@/lib/utils/type-guards';
 
 // Type inference from schema
 type MessagePart = z.infer<typeof MessagePartSchema>;
@@ -69,13 +63,13 @@ export type SaveMessageParams = {
   /** ✅ SCHEMA-BASED: Uses StreamingFinishResult from @/lib/schemas/message-messages */
   finishResult: StreamingFinishResult;
   userId: string;
-  participants: Array<{ id: string }>;
-  threadMode: string;
   db: Awaited<ReturnType<typeof getDbAsync>>;
   /** Citation source map for resolving [source_id] markers in AI response */
   citationSourceMap?: CitationSourceMap;
   /** Available sources (files/context available to AI, for "Sources" UI even without inline citations) */
   availableSources?: AvailableSource[];
+  /** Reasoning duration in seconds (for "Thought for X seconds" display on page refresh) */
+  reasoningDuration?: number;
 };
 
 // ============================================================================
@@ -250,12 +244,16 @@ function extractErrorMetadata(
  * This function:
  * 1. Extracts reasoning from multiple sources
  * 2. Detects and categorizes errors
- * 3. Builds parts[] array (text + reasoning)
- * 4. Saves message with metadata
- * 5. Stores RAG embeddings for semantic search
- * 6. Triggers analysis creation if round is complete
+ * 3. Builds parts[] array (text + reasoning + tool-calls)
+ * 4. Resolves citations from RAG sources
+ * 5. Saves message with metadata
+ * 6. Increments usage quotas
  *
- * Reference: streaming.handler.ts lines 1143-1631 (onFinish callback)
+ * Note: This service only persists participant messages. Moderators
+ * are persisted by the moderator handler as chatMessage entries with
+ * metadata.isModerator: true.
+ *
+ * Reference: streaming.handler.ts onFinish callback
  */
 export async function saveStreamedMessage(
   params: SaveMessageParams,
@@ -272,11 +270,10 @@ export async function saveStreamedMessage(
     reasoningDeltas,
     finishResult,
     userId,
-    participants,
-    threadMode,
     db,
     citationSourceMap,
     availableSources,
+    reasoningDuration,
   } = params;
 
   try {
@@ -466,6 +463,8 @@ export async function saveStreamedMessage(
       citations: resolvedCitations,
       // ✅ AVAILABLE SOURCES: Include files/context available to AI for "Sources" UI
       availableSources,
+      // ✅ REASONING DURATION: Track how long reasoning took for "Thought for X seconds" display
+      reasoningDuration,
     });
 
     // Save message to database
@@ -525,177 +524,17 @@ export async function saveStreamedMessage(
     // Increment message usage quota (charged regardless of stream completion)
     await incrementMessageUsage(userId, 1);
 
-    // ✅ CRITICAL FIX: Trigger summary creation if last participant
-    // Removed savedMessage check because onConflictDoNothing() can return undefined
-    // even when the message exists, preventing summary creation
-    if (participantIndex === participants.length - 1) {
-      await createPendingSummary({
-        threadId,
-        roundNumber,
-        threadMode,
-        userId,
-        participants,
-        db,
-      });
-    }
+    // ✅ MODERATOR ARCHITECTURE: Moderator creation is triggered by frontend
+    // useModeratorStream hook calls POST /api/v1/chat/threads/:threadId/rounds/:roundNumber/moderator
+    // Moderators are stored in chatMessage table with metadata.isModerator: true
+    // ChatMessageList component renders moderator messages alongside participant messages
   } catch {
     // Non-blocking error - allow round to continue
     // This allows the next participant to respond even if this one failed to save
   }
 }
 
-// ============================================================================
-// Summary Creation
-// ============================================================================
-
-type CreatePendingSummaryParams = {
-  threadId: string;
-  roundNumber: number;
-  threadMode: string;
-  userId: string;
-  participants: Array<{ id: string }>;
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-};
-
-/**
- * Create pending summary record for completed rounds
- *
- * This runs synchronously after the last participant completes streaming.
- * The frontend will then stream the summary using the summary endpoint.
- *
- * ✅ CRITICAL FIX: Removed fire-and-forget pattern to prevent race conditions
- * Previously used IIFE that ran in background, causing database queries to execute
- * before all participant messages were fully visible, resulting in incomplete summary records.
- *
- * Reference: streaming.handler.ts lines 1524-1621
- */
-async function createPendingSummary(
-  params: CreatePendingSummaryParams,
-): Promise<void> {
-  const { threadId, roundNumber, threadMode, userId, participants, db }
-    = params;
-
-  try {
-    // Check summary quota first (silent return if quota exceeded)
-    const stats = await getUserUsageStats(userId);
-    if (stats.analysis.remaining === 0) {
-      return;
-    }
-
-    // Check if summary already exists
-    const existingSummary = await db
-      .select()
-      .from(tables.chatModeratorAnalysis)
-      .where(
-        and(
-          eq(tables.chatModeratorAnalysis.threadId, threadId),
-          eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
-        ),
-      )
-      .get();
-
-    if (existingSummary) {
-      return; // Summary already exists
-    }
-
-    // ✅ CRITICAL FIX: Retry logic to ensure all participant messages are visible
-    // D1/SQLite has eventual consistency - we need to poll until all messages are found
-    // This prevents creating summary records with incomplete participant message IDs
-    let roundMessages: ChatMessage[] = [];
-    let assistantMessages: ChatMessage[] = [];
-    const maxRetries = 10;
-    const retryDelayMs = 150;
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // Add delay before checking (first attempt also waits to give DB time to commit)
-      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
-
-      // Query for all messages in this round
-      roundMessages = await db.query.chatMessage.findMany({
-        where: and(
-          eq(tables.chatMessage.threadId, threadId),
-          eq(tables.chatMessage.roundNumber, roundNumber),
-        ),
-        orderBy: [
-          asc(tables.chatMessage.roundNumber),
-          asc(tables.chatMessage.createdAt),
-          asc(tables.chatMessage.id),
-        ],
-      });
-
-      // ✅ TYPE-SAFE FILTERING: Use consolidated utility for participant message filtering
-      // Replaces inline logic with Zod-validated type guard from message-type-guards.ts
-      // Pre-search messages have role: 'assistant' but are NOT actual participant responses
-      // They should be excluded from summary to prevent ID inconsistency when web search is enabled
-      assistantMessages = filterDbToParticipantMessages(roundMessages);
-
-      // Check if we have all expected participant messages
-      if (assistantMessages.length >= participants.length) {
-        break; // Found all messages, exit retry loop
-      }
-
-      // If not last attempt, continue polling
-      if (attempt < maxRetries - 1) {
-        continue;
-      }
-
-      // Final attempt failed - return
-      return;
-    }
-
-    // Check for messages with errors using type-safe metadata extraction
-    const messagesWithErrors = assistantMessages.filter(msg =>
-      hasError(msg.metadata),
-    );
-
-    if (messagesWithErrors.length > 0) {
-      return;
-    }
-
-    // Extract participant message IDs
-    const participantMessageIds = assistantMessages.map(m => m.id);
-
-    if (participantMessageIds.length === 0) {
-      return;
-    }
-
-    // Get user question from this round
-    const userMessage = roundMessages.find(m => m.role === MessageRoles.USER);
-
-    // ✅ TYPE GUARD: Validate and extract text parts from message
-    const textParts = userMessage?.parts?.filter(isTextPart) ?? [];
-    const userQuestion
-      = textParts.length > 0
-        ? extractTextFromParts(textParts)
-        : 'No user question found';
-
-    // ✅ TYPE GUARD: Validate thread mode with Zod - using canonical ChatModeSchema
-    const validatedMode = safeParse(ChatModeSchema, threadMode);
-
-    if (!validatedMode) {
-      // Invalid mode - skip summary creation
-      return;
-    }
-
-    // Create pending summary record
-    const summaryId = ulid();
-    await db
-      .insert(tables.chatModeratorAnalysis)
-      .values({
-        id: summaryId,
-        threadId,
-        roundNumber,
-        mode: validatedMode,
-        userQuestion,
-        status: MessageStatuses.PENDING,
-        participantMessageIds,
-        summaryData: null,
-        completedAt: null,
-        errorMessage: null,
-      })
-      .run();
-  } catch {
-    // Summary creation errors should not break the chat flow
-    // Silently fail and let frontend handle summary creation if needed
-  }
-}
+// ✅ MODERATOR ARCHITECTURE: Moderator creation handled by moderator handler
+// useModeratorStream hook calls POST /api/v1/chat/threads/:threadId/rounds/:roundNumber/moderator
+// Moderators are stored as chatMessage entries with metadata.isModerator: true
+// ChatMessageList component renders moderator messages alongside participant messages

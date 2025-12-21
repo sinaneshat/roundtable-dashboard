@@ -5,22 +5,14 @@
  *
  * Includes:
  * - Custom render function with providers (React Testing Library)
- * - Test helper utilities (mocks, async utilities, etc.)
+ * - Test helper utilities (mocks, async utilities)
  * - Re-exports from React Testing Library and user-event
- *
- * Usage:
- * ```tsx
- * import { render, screen, userEvent } from '@/lib/testing';
- * import { createMockMessages, waitForAsync } from '@/lib/testing';
- * ```
  *
  * @module lib/testing
  */
 
 // ============================================================================
-// API Response Mocks for E2E Testing
-// Re-export everything EXCEPT createMockThread, createMockParticipant, createMockAnalysis
-// Those are re-exported from chat-test-factories with test-friendly defaults
+// API Response Mocks
 // ============================================================================
 export {
   createMockAssistantMessage,
@@ -32,7 +24,6 @@ export {
   createMockParticipantDetailResponse,
   createMockPreSearch,
   createMockPreSearchesListResponse,
-  createMockSummariesListResponse,
   createMockThreadDetailResponse,
   createMockThreadListResponse,
 } from './api-mocks';
@@ -43,14 +34,12 @@ export {
 export * from './chat-store-helpers';
 
 // ============================================================================
-// Chat Test Factories (Mock data creators)
-// These export test-friendly versions of createMockThread, createMockParticipant, createMockAnalysis
-// with defaults like id: 'thread-123', indexed participants
+// Chat Test Factories
 // ============================================================================
 export * from './chat-test-factories';
 
 // ============================================================================
-// Test Helper Utilities
+// Test Helpers
 // ============================================================================
 export * from './helpers';
 

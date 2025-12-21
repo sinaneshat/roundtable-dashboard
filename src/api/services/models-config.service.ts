@@ -12,7 +12,13 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { ModelCategorySchema } from '@/api/core/enums';
+import type { StreamingBehavior } from '@/api/core/enums';
+import {
+  ModelCategorySchema,
+  PROVIDER_STREAMING_DEFAULTS,
+  StreamingBehaviors,
+  StreamingBehaviorSchema,
+} from '@/api/core/enums';
 
 // ============================================================================
 // ZOD-BASED MODEL ENUMS - Verified OpenRouter Model IDs (15 models)
@@ -151,6 +157,14 @@ export const HardcodedModelSchema = z.object({
   is_reasoning_model: z.boolean(),
   supports_temperature: z.boolean(),
   supports_reasoning_stream: z.boolean(),
+  /**
+   * ✅ STREAMING BEHAVIOR: How the model delivers SSE chunks (optional - inferred from provider)
+   * - 'token': Streams token-by-token (OpenAI, Anthropic, Mistral) - no normalization needed
+   * - 'buffered': Buffers server-side (xAI, DeepSeek, Gemini) - needs smoothStream normalization
+   *
+   * If not specified, getModelStreamingBehavior() infers from provider.
+   */
+  streaming_behavior: StreamingBehaviorSchema.optional(),
 });
 
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
@@ -955,4 +969,46 @@ export function extractModeratorModelName(modelId: string): string {
     .join(' ')
     .replace(/\d{8}$/, '')
     .trim();
+}
+
+/**
+ * ✅ GET STREAMING BEHAVIOR: Determines if model needs smoothStream normalization
+ *
+ * Returns the streaming behavior for a model:
+ * - 'token': Streams token-by-token (OpenAI, Anthropic, Mistral) - no normalization needed
+ * - 'buffered': Buffers server-side (xAI, DeepSeek, Gemini) - needs smoothStream normalization
+ *
+ * Priority:
+ * 1. Model's explicit streaming_behavior (if set)
+ * 2. Provider default from PROVIDER_STREAMING_DEFAULTS
+ * 3. Fallback to 'token' (safe default - no normalization)
+ *
+ * @param modelId - The full model ID (e.g., 'x-ai/grok-4-fast', 'openai/gpt-5')
+ * @returns StreamingBehavior - 'token' or 'buffered'
+ */
+export function getModelStreamingBehavior(modelId: string): StreamingBehavior {
+  // Check for explicit model-level override
+  const model = getModelById(modelId);
+  if (model?.streaming_behavior) {
+    return model.streaming_behavior;
+  }
+
+  // Extract provider from model ID (format: "provider/model-name")
+  const provider = modelId.split('/')[0] || '';
+
+  // Return provider default or fallback to 'token'
+  return PROVIDER_STREAMING_DEFAULTS[provider] ?? StreamingBehaviors.TOKEN;
+}
+
+/**
+ * ✅ NEEDS SMOOTH STREAM: Quick check if model needs chunk normalization
+ *
+ * Returns true if the model buffers responses server-side and needs
+ * smoothStream to normalize chunk delivery for consistent UI rendering.
+ *
+ * @param modelId - The full model ID (e.g., 'x-ai/grok-4-fast')
+ * @returns boolean - true if model needs smoothStream normalization
+ */
+export function needsSmoothStream(modelId: string): boolean {
+  return getModelStreamingBehavior(modelId) === StreamingBehaviors.BUFFERED;
 }

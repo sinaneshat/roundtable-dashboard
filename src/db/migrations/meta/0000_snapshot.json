@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "88312489-dd3c-4729-9391-34285b3ff310",
+  "id": "f4a49a34-2aae-4844-8be7-89bbbba346e0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1494,7 +1494,7 @@
           "name": "system_prompt",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "metadata": {
@@ -1697,139 +1697,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "chat_moderator_analysis": {
-      "name": "chat_moderator_analysis",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "round_number": {
-          "name": "round_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_question": {
-          "name": "user_question",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "analysis_data": {
-          "name": "analysis_data",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "participant_message_ids": {
-          "name": "participant_message_ids",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "error_message": {
-          "name": "error_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
-        }
-      },
-      "indexes": {
-        "chat_moderator_analysis_thread_idx": {
-          "name": "chat_moderator_analysis_thread_idx",
-          "columns": [
-            "thread_id"
-          ],
-          "isUnique": false
-        },
-        "chat_moderator_analysis_round_idx": {
-          "name": "chat_moderator_analysis_round_idx",
-          "columns": [
-            "thread_id",
-            "round_number"
-          ],
-          "isUnique": false
-        },
-        "chat_moderator_analysis_created_idx": {
-          "name": "chat_moderator_analysis_created_idx",
-          "columns": [
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "chat_moderator_analysis_status_idx": {
-          "name": "chat_moderator_analysis_status_idx",
-          "columns": [
-            "status"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "chat_moderator_analysis_thread_id_chat_thread_id_fk": {
-          "name": "chat_moderator_analysis_thread_id_chat_thread_id_fk",
-          "tableFrom": "chat_moderator_analysis",
-          "tableTo": "chat_thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },

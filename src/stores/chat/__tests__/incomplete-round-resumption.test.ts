@@ -26,7 +26,7 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import {
   createTestAssistantMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
 
 import { useIncompleteRoundResumption } from '../actions/incomplete-round-resumption';
 import type { ChatStore } from '../store-schemas';

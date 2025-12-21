@@ -94,6 +94,9 @@ export type ParticipantMetadataParams = {
     mimeType?: string;
     fileSize?: number;
   }>;
+
+  // Reasoning duration in seconds (for "Thought for X seconds" display on page refresh)
+  reasoningDuration?: number;
 };
 
 // ============================================================================
@@ -172,6 +175,12 @@ export function createParticipantMetadata(
     ...(params.availableSources
       && params.availableSources.length > 0 && {
       availableSources: params.availableSources,
+    }),
+
+    // Reasoning duration (for "Thought for X seconds" display)
+    ...(params.reasoningDuration !== undefined
+      && params.reasoningDuration > 0 && {
+      reasoningDuration: params.reasoningDuration,
     }),
   };
 }

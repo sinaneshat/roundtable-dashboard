@@ -21,7 +21,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { ProjectIndexStatus } from '@/api/core/enums';
 import type { TypedLogger } from '@/api/types/logger';
 import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 
 // ✅ SINGLE SOURCE OF TRUTH: Uses global Ai type from cloudflare-env.d.ts
 // The Ai class includes autorag() method that returns AutoRAG with list/search/aiSearch

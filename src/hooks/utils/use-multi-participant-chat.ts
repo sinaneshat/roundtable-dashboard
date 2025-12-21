@@ -387,12 +387,12 @@ export function useMultiParticipantChat(
     }
 
     // Round complete - reset state
-    // Summary triggering now handled automatically by store subscription
+    // Moderator triggering now handled automatically by store subscription
     if (nextIndex >= totalParticipants) {
       // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
       isStreamingRef.current = false;
 
-      // eslint-disable-next-line react-dom/no-flush-sync -- Required for summary trigger synchronization
+      // eslint-disable-next-line react-dom/no-flush-sync -- Required for moderator trigger synchronization
       flushSync(() => {
         setIsExplicitlyStreaming(false);
         setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
@@ -1166,7 +1166,7 @@ export function useMultiParticipantChat(
       // CRITICAL: Trigger next participant after current one finishes
       // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
       // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
-      // which has its own timeout mechanism for summary creation
+      // which has its own timeout mechanism for moderator creation
       // ✅ FIX: Must await to block onFinish from returning before next participant triggers
       // Without await, onFinish returns immediately and AI SDK status changes,
       // allowing multiple streams to start concurrently (race condition)
@@ -1856,7 +1856,7 @@ export function useMultiParticipantChat(
     // STEP 1: Set regenerate flag to preserve round numbering
     regenerateRoundNumberRef.current = roundNumber;
 
-    // STEP 2: Call onRetry FIRST to remove summary and cleanup state
+    // STEP 2: Call onRetry FIRST to remove moderator and cleanup state
     // This must happen before setMessages to ensure UI updates properly
     callbackRefs.onRetry.current?.(roundNumber);
 
@@ -2067,8 +2067,10 @@ export function useMultiParticipantChat(
     }
 
     // Extract finishReason from metadata
-    const metadata = lastAssistantMessage.metadata as Record<string, unknown> | undefined;
-    const finishReason = metadata?.finishReason as string | undefined;
+    const metadata = lastAssistantMessage.metadata;
+    const finishReason = metadata && typeof metadata === 'object' && 'finishReason' in metadata && typeof metadata.finishReason === 'string'
+      ? metadata.finishReason
+      : undefined;
     const isComplete = finishReason === 'stop' || finishReason === 'length';
 
     // If participant completed, normal orchestration will handle next steps

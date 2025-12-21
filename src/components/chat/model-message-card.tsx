@@ -20,11 +20,12 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { StreamingCursor } from '@/components/ui/streaming-text';
+// StreamingCursor removed - typing effect disabled per user request
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
+import { cn } from '@/lib/ui/cn';
 import { hasCitations } from '@/lib/utils/citation-parser';
 import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 
@@ -102,12 +103,36 @@ export const ModelMessageCard = memo(({
 }: ModelMessageCardProps) => {
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
-  const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
+
+  // ✅ FIX: Subscribe to PARTICIPANT streaming state (NOT moderator)
+  const globalIsStreaming = useChatStore(s => s.isStreaming);
+
+  // Check if parts have streaming state (only trust when PARTICIPANTS actively streaming)
+  const hasActualStreamingParts = globalIsStreaming && parts.some(
+    p => 'state' in p && p.state === 'streaming',
+  );
+
   // ✅ MODEL NORMALIZATION: Filter non-renderable reasoning to prevent layout shifts
   const renderableParts = parts.filter(part => !isNonRenderableReasoningPart(part));
-  const isPendingWithNoParts = showStatusIndicator && renderableParts.length === 0;
+
+  // ✅ FLASH FIX: Shimmer must stay visible until content arrives
+  // Previous bug: When status changed from PENDING→STREAMING before parts arrived,
+  // both shimmer AND content were hidden (opacity 0) causing a flash.
+  // Fix: Show shimmer whenever no content AND expecting content (pending/streaming)
+  const isExpectingContent = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
+  const showShimmer = renderableParts.length === 0 && isExpectingContent;
+
+  // Pulsating indicator: pending with no parts OR actively streaming parts
+  const showStatusIndicator = (status === MessageStatuses.PENDING && parts.length === 0)
+    || hasActualStreamingParts;
+
   const isError = status === MessageStatuses.FAILED;
-  const isStreaming = status === MessageStatuses.STREAMING;
+
+  // eslint-disable-next-line no-console
+  console.log('[CARD]', JSON.stringify({ idx: participantIndex, shim: showShimmer ? 1 : 0, p: renderableParts.length, st: status.slice(0, 4) }));
+
+  // ✅ FIX: isStreaming requires PARTICIPANT streaming active AND parts streaming
+  const isStreaming = hasActualStreamingParts;
 
   // Animation tracking for sequential participant streaming
   const registerAnimation = useChatStore(s => s.registerAnimation);
@@ -197,32 +222,48 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            {/* Content rendering - StreamingMessageContent handles smooth height transitions */}
-            {isPendingWithNoParts
-              ? (
-                  <div className="py-2 text-muted-foreground text-base">
-                    <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
-                  </div>
-                )
-              : renderableParts.length > 0
-                ? (
-                    <StreamingMessageContent
-                      isStreaming={isStreaming}
-                      layoutId={messageId ? `msg-content-${messageId}` : undefined}
-                    >
-                      {maxContentHeight
-                        ? (
-                            <ScrollArea
-                              className="pr-3"
-                              style={{ maxHeight: maxContentHeight }}
-                            >
-                              {renderContentParts()}
-                            </ScrollArea>
-                          )
-                        : renderContentParts()}
-                    </StreamingMessageContent>
-                  )
-                : null}
+            {/* ✅ FLASH FIX v3: CSS Grid overlay + shimmer stays until content arrives
+                Previous bug: shimmer hid when status=STREAMING before parts arrived
+                Now shimmer stays visible until renderableParts.length > 0 */}
+            <div className="grid" style={{ gridTemplateColumns: '1fr' }}>
+              {/* Shimmer - stays visible until content actually arrives */}
+              <div
+                style={{ gridArea: '1/1' }}
+                className={cn(
+                  'py-2 text-muted-foreground text-base transition-opacity duration-200 ease-out',
+                  showShimmer ? 'opacity-100' : 'opacity-0 pointer-events-none',
+                )}
+              >
+                <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
+              </div>
+              {/* Content - hidden initially, fades in when parts arrive
+                  Always render wrapper to prevent mount/unmount flashing */}
+              <div
+                style={{ gridArea: '1/1' }}
+                className={cn(
+                  'transition-opacity duration-200 ease-out',
+                  renderableParts.length > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none',
+                )}
+              >
+                <StreamingMessageContent
+                  isStreaming={isStreaming}
+                  layoutId={messageId ? `msg-content-${messageId}` : undefined}
+                >
+                  {renderableParts.length > 0 && (
+                    maxContentHeight
+                      ? (
+                          <ScrollArea
+                            className="pr-3"
+                            style={{ maxHeight: maxContentHeight }}
+                          >
+                            {renderContentParts()}
+                          </ScrollArea>
+                        )
+                      : renderContentParts()
+                  )}
+                </StreamingMessageContent>
+              </div>
+            </div>
 
             {/* ✅ SOURCES: Show files/context available to AI */}
             {/* Displayed even when AI doesn't cite inline, so users know what files were used */}
@@ -248,7 +289,6 @@ export const ModelMessageCard = memo(({
 
     return sortedParts.map((part, partIndex) => {
       if (part.type === MessagePartTypes.TEXT) {
-        const isLastTextPart = sortedParts.slice(partIndex + 1).every(p => p.type !== MessagePartTypes.TEXT);
         const textHasCitations = hasCitations(part.text);
         const resolvedCitations = assistantMetadata?.citations;
 
@@ -261,7 +301,7 @@ export const ModelMessageCard = memo(({
                 isStreaming={isStreaming}
                 className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
               />
-              {isStreaming && isLastTextPart && <StreamingCursor />}
+              {/* ✅ REMOVED: StreamingCursor typing effect per user request */}
             </div>
           );
         }
@@ -274,7 +314,7 @@ export const ModelMessageCard = memo(({
             >
               {part.text}
             </Streamdown>
-            {isStreaming && isLastTextPart && <StreamingCursor />}
+            {/* ✅ REMOVED: StreamingCursor typing effect per user request */}
           </div>
         );
       }
@@ -282,11 +322,17 @@ export const ModelMessageCard = memo(({
         const reasoningMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
         const storedDuration = reasoningMetadata?.reasoningDuration;
 
+        // ✅ FIX: Use the reasoning part's own state, not the message's overall status
+        // When text is still streaming but reasoning is done, reasoning animation should stop
+        // part.state can be 'streaming' | 'done' | undefined (undefined = historical/complete)
+        const reasoningPartState = 'state' in part ? part.state : undefined;
+        const isReasoningStreaming = reasoningPartState === 'streaming';
+
         return (
           <Reasoning
             key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
-            isStreaming={status === MessageStatuses.STREAMING}
-            initialContentLength={status === MessageStatuses.COMPLETE ? part.text.length : 0}
+            isStreaming={isReasoningStreaming}
+            initialContentLength={!isReasoningStreaming ? part.text.length : 0}
             storedDuration={storedDuration}
             className="w-full"
           >

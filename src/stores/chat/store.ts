@@ -53,7 +53,6 @@
  * - FormSlice: Form input, mode, participants
  * - FeedbackSlice: Round feedback (like/dislike)
  * - UISlice: Initial UI, thread creation, streaming flags
- * - SummarySlice: Round summaries
  * - PreSearchSlice: Pre-search results
  * - ThreadSlice: Thread data, participants, messages, AI SDK methods
  * - FlagsSlice: Loading states that need re-renders
@@ -75,21 +74,17 @@ import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
-import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes, StreamStatuses } from '@/api/core/enums';
-import type {
-  RoundSummaryAIContent,
-  StoredPreSearch,
-  StoredRoundSummary,
-} from '@/api/routes/chat/schema';
+import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses } from '@/api/core/enums';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message';
-import { getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
+import { getRoundNumber } from '@/lib/utils/metadata';
 import { getEnabledSortedParticipants, sortByPriority } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
+import { isObject } from '@/lib/utils/type-guards';
 import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
 
 import type { SendMessage, StartRound } from './store-action-types';
@@ -102,14 +97,13 @@ import {
   FEEDBACK_DEFAULTS,
   FLAGS_DEFAULTS,
   FORM_DEFAULTS,
+  MODERATOR_STATE_RESET,
   PENDING_MESSAGE_STATE_RESET,
   PRESEARCH_DEFAULTS,
   REGENERATION_STATE_RESET,
   SCREEN_DEFAULTS,
   STREAM_RESUMPTION_DEFAULTS,
   STREAMING_STATE_RESET,
-  SUMMARY_DEFAULTS,
-  SUMMARY_STATE_RESET,
   THREAD_DEFAULTS,
   THREAD_NAVIGATION_RESET_STATE,
   THREAD_RESET_STATE,
@@ -129,7 +123,6 @@ import type {
   PreSearchSlice,
   ScreenSlice,
   StreamResumptionSlice,
-  SummarySlice,
   ThreadSlice,
   TrackingSlice,
   UISlice,
@@ -141,8 +134,6 @@ enableMapSet();
 // ============================================================================
 // TYPES FROM SCHEMAS (Single Source of Truth)
 // ============================================================================
-
-export type { ChatStore } from './store-schemas';
 
 /**
  * Type alias for slice StateCreator with Zustand middleware chain
@@ -250,170 +241,6 @@ const createUISlice: SliceCreator<UISlice> = set => ({
     set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
   resetUI: () =>
     set(UI_DEFAULTS, false, 'ui/resetUI'),
-});
-
-/**
- * Summary Slice - Round summary state
- * Manages pending, streaming, and completed round summaries
- */
-const createSummarySlice: SliceCreator<SummarySlice> = set => ({
-  ...SUMMARY_DEFAULTS,
-
-  setSummaries: (summaries: StoredRoundSummary[]) =>
-    set({ summaries }, false, 'summary/setSummaries'),
-  // ✅ IMMER: Direct mutations
-  addSummary: (summary: StoredRoundSummary) =>
-    set((draft) => {
-      // Deduplicate by roundNumber to prevent retrigger bug
-      const exists = draft.summaries.some(
-        s => s.threadId === summary.threadId && s.roundNumber === summary.roundNumber,
-      );
-      if (!exists) {
-        draft.summaries.push(summary);
-      }
-    }, false, 'summary/addSummary'),
-  updateSummaryData: (roundNumber: number, data: RoundSummaryAIContent) =>
-    set((draft) => {
-      const s = draft.summaries.find(s => s.roundNumber === roundNumber);
-      if (s) {
-        // AI content only: summary + metrics (metadata stored at summary row level)
-        s.summaryData = data;
-        s.status = MessageStatuses.COMPLETE;
-      }
-    }, false, 'summary/updateSummaryData'),
-  updateSummaryStatus: (roundNumber, status) =>
-    set((draft) => {
-      draft.summaries.forEach((s) => {
-        if (s.roundNumber === roundNumber)
-          s.status = status;
-      });
-    }, false, 'summary/updateSummaryStatus'),
-  updateSummaryError: (roundNumber, errorMessage) =>
-    set((draft) => {
-      draft.summaries.forEach((s) => {
-        if (s.roundNumber === roundNumber) {
-          s.status = MessageStatuses.FAILED;
-          s.errorMessage = errorMessage;
-        }
-      });
-    }, false, 'summary/updateSummaryError'),
-  removeSummary: roundNumber =>
-    set((draft) => {
-      const idx = draft.summaries.findIndex(s => s.roundNumber === roundNumber);
-      if (idx !== -1)
-        draft.summaries.splice(idx, 1);
-    }, false, 'summary/removeSummary'),
-  clearAllSummaries: () =>
-    set(SUMMARY_DEFAULTS, false, 'summary/clearAllSummaries'),
-  createPendingSummary: (params: { roundNumber: number; messages: UIMessage[]; userQuestion: string; threadId: string; mode: ChatMode }) => {
-    const { roundNumber, messages, userQuestion, threadId, mode: rawMode } = params;
-
-    // Validate and narrow mode type to match database schema
-    const modeResult = ChatModeSchema.safeParse(rawMode);
-    if (!modeResult.success) {
-      return;
-    }
-    const mode = modeResult.data;
-
-    // ✅ TYPE-SAFE EXTRACTION: Use consolidated utility from message-transforms.ts
-    // Replaces unsafe type assertions with Zod-validated filtering
-    // getParticipantMessagesWithIds() uses isParticipantMessage() type guard internally
-    const { ids: participantMessageIds, messages: participantMessages } = getParticipantMessagesWithIds(messages, roundNumber);
-
-    // ✅ SAFETY CHECK: Don't create summary if no valid participant messages
-    if (participantMessageIds.length === 0) {
-      return;
-    }
-
-    // ✅ CRITICAL FIX: Deduplicate message IDs and keep only unique messages
-    // Backend bug can cause duplicate message IDs for different participants
-    // Instead of failing, deduplicate by participantId to ensure summary proceeds
-    const uniqueIds = new Set(participantMessageIds);
-    if (uniqueIds.size !== participantMessageIds.length) {
-      // ✅ TYPE-SAFE: Use type guard to ensure messages have valid participant metadata
-      // Deduplicate by participantId - keep last message per participant
-      const validParticipantMessages = filterToParticipantMessages(participantMessages);
-      const messagesByParticipant = new Map<string, string>();
-
-      validParticipantMessages.forEach((msg) => {
-        // ✅ TYPE-SAFE: Use extraction utility for consistent metadata access
-        const participantId = getParticipantId(msg.metadata);
-        if (participantId) {
-          messagesByParticipant.set(participantId, msg.id);
-        }
-      });
-
-      // Use deduplicated IDs
-      const deduplicatedIds = Array.from(messagesByParticipant.values());
-
-      // Update participantMessageIds to use deduplicated set
-      participantMessageIds.length = 0;
-      participantMessageIds.push(...deduplicatedIds);
-    }
-
-    // ✅ CRITICAL FIX: Verify all messages have correct round number
-    // Prevents using messages from previous rounds in summary
-    // ✅ TYPE-SAFE: Use extraction utility instead of type casting
-    const allMessagesFromCorrectRound = participantMessages.every((msg) => {
-      const msgRound = getRoundNumber(msg.metadata);
-      return msgRound === roundNumber;
-    });
-
-    if (!allMessagesFromCorrectRound) {
-      return;
-    }
-
-    // ✅ AI SDK v5 FIX: Removed strict ID/metadata validation that was causing false positives
-    // Previous validation compared message ID patterns (_r{N}_p{M}) to metadata values
-    // This caused issues when:
-    // - Participant configuration changed between rounds
-    // - Messages were in transitional state during streaming
-    // - Zod metadata extraction returned null for valid messages
-    //
-    // The backend is the source of truth for summaries. Frontend should:
-    // - Trust that allMessagesFromCorrectRound check (above) validates round numbers
-    // - Allow summary creation and let RoundSummaryStream handle streaming
-    // - Fetch backend summaries to merge any that frontend missed
-
-    // Generate unique summary ID
-    const summaryId = `summary_${threadId}_${roundNumber}_${Date.now()}`;
-
-    // ✅ Set status to pending - component will update to streaming when POST starts
-    // Virtualization checks for BOTH pending and streaming to prevent unmounting
-    // This ensures accurate status: pending → streaming (when POST starts) → completed/failed
-    const pendingSummary: StoredRoundSummary = {
-      id: summaryId,
-      threadId,
-      roundNumber,
-      mode,
-      userQuestion,
-      status: MessageStatuses.PENDING,
-      participantMessageIds,
-      summaryData: null,
-      errorMessage: null,
-      completedAt: null,
-      createdAt: new Date(),
-    };
-
-    // ✅ IMMER: Direct mutation with deduplication
-    set((draft) => {
-      const existingIndex = draft.summaries.findIndex(
-        s => s.threadId === threadId && s.roundNumber === roundNumber,
-      );
-
-      if (existingIndex >= 0) {
-        const existing = draft.summaries[existingIndex]!;
-        // Update placeholder (empty participantMessageIds) with real data
-        if (!existing.participantMessageIds || existing.participantMessageIds.length === 0) {
-          Object.assign(existing, pendingSummary, { id: existing.id, createdAt: existing.createdAt });
-        }
-        // else: Real summary exists, skip
-      } else {
-        // Add new summary
-        draft.summaries.push(pendingSummary);
-      }
-    }, false, 'summary/createPendingSummary');
-  },
 });
 
 /**
@@ -555,7 +382,50 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
 
-    set({ messages: newMessages }, false, 'thread/setMessages');
+    // ✅ CONTENT-AWARE MERGE: Prevent stale updates from overwriting completed content
+    // This fixes race conditions where concurrent updates can lose moderator/complete content
+    const mergedMessages = newMessages.map((newMsg) => {
+      const existingMsg = prevMessages.find(m => m.id === newMsg.id);
+      if (!existingMsg)
+        return newMsg;
+
+      // Check if existing message has content
+      const existingHasContent = existingMsg.parts?.some(
+        p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+      );
+      // Check if new message has content
+      const newHasContent = newMsg.parts?.some(
+        p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+      );
+
+      // ✅ FIX: Check finishReason to detect complete vs partial messages
+      // Using type guards to avoid unsafe casts
+      const existingIsComplete = isObject(existingMsg.metadata) && 'finishReason' in existingMsg.metadata;
+      const newIsComplete = isObject(newMsg.metadata) && 'finishReason' in newMsg.metadata;
+
+      // If existing has content but new doesn't, preserve existing content
+      // This prevents empty placeholder updates from overwriting streamed content
+      if (existingHasContent && !newHasContent) {
+        return {
+          ...newMsg,
+          parts: existingMsg.parts,
+        };
+      }
+
+      // ✅ FIX: If existing is complete but new is partial, preserve existing
+      // This prevents stale partial updates from overwriting completed messages
+      if (existingIsComplete && !newIsComplete && existingHasContent) {
+        return {
+          ...newMsg,
+          parts: existingMsg.parts,
+          metadata: existingMsg.metadata, // Preserve finishReason too
+        };
+      }
+
+      return newMsg;
+    });
+
+    set({ messages: mergedMessages }, false, 'thread/setMessages');
   },
   setIsStreaming: (isStreaming: boolean) =>
     set({ isStreaming }, false, 'thread/setIsStreaming'),
@@ -589,8 +459,14 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
   setIsRegenerating: (value: boolean) =>
     set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
-  setIsCreatingSummary: (value: boolean) =>
-    set({ isCreatingSummary: value }, false, 'flags/setIsCreatingSummary'),
+  setIsModeratorStreaming: (value: boolean) =>
+    set({ isModeratorStreaming: value }, false, 'flags/setIsModeratorStreaming'),
+  // Complete moderator stream - clears ALL moderator-related flags
+  completeModeratorStream: () =>
+    set({
+      isModeratorStreaming: false,
+      isWaitingForChangelog: false, // ✅ FIX: Clear changelog flag with moderator completion
+    }, false, 'flags/completeModeratorStream'),
   setIsWaitingForChangelog: (value: boolean) =>
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
   setHasPendingConfigChanges: (value: boolean) =>
@@ -620,36 +496,37 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
 
 /**
  * Tracking Slice - Deduplication tracking
- * Tracks which rounds have had summaries/pre-searches created to prevent duplicates
+ * Tracks which rounds have had moderators/pre-searches created to prevent duplicates
+ * Note: Moderator now renders inline via messages array with isModerator: true metadata
  */
 const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
   ...TRACKING_DEFAULTS,
 
   setHasSentPendingMessage: value =>
     set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
-  markSummaryCreated: roundNumber =>
+  markModeratorCreated: roundNumber =>
     set((draft) => {
-      draft.createdSummaryRounds.add(roundNumber);
-    }, false, 'tracking/markSummaryCreated'),
-  hasSummaryBeenCreated: roundNumber =>
-    get().createdSummaryRounds.has(roundNumber),
-  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasSummaryBeenCreated and markSummaryCreated
+      draft.createdModeratorRounds.add(roundNumber);
+    }, false, 'tracking/markModeratorCreated'),
+  hasModeratorBeenCreated: roundNumber =>
+    get().createdModeratorRounds.has(roundNumber),
+  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasModeratorBeenCreated and markModeratorCreated
   // Returns true if successfully marked (was not already created), false if already created
-  tryMarkSummaryCreated: (roundNumber) => {
+  tryMarkModeratorCreated: (roundNumber) => {
     const state = get();
-    if (state.createdSummaryRounds.has(roundNumber)) {
+    if (state.createdModeratorRounds.has(roundNumber)) {
       return false; // Already created by another component
     }
     // Add to set atomically - JavaScript is single-threaded so this is safe
     set((draft) => {
-      draft.createdSummaryRounds.add(roundNumber);
-    }, false, 'tracking/tryMarkSummaryCreated');
+      draft.createdModeratorRounds.add(roundNumber);
+    }, false, 'tracking/tryMarkModeratorCreated');
     return true; // Successfully marked
   },
-  clearSummaryTracking: roundNumber =>
+  clearModeratorTracking: roundNumber =>
     set((draft) => {
-      draft.createdSummaryRounds.delete(roundNumber);
-    }, false, 'tracking/clearSummaryTracking'),
+      draft.createdModeratorRounds.delete(roundNumber);
+    }, false, 'tracking/clearModeratorTracking'),
   markPreSearchTriggered: roundNumber =>
     set((draft) => {
       draft.triggeredPreSearchRounds.add(roundNumber);
@@ -677,28 +554,29 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     set((draft) => {
       draft.triggeredPreSearchRounds = new Set<number>();
     }, false, 'tracking/clearAllPreSearchTracking'),
-  // ✅ SUMMARY STREAM TRACKING: Two-level deduplication for summary streams
-  markSummaryStreamTriggered: (summaryId, roundNumber) =>
+  // ✅ MODERATOR STREAM TRACKING: Two-level deduplication for moderator streams
+  // Note: Moderator now renders inline via messages array with isModerator: true metadata
+  markModeratorStreamTriggered: (moderatorMessageId, roundNumber) =>
     set((draft) => {
-      draft.triggeredSummaryIds.add(summaryId);
-      draft.triggeredSummaryRounds.add(roundNumber);
-    }, false, 'tracking/markSummaryStreamTriggered'),
-  hasSummaryStreamBeenTriggered: (summaryId, roundNumber) => {
+      draft.triggeredModeratorIds.add(moderatorMessageId);
+      draft.triggeredModeratorRounds.add(roundNumber);
+    }, false, 'tracking/markModeratorStreamTriggered'),
+  hasModeratorStreamBeenTriggered: (moderatorMessageId, roundNumber) => {
     const state = get();
-    return state.triggeredSummaryIds.has(summaryId) || state.triggeredSummaryRounds.has(roundNumber);
+    return state.triggeredModeratorIds.has(moderatorMessageId) || state.triggeredModeratorRounds.has(roundNumber);
   },
-  clearSummaryStreamTracking: roundNumber =>
+  clearModeratorStreamTracking: roundNumber =>
     set((draft) => {
       // Clear round tracking
-      draft.triggeredSummaryRounds.delete(roundNumber);
-      // Clear summary IDs that contain this round number
-      // Summary IDs often contain round number in their format
-      for (const id of draft.triggeredSummaryIds) {
+      draft.triggeredModeratorRounds.delete(roundNumber);
+      // Clear moderator IDs that contain this round number
+      // Moderator IDs often contain round number in their format
+      for (const id of draft.triggeredModeratorIds) {
         if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
-          draft.triggeredSummaryIds.delete(id);
+          draft.triggeredModeratorIds.delete(id);
         }
       }
-    }, false, 'tracking/clearSummaryStreamTracking'),
+    }, false, 'tracking/clearModeratorStreamTracking'),
   setHasEarlyOptimisticMessage: value =>
     set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
 });
@@ -859,7 +737,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       // ✅ UNIFIED PHASES: Clear phase-based resumption state
       currentResumptionPhase: null,
       preSearchResumption: null,
-      summarizerResumption: null,
+      moderatorResumption: null,
       resumptionRoundNumber: null,
     }, false, 'streamResumption/clearStreamResumption'),
 
@@ -867,16 +745,16 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
   // This prevents stale preSearchResumption.status: 'streaming' when pre-search is actually complete
   transitionToParticipantsPhase: () =>
     set({
-      currentResumptionPhase: 'participants',
+      currentResumptionPhase: RoundPhases.PARTICIPANTS,
       preSearchResumption: null,
     }, false, 'streamResumption/transitionToParticipantsPhase'),
 
   // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
   // Called during SSR to set up state BEFORE AI SDK resume runs
-  // ✅ UNIFIED PHASES: Now handles pre-search, participants, and summarizer phases
+  // ✅ UNIFIED PHASES: Now handles pre-search, participants, and moderator phases
   prefillStreamResumptionState: (threadId, serverState) => {
     // If round is complete or idle, no prefill needed
-    if (serverState.roundComplete || serverState.currentPhase === 'complete' || serverState.currentPhase === 'idle') {
+    if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
       return;
     }
 
@@ -890,7 +768,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
 
     // Handle phase-specific state
     switch (serverState.currentPhase) {
-      case 'pre_search':
+      case RoundPhases.PRE_SEARCH:
         // Pre-search phase needs resumption
         if (serverState.preSearch) {
           stateUpdate.preSearchResumption = {
@@ -904,7 +782,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         stateUpdate.waitingToStartStreaming = true;
         break;
 
-      case 'participants':
+      case RoundPhases.PARTICIPANTS:
         // Participants phase needs resumption
         stateUpdate.nextParticipantToTrigger = serverState.participants.nextParticipantToTrigger;
         // If there's a next participant to trigger, set waitingToStartStreaming
@@ -912,16 +790,16 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         stateUpdate.waitingToStartStreaming = serverState.participants.nextParticipantToTrigger !== null;
         break;
 
-      case 'summarizer':
-        // Summarizer phase needs resumption
-        if (serverState.summarizer) {
-          stateUpdate.summarizerResumption = {
-            status: serverState.summarizer.status,
-            streamId: serverState.summarizer.streamId,
-            summaryId: serverState.summarizer.summaryId,
+      case RoundPhases.MODERATOR:
+        // Moderator phase needs resumption
+        if (serverState.moderator) {
+          stateUpdate.moderatorResumption = {
+            status: serverState.moderator.status,
+            streamId: serverState.moderator.streamId,
+            moderatorMessageId: serverState.moderator.moderatorMessageId,
           };
         }
-        // Set waitingToStartStreaming to enable provider effect to handle summarizer resumption
+        // Set waitingToStartStreaming to enable provider effect to handle moderator resumption
         stateUpdate.waitingToStartStreaming = true;
         break;
     }
@@ -972,7 +850,7 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
 
   // ✅ FIX: Wait for ALL pending animations to complete
   // This ensures sequential execution with no overlapping animations
-  // Used by provider handleComplete to wait for all participant animations before creating summary
+  // Used by provider handleComplete to wait for all participant animations before creating moderator
   waitForAllAnimations: async () => {
     const state = get();
     const pendingIndices = Array.from(state.pendingAnimations);
@@ -981,9 +859,9 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
       return Promise.resolve();
     }
 
-    // ✅ CRITICAL FIX: Add timeout to prevent indefinite blocking
-    // If animations don't complete within 5 seconds, force-clear them and continue
-    // This prevents summary creation from being blocked forever by stuck animations
+    // Add timeout to prevent indefinite blocking.
+    // If animations don't complete within 5 seconds, force-clear them and continue.
+    // This prevents moderator creation from being blocked forever by stuck animations.
     const ANIMATION_TIMEOUT_MS = 5000;
 
     const animationPromises = pendingIndices.map(index => state.waitForAnimation(index));
@@ -1093,10 +971,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     set({
       ...THREAD_NAVIGATION_RESET_STATE,
       // Create fresh Set instances
-      createdSummaryRounds: new Set<number>(),
+      createdModeratorRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
-      triggeredSummaryRounds: new Set<number>(),
-      triggeredSummaryIds: new Set<string>(),
+      triggeredModeratorRounds: new Set<number>(),
+      triggeredModeratorIds: new Set<string>(),
       resumptionAttempts: new Set<string>(),
       pendingAnimations: new Set<number>(),
       animationResolvers: new Map(),
@@ -1114,15 +992,15 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     set({
       ...COMPLETE_RESET_STATE,
-      // ✅ CRITICAL FIX: Set screenMode to 'overview' instead of null
+      // Set screenMode to 'overview' instead of null.
       // This prevents race condition where provider effect waits for screenMode='overview'
-      // but useScreenInitialization hasn't run yet to set it
+      // but useScreenInitialization hasn't run yet to set it.
       screenMode: ScreenModes.OVERVIEW,
-      // ✅ Create fresh Set instances (same as resetToNewChat)
-      createdSummaryRounds: new Set(),
+      // Create fresh Set instances (same as resetToNewChat)
+      createdModeratorRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
-      triggeredSummaryRounds: new Set(),
-      triggeredSummaryIds: new Set(),
+      triggeredModeratorRounds: new Set(),
+      triggeredModeratorIds: new Set(),
     }, false, 'operations/resetToOverview');
   },
 
@@ -1192,7 +1070,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // Reset flags (previously in ChatThreadScreen useEffect via resetThreadState)
       waitingToStartStreaming: false,
       isRegenerating: false,
-      isCreatingSummary: false,
+      isModeratorStreaming: false,
       isWaitingForChangelog: false,
       hasPendingConfigChanges: false,
       regeneratingRoundNumber: null,
@@ -1203,10 +1081,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       streamingRoundNumber: null,
       currentRoundNumber: null,
       hasSentPendingMessage: false,
-      createdSummaryRounds: new Set<number>(),
+      createdModeratorRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
-      triggeredSummaryRounds: new Set<number>(),
-      triggeredSummaryIds: new Set<string>(),
+      triggeredModeratorRounds: new Set<number>(),
+      triggeredModeratorIds: new Set<string>(),
       preSearchActivityTimes: new Map<number, number>(),
       hasEarlyOptimisticMessage: false,
       streamResumptionState: null,
@@ -1274,7 +1152,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       draft.nextParticipantToTrigger = null;
 
       // Set message state
-      draft.isCreatingSummary = false;
+      draft.isModeratorStreaming = false;
       draft.isWaitingForChangelog = true;
       draft.pendingMessage = message;
       draft.pendingAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : null;
@@ -1306,44 +1184,58 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       }
     }, false, 'operations/prepareForNewMessage'),
 
-  completeStreaming: () =>
+  completeStreaming: () => {
+    const currentState = get();
+
+    // ✅ OPTIMIZATION: Only create new Set/Map if they have items
+    // This prevents unnecessary reference changes that trigger re-renders
+    // when the collections are already empty
+    const needsNewPendingAnimations = currentState.pendingAnimations.size > 0;
+    const needsNewAnimationResolvers = currentState.animationResolvers.size > 0;
+
     set({
-      // ✅ TYPE-SAFE: Use reset groups to ensure ALL streaming/summary flags are cleared
+      // ✅ TYPE-SAFE: Use reset groups to ensure ALL streaming/moderator flags are cleared
       // This prevents infinite loops when both provider and flow-state-machine call completeStreaming
       ...STREAMING_STATE_RESET,
-      ...SUMMARY_STATE_RESET,
+      ...MODERATOR_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
       // ✅ CRITICAL FIX: Also clear animation state to prevent waitForAllAnimations from blocking
-      // If animations are stuck pending when streaming completes, the next round's summary
+      // If animations are stuck pending when streaming completes, the next round's moderator
       // creation would hang forever waiting for animations that will never complete
-      pendingAnimations: new Set<number>(),
-      animationResolvers: new Map<number, () => void>(),
-    }, false, 'operations/completeStreaming'),
+      // ✅ OPTIMIZATION: Reuse existing empty collections to avoid unnecessary re-renders
+      ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
+      ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),
+    }, false, 'operations/completeStreaming');
+  },
 
   startRegeneration: (roundNumber: number) => {
-    const { clearSummaryTracking, clearPreSearchTracking, clearSummaryStreamTracking } = get();
-    clearSummaryTracking(roundNumber);
+    const { clearModeratorTracking, clearPreSearchTracking, clearModeratorStreamTracking, selectedParticipants } = get();
+    clearModeratorTracking(roundNumber);
     clearPreSearchTracking(roundNumber);
-    clearSummaryStreamTracking(roundNumber);
+    clearModeratorStreamTracking(roundNumber);
+    // ✅ FIX: Extract participant IDs from current config before reset
+    const participantIds = selectedParticipants.map(p => p.modelId);
     set({
       // ✅ TYPE-SAFE: Clear all streaming state before starting regeneration
       ...STREAMING_STATE_RESET,
-      ...SUMMARY_STATE_RESET,
+      ...MODERATOR_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...STREAM_RESUMPTION_DEFAULTS, // Clear any pending stream resumption
       // Then set regeneration-specific state
       isRegenerating: true,
       regeneratingRoundNumber: roundNumber,
+      // ✅ FIX: Use current participant config, not null from PENDING_MESSAGE_STATE_RESET
+      expectedParticipantIds: participantIds.length > 0 ? participantIds : null,
     }, false, 'operations/startRegeneration');
   },
 
   completeRegeneration: (_roundNumber: number) =>
     set({
-      // ✅ TYPE-SAFE: Clear ALL streaming/summary/pending/regeneration flags
+      // ✅ TYPE-SAFE: Clear ALL streaming/moderator/pending/regeneration flags
       // This was CRITICAL bug - was only clearing 4 fields, blocking next round
       ...STREAMING_STATE_RESET,
-      ...SUMMARY_STATE_RESET,
+      ...MODERATOR_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
     }, false, 'operations/completeRegeneration'),
@@ -1398,10 +1290,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // but useScreenInitialization hasn't run yet to set it
       screenMode: ScreenModes.OVERVIEW,
       // ✅ CRITICAL: Reset tracking Sets (need new instances)
-      createdSummaryRounds: new Set(),
+      createdModeratorRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
-      triggeredSummaryRounds: new Set(),
-      triggeredSummaryIds: new Set(),
+      triggeredModeratorRounds: new Set(),
+      triggeredModeratorIds: new Set(),
     }, false, 'operations/resetToNewChat');
   },
 
@@ -1430,7 +1322,6 @@ export function createChatStore() {
           ...createFormSlice(...args),
           ...createFeedbackSlice(...args),
           ...createUISlice(...args),
-          ...createSummarySlice(...args),
           ...createPreSearchSlice(...args),
           ...createThreadSlice(...args),
           ...createFlagsSlice(...args),
@@ -1455,7 +1346,7 @@ export function createChatStore() {
   // ============================================================================
   // Store Subscriptions (Removed)
   // ============================================================================
-  // Summary triggering, streaming orchestration, and message sending moved to
+  // Moderator triggering, streaming orchestration, and message sending moved to
   // AI SDK v5 onComplete callbacks in chat-store-provider.tsx:79-198
   // This provides direct access to fresh chat hook state and eliminates stale closures.
 

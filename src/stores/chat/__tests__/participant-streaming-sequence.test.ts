@@ -278,7 +278,7 @@ describe('participant Streaming Sequence', () => {
       // P0 completes
       let p0State = initializeParticipantStream(0, 0, 'thread-123');
       p0State = processStreamPart(p0State, { type: 'start' });
-      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'P0 analysis of the topic' });
+      p0State = processStreamPart(p0State, { type: 'text-delta', text: 'P0 moderator of the topic' });
       p0State = processStreamPart(p0State, { type: 'finish', finishReason: 'stop' });
       roundState.participantStates.set(0, p0State);
       roundState.currentParticipantIndex = 1;
@@ -286,7 +286,7 @@ describe('participant Streaming Sequence', () => {
       // P1 should see P0's response
       const contextForP1 = getContextForParticipant(roundState, 1);
       expect(contextForP1).toHaveLength(1);
-      expect(contextForP1[0]).toBe('P0 analysis of the topic');
+      expect(contextForP1[0]).toBe('P0 moderator of the topic');
     });
 
     it('should provide P0 and P1 responses to P2', () => {

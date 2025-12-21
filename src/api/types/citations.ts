@@ -79,7 +79,7 @@ export const CitableContextStatsSchema = z.object({
   totalMemories: z.number(),
   totalThreads: z.number(),
   totalSearches: z.number(),
-  totalSummaries: z.number(),
+  totalModerators: z.number(),
   totalAttachments: z.number(),
 });
 

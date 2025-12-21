@@ -10,7 +10,7 @@
  * RESPONSIBILITIES:
  * - Slug polling and URL updates
  * - Navigation to thread detail page
- * - Summary completion detection
+ * - Moderator completion detection
  * - Timeout fallbacks for stuck states
  * - Pre-populating TanStack Query cache before navigation (eliminates loading.tsx)
  *
@@ -24,7 +24,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { ScreenModes } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
 import { useSession } from '@/lib/auth/client';
@@ -33,6 +33,7 @@ import { createEmptyListCache, createPrefetchMeta } from '@/lib/utils/cache-help
 import { toISOString, toISOStringOrNull } from '@/lib/utils/date-transforms';
 import { getCreatedAt } from '@/lib/utils/metadata';
 
+import { getModeratorMessageForRound } from '../utils/participant-completion-gate';
 import { validateInfiniteQueryCache } from './types';
 
 export type UseFlowControllerOptions = {
@@ -71,7 +72,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     createdThreadId: s.createdThreadId,
   })));
 
-  const summaries = useChatStore(s => s.summaries);
   const setThread = useChatStore(s => s.setThread);
 
   // ============================================================================
@@ -96,7 +96,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     const thread = state.thread;
     const currentParticipants = state.participants;
     const currentMessages = state.messages;
-    const currentSummaries = state.summaries;
     const currentPreSearches = state.preSearches;
 
     if (!thread)
@@ -135,26 +134,10 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       },
     );
 
-    // 2. Pre-populate summaries
-    // Format matches getThreadSummariesService response
-    if (currentSummaries.length > 0) {
-      queryClient.setQueryData(
-        queryKeys.threads.summaries(threadId),
-        {
-          success: true,
-          data: {
-            items: currentSummaries.map((s: { createdAt: string | Date; completedAt: string | Date | null }) => ({
-              ...s,
-              createdAt: toISOString(s.createdAt),
-              completedAt: toISOStringOrNull(s.completedAt),
-            })),
-          },
-          meta: createPrefetchMeta(),
-        },
-      );
-    }
+    // ✅ TEXT STREAMING: Moderator messages are now regular messages in chatMessage table
+    // Displayed inline via ChatMessageList - no separate pre-population needed
 
-    // 3. Pre-populate pre-searches (if web search enabled)
+    // 2. Pre-populate pre-searches (if web search enabled)
     if (currentPreSearches.length > 0) {
       queryClient.setQueryData(
         queryKeys.threads.preSearches(threadId),
@@ -207,68 +190,23 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   }, [streamingState.showInitialUI]);
 
   // ============================================================================
-  // SUMMARY COMPLETION DETECTION
+  // MODERATOR COMPLETION DETECTION
   // ============================================================================
 
+  // ✅ TEXT STREAMING: Check for moderator messages in messages array
+  const messages = useChatStore(s => s.messages);
+
   /**
-   * Check if first summary is completed
-   * PRIMARY: Summary status = 'complete'
-   * FALLBACK: Timeout-based completion (safety net)
+   * Check if first moderator message is completed
+   * ✅ TEXT STREAMING: Moderator messages rendered inline via ChatMessageList
+   * Moderator messages have metadata.isModerator: true
    * ✅ 0-BASED: First round is round 0
    */
-  const firstSummaryCompleted = useMemo(() => {
-    const firstSummary = summaries[0];
-    if (!firstSummary || firstSummary.roundNumber !== 0) {
-      return false;
-    }
-
-    // PRIMARY: Summary reached 'completed' status
-    if (firstSummary.status === MessageStatuses.COMPLETE) {
-      return true;
-    }
-
-    // SAFETY NET 1: Summary stuck at 'streaming' for >60s
-    if (
-      firstSummary.status === MessageStatuses.STREAMING
-      && firstSummary.createdAt
-    ) {
-      const SAFETY_TIMEOUT_MS = 60000; // 60 seconds
-      const createdTime = firstSummary.createdAt instanceof Date
-        ? firstSummary.createdAt.getTime()
-        : new Date(firstSummary.createdAt).getTime();
-      const elapsed = Date.now() - createdTime;
-
-      if (elapsed > SAFETY_TIMEOUT_MS) {
-        return true;
-      }
-    }
-
-    // SAFETY NET 2: Summary stuck at 'pending' for >60s
-    // ✅ CRITICAL FIX: Only apply timeout to placeholder summaries (no participantMessageIds)
-    // When summary has participantMessageIds, it's ready to stream - not stuck
-    // The RoundSummaryStream component will render and trigger the POST request
-    const isPlaceholderSummary = !firstSummary.participantMessageIds
-      || firstSummary.participantMessageIds.length === 0;
-
-    if (
-      !streamingState.isStreaming
-      && firstSummary.status === MessageStatuses.PENDING
-      && firstSummary.createdAt
-      && isPlaceholderSummary // Only timeout if no participantMessageIds yet
-    ) {
-      const SAFETY_TIMEOUT_MS = 60000; // 60 seconds
-      const createdTime = firstSummary.createdAt instanceof Date
-        ? firstSummary.createdAt.getTime()
-        : new Date(firstSummary.createdAt).getTime();
-      const elapsed = Date.now() - createdTime;
-
-      if (elapsed > SAFETY_TIMEOUT_MS) {
-        return true;
-      }
-    }
-
-    return false;
-  }, [summaries, streamingState.isStreaming]);
+  const firstModeratorCompleted = useMemo(() => {
+    // Check if there's a moderator message for round 0
+    const moderatorMessage = getModeratorMessageForRound(messages, 0);
+    return !!moderatorMessage;
+  }, [messages]);
 
   // ============================================================================
   // SLUG POLLING & URL UPDATES
@@ -410,7 +348,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // ============================================================================
 
   /**
-   * STEP 2: Navigate to thread detail page when first summary completes
+   * STEP 2: Navigate to thread detail page when first moderator completes
    * After URL replaced, do full navigation to ChatThreadScreen
    */
   const hasAiSlug = Boolean(aiGeneratedSlug || (threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug));
@@ -432,11 +370,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       return;
     }
 
-    // Navigate ONLY when summary is fully completed + AI slug ready
-    // Wait for participants to speak AND summary to finish before navigating
+    // Navigate ONLY when moderator is fully completed + AI slug ready
+    // Wait for participants to speak AND moderator to finish before navigating
     const shouldNavigate = !hasNavigated
       && hasAiSlug
-      && firstSummaryCompleted;
+      && firstModeratorCompleted;
 
     if (shouldNavigate) {
       // Mark as navigated
@@ -463,7 +401,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         // SOLUTION: Don't trigger server navigation at all!
         // - URL is already `/chat/[slug]` from history.replaceState (Step 1)
         // - Overview screen already renders thread content when !showInitialUI
-        // - All data (messages, analyses, etc.) is in Zustand store
+        // - All data (messages, moderator, etc.) is in Zustand store
         // - User sees seamless transition with NO loading skeleton
         //
         // BEHAVIOR:
@@ -482,7 +420,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
   }, [
     isActive,
-    firstSummaryCompleted,
+    firstModeratorCompleted,
     streamingState.showInitialUI,
     hasNavigated,
     hasAiSlug,

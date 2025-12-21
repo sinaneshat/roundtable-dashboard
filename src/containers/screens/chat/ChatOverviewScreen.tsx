@@ -104,11 +104,11 @@ export default function ChatOverviewScreen() {
   // STORE STATE
   // ============================================================================
 
-  const { isStreaming, error: streamError, isCreatingSummary } = useChatStore(
+  const { isStreaming, error: streamError, isModeratorStreaming } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
       error: s.error,
-      isCreatingSummary: s.isCreatingSummary,
+      isModeratorStreaming: s.isModeratorStreaming,
     })),
   );
 
@@ -137,7 +137,6 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const summaries = useChatStore(s => s.summaries);
   const preSearches = useChatStore(s => s.preSearches);
   const messages = useChatStore(s => s.messages);
 
@@ -496,10 +495,7 @@ export default function ChatOverviewScreen() {
   const hasActivePreSearch = preSearches.some(
     ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
   );
-  const hasStreamingSummary = summaries.some(
-    s => (s.status === MessageStatuses.PENDING || s.status === MessageStatuses.STREAMING)
-      && s.participantMessageIds && s.participantMessageIds.length > 0,
-  );
+  // ✅ TEXT STREAMING: isModeratorStreaming flag tracks moderator streaming
 
   useScreenInitialization({
     mode: 'overview',
@@ -508,20 +504,19 @@ export default function ChatOverviewScreen() {
     chatMode: selectedMode,
     enableOrchestrator: (
       !isStreaming
-      && !isCreatingSummary
+      && !isModeratorStreaming
       && !hasActivePreSearch
-      && !hasStreamingSummary
       && shouldInitializeThread
     ),
   });
 
   // Input blocking state
   // For initial UI (no thread): block during thread creation
-  // For existing thread (reusing thread screen flow): block during streaming/analysis
+  // For existing thread (reusing thread screen flow): block during streaming/moderator
   const pendingMessage = useChatStore(s => s.pendingMessage);
   // ✅ SUBMIT FIX: Include formActions.isSubmitting for immediate blocking on submit click
   const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting;
-  const isSubmitBlocked = isStreaming || isCreatingSummary || Boolean(pendingMessage) || formActions.isSubmitting;
+  const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   // ============================================================================
   // LAYOUT EFFECTS (external system sync only - DOM, scroll, navigation)
@@ -535,7 +530,7 @@ export default function ChatOverviewScreen() {
     // Only reset when navigating TO /chat from elsewhere (or on initial mount at /chat)
     if (pathname === '/chat' && lastResetPathRef.current !== '/chat') {
       // ✅ FIX: Check for active conversation/streaming state before resetting
-      // This prevents wiping state when user clicks recommended models from round summary
+      // This prevents wiping state when user clicks recommended models from round moderator
       // and submits - the ref check can fail due to re-renders but state should be preserved
       const currentState = storeApi.getState();
       const hasActiveConversation = currentState.messages.length > 0

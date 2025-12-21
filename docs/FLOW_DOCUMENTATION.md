@@ -420,7 +420,7 @@ const { messages, stop } = useChat({
 
 **What User Sees:**
 1. **Loading changes**: "Analyzing responses..." or "Synthesizing insights..."
-2. **Summary card appears** below all responses with expandable accordion
+2. **Moderator message appears** below all responses with expandable accordion
 3. **Progressive streaming** (5 sections appear in order):
 
    **Section 1: Leaderboard**
@@ -455,7 +455,8 @@ const { messages, stop } = useChat({
 - System uses fast AI model (GPT-4o) to generate summary
 - Summary considers conversation mode (Debate summary differs from Brainstorming)
 - Creates structured data with scores, ratings, and text
-- Saves to database linked to specific round number
+- Saves to database as assistant message with `isModerator: true` metadata
+- Moderator rendered via `ChatMessageList` → `ModelMessageCard` (same as participant messages, but with moderator styling)
 
 ### After First Round Completes
 
@@ -473,7 +474,7 @@ const { messages, stop } = useChat({
 - Each round shows:
   - User question
   - All AI responses
-  - Summary card (collapsed for older rounds)
+  - Moderator message (collapsed for older rounds)
   - Like/Dislike buttons for entire round
 - Input box at bottom ready for next message
 
@@ -492,14 +493,14 @@ Round 1:
   - AI Response 1
   - AI Response 2
   - AI Response 3
-  - Summary (expandable)
+  - Moderator message (expandable)
   - Like/Dislike buttons
 
 Round 2:
   - [Configuration Change Banner] ← only if changes made
   - User message
   - AI responses...
-  - Summary
+  - Moderator message
   - Like/Dislike buttons
 ```
 
@@ -557,7 +558,7 @@ Changes save when user submits next message (not immediately).
 
 **Immediate Visual Changes:**
 1. All AI responses from that round disappear
-2. Summary card disappears
+2. Moderator message disappears
 3. Feedback buttons reset
 4. Loading indicator appears
 
@@ -639,16 +640,16 @@ Changes save when user submits next message (not immediately).
 - Round can complete with partial results
 - User can retry entire round to regenerate all responses
 
-### Summary Errors
+### Moderator Errors
 
 **What User Sees:**
-- Red "Failed" badge on summary card
+- Red "Failed" badge on moderator message
 - Error message details
 - Retry button next to status
 
 **Behavior:**
-- Can retry summary without regenerating AI responses
-- Failed summary doesn't prevent continuing conversation
+- Can retry moderator without regenerating AI responses
+- Failed moderator doesn't prevent continuing conversation
 
 ---
 

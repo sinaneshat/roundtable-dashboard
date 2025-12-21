@@ -5,8 +5,8 @@
  * Determines current state based on store data - does NOT orchestrate actions
  *
  * STATE MACHINE:
- * idle → creating_thread → streaming_participants → creating_summary →
- * streaming_summary → complete → navigating
+ * idle → creating_thread → streaming_participants → creating_moderator →
+ * streaming_moderator → complete → navigating
  *
  * CRITICAL: This is a PURE STATE CALCULATOR, not an orchestrator
  * Navigation and side effects handled by flow-controller.ts
@@ -16,14 +16,11 @@
 
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-import type { TextPart, UIMessage } from 'ai';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { FlowState, ScreenMode } from '@/api/core/enums';
 import {
-  DEFAULT_CHAT_MODE,
   FlowStates,
   MessagePartTypes,
   MessageRoles,
@@ -31,11 +28,12 @@ import {
   ScreenModes,
 } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
-import { queryKeys } from '@/lib/data/query-keys';
 import { getAssistantMetadata, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import {
+  getMessageStreamingStatus,
+  getModeratorMessageForRound,
   getParticipantCompletionStatus,
   logParticipantCompletionStatus,
 } from '../utils/participant-completion-gate';
@@ -60,21 +58,26 @@ export type FlowContext = {
   participantCount: number;
   allParticipantsResponded: boolean; // All participants responded for current round
 
-  // Summary state
-  summaryStatus:
+  // Moderator state
+  moderatorStatus:
     | (typeof MessageStatuses)[keyof typeof MessageStatuses]
     | null;
-  summaryExists: boolean;
+  moderatorExists: boolean;
 
   // SDK state
   isAiSdkStreaming: boolean;
   // ✅ FIX: Track if streaming just completed (within delay window)
-  // Prevents summary from triggering before UI renders final content
+  // Prevents moderator from triggering before UI renders final content
   streamingJustCompleted: boolean;
+
+  // Animation state
+  // ✅ RACE FIX: Track pending animations (pre-search, participants)
+  // Prevents moderator from triggering before animations complete
+  pendingAnimations: Set<number>;
 
   // Flags
   isCreatingThread: boolean;
-  isCreatingSummary: boolean;
+  isCreatingModerator: boolean;
   hasNavigated: boolean;
 
   // Screen mode
@@ -87,8 +90,8 @@ export type FlowContext = {
 export type FlowAction
   = | { type: 'CREATE_THREAD' }
     | { type: 'START_PARTICIPANT_STREAMING' }
-    | { type: 'CREATE_SUMMARY' }
-    | { type: 'START_SUMMARY_STREAMING' }
+    | { type: 'CREATE_MODERATOR' }
+    | { type: 'START_MODERATOR_STREAMING' }
     | { type: 'INVALIDATE_CACHE' }
     | { type: 'NAVIGATE'; slug: string }
     | { type: 'COMPLETE_FLOW' }
@@ -108,46 +111,48 @@ function determineFlowState(context: FlowContext): FlowState {
     return FlowStates.COMPLETE;
   }
 
-  // Priority 2: Ready to navigate (summary done + title ready)
+  // Priority 2: Ready to navigate (moderator done + title ready)
   // Only navigate in overview mode - thread screen already at destination
   if (
     context.screenMode === ScreenModes.OVERVIEW
-    && context.summaryStatus === MessageStatuses.COMPLETE
+    && context.moderatorStatus === MessageStatuses.COMPLETE
     && context.hasAiGeneratedTitle
     && context.threadSlug
   ) {
     return FlowStates.NAVIGATING;
   }
 
-  // Priority 3: Summary streaming
-  // Also consider summary streaming if summary exists and AI SDK is streaming
+  // Priority 3: Moderator streaming
+  // Also consider moderator streaming if moderator exists and AI SDK is streaming
   // This handles race condition where status hasn't been updated to 'streaming' yet
   if (
-    context.summaryStatus === MessageStatuses.STREAMING
-    || (context.summaryExists && context.isAiSdkStreaming)
+    context.moderatorStatus === MessageStatuses.STREAMING
+    || (context.moderatorExists && context.isAiSdkStreaming)
   ) {
-    return FlowStates.STREAMING_SUMMARY;
+    return FlowStates.STREAMING_MODERATOR;
   }
 
-  // Priority 4: Creating summary (participants done, no summary yet)
-  // Check if all participants responded for CURRENT round before creating summary
+  // Priority 4: Creating moderator (participants done, no moderator yet)
+  // Check if all participants responded for CURRENT round before creating moderator
   // ✅ FIX: Also check streamingJustCompleted to ensure UI has rendered final content
+  // ✅ RACE FIX: Don't create moderator if ANY animations still pending (pre-search, participants)
   if (
     !context.isAiSdkStreaming
     && !context.streamingJustCompleted // Wait for delay after streaming ends
     && context.allParticipantsResponded // All participants must respond for current round
     && context.participantCount > 0
-    && !context.summaryExists // Checks current round
-    && !context.isCreatingSummary
+    && !context.moderatorExists // Checks current round
+    && !context.isCreatingModerator
+    && context.pendingAnimations.size === 0 // Wait for ALL animations (pre-search, participants) to complete
   ) {
-    return FlowStates.CREATING_SUMMARY;
+    return FlowStates.CREATING_MODERATOR;
   }
 
   // Priority 5: Participants streaming
-  // Only return streaming_participants if no summary exists yet
-  // Once summary exists and isAiSdkStreaming is true, that's summary streaming (Priority 3),
-  // not participant streaming. This prevents falling back to streaming_participants during summary.
-  if (context.isAiSdkStreaming && !context.summaryExists) {
+  // Only return streaming_participants if no moderator exists yet
+  // Once moderator exists and isAiSdkStreaming is true, that's moderator streaming (Priority 3),
+  // not participant streaming. This prevents falling back to streaming_participants during moderator.
+  if (context.isAiSdkStreaming && !context.moderatorExists) {
     return FlowStates.STREAMING_PARTICIPANTS;
   }
 
@@ -177,10 +182,10 @@ function getLoadingMessage(state: FlowState): string {
       return 'Creating conversation...';
     case FlowStates.STREAMING_PARTICIPANTS:
       return 'AI models responding...';
-    case FlowStates.CREATING_SUMMARY:
-      return 'Preparing summary...';
-    case FlowStates.STREAMING_SUMMARY:
-      return 'Summarizing responses...';
+    case FlowStates.CREATING_MODERATOR:
+      return 'Preparing moderator...';
+    case FlowStates.STREAMING_MODERATOR:
+      return 'Moderator responding...';
     case FlowStates.COMPLETING:
       return 'Finalizing...';
     case FlowStates.NAVIGATING:
@@ -204,24 +209,24 @@ function getNextAction(
   // Transition: creating_thread → streaming_participants (handled by AI SDK)
   // No action needed here
 
-  // Transition: * → creating_summary
-  // Trigger CREATE_SUMMARY from any previous state (not just streaming_participants)
+  // Transition: * → creating_moderator
+  // Trigger CREATE_MODERATOR from any previous state (not just streaming_participants)
   // This handles race condition where streaming finishes before component mounts
   if (
-    currentState === FlowStates.CREATING_SUMMARY
-    && prevState !== FlowStates.CREATING_SUMMARY
+    currentState === FlowStates.CREATING_MODERATOR
+    && prevState !== FlowStates.CREATING_MODERATOR
     && context.threadId
   ) {
-    return { type: 'CREATE_SUMMARY' };
+    return { type: 'CREATE_MODERATOR' };
   }
 
-  // Transition: creating_summary → streaming_summary (handled by summary component)
+  // Transition: creating_moderator → streaming_moderator (handled by moderator component)
   // No action needed here
 
-  // Transition: streaming_summary → navigating (cache invalidation)
+  // Transition: streaming_moderator → navigating (cache invalidation)
   // PRIORITY 1: Invalidate cache BEFORE navigating
   if (
-    prevState === FlowStates.STREAMING_SUMMARY
+    prevState === FlowStates.STREAMING_MODERATOR
     && currentState === FlowStates.NAVIGATING
     && context.threadSlug
     && !context.hasNavigated
@@ -240,7 +245,7 @@ function getNextAction(
     && context.threadSlug
   ) {
     // Skip if we just returned INVALIDATE_CACHE (will be handled in next effect run)
-    if (prevState === FlowStates.STREAMING_SUMMARY) {
+    if (prevState === FlowStates.STREAMING_MODERATOR) {
       return null;
     }
     return { type: 'NAVIGATE', slug: context.threadSlug };
@@ -282,7 +287,6 @@ export function useFlowStateMachine(
   options: UseFlowOrchestratorOptions,
 ): UseFlowOrchestratorReturn {
   const { mode } = options;
-  const queryClient = useQueryClient();
 
   // ============================================================================
   // ✅ REACT 19 PATTERN: Batched store selectors with useShallow
@@ -296,26 +300,25 @@ export function useFlowStateMachine(
     isCreatingThread,
     messages,
     participants,
-    summaries,
-    isCreatingSummary,
+    isCreatingModerator,
     isAiSdkStreaming,
     screenMode,
+    pendingAnimations,
   } = useChatStore(useShallow(s => ({
     thread: s.thread,
     createdThreadId: s.createdThreadId,
     isCreatingThread: s.isCreatingThread,
     messages: s.messages,
     participants: s.participants,
-    summaries: s.summaries,
-    isCreatingSummary: s.isCreatingSummary,
+    isCreatingModerator: s.isModeratorStreaming,
     isAiSdkStreaming: s.isStreaming,
     screenMode: s.screenMode,
+    pendingAnimations: s.pendingAnimations,
   })));
 
   // Actions (stable references - no need for useShallow)
-  const createPendingSummary = useChatStore(s => s.createPendingSummary);
-  // 🚨 ATOMIC: Use tryMarkSummaryCreated to prevent race conditions
-  const tryMarkSummaryCreated = useChatStore(s => s.tryMarkSummaryCreated);
+  // 🚨 ATOMIC: Use tryMarkModeratorCreated to prevent race conditions
+  const tryMarkModeratorCreated = useChatStore(s => s.tryMarkModeratorCreated);
   const completeStreaming = useChatStore(s => s.completeStreaming);
 
   // ✅ RACE CONDITION FIX: Get store API for fresh state reads inside effects
@@ -373,6 +376,14 @@ export function useFlowStateMachine(
         });
       });
     }
+
+    // ✅ FIX: Cleanup RAF chain on unmount to prevent orphan callbacks
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
   }, [isAiSdkStreaming, messages.length]);
 
   // ============================================================================
@@ -384,10 +395,9 @@ export function useFlowStateMachine(
     const currentRound
       = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
 
-    // ✅ FIX: Check if summary exists for CURRENT round, not ANY round
-    const currentRoundSummary = summaries.find(
-      (s: { roundNumber: number }) => s.roundNumber === currentRound,
-    );
+    // ✅ TEXT STREAMING: Check for moderator message for CURRENT round
+    // Moderator messages have metadata.isModerator: true
+    const currentRoundModeratorMessage = getModeratorMessageForRound(messages, currentRound);
 
     // ✅ FIX: Count participant messages for CURRENT round only
     // ✅ TYPE-SAFE: Use extraction utility instead of manual metadata access
@@ -401,7 +411,7 @@ export function useFlowStateMachine(
 
     // ✅ FIX: Only count messages that have ACTUAL CONTENT or finished with a reason
     // Empty messages (parts: []) are placeholders created by AI SDK before streaming completes
-    // Don't count them as "responded" or summary will trigger prematurely
+    // Don't count them as "responded" or moderator will trigger prematurely
     const completedMessagesInRound = participantMessagesInRound.filter((m) => {
       // ✅ STREAMING CHECK: Don't count messages that still have streaming parts
       // AI SDK v5 marks parts with state: 'streaming' while content is being generated
@@ -434,6 +444,13 @@ export function useFlowStateMachine(
       = completedMessagesInRound.length >= participants.length
         && participants.length > 0;
 
+    // ✅ TEXT STREAMING: Determine moderator message status
+    // Check if the message is still streaming by looking for streaming parts
+    let moderatorStatus: FlowContext['moderatorStatus'] = null;
+    if (currentRoundModeratorMessage) {
+      moderatorStatus = getMessageStreamingStatus(currentRoundModeratorMessage);
+    }
+
     return {
       threadId,
       threadSlug: thread?.slug || null,
@@ -441,13 +458,14 @@ export function useFlowStateMachine(
       currentRound,
       hasMessages: messages.length > 0,
       participantCount: participants.length,
-      allParticipantsResponded, // ✅ NEW: Round-specific participant completion
-      summaryStatus: currentRoundSummary?.status || null,
-      summaryExists: !!currentRoundSummary, // ✅ FIX: Round-specific check
+      allParticipantsResponded,
+      moderatorStatus,
+      moderatorExists: !!currentRoundModeratorMessage,
       isAiSdkStreaming,
-      streamingJustCompleted, // ✅ FIX: Delay after streaming for UI to render
+      streamingJustCompleted,
+      pendingAnimations,
       isCreatingThread,
-      isCreatingSummary,
+      isCreatingModerator,
       hasNavigated,
       screenMode,
     };
@@ -456,11 +474,11 @@ export function useFlowStateMachine(
     createdThreadId,
     messages,
     participants,
-    summaries,
     isAiSdkStreaming,
     streamingJustCompleted,
+    pendingAnimations,
     isCreatingThread,
-    isCreatingSummary,
+    isCreatingModerator,
     hasNavigated,
     screenMode,
   ]);
@@ -471,7 +489,7 @@ export function useFlowStateMachine(
 
   const flowState = useMemo(() => determineFlowState(context), [context]);
   // Initialize prevState as idle instead of current flowState
-  // This ensures we detect the transition TO creating_summary even if component
+  // This ensures we detect the transition TO creating_moderator even if component
   // mounts after streaming has finished (fast streaming race condition)
   const prevStateRef = useRef<FlowState>(FlowStates.IDLE);
 
@@ -485,31 +503,23 @@ export function useFlowStateMachine(
 
     if (action) {
       switch (action.type) {
-        case 'CREATE_SUMMARY': {
-          // Create pending summary when participants finish
+        case 'CREATE_MODERATOR': {
+          // ✅ TEXT STREAMING: Mark moderator as ready to create
+          // The actual moderator streaming is triggered by useModeratorTrigger hook
           const { threadId, currentRound } = context;
 
           if (threadId && messages.length > 0) {
             // ✅ RACE CONDITION FIX: Get FRESH state directly from store
-            // The `messages` from closure might be stale - verify with current state
             const freshState = storeApi.getState();
             const freshMessages = freshState.messages;
             const freshParticipants = freshState.participants;
 
-            // ✅ STRICT STREAMING CHECK: Block summary if AI SDK is still streaming
-            // This is a CRITICAL gate - never create summary while streaming is active.
-            // The message-level check below might miss cases where:
-            // 1. Last participant just started (message created but no streaming parts yet)
-            // 2. Message sync race (parts not updated yet)
-            //
-            // This flag is the source of truth from AI SDK - if true, streaming is active.
+            // ✅ STRICT STREAMING CHECK: Block moderator if AI SDK is still streaming
             if (freshState.isStreaming) {
               return; // Exit effect without updating prevStateRef
             }
 
             // ✅ STRICT COMPLETION GATE: Use centralized utility for participant completion check
-            // This is the SINGLE SOURCE OF TRUTH for determining if all participants are done
-            // Prevents race condition where summary starts while a participant is still streaming
             const completionStatus = getParticipantCompletionStatus(
               freshMessages,
               freshParticipants,
@@ -517,56 +527,26 @@ export function useFlowStateMachine(
             );
 
             if (!completionStatus.allComplete) {
-              // Participants still streaming - DON'T update prevStateRef so we can retry
-              // The effect will re-run when store updates with completed messages
-              logParticipantCompletionStatus(completionStatus, 'flow-state-machine:CREATE_SUMMARY');
+              logParticipantCompletionStatus(completionStatus, 'flow-state-machine:CREATE_MODERATOR');
               return; // Exit effect without updating prevStateRef
             }
 
-            // 🚨 ATOMIC: tryMarkSummaryCreated returns false if already created
-            // This prevents race condition where multiple components try to create summary simultaneously
-            if (!tryMarkSummaryCreated(currentRound)) {
+            // 🚨 ATOMIC: tryMarkModeratorCreated returns false if already created
+            if (!tryMarkModeratorCreated(currentRound)) {
               completeStreaming();
-              break; // Summary already created by another component, skip
+              break; // Moderator already created by another component, skip
             }
 
-            // ✅ ENUM PATTERN: Use MessageRoles constant instead of hardcoded string
-            const userMessage = freshMessages.findLast(
-              (m: UIMessage) => m.role === MessageRoles.USER,
-            );
-            // ✅ TYPE-SAFE: Use AI SDK TextPart type for text content extraction
-            // ✅ ENUM PATTERN: Use MessagePartTypes constant instead of hardcoded string
-            const userQuestion
-              = userMessage?.parts?.find((p): p is TextPart => {
-                return (
-                  typeof p === 'object'
-                  && p !== null
-                  && 'type' in p
-                  && p.type === MessagePartTypes.TEXT
-                  && 'text' in p
-                  && typeof p.text === 'string'
-                );
-              })?.text || '';
-
-            createPendingSummary({
-              roundNumber: currentRound,
-              messages: freshMessages,
-              userQuestion,
-              threadId,
-              mode: thread?.mode || DEFAULT_CHAT_MODE,
-            });
+            // ✅ TEXT STREAMING: Just complete streaming state
+            // useModeratorTrigger hook triggers POST /api/v1/chat/moderator
             completeStreaming();
           }
           break;
         }
 
         case 'INVALIDATE_CACHE': {
-          // Invalidate cache before navigation
-          if (context.threadId) {
-            queryClient.invalidateQueries({
-              queryKey: queryKeys.threads.summaries(context.threadId),
-            });
-          }
+          // ✅ TEXT STREAMING: Moderator messages are now regular messages in chatMessage table
+          // Displayed inline via ChatMessageList, no separate cache to invalidate
 
           // =========================================================================
           // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
@@ -618,10 +598,8 @@ export function useFlowStateMachine(
     messages,
     participants,
     thread,
-    queryClient,
-    storeApi, // ✅ For fresh state reads inside effect
-    tryMarkSummaryCreated,
-    createPendingSummary,
+    storeApi,
+    tryMarkModeratorCreated,
     completeStreaming,
   ]);
 

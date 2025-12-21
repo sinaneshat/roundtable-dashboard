@@ -4,7 +4,7 @@
  * These tests verify that the flow state machine correctly prevents
  * race conditions during state transitions:
  *
- * 1. Summary creation NEVER happens while any participant is streaming
+ * 1. Moderator creation NEVER happens while any participant is streaming
  * 2. State transitions happen in correct order
  * 3. Actions are called exactly once (no over-triggering)
  * 4. Fresh state is always used for decisions (no stale closures)
@@ -88,33 +88,33 @@ type ActionCallLog = {
 
 function createMockStore() {
   const actionLog: ActionCallLog[] = [];
-  let summaryCreatedForRound: number | null = null;
+  let moderatorCreatedForRound: number | null = null;
 
   return {
     actionLog,
-    getSummaryCreatedRound: () => summaryCreatedForRound,
+    getModeratorCreatedRound: () => moderatorCreatedForRound,
     resetLog: () => {
       actionLog.length = 0;
-      summaryCreatedForRound = null;
+      moderatorCreatedForRound = null;
     },
 
-    // Simulates createPendingSummary
-    createPendingSummary: (params: { roundNumber: number }) => {
+    // Simulates createPendingModerator
+    createPendingModerator: (params: { roundNumber: number }) => {
       actionLog.push({
-        action: 'createPendingSummary',
+        action: 'createPendingModerator',
         timestamp: Date.now(),
         params,
       });
     },
 
-    // Simulates tryMarkSummaryCreated (atomic check)
-    tryMarkSummaryCreated: (roundNumber: number): boolean => {
-      if (summaryCreatedForRound === roundNumber) {
+    // Simulates tryMarkModeratorCreated (atomic check)
+    tryMarkModeratorCreated: (roundNumber: number): boolean => {
+      if (moderatorCreatedForRound === roundNumber) {
         return false; // Already created
       }
-      summaryCreatedForRound = roundNumber;
+      moderatorCreatedForRound = roundNumber;
       actionLog.push({
-        action: 'tryMarkSummaryCreated',
+        action: 'tryMarkModeratorCreated',
         timestamp: Date.now(),
         params: { roundNumber, success: true },
       });
@@ -141,34 +141,34 @@ function createMockStore() {
 
 type FlowContext = {
   allParticipantsResponded: boolean;
-  summaryExists: boolean;
-  summaryStatus: string | null;
+  moderatorExists: boolean;
+  moderatorStatus: string | null;
   isAiSdkStreaming: boolean;
   streamingJustCompleted: boolean;
-  isCreatingSummary: boolean;
+  isModeratorStreaming: boolean;
   participantCount: number;
 };
 
 function determineFlowState(context: FlowContext): string {
-  // Summary streaming
-  if (context.summaryStatus === MessageStatuses.STREAMING) {
-    return FlowStates.STREAMING_SUMMARY;
+  // Moderator streaming
+  if (context.moderatorStatus === MessageStatuses.STREAMING) {
+    return FlowStates.STREAMING_MODERATOR;
   }
 
-  // Creating summary (all participants done, no summary yet)
+  // Creating moderator (all participants done, no moderator yet)
   if (
     !context.isAiSdkStreaming
     && !context.streamingJustCompleted
     && context.allParticipantsResponded
     && context.participantCount > 0
-    && !context.summaryExists
-    && !context.isCreatingSummary
+    && !context.moderatorExists
+    && !context.isModeratorStreaming
   ) {
-    return FlowStates.CREATING_SUMMARY;
+    return FlowStates.CREATING_MODERATOR;
   }
 
   // Participants streaming
-  if (context.isAiSdkStreaming && !context.summaryExists) {
+  if (context.isAiSdkStreaming && !context.moderatorExists) {
     return FlowStates.STREAMING_PARTICIPANTS;
   }
 
@@ -176,10 +176,10 @@ function determineFlowState(context: FlowContext): string {
 }
 
 // ============================================================================
-// Simulated Summary Gate (from flow-state-machine.ts CREATE_SUMMARY case)
+// Simulated Moderator Gate (from flow-state-machine.ts CREATE_MODERATOR case)
 // ============================================================================
 
-function simulateSummaryGate(
+function simulateModeratorGate(
   messages: UIMessage[],
   participants: ChatParticipant[],
   roundNumber: number,
@@ -206,12 +206,12 @@ function simulateSummaryGate(
   }
 
   // Gate 3: Atomic check to prevent duplicate creation
-  if (!store.tryMarkSummaryCreated(roundNumber)) {
+  if (!store.tryMarkModeratorCreated(roundNumber)) {
     return { created: false, blockedReason: 'already created' };
   }
 
-  // All gates passed - create summary
-  store.createPendingSummary({ roundNumber });
+  // All gates passed - create moderator
+  store.createPendingModerator({ roundNumber });
   store.completeStreaming();
 
   return { created: true };
@@ -229,14 +229,14 @@ describe('flow State Machine Race Prevention', () => {
   });
 
   describe('gate 1: isStreaming Flag', () => {
-    it('blocks summary creation when isStreaming is true', () => {
+    it('blocks moderator creation when isStreaming is true', () => {
       const participants = [createParticipant('p1', 0)];
       const messages: UIMessage[] = [
         createUserMessage(0),
         createAssistantMessage('p1', 0, 0, { streaming: false }),
       ];
 
-      const result = simulateSummaryGate(
+      const result = simulateModeratorGate(
         messages,
         participants,
         0,
@@ -246,17 +246,17 @@ describe('flow State Machine Race Prevention', () => {
 
       expect(result.created).toBe(false);
       expect(result.blockedReason).toBe('isStreaming=true');
-      expect(store.getActionCount('createPendingSummary')).toBe(0);
+      expect(store.getActionCount('createPendingModerator')).toBe(0);
     });
 
-    it('allows summary creation when isStreaming is false', () => {
+    it('allows moderator creation when isStreaming is false', () => {
       const participants = [createParticipant('p1', 0)];
       const messages: UIMessage[] = [
         createUserMessage(0),
         createAssistantMessage('p1', 0, 0, { streaming: false }),
       ];
 
-      const result = simulateSummaryGate(
+      const result = simulateModeratorGate(
         messages,
         participants,
         0,
@@ -265,7 +265,7 @@ describe('flow State Machine Race Prevention', () => {
       );
 
       expect(result.created).toBe(true);
-      expect(store.getActionCount('createPendingSummary')).toBe(1);
+      expect(store.getActionCount('createPendingModerator')).toBe(1);
     });
   });
 
@@ -280,7 +280,7 @@ describe('flow State Machine Race Prevention', () => {
         createAssistantMessage('p1', 0, 0, { streaming: true }), // P1 streaming
       ];
 
-      const result = simulateSummaryGate(messages, participants, 0, false, store);
+      const result = simulateModeratorGate(messages, participants, 0, false, store);
 
       expect(result.created).toBe(false);
       expect(result.blockedReason).toContain('p1');
@@ -299,11 +299,11 @@ describe('flow State Machine Race Prevention', () => {
         createAssistantMessage('p3', 0, 2, { streaming: true }), // P3 (last) streaming
       ];
 
-      const result = simulateSummaryGate(messages, participants, 0, false, store);
+      const result = simulateModeratorGate(messages, participants, 0, false, store);
 
       expect(result.created).toBe(false);
       expect(result.blockedReason).toContain('p3');
-      expect(store.getActionCount('createPendingSummary')).toBe(0);
+      expect(store.getActionCount('createPendingModerator')).toBe(0);
     });
 
     it('blocks when any middle participant is streaming', () => {
@@ -319,7 +319,7 @@ describe('flow State Machine Race Prevention', () => {
         createAssistantMessage('p3', 0, 2, { streaming: false }),
       ];
 
-      const result = simulateSummaryGate(messages, participants, 0, false, store);
+      const result = simulateModeratorGate(messages, participants, 0, false, store);
 
       expect(result.created).toBe(false);
       expect(result.blockedReason).toContain('p2');
@@ -336,7 +336,7 @@ describe('flow State Machine Race Prevention', () => {
         // P2 has no message
       ];
 
-      const result = simulateSummaryGate(messages, participants, 0, false, store);
+      const result = simulateModeratorGate(messages, participants, 0, false, store);
 
       expect(result.created).toBe(false);
       expect(result.blockedReason).toContain('p2');
@@ -355,15 +355,15 @@ describe('flow State Machine Race Prevention', () => {
         createAssistantMessage('p3', 0, 2, { streaming: false }),
       ];
 
-      const result = simulateSummaryGate(messages, participants, 0, false, store);
+      const result = simulateModeratorGate(messages, participants, 0, false, store);
 
       expect(result.created).toBe(true);
-      expect(store.getActionCount('createPendingSummary')).toBe(1);
+      expect(store.getActionCount('createPendingModerator')).toBe(1);
     });
   });
 
   describe('gate 3: Atomic Creation Check', () => {
-    it('prevents duplicate summary creation on concurrent calls', () => {
+    it('prevents duplicate moderator creation on concurrent calls', () => {
       const participants = [createParticipant('p1', 0)];
       const messages: UIMessage[] = [
         createUserMessage(0),
@@ -371,18 +371,18 @@ describe('flow State Machine Race Prevention', () => {
       ];
 
       // First call succeeds
-      const result1 = simulateSummaryGate(messages, participants, 0, false, store);
+      const result1 = simulateModeratorGate(messages, participants, 0, false, store);
       expect(result1.created).toBe(true);
-      expect(store.getActionCount('createPendingSummary')).toBe(1);
+      expect(store.getActionCount('createPendingModerator')).toBe(1);
 
       // Second call is blocked by atomic check
-      const result2 = simulateSummaryGate(messages, participants, 0, false, store);
+      const result2 = simulateModeratorGate(messages, participants, 0, false, store);
       expect(result2.created).toBe(false);
       expect(result2.blockedReason).toBe('already created');
-      expect(store.getActionCount('createPendingSummary')).toBe(1); // Still 1
+      expect(store.getActionCount('createPendingModerator')).toBe(1); // Still 1
     });
 
-    it('allows summary creation for different rounds', () => {
+    it('allows moderator creation for different rounds', () => {
       const participants = [createParticipant('p1', 0)];
       const messages: UIMessage[] = [
         createUserMessage(0),
@@ -392,46 +392,46 @@ describe('flow State Machine Race Prevention', () => {
       ];
 
       // Round 0
-      const result0 = simulateSummaryGate(messages, participants, 0, false, store);
+      const result0 = simulateModeratorGate(messages, participants, 0, false, store);
       expect(result0.created).toBe(true);
 
       // Round 1 (separate atomic check)
-      const result1 = simulateSummaryGate(messages, participants, 1, false, store);
+      const result1 = simulateModeratorGate(messages, participants, 1, false, store);
       expect(result1.created).toBe(true);
 
-      expect(store.getActionCount('createPendingSummary')).toBe(2);
+      expect(store.getActionCount('createPendingModerator')).toBe(2);
     });
   });
 
   describe('flow State Transitions', () => {
-    it('transitions to CREATING_SUMMARY only when all conditions met', () => {
+    it('transitions to CREATING_MODERATOR only when all conditions met', () => {
       // Condition 1: isAiSdkStreaming = false
       // Condition 2: allParticipantsResponded = true
-      // Condition 3: summaryExists = false
-      // Condition 4: isCreatingSummary = false
+      // Condition 3: moderatorExists = false
+      // Condition 4: isModeratorStreaming = false
       // Condition 5: streamingJustCompleted = false
 
       const context: FlowContext = {
         allParticipantsResponded: true,
-        summaryExists: false,
-        summaryStatus: null,
+        moderatorExists: false,
+        moderatorStatus: null,
         isAiSdkStreaming: false,
         streamingJustCompleted: false,
-        isCreatingSummary: false,
+        isModeratorStreaming: false,
         participantCount: 2,
       };
 
-      expect(determineFlowState(context)).toBe(FlowStates.CREATING_SUMMARY);
+      expect(determineFlowState(context)).toBe(FlowStates.CREATING_MODERATOR);
     });
 
     it('stays at STREAMING_PARTICIPANTS when isAiSdkStreaming is true', () => {
       const context: FlowContext = {
         allParticipantsResponded: true, // Even if all responded...
-        summaryExists: false,
-        summaryStatus: null,
+        moderatorExists: false,
+        moderatorStatus: null,
         isAiSdkStreaming: true, // ...streaming flag blocks
         streamingJustCompleted: false,
-        isCreatingSummary: false,
+        isModeratorStreaming: false,
         participantCount: 2,
       };
 
@@ -441,27 +441,27 @@ describe('flow State Machine Race Prevention', () => {
     it('stays at IDLE when streamingJustCompleted is true', () => {
       const context: FlowContext = {
         allParticipantsResponded: true,
-        summaryExists: false,
-        summaryStatus: null,
+        moderatorExists: false,
+        moderatorStatus: null,
         isAiSdkStreaming: false,
         streamingJustCompleted: true, // Delay window blocks
-        isCreatingSummary: false,
+        isModeratorStreaming: false,
         participantCount: 2,
       };
 
-      // Won't be CREATING_SUMMARY due to streamingJustCompleted
+      // Won't be CREATING_MODERATOR due to streamingJustCompleted
       const state = determineFlowState(context);
-      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(state).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
     it('does not transition when allParticipantsResponded is false', () => {
       const context: FlowContext = {
         allParticipantsResponded: false, // Not all responded
-        summaryExists: false,
-        summaryStatus: null,
+        moderatorExists: false,
+        moderatorStatus: null,
         isAiSdkStreaming: false,
         streamingJustCompleted: false,
-        isCreatingSummary: false,
+        isModeratorStreaming: false,
         participantCount: 2,
       };
 
@@ -494,7 +494,7 @@ describe('real-World Timing Scenarios', () => {
         createAssistantMessage('slow-model', 0, 0, { streaming: true }),
       ];
 
-      let result = simulateSummaryGate(messages, participants, 0, true, store);
+      let result = simulateModeratorGate(messages, participants, 0, true, store);
       expect(result.created).toBe(false);
 
       // Step 2: Fast model completes while slow is still streaming
@@ -504,7 +504,7 @@ describe('real-World Timing Scenarios', () => {
         createAssistantMessage('fast-model', 0, 1, { streaming: false }),
       ];
 
-      result = simulateSummaryGate(messages, participants, 0, true, store);
+      result = simulateModeratorGate(messages, participants, 0, true, store);
       expect(result.created).toBe(false);
 
       // Step 3: Slow model completes
@@ -514,9 +514,9 @@ describe('real-World Timing Scenarios', () => {
         createAssistantMessage('fast-model', 0, 1, { streaming: false }),
       ];
 
-      result = simulateSummaryGate(messages, participants, 0, false, store);
+      result = simulateModeratorGate(messages, participants, 0, false, store);
       expect(result.created).toBe(true);
-      expect(store.getActionCount('createPendingSummary')).toBe(1);
+      expect(store.getActionCount('createPendingModerator')).toBe(1);
     });
   });
 
@@ -530,12 +530,12 @@ describe('real-World Timing Scenarios', () => {
 
       // Simulate multiple effect runs (React strict mode, state updates)
       for (let i = 0; i < 10; i++) {
-        simulateSummaryGate(messages, participants, 0, false, store);
+        simulateModeratorGate(messages, participants, 0, false, store);
       }
 
-      // Should only create summary once
-      expect(store.getActionCount('createPendingSummary')).toBe(1);
-      expect(store.getActionCount('tryMarkSummaryCreated')).toBe(1); // Atomic check passes once
+      // Should only create moderator once
+      expect(store.getActionCount('createPendingModerator')).toBe(1);
+      expect(store.getActionCount('tryMarkModeratorCreated')).toBe(1); // Atomic check passes once
     });
   });
 
@@ -561,11 +561,11 @@ describe('real-World Timing Scenarios', () => {
       ];
 
       // If code uses stale messages, it would block
-      const staleResult = simulateSummaryGate(staleMessages, participants, 0, false, store);
+      const staleResult = simulateModeratorGate(staleMessages, participants, 0, false, store);
       expect(staleResult.created).toBe(false);
 
       // Fresh messages should allow
-      const freshResult = simulateSummaryGate(freshMessages, participants, 0, false, store);
+      const freshResult = simulateModeratorGate(freshMessages, participants, 0, false, store);
       expect(freshResult.created).toBe(true);
     });
   });
@@ -590,14 +590,14 @@ describe('action Call Count Verification', () => {
     ];
 
     // Multiple gate checks
-    simulateSummaryGate(messages, participants, 0, false, store);
-    simulateSummaryGate(messages, participants, 0, false, store);
-    simulateSummaryGate(messages, participants, 0, false, store);
+    simulateModeratorGate(messages, participants, 0, false, store);
+    simulateModeratorGate(messages, participants, 0, false, store);
+    simulateModeratorGate(messages, participants, 0, false, store);
 
     expect(store.getActionCount('completeStreaming')).toBe(1);
   });
 
-  it('never calls createPendingSummary when blocked', () => {
+  it('never calls createPendingModerator when blocked', () => {
     const participants = [createParticipant('p1', 0)];
     const messages: UIMessage[] = [
       createUserMessage(0),
@@ -606,11 +606,11 @@ describe('action Call Count Verification', () => {
 
     // Multiple attempts while streaming
     for (let i = 0; i < 5; i++) {
-      simulateSummaryGate(messages, participants, 0, true, store);
+      simulateModeratorGate(messages, participants, 0, true, store);
     }
 
-    expect(store.getActionCount('createPendingSummary')).toBe(0);
-    expect(store.getActionCount('tryMarkSummaryCreated')).toBe(0);
+    expect(store.getActionCount('createPendingModerator')).toBe(0);
+    expect(store.getActionCount('tryMarkModeratorCreated')).toBe(0);
     expect(store.getActionCount('completeStreaming')).toBe(0);
   });
 
@@ -621,12 +621,12 @@ describe('action Call Count Verification', () => {
       createAssistantMessage('p1', 0, 0, { streaming: false }),
     ];
 
-    simulateSummaryGate(messages, participants, 0, false, store);
+    simulateModeratorGate(messages, participants, 0, false, store);
 
     const actions = store.actionLog.map(a => a.action);
     expect(actions).toEqual([
-      'tryMarkSummaryCreated',
-      'createPendingSummary',
+      'tryMarkModeratorCreated',
+      'createPendingModerator',
       'completeStreaming',
     ]);
   });
@@ -657,7 +657,7 @@ describe('multi-Round Isolation', () => {
     expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBe(false);
   });
 
-  it('summary gate uses correct round for checks', () => {
+  it('moderator gate uses correct round for checks', () => {
     const store = createMockStore();
     const participants = [createParticipant('p1', 0)];
     const messages: UIMessage[] = [
@@ -668,11 +668,11 @@ describe('multi-Round Isolation', () => {
     ];
 
     // Round 0 should succeed
-    const result0 = simulateSummaryGate(messages, participants, 0, false, store);
+    const result0 = simulateModeratorGate(messages, participants, 0, false, store);
     expect(result0.created).toBe(true);
 
     // Round 1 should block (streaming)
-    const result1 = simulateSummaryGate(messages, participants, 1, false, store);
+    const result1 = simulateModeratorGate(messages, participants, 1, false, store);
     expect(result1.created).toBe(false);
   });
 });
@@ -691,7 +691,7 @@ describe('edge Cases', () => {
   it('handles empty participants list', () => {
     const messages: UIMessage[] = [createUserMessage(0)];
 
-    const result = simulateSummaryGate(messages, [], 0, false, store);
+    const result = simulateModeratorGate(messages, [], 0, false, store);
 
     expect(result.created).toBe(false);
   });
@@ -699,7 +699,7 @@ describe('edge Cases', () => {
   it('handles empty messages list', () => {
     const participants = [createParticipant('p1', 0)];
 
-    const result = simulateSummaryGate([], participants, 0, false, store);
+    const result = simulateModeratorGate([], participants, 0, false, store);
 
     expect(result.created).toBe(false);
   });
@@ -712,7 +712,7 @@ describe('edge Cases', () => {
       createUserMessage(0),
       createAssistantMessage('p1', 0, 0, { streaming: true }),
     ];
-    let result = simulateSummaryGate(messages, participants, 0, true, store);
+    let result = simulateModeratorGate(messages, participants, 0, true, store);
     expect(result.created).toBe(false);
 
     // Complete
@@ -720,7 +720,7 @@ describe('edge Cases', () => {
       createUserMessage(0),
       createAssistantMessage('p1', 0, 0, { streaming: false }),
     ];
-    result = simulateSummaryGate(messages, participants, 0, false, store);
+    result = simulateModeratorGate(messages, participants, 0, false, store);
     expect(result.created).toBe(true);
   });
 
@@ -745,7 +745,7 @@ describe('edge Cases', () => {
       ),
     ];
 
-    const result1 = simulateSummaryGate(messagesWithStreaming, participants, 0, false, store);
+    const result1 = simulateModeratorGate(messagesWithStreaming, participants, 0, false, store);
     expect(result1.created).toBe(false);
 
     // All complete
@@ -756,7 +756,7 @@ describe('edge Cases', () => {
       ),
     ];
 
-    const result2 = simulateSummaryGate(messagesAllComplete, participants, 0, false, store);
+    const result2 = simulateModeratorGate(messagesAllComplete, participants, 0, false, store);
     expect(result2.created).toBe(true);
   });
 });

@@ -61,11 +61,12 @@ export function useNavigationReset() {
   })));
 
   // Shared reset logic - invalidate queries and reset store
+  // ✅ TEXT STREAMING: Summaries are now moderator messages in chatMessage
+  // No separate summaries query to invalidate
   const doReset = useCallback(() => {
     const effectiveThreadId = thread?.id || createdThreadId;
     if (effectiveThreadId) {
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.messages(effectiveThreadId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.summaries(effectiveThreadId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.preSearches(effectiveThreadId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.feedback(effectiveThreadId) });
     }

@@ -145,8 +145,8 @@ function createEmptyMessage(
 // ============================================================================
 
 type ActionCallCounts = {
-  createPendingSummary: number;
-  setIsCreatingSummary: number;
+  createPendingModerator: number;
+  setIsCreatingModerator: number;
   setStreamingRoundNumber: number;
   setNextParticipantToTrigger: number;
   setMessages: number;
@@ -157,8 +157,8 @@ type ActionCallCounts = {
 function createActionCallTracker(): {
   counts: ActionCallCounts;
   reset: () => void;
-  createPendingSummary: () => void;
-  setIsCreatingSummary: () => void;
+  createPendingModerator: () => void;
+  setIsCreatingModerator: () => void;
   setStreamingRoundNumber: () => void;
   setNextParticipantToTrigger: () => void;
   setMessages: () => void;
@@ -166,8 +166,8 @@ function createActionCallTracker(): {
   completeStreaming: () => void;
 } {
   const counts: ActionCallCounts = {
-    createPendingSummary: 0,
-    setIsCreatingSummary: 0,
+    createPendingModerator: 0,
+    setIsCreatingModerator: 0,
     setStreamingRoundNumber: 0,
     setNextParticipantToTrigger: 0,
     setMessages: 0,
@@ -182,11 +182,11 @@ function createActionCallTracker(): {
         counts[key as keyof ActionCallCounts] = 0;
       });
     },
-    createPendingSummary: () => {
-      counts.createPendingSummary++;
+    createPendingModerator: () => {
+      counts.createPendingModerator++;
     },
-    setIsCreatingSummary: () => {
-      counts.setIsCreatingSummary++;
+    setIsCreatingModerator: () => {
+      counts.setIsCreatingModerator++;
     },
     setStreamingRoundNumber: () => {
       counts.setStreamingRoundNumber++;
@@ -210,7 +210,7 @@ function createActionCallTracker(): {
 // CORE INVARIANT TESTS: Summarizer Must Never Trigger While Streaming
 // ============================================================================
 
-describe('core Invariant: Summarizer Never Triggers During Streaming', () => {
+describe('core Invariant: Moderator Never Triggers During Streaming', () => {
   describe('isMessageComplete strict checks', () => {
     it('returns FALSE when any part has state: streaming', () => {
       const message = createStreamingMessage('p1', 0, 0, 'Content');
@@ -262,7 +262,7 @@ describe('core Invariant: Summarizer Never Triggers During Streaming', () => {
       expect(isMessageComplete(message)).toBe(true);
     });
 
-    it('returns FALSE when has empty text (empty string is falsy)', () => {
+    it('returns TRUE when has finishReason (even with empty text)', () => {
       const message: UIMessage = {
         id: 'msg-1',
         role: MessageRoles.ASSISTANT,
@@ -276,10 +276,10 @@ describe('core Invariant: Summarizer Never Triggers During Streaming', () => {
           finishReason: 'stop',
         },
       };
-      // Empty text is NOT considered as having content
-      // This is correct - empty responses should not be counted as complete
-      // and may require re-triggering the participant
-      expect(isMessageComplete(message)).toBe(false);
+      // ✅ FIX: finishReason indicates stream ended - complete regardless of content
+      // This is consistent with error case handling (finishReason: 'error' → complete)
+      // Prevents blocking moderator creation when stream ended but produced no content
+      expect(isMessageComplete(message)).toBe(true);
     });
 
     it('returns FALSE when empty parts array', () => {
@@ -405,8 +405,8 @@ describe('core Invariant: Summarizer Never Triggers During Streaming', () => {
 // ============================================================================
 
 describe('race Condition Scenarios', () => {
-  describe('scenario: Last Participant Begins Streaming → Summarizer Triggers Prematurely', () => {
-    it('must NOT trigger summary when last participant has JUST STARTED (empty message)', () => {
+  describe('scenario: Last Participant Begins Streaming → Moderator Triggers Prematurely', () => {
+    it('must NOT trigger moderator when last participant has JUST STARTED (empty message)', () => {
       const participants = [
         createParticipant('gpt-4', 0),
         createParticipant('claude', 1),
@@ -426,7 +426,7 @@ describe('race Condition Scenarios', () => {
       expect(status.streamingParticipantIds).toContain('gemini');
     });
 
-    it('must NOT trigger summary when last participant has partial content', () => {
+    it('must NOT trigger moderator when last participant has partial content', () => {
       const participants = [
         createParticipant('gpt-4', 0),
         createParticipant('claude', 1),
@@ -437,7 +437,7 @@ describe('race Condition Scenarios', () => {
         createAssistantMessage('gpt-4', 0, { partState: 'done', finishReason: 'stop' }),
         createAssistantMessage('claude', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
         // Gemini streaming with partial content
-        createStreamingMessage('gemini', 0, 2, 'Here is my analysis so far...'),
+        createStreamingMessage('gemini', 0, 2, 'Here is my moderator so far...'),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
@@ -447,7 +447,7 @@ describe('race Condition Scenarios', () => {
       expect(status.streamingCount).toBe(1);
     });
 
-    it('must NOT trigger summary even when last participant has 99% of content', () => {
+    it('must NOT trigger moderator even when last participant has 99% of content', () => {
       const participants = [
         createParticipant('p1', 0),
         createParticipant('p2', 1),
@@ -514,7 +514,7 @@ describe('race Condition Scenarios', () => {
   });
 
   describe('scenario: Multiple Participants Finish Simultaneously', () => {
-    it('must wait for ALL to actually complete before summary', () => {
+    it('must wait for ALL to actually complete before moderator', () => {
       const participants = [
         createParticipant('p1', 0),
         createParticipant('p2', 1),
@@ -869,14 +869,14 @@ describe('streaming State Transitions', () => {
 // SUMMARY CREATION GATING SIMULATION
 // ============================================================================
 
-describe('summary Creation Gating Simulation', () => {
+describe('moderator Creation Gating Simulation', () => {
   let actionTracker: ReturnType<typeof createActionCallTracker>;
 
   beforeEach(() => {
     actionTracker = createActionCallTracker();
   });
 
-  function simulateSummaryGate(
+  function simulateModeratorGate(
     messages: UIMessage[],
     participants: ChatParticipant[],
     roundNumber: number,
@@ -884,16 +884,16 @@ describe('summary Creation Gating Simulation', () => {
     const status = getParticipantCompletionStatus(messages, participants, roundNumber);
 
     if (!status.allComplete) {
-      // Gate blocks summary creation
+      // Gate blocks moderator creation
       return false;
     }
 
-    // Gate passes - summary would be created
-    actionTracker.createPendingSummary();
+    // Gate passes - moderator would be created
+    actionTracker.createPendingModerator();
     return true;
   }
 
-  it('blocks summary when participant 1/3 is streaming', () => {
+  it('blocks moderator when participant 1/3 is streaming', () => {
     const participants = [
       createParticipant('p1', 0),
       createParticipant('p2', 1),
@@ -904,13 +904,13 @@ describe('summary Creation Gating Simulation', () => {
       createStreamingMessage('p1', 0, 0),
     ];
 
-    const created = simulateSummaryGate(messages, participants, 0);
+    const created = simulateModeratorGate(messages, participants, 0);
 
     expect(created).toBe(false);
-    expect(actionTracker.counts.createPendingSummary).toBe(0);
+    expect(actionTracker.counts.createPendingModerator).toBe(0);
   });
 
-  it('blocks summary when participant 2/3 is streaming', () => {
+  it('blocks moderator when participant 2/3 is streaming', () => {
     const participants = [
       createParticipant('p1', 0),
       createParticipant('p2', 1),
@@ -922,13 +922,13 @@ describe('summary Creation Gating Simulation', () => {
       createStreamingMessage('p2', 0, 1),
     ];
 
-    const created = simulateSummaryGate(messages, participants, 0);
+    const created = simulateModeratorGate(messages, participants, 0);
 
     expect(created).toBe(false);
-    expect(actionTracker.counts.createPendingSummary).toBe(0);
+    expect(actionTracker.counts.createPendingModerator).toBe(0);
   });
 
-  it('blocks summary when participant 3/3 is streaming (the exact bug scenario)', () => {
+  it('blocks moderator when participant 3/3 is streaming (the exact bug scenario)', () => {
     const participants = [
       createParticipant('p1', 0),
       createParticipant('p2', 1),
@@ -941,13 +941,13 @@ describe('summary Creation Gating Simulation', () => {
       createStreamingMessage('p3', 0, 2), // LAST participant streaming
     ];
 
-    const created = simulateSummaryGate(messages, participants, 0);
+    const created = simulateModeratorGate(messages, participants, 0);
 
     expect(created).toBe(false);
-    expect(actionTracker.counts.createPendingSummary).toBe(0);
+    expect(actionTracker.counts.createPendingModerator).toBe(0);
   });
 
-  it('allows summary only when ALL participants have done parts', () => {
+  it('allows moderator only when ALL participants have done parts', () => {
     const participants = [
       createParticipant('p1', 0),
       createParticipant('p2', 1),
@@ -960,13 +960,13 @@ describe('summary Creation Gating Simulation', () => {
       createAssistantMessage('p3', 0, { partState: 'done', finishReason: 'stop', participantIndex: 2 }),
     ];
 
-    const created = simulateSummaryGate(messages, participants, 0);
+    const created = simulateModeratorGate(messages, participants, 0);
 
     expect(created).toBe(true);
-    expect(actionTracker.counts.createPendingSummary).toBe(1);
+    expect(actionTracker.counts.createPendingModerator).toBe(1);
   });
 
-  it('only creates summary ONCE even when called multiple times', () => {
+  it('only creates moderator ONCE even when called multiple times', () => {
     const participants = [createParticipant('p1', 0)];
     const messages: UIMessage[] = [
       createUserMessage(0),
@@ -982,15 +982,15 @@ describe('summary Creation Gating Simulation', () => {
     const status1 = getParticipantCompletionStatus(messages, participants, 0);
     if (status1.allComplete) {
       created1 = true;
-      actionTracker.createPendingSummary();
+      actionTracker.createPendingModerator();
     }
 
-    // In real code, tryMarkSummaryCreated would prevent this
+    // In real code, tryMarkModeratorCreated would prevent this
     // For this test, we just verify the gate would allow it
     const status2 = getParticipantCompletionStatus(messages, participants, 0);
     if (status2.allComplete) {
       created2 = true;
-      // In real code, tryMarkSummaryCreated would return false here
+      // In real code, tryMarkModeratorCreated would return false here
     }
 
     const status3 = getParticipantCompletionStatus(messages, participants, 0);
@@ -1001,7 +1001,7 @@ describe('summary Creation Gating Simulation', () => {
     expect(created1).toBe(true);
     expect(created2).toBe(true); // Gate allows, atomic check blocks
     expect(created3).toBe(true);
-    expect(actionTracker.counts.createPendingSummary).toBe(1);
+    expect(actionTracker.counts.createPendingModerator).toBe(1);
   });
 });
 

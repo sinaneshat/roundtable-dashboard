@@ -8,7 +8,23 @@ import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
 import { cache } from 'react';
 
 import { CloudflareKVCache } from './cache/cloudflare-kv-cache';
-import * as schema from './schema';
+// Import all tables directly (single source of truth)
+import * as auth from './tables/auth';
+import * as billing from './tables/billing';
+import * as chat from './tables/chat';
+import * as project from './tables/project';
+import * as upload from './tables/upload';
+import * as usage from './tables/usage';
+
+// Combine all schemas for Drizzle
+const schema = {
+  ...auth,
+  ...billing,
+  ...chat,
+  ...project,
+  ...upload,
+  ...usage,
+};
 
 // Database configuration
 const LOCAL_DB_DIR = '.wrangler/state/v3/d1/miniflare-D1DatabaseObject';
@@ -272,3 +288,10 @@ export { schema };
 
 // Export batch-related types for TypeScript enforcement
 export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-types';
+// Re-export all table definitions (barrel pattern)
+export * from './tables/auth';
+export * from './tables/billing';
+export * from './tables/chat';
+export * from './tables/project';
+export * from './tables/upload';
+export * from './tables/usage';

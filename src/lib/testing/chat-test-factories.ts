@@ -12,13 +12,12 @@
 
 import type { MessageStatus, StreamStatus } from '@/api/core/enums';
 import { ChatModes, MessageStatuses, StreamStatuses } from '@/api/core/enums';
-import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import {
   createMockParticipant as _createMockParticipant,
-  createMockSummary as _createMockSummary,
   createMockThread as _createMockThread,
 } from './api-mocks';
 
@@ -78,28 +77,6 @@ export function createMockParticipants(
 ): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) =>
     createMockParticipant(i, { threadId }));
-}
-
-// ============================================================================
-// SUMMARY FACTORIES
-// ============================================================================
-
-/**
- * Creates a mock StoredRoundSummary for testing with roundNumber and status
- * This is the preferred version for tests that specify round/status directly
- */
-export function createMockSummary(
-  roundNumber: number,
-  status: MessageStatus = MessageStatuses.COMPLETE,
-  overrides?: Partial<StoredRoundSummary>,
-): StoredRoundSummary {
-  return _createMockSummary({
-    id: `summary-${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    status,
-    ...overrides,
-  });
 }
 
 // ============================================================================
@@ -235,16 +212,18 @@ export type TestStoreState = {
   streamingRoundNumber: number | null;
   currentParticipantIndex: number;
   currentRoundNumber: number | null;
-  isCreatingSummary: boolean;
+  isModeratorStreaming: boolean;
   isWaitingForChangelog: boolean;
   hasSentPendingMessage: boolean;
   error: Error | null;
   preSearches: StoredPreSearch[];
-  summaries: StoredRoundSummary[];
   triggeredPreSearchRounds: Set<number>;
-  triggeredSummaryRounds: Set<number>;
-  triggeredSummaryIds: Set<string>;
-  createdSummaryRounds: Set<number>;
+  /** Track which rounds have had moderators created */
+  createdModeratorRounds: Set<number>;
+  /** Track which round numbers have triggered moderator streams */
+  triggeredModeratorRounds: Set<number>;
+  /** Track which moderator IDs have triggered moderator streams */
+  triggeredModeratorIds: Set<string>;
 };
 
 /**
@@ -259,16 +238,15 @@ export function createInitialStoreState(
     streamingRoundNumber: null,
     currentParticipantIndex: 0,
     currentRoundNumber: null,
-    isCreatingSummary: false,
+    isModeratorStreaming: false,
     isWaitingForChangelog: false,
     hasSentPendingMessage: false,
     error: null,
     preSearches: [],
-    summaries: [],
     triggeredPreSearchRounds: new Set(),
-    triggeredSummaryRounds: new Set(),
-    triggeredSummaryIds: new Set(),
-    createdSummaryRounds: new Set(),
+    createdModeratorRounds: new Set(),
+    triggeredModeratorRounds: new Set(),
+    triggeredModeratorIds: new Set(),
     ...overrides,
   };
 }
@@ -365,7 +343,7 @@ export type TestStreamState = {
   completedParticipants: string[];
   pendingParticipants: string[];
   preSearchComplete: boolean;
-  summaryComplete: boolean;
+  moderatorComplete: boolean;
   messages: Array<{
     id: string;
     participantId: string;
@@ -408,7 +386,7 @@ export function createTestStreamState(
     completedParticipants: [],
     pendingParticipants: ['participant-0', 'participant-1'],
     preSearchComplete: false,
-    summaryComplete: false,
+    moderatorComplete: false,
     messages: [],
     lastEventId: '',
     timestamp: Date.now(),
@@ -432,6 +410,93 @@ export function createTestKVStreamData(
       createdAt: now,
       updatedAt: now,
     },
+    ...overrides,
+  };
+}
+
+// ============================================================================
+// MODERATOR PAYLOAD FACTORIES (Moderator Data)
+// ============================================================================
+
+/**
+ * Moderator metrics type for testing
+ * Matches ModeratorMetricsSchema from API
+ */
+export type TestModeratorMetrics = {
+  engagement: number;
+  insight: number;
+  balance: number;
+  clarity: number;
+};
+
+/**
+ * Moderator payload type for testing
+ * Matches ModeratorPayload from API
+ */
+export type TestModeratorPayload = {
+  summary: string;
+  metrics: TestModeratorMetrics;
+};
+
+/**
+ * Creates mock moderator metrics for testing
+ * All values default to valid range (0-100)
+ */
+export function createMockModeratorMetrics(
+  overrides?: Partial<TestModeratorMetrics>,
+): TestModeratorMetrics {
+  return {
+    engagement: 85,
+    insight: 78,
+    balance: 82,
+    clarity: 90,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates mock moderator payload for testing
+ * Used when testing moderator streaming or moderator data display
+ *
+ * @example
+ * ```typescript
+ * // Complete moderator
+ * const moderatorData = createMockModeratorPayload();
+ *
+ * // Partial moderator (streaming state)
+ * const partialData = createMockModeratorPayload({
+ *   summary: 'Partial text...',
+ *   metrics: undefined, // Not yet streamed
+ * });
+ * ```
+ */
+export function createMockModeratorPayload(
+  overrides?: Partial<TestModeratorPayload>,
+): TestModeratorPayload {
+  return {
+    summary: 'The participants provided diverse perspectives on the topic, reaching consensus on key factors.',
+    metrics: createMockModeratorMetrics(),
+    ...overrides,
+  };
+}
+
+/**
+ * Creates partial moderator payload for streaming tests
+ * Useful for testing progressive streaming states
+ *
+ * @example
+ * ```typescript
+ * // Just summary, no metrics yet
+ * const partial = createPartialModeratorPayload({ summary: 'Test' });
+ *
+ * // Empty state
+ * const empty = createPartialModeratorPayload({});
+ * ```
+ */
+export function createPartialModeratorPayload(
+  overrides?: Partial<TestModeratorPayload>,
+): Partial<TestModeratorPayload> {
+  return {
     ...overrides,
   };
 }

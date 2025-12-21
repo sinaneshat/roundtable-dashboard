@@ -14,14 +14,14 @@
  * - Cross-chat memory: Conversations reference info from other chats in same project
  * - File auto-referencing: Files are automatically referenced when relevant
  * - Search history: Previous searches inform current conversations
- * - Summary context: Past moderator summaries provide insights
+ * - Moderator context: Past moderator analyses provide insights
  */
 
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 
-import { PreSearchDataPayloadSchema, RoundSummaryPayloadSchema } from '@/api/routes/chat/schema';
+import { PreSearchDataPayloadSchema } from '@/api/routes/chat/schema';
 import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 
 // ============================================================================
@@ -35,7 +35,7 @@ export type ProjectContextParams = {
   maxMemories?: number;
   maxMessagesPerThread?: number;
   maxSearchResults?: number;
-  maxAnalyses?: number;
+  maxModerators?: number;
   db: Awaited<ReturnType<typeof getDbAsync>>;
 };
 
@@ -79,13 +79,13 @@ export type ProjectSearchContext = {
   totalCount: number;
 };
 
-export type ProjectSummaryContext = {
-  summaries: Array<{
+export type ProjectModeratorContext = {
+  moderators: Array<{
     threadId: string;
     threadTitle: string;
     roundNumber: number;
     userQuestion: string;
-    summary: string;
+    moderator: string;
     recommendations: string[];
     keyThemes: string | null;
   }>;
@@ -109,7 +109,7 @@ export type AggregatedProjectContext = {
   memories: ProjectMemoryContext;
   chats: ProjectChatContext;
   searches: ProjectSearchContext;
-  summaries: ProjectSummaryContext;
+  moderators: ProjectModeratorContext;
   attachments: ProjectAttachmentContext;
 };
 
@@ -267,7 +267,6 @@ export async function getProjectSearchContext(
   });
 
   const searches = preSearches.map((search) => {
-    // ✅ TYPE-SAFE: Use Zod validation instead of force cast
     const parseResult = PreSearchDataPayloadSchema.safeParse(search.searchData);
     const searchData = parseResult.success ? parseResult.data : null;
 
@@ -291,16 +290,16 @@ export async function getProjectSearchContext(
 }
 
 // ============================================================================
-// Summary Context
+// Moderator Context
 // ============================================================================
 
 /**
- * Fetch moderator summaries from other threads in the project
+ * Fetch moderators from other threads in the project
  */
-export async function getProjectSummaryContext(
-  params: Pick<ProjectContextParams, 'projectId' | 'currentThreadId' | 'maxAnalyses' | 'db'>,
-): Promise<ProjectSummaryContext> {
-  const { projectId, currentThreadId, maxAnalyses = 3, db } = params;
+export async function getProjectModeratorContext(
+  params: Pick<ProjectContextParams, 'projectId' | 'currentThreadId' | 'maxModerators' | 'db'>,
+): Promise<ProjectModeratorContext> {
+  const { projectId, currentThreadId, maxModerators = 3, db } = params;
 
   // Get other threads in this project
   const projectThreads = await db.query.chatThread.findMany({
@@ -312,48 +311,82 @@ export async function getProjectSummaryContext(
   });
 
   if (projectThreads.length === 0) {
-    return { summaries: [], totalCount: 0 };
+    return { moderators: [], totalCount: 0 };
   }
 
   const threadIds = projectThreads.map(t => t.id);
   const threadTitleMap = new Map(projectThreads.map(t => [t.id, t.title]));
 
-  // Get completed summaries from project threads
-  const moderatorSummaries = await db.query.chatModeratorAnalysis.findMany({
+  // ✅ TEXT STREAMING: Query chatMessage for moderator messages
+  // Moderator messages have role: 'assistant' and metadata.isModerator: true
+  const allMessages = await db.query.chatMessage.findMany({
     where: and(
-      inArray(tables.chatModeratorAnalysis.threadId, threadIds),
-      eq(tables.chatModeratorAnalysis.status, 'complete'),
+      inArray(tables.chatMessage.threadId, threadIds),
+      eq(tables.chatMessage.role, 'assistant'),
     ),
-    orderBy: [desc(tables.chatModeratorAnalysis.createdAt)],
-    limit: maxAnalyses,
+    orderBy: [desc(tables.chatMessage.createdAt)],
     columns: {
       threadId: true,
       roundNumber: true,
-      userQuestion: true,
-      summaryData: true,
+      parts: true,
+      metadata: true,
     },
   });
 
-  const summaries = moderatorSummaries.map((summary) => {
-    // ✅ TYPE-SAFE: Use Zod validation instead of force cast
-    // Use partial schema since summaryData may not have all required fields
-    const parseResult = RoundSummaryPayloadSchema.partial().safeParse(summary.summaryData);
-    const data = parseResult.success ? parseResult.data : null;
+  // Filter for moderator messages and extract text
+  const moderatorMessages = allMessages.filter((msg) => {
+    const metadata = msg.metadata;
+    return metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true;
+  });
+
+  // Get user questions for each round
+  const userMessages = await db.query.chatMessage.findMany({
+    where: and(
+      inArray(tables.chatMessage.threadId, threadIds),
+      eq(tables.chatMessage.role, 'user'),
+    ),
+    columns: {
+      threadId: true,
+      roundNumber: true,
+      parts: true,
+    },
+  });
+
+  // Map user questions by thread+round
+  const userQuestionMap = new Map<string, string>();
+  for (const msg of userMessages) {
+    const key = `${msg.threadId}_${msg.roundNumber}`;
+    const textParts = (msg.parts || []).filter(
+      (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === 'text',
+    );
+    if (textParts.length > 0) {
+      userQuestionMap.set(key, textParts.map(p => p.text).join(' '));
+    }
+  }
+
+  const moderators = moderatorMessages.slice(0, maxModerators).map((msg) => {
+    // Extract text from parts
+    const textParts = (msg.parts || []).filter(
+      (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === 'text',
+    );
+    const moderatorText = textParts.map(p => p.text).join('\n');
+
+    const userQuestion = userQuestionMap.get(`${msg.threadId}_${msg.roundNumber}`) || '';
 
     return {
-      threadId: summary.threadId,
-      threadTitle: threadTitleMap.get(summary.threadId) || 'Unknown',
-      roundNumber: summary.roundNumber,
-      userQuestion: summary.userQuestion,
-      summary: data?.summary || '',
-      recommendations: [], // No recommendations in simplified schema
-      keyThemes: null, // No key themes in simplified schema
+      threadId: msg.threadId,
+      threadTitle: threadTitleMap.get(msg.threadId) || 'Unknown',
+      roundNumber: msg.roundNumber,
+      userQuestion,
+      moderator: moderatorText,
+      recommendations: [],
+      keyThemes: null,
     };
   });
 
   return {
-    summaries,
-    totalCount: moderatorSummaries.length,
+    moderators,
+    totalCount: moderatorMessages.length,
   };
 }
 
@@ -425,11 +458,11 @@ export async function getProjectAttachmentContext(
 export async function getAggregatedProjectContext(
   params: ProjectContextParams,
 ): Promise<AggregatedProjectContext> {
-  const [memories, chats, searches, summaries, attachments] = await Promise.all([
+  const [memories, chats, searches, moderators, attachments] = await Promise.all([
     getProjectMemories(params),
     getProjectChatContext(params),
     getProjectSearchContext(params),
-    getProjectSummaryContext(params),
+    getProjectModeratorContext(params),
     getProjectAttachmentContext(params),
   ]);
 
@@ -437,7 +470,7 @@ export async function getAggregatedProjectContext(
     memories,
     chats,
     searches,
-    summaries,
+    moderators,
     attachments,
   };
 }
@@ -482,18 +515,18 @@ export function formatProjectContextForPrompt(
     sections.push(`### Previous Research in Project\n${searchLines.join('\n')}`);
   }
 
-  // Format summary context
-  if (context.summaries.summaries.length > 0) {
-    const summaryLines = context.summaries.summaries.map((s) => {
-      const recs = s.recommendations.slice(0, 2).join(', ');
-      return `- **${s.userQuestion}**: ${s.summary.slice(0, 150)}${recs ? ` (Recommendations: ${recs})` : ''}`;
+  // Format moderator context
+  if (context.moderators.moderators.length > 0) {
+    const moderatorLines = context.moderators.moderators.map((m) => {
+      const recs = m.recommendations.slice(0, 2).join(', ');
+      return `- **${m.userQuestion}**: ${m.moderator.slice(0, 150)}${recs ? ` (Recommendations: ${recs})` : ''}`;
     });
-    sections.push(`### Key Insights from Project Summaries\n${summaryLines.join('\n')}`);
+    sections.push(`### Key Insights from Project Moderators\n${moderatorLines.join('\n')}`);
   }
 
   if (sections.length === 0) {
     return '';
   }
 
-  return `\n\n## Project Context\n\nThe following context is from other conversations, research, and summaries within this project. Use this information to provide more informed and coherent responses.\n\n${sections.join('\n\n')}`;
+  return `\n\n## Project Context\n\nThe following context is from other conversations, research, and moderator analyses within this project. Use this information to provide more informed and coherent responses.\n\n${sections.join('\n\n')}`;
 }

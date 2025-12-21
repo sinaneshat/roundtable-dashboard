@@ -95,30 +95,13 @@ export type GetThreadChangelogResponse = InferResponseType<
   ApiClientType['chat']['threads'][':id']['changelog']['$get']
 >;
 
-export type GetThreadSummariesRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':id']['summaries']['$get']
->;
-
-export type GetThreadSummariesResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':id']['summaries']['$get']
->;
-
-// Round summary types - for streaming object generation
+// Round summary types - for text streaming (like participants)
 export type SummarizeRoundRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['$post']
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['moderator']['$post']
 >;
 
 export type SummarizeRoundResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['$post']
->;
-
-// Summary resume types - for stream resumption
-export type GetSummaryResumeRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['resume']['$get']
->;
-
-export type GetSummaryResumeResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['summarize']['resume']['$get']
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['moderator']['$post']
 >;
 
 // ============================================================================
@@ -285,49 +268,6 @@ export async function getThreadChangelogService(data: GetThreadChangelogRequest)
     param: data.param ?? { id: '' },
   };
   return parseResponse(client.chat.threads[':id'].changelog.$get(params));
-}
-
-/**
- * Get round summaries for a thread
- * Protected endpoint - requires authentication (ownership check)
- *
- * Returns all round summaries for a thread ordered by round number.
- *
- * @param data - Request with param.id for thread ID
- */
-export async function getThreadSummariesService(data: GetThreadSummariesRequest) {
-  const client = await createApiClient();
-  // Internal fallback: ensure param exists
-  const params: GetThreadSummariesRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.chat.threads[':id'].summaries.$get(params));
-}
-
-/**
- * Get summary resume buffer for stream resumption
- * Protected endpoint - requires authentication (ownership check)
- *
- * ✅ PATTERN: Returns raw Response for custom header handling
- * Used by RoundSummaryStream to resume buffered summary streams
- *
- * Response codes:
- * - 200: Buffer available with X-Stream-Status header
- * - 202: Stream is still active, client should poll
- * - 204: No buffer available
- *
- * EXCEPTION: Does NOT use parseResponse because custom header handling requires
- * raw Response object.
- *
- * @param data - Request with param.threadId and param.roundNumber
- */
-export async function getSummaryResumeService(data: GetSummaryResumeRequest) {
-  const client = await createApiClient();
-  // Internal fallback: ensure param exists
-  const params: GetSummaryResumeRequest = {
-    param: data.param ?? { threadId: '', roundNumber: '' },
-  };
-  return client.chat.threads[':threadId'].rounds[':roundNumber'].summarize.resume.$get(params);
 }
 
 // ============================================================================

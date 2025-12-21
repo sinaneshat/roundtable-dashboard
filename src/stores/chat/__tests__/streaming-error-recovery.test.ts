@@ -3,7 +3,7 @@
  *
  * Tests for error handling and recovery during streaming:
  * - Participant streaming errors
- * - Summary streaming errors
+ * - Moderator streaming errors
  * - Pre-search streaming errors
  * - Partial response handling
  * - Error state cleanup
@@ -18,7 +18,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -28,6 +28,7 @@ import {
 } from '@/lib/testing';
 
 import { createChatStore } from '../store';
+import type { StoredPreSearch } from '../store-action-types';
 
 // ============================================================================
 // PARTICIPANT ERROR HANDLING TESTS
@@ -164,10 +165,10 @@ describe('participant Streaming Errors', () => {
 });
 
 // ============================================================================
-// SUMMARY ERROR HANDLING TESTS
+// MODERATOR ERROR HANDLING TESTS
 // ============================================================================
 
-describe('summary Streaming Errors', () => {
+describe('moderator Streaming Errors', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -179,126 +180,36 @@ describe('summary Streaming Errors', () => {
     state.setShowInitialUI(false);
   });
 
-  it('updates summary to failed status', () => {
+  it('clears isModeratorStreaming flag on error', () => {
     const state = getStoreState(store);
 
-    // Create summary
-    const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user', content: 'Q', roundNumber: 0 }),
-      createTestAssistantMessage({
-        id: 'p0',
-        content: 'R',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
-    ];
-    state.setMessages(messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Q',
-      threadId: 'thread-error-123',
-      mode: ChatModes.ANALYZING,
-    });
-
-    // Transition to streaming
-    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
-
-    // Error occurs - use updateSummaryError
-    state.updateSummaryError(0, 'Summary generation failed');
-
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.FAILED);
-    expect(getStoreState(store).summaries[0]!.errorMessage).toBe('Summary generation failed');
-  });
-
-  it('clears isCreatingSummary flag on error', () => {
-    const state = getStoreState(store);
-
-    state.setIsCreatingSummary(true);
-    expect(getStoreState(store).isCreatingSummary).toBe(true);
+    state.setIsModeratorStreaming(true);
+    expect(getStoreState(store).isModeratorStreaming).toBe(true);
 
     // Error handling should clear flag
-    state.setIsCreatingSummary(false);
-    expect(getStoreState(store).isCreatingSummary).toBe(false);
+    state.setIsModeratorStreaming(false);
+    expect(getStoreState(store).isModeratorStreaming).toBe(false);
   });
 
-  it('summary can be retried after failure', () => {
+  it('moderator can be retried after failure', () => {
     const state = getStoreState(store);
 
-    const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user', content: 'Q', roundNumber: 0 }),
-      createTestAssistantMessage({
-        id: 'p0',
-        content: 'R',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
-    ];
-    state.setMessages(messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Q',
-      threadId: 'thread-error-123',
-      mode: ChatModes.ANALYZING,
-    });
+    // Mark moderator as created (simulating initial attempt)
+    const wasMarked = state.tryMarkModeratorCreated(0);
+    expect(wasMarked).toBe(true);
 
-    // First attempt fails
-    state.updateSummaryError(0, 'First attempt failed');
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.FAILED);
+    // Verify it's marked
+    expect(state.hasModeratorBeenCreated(0)).toBe(true);
 
     // Clear tracking to allow retry
-    state.clearSummaryTracking(0);
+    state.clearModeratorTracking(0);
 
-    // Retry can mark summary created again
-    const canRetry = state.tryMarkSummaryCreated(0);
+    // Verify tracking cleared
+    expect(state.hasModeratorBeenCreated(0)).toBe(false);
+
+    // Retry can mark moderator created again
+    const canRetry = state.tryMarkModeratorCreated(0);
     expect(canRetry).toBe(true);
-  });
-
-  it('removes summary for retry with removeSummary', () => {
-    const state = getStoreState(store);
-
-    const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user', content: 'Q', roundNumber: 0 }),
-      createTestAssistantMessage({
-        id: 'p0',
-        content: 'R',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
-    ];
-    state.setMessages(messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Q',
-      threadId: 'thread-error-123',
-      mode: ChatModes.ANALYZING,
-    });
-
-    expect(getStoreState(store).summaries).toHaveLength(1);
-
-    // Remove failed summary
-    state.removeSummary(0);
-    expect(getStoreState(store).summaries).toHaveLength(0);
-
-    // Can create new one
-    state.clearSummaryTracking(0);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Q',
-      threadId: 'thread-error-123',
-      mode: ChatModes.ANALYZING,
-    });
-    expect(getStoreState(store).summaries).toHaveLength(1);
   });
 });
 
@@ -592,16 +503,9 @@ describe('complete Error Journey', () => {
       }),
     ];
     state.setMessages(round0Messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q0',
-      threadId: 'thread-error-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
 
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+    // Mark round 0 as having completed moderator (tracking only)
+    state.tryMarkModeratorCreated(0);
 
     // === ROUND 1: Participant 1 errors ===
     const round1UserMessage = createTestUserMessage({
@@ -647,9 +551,7 @@ describe('complete Error Journey', () => {
     expect(getStoreState(store).error).toBeNull();
     expect(getStoreState(store).messages).toHaveLength(6);
 
-    // Round 0 summary still intact
-    expect(getStoreState(store).summaries).toHaveLength(1);
-    expect(getStoreState(store).summaries[0]!.roundNumber).toBe(0);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+    // Round 0 moderator tracking still intact
+    expect(state.hasModeratorBeenCreated(0)).toBe(true);
   });
 });

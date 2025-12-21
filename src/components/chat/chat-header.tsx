@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { Logo } from '@/components/logo';
 import { useChatStore } from '@/components/providers/chat-store-provider';
@@ -157,15 +158,24 @@ function NavigationHeaderComponent({
 }
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
-  // Subscribe to all loading/streaming states to show glass effect immediately
-  const showInitialUI = useChatStore(s => s.showInitialUI);
-  const isStreaming = useChatStore(s => s.isStreaming);
-  const isCreatingThread = useChatStore(s => s.isCreatingThread);
-  const waitingToStartStreaming = useChatStore(s => s.waitingToStartStreaming);
-  const isCreatingSummary = useChatStore(s => s.isCreatingSummary);
+  // ✅ OPTIMIZATION: Batch all streaming state selectors with useShallow
+  // Prevents 5 separate re-renders when related states change
+  const {
+    showInitialUI,
+    isStreaming,
+    isCreatingThread,
+    waitingToStartStreaming,
+    isModeratorStreaming,
+  } = useChatStore(useShallow(s => ({
+    showInitialUI: s.showInitialUI,
+    isStreaming: s.isStreaming,
+    isCreatingThread: s.isCreatingThread,
+    waitingToStartStreaming: s.waitingToStartStreaming,
+    isModeratorStreaming: s.isModeratorStreaming,
+  })));
 
   // Show glass header on mobile when thread flow is active (placeholders, pending, or streaming)
-  const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isCreatingSummary;
+  const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isModeratorStreaming;
   const showGlassEffect = !showInitialUI && isThreadFlowActive;
 
   return (

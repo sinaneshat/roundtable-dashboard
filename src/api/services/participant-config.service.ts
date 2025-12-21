@@ -25,7 +25,7 @@ import type {
 } from '@/api/routes/chat/schema';
 import type { TypedLogger } from '@/api/types/logger';
 import type { DbType } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import type { DbChangelogData } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
@@ -288,7 +288,6 @@ export function buildParticipantOperations(
   // CHANGELOG ENTRIES
   // =========================================================================
 
-  // Removed participants
   if (removedParticipants.length > 0) {
     removedParticipants.forEach((removed) => {
       const modelName = extractModelName(removed.modelId);

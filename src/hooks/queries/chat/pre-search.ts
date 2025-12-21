@@ -2,7 +2,7 @@
  * Thread Pre-Search Query Hooks
  *
  * TanStack Query hooks for thread pre-search operations
- * Following EXACT pattern from summary.ts
+ * Following EXACT pattern from moderator.ts
  *
  * IMPORTANT: staleTime values MUST match server-side prefetch values
  */
@@ -19,7 +19,7 @@ import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
 
 /**
  * Hook to fetch all pre-search results for a thread
- * ✅ FOLLOWS: useThreadSummariesQuery pattern exactly
+ * ✅ FOLLOWS: useThreadModeratorsQuery pattern exactly
  * ✅ USED BY: usePreSearchOrchestrator to sync to store
  *
  * @param threadId - Thread ID

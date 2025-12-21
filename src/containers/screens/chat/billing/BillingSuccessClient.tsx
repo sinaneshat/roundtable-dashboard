@@ -7,7 +7,7 @@ import { startTransition, useEffect, useRef, useState } from 'react';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
-import { PlanSummaryCard, StatusPage, StatusPageActions } from '@/components/billing';
+import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations/checkout';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
@@ -150,7 +150,7 @@ export function BillingSuccessClient() {
       )}
     >
       {displaySubscription && (
-        <PlanSummaryCard
+        <PlanOverviewCard
           tierName={tierName}
           description={t(`subscription.tiers.${currentTier}.description`)}
           status={displaySubscription.status}

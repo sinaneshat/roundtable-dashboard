@@ -783,8 +783,8 @@ function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, st
   if (metadata.resumedFromBuffer !== undefined) {
     headers['X-Resumed-From-Buffer'] = String(metadata.resumedFromBuffer);
   }
-  if (metadata.summaryId !== undefined) {
-    headers['X-Summary-Id'] = metadata.summaryId;
+  if (metadata.moderatorMessageId !== undefined) {
+    headers['X-Moderator-Message-Id'] = metadata.moderatorMessageId;
   }
 
   return headers;
@@ -886,8 +886,8 @@ function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<st
   if (metadata.roundNumber !== undefined) {
     headers['X-Round-Number'] = String(metadata.roundNumber);
   }
-  if (metadata.summaryId !== undefined) {
-    headers['X-Summary-Id'] = metadata.summaryId;
+  if (metadata.moderatorMessageId !== undefined) {
+    headers['X-Moderator-Message-Id'] = metadata.moderatorMessageId;
   }
   if (metadata.streamStatus !== undefined) {
     headers['X-Stream-Status'] = metadata.streamStatus;

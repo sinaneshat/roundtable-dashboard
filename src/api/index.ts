@@ -89,10 +89,8 @@ import {
   getThreadPreSearchesHandler,
   getThreadSlugStatusHandler,
   getThreadStreamResumptionStateHandler,
-  getThreadSummariesHandler,
   listCustomRolesHandler,
   listThreadsHandler,
-  resumeSummaryStreamHandler,
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
   streamChatHandler,
@@ -119,10 +117,8 @@ import {
   getThreadRoute,
   getThreadSlugStatusRoute,
   getThreadStreamResumptionStateRoute,
-  getThreadSummariesRoute,
   listCustomRolesRoute,
   listThreadsRoute,
-  resumeSummaryStreamRoute,
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
   streamChatRoute,
@@ -288,7 +284,7 @@ app.use('*', async (c, next) => {
   // Skip timeout for streaming endpoints (chat streaming and round summary)
   // AI SDK v5 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
   // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
-  if (c.req.path.includes('/stream') || c.req.path.includes('/summarize') || c.req.path.includes('/chat')) {
+  if (c.req.path.includes('/stream') || c.req.path.includes('/moderator') || c.req.path.includes('/chat')) {
     return next();
   }
   return timeout(15000)(c, next);
@@ -355,8 +351,8 @@ app.use('*', (c, next) => {
 // ETag support - Skip for streaming endpoints to avoid buffering
 app.use('*', async (c, next) => {
   // Skip ETag for streaming endpoints as it buffers the entire response
-  // Must skip for /chat (AI streaming), /stream, and /summarize (round summary streaming)
-  if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/summarize')) {
+  // Must skip for /chat (AI streaming), /stream, and /moderator (round summary streaming)
+  if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/moderator')) {
     return next();
   }
   return etag()(c, next);
@@ -451,8 +447,8 @@ app.use('/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection
 app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches for thread
 
 // Round summary routes (protected)
-app.use('/chat/threads/:threadId/rounds/:roundNumber/summarize', csrfProtection, requireSession);
-app.use('/chat/threads/:threadId/rounds/:roundNumber/summarize/resume', requireSession); // GET resume (no CSRF for safe method)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection, requireSession);
+app.use('/chat/threads/:threadId/rounds/:roundNumber/moderator/resume', requireSession); // GET resume (no CSRF for safe method)
 app.use('/chat/threads/:id/summaries', requireSession); // GET summaries for thread
 
 // Round feedback routes (protected)
@@ -566,9 +562,7 @@ const appRoutes = app
   .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
   .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)
   // Round Summary (protected, backend-triggered only)
-  .openapi(getThreadSummariesRoute, getThreadSummariesHandler) // Get persisted round summaries (read-only)
-  .openapi(summarizeRoundRoute, summarizeRoundHandler) // Stream round summary generation
-  .openapi(resumeSummaryStreamRoute, resumeSummaryStreamHandler) // Resume buffered summary stream
+  .openapi(summarizeRoundRoute, summarizeRoundHandler) // Stream round summary generation (text streaming like participants)
   // Round Feedback (protected)
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread
@@ -773,4 +767,4 @@ export default appRoutes;
 // ============================================================================
 
 // Workflows have been removed in favor of user-initiated streaming summary generation
-// Round summaries are now triggered exclusively via POST /chat/threads/:id/rounds/:roundNumber/summarize
+// Round summaries are now triggered exclusively via POST /chat/threads/:id/rounds/:roundNumber/moderator

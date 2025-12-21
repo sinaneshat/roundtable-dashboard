@@ -8,12 +8,12 @@
  * - POST /api/v1/chat/message - Send new message
  * - GET /api/v1/chat/thread/:id/stream - Resume stream
  * - POST /api/v1/chat/thread/:id/pre-search - Trigger pre-search
- * - POST /api/v1/chat/thread/:id/summary - Trigger summary
+ * - POST /api/v1/chat/thread/:id/moderator - Trigger moderator
  *
  * State Transitions:
  * - idle → streaming → complete
  * - pre-search: pending → streaming → complete/failed
- * - summary: pending → streaming → complete/failed
+ * - moderator: pending → streaming → complete/failed
  *
  * Key Validations:
  * - Correct state updates on API responses
@@ -28,7 +28,6 @@ import { MessageStatuses, StreamStatuses } from '@/api/core/enums';
 import {
   createInitialStoreState,
   createMockStoredPreSearch,
-  createMockSummary,
 } from '@/lib/testing';
 
 // ============================================================================
@@ -182,7 +181,7 @@ describe('pre-Search API Responses', () => {
       const searchData = {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
         results: [],
-        summary: 'Test summary',
+        moderatorSummary: 'Test moderator',
         successCount: 1,
         failureCount: 0,
         totalResults: 3,
@@ -237,114 +236,60 @@ describe('pre-Search API Responses', () => {
 });
 
 // ============================================================================
-// ANALYSIS API RESPONSE TESTS
+// MODERATOR TRACKING TESTS (Moderator creation/streaming tracking remains)
 // ============================================================================
 
-describe('summary API Responses', () => {
-  describe('summary Creation', () => {
-    it('creates pending summary when triggered', () => {
-      const state = createInitialStoreState();
-
-      const summary = createMockSummary(0, MessageStatuses.PENDING);
-      state.summaries.push(summary);
-      state.createdSummaryRounds.add(0);
-
-      expect(state.summaries).toHaveLength(1);
-      expect(state.createdSummaryRounds.has(0)).toBe(true);
-    });
-
-    it('sets isCreatingSummary flag during creation', () => {
-      const state = createInitialStoreState();
-
-      state.isCreatingSummary = true;
-      expect(state.isCreatingSummary).toBe(true);
-
-      // After creation complete
-      state.isCreatingSummary = false;
-      expect(state.isCreatingSummary).toBe(false);
-    });
-
-    it('prevents duplicate summary creation via tracking', () => {
+describe('moderator Tracking', () => {
+  describe('moderator Creation Tracking', () => {
+    it('tracks moderator creation to prevent duplicates', () => {
       const state = createInitialStoreState();
 
       const roundNumber = 0;
 
       // First creation
-      if (!state.createdSummaryRounds.has(roundNumber)) {
-        state.createdSummaryRounds.add(roundNumber);
-        state.summaries.push(createMockSummary(roundNumber, MessageStatuses.PENDING));
+      if (!state.createdModeratorRounds.has(roundNumber)) {
+        state.createdModeratorRounds.add(roundNumber);
       }
 
-      // Duplicate attempt
-      if (!state.createdSummaryRounds.has(roundNumber)) {
-        state.summaries.push(createMockSummary(roundNumber, MessageStatuses.PENDING));
-      }
+      expect(state.createdModeratorRounds.has(roundNumber)).toBe(true);
 
-      expect(state.summaries).toHaveLength(1);
+      // Duplicate attempt blocked
+      const canCreateAgain = !state.createdModeratorRounds.has(roundNumber);
+      expect(canCreateAgain).toBe(false);
     });
   });
 
-  describe('summary Stream Tracking', () => {
-    it('prevents duplicate stream triggers via triggeredSummaryRounds', () => {
+  describe('moderator Stream Tracking', () => {
+    it('prevents duplicate stream triggers via triggeredModeratorRounds', () => {
       const state = createInitialStoreState();
 
       // First stream trigger
       const roundNumber = 0;
-      if (!state.triggeredSummaryRounds.has(roundNumber)) {
-        state.triggeredSummaryRounds.add(roundNumber);
+      if (!state.triggeredModeratorRounds.has(roundNumber)) {
+        state.triggeredModeratorRounds.add(roundNumber);
         // Trigger stream...
       }
 
-      expect(state.triggeredSummaryRounds.has(roundNumber)).toBe(true);
+      expect(state.triggeredModeratorRounds.has(roundNumber)).toBe(true);
 
       // Second trigger should be blocked
-      const shouldTrigger = !state.triggeredSummaryRounds.has(roundNumber);
+      const shouldTrigger = !state.triggeredModeratorRounds.has(roundNumber);
       expect(shouldTrigger).toBe(false);
     });
 
-    it('prevents duplicate stream triggers via triggeredSummaryIds', () => {
+    it('prevents duplicate stream triggers via triggeredModeratorIds', () => {
       const state = createInitialStoreState();
 
-      const summaryId = 'summary-123';
+      const moderatorMessageId = 'moderator-123';
 
       // First trigger
-      if (!state.triggeredSummaryIds.has(summaryId)) {
-        state.triggeredSummaryIds.add(summaryId);
+      if (!state.triggeredModeratorIds.has(moderatorMessageId)) {
+        state.triggeredModeratorIds.add(moderatorMessageId);
       }
 
       // Second trigger blocked
-      const shouldTrigger = !state.triggeredSummaryIds.has(summaryId);
+      const shouldTrigger = !state.triggeredModeratorIds.has(moderatorMessageId);
       expect(shouldTrigger).toBe(false);
-    });
-  });
-
-  describe('summary Status Updates', () => {
-    it('updates status to streaming when stream starts', () => {
-      const state = createInitialStoreState();
-      state.summaries = [createMockSummary(0, MessageStatuses.PENDING)];
-
-      state.summaries[0]!.status = MessageStatuses.STREAMING;
-
-      expect(state.summaries[0]?.status).toBe(MessageStatuses.STREAMING);
-    });
-
-    it('updates status to complete with summaryData', () => {
-      const state = createInitialStoreState();
-      state.summaries = [createMockSummary(0, MessageStatuses.STREAMING)];
-
-      const summaryData = {
-        keyInsights: ['Insight 1', 'Insight 2'],
-        participantAnalyses: [],
-        verdict: 'The participants agreed on key points.',
-        recommendations: ['Consider X', 'Try Y'],
-      };
-
-      state.summaries[0]!.status = MessageStatuses.COMPLETE;
-      state.summaries[0]!.summaryData = summaryData;
-      state.summaries[0]!.completedAt = new Date();
-
-      expect(state.summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
-      expect(state.summaries[0]?.summaryData).toBeDefined();
     });
   });
 });
@@ -564,16 +509,16 @@ describe('state Consistency', () => {
     it('clears tracking sets on round completion', () => {
       const state = createInitialStoreState();
       state.triggeredPreSearchRounds.add(0);
-      state.triggeredSummaryRounds.add(0);
-      state.triggeredSummaryIds.add('summary-0');
-      state.createdSummaryRounds.add(0);
+      state.triggeredModeratorRounds.add(0);
+      state.triggeredModeratorIds.add('moderator-0');
+      state.createdModeratorRounds.add(0);
 
-      // Clear for new round (simulating clearAnalysisTracking)
-      state.triggeredSummaryRounds.clear();
-      state.triggeredSummaryIds.clear();
+      // Clear for new round (simulating clearModeratorTracking)
+      state.triggeredModeratorRounds.clear();
+      state.triggeredModeratorIds.clear();
 
-      expect(state.triggeredSummaryRounds.size).toBe(0);
-      expect(state.triggeredSummaryIds.size).toBe(0);
+      expect(state.triggeredModeratorRounds.size).toBe(0);
+      expect(state.triggeredModeratorIds.size).toBe(0);
     });
   });
 });
@@ -613,24 +558,24 @@ describe('idempotency', () => {
     });
   });
 
-  describe('summary Trigger Idempotency', () => {
-    it('same summary cannot be triggered twice (by ID)', () => {
+  describe('moderator Trigger Idempotency', () => {
+    it('same moderator cannot be triggered twice (by ID)', () => {
       const state = createInitialStoreState();
 
-      const summaryId = 'summary-123';
-      state.triggeredSummaryIds.add(summaryId);
+      const moderatorMessageId = 'moderator-123';
+      state.triggeredModeratorIds.add(moderatorMessageId);
 
-      const canTrigger = !state.triggeredSummaryIds.has(summaryId);
+      const canTrigger = !state.triggeredModeratorIds.has(moderatorMessageId);
       expect(canTrigger).toBe(false);
     });
 
-    it('same round cannot trigger summary twice (by round)', () => {
+    it('same round cannot trigger moderator twice (by round)', () => {
       const state = createInitialStoreState();
 
       const roundNumber = 0;
-      state.triggeredSummaryRounds.add(roundNumber);
+      state.triggeredModeratorRounds.add(roundNumber);
 
-      const canTrigger = !state.triggeredSummaryRounds.has(roundNumber);
+      const canTrigger = !state.triggeredModeratorRounds.has(roundNumber);
       expect(canTrigger).toBe(false);
     });
   });

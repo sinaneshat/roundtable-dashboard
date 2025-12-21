@@ -214,7 +214,7 @@ CREATE TABLE `chat_custom_role` (
 	`user_id` text NOT NULL,
 	`name` text NOT NULL,
 	`description` text,
-	`system_prompt` text NOT NULL,
+	`system_prompt` text,
 	`metadata` text,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
@@ -243,25 +243,6 @@ CREATE INDEX `chat_message_participant_idx` ON `chat_message` (`participant_id`)
 CREATE INDEX `chat_message_role_idx` ON `chat_message` (`role`);--> statement-breakpoint
 CREATE INDEX `chat_message_thread_created_idx` ON `chat_message` (`thread_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_message_thread_round_idx` ON `chat_message` (`thread_id`,`round_number`);--> statement-breakpoint
-CREATE TABLE `chat_moderator_analysis` (
-	`id` text PRIMARY KEY NOT NULL,
-	`thread_id` text NOT NULL,
-	`round_number` integer NOT NULL,
-	`mode` text NOT NULL,
-	`user_question` text NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`analysis_data` text,
-	`participant_message_ids` text NOT NULL,
-	`error_message` text,
-	`completed_at` integer,
-	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `chat_moderator_analysis_thread_idx` ON `chat_moderator_analysis` (`thread_id`);--> statement-breakpoint
-CREATE INDEX `chat_moderator_analysis_round_idx` ON `chat_moderator_analysis` (`thread_id`,`round_number`);--> statement-breakpoint
-CREATE INDEX `chat_moderator_analysis_created_idx` ON `chat_moderator_analysis` (`created_at`);--> statement-breakpoint
-CREATE INDEX `chat_moderator_analysis_status_idx` ON `chat_moderator_analysis` (`status`);--> statement-breakpoint
 CREATE TABLE `chat_participant` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,

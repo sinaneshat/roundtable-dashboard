@@ -33,16 +33,17 @@ import { isObject, isToolCall } from '@/lib/utils/type-guards';
  * ✅ AI SDK V5 TYPE REUSE: Use LanguageModelUsage from AI SDK
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/language-model-usage
  *
- * This replaces our hardcoded AISDKTokenUsage type with the official AI SDK type
- * Ensures type consistency across the codebase
+ * Import LanguageModelUsage directly from 'ai' package for single source of truth
+ * Example: import { type LanguageModelUsage } from 'ai';
  */
-export type { LanguageModelUsage } from 'ai';
 
 /**
  * ✅ AI SDK V5 TOOL TYPES: Use official AI SDK tool types
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
+ *
+ * Import tool types directly from 'ai' package for single source of truth
+ * Example: import { type ToolCallPart, type ToolResultPart } from 'ai';
  */
-export type { ToolCallPart, ToolResultPart } from 'ai';
 
 /**
  * LLM tracking context - captures all relevant context for PostHog event enrichment

@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 import type { MessageStatus } from '@/api/core/enums';
 import { MessageStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import { createMockPreSearch } from '@/lib/testing/helpers';
+import { createMockPreSearch } from '@/lib/testing';
 
 // ============================================================================
 // TEST HELPER TYPES
@@ -46,7 +46,7 @@ type PostRefreshState = {
  * Creates mock pre-search with proper typing
  * ✅ ENUM PATTERN: Uses MessageStatus type from enums
  */
-function createTestPreSearch(overrides: {
+function createTestPreSearch(overrides?: {
   id?: string;
   threadId?: string;
   roundNumber?: number;
@@ -56,14 +56,14 @@ function createTestPreSearch(overrides: {
   completedAt?: Date | null;
 }): StoredPreSearch {
   return createMockPreSearch({
-    id: overrides.id ?? 'presearch-123',
-    threadId: overrides.threadId ?? 'thread-123',
-    roundNumber: overrides.roundNumber ?? 0,
-    status: overrides.status ?? MessageStatuses.PENDING,
-    userQuery: overrides.userQuery ?? 'Test query',
-    createdAt: overrides.createdAt ?? new Date(),
-    completedAt: overrides.completedAt ?? null,
-  }) as StoredPreSearch;
+    id: overrides?.id ?? 'presearch-123',
+    threadId: overrides?.threadId ?? 'thread-123',
+    roundNumber: overrides?.roundNumber ?? 0,
+    status: overrides?.status ?? MessageStatuses.PENDING,
+    userQuery: overrides?.userQuery ?? 'Test query',
+    createdAt: overrides?.createdAt ?? new Date(),
+    completedAt: overrides?.completedAt ?? null,
+  });
 }
 
 /**

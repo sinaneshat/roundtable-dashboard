@@ -13,9 +13,8 @@ src/stores/chat/
 └── actions/                     # Store-specific action hooks
     ├── form-actions.ts          # Form submission orchestration
     ├── feedback-actions.ts      # Round feedback management
-    ├── summary-orchestrator.ts  # Summary server sync
-    ├── summary-deduplication.ts # Summary deduplication logic
-    └── chat-summary.ts          # Summary cache management
+    ├── flow-state-machine.ts    # Round flow state management
+    └── incomplete-round-resumption.ts  # Resuming incomplete rounds
 ```
 
 ## Architecture Principles
@@ -88,7 +87,8 @@ function ChatScreen() {
 
   return (
     <form onSubmit={formActions.handleCreateThread}>
-      <RoundSummaryCard />
+      {/* Moderator renders via ChatMessageList + ModelMessageCard */}
+      <ChatMessageList messages={messages} />
     </form>
   );
 }
@@ -116,17 +116,26 @@ function Component() {
 5. **Testability**: Action hooks can be tested independently
 6. **Official Pattern**: Follows Zustand v5 and Next.js App Router best practices
 
+## Moderator Architecture
+
+The moderator (round summary) functionality works as follows:
+
+1. **Trigger**: `useModeratorTrigger` hook calls `/api/v1/chat/summary` endpoint
+2. **Backend**: Streams moderator message as assistant message with `isModerator: true` metadata
+3. **Storage**: Saved to database as regular message with moderator metadata flag
+4. **Rendering**: Frontend renders via `ChatMessageList` → `ModelMessageCard` component
+5. **Display**: Moderator messages use special styling/header to distinguish from participant messages
+
+No separate summary components or panels - moderators are integrated into the message timeline.
+
 ## Migration Notes
 
 Moved from `hooks/utils/` to `stores/chat/actions/`:
 - `use-chat-form-actions.ts` → `actions/form-actions.ts`
 - `use-feedback-actions.ts` → `actions/feedback-actions.ts`
-- `use-summary-orchestrator.ts` → `actions/summary-orchestrator.ts`
-- `use-summary-deduplication.ts` → `actions/summary-deduplication.ts`
-- `use-chat-summary.ts` → `actions/chat-summary.ts`
 
 Consolidated to store subscriptions (deleted):
-- `use-summary-creation.ts` → Automatic summary triggering in store.ts
+- Summary-specific hooks → Moderator now uses message streaming architecture
 - Streaming trigger effect → Automatic streaming trigger in store.ts
 - Pending message orchestration → Automatic message sending in store.ts
 

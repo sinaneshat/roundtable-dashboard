@@ -17,22 +17,20 @@
 import { useRef } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import { MessageStatuses } from '@/api/core/enums';
-import type { ChatParticipant, RoundSummaryAIContent, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
-import { ScrollFadeEntrance, ScrollFromBottom, ScrollFromTop } from '@/components/ui/motion';
+import { ScrollFadeEntrance, ScrollFromTop } from '@/components/ui/motion';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
 import { messageHasError } from '@/lib/schemas/message-metadata';
-import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-schemas';
+import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils/metadata';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
 import { PreSearchCard } from './pre-search-card';
 import { RoundCopyAction } from './round-copy-action';
 import { RoundFeedback } from './round-feedback';
-import { RoundSummaryCard } from './round-summary/round-summary-card';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
 // Stable constants to prevent render loops
@@ -60,10 +58,6 @@ type ThreadTimelineProps = {
   pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
   getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
 
-  // Summary handlers
-  onSummaryStreamStart?: (roundNumber: number) => void;
-  onSummaryStreamComplete?: (roundNumber: number, data?: RoundSummaryAIContent | null, error?: unknown) => void;
-
   // Error retry
   onRetry?: () => void;
 
@@ -75,7 +69,6 @@ type ThreadTimelineProps = {
 
   // Demo mode
   demoPreSearchOpen?: boolean;
-  demoSummaryOpen?: boolean;
 
   // Data readiness
   isDataReady?: boolean;
@@ -89,6 +82,10 @@ type ThreadTimelineProps = {
   // ✅ BUG FIX: Set of round numbers that have complete summaries
   // Used to prevent showing pending cards for rounds that already completed
   completedRoundNumbers?: Set<number>;
+
+  // ✅ MODERATOR FLAG: Indicates moderator is streaming (for input blocking)
+  // Moderator message now renders via normal message flow
+  isModeratorStreaming?: boolean;
 };
 
 // Stable empty set to prevent render loops
@@ -107,17 +104,15 @@ export function ThreadTimeline({
   feedbackByRound = EMPTY_FEEDBACK_MAP,
   pendingFeedback = null,
   getFeedbackHandler,
-  onSummaryStreamStart,
-  onSummaryStreamComplete,
   onRetry,
   isReadOnly = false,
   preSearches = EMPTY_PRE_SEARCHES,
   demoPreSearchOpen,
-  demoSummaryOpen,
   isDataReady = true,
   maxContentHeight,
   skipEntranceAnimations = false,
   completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
+  isModeratorStreaming = false,
 }: ThreadTimelineProps) {
   // TanStack Virtual hook - official pattern
   const {
@@ -177,17 +172,6 @@ export function ThreadTimeline({
         const item = timelineItems[virtualItem.index];
         if (!item)
           return null;
-
-        // Extract round number for feedback logic
-        const roundNumber = item.type === 'messages'
-          ? extractRoundNumber(item.data[0]?.metadata)
-          : item.type === 'summary'
-            ? item.data.roundNumber
-            : item.type === 'changelog'
-              ? item.data[0]?.roundNumber ?? DEFAULT_ROUND_NUMBER
-              : item.type === 'pre-search'
-                ? item.data.roundNumber
-                : DEFAULT_ROUND_NUMBER;
 
         return (
           // Official TanStack Virtual pattern:
@@ -277,86 +261,69 @@ export function ThreadTimeline({
                       maxContentHeight={maxContentHeight}
                       skipEntranceAnimations={skipEntranceAnimations}
                       completedRoundNumbers={completedRoundNumbers}
+                      isModeratorStreaming={isModeratorStreaming}
+                      roundNumber={item.roundNumber}
                     />
                   </UnifiedErrorBoundary>
 
-                  {/* Round feedback and copy actions */}
+                  {/* Round feedback and copy actions - shown after moderator message completes */}
                   {!isStreaming && !isReadOnly && (() => {
+                    // Find moderator message in this round using type-safe utility
+                    const moderatorMessage = item.data.find(msg => isModeratorMessage(msg));
+
+                    // Only show feedback/copy after moderator finishes
+                    if (!moderatorMessage)
+                      return null;
+                    const moderatorMeta = getModeratorMetadata(moderatorMessage.metadata);
+                    if (!moderatorMeta?.finishReason)
+                      return null;
+
                     const hasRoundError = item.data.some((msg) => {
                       const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
                       return parseResult.success && messageHasError(parseResult.data);
                     });
 
-                    // Only show feedback after summary is complete
-                    const roundSummary = timelineItems.find(
-                      ti => ti.type === 'summary' && ti.data.roundNumber === roundNumber,
-                    );
-                    const isRoundComplete = roundSummary
-                      && roundSummary.type === 'summary'
-                      && roundSummary.data.status === MessageStatuses.COMPLETE;
-
-                    if (!isRoundComplete)
-                      return null;
+                    // Get moderator text for copy action
+                    const moderatorText = moderatorMessage.parts
+                      ?.filter(part => part.type === 'text')
+                      .map(part => (part as { text: string }).text)
+                      .join('\n');
 
                     return (
                       <Actions className="mt-3 mb-2">
                         {!hasRoundError && (
                           <RoundFeedback
-                            key={`feedback-${threadId}-${roundNumber}`}
+                            key={`feedback-${threadId}-${item.roundNumber}`}
                             threadId={threadId}
-                            roundNumber={roundNumber}
-                            currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                            roundNumber={item.roundNumber}
+                            currentFeedback={feedbackByRound.get(item.roundNumber) ?? null}
                             onFeedbackChange={
                               !getFeedbackHandler
                                 ? () => {}
-                                : getFeedbackHandler(roundNumber)
+                                : getFeedbackHandler(item.roundNumber)
                             }
                             disabled={isStreaming}
-                            isPending={pendingFeedback?.roundNumber === roundNumber}
+                            isPending={pendingFeedback?.roundNumber === item.roundNumber}
                             pendingType={
-                              pendingFeedback?.roundNumber === roundNumber
+                              pendingFeedback?.roundNumber === item.roundNumber
                                 ? pendingFeedback?.type ?? null
                                 : null
                             }
                           />
                         )}
                         <RoundCopyAction
-                          key={`copy-${threadId}-${roundNumber}`}
+                          key={`copy-${threadId}-${item.roundNumber}`}
                           messages={item.data}
                           participants={participants}
-                          roundNumber={roundNumber}
+                          roundNumber={item.roundNumber}
                           threadTitle={threadTitle}
+                          moderatorText={moderatorText}
                         />
                       </Actions>
                     );
                   })()}
                 </div>
               </ScrollFadeEntrance>
-            )}
-
-            {/* Round Summary items - slides UP from bottom */}
-            {/* ✅ FIX: Don't use shouldAnimate - let whileInView handle scroll-triggered animation */}
-            {item.type === 'summary' && (
-              <ScrollFromBottom
-                skipAnimation={skipEntranceAnimations}
-              >
-                <div className="w-full mb-4">
-                  <RoundSummaryCard
-                    summary={item.data}
-                    threadId={threadId}
-                    isLatest={virtualItem.index === timelineItems.length - 1}
-                    streamingRoundNumber={streamingRoundNumber}
-                    onStreamStart={() => {
-                      onSummaryStreamStart?.(item.data.roundNumber);
-                    }}
-                    onStreamComplete={(completedData, error) => {
-                      onSummaryStreamComplete?.(item.data.roundNumber, completedData, error);
-                    }}
-                    demoOpen={demoSummaryOpen}
-                    demoShowContent={demoSummaryOpen ? item.data.summaryData !== undefined : undefined}
-                  />
-                </div>
-              </ScrollFromBottom>
             )}
           </div>
         );

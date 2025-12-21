@@ -1,7 +1,7 @@
 /**
  * Pre-Search Handler
  *
- * ✅ FOLLOWS: backend-patterns.md and summary.handler.ts patterns
+ * ✅ FOLLOWS: backend-patterns.md and moderator.handler.ts patterns
  * ✅ DATABASE-FIRST: Creates record before streaming
  * ✅ IDEMPOTENT: Returns existing results if already completed
  * ✅ SSE STREAMING: Streams search execution progress
@@ -13,7 +13,7 @@
  * - Aligned with AI SDK v5 streamObject pattern
  * - Maintained PreSearchDataPayloadSchema compatibility
  *
- * Architecture matches: src/api/routes/chat/handlers/summary.handler.ts
+ * Architecture matches: src/api/routes/chat/handlers/moderator.handler.ts
  * Reference: backend-patterns.md lines 546-693 (SSE Streaming Pattern)
  */
 
@@ -60,7 +60,7 @@ import {
 } from '@/api/services/web-search.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 
@@ -175,7 +175,7 @@ async function analyzeImagesForSearchContext(
 /**
  * Execute pre-search with SSE streaming
  *
- * **DATABASE-FIRST PATTERN** (matches summary.handler.ts):
+ * **DATABASE-FIRST PATTERN** (matches moderator.handler.ts):
  * 1. Check for existing completed search → return immediately
  * 2. Check for in-progress search → return conflict
  * 3. Create/update record with PENDING status
@@ -202,7 +202,7 @@ async function analyzeImagesForSearchContext(
  * - Maintained backward compatibility with PreSearchDataPayloadSchema
  *
  * **PATTERN**: Identical to summarizeRoundHandler architecture
- * **REFERENCE**: summary.handler.ts:227-648, backend-patterns.md:546-693
+ * **REFERENCE**: moderator.handler.ts:227-648, backend-patterns.md:546-693
  */
 export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute, ApiEnv> = createHandler(
   {
@@ -330,7 +330,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // ============================================================================
     // ✅ REFACTORED: Direct streamObject integration (no callbacks)
     // ============================================================================
-    // Pattern from summary.handler.ts:91-120
+    // Pattern from moderator.handler.ts:91-120
     // Uses AI SDK v5 streamObject with partialObjectStream iterator
     // ✅ STREAM BUFFER: Generate stream ID and initialize buffer for resumption
     const streamId = generatePreSearchStreamId(threadId, roundNum);

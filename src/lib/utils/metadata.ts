@@ -22,14 +22,17 @@ import { z } from 'zod';
 import type {
   DbAssistantMessageMetadata,
   DbMessageMetadata,
+  DbModeratorMessageMetadata,
   DbPreSearchMessageMetadata,
   DbUserMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import {
   DbAssistantMessageMetadataSchema,
   DbMessageMetadataSchema,
+  DbModeratorMessageMetadataSchema,
   DbPreSearchMessageMetadataSchema,
   DbUserMessageMetadataSchema,
+  isModeratorMessageMetadata,
   isParticipantMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
@@ -115,6 +118,34 @@ export function getPreSearchMetadata(
   return result.success ? result.data : null;
 }
 
+/**
+ * Type-safe moderator metadata extraction
+ * Returns validated ModeratorMessageMetadata or null
+ * ✅ TEXT STREAMING: Used to identify moderator messages in the messages array
+ */
+export function getModeratorMetadata(
+  metadata: unknown,
+): DbModeratorMessageMetadata | null {
+  const result = DbModeratorMessageMetadataSchema.safeParse(metadata);
+  return result.success ? result.data : null;
+}
+
+/**
+ * Check if a message is from the moderator
+ * ✅ TEXT STREAMING: Moderator messages are now in the messages array
+ * @param message - UIMessage or ChatMessage to check
+ * @returns true if the message is from the moderator
+ */
+export function isModeratorMessage(
+  message: UIMessage | ChatMessage,
+): boolean {
+  if (!message.metadata) {
+    return false;
+  }
+  const meta = getMessageMetadata(message.metadata);
+  return meta !== undefined && isModeratorMessageMetadata(meta);
+}
+
 // ============================================================================
 // Message-Level Helpers
 // ============================================================================
@@ -122,10 +153,11 @@ export function getPreSearchMetadata(
 /**
  * Extract metadata from UIMessage with type validation
  * Handles both frontend and backend message types
+ * ✅ TEXT STREAMING: Now includes moderator message metadata
  */
 export function extractMessageMetadata(
   message: UIMessage | ChatMessage,
-): DbUserMessageMetadata | DbAssistantMessageMetadata | DbPreSearchMessageMetadata | null {
+): DbUserMessageMetadata | DbAssistantMessageMetadata | DbPreSearchMessageMetadata | DbModeratorMessageMetadata | null {
   if (!message.metadata) {
     return null;
   }
@@ -134,6 +166,12 @@ export function extractMessageMetadata(
   const userResult = getUserMetadata(message.metadata);
   if (userResult)
     return userResult;
+
+  // ✅ TEXT STREAMING: Check moderator before regular assistant
+  // (moderator is a specialized assistant type)
+  const moderatorResult = getModeratorMetadata(message.metadata);
+  if (moderatorResult)
+    return moderatorResult;
 
   const assistantResult = getAssistantMetadata(message.metadata);
   if (assistantResult)

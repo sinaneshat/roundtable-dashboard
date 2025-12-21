@@ -1,66 +1,77 @@
 /**
- * Summary Utility Functions
+ * Moderator Utility Functions
  *
- * Shared utilities for working with round summaries in chat threads.
- * These functions handle summary deduplication, status priority, and
+ * Shared utilities for working with moderators in chat threads.
+ * These functions handle moderator deduplication, status priority, and
  * validation logic used across ChatOverviewScreen and ChatThreadScreen.
  *
- * @module lib/utils/summary-utils
+ * MODERATOR ARCHITECTURE:
+ * - Moderators are triggered via moderator messages (assistant role with isModerator: true)
+ * - useModeratorTrigger creates moderator messages after all participants complete
+ * - Moderator streaming populates moderatorData field in StoredModeratorData
+ * - These utilities validate and process the resulting moderator data
+ *
+ * @module lib/utils/moderator-utils
  */
 
 import type { DeepPartial } from 'ai';
 
 import { MessageStatuses } from '@/api/core/enums';
-import type { RoundSummaryPayload, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { ModeratorPayload, StoredModeratorData } from '@/api/routes/chat/schema';
 import { getStatusPriority } from '@/stores/chat';
 
 import { isObject } from './type-guards';
 
 // ============================================================================
-// SUMMARY DATA COMPLETENESS - SINGLE SOURCE OF TRUTH
+// MODERATOR DATA COMPLETENESS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
 /**
- * Summary data input type
+ * Moderator data input type
  * Accepts both complete data and AI SDK streaming partial data
  *
  * DeepPartial<T> from AI SDK makes all properties recursively optional,
  * including array elements, which differs from TypeScript's Partial<T>
  */
-type SummaryDataInput
-  = | RoundSummaryPayload
-    | DeepPartial<RoundSummaryPayload>
+type ModeratorDataInput
+  = | ModeratorPayload
+    | DeepPartial<ModeratorPayload>
     | null
     | undefined;
 
 /**
- * Check if summary data has displayable content
+ * Check if moderator data has displayable content
  *
  * Type guard that narrows the input type from nullable to non-nullable.
- * Handles both complete summary data (RoundSummaryPayload) and
- * partial streaming data (AI SDK's DeepPartial<RoundSummaryPayload>).
+ * Handles both complete moderator data (ModeratorPayload) and
+ * partial streaming data (AI SDK's DeepPartial<ModeratorPayload>).
  *
- * For the new simplified schema:
- * - summary: string (the main summary text)
+ * MODERATOR SCHEMA:
+ * - summary: string (the main moderator text)
  * - metrics: { engagement, insight, balance, clarity } (0-100 scores)
  *
- * @param data - Summary data (complete or streaming partial)
+ * USAGE:
+ * - Called during moderator streaming to detect first displayable content
+ * - Used by ModelMessageCard to determine when to show moderator UI
+ * - Works with progressive streaming (detects partial data)
+ *
+ * @param data - Moderator data (complete or streaming partial)
  * @returns True if data has displayable content, with type narrowing
  */
-export function hasSummaryData(
-  data: SummaryDataInput,
-): data is RoundSummaryPayload | DeepPartial<RoundSummaryPayload> {
+export function hasModeratorData(
+  data: ModeratorDataInput,
+): data is ModeratorPayload | DeepPartial<ModeratorPayload> {
   // Null/undefined check
   if (!data) {
     return false;
   }
 
-  // Type-safe access to properties for SIMPLIFIED SUMMARY SCHEMA
+  // Type-safe access to properties for MODERATOR SCHEMA
   const summary = 'summary' in data ? data.summary : undefined;
   const metrics = 'metrics' in data ? data.metrics : undefined;
 
-  // Check if we have summary text (excluding whitespace-only)
-  const hasSummaryText = typeof summary === 'string' && summary.trim().length > 0;
+  // Check if we have moderator text (excluding whitespace-only)
+  const hasModeratorText = typeof summary === 'string' && summary.trim().length > 0;
 
   // Check if we have any metrics greater than 0
   const hasMetrics = isObject(metrics) && (
@@ -70,27 +81,27 @@ export function hasSummaryData(
     || (typeof metrics.clarity === 'number' && !Number.isNaN(metrics.clarity) && metrics.clarity > 0)
   );
 
-  // Returns true as soon as we have summary text OR any metrics
-  return hasSummaryText || hasMetrics;
+  // Returns true as soon as we have moderator text OR any metrics
+  return hasModeratorText || hasMetrics;
 }
 
 // ============================================================================
-// SUMMARY DATA NORMALIZATION
+// MODERATOR DATA NORMALIZATION
 // ============================================================================
 
 /**
- * Normalize summary data to ensure consistent format
+ * Normalize moderator data to ensure consistent format
  *
- * For the new simplified schema, normalization is minimal since we only have:
- * - summary: string
- * - metrics: { engagement, insight, balance, clarity }
+ * MODERATOR SCHEMA:
+ * - summary: string (moderator text)
+ * - metrics: { engagement, insight, balance, clarity } (0-100 scores)
  *
- * This function is kept for consistency and future extensibility.
+ * Normalization ensures metrics are clamped to 0-100 range.
  *
- * @param data - Raw summary data from AI model
- * @returns Normalized data
+ * @param data - Raw moderator data from AI model (streamed via moderator message)
+ * @returns Normalized data with clamped metrics
  */
-export function normalizeSummaryData<T>(data: T): T {
+export function normalizeModeratorData<T>(data: T): T {
   // ✅ TYPE-SAFE: Use type guard instead of force cast
   if (!isObject(data)) {
     return data;
@@ -99,8 +110,7 @@ export function normalizeSummaryData<T>(data: T): T {
   // Deep clone to avoid mutation
   const normalized: Record<string, unknown> = JSON.parse(JSON.stringify(data));
 
-  // For the simplified schema, no complex normalization needed
-  // Just ensure metrics are clamped to 0-100 range if present
+  // Ensure metrics are clamped to 0-100 range if present
   if (isObject(normalized.metrics)) {
     const metrics = normalized.metrics;
     const clamp = (value: unknown): number | undefined => {
@@ -123,58 +133,58 @@ export function normalizeSummaryData<T>(data: T): T {
 }
 
 // ============================================================================
-// SUMMARY DEDUPLICATION
+// MODERATOR DEDUPLICATION
 // ============================================================================
 
 /**
- * Deduplicate summaries by ID and round number
+ * Deduplicate moderators by ID and round number
  *
- * Performs multi-step deduplication to ensure clean summary list:
+ * Performs multi-step deduplication to ensure clean moderator list:
  *
  * Step 1: Deduplicate by ID
- * - Remove duplicate summary objects with same ID
+ * - Remove duplicate moderator objects with same ID
  * - Keeps first occurrence of each ID
  *
- * Step 2: Filter invalid summaries
- * - Removes failed summaries (status === 'failed')
- * - Optionally filters out summaries for regenerating rounds
+ * Step 2: Filter invalid moderators
+ * - Removes failed moderators (status === 'failed')
+ * - Optionally filters out moderators for regenerating rounds
  *
  * Step 3: Deduplicate by round number
- * - One summary per round (keeps highest priority)
+ * - One moderator per round (keeps highest priority)
  * - Priority: complete > streaming > pending
  * - If same priority, keeps most recent (by createdAt)
  *
  * Step 4: Sort by round number (ascending)
  *
- * @param summaries - Raw summaries array (may contain duplicates)
+ * @param moderators - Raw moderators array (may contain duplicates)
  * @param options - Optional configuration
  * @param options.regeneratingRoundNumber - Round being regenerated (filtered out)
- * @param options.excludeFailed - Whether to exclude failed summaries (default: true)
- * @returns Deduplicated and sorted summaries
+ * @param options.excludeFailed - Whether to exclude failed moderators (default: true)
+ * @returns Deduplicated and sorted moderators
  *
  * @example
  * ```typescript
  * // Basic deduplication
- * const clean = deduplicateSummaries(rawSummaries);
+ * const clean = deduplicateModerators(rawModerators);
  *
  * // With regeneration filtering
- * const clean = deduplicateSummaries(rawSummaries, {
+ * const clean = deduplicateModerators(rawModerators, {
  *   regeneratingRoundNumber: 2
  * });
  * ```
  */
-export function deduplicateSummaries(
-  summaries: StoredRoundSummary[],
+export function deduplicateModerators(
+  moderators: StoredModeratorData[],
   options?: {
     regeneratingRoundNumber?: number | null;
     excludeFailed?: boolean;
   },
-): StoredRoundSummary[] {
+): StoredModeratorData[] {
   const { regeneratingRoundNumber, excludeFailed = true } = options || {};
 
   // Step 1: Deduplicate by ID
   const seenIds = new Set<string>();
-  const uniqueById = summaries.filter((item) => {
+  const uniqueById = moderators.filter((item) => {
     if (seenIds.has(item.id)) {
       return false;
     }
@@ -182,18 +192,18 @@ export function deduplicateSummaries(
     return true;
   });
 
-  // Step 2: Filter out invalid summaries
-  const SUMMARY_TIMEOUT_MS = 60000; // 60 seconds
+  // Step 2: Filter out invalid moderators
+  const MODERATOR_TIMEOUT_MS = 60000; // 60 seconds
   const now = Date.now();
 
-  const validSummaries = uniqueById.filter((item) => {
-    // Exclude failed summaries
+  const validModerators = uniqueById.filter((item) => {
+    // Exclude failed moderators
     if (excludeFailed && item.status === MessageStatuses.FAILED) {
       return false;
     }
 
-    // ✅ TIMEOUT PROTECTION: Exclude stuck streaming summaries
-    // If summary has been 'streaming' or 'pending' for >60 seconds, treat as failed
+    // ✅ TIMEOUT PROTECTION: Exclude stuck streaming moderators
+    // If moderator has been 'streaming' or 'pending' for >60 seconds, treat as failed
     // This prevents infinite loading when SSE streams fail
     if ((item.status === MessageStatuses.STREAMING || item.status === MessageStatuses.PENDING) && item.createdAt) {
       const createdTime = item.createdAt instanceof Date
@@ -201,12 +211,12 @@ export function deduplicateSummaries(
         : new Date(item.createdAt).getTime();
       const elapsed = now - createdTime;
 
-      if (elapsed > SUMMARY_TIMEOUT_MS) {
-        return false; // Exclude stuck summaries
+      if (elapsed > MODERATOR_TIMEOUT_MS) {
+        return false; // Exclude stuck moderators
       }
     }
 
-    // Exclude summary for the round being regenerated
+    // Exclude moderator for the round being regenerated
     if (regeneratingRoundNumber !== null
       && regeneratingRoundNumber !== undefined
       && item.roundNumber === regeneratingRoundNumber) {
@@ -217,14 +227,14 @@ export function deduplicateSummaries(
   });
 
   // Step 3: Deduplicate by round number (keep highest priority status)
-  const deduplicatedByRound = validSummaries.reduce((acc, item) => {
+  const deduplicatedByRound = validModerators.reduce((acc, item) => {
     const existing = acc.get(item.roundNumber);
     if (!existing) {
       acc.set(item.roundNumber, item);
       return acc;
     }
 
-    // Priority: complete > streaming > pending (via SUMMARY_STATUS_PRIORITY)
+    // Priority: complete > streaming > pending
     const itemPriority = getStatusPriority(item.status);
     const existingPriority = getStatusPriority(existing.status);
 
@@ -247,7 +257,7 @@ export function deduplicateSummaries(
     }
 
     return acc;
-  }, new Map<number, StoredRoundSummary>());
+  }, new Map<number, StoredModeratorData>());
 
   // Step 4: Sort by round number (ascending)
   return Array.from(deduplicatedByRound.values()).sort((a, b) => a.roundNumber - b.roundNumber);

@@ -12,8 +12,8 @@ import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
-import * as tables from '@/db/schema';
 import { isObject } from '@/lib/utils/type-guards';
 
 import type {

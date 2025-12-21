@@ -149,6 +149,12 @@ export function usePendingMessage({
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
 
+    // ✅ RACE CONDITION FIX: Moderator placeholder is now added in useModeratorTrigger
+    // AFTER all participants complete streaming. Adding it here caused the moderator
+    // to appear BEFORE participants in the UI, leading to incorrect timeline ordering.
+    // The old pattern: User → Moderator → Participants (wrong)
+    // The new pattern: User → Participants → Moderator (correct)
+
     queueMicrotask(() => {
       if (chat.isStreamingRef.current) {
         store.getState().setHasSentPendingMessage(false);

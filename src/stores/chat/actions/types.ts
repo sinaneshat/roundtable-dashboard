@@ -12,11 +12,9 @@
 import { z } from 'zod';
 
 import { Environments, UsageStatusSchema } from '@/api/core/enums';
-import type { SummariesCacheResponse } from '@/api/routes/chat/schema';
 import {
   ChatThreadCacheSchema,
   createCacheResponseSchema,
-  SummariesCacheResponseSchema,
 } from '@/api/routes/chat/schema';
 import { chatThreadChangelogSelectSchema } from '@/db/validation/chat';
 
@@ -296,55 +294,6 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
   }
 
   return queryData.data;
-}
-
-// ============================================================================
-// DEDUPLICATION OPTIONS SCHEMAS
-// ============================================================================
-
-/**
- * Schema for summary deduplication options
- *
- * **SINGLE SOURCE OF TRUTH**: Replaces `Record<string, unknown>` in orchestrators.
- * Provides type-safe options for deduplicateSummaries() function.
- *
- * @see deduplicateSummaries in @/lib/utils/summary-utils.ts
- */
-export const SummaryDeduplicationOptionsSchema = z.object({
-  /** Round being regenerated (filtered out during deduplication) */
-  regeneratingRoundNumber: z.number().nullable().optional(),
-  /** Whether to exclude failed summaries (default: true) */
-  excludeFailed: z.boolean().optional(),
-});
-
-/**
- * Type for summary deduplication options (inferred from schema)
- */
-export type SummaryDeduplicationOptions = z.infer<typeof SummaryDeduplicationOptionsSchema>;
-
-/**
- * Helper function to safely cast cache data with validation
- *
- * **USE THIS INSTEAD OF**: `oldData as { success: boolean; data: { items: ... } }`
- *
- * @param data - Raw cache data from React Query
- * @returns Validated cache data or undefined if invalid
- *
- * @example
- * ```typescript
- * queryClient.setQueryData(queryKey, (oldData) => {
- *   const cacheData = validateSummariesCache(oldData);
- *   if (!cacheData) return oldData;
- *
- *   // Type-safe access to cacheData.data.items
- *   const updatedItems = [...cacheData.data.items, newSummary];
- *   return { ...cacheData, data: { items: updatedItems } };
- * });
- * ```
- */
-export function validateSummariesCache(data: unknown): SummariesCacheResponse | undefined {
-  const result = SummariesCacheResponseSchema.safeParse(data);
-  return result.success ? result.data : undefined;
 }
 
 /**

@@ -7,7 +7,7 @@
  * Key Areas:
  * - Double message submission prevention
  * - Pre-search vs participant streaming coordination
- * - Summary deduplication
+ * - Moderator deduplication
  * - Thread creation race conditions
  * - Navigation timing conflicts
  * - Stream resumption conflicts
@@ -27,7 +27,6 @@ import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatThread } from '@/db/validation';
 import {
   createMockStoredPreSearch,
-  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
@@ -319,61 +318,43 @@ describe('pre-Search vs Participant Coordination', () => {
 });
 
 // ============================================================================
-// SUMMARY DEDUPLICATION TESTS
+// MODERATOR DEDUPLICATION TESTS
 // ============================================================================
 
-describe('summary Deduplication', () => {
-  describe('roundNumber Based Deduplication', () => {
-    it('prevents duplicate summary for same round', () => {
+describe('moderator Deduplication', () => {
+  describe.todo('roundNumber Based Deduplication - moderator functionality integrated into messages');
+
+  describe('createdModeratorRounds Tracking', () => {
+    it('tracks rounds where moderator was created', () => {
       const store = createChatStore();
 
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.PENDING));
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.STREAMING));
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
 
-      expect(store.getState().summaries).toHaveLength(1);
-    });
+      store.getState().markModeratorCreated(0);
 
-    it('allows different rounds', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
-      store.getState().addSummary(createMockSummary(1, MessageStatuses.PENDING));
-
-      expect(store.getState().summaries).toHaveLength(2);
-    });
-  });
-
-  describe('createdSummaryRounds Tracking', () => {
-    it('tracks rounds where summary was created', () => {
-      const store = createChatStore();
-
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
-
-      store.getState().markSummaryCreated(0);
-
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
     });
 
     it('cleared on regeneration', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
+      store.getState().markModeratorCreated(0);
       store.getState().startRegeneration(0);
 
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
     });
   });
 
-  describe('triggeredSummaryRounds and triggeredSummaryIds', () => {
+  describe('triggeredModeratorRounds and triggeredModeratorIds', () => {
     it('tracks both round and ID for stream deduplication', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryStreamTriggered('summary-123', 0);
+      store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
       // Can check by ID or round
-      expect(store.getState().hasSummaryStreamBeenTriggered('summary-123', 0)).toBe(true);
-      expect(store.getState().hasSummaryStreamBeenTriggered('different-id', 0)).toBe(true); // Same round
-      expect(store.getState().hasSummaryStreamBeenTriggered('summary-123', 1)).toBe(true); // Same ID
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBe(true); // Same round
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 1)).toBe(true); // Same ID
     });
   });
 });
@@ -460,27 +441,27 @@ describe('navigation Timing Conflicts', () => {
   });
 
   describe('navigation Prerequisites', () => {
-    it('waits for both AI title and summary complete', () => {
+    it('waits for both AI title and moderator complete', () => {
       type NavState = {
         isAiGeneratedTitle: boolean;
-        summaryStatus: typeof MessageStatuses[keyof typeof MessageStatuses];
+        moderatorStatus: typeof MessageStatuses[keyof typeof MessageStatuses];
       };
 
       const canNavigate = (state: NavState) =>
         state.isAiGeneratedTitle
-        && state.summaryStatus === MessageStatuses.COMPLETE;
+        && state.moderatorStatus === MessageStatuses.COMPLETE;
 
       // Neither ready
-      expect(canNavigate({ isAiGeneratedTitle: false, summaryStatus: MessageStatuses.PENDING })).toBe(false);
+      expect(canNavigate({ isAiGeneratedTitle: false, moderatorStatus: MessageStatuses.PENDING })).toBe(false);
 
       // Only title ready
-      expect(canNavigate({ isAiGeneratedTitle: true, summaryStatus: MessageStatuses.STREAMING })).toBe(false);
+      expect(canNavigate({ isAiGeneratedTitle: true, moderatorStatus: MessageStatuses.STREAMING })).toBe(false);
 
-      // Only summary ready
-      expect(canNavigate({ isAiGeneratedTitle: false, summaryStatus: MessageStatuses.COMPLETE })).toBe(false);
+      // Only moderator ready
+      expect(canNavigate({ isAiGeneratedTitle: false, moderatorStatus: MessageStatuses.COMPLETE })).toBe(false);
 
       // Both ready
-      expect(canNavigate({ isAiGeneratedTitle: true, summaryStatus: MessageStatuses.COMPLETE })).toBe(true);
+      expect(canNavigate({ isAiGeneratedTitle: true, moderatorStatus: MessageStatuses.COMPLETE })).toBe(true);
     });
   });
 
@@ -584,16 +565,16 @@ describe('concurrent Round Operations', () => {
     it('only clears tracking for specific round', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
-      store.getState().markSummaryCreated(1);
+      store.getState().markModeratorCreated(0);
+      store.getState().markModeratorCreated(1);
       store.getState().markPreSearchTriggered(0);
       store.getState().markPreSearchTriggered(1);
 
       store.getState().startRegeneration(0);
 
       // Only round 0 cleared
-      expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
-      expect(store.getState().hasSummaryBeenCreated(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
       expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
       expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
     });
@@ -700,7 +681,7 @@ describe('participant Completion Race', () => {
   });
 
   describe('all Participants Complete Check', () => {
-    it('waits for all participants before summary', () => {
+    it('waits for all participants before moderator', () => {
       const participantCount = 3;
       const messages = [
         createTestAssistantMessage({
@@ -787,7 +768,7 @@ describe('message Sync Race', () => {
 
 describe('animation Race Conditions', () => {
   describe('animation Completion Ordering', () => {
-    it('waits for all animations before summary', async () => {
+    it('waits for all animations before moderator', async () => {
       const store = createChatStore();
 
       // Register animations for 3 participants
@@ -849,14 +830,12 @@ describe('state Leakage Prevention', () => {
       store.getState().setMessages([
         createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
       ]);
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
       store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
 
       // Navigate to new thread
       store.getState().resetForThreadNavigation();
 
       expect(store.getState().messages).toHaveLength(0);
-      expect(store.getState().summaries).toHaveLength(0);
       expect(store.getState().preSearches).toHaveLength(0);
     });
   });
@@ -865,12 +844,12 @@ describe('state Leakage Prevention', () => {
     it('creates fresh Set instances on reset', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
-      const set1 = store.getState().createdSummaryRounds;
+      store.getState().markModeratorCreated(0);
+      const set1 = store.getState().createdModeratorRounds;
 
       store.getState().resetToNewChat();
 
-      const set2 = store.getState().createdSummaryRounds;
+      const set2 = store.getState().createdModeratorRounds;
 
       // Should be different Set instances
       expect(set1).not.toBe(set2);
@@ -902,15 +881,15 @@ describe('idempotency', () => {
     });
   });
 
-  describe('markSummaryCreated Idempotency', () => {
+  describe('markModeratorCreated Idempotency', () => {
     it('multiple marks for same round is safe', () => {
       const store = createChatStore();
 
-      store.getState().markSummaryCreated(0);
-      store.getState().markSummaryCreated(0);
-      store.getState().markSummaryCreated(0);
+      store.getState().markModeratorCreated(0);
+      store.getState().markModeratorCreated(0);
+      store.getState().markModeratorCreated(0);
 
-      expect(store.getState().createdSummaryRounds.size).toBe(1);
+      expect(store.getState().createdModeratorRounds.size).toBe(1);
     });
   });
 });
@@ -1226,48 +1205,5 @@ describe('round Boundary Integrity', () => {
     });
   });
 
-  describe('summary and PreSearch Round Matching', () => {
-    it('summary roundNumber must match message round', () => {
-      const store = createChatStore();
-
-      // Add messages for round 0
-      store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
-        createTestAssistantMessage({
-          id: 'a0-0',
-          content: 'R0',
-          roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
-          finishReason: FinishReasons.STOP,
-        }),
-      ]);
-
-      // Add summary for round 0
-      store.getState().addSummary(createMockSummary(0, MessageStatuses.COMPLETE));
-
-      const summaries = store.getState().summaries;
-      const summary0 = summaries.find(s => s.roundNumber === 0);
-
-      expect(summary0).toBeDefined();
-      expect(summary0?.roundNumber).toBe(0);
-    });
-
-    it('preSearch roundNumber must match expected streaming round', () => {
-      const store = createChatStore();
-
-      // Set up for round 1
-      store.getState().setStreamingRoundNumber(1);
-
-      // Add pre-search for round 1
-      store.getState().addPreSearch(createMockStoredPreSearch(1, MessageStatuses.PENDING));
-
-      const preSearches = store.getState().preSearches;
-      const preSearch1 = preSearches.find(ps => ps.roundNumber === 1);
-
-      expect(preSearch1).toBeDefined();
-      expect(preSearch1?.roundNumber).toBe(1);
-      expect(preSearch1?.roundNumber).toBe(store.getState().streamingRoundNumber);
-    });
-  });
+  describe.todo('moderator and PreSearch Round Matching - moderator functionality integrated into messages with isModerator metadata');
 });

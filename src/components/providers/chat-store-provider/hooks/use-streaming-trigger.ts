@@ -17,6 +17,7 @@ import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
+import { devLog } from '@/lib/utils/dev-logger';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import { extractFileContextForSearch, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
@@ -307,6 +308,15 @@ export function useStreamingTrigger({
     }
 
     startRoundCalledForRoundRef.current = currentRound;
+
+    // Debug: Track startRound trigger (debounced)
+    devLog.d('StartRound', { rnd: currentRound, parts: storeParticipants.length, msgs: storeMessages.length });
+
+    // ✅ RACE CONDITION FIX: Moderator placeholder is now added in useModeratorTrigger
+    // AFTER all participants complete streaming. Adding it here caused the moderator
+    // to appear BEFORE participants in the UI, leading to incorrect timeline ordering.
+    // The old pattern: User → Moderator → Participants (wrong)
+    // The new pattern: User → Participants → Moderator (correct)
 
     // ✅ FIX: Use queueMicrotask to run startRound outside React's lifecycle
     // startRound uses flushSync internally which cannot be called during render/effects

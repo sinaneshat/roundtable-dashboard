@@ -39,7 +39,7 @@ import {
   UIMessageRoles,
 } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
-import { getModelById } from '@/api/services/models-config.service';
+import { getModelById, needsSmoothStream } from '@/api/services/models-config.service';
 import {
   initializeOpenRouter,
   openRouterService,
@@ -95,7 +95,8 @@ import {
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
+import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ExtendedFilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
@@ -237,14 +238,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       }
 
       // =========================================================================
-      // STEP 3.5: ✅ PRE-SEARCH CREATION REMOVED (Fixed web search ordering)
+      // STEP 3.5: PRE-SEARCH CREATION (Fixed web search ordering)
       // =========================================================================
-      // PRE-SEARCH NOW CREATED BEFORE STREAMING (not during)
+      // Pre-search now created before streaming to ensure proper ordering.
       //
-      // OLD FLOW (Broken - caused participants to speak before web search):
-      //   User message → Participant streaming → Pre-search created here → Search executes
-      //
-      // CURRENT FLOW (consolidated - execute auto-creates):
+      // CURRENT FLOW:
       //   User message → Frontend adds placeholder → Execute endpoint auto-creates + streams → COMPLETE → Participants start
       //
       // IMPLEMENTATION:
@@ -392,7 +390,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       // STEP 8: Load Previous Messages and Prepare for Streaming
       // =========================================================================
-      const previousDbMessages = await db.query.chatMessage.findMany({
+      const allDbMessages = await db.query.chatMessage.findMany({
         where: eq(tables.chatMessage.threadId, threadId),
         orderBy: [
           asc(tables.chatMessage.roundNumber),
@@ -400,6 +398,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           asc(tables.chatMessage.id),
         ],
       });
+
+      // ✅ FIX: Filter out moderator messages from conversation context
+      // Moderator messages are round summaries that should not be included in
+      // the context sent to AI models - they would cause models to repeat the summary
+      const previousDbMessages = allDbMessages.filter(
+        msg => !msg.metadata || !isModeratorMessageMetadata(msg.metadata),
+      );
 
       // Convert to UIMessages for validation
       const previousMessages
@@ -618,6 +623,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const { systemPrompt, citationSourceMap, citableSources }
         = await buildSystemPromptWithContext({
           participant,
+          allParticipants: participants, // ✅ V2.4: Inject roster for mandatory named positioning
           thread,
           userQuery,
           previousDbMessages,
@@ -720,11 +726,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Applying extractReasoningMiddleware to models with native reasoning causes duplicate/conflicting parts
       const baseModel = client.chat(participant.modelId);
 
-      // ✅ MODEL DETECTION: Identify model providers for conditional handling
-      const modelIdLower = participant.modelId.toLowerCase();
-      const isDeepSeekModel = modelIdLower.includes('deepseek');
-      const isXaiModel
-        = modelIdLower.startsWith('x-ai/') || modelIdLower.includes('grok');
+      // ✅ MODEL DETECTION: DeepSeek needs extractReasoningMiddleware for XML <think> tags
+      const isDeepSeekModel = participant.modelId.toLowerCase().includes('deepseek');
 
       // ✅ REASONING MIDDLEWARE: Only apply to DeepSeek models that use XML tag-based reasoning
       // DeepSeek uses <think> tags that must be extracted via middleware
@@ -745,21 +748,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         ...(modelSupportsTemperature && { temperature: temperatureValue }),
         // ✅ REASONING: Add providerOptions for o1/o3/o4/DeepSeek R1 models
         ...(providerOptions && { providerOptions }),
-        // ✅ CHUNK NORMALIZATION: Normalize streaming chunk delivery for xAI/Grok models
-        // These models buffer responses server-side and send large chunks (sometimes entire responses)
-        // instead of streaming token-by-token like other models.
+        // ✅ CHUNK NORMALIZATION: Normalize streaming for models with buffered chunk delivery
+        // Some providers (xAI/Grok, DeepSeek, Gemini) buffer server-side, sending large chunks
+        // (sometimes entire paragraphs) instead of token-by-token. This causes UI jumpiness.
         //
-        // Without smoothStream: UI receives massive SSE chunks → blocks main thread → excessive re-renders
-        // With smoothStream: Large chunks are buffered and re-emitted at controlled intervals
-        //
-        // Configuration rationale:
-        // - delayInMs: 25ms balances smoothness vs latency (10ms was too fast, caused UI thrashing)
-        // - chunking: 'line' splits on newlines for natural paragraph flow
-        //   (word-level was too granular for large chunks, causing thousands of micro-updates)
-        ...(isXaiModel && {
+        // needsSmoothStream() checks PROVIDER_STREAMING_DEFAULTS enum for provider behavior.
+        // smoothStream re-chunks at word boundaries with controlled delay for consistent UX.
+        // @see /src/api/core/enums/models.ts - StreamingBehaviors enum
+        // @see /src/api/services/models-config.service.ts - needsSmoothStream()
+        ...(needsSmoothStream(participant.modelId) && {
           experimental_transform: smoothStream({
-            delayInMs: 25,
-            chunking: 'line',
+            delayInMs: 20,
+            chunking: 'word',
           }),
         }),
         maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
@@ -877,6 +877,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // AI SDK streams reasoning in parts (reasoning-start, reasoning-delta, reasoning-end)
       // but doesn't include the full reasoning in finishResult for most models
       const reasoningDeltas: string[] = [];
+
+      // ✅ REASONING DURATION TRACKING: Track how long reasoning takes
+      // Used for "Thought for X seconds" display on page refresh
+      let reasoningStartTime: number | null = null;
+      let reasoningDurationSeconds: number | undefined;
 
       // ✅ DETERMINISTIC MESSAGE ID GENERATION
       // Message uniqueness is guaranteed by business logic: (threadId, roundNumber, participantIndex)
@@ -1042,7 +1047,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // For models with native reasoning (Claude, OpenAI o1/o3), reasoning is captured via
           // finishResult.reasoning in onFinish and handled by extractReasoning() in message-persistence
           if (chunk.type === 'reasoning-delta') {
+            // ✅ REASONING DURATION: Start timer on first reasoning chunk
+            if (reasoningStartTime === null) {
+              reasoningStartTime = Date.now();
+            }
             reasoningDeltas.push(chunk.text);
+          }
+
+          // ✅ REASONING DURATION: Calculate duration when text starts (reasoning ended)
+          // Reasoning typically ends when the model starts outputting text
+          if (chunk.type === 'text-delta' && reasoningStartTime !== null && reasoningDurationSeconds === undefined) {
+            reasoningDurationSeconds = Math.round((Date.now() - reasoningStartTime) / 1000);
           }
         },
 
@@ -1144,6 +1159,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // Delegate to message persistence service
           // ✅ CITATIONS: Pass citationSourceMap for resolving [source_id] markers in AI response
           // ✅ AVAILABLE SOURCES: Pass availableSources for "Sources" UI even without inline citations
+          // ✅ REASONING DURATION: Calculate final duration if not already set
+          // Handle case where model only outputs reasoning without text (e.g., reasoning-only response)
+          // Also handle native reasoning (Claude/OpenAI) which comes via finishResult.reasoning
+          let finalReasoningDuration = reasoningDurationSeconds;
+          if (finalReasoningDuration === undefined && reasoningStartTime !== null) {
+            finalReasoningDuration = Math.round((Date.now() - reasoningStartTime) / 1000);
+          }
+
           await saveStreamedMessage({
             messageId,
             threadId,
@@ -1156,11 +1179,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             reasoningDeltas,
             finishResult,
             userId: user.id,
-            participants,
-            threadMode: thread.mode,
             db,
             citationSourceMap,
             availableSources,
+            // ✅ REASONING DURATION: Pass duration for "Thought for X seconds" display
+            reasoningDuration: finalReasoningDuration,
           });
 
           // =========================================================================

@@ -30,9 +30,9 @@ function extractTextContent(children: ReactNode): string {
   }
 
   if (isValidElement(children)) {
-    const props = children.props as Record<string, unknown>;
-    if (props && 'children' in props) {
-      return extractTextContent(props.children as ReactNode);
+    const elementProps = children.props as { children?: ReactNode };
+    if (elementProps.children !== undefined) {
+      return extractTextContent(elementProps.children);
     }
   }
 

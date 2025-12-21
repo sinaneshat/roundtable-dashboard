@@ -16,7 +16,7 @@ import { MessagePartTypes, UIMessageRoles } from '@/api/core/enums';
 import { TITLE_GENERATION_CONFIG } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
 import { generateUniqueSlug } from './slug-generator.service';

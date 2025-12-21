@@ -12,7 +12,7 @@
  * 2. GET handler returns 204 if no active stream, or resumes the stream
  * 3. Frontend uses resume: true which triggers GET on mount
  *
- * ✅ UNIFIED RESUMPTION: Supports pre-search, participants, and summarizer phases
+ * ✅ UNIFIED RESUMPTION: Supports pre-search, participant, and moderator phases
  * ✅ PATTERN: Uses Responses.sse() and Responses.noContentWithHeaders() from core
  */
 
@@ -25,15 +25,15 @@ import type { MessageStatus, RoundPhase } from '@/api/core/enums';
 import { MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
 import { getActivePreSearchStreamId, getPreSearchStreamChunks, getPreSearchStreamMetadata } from '@/api/services/pre-search-stream-buffer.service';
 import { clearThreadActiveStream, getNextParticipantToStream, getThreadActiveStream, updateParticipantStatus } from '@/api/services/resumable-stream-kv.service';
-import { createLiveParticipantResumeStream, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
-import { getActiveSummaryStreamId, getSummaryStreamChunks, getSummaryStreamMetadata } from '@/api/services/summary-stream-buffer.service';
+import { createLiveParticipantResumeStream, getActiveStreamId, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
 import type { ApiEnv } from '@/api/types';
 import { parseStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
+import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 
 import type { getThreadStreamResumptionStateRoute, resumeThreadStreamRoute } from '../route';
-import type { ParticipantPhaseStatus, PreSearchPhaseStatus, SummarizerPhaseStatus } from '../schema';
+import type { ModeratorPhaseStatus, ParticipantPhaseStatus, PreSearchPhaseStatus } from '../schema';
 import { ThreadIdParamSchema } from '../schema';
 
 // ============================================================================
@@ -238,35 +238,30 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     }
 
     // ============================================================================
-    // PHASE 3: Check for active SUMMARIZER stream
+    // PHASE 3: Check for active MODERATOR stream
     // ============================================================================
-    // ✅ AI SDK RESUME FIX: Return 204 with phase metadata for summarizer phase
-    // AI SDK's resume: true expects UIMessage format, but summarizer uses useObject with custom schema.
-    // Instead of returning the stream (which AI SDK can't parse), return 204 with metadata.
-    // The frontend RoundSummaryStream component has its own resumption logic (attemptSummaryResume).
-    const summarizerStreamId = await getActiveSummaryStreamId(threadId, currentRound, c.env);
-    if (summarizerStreamId) {
-      const summarizerMetadata = await getSummaryStreamMetadata(summarizerStreamId, c.env);
-      const summarizerChunks = await getSummaryStreamChunks(summarizerStreamId, c.env);
+    // ✅ TEXT STREAMING: Moderator uses stream-buffer.service.ts like participants
+    // Moderator uses participantIndex = NO_PARTICIPANT_SENTINEL (-1)
+    const moderatorStreamId = await getActiveStreamId(threadId, currentRound, NO_PARTICIPANT_SENTINEL, c.env);
+    if (moderatorStreamId) {
+      const moderatorMetadata = await getStreamMetadata(moderatorStreamId, c.env);
+      const moderatorChunks = await getStreamChunks(moderatorStreamId, c.env);
 
-      // Check if summarizer is still active (check both ACTIVE and STREAMING for consistency with pre-search)
-      if (summarizerMetadata && (summarizerMetadata.status === StreamStatuses.ACTIVE || summarizerMetadata.status === StreamStatuses.STREAMING)) {
+      // Check if moderator is still active
+      if (moderatorMetadata && (moderatorMetadata.status === StreamStatuses.ACTIVE || moderatorMetadata.status === StreamStatuses.STREAMING)) {
         // Check for staleness
-        const lastChunkTime = summarizerChunks && summarizerChunks.length > 0
-          ? Math.max(...summarizerChunks.map(chunk => chunk.timestamp))
+        const lastChunkTime = moderatorChunks && moderatorChunks.length > 0
+          ? Math.max(...moderatorChunks.map(chunk => chunk.timestamp))
           : 0;
         const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
 
         if (!isStale) {
-          // ✅ AI SDK RESUME FIX: Return 204 with phase metadata instead of SSE stream
-          // This tells the frontend that summarizer is active but should be handled
-          // by RoundSummaryStream component (via attemptSummaryResume), not AI SDK resume.
-          // NOTE: Use 'summarizer' to match SSEStreamMetadataSchema
+          // ✅ TEXT STREAMING: Return 204 with phase metadata for moderator
+          // The frontend moderator stream component handles resumption
           return Responses.noContentWithHeaders({
-            phase: 'summarizer',
+            phase: 'moderator',
             roundNumber: currentRound,
-            streamId: summarizerStreamId,
-            summaryId: summarizerMetadata.summaryId,
+            streamId: moderatorStreamId,
           });
         }
       }
@@ -287,7 +282,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 function determineCurrentPhase(
   preSearchStatus: PreSearchPhaseStatus | null,
   participantStatus: ParticipantPhaseStatus,
-  summarizerStatus: SummarizerPhaseStatus | null,
+  moderatorStatus: ModeratorPhaseStatus | null,
 ): RoundPhase {
   // Check pre-search phase first (if enabled)
   if (preSearchStatus?.enabled) {
@@ -302,18 +297,18 @@ function determineCurrentPhase(
     return RoundPhases.PARTICIPANTS;
   }
 
-  // Check summarizer phase
-  if (summarizerStatus) {
-    const status = summarizerStatus.status;
+  // Check moderator phase
+  if (moderatorStatus) {
+    const status = moderatorStatus.status;
     if (status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING) {
-      return RoundPhases.SUMMARIZER;
+      return RoundPhases.MODERATOR;
     }
     if (status === MessageStatuses.COMPLETE) {
       return RoundPhases.COMPLETE;
     }
   }
 
-  // All participants done but no summarizer started/needed
+  // All participants done but no moderator started/needed
   return RoundPhases.COMPLETE;
 }
 
@@ -335,7 +330,7 @@ function isStreamStale(lastChunkTime: number, createdTime: number, hasChunks: bo
  * GET /chat/threads/:threadId/stream-status
  *
  * Get UNIFIED stream resumption state metadata for server-side prefetching.
- * Returns JSON metadata for ALL phases (pre-search, participants, summarizer).
+ * Returns JSON metadata for ALL phases (pre-search, participants, moderator).
  *
  * This enables:
  * 1. Server component to check for active streams during page load
@@ -346,7 +341,7 @@ function isStreamStale(lastChunkTime: number, createdTime: number, hasChunks: bo
  * Phase detection logic:
  * 1. If preSearch.status is 'pending' or 'streaming' → currentPhase = 'pre_search'
  * 2. If participants.allComplete is false → currentPhase = 'participants'
- * 3. If summarizer.status is 'pending' or 'streaming' → currentPhase = 'summarizer'
+ * 3. If moderator.status is 'pending' or 'streaming' → currentPhase = 'moderator'
  * 4. Otherwise → currentPhase = 'complete' (or 'idle' if no round started)
  *
  * @pattern Following AI SDK Chatbot Resume Streams documentation
@@ -392,7 +387,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         nextParticipantToTrigger: null,
         allComplete: true,
       } as ParticipantPhaseStatus,
-      summarizer: null,
+      moderator: null,
       roundComplete: true,
       // Legacy fields for backwards compatibility
       hasActiveStream: false,
@@ -576,31 +571,44 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     }
 
     // ============================================================================
-    // STEP 4: Get summarizer phase status
+    // STEP 4: Get moderator phase status
     // ============================================================================
-    let summarizerStatus: SummarizerPhaseStatus | null = null;
+    let moderatorStatus: ModeratorPhaseStatus | null = null;
 
-    // Check database for summary record
-    const summaryRecord = await db.query.chatModeratorAnalysis.findFirst({
+    // ✅ TEXT STREAMING: Check for moderator message in chatMessage
+    const moderatorMessages = await db.query.chatMessage.findMany({
       where: and(
-        eq(tables.chatModeratorAnalysis.threadId, threadId),
-        eq(tables.chatModeratorAnalysis.roundNumber, currentRoundNumber),
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.roundNumber, currentRoundNumber),
+        eq(tables.chatMessage.role, 'assistant'),
       ),
-      columns: { id: true, status: true },
+      columns: { id: true, metadata: true },
     });
 
-    // Check KV for active stream
-    let summaryStreamId: string | null = null;
-    let summaryKVStatus: MessageStatus | null = null;
+    // Find moderator message (metadata.isModerator: true)
+    const moderatorRecord = moderatorMessages.find((msg) => {
+      const metadata = msg.metadata;
+      return metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true;
+    });
+
+    // Map to expected structure
+    const moderatorRecordData = moderatorRecord
+      ? { id: moderatorRecord.id, status: 'complete' as const }
+      : null;
+
+    // Check KV for active moderator stream
+    // ✅ TEXT STREAMING: Use stream-buffer.service.ts for moderator streams
+    let moderatorStreamId: string | null = null;
+    let moderatorKVStatus: MessageStatus | null = null;
 
     if (hasKV) {
-      summaryStreamId = await getActiveSummaryStreamId(threadId, currentRoundNumber, c.env);
+      moderatorStreamId = await getActiveStreamId(threadId, currentRoundNumber, NO_PARTICIPANT_SENTINEL, c.env);
 
-      if (summaryStreamId) {
-        const metadata = await getSummaryStreamMetadata(summaryStreamId, c.env);
-        const chunks = await getSummaryStreamChunks(summaryStreamId, c.env);
+      if (moderatorStreamId) {
+        const metadata = await getStreamMetadata(moderatorStreamId, c.env);
+        const chunks = await getStreamChunks(moderatorStreamId, c.env);
         const lastChunkTime = chunks && chunks.length > 0
-          ? Math.max(...chunks.map(chunk => chunk.timestamp))
+          ? Math.max(...chunks.map((chunk: { timestamp: number }) => chunk.timestamp))
           : 0;
 
         // Check if stream is stale
@@ -612,32 +620,32 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         );
 
         if (stale) {
-          summaryStreamId = null; // Mark as not resumable
-          summaryKVStatus = MessageStatuses.FAILED;
+          moderatorStreamId = null; // Mark as not resumable
+          moderatorKVStatus = MessageStatuses.FAILED;
         } else if (metadata?.status === StreamStatuses.ACTIVE || metadata?.status === StreamStatuses.STREAMING) {
-          summaryKVStatus = MessageStatuses.STREAMING;
+          moderatorKVStatus = MessageStatuses.STREAMING;
         } else if (metadata?.status === StreamStatuses.COMPLETED) {
-          summaryKVStatus = MessageStatuses.COMPLETE;
+          moderatorKVStatus = MessageStatuses.COMPLETE;
         }
       }
     }
 
     // Determine status from KV or DB
-    const dbMessageStatus = summaryRecord?.status as MessageStatus | undefined;
-    const effectiveMessageStatus = summaryKVStatus ?? dbMessageStatus ?? null;
+    const dbMessageStatus = moderatorRecordData?.status as MessageStatus | undefined;
+    const effectiveMessageStatus = moderatorKVStatus ?? dbMessageStatus ?? null;
 
-    if (summaryRecord || summaryStreamId) {
-      summarizerStatus = {
+    if (moderatorRecordData || moderatorStreamId) {
+      moderatorStatus = {
         status: effectiveMessageStatus,
-        streamId: summaryStreamId,
-        summaryId: summaryRecord?.id ?? null,
+        streamId: moderatorStreamId,
+        moderatorMessageId: moderatorRecordData?.id ?? null,
       };
     }
 
     // ============================================================================
     // STEP 5: Determine current phase and build response
     // ============================================================================
-    const currentPhase = determineCurrentPhase(preSearchStatus, participantStatus, summarizerStatus);
+    const currentPhase = determineCurrentPhase(preSearchStatus, participantStatus, moderatorStatus);
     const roundComplete = currentPhase === RoundPhases.COMPLETE;
 
     // Check if there's any active stream
@@ -653,7 +661,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       currentPhase,
       preSearch: preSearchStatus,
       participants: participantStatus,
-      summarizer: summarizerStatus,
+      moderator: moderatorStatus,
       roundComplete,
       // Legacy fields for backwards compatibility
       hasActiveStream,

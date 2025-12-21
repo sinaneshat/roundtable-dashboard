@@ -624,7 +624,7 @@ export const RoundNumberParamSchema = z.object({
 
 /**
  * Thread + Round path parameters (combined)
- * ✅ REUSABLE: Used for round analysis endpoints
+ * ✅ REUSABLE: Used for round moderator endpoints
  */
 export const ThreadRoundParamSchema = z.object({
   threadId: CoreSchemas.id().openapi({
@@ -653,8 +653,8 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Stream ID for resumption',
     example: 'thread_123_r0_p0',
   }),
-  /** Current stream phase (presearch, participant, summarizer) */
-  phase: z.enum(['presearch', 'participant', 'summarizer']).optional().openapi({
+  /** Current stream phase (presearch, participant, moderator) */
+  phase: z.enum(['presearch', 'participant', 'moderator']).optional().openapi({
     description: 'Current stream phase',
     example: 'participant',
   }),
@@ -698,44 +698,44 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Whether stream was resumed from buffer',
     example: true,
   }),
-  /** Summary ID (for summarizer phase) */
-  summaryId: z.string().optional().openapi({
-    description: 'Summary ID for summarizer phase',
-    example: 'summary_abc123',
+  /** Moderator message ID (for moderator phase) */
+  moderatorMessageId: z.string().optional().openapi({
+    description: 'Moderator message ID for moderator phase',
+    example: 'moderator_abc123',
   }),
 }).openapi('SSEStreamMetadata');
 
 export type SSEStreamMetadata = z.infer<typeof SSEStreamMetadataSchema>;
 
 /**
- * Text stream metadata for analysis/object streaming
+ * Text stream metadata for moderator/object streaming
  * ✅ ZOD-FIRST PATTERN: Type inferred from schema
  */
 export const TextStreamMetadataSchema = z.object({
   /** Stream ID for resumption */
   streamId: z.string().optional().openapi({
     description: 'Stream ID for resumption',
-    example: 'analysis_123',
+    example: 'moderator_123',
   }),
   /** Whether stream was resumed from buffer */
   resumedFromBuffer: z.boolean().optional().openapi({
     description: 'Whether stream was resumed from buffer',
     example: true,
   }),
-  /** Resource ID (e.g., analysis ID) */
+  /** Resource ID (e.g., moderator message ID) */
   resourceId: z.string().optional().openapi({
-    description: 'Resource ID (e.g., analysis ID)',
-    example: 'analysis_abc123',
+    description: 'Resource ID (e.g., moderator message ID)',
+    example: 'moderator_abc123',
   }),
-  /** Round number for round summary streams */
+  /** Round number for round moderator streams */
   roundNumber: z.number().int().nonnegative().optional().openapi({
-    description: 'Round number for round summary streams',
+    description: 'Round number for round moderator streams',
     example: 0,
   }),
-  /** Summary ID for round summary streams */
-  summaryId: z.string().optional().openapi({
-    description: 'Summary ID for round summary streams',
-    example: 'summary_123',
+  /** Moderator message ID for round moderator streams */
+  moderatorMessageId: z.string().optional().openapi({
+    description: 'Moderator message ID for round moderator streams',
+    example: 'moderator_123',
   }),
   /** Stream status (e.g., 'completed', 'streaming') */
   streamStatus: z.string().optional().openapi({

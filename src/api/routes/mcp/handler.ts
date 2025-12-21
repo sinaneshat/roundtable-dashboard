@@ -31,7 +31,7 @@ import { calculateRoundNumber } from '@/api/services/round.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 import { isObject } from '@/lib/utils/type-guards';
@@ -756,7 +756,7 @@ async function toolGenerateResponses(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   env: ApiEnv['Bindings'],
 ): Promise<ToolCallResult> {
-  const thread = await verifyThreadOwnership(input.threadId, user.id, db);
+  await verifyThreadOwnership(input.threadId, user.id, db);
 
   const participants = await db.query.chatParticipant.findMany({
     where: and(
@@ -866,8 +866,6 @@ async function toolGenerateResponses(
         reasoning: await finishResult.reasoning,
       },
       userId: user.id,
-      participants,
-      threadMode: thread.mode,
       db,
     });
 
@@ -988,23 +986,37 @@ async function toolGetRoundSummary(
 ): Promise<ToolCallResult> {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
-  const summary = await db.query.chatModeratorAnalysis.findFirst({
+  // ✅ TEXT STREAMING: Query chatMessage for moderator messages
+  const messages = await db.query.chatMessage.findMany({
     where: and(
-      eq(tables.chatModeratorAnalysis.threadId, input.threadId),
-      eq(tables.chatModeratorAnalysis.roundNumber, input.roundNumber),
+      eq(tables.chatMessage.threadId, input.threadId),
+      eq(tables.chatMessage.roundNumber, input.roundNumber),
+      eq(tables.chatMessage.role, 'assistant'),
     ),
-    orderBy: [desc(tables.chatModeratorAnalysis.createdAt)],
+    orderBy: [desc(tables.chatMessage.createdAt)],
   });
 
-  if (!summary) {
+  // Find the moderator message (has metadata.isModerator: true)
+  const moderatorMessage = messages.find((msg) => {
+    const metadata = msg.metadata;
+    return metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true;
+  });
+
+  if (!moderatorMessage) {
     return mcpError(`No summary found for round ${input.roundNumber}`);
   }
 
+  // Extract text content from parts
+  const textParts = (moderatorMessage.parts || []).filter(
+    (p): p is { type: 'text'; text: string } => p && typeof p === 'object' && 'type' in p && p.type === 'text',
+  );
+  const summaryText = textParts.map(p => p.text).join('\n');
+
   return mcpResult({
-    summaryId: summary.id,
-    roundNumber: summary.roundNumber,
-    status: summary.status,
-    data: summary.summaryData,
+    summaryId: moderatorMessage.id,
+    roundNumber: moderatorMessage.roundNumber,
+    status: 'complete',
+    data: { summary: summaryText },
   });
 }
 

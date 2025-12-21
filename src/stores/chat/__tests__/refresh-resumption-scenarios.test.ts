@@ -9,7 +9,7 @@
  * - Refresh during participant 0 streaming
  * - Refresh between participants (P0 done, P1 not started)
  * - Refresh during last participant streaming
- * - Refresh during summary streaming
+ * - Refresh during moderator streaming
  * - Refresh after round complete
  *
  * Resumption Behavior:
@@ -368,25 +368,25 @@ describe('refresh During Participant Streaming', () => {
 });
 
 // ============================================================================
-// REFRESH DURING ANALYSIS TESTS
+// REFRESH DURING MODERATOR TESTS
 // ============================================================================
 
-describe('refresh During Analysis', () => {
-  describe('summary Streaming', () => {
-    it('detects analysis in progress', () => {
-      const analysisStatus = MessageStatuses.STREAMING;
+describe('refresh During Moderator', () => {
+  describe('moderator Streaming', () => {
+    it('detects moderator in progress', () => {
+      const moderatorStatus = MessageStatuses.STREAMING;
 
-      const isAnalysisComplete = analysisStatus === MessageStatuses.COMPLETE
-        || analysisStatus === MessageStatuses.FAILED;
+      const isModeratorComplete = moderatorStatus === MessageStatuses.COMPLETE
+        || moderatorStatus === MessageStatuses.FAILED;
 
-      expect(isAnalysisComplete).toBe(false);
+      expect(isModeratorComplete).toBe(false);
     });
 
-    it('allows round to complete even if analysis fails', () => {
-      const _analysisStatus = MessageStatuses.FAILED;
+    it('allows round to complete even if moderator fails', () => {
+      const _moderatorStatus = MessageStatuses.FAILED;
       const allParticipantsComplete = true;
 
-      // Round is considered complete even with failed analysis
+      // Round is considered complete even with failed moderator
       // User can still send new message
       const canProceed = allParticipantsComplete;
 
@@ -394,27 +394,27 @@ describe('refresh During Analysis', () => {
     });
   });
 
-  describe('navigation Blocked Until Summary Complete', () => {
-    it('blocks navigation on overview screen until summary complete', () => {
+  describe('navigation Blocked Until Moderator Complete', () => {
+    it('blocks navigation on overview screen until moderator complete', () => {
       const screenMode = 'overview';
-      const summaryStatus = MessageStatuses.STREAMING;
+      const moderatorStatus = MessageStatuses.STREAMING;
       const hasAiGeneratedTitle = true;
 
       const canNavigate = screenMode === 'overview'
-        && summaryStatus === MessageStatuses.COMPLETE
+        && moderatorStatus === MessageStatuses.COMPLETE
         && hasAiGeneratedTitle;
 
       expect(canNavigate).toBe(false);
     });
 
-    it('allows navigation when summary complete', () => {
+    it('allows navigation when moderator complete', () => {
       const screenMode = 'overview';
-      const summaryStatus = MessageStatuses.COMPLETE;
+      const moderatorStatus = MessageStatuses.COMPLETE;
       const hasAiGeneratedTitle = true;
       const threadSlug = 'test-thread';
 
       const canNavigate = screenMode === 'overview'
-        && summaryStatus === MessageStatuses.COMPLETE
+        && moderatorStatus === MessageStatuses.COMPLETE
         && hasAiGeneratedTitle
         && !!threadSlug;
 

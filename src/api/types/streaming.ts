@@ -253,29 +253,29 @@ export function isStreamBufferMetadata(value: unknown): value is StreamBufferMet
 }
 
 // ============================================================================
-// ROUND SUMMARY STREAM TYPES
+// ROUND MODERATOR STREAM TYPES
 // ============================================================================
 
 /**
- * Round summary stream chunk schema
+ * Round moderator stream chunk schema
  * Used for object stream buffering (JSON being built incrementally)
  */
-export const SummaryStreamChunkSchema = z.object({
+export const ModeratorStreamChunkSchema = z.object({
   data: z.string(),
   timestamp: z.number(),
 });
 
-/** Round summary stream chunk format */
-export type SummaryStreamChunk = z.infer<typeof SummaryStreamChunkSchema>;
+/** Round moderator stream chunk format */
+export type ModeratorStreamChunk = z.infer<typeof ModeratorStreamChunkSchema>;
 
 /**
- * Round summary stream buffer metadata schema
+ * Round moderator stream buffer metadata schema
  */
-export const SummaryStreamBufferMetadataSchema = z.object({
+export const ModeratorStreamBufferMetadataSchema = z.object({
   streamId: z.string(),
   threadId: z.string(),
   roundNumber: z.number(),
-  summaryId: z.string(),
+  moderatorId: z.string(),
   status: StreamStatusSchema,
   chunkCount: z.number(),
   createdAt: z.number(),
@@ -283,21 +283,21 @@ export const SummaryStreamBufferMetadataSchema = z.object({
   errorMessage: z.string().nullable(),
 });
 
-/** Round summary stream buffer metadata */
-export type SummaryStreamBufferMetadata = z.infer<typeof SummaryStreamBufferMetadataSchema>;
+/** Round moderator stream buffer metadata */
+export type ModeratorStreamBufferMetadata = z.infer<typeof ModeratorStreamBufferMetadataSchema>;
 
 /**
- * Type guard: Check if value is SummaryStreamChunk
+ * Type guard: Check if value is ModeratorStreamChunk
  */
-export function isSummaryStreamChunk(value: unknown): value is SummaryStreamChunk {
-  return SummaryStreamChunkSchema.safeParse(value).success;
+export function isModeratorStreamChunk(value: unknown): value is ModeratorStreamChunk {
+  return ModeratorStreamChunkSchema.safeParse(value).success;
 }
 
 /**
- * Type guard: Check if value is SummaryStreamBufferMetadata
+ * Type guard: Check if value is ModeratorStreamBufferMetadata
  */
-export function isSummaryStreamBufferMetadata(value: unknown): value is SummaryStreamBufferMetadata {
-  return SummaryStreamBufferMetadataSchema.safeParse(value).success;
+export function isModeratorStreamBufferMetadata(value: unknown): value is ModeratorStreamBufferMetadata {
+  return ModeratorStreamBufferMetadataSchema.safeParse(value).success;
 }
 
 // ============================================================================
@@ -416,7 +416,7 @@ export function isThreadActiveStream(value: unknown): value is ThreadActiveStrea
  * Stream phase identifiers for unified stream ID format
  * Used to identify which phase a stream belongs to from its ID
  */
-export const STREAM_PHASES = ['presearch', 'participant', 'summarizer'] as const;
+export const STREAM_PHASES = ['presearch', 'participant', 'moderator'] as const;
 export type StreamPhase = (typeof STREAM_PHASES)[number];
 
 /**
@@ -426,12 +426,12 @@ export type StreamPhase = (typeof STREAM_PHASES)[number];
  * - Pre-search: thread123_r0_presearch
  * - Participant 0: thread123_r0_participant_0
  * - Participant 1: thread123_r0_participant_1
- * - Summarizer: thread123_r0_summarizer
+ * - Moderator: thread123_r0_moderator
  *
  * This unifies the previously inconsistent formats:
  * - OLD pre-search: presearch_{threadId}_{roundNumber}_{timestamp}
  * - OLD participant: {threadId}_r{roundNumber}_p{participantIndex}
- * - OLD summarizer: analysis:{threadId}:r{roundNumber}
+ * - OLD moderator: moderator:{threadId}:r{roundNumber}
  */
 
 /**
@@ -449,10 +449,10 @@ export function generateParticipantStreamId(threadId: string, roundNumber: numbe
 }
 
 /**
- * Generate unified stream ID for summarizer
+ * Generate unified stream ID for moderator
  */
-export function generateSummarizerStreamId(threadId: string, roundNumber: number): string {
-  return `${threadId}_r${roundNumber}_summarizer`;
+export function generateModeratorStreamId(threadId: string, roundNumber: number): string {
+  return `${threadId}_r${roundNumber}_moderator`;
 }
 
 /**
@@ -489,13 +489,13 @@ export function parseStreamId(streamId: string): {
     };
   }
 
-  // Match summarizer: {threadId}_r{roundNumber}_summarizer
-  const summarizerMatch = streamId.match(/^(.+)_r(\d+)_summarizer$/);
-  if (summarizerMatch) {
+  // Match moderator: {threadId}_r{roundNumber}_moderator
+  const moderatorMatch = streamId.match(/^(.+)_r(\d+)_moderator$/);
+  if (moderatorMatch) {
     return {
-      threadId: summarizerMatch[1]!,
-      roundNumber: Number.parseInt(summarizerMatch[2]!, 10),
-      phase: 'summarizer',
+      threadId: moderatorMatch[1]!,
+      roundNumber: Number.parseInt(moderatorMatch[2]!, 10),
+      phase: 'moderator',
     };
   }
 
@@ -537,10 +537,10 @@ export function isParticipantStreamId(streamId: string): boolean {
 }
 
 /**
- * Check if stream ID is for summarizer
+ * Check if stream ID is for moderator
  */
-export function isSummarizerStreamId(streamId: string): boolean {
-  return getStreamPhase(streamId) === 'summarizer';
+export function isModeratorStreamId(streamId: string): boolean {
+  return getStreamPhase(streamId) === 'moderator';
 }
 
 // ============================================================================
@@ -566,20 +566,20 @@ export function parseStreamChunksArray(data: unknown): StreamChunk[] | null {
 }
 
 /**
- * Safely parse SummaryStreamBufferMetadata from KV data
+ * Safely parse ModeratorStreamBufferMetadata from KV data
  * @returns Parsed metadata or null if invalid
  */
-export function parseSummaryStreamBufferMetadata(data: unknown): SummaryStreamBufferMetadata | null {
-  const result = SummaryStreamBufferMetadataSchema.safeParse(data);
+export function parseModeratorStreamBufferMetadata(data: unknown): ModeratorStreamBufferMetadata | null {
+  const result = ModeratorStreamBufferMetadataSchema.safeParse(data);
   return result.success ? result.data : null;
 }
 
 /**
- * Safely parse SummaryStreamChunk array from KV data
+ * Safely parse ModeratorStreamChunk array from KV data
  * @returns Parsed chunks array or null if invalid
  */
-export function parseSummaryStreamChunksArray(data: unknown): SummaryStreamChunk[] | null {
-  const result = z.array(SummaryStreamChunkSchema).safeParse(data);
+export function parseModeratorStreamChunksArray(data: unknown): ModeratorStreamChunk[] | null {
+  const result = z.array(ModeratorStreamChunkSchema).safeParse(data);
   return result.success ? result.data : null;
 }
 

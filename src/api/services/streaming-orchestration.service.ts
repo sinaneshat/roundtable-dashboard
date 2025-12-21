@@ -36,6 +36,7 @@ import { buildCitableContext } from '@/api/services/citation-context-builder';
 import {
   buildAttachmentCitationPrompt,
   buildParticipantSystemPrompt,
+  PARTICIPANT_ROSTER_PLACEHOLDER,
 } from '@/api/services/prompts.service';
 import { buildSearchContext } from '@/api/services/search-context-builder';
 import { getFile } from '@/api/services/storage.service';
@@ -49,7 +50,7 @@ import type {
 import type { TypedLogger } from '@/api/types/logger';
 import { isModelFilePartWithData } from '@/api/types/uploads';
 import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation';
 import {
   extractTextFromMessage,
@@ -99,6 +100,8 @@ export type LoadParticipantConfigResult = {
 
 export type BuildSystemPromptParams = {
   participant: ChatParticipant;
+  /** All participants in the current round (for roster injection) */
+  allParticipants: ChatParticipant[];
   thread: Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>;
   userQuery: string;
   previousDbMessages: ChatMessage[];
@@ -580,6 +583,7 @@ export async function buildSystemPromptWithContext(
 ): Promise<BuildSystemPromptResult> {
   const {
     participant,
+    allParticipants,
     thread,
     userQuery,
     previousDbMessages,
@@ -598,6 +602,13 @@ export async function buildSystemPromptWithContext(
   let systemPrompt
     = participant.settings?.systemPrompt
       || buildParticipantSystemPrompt(participant.role, thread.mode);
+
+  // ✅ V2.4: Inject participant roster for mandatory named positioning
+  // Build roster string from all participants (e.g., "Claude Opus 4, Gemini 2.5 Pro, GPT-4o")
+  const participantRoster = allParticipants
+    .map(p => p.role || p.modelId.split('/').pop() || 'Unknown')
+    .join(', ');
+  systemPrompt = systemPrompt.replace(PARTICIPANT_ROSTER_PLACEHOLDER, participantRoster);
 
   // Add project-based context
   if (thread.projectId && userQuery.trim()) {
@@ -697,7 +708,7 @@ export async function buildSystemPromptWithContext(
 
               // Add both synthesized response and source files
               const ragContext = ragResponse.response
-                ? `### AI Summary\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
+                ? `### AI Analysis\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
                 : `### Relevant Files\n${sourceFiles}`;
 
               systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\nUse the above knowledge from indexed project files when relevant. Cite sources using [rag_xxxxx] markers when referencing specific files.`;
@@ -736,7 +747,7 @@ export async function buildSystemPromptWithContext(
             maxMemories: 10,
             maxMessagesPerThread: 3,
             maxSearchResults: 5,
-            maxAnalyses: 3,
+            maxModerators: 3,
             db,
           });
 

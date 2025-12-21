@@ -109,18 +109,18 @@ const model = getModelOrDefault(modelId);
 ### Timeline/Virtualization
 
 #### `useThreadTimeline.ts` (178 lines)
-Group messages, summaries, and changelog by round number into timeline items.
-- **Returns:** `TimelineItem[]` (discriminated union: messages | summary | changelog)
+Group messages and changelog by round number into timeline items.
+- **Returns:** `TimelineItem[]` (discriminated union: messages | changelog)
 - **Usage:** Chat history rendering with round-based organization
 - **Features:** Automatic round grouping, type-safe timeline items
+- **Note:** Moderator messages are included in regular message timeline with `isModerator: true` metadata
 
 ```typescript
 const timeline = useThreadTimeline({
-  messages,
-  summaries,
+  messages,  // Includes both participant and moderator messages
   changelog
 });
-// timeline: Array<{ type: 'messages' | 'summary' | 'changelog', data, roundNumber, key }>
+// timeline: Array<{ type: 'messages' | 'changelog', data, roundNumber, key }>
 ```
 
 #### `useVirtualizedTimeline.ts` (368 lines)

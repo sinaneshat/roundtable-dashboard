@@ -2,7 +2,7 @@
  * Participant Completion Gate
  *
  * SINGLE SOURCE OF TRUTH for determining if all participants have finished streaming.
- * This is the STRICT GATE that MUST be passed before any summary creation can proceed.
+ * This is the STRICT GATE that MUST be passed before moderator message creation can proceed.
  *
  * KEY INVARIANTS:
  * 1. A participant is NOT complete if ANY part has `state: 'streaming'`
@@ -13,16 +13,22 @@
  * RACE CONDITION PREVENTION:
  * - This module provides fresh state checks (via store.getState())
  * - Never relies on closure values which can be stale
- * - Called immediately before summary creation decisions
+ * - Called immediately before moderator message creation decisions
+ *
+ * MODERATOR FLOW:
+ * - useModeratorTrigger checks this gate before creating moderator messages
+ * - Moderator messages (assistant role with isModerator: true) trigger moderator streaming
+ * - This ensures moderators only start after ALL participants complete their responses
  *
  * Location: /src/stores/chat/utils/participant-completion-gate.ts
  */
 
 import type { UIMessage } from 'ai';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import { getAssistantMetadata, getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
+import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
+import { isNonEmptyString, isObject } from '@/lib/utils/type-guards';
 
 // ============================================================================
 // Types
@@ -86,14 +92,25 @@ export function isMessageComplete(message: UIMessage): boolean {
   const metadata = getAssistantMetadata(message.metadata);
   const hasFinishReason = !!metadata?.finishReason;
 
+  // ✅ FALLBACK: Check finishReason directly when Zod validation fails
+  // When streams fail, metadata may have finishReason but lack required fields (e.g., usage)
+  // causing getAssistantMetadata() to return null. This fallback prevents failed
+  // participants from blocking moderator creation.
+  let hasFallbackFinishReason = false;
+  if (!metadata && isObject(message.metadata)) {
+    const rawFinishReason = message.metadata.finishReason;
+    hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
+  }
+
   // Complete if has text content OR has finish reason (handles error cases)
-  return hasTextContent || hasFinishReason;
+  return hasTextContent || hasFinishReason || hasFallbackFinishReason;
 }
 
 /**
  * Get comprehensive completion status for all participants in a round
  *
- * This is the STRICT CHECK that should be used before creating summaries.
+ * This is the STRICT CHECK that should be used before triggering moderator.
+ * Moderator messages (assistant role with isModerator: true metadata) trigger moderator streaming.
  * It provides detailed debugging information for troubleshooting race conditions.
  */
 export function getParticipantCompletionStatus(
@@ -162,14 +179,21 @@ export function getParticipantCompletionStatus(
     const metadata = getAssistantMetadata(participantMessage.metadata);
     const hasFinishReason = !!metadata?.finishReason;
 
-    const isComplete = !hasStreamingParts && (hasTextContent || hasFinishReason);
+    // ✅ FALLBACK: Check finishReason directly when Zod validation fails
+    let hasFallbackFinishReason = false;
+    if (!metadata && isObject(participantMessage.metadata)) {
+      const rawFinishReason = participantMessage.metadata.finishReason;
+      hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
+    }
+
+    const isComplete = !hasStreamingParts && (hasTextContent || hasFinishReason || hasFallbackFinishReason);
 
     debugInfo.push({
       participantId: participant.id,
       participantIndex: participant.priority,
       hasMessage: true,
       hasStreamingParts,
-      hasFinishReason,
+      hasFinishReason: hasFinishReason || hasFallbackFinishReason,
       hasContent: !!hasTextContent,
       isComplete,
     });
@@ -218,4 +242,52 @@ export function logParticipantCompletionStatus(
   if (process.env.NODE_ENV !== 'development') {
     // No-op in production
   }
+}
+
+// ============================================================================
+// Moderator Message Utilities
+// ============================================================================
+
+/**
+ * Get the moderator message for a specific round
+ *
+ * Moderator messages are assistant messages with isModerator: true metadata.
+ * This is the consolidated utility to prevent duplication across the codebase.
+ *
+ * @param messages - Array of UI messages
+ * @param roundNumber - Round number to check
+ * @returns Moderator message for the round, or undefined if not found
+ */
+export function getModeratorMessageForRound(
+  messages: UIMessage[],
+  roundNumber: number,
+): UIMessage | undefined {
+  return messages.find((m) => {
+    if (m.role !== MessageRoles.ASSISTANT)
+      return false;
+
+    const metadata = getModeratorMetadata(m.metadata);
+    if (!metadata)
+      return false;
+
+    return getRoundNumber(m.metadata) === roundNumber;
+  });
+}
+
+/**
+ * Get streaming status of a message
+ *
+ * Checks if the message has streaming parts to determine if it's still being generated.
+ *
+ * @param message - UI message to check
+ * @returns STREAMING if message has streaming parts, COMPLETE otherwise
+ */
+export function getMessageStreamingStatus(
+  message: UIMessage,
+): typeof MessageStatuses.STREAMING | typeof MessageStatuses.COMPLETE {
+  const hasStreamingParts = message.parts?.some(
+    p => 'state' in p && p.state === 'streaming',
+  ) ?? false;
+
+  return hasStreamingParts ? MessageStatuses.STREAMING : MessageStatuses.COMPLETE;
 }

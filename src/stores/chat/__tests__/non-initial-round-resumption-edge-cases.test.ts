@@ -30,7 +30,7 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import {
   createTestAssistantMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
 
 import type { ChatStore } from '../store-schemas';
 
@@ -175,7 +175,6 @@ function setupMockStore(overrides?: Partial<ChatStore>): void {
     messages: [],
     participants: createMockParticipants(4),
     preSearches: [],
-    summaries: [],
     isStreaming: false,
     waitingToStartStreaming: false,
     pendingMessage: null,

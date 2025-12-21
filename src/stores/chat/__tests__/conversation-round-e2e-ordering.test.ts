@@ -7,11 +7,11 @@
  * 1. Round starts when user sends a message (with optional files)
  * 2. Web search (if enabled) MUST complete BEFORE any participant speaks
  * 3. Participants respond in priority order (index 0, 1, 2...)
- * 4. Round summary appears AFTER all participants complete
+ * 4. Round moderator appears AFTER all participants complete
  * 5. Changelog appears ABOVE user message in subsequent rounds when config changes
  *
  * Timeline order per round:
- * [Changelog if config changed] → User Message → [Pre-search if enabled] → Participants → Summary
+ * [Changelog if config changed] → User Message → [Pre-search if enabled] → Participants → Moderator
  *
  * These tests validate the expected behavior documented in FLOW_DOCUMENTATION.md
  */
@@ -20,12 +20,13 @@ import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
   createTestAssistantMessage,
+  createTestModeratorMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
 
 import { createChatStore } from '../store';
 
@@ -92,7 +93,7 @@ function createMockPreSearch(
       ? {
           queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
           results: [],
-          summary: 'Search summary',
+          moderatorSummary: 'Search moderator summary',
           successCount: 1,
           failureCount: 0,
           totalResults: 0,
@@ -103,43 +104,6 @@ function createMockPreSearch(
     createdAt: new Date(),
     completedAt: status === 'complete' ? new Date() : null,
   } as StoredPreSearch;
-}
-
-function createMockSummary(
-  roundNumber: number,
-  status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
-  participantMessageIds: string[] = [],
-  threadId = 'thread-123',
-): StoredRoundSummary {
-  return {
-    id: `summary-${threadId}-r${roundNumber}`,
-    threadId,
-    roundNumber,
-    mode: ChatModes.ANALYZING,
-    userQuestion: `Question for round ${roundNumber}`,
-    status: status === 'pending'
-      ? MessageStatuses.PENDING
-      : status === 'streaming'
-        ? MessageStatuses.STREAMING
-        : status === 'complete'
-          ? MessageStatuses.COMPLETE
-          : MessageStatuses.FAILED,
-    summaryData: status === 'complete'
-      ? {
-          confidence: { overall: 85, reasoning: 'Test' },
-          modelVoices: [],
-          article: { headline: 'Test', narrative: 'Test', keyTakeaway: 'Test' },
-          recommendations: [],
-          consensusTable: [],
-          minorityViews: [],
-          convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
-        }
-      : null,
-    participantMessageIds,
-    errorMessage: null,
-    completedAt: status === 'complete' ? new Date() : null,
-    createdAt: new Date(),
-  } as StoredRoundSummary;
 }
 
 function createMockChangelog(
@@ -166,6 +130,18 @@ function createMockChangelog(
     },
     createdAt: new Date(),
   } as ChatThreadChangelog;
+}
+
+function createModeratorMsg(
+  roundNumber: number,
+  content = `Moderator for round ${roundNumber}`,
+): ChatMessage {
+  return createTestModeratorMessage({
+    id: `thread-123_r${roundNumber}_moderator`,
+    content,
+    roundNumber,
+    finishReason: FinishReasons.STOP,
+  });
 }
 
 // ============================================================================
@@ -466,12 +442,14 @@ describe('participant Response Order', () => {
 });
 
 // ============================================================================
-// ROUND SUMMARY POSITION TESTS
+// ROUND MODERATOR POSITION TESTS
 // ============================================================================
 
-describe('round Summary Position', () => {
-  describe('summary Appears After Last Participant', () => {
-    it('summary MUST appear AFTER all participants complete', () => {
+describe('round Moderator Position', () => {
+  describe('moderator Appears After Last Participant', () => {
+    it('moderator MUST appear AFTER all participants in messages array', () => {
+      // ✅ UNIFIED: Moderator now renders inline with participants in messages
+      // Not as a separate timeline item
       const messages = [
         createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
         createTestAssistantMessage({
@@ -490,16 +468,12 @@ describe('round Summary Position', () => {
           participantIndex: 1,
           finishReason: FinishReasons.STOP,
         }),
-      ];
-
-      const summaries = [
-        createMockSummary(0, 'complete', ['a0p0', 'a0p1']),
+        createModeratorMsg(0, 'Round 0 summary'),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches: [],
         }),
@@ -507,16 +481,18 @@ describe('round Summary Position', () => {
 
       const timeline = result.current;
 
-      // Find positions
-      const messagesIndex = timeline.findIndex(item => item.type === 'messages');
-      const summaryIndex = timeline.findIndex(item => item.type === 'summary');
+      // Messages timeline item should exist
+      const messagesItem = timeline.find(item => item.type === 'messages');
+      expect(messagesItem).toBeDefined();
+      expect(messagesItem?.type).toBe('messages');
 
-      expect(messagesIndex).toBeGreaterThan(-1);
-      expect(summaryIndex).toBeGreaterThan(-1);
-      expect(summaryIndex).toBeGreaterThan(messagesIndex);
+      // ✅ UNIFIED: Moderator is now in messages array, sorted LAST
+      const roundMessages = messagesItem?.type === 'messages' ? messagesItem.data : [];
+      const lastMessage = roundMessages[roundMessages.length - 1];
+      expect(lastMessage?.metadata).toHaveProperty('isModerator', true);
     });
 
-    it('summary MUST NOT appear while participants are still streaming', () => {
+    it('moderator MUST NOT appear while participants are still streaming', () => {
       const messages = [
         createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
         createTestAssistantMessage({
@@ -530,15 +506,9 @@ describe('round Summary Position', () => {
         // Participant 1 is still streaming (no finishReason in a real scenario)
       ];
 
-      // Pending summary with no participantMessageIds = not ready
-      const summaries = [
-        createMockSummary(0, 'pending', []),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches: [],
         }),
@@ -546,12 +516,13 @@ describe('round Summary Position', () => {
 
       const timeline = result.current;
 
-      // Pending summary without messageIds should NOT appear
-      const summaryItem = timeline.find(item => item.type === 'summary');
-      expect(summaryItem).toBeUndefined();
+      // Pending moderator without messageIds should NOT appear
+      const moderatorItem = timeline.find(item => item.type === 'moderator');
+      expect(moderatorItem).toBeUndefined();
     });
 
-    it('summary with complete status always appears', () => {
+    it('moderator with complete status always appears in messages', () => {
+      // ✅ UNIFIED: Moderator is now included in messages, not as separate summary
       const messages = [
         createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
         createTestAssistantMessage({
@@ -562,25 +533,27 @@ describe('round Summary Position', () => {
           participantIndex: 0,
           finishReason: FinishReasons.STOP,
         }),
-      ];
-
-      const summaries = [
-        createMockSummary(0, 'complete', ['a0p0']),
+        createModeratorMsg(0, 'Round 0 summary'),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches: [],
         }),
       );
 
       const timeline = result.current;
-      const summaryItem = timeline.find(item => item.type === 'summary');
-      expect(summaryItem).toBeDefined();
-      expect(summaryItem?.type).toBe('summary');
+
+      // Should have messages item
+      const messagesItem = timeline.find(item => item.type === 'messages');
+      expect(messagesItem).toBeDefined();
+
+      // Moderator should be in messages, sorted last
+      const roundMessages = messagesItem?.type === 'messages' ? messagesItem.data : [];
+      const moderatorMessage = roundMessages.find(m => m.metadata && 'isModerator' in m.metadata && m.metadata.isModerator === true);
+      expect(moderatorMessage).toBeDefined();
     });
   });
 });
@@ -622,15 +595,9 @@ describe('changelog Position in Subsequent Rounds', () => {
         ]),
       ];
 
-      const summaries = [
-        createMockSummary(0, 'complete', ['a0p0']),
-        createMockSummary(1, 'complete', ['a1p0']),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog,
           preSearches: [],
         }),
@@ -679,15 +646,11 @@ describe('changelog Position in Subsequent Rounds', () => {
         ]),
       ];
 
-      const summaries = [
-        createMockSummary(1, 'complete', ['a1p0']),
-        createMockSummary(2, 'complete', ['a2p0']),
-      ];
+      // ✅ TEXT STREAMING: summaries removed - now chatMessage with metadata.isModerator
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog,
           preSearches: [],
         }),
@@ -718,7 +681,6 @@ describe('changelog Position in Subsequent Rounds', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries: [createMockSummary(0, 'complete', ['a0p0'])],
           changelog: [],
           preSearches: [],
         }),
@@ -740,6 +702,7 @@ describe('changelog Position in Subsequent Rounds', () => {
 describe('complete Round Timeline Order', () => {
   describe('full Round Order: Changelog → User → PreSearch → Participants → Summary', () => {
     it('round with all elements in correct order', () => {
+      // ✅ UNIFIED: Moderator is now included in messages, not as separate summary
       const messages = [
         createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
         createTestAssistantMessage({
@@ -758,15 +721,14 @@ describe('complete Round Timeline Order', () => {
           participantIndex: 1,
           finishReason: FinishReasons.STOP,
         }),
+        createModeratorMsg(0, 'Round 0 summary'),
       ];
 
       const preSearches = [createMockPreSearch(0, 'complete')];
-      const summaries = [createMockSummary(0, 'complete', ['a0p0', 'a0p1'])];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches,
         }),
@@ -774,9 +736,16 @@ describe('complete Round Timeline Order', () => {
 
       const timeline = result.current;
 
-      // Expected order: messages (contains user + assistants), summary
+      // ✅ UNIFIED: Only 'messages' item now (moderator is inside messages, sorted last)
       // Pre-search is rendered INSIDE ChatMessageList when messages exist
-      expect(timeline.map(item => item.type)).toEqual(['messages', 'summary']);
+      expect(timeline.map(item => item.type)).toEqual(['messages']);
+
+      // Verify order within messages: user, participants by index, then moderator
+      const messagesItem = timeline.find(item => item.type === 'messages');
+      const roundMessages = messagesItem?.type === 'messages' ? messagesItem.data : [];
+      expect(roundMessages).toHaveLength(4); // user + 2 participants + moderator
+      expect(roundMessages[0]?.role).toBe('user');
+      expect(roundMessages[3]?.metadata).toHaveProperty('isModerator', true);
     });
 
     it('multi-round conversation maintains correct order per round', () => {
@@ -810,15 +779,11 @@ describe('complete Round Timeline Order', () => {
         ]),
       ];
 
-      const summaries = [
-        createMockSummary(0, 'complete', ['a0p0']),
-        createMockSummary(1, 'complete', ['a1p0']),
-      ];
+      // ✅ TEXT STREAMING: summaries removed - now chatMessage with metadata.isModerator
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog,
           preSearches: [],
         }),
@@ -826,15 +791,13 @@ describe('complete Round Timeline Order', () => {
 
       const timeline = result.current;
 
-      // Expected order:
-      // Round 0: messages, summary
-      // Round 1: changelog, messages, summary
+      // Expected order (without summaries):
+      // Round 0: messages
+      // Round 1: changelog, messages
       const expectedOrder = [
         { type: 'messages', roundNumber: 0 },
-        { type: 'summary', roundNumber: 0 },
         { type: 'changelog', roundNumber: 1 },
         { type: 'messages', roundNumber: 1 },
-        { type: 'summary', roundNumber: 1 },
       ];
 
       expect(timeline.map(item => ({ type: item.type, roundNumber: item.roundNumber }))).toEqual(expectedOrder);
@@ -862,12 +825,9 @@ describe('complete Round Timeline Order', () => {
         createMockPreSearch(1, 'streaming'), // Orphaned pre-search
       ];
 
-      const summaries = [createMockSummary(0, 'complete', ['a0p0'])];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches,
         }),
@@ -906,20 +866,20 @@ describe('race Condition Prevention', () => {
       expect(round1Trigger).toBe(true);
     });
 
-    it('summary trigger is idempotent (only triggers once per round)', () => {
+    it('moderator trigger is idempotent (only triggers once per round)', () => {
       const store = createChatStore();
 
       // First check - not triggered yet
-      expect(store.getState().hasSummaryStreamBeenTriggered('summary-123', 0)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(false);
 
       // Mark as triggered
-      store.getState().markSummaryStreamTriggered('summary-123', 0);
+      store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
       // Second check - should be blocked
-      expect(store.getState().hasSummaryStreamBeenTriggered('summary-123', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
 
       // Different round should not be blocked
-      expect(store.getState().hasSummaryStreamBeenTriggered('summary-456', 1)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-456', 1)).toBe(false);
     });
   });
 
@@ -957,7 +917,6 @@ describe('race Condition Prevention', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries: [],
           changelog: [],
           preSearches: [],
         }),
@@ -990,21 +949,6 @@ describe('race Condition Prevention', () => {
       // Different round should be added
       store.getState().addPreSearch(createMockPreSearch(1, 'pending'));
       expect(store.getState().preSearches).toHaveLength(2);
-    });
-
-    it('summary deduplication prevents duplicate entries', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createMockSummary(0, 'pending'));
-      expect(store.getState().summaries).toHaveLength(1);
-
-      // Adding same round again should not duplicate
-      store.getState().addSummary(createMockSummary(0, 'streaming'));
-      expect(store.getState().summaries).toHaveLength(1);
-
-      // Different round should be added
-      store.getState().addSummary(createMockSummary(1, 'pending'));
-      expect(store.getState().summaries).toHaveLength(2);
     });
   });
 });
@@ -1075,16 +1019,11 @@ describe('multi-Round E2E Scenarios', () => {
         ]),
       ];
 
-      const summaries = [
-        createMockSummary(0, 'complete', ['a0p0', 'a0p1']),
-        createMockSummary(1, 'complete', ['a1p0', 'a1p1']),
-        createMockSummary(2, 'complete', ['a2p0']),
-      ];
+      // ✅ TEXT STREAMING: moderators now chatMessage with metadata.isModerator
 
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog,
           preSearches: [],
         }),
@@ -1092,29 +1031,27 @@ describe('multi-Round E2E Scenarios', () => {
 
       const timeline = result.current;
 
-      // Verify structure
-      // Round 0: messages, summary
-      // Round 1: messages, summary
-      // Round 2: changelog, messages, summary
-      expect(timeline).toHaveLength(7);
+      // Verify structure (with moderators in messages)
+      // Round 0: messages
+      // Round 1: messages
+      // Round 2: changelog, messages
+      expect(timeline).toHaveLength(4);
 
       // Round 0
       expect(timeline[0]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 0 }));
-      expect(timeline[1]).toEqual(expect.objectContaining({ type: 'summary', roundNumber: 0 }));
 
       // Round 1
-      expect(timeline[2]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 1 }));
-      expect(timeline[3]).toEqual(expect.objectContaining({ type: 'summary', roundNumber: 1 }));
+      expect(timeline[1]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 1 }));
 
       // Round 2 (with changelog)
-      expect(timeline[4]).toEqual(expect.objectContaining({ type: 'changelog', roundNumber: 2 }));
-      expect(timeline[5]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 2 }));
-      expect(timeline[6]).toEqual(expect.objectContaining({ type: 'summary', roundNumber: 2 }));
+      expect(timeline[2]).toEqual(expect.objectContaining({ type: 'changelog', roundNumber: 2 }));
+      expect(timeline[3]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 2 }));
     });
   });
 
   describe('web Search Toggle Between Rounds', () => {
     it('handles web search enabled then disabled between rounds', () => {
+      // ✅ UNIFIED: Moderator is now included in messages, not as separate item
       const messages = [
         // Round 0: Web search enabled
         createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
@@ -1126,6 +1063,7 @@ describe('multi-Round E2E Scenarios', () => {
           participantIndex: 0,
           finishReason: FinishReasons.STOP,
         }),
+        createModeratorMsg(0, 'Round 0 moderator'),
 
         // Round 1: Web search disabled
         createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
@@ -1137,21 +1075,16 @@ describe('multi-Round E2E Scenarios', () => {
           participantIndex: 0,
           finishReason: FinishReasons.STOP,
         }),
+        createModeratorMsg(1, 'Round 1 moderator'),
       ];
 
       const preSearches = [
         createMockPreSearch(0, 'complete'), // Only round 0 has pre-search
       ];
 
-      const summaries = [
-        createMockSummary(0, 'complete', ['a0p0']),
-        createMockSummary(1, 'complete', ['a1p0']),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches,
         }),
@@ -1159,13 +1092,21 @@ describe('multi-Round E2E Scenarios', () => {
 
       const timeline = result.current;
 
-      // Verify structure
+      // ✅ UNIFIED: Only 'messages' items now (moderator inside each round's messages)
       expect(timeline.map(item => ({ type: item.type, roundNumber: item.roundNumber }))).toEqual([
         { type: 'messages', roundNumber: 0 },
-        { type: 'summary', roundNumber: 0 },
         { type: 'messages', roundNumber: 1 },
-        { type: 'summary', roundNumber: 1 },
       ]);
+
+      // Verify moderator is last in each round
+      const round0 = timeline.find(item => item.type === 'messages' && item.roundNumber === 0);
+      const round1 = timeline.find(item => item.type === 'messages' && item.roundNumber === 1);
+
+      const round0Messages = round0?.type === 'messages' ? round0.data : [];
+      const round1Messages = round1?.type === 'messages' ? round1.data : [];
+
+      expect(round0Messages[round0Messages.length - 1]?.metadata).toHaveProperty('isModerator', true);
+      expect(round1Messages[round1Messages.length - 1]?.metadata).toHaveProperty('isModerator', true);
 
       // No orphaned pre-search items at timeline level (rendered inside messages)
       const timelinePreSearches = timeline.filter(item => item.type === 'pre-search');

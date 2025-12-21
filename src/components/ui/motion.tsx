@@ -52,7 +52,7 @@ export const participantMessageVariants: Variants = {
 };
 
 /**
- * Summary/Search cards - fade in
+ * Moderator/Search cards - fade in
  */
 export const slideUpVariants: Variants = {
   initial: { opacity: 0 },
@@ -74,7 +74,7 @@ export const timelineEntranceVariants: Variants = {
 };
 
 /**
- * Accordion card entrance (PreSearch, RoundSummary) - fade in
+ * Accordion card entrance (PreSearch, moderator) - fade in
  */
 export const accordionCardVariants: Variants = {
   initial: { opacity: 0 },
@@ -205,7 +205,7 @@ export function ScrollFromTop({
 }
 
 /**
- * Summary card - fade in when scrolled into view
+ * Moderator card - fade in when scrolled into view
  */
 export function ScrollFromBottom({
   children,
@@ -297,30 +297,16 @@ type AnimatedStreamingListProps = {
 };
 
 /**
- * Container for streaming lists - uses layout animation for smooth content changes
- * The layout prop ensures smooth height transitions as items are added/removed
+ * Container for streaming lists - no height animations
  */
 export function AnimatedStreamingList({
   children,
   className,
-  groupId,
 }: AnimatedStreamingListProps) {
   return (
-    <motion.div
-      layout
-      layoutId={groupId}
-      transition={{
-        layout: {
-          type: 'spring',
-          stiffness: 400,
-          damping: 30,
-          mass: 0.8,
-        },
-      }}
-      className={cn(className)}
-    >
+    <div className={cn(className)}>
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -335,13 +321,11 @@ type AnimatedStreamingItemProps = {
 };
 
 /**
- * Individual streaming item - fade in with layout animation
- * Layout prop prevents height jumps when content size changes
+ * Individual streaming item - fade in only, no height animations
  */
 export function AnimatedStreamingItem({
   children,
   className,
-  itemKey,
   index = 0,
   delay = 0,
   staggerDelay = 0.03,
@@ -353,22 +337,12 @@ export function AnimatedStreamingItem({
 
   return (
     <motion.div
-      layout
-      layoutId={itemKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{
-        opacity: {
-          duration: ANIMATION_DURATION.normal,
-          delay: delay + index * staggerDelay,
-          ease: ANIMATION_EASE.enter,
-        },
-        layout: {
-          type: 'spring',
-          stiffness: 400,
-          damping: 30,
-          mass: 0.8,
-        },
+        duration: ANIMATION_DURATION.normal,
+        delay: delay + index * staggerDelay,
+        ease: ANIMATION_EASE.enter,
       }}
       className={cn(className)}
     >
@@ -461,32 +435,17 @@ type StreamingMessageContentProps = {
 };
 
 /**
- * Wrapper for streaming message content that smoothly animates height changes
- * Use this around text content that grows as tokens stream in
- * Prevents jarring height jumps during AI response streaming
+ * Wrapper for streaming message content
+ * No height animations - content grows naturally as text streams in
  */
 export function StreamingMessageContent({
   children,
   className,
-  isStreaming = false,
-  layoutId,
 }: StreamingMessageContentProps) {
   return (
-    <motion.div
-      layout={isStreaming ? 'position' : false}
-      layoutId={layoutId}
-      transition={{
-        layout: {
-          type: 'spring',
-          stiffness: 500,
-          damping: 35,
-          mass: 0.8,
-        },
-      }}
-      className={cn(className)}
-    >
+    <div className={cn(className)}>
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -503,29 +462,21 @@ type AnimatedSectionProps = {
 };
 
 /**
- * Animated section - fade in with layout support
+ * Animated section - fade in only, no height animations
  */
 export function AnimatedSection({
   children,
   className,
-  sectionKey,
   index = 0,
 }: AnimatedSectionProps) {
   return (
     <motion.div
-      layout
-      layoutId={sectionKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{
         duration: 0.2,
         delay: index * 0.05,
         ease: ANIMATION_EASE.enter,
-        layout: {
-          type: 'spring',
-          stiffness: 400,
-          damping: 30,
-        },
       }}
       className={cn(className)}
     >
@@ -735,13 +686,11 @@ export function StaggerItem({
 export function SimpleMotion({
   children,
   className,
-  ...props
-}: MotionComponentProps) {
-  return (
-    <div className={cn(className)} {...(props as React.HTMLAttributes<HTMLDivElement>)}>
-      {children}
-    </div>
-  );
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={cn(className)}>{children}</div>;
 }
 
 /**
@@ -754,10 +703,6 @@ export function PageTransition({ children, className }: { children: ReactNode; c
     </FadeIn>
   );
 }
-
-// =============================================================================
-// LEGACY EXPORTS - Keep for compatibility but simplified
-// =============================================================================
 
 export const layoutTransition = {
   type: 'spring' as const,

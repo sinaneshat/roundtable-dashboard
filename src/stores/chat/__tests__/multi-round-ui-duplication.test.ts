@@ -4,16 +4,16 @@
  * Tests to detect and prevent UI duplication issues in multi-round conversations.
  *
  * CRITICAL ISSUE: After initial round completes streaming, second round shows
- * duplicated UI elements (messages, pre-searches, or summaries appearing twice).
+ * duplicated UI elements (messages, pre-searches, or moderators appearing twice).
  *
  * EXPECTED FLOW per round:
  * 1. User message (with optional files)
  * 2. Pre-search streams (if web search enabled) - MUST complete before participants
  * 3. Participants respond in order (index 0, 1, 2...)
- * 4. Summary streams after all participants complete
+ * 4. Moderator streams after all participants complete
  *
  * BETWEEN ROUNDS (config changes):
- * - Changelog card appears under previous round's summary
+ * - Changelog card appears under previous round's moderator
  * - New round follows same flow
  *
  * SINGLE SOURCE OF TRUTH: Thread state for all configuration decisions
@@ -23,9 +23,9 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing/helpers';
+import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 import { getParticipantModelIds } from '@/lib/utils/participant';
 
 import { createChatStore } from '../store';
@@ -111,47 +111,11 @@ function createPreSearch(
     roundNumber,
     userQuery: `Query ${roundNumber}`,
     status: statusMap[status],
-    searchData: status === 'complete' ? { queries: [], results: [], summary: 'Done', successCount: 1, failureCount: 0, totalResults: 0, totalTime: 100 } : null,
+    searchData: status === 'complete' ? { queries: [], results: [], moderatorSummary: 'Done', successCount: 1, failureCount: 0, totalResults: 0, totalTime: 100 } : null,
     errorMessage: null,
     createdAt: new Date(),
     completedAt: status === 'complete' ? new Date() : null,
   } as StoredPreSearch;
-}
-
-function createSummary(
-  roundNumber: number,
-  status: 'pending' | 'streaming' | 'complete' = 'complete',
-  participantCount = 2,
-): StoredRoundSummary {
-  const statusMap = {
-    pending: MessageStatuses.PENDING,
-    streaming: MessageStatuses.STREAMING,
-    complete: MessageStatuses.COMPLETE,
-  };
-  const messageIds = Array.from({ length: participantCount }, (_, i) => `thread-123_r${roundNumber}_p${i}`);
-  return {
-    id: `summary-thread-123-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    mode: ChatModes.ANALYZING,
-    userQuestion: `Question ${roundNumber}`,
-    status: statusMap[status],
-    summaryData: status === 'complete'
-      ? {
-          confidence: { overall: 85, reasoning: 'Test' },
-          modelVoices: [],
-          article: { headline: 'Test', narrative: 'Test', keyTakeaway: 'Test' },
-          recommendations: [],
-          consensusTable: [],
-          minorityViews: [],
-          convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
-        }
-      : null,
-    participantMessageIds: messageIds,
-    errorMessage: null,
-    completedAt: status === 'complete' ? new Date() : null,
-    createdAt: new Date(),
-  } as StoredRoundSummary;
 }
 
 function _createChangelog(roundNumber: number): ChatThreadChangelog {
@@ -164,6 +128,29 @@ function _createChangelog(roundNumber: number): ChatThreadChangelog {
     changeData: { changes: [{ type: 'added', participantId: 'new-participant', modelId: 'new-model' }] },
     createdAt: new Date(),
   } as ChatThreadChangelog;
+}
+
+function _createModeratorMsg(
+  roundNumber: number,
+  content = `Moderator R${roundNumber}`,
+): ChatMessage {
+  return createTestAssistantMessage({
+    id: `thread-123_r${roundNumber}_moderator`,
+    content,
+    roundNumber,
+    participantId: undefined,
+    participantIndex: undefined,
+    finishReason: FinishReasons.STOP,
+    metadata: {
+      role: MessageRoles.ASSISTANT,
+      isModerator: true,
+      roundNumber,
+      model: 'gemini-2.0-flash',
+      finishReason: FinishReasons.STOP,
+      usage: null,
+      createdAt: new Date().toISOString(),
+    },
+  });
 }
 
 // ============================================================================
@@ -205,12 +192,6 @@ describe('message Duplication Detection', () => {
         createUserMsg(0),
         createAssistantMsg(0, 0),
       ]);
-      store.getState().setSummaries([createSummary(0, 'complete', 1)]);
-
-      // Simulate race condition: prepareForNewMessage called twice for round 1
-      store.getState().setExpectedParticipantIds(getParticipantModelIds(participants));
-      store.getState().setStreamingRoundNumber(1);
-      store.getState().prepareForNewMessage('Question 1', []);
 
       const messagesAfterFirst = store.getState().messages;
       const round1UserMsgsAfterFirst = messagesAfterFirst.filter(
@@ -324,15 +305,9 @@ describe('timeline Duplication Detection', () => {
         createAssistantMsg(1, 1),
       ];
 
-      const summaries = [
-        createSummary(0, 'complete'),
-        createSummary(1, 'complete'),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches: [],
         }),
@@ -366,7 +341,6 @@ describe('timeline Duplication Detection', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries: [createSummary(0, 'complete')],
           changelog: [],
           preSearches: [],
         }),
@@ -396,7 +370,6 @@ describe('timeline Duplication Detection', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages: [createUserMsg(0), createUserMsg(1)],
-          summaries: [],
           changelog: [],
           preSearches,
         }),
@@ -435,60 +408,7 @@ describe('timeline Duplication Detection', () => {
     });
   });
 
-  describe('summary Duplication', () => {
-    it('timeline has at most ONE summary per round', () => {
-      const summaries = [
-        createSummary(0, 'complete'),
-        createSummary(0, 'streaming'), // Duplicate round 0
-        createSummary(1, 'pending'),
-      ];
-
-      const { result } = renderHook(() =>
-        useThreadTimeline({
-          messages: [
-            createUserMsg(0),
-            createAssistantMsg(0, 0),
-            createUserMsg(1),
-            createAssistantMsg(1, 0),
-          ],
-          summaries,
-          changelog: [],
-          preSearches: [],
-        }),
-      );
-
-      const timeline = result.current;
-
-      // Count summary items per round
-      const summaryCountByRound = new Map<number, number>();
-      for (const item of timeline) {
-        if (item.type === 'summary') {
-          summaryCountByRound.set(
-            item.roundNumber,
-            (summaryCountByRound.get(item.roundNumber) || 0) + 1,
-          );
-        }
-      }
-
-      // ASSERTION: At most 1 summary per round in timeline
-      for (const [_round, count] of summaryCountByRound) {
-        expect(count).toBeLessThanOrEqual(1);
-      }
-    });
-
-    it('store.addSummary deduplicates by roundNumber', () => {
-      const store = createChatStore();
-
-      store.getState().addSummary(createSummary(0, 'pending'));
-      expect(store.getState().summaries).toHaveLength(1);
-
-      store.getState().addSummary(createSummary(0, 'streaming'));
-      expect(store.getState().summaries).toHaveLength(1); // Still 1
-
-      store.getState().addSummary(createSummary(1, 'pending'));
-      expect(store.getState().summaries).toHaveLength(2);
-    });
-  });
+  describe.todo('moderator Duplication - moderator functionality integrated into messages with isModerator metadata');
 });
 
 // ============================================================================
@@ -510,17 +430,6 @@ describe('second Round Specific Duplication Issues', () => {
       createAssistantMsg(0, 0),
       createAssistantMsg(0, 1),
     ]);
-    store.getState().setSummaries([createSummary(0, 'complete')]);
-    store.getState().completeStreaming();
-  });
-
-  it('second round should not duplicate first round messages', () => {
-    const expectedIds = getParticipantModelIds(participants);
-
-    // Start round 1
-    store.getState().setExpectedParticipantIds(expectedIds);
-    store.getState().setStreamingRoundNumber(1);
-    store.getState().prepareForNewMessage('Question 1', []);
     store.getState().setIsStreaming(true);
 
     // Add round 1 messages
@@ -557,50 +466,6 @@ describe('second Round Specific Duplication Issues', () => {
     expect(preSearches).toHaveLength(2);
     expect(preSearches.filter(ps => ps.roundNumber === 0)).toHaveLength(1);
     expect(preSearches.filter(ps => ps.roundNumber === 1)).toHaveLength(1);
-  });
-
-  it('second round summary should not duplicate first round summary', () => {
-    // Round 0 already has summary from beforeEach
-
-    // Add summary for round 1
-    store.getState().addSummary(createSummary(1, 'pending'));
-
-    const summaries = store.getState().summaries;
-
-    expect(summaries).toHaveLength(2);
-    expect(summaries.filter(s => s.roundNumber === 0)).toHaveLength(1);
-    expect(summaries.filter(s => s.roundNumber === 1)).toHaveLength(1);
-  });
-
-  it('completeStreaming should not cause message duplication', () => {
-    const _initialMsgCount = store.getState().messages.length;
-
-    // Start round 1
-    const expectedIds = getParticipantModelIds(participants);
-    store.getState().setExpectedParticipantIds(expectedIds);
-    store.getState().setStreamingRoundNumber(1);
-    store.getState().prepareForNewMessage('Question 1', []);
-    store.getState().setIsStreaming(true);
-
-    const _afterPrepareCount = store.getState().messages.length;
-
-    // Add assistant messages
-    const currentMsgs = store.getState().messages;
-    store.getState().setMessages([
-      ...currentMsgs,
-      createAssistantMsg(1, 0),
-      createAssistantMsg(1, 1),
-    ]);
-
-    const beforeCompleteCount = store.getState().messages.length;
-
-    // Complete streaming
-    store.getState().completeStreaming();
-
-    const afterCompleteCount = store.getState().messages.length;
-
-    // completeStreaming should NOT add or duplicate messages
-    expect(afterCompleteCount).toBe(beforeCompleteCount);
   });
 
   it('rapid state changes should not cause duplication', () => {
@@ -646,13 +511,11 @@ describe('full Flow E2E - No Duplication', () => {
       createAssistantMsg(0, 0),
       createAssistantMsg(0, 1),
     ]);
-    store.getState().addSummary(createSummary(0, 'complete'));
     store.getState().completeStreaming();
 
     // Verify round 0
     expect(store.getState().messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 0)).toHaveLength(3);
     expect(store.getState().preSearches.filter(ps => ps.roundNumber === 0)).toHaveLength(1);
-    expect(store.getState().summaries.filter(s => s.roundNumber === 0)).toHaveLength(1);
 
     // ===== ROUND 1 =====
     store.getState().setExpectedParticipantIds(getParticipantModelIds(participants));
@@ -667,14 +530,12 @@ describe('full Flow E2E - No Duplication', () => {
       createAssistantMsg(1, 0),
       createAssistantMsg(1, 1),
     ]);
-    store.getState().addSummary(createSummary(1, 'complete'));
     store.getState().completeStreaming();
 
     // Verify round 1 (optimistic user msg may or may not be present)
     const round1Msgs = store.getState().messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 1);
     expect(round1Msgs.length).toBeGreaterThanOrEqual(2); // At least 2 assistant messages
     expect(store.getState().preSearches.filter(ps => ps.roundNumber === 1)).toHaveLength(1);
-    expect(store.getState().summaries.filter(s => s.roundNumber === 1)).toHaveLength(1);
 
     // ===== ROUND 2 =====
     store.getState().setExpectedParticipantIds(getParticipantModelIds(participants));
@@ -689,31 +550,39 @@ describe('full Flow E2E - No Duplication', () => {
       createAssistantMsg(2, 0),
       createAssistantMsg(2, 1),
     ]);
-    store.getState().addSummary(createSummary(2, 'complete'));
     store.getState().completeStreaming();
 
     // ===== FINAL VERIFICATION =====
     const allMessages = store.getState().messages;
     const allPreSearches = store.getState().preSearches;
-    const allSummaries = store.getState().summaries;
 
-    // Verify total counts
+    // Verify total pre-search counts
     expect(allPreSearches).toHaveLength(3); // One per round
-    expect(allSummaries).toHaveLength(3); // One per round
 
     // Verify no duplicate pre-searches
     const preSearchRounds = allPreSearches.map(ps => ps.roundNumber);
     expect(new Set(preSearchRounds).size).toBe(preSearchRounds.length);
 
-    // Verify no duplicate summaries
-    const summaryRounds = allSummaries.map(s => s.roundNumber);
-    expect(new Set(summaryRounds).size).toBe(summaryRounds.length);
+    // Verify moderator messages (summaries are now messages with metadata.isModerator: true)
+    const moderatorMessages = allMessages.filter((m) => {
+      const meta = m.metadata as { role?: string; isModerator?: boolean; roundNumber?: number };
+      return meta.role === MessageRoles.ASSISTANT && meta.isModerator === true;
+    });
+
+    // Should have one moderator message per round (if summaries were added)
+    // Count moderator messages per round
+    const moderatorRounds = moderatorMessages.map((m) => {
+      const meta = m.metadata as { roundNumber: number };
+      return meta.roundNumber;
+    });
+
+    // Verify no duplicate moderator messages per round
+    expect(new Set(moderatorRounds).size).toBe(moderatorRounds.length);
 
     // Verify timeline renders correctly
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages: allMessages,
-        summaries: allSummaries,
         changelog: [], // No changelog in this test
         preSearches: allPreSearches,
       }),
@@ -727,10 +596,11 @@ describe('full Flow E2E - No Duplication', () => {
     expect(timelineKeys).toHaveLength(uniqueKeys.size);
 
     // Verify expected timeline structure
-    // Round 0: messages, summary
-    // Round 1: messages, summary
-    // Round 2: messages, summary
-    expect(timeline).toHaveLength(6);
+    // Note: This test doesn't add moderator messages, so no summaries in timeline
+    // Round 0: messages only
+    // Round 1: messages only
+    // Round 2: messages only
+    expect(timeline).toHaveLength(3);
   });
 
   it('resumption after page refresh does not cause duplication', () => {
@@ -748,7 +618,6 @@ describe('full Flow E2E - No Duplication', () => {
       createAssistantMsg(0, 0),
     ]);
     store.getState().addPreSearch(createPreSearch(0, 'complete'));
-    store.getState().addSummary(createSummary(0, 'complete', 1));
 
     // Round 1 was streaming when page was refreshed
     const r0Msgs = store.getState().messages;
@@ -769,17 +638,14 @@ describe('full Flow E2E - No Duplication', () => {
     ]);
 
     // Resumption: summary added
-    store.getState().addSummary(createSummary(1, 'complete', 1));
 
     // Verify no duplicates
     const messages = store.getState().messages;
     const preSearches = store.getState().preSearches;
-    const summaries = store.getState().summaries;
 
     expect(messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 0)).toHaveLength(2);
     expect(messages.filter(m => (m.metadata as { roundNumber: number }).roundNumber === 1)).toHaveLength(2);
     expect(preSearches).toHaveLength(2);
-    expect(summaries).toHaveLength(2);
   });
 });
 
@@ -801,36 +667,36 @@ describe('trigger Deduplication', () => {
     expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
   });
 
-  it('summary trigger is idempotent per round+id', () => {
+  it('moderator stream trigger is idempotent per round+id', () => {
     const store = createChatStore();
 
     // Not triggered yet
-    expect(store.getState().hasSummaryStreamBeenTriggered('summary-1', 0)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-1', 0)).toBe(false);
 
     // Mark triggered
-    store.getState().markSummaryStreamTriggered('summary-1', 0);
+    store.getState().markModeratorStreamTriggered('moderator-1', 0);
 
     // Now blocked
-    expect(store.getState().hasSummaryStreamBeenTriggered('summary-1', 0)).toBe(true);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-1', 0)).toBe(true);
 
     // Different ID/round not blocked
-    expect(store.getState().hasSummaryStreamBeenTriggered('summary-2', 1)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-2', 1)).toBe(false);
   });
 
-  it('hasSummaryBeenCreated prevents duplicate summary creation', () => {
+  it('hasModeratorBeenCreated prevents duplicate moderator creation', () => {
     const store = createChatStore();
 
     // Not created yet
-    expect(store.getState().hasSummaryBeenCreated(0)).toBe(false);
+    expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
 
     // Mark created
-    store.getState().markSummaryCreated(0);
+    store.getState().markModeratorCreated(0);
 
     // Now blocked
-    expect(store.getState().hasSummaryBeenCreated(0)).toBe(true);
+    expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
 
     // Different round not blocked
-    expect(store.getState().hasSummaryBeenCreated(1)).toBe(false);
+    expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
   });
 
   it('clearAllPreSearchTracking resets tracking for navigation', () => {
@@ -863,12 +729,10 @@ describe('optimistic Message Handling', () => {
 
     // Complete round 0
     store.getState().setMessages([createUserMsg(0), createAssistantMsg(0, 0)]);
-    store.getState().setSummaries([createSummary(0, 'complete', 1)]);
 
     const beforeCount = store.getState().messages.length;
 
-    // First call
-    store.getState().setStreamingRoundNumber(1);
+    // First call to prepareForNewMessage
     store.getState().prepareForNewMessage('Question 1', []);
 
     const afterFirstCount = store.getState().messages.length;

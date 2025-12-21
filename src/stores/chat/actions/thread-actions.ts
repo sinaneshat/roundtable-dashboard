@@ -24,7 +24,7 @@ import { useConfigChangeHandlers } from '../hooks';
 export type UseThreadActionsOptions = {
   /** Thread slug for query invalidation */
   slug: string;
-  /** Whether round is currently in progress (streaming or creating summary) */
+  /** Whether round is currently in progress (streaming or creating moderator) */
   isRoundInProgress: boolean;
   /** Whether changelog is currently being fetched */
   isChangelogFetching: boolean;

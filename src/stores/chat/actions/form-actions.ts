@@ -27,6 +27,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast, showApiWarningToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
+import { devLog } from '@/lib/utils/dev-logger';
 import { isVisionRequiredMimeType } from '@/lib/utils/file-capability';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
@@ -34,7 +35,7 @@ import { getRoundNumber } from '@/lib/utils/metadata';
 import { chatParticipantsToConfig, getParticipantModelIds, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
-import { createOptimisticUserMessage, createPlaceholderPreSearch, createPlaceholderSummary } from '../utils/placeholder-factories';
+import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
 
 /**
@@ -116,7 +117,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     initializeThread: s.initializeThread,
     updateParticipants: s.updateParticipants,
     addPreSearch: s.addPreSearch,
-    addSummary: s.addSummary,
     // ✅ IMMEDIATE UI FEEDBACK: For eager accordion collapse and optimistic message
     setStreamingRoundNumber: s.setStreamingRoundNumber,
     // ✅ THREAD SCREEN RESUMPTION: Required for continueFromParticipant effect
@@ -206,10 +206,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
-      // ✅ CRITICAL FIX: Sync selectedParticipants with DB IDs immediately after thread creation
-      // BUG FIX: Without this, selectedParticipants keeps frontend IDs (participant-XXX) from overview screen
+      // Sync selectedParticipants with DB IDs immediately after thread creation.
+      // Without this, selectedParticipants keeps frontend IDs (participant-XXX) from overview screen.
       // When user sends next message, prepareParticipantUpdate sees frontend IDs as "new" participants
-      // and creates duplicate participants in database (empty ID = create new)
+      // and creates duplicate participants in database (empty ID = create new).
       const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
       actions.setSelectedParticipants(syncedParticipantConfigs);
 
@@ -275,15 +275,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         );
       });
 
-      // ✅ EAGER RENDERING: Create placeholder summary immediately for round 0
-      // This allows the RoundSummaryCard to render in PENDING state with loading UI
-      // before participants finish streaming. Creates better UX with immediate visual feedback.
-      actions.addSummary(createPlaceholderSummary({
-        threadId: thread.id,
-        roundNumber: 0,
-        mode: thread.mode,
-        userQuestion: prompt,
-      }));
+      // ✅ TEXT STREAMING: Moderators are now streamed as moderator messages via RoundModeratorStream
+      // No placeholder needed - the component directly triggers POST /api/v1/chat/moderator
 
       // ✅ FIX: Clear input AFTER initializeThread so user message appears in UI first
       // User reported: "never empty out the chatbox until the request goes through
@@ -437,6 +430,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // Use the already calculated and validated round number
       const nextRoundNumber = pendingRoundNumber;
 
+      // Debug: Track new round initiation (debounced)
+      devLog.d('NewRound', { rnd: nextRoundNumber, msgs: threadState.messages.length, parts: formState.selectedParticipants.length });
+
       // Set streamingRoundNumber IMMEDIATELY for accordion collapse
       actions.setStreamingRoundNumber(nextRoundNumber);
 
@@ -478,6 +474,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ FIX: Use function updater to get CURRENT messages from store
       // BUG FIX: threadState.messages is captured at function start and could be stale
       // This caused round 1 to overwrite round 0's assistant messages when they weren't synced yet
+      // ✅ MODERATOR PLACEHOLDER: Added in use-pending-message.ts before sending (like use-streaming-trigger for Round 0)
+      // This avoids race conditions with concurrent moderator streaming updates
       actions.setMessages(currentMessages => [...currentMessages, optimisticUserMessage]);
 
       // ✅ IMMEDIATE UI FEEDBACK: Set flag to tell prepareForNewMessage not to add duplicate
@@ -547,10 +545,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             actions.updateParticipants(participantsWithDates);
             actions.setExpectedParticipantIds(getParticipantModelIds(participantsWithDates));
 
-            // ✅ CRITICAL FIX: Sync selectedParticipants with DB IDs after successful update
-            // BUG FIX: Without this, selectedParticipants keeps frontend IDs (participant-XXX)
+            // Sync selectedParticipants with DB IDs after successful update.
+            // Without this, selectedParticipants keeps frontend IDs (participant-XXX).
             // When user sends next message, prepareParticipantUpdate sees frontend IDs as "new" participants
-            // and creates duplicate participants in database (empty ID = create new)
+            // and creates duplicate participants in database (empty ID = create new).
             const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
             actions.setSelectedParticipants(syncedParticipantConfigs);
 

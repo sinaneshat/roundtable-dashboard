@@ -26,8 +26,8 @@ import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
+import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
-import * as tables from '@/db/schema';
 import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload, UsageStatus } from '../routes/usage/schema';

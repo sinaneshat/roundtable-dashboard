@@ -49,7 +49,7 @@ import {
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
 import type {
   ChatCustomRole,
@@ -201,13 +201,15 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       }
     }
     const participantValues = body.participants.map((p, index) => {
-      let systemPrompt = p.systemPrompt;
-      if (p.customRoleId && !systemPrompt) {
-        const customRole = customRolesMap.get(p.customRoleId);
-        if (customRole) {
-          systemPrompt = customRole.systemPrompt;
-        }
-      }
+      // Use custom role name as participant role if customRoleId is set
+      // systemPrompt is generated at runtime from role name in streaming handler
+      const customRole = p.customRoleId ? customRolesMap.get(p.customRoleId) : undefined;
+      const role = customRole?.name ?? p.role;
+
+      // Only use systemPrompt from request if explicitly provided (custom override)
+      // Custom roles no longer store systemPrompt - it's generated at runtime
+      const systemPrompt = p.systemPrompt;
+
       const participantId = ulid();
       const hasSettings = systemPrompt || p.temperature !== undefined || p.maxTokens !== undefined;
       const settingsValue = hasSettings
@@ -222,7 +224,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         threadId,
         modelId: p.modelId,
         customRoleId: p.customRoleId,
-        role: p.role,
+        role,
         priority: index,
         isEnabled: true,
         ...(settingsValue !== undefined && { settings: settingsValue }),
@@ -1141,12 +1143,9 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     // (at least one assistant message exists), so no need to filter by roundNumber > 1
     const changelog = allChangelog.filter(cl => completeRounds.has(cl.roundNumber));
 
-    // Fetch all analyses - filter to only include complete rounds
-    const allAnalyses = await db.query.chatModeratorAnalysis.findMany({
-      where: eq(tables.chatModeratorAnalysis.threadId, thread.id),
-      orderBy: [tables.chatModeratorAnalysis.roundNumber],
-    });
-    const analyses = allAnalyses.filter(a => completeRounds.has(a.roundNumber));
+    // ✅ TEXT STREAMING: Moderator messages are now in chatMessage with metadata.isModerator: true
+    // They are already included in the messages array above
+    const analyses: never[] = [];
 
     const allFeedback = await db.query.chatRoundFeedback.findMany({
       where: eq(tables.chatRoundFeedback.threadId, thread.id),

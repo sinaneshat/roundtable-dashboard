@@ -1,9 +1,9 @@
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
-import { MessageRoles, MessageStatuses } from '@/api/core/enums';
-import type { ChatThreadChangelog, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
-import { getParticipantIndex } from '@/lib/utils/metadata';
+import { MessageRoles } from '@/api/core/enums';
+import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
+import { getParticipantIndex, isModeratorMessage } from '@/lib/utils/metadata';
 import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 
 /**
@@ -18,20 +18,16 @@ type ChangelogItem = Omit<ChatThreadChangelog, 'createdAt'> & {
  * Timeline Item Types
  * Discriminated union for type-safe timeline rendering
  *
- * ✅ RESUMPTION FIX: Added 'pre-search' type to support rendering pre-search cards
- * at the timeline level, enabling proper display during page refresh scenarios
- * where user message hasn't been persisted yet.
+ * ARCHITECTURE:
+ * - 'messages': All messages for a round (user, participants, moderator)
+ *   Moderator messages (isModerator: true) are sorted LAST after all participants
+ * - 'changelog': Configuration changes that occurred before round started
+ * - 'pre-search': Web search phase indicator (orphaned rounds only)
  */
 export type TimelineItem
   = | {
     type: 'messages';
     data: UIMessage[];
-    key: string;
-    roundNumber: number;
-  }
-  | {
-    type: 'summary';
-    data: StoredRoundSummary;
     key: string;
     roundNumber: number;
   }
@@ -51,14 +47,10 @@ export type TimelineItem
 export type UseThreadTimelineOptions = {
   /**
    * Messages to group by round
+   * Includes ALL message types: user, participants, and moderator
+   * Moderator messages (isModerator: true) are sorted LAST in each round
    */
   messages: UIMessage[];
-
-  /**
-   * Optional summaries to include in timeline
-   * If not provided, only messages and changelog will be rendered
-   */
-  summaries?: StoredRoundSummary[];
 
   /**
    * Changelog items to group by round
@@ -68,7 +60,7 @@ export type UseThreadTimelineOptions = {
 
   /**
    * Pre-searches to include in timeline
-   * ✅ RESUMPTION FIX: Required for rendering pre-search cards when user message
+   * Required for rendering pre-search cards when user message
    * hasn't been persisted yet (e.g., page refresh during web search phase)
    */
   preSearches?: StoredPreSearch[];
@@ -77,46 +69,49 @@ export type UseThreadTimelineOptions = {
 /**
  * useThreadTimeline - Unified Timeline Grouping Hook
  *
- * CONSOLIDATION: This hook replaces duplicate timeline logic in:
- * - ChatThreadScreen.tsx:726-801 (76 lines)
- * - PublicChatThreadScreen.tsx:43-94 (52 lines)
+ * Single source of truth for grouping messages, changelog, and pre-searches by round number.
  *
- * Single source of truth for grouping messages, summaries, and changelog by round number.
- * Handles both authenticated views (with summaries) and public views (without summaries).
+ * ARCHITECTURE:
+ * - Messages array includes ALL messages: user, participants, AND moderator
+ * - Moderator messages (isModerator: true) are sorted LAST after all participants
+ * - Moderator renders inline via ChatMessageList, just like participants
  *
  * FLOW:
  * 1. Group messages by round number (from metadata)
- * 2. Group changelog by round number
- * 3. Get all unique round numbers
- * 4. For each round, assemble timeline items in order:
+ * 2. Sort messages: user first, then participants by index, then moderator LAST
+ * 3. Group changelog by round number
+ * 4. Index pre-searches by round number
+ * 5. For each round, assemble timeline items in order:
  *    a. Changelog (configuration changes before messages)
- *    b. Messages (user + assistant responses)
- *    c. Summary (round summary after messages, if available)
+ *    b. Pre-search (orphaned rounds only - otherwise rendered by ChatMessageList)
+ *    c. Messages (user + participants + moderator, with moderator LAST)
  *
  * @example
  * ```tsx
  * const timeline = useThreadTimeline({
- *   messages,
- *   summaries,  // Optional - omit for public views
+ *   messages,      // Includes moderator messages (isModerator: true)
  *   changelog,
+ *   preSearches,
  * });
  *
  * return timeline.map((item) => {
- *   if (item.type === 'messages') return <MessageList messages={item.data} />;
- *   if (item.type === 'summary') return <SummaryCard summary={item.data} />;
+ *   if (item.type === 'messages') {
+ *     // Renders ALL messages including moderator (sorted LAST)
+ *     return <ChatMessageList messages={item.data} />;
+ *   }
  *   if (item.type === 'changelog') return <ChangelogGroup changes={item.data} />;
+ *   if (item.type === 'pre-search') return <PreSearchCard data={item.data} />;
  * });
  * ```
  */
 export function useThreadTimeline({
   messages,
-  summaries = [],
   changelog,
   preSearches = [],
 }: UseThreadTimelineOptions): TimelineItem[] {
   return useMemo(() => {
     // STEP 1: Group messages by round number
-    // ✅ 0-BASED: Default round is 0
+    // Includes ALL messages: user, participants, and moderator
     const messagesByRound = new Map<number, UIMessage[]>();
     messages.forEach((message) => {
       const roundNumber = getRoundNumberFromMetadata(message.metadata, 0);
@@ -127,8 +122,8 @@ export function useThreadTimeline({
       messagesByRound.get(roundNumber)!.push(message);
     });
 
-    // STEP 1.5: Sort messages within each round
-    // ✅ FIX: User messages first, then assistant messages sorted by participantIndex
+    // STEP 2: Sort messages within each round
+    // Order: user → participants (by index) → moderator LAST
     // This ensures consistent ordering regardless of message arrival order
     messagesByRound.forEach((roundMessages, _roundNumber) => {
       roundMessages.sort((a, b) => {
@@ -139,7 +134,18 @@ export function useThreadTimeline({
           return 1;
 
         // For assistant messages, sort by participantIndex
+        // Moderator (isModerator: true, no participantIndex) comes LAST
         if (a.role === MessageRoles.ASSISTANT && b.role === MessageRoles.ASSISTANT) {
+          const aIsModerator = isModeratorMessage(a);
+          const bIsModerator = isModeratorMessage(b);
+
+          // Moderator always comes after participants
+          if (aIsModerator && !bIsModerator)
+            return 1;
+          if (!aIsModerator && bIsModerator)
+            return -1;
+
+          // Neither is moderator - sort by participantIndex
           const indexA = getParticipantIndex(a.metadata) ?? 0;
           const indexB = getParticipantIndex(b.metadata) ?? 0;
           return indexA - indexB;
@@ -149,8 +155,7 @@ export function useThreadTimeline({
       });
     });
 
-    // STEP 2: Group changelog by round number
-    // ✅ 0-BASED: Default round is 0
+    // STEP 3: Group changelog by round number
     const changelogByRound = new Map<number, ChangelogItem[]>();
     changelog.forEach((change) => {
       const roundNumber = change.roundNumber ?? 0;
@@ -167,36 +172,29 @@ export function useThreadTimeline({
       }
     });
 
-    // STEP 3: Index pre-searches by round number
-    // ✅ RESUMPTION FIX: Pre-searches are now tracked at timeline level
+    // STEP 4: Index pre-searches by round number
     const preSearchByRound = new Map<number, StoredPreSearch>();
     preSearches.forEach((preSearch) => {
       preSearchByRound.set(preSearch.roundNumber, preSearch);
     });
 
-    // STEP 4: Collect all unique round numbers from all sources
-    // ✅ RESUMPTION FIX: Include pre-search rounds to ensure they render
-    // even when user message hasn't been persisted yet
+    // STEP 5: Collect all unique round numbers from all sources
+    // Include pre-search rounds to ensure they render even when user message hasn't been persisted yet
     const allRoundNumbers = new Set<number>([
       ...messagesByRound.keys(),
       ...changelogByRound.keys(),
-      ...summaries.map(s => s.roundNumber),
       ...preSearchByRound.keys(),
     ]);
 
-    // STEP 5: Build timeline items in chronological order
+    // STEP 6: Build timeline items in chronological order
     const timeline: TimelineItem[] = [];
     const sortedRounds = Array.from(allRoundNumbers).sort((a, b) => a - b);
 
     sortedRounds.forEach((roundNumber) => {
       const roundMessages = messagesByRound.get(roundNumber);
       const roundChangelog = changelogByRound.get(roundNumber);
-      const roundSummary = summaries.find(s => s.roundNumber === roundNumber);
       const roundPreSearch = preSearchByRound.get(roundNumber);
 
-      // ✅ RESUMPTION FIX: Don't skip rounds that have pre-search or changelog
-      // This enables rendering changelog + pre-search even when user message
-      // hasn't been persisted yet (e.g., page refresh during web search phase)
       const hasMessages = roundMessages && roundMessages.length > 0;
       const hasPreSearch = !!roundPreSearch;
       const hasChangelog = roundChangelog && roundChangelog.length > 0;
@@ -206,9 +204,8 @@ export function useThreadTimeline({
         return;
       }
 
-      // ✅ FIX: Don't show changelog for rounds that have no messages and no pre-search
-      // These are "future" rounds where config was changed but round hasn't started yet
-      // Only show changelog when the round is actually starting (has messages or pre-search)
+      // Only show changelog when round is actually starting (has messages or pre-search)
+      // Don't show changelog for "future" rounds where config changed but round hasn't started yet
       const shouldShowChangelog = hasChangelog && (hasMessages || hasPreSearch);
 
       // Add changelog first (shows configuration changes before messages)
@@ -222,18 +219,16 @@ export function useThreadTimeline({
       }
 
       // Skip entire round if it only has changelog (no messages, no pre-search)
-      // This prevents showing orphaned changelog at the bottom
       if (!hasMessages && !hasPreSearch) {
         return;
       }
 
-      // ✅ RESUMPTION FIX: Pre-search renders at timeline level ONLY for orphaned rounds
-      // (rounds without messages). For normal rounds with messages, ChatMessageList
-      // renders PreSearchCard in the correct position (after user message, before assistant messages).
+      // Pre-search renders at timeline level ONLY for orphaned rounds (rounds without messages)
+      // For normal rounds with messages, ChatMessageList renders PreSearchCard in correct position
+      // (after user message, before assistant messages)
       //
-      // This ensures:
-      // - Normal flow: changelog → user message → pre-search → assistant messages (via ChatMessageList)
-      // - Orphaned flow: changelog → pre-search (standalone timeline item)
+      // Flow with messages: changelog → user message → pre-search → participants → moderator (via ChatMessageList)
+      // Flow without messages (orphaned): changelog → pre-search (standalone timeline item)
       if (hasPreSearch && !hasMessages) {
         timeline.push({
           type: 'pre-search',
@@ -244,7 +239,8 @@ export function useThreadTimeline({
       }
 
       // Add messages for this round (if any)
-      // ChatMessageList handles pre-search rendering in correct position when messages exist
+      // Messages array includes: user → participants (by index) → moderator LAST
+      // ChatMessageList handles rendering and pre-search card insertion
       if (hasMessages) {
         timeline.push({
           type: 'messages',
@@ -253,44 +249,8 @@ export function useThreadTimeline({
           roundNumber,
         });
       }
-
-      // Add summary after messages (if exists and should be shown)
-      // ✅ DEFENSIVE: Verify all referenced messages are complete before showing pending summary
-      // The flow state machine validates completion, but UI adds extra safety check
-      if (roundSummary) {
-        const hasMessageIds = roundSummary.participantMessageIds && roundSummary.participantMessageIds.length > 0;
-
-        // For pending summaries with messageIds, verify all messages are complete (have finishReason)
-        let allMessagesComplete = true;
-        if (roundSummary.status === MessageStatuses.PENDING && hasMessageIds && roundMessages) {
-          const messageIds = new Set(roundSummary.participantMessageIds);
-          const referencedMessages = roundMessages.filter(m => messageIds.has(m.id));
-          allMessagesComplete = referencedMessages.length > 0
-            && referencedMessages.every((m) => {
-              const meta = m.metadata as Record<string, unknown> | undefined;
-              return meta?.finishReason != null;
-            });
-        }
-
-        // Show summary when:
-        // 1. Non-pending status (streaming/complete/failed) - always show
-        // 2. Pending status WITH messageIds AND all messages complete
-        // Don't show: Pending with no messageIds OR referenced messages still streaming
-        const shouldShowSummary
-          = roundSummary.status !== MessageStatuses.PENDING
-            || (hasMessageIds && allMessagesComplete);
-
-        if (shouldShowSummary) {
-          timeline.push({
-            type: 'summary',
-            data: roundSummary,
-            key: `round-${roundNumber}-summary`,
-            roundNumber,
-          });
-        }
-      }
     });
 
     return timeline;
-  }, [messages, summaries, changelog, preSearches]);
+  }, [messages, changelog, preSearches]);
 }

@@ -1,14 +1,22 @@
 /**
- * Summarizer-Participant Race Condition Tests
+ * Moderator-Participant Race Condition Tests
  *
- * These tests ensure the summarizer doesn't start before all participants
- * have completed streaming. This was identified as a bug where the summary
+ * These tests ensure the moderator doesn't start before all participants
+ * have completed streaming. This was identified as a bug where the moderator
  * began creating while participant 2 still had `state: 'streaming'`.
  *
+ * The moderator now renders inline via ChatMessageList (not separate summary components).
+ *
  * KEY INVARIANTS:
- * 1. Summary creation MUST NOT start until ALL participants finish
+ * 1. Moderator creation MUST NOT start until ALL participants finish
  * 2. Participant with `state: 'streaming'` in parts is NOT complete
- * 3. `isCreatingSummary` should only be true after all participants done
+ * 3. `isModeratorStreaming` should only be true after all participants done
+ *
+ * Architecture:
+ * - Moderator message has `isModerator: true` in metadata
+ * - Moderator renders inline via ChatMessageList
+ * - useModeratorStream triggers the /summarize endpoint only after participants complete
+ * - useThreadTimeline puts moderator LAST in messages array for each round
  */
 
 import type { UIMessage } from 'ai';
@@ -93,12 +101,12 @@ function createAssistantMessage(
 }
 
 // ============================================================================
-// Summarizer-Participant Race Condition Tests
+// Moderator-Participant Race Condition Tests
 // ============================================================================
 
-describe('summarizer-Participant Race Prevention', () => {
-  describe('summary Creation Guards', () => {
-    it('should NOT allow summary creation while any participant has state=streaming', () => {
+describe('moderator-Participant Race Prevention', () => {
+  describe('moderator Creation Guards', () => {
+    it('should NOT allow moderator creation while any participant has state=streaming', () => {
       const store = createChatStore();
       const participants = [createParticipant(0), createParticipant(1), createParticipant(2)];
 
@@ -122,26 +130,24 @@ describe('summarizer-Participant Race Prevention', () => {
       );
       expect(p2Message?.parts?.[0]).toHaveProperty('state', 'streaming');
 
-      // Attempt to set isCreatingSummary - should be blocked or at least not proceed
-      // This tests the invariant that summary shouldn't start while streaming
-      store.getState().setIsCreatingSummary(true);
+      // Attempt to set isModeratorStreaming - should be blocked or at least not proceed
+      // This tests the invariant that moderator shouldn't start while streaming
+      store.getState().setIsModeratorStreaming(true);
 
-      // The summary orchestrator should check for streaming participants
-      // and NOT actually create the summary
+      // The moderator orchestrator should check for streaming participants
+      // and NOT actually create the moderator message
       const hasStreamingPart = store.getState().messages.some((m) => {
         if (m.role !== MessageRoles.ASSISTANT)
           return false;
         return m.parts?.some(p => 'state' in p && p.state === 'streaming');
       });
 
-      // This is the BUG: isCreatingSummary can be true while participants are streaming
-      // The test documents the expected behavior - summary should wait
+      // This is the BUG: isModeratorStreaming can be true while participants are streaming
+      // The test documents the expected behavior - moderator should wait
       expect(hasStreamingPart).toBe(true);
-      // TODO: Fix this - isCreatingSummary should be false or blocked when hasStreamingPart
-      // expect(store.getState().isCreatingSummary).toBe(false);
     });
 
-    it('should allow summary creation ONLY when all participant parts have state=done', () => {
+    it('should allow moderator creation ONLY when all participant parts have state=done', () => {
       const store = createChatStore();
       const participants = [createParticipant(0), createParticipant(1), createParticipant(2)];
 
@@ -167,9 +173,9 @@ describe('summarizer-Participant Race Prevention', () => {
       });
       expect(hasStreamingPart).toBe(false);
 
-      // Now summary creation should be allowed
-      store.getState().setIsCreatingSummary(true);
-      expect(store.getState().isCreatingSummary).toBe(true);
+      // Now moderator creation should be allowed
+      store.getState().setIsModeratorStreaming(true);
+      expect(store.getState().isModeratorStreaming).toBe(true);
     });
 
     it('should track responded vs in-progress participants separately', () => {
@@ -277,8 +283,8 @@ describe('summarizer-Participant Race Prevention', () => {
     });
   });
 
-  describe('summary State Transitions', () => {
-    it('should transition to summary only after streaming flag cleared AND all parts done', () => {
+  describe('moderator State Transitions', () => {
+    it('should transition to moderator only after streaming flag cleared AND all parts done', () => {
       const store = createChatStore();
       const participants = [createParticipant(0)];
 
@@ -295,9 +301,9 @@ describe('summarizer-Participant Race Prevention', () => {
         createAssistantMessage(0, 0, 'streaming'),
       ]);
 
-      // Should NOT create summary yet
+      // Should NOT create moderator yet
       expect(store.getState().isStreaming).toBe(true);
-      expect(store.getState().isCreatingSummary).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBe(false);
 
       // Complete the participant
       store.getState().setMessages([
@@ -308,9 +314,9 @@ describe('summarizer-Participant Race Prevention', () => {
       // Clear streaming flag
       store.getState().setIsStreaming(false);
 
-      // Now summary can be created
-      store.getState().setIsCreatingSummary(true);
-      expect(store.getState().isCreatingSummary).toBe(true);
+      // Now moderator can be created
+      store.getState().setIsModeratorStreaming(true);
+      expect(store.getState().isModeratorStreaming).toBe(true);
     });
   });
 });
@@ -512,7 +518,7 @@ describe('one-Way Data Flow', () => {
 
     expect(store.getState().isStreaming).toBe(false);
     expect(store.getState().waitingToStartStreaming).toBe(false);
-    expect(store.getState().isCreatingSummary).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBe(false);
   });
 
   it('should clear streaming state atomically', () => {
@@ -525,7 +531,7 @@ describe('one-Way Data Flow', () => {
     store.getState().setIsStreaming(true);
     store.getState().setStreamingRoundNumber(1);
     store.getState().setCurrentParticipantIndex(0);
-    store.getState().setIsCreatingSummary(true);
+    store.getState().setIsModeratorStreaming(true);
 
     // completeStreaming should clear ALL of these
     store.getState().completeStreaming();
@@ -534,6 +540,6 @@ describe('one-Way Data Flow', () => {
     expect(store.getState().isStreaming).toBe(false);
     expect(store.getState().streamingRoundNumber).toBe(null);
     expect(store.getState().currentParticipantIndex).toBe(0);
-    expect(store.getState().isCreatingSummary).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBe(false);
   });
 });

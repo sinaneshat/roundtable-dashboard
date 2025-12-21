@@ -112,7 +112,7 @@ function PreSearchStreamComponent({
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
   // ✅ CRITICAL FIX: Do NOT abort fetch on unmount
-  // Following the RoundSummaryStream pattern - let the fetch complete in the background
+  // Following the moderator streaming pattern - let the fetch complete in the background
   // Aborting on unmount causes "Malformed JSON in request body" errors because:
   // 1. Component unmounts quickly after starting fetch
   // 2. Abort happens after HTTP headers sent but before body completes

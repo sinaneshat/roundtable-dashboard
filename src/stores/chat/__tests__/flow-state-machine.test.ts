@@ -3,15 +3,15 @@
  *
  * Tests for the chat flow state machine logic:
  * - State determination based on context
- * - Summary triggering conditions
+ * - Moderator triggering conditions
  * - Participant completion detection
  * - State transition actions
  *
  * These tests verify that:
- * 1. Summary is only triggered after ALL participants complete
+ * 1. Moderator is only triggered after ALL participants complete
  * 2. State transitions are correct based on context
  * 3. Incomplete messages don't count as "responded"
- * 4. Guard conditions prevent premature summary
+ * 4. Guard conditions prevent premature moderator
  */
 
 import { describe, expect, it } from 'vitest';
@@ -39,11 +39,11 @@ type FlowContext = {
   hasMessages: boolean;
   participantCount: number;
   allParticipantsResponded: boolean;
-  summaryStatus: typeof MessageStatuses[keyof typeof MessageStatuses] | null;
-  summaryExists: boolean;
+  moderatorStatus: typeof MessageStatuses[keyof typeof MessageStatuses] | null;
+  moderatorExists: boolean;
   isAiSdkStreaming: boolean;
   isCreatingThread: boolean;
-  isCreatingSummary: boolean;
+  isModeratorStreaming: boolean;
   hasNavigated: boolean;
   screenMode: typeof ScreenModes[keyof typeof ScreenModes] | null;
 };
@@ -57,37 +57,37 @@ function determineFlowState(context: FlowContext): FlowState {
     return FlowStates.COMPLETE;
   }
 
-  // Priority 2: Ready to navigate (summary done + title ready)
+  // Priority 2: Ready to navigate (moderator done + title ready)
   if (
     context.screenMode === ScreenModes.OVERVIEW
-    && context.summaryStatus === MessageStatuses.COMPLETE
+    && context.moderatorStatus === MessageStatuses.COMPLETE
     && context.hasAiGeneratedTitle
     && context.threadSlug
   ) {
     return FlowStates.NAVIGATING;
   }
 
-  // Priority 3: Summary streaming
+  // Priority 3: Moderator streaming
   if (
-    context.summaryStatus === MessageStatuses.STREAMING
-    || (context.summaryExists && context.isAiSdkStreaming)
+    context.moderatorStatus === MessageStatuses.STREAMING
+    || (context.moderatorExists && context.isAiSdkStreaming)
   ) {
-    return FlowStates.STREAMING_SUMMARY;
+    return FlowStates.STREAMING_MODERATOR;
   }
 
-  // Priority 4: Creating summary (participants done, no summary yet)
+  // Priority 4: Creating moderator (participants done, no moderator yet)
   if (
     !context.isAiSdkStreaming
     && context.allParticipantsResponded
     && context.participantCount > 0
-    && !context.summaryExists
-    && !context.isCreatingSummary
+    && !context.moderatorExists
+    && !context.isModeratorStreaming
   ) {
-    return FlowStates.CREATING_SUMMARY;
+    return FlowStates.CREATING_MODERATOR;
   }
 
   // Priority 5: Participants streaming
-  if (context.isAiSdkStreaming && !context.summaryExists) {
+  if (context.isAiSdkStreaming && !context.moderatorExists) {
     return FlowStates.STREAMING_PARTICIPANTS;
   }
 
@@ -163,11 +163,11 @@ function createDefaultContext(): FlowContext {
     hasMessages: false,
     participantCount: 2,
     allParticipantsResponded: false,
-    summaryStatus: null,
-    summaryExists: false,
+    moderatorStatus: null,
+    moderatorExists: false,
     isAiSdkStreaming: false,
     isCreatingThread: false,
-    isCreatingSummary: false,
+    isModeratorStreaming: false,
     hasNavigated: false,
     screenMode: ScreenModes.OVERVIEW,
   };
@@ -215,87 +215,87 @@ describe('flow State Machine - State Determination', () => {
       expect(determineFlowState(context)).toBe(FlowStates.STREAMING_PARTICIPANTS);
     });
 
-    it('does NOT return STREAMING_PARTICIPANTS when summary exists', () => {
+    it('does NOT return STREAMING_PARTICIPANTS when moderator exists', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
-      context.summaryExists = true;
-      // Should be STREAMING_SUMMARY instead
-      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
+      context.moderatorExists = true;
+      // Should be STREAMING_MODERATOR instead
+      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_MODERATOR);
     });
   });
 
-  describe('creating Summary State', () => {
-    it('returns CREATING_SUMMARY when all participants responded and no summary', () => {
+  describe('creating Moderator State', () => {
+    it('returns CREATING_MODERATOR when all participants responded and no moderator', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
-      context.summaryExists = false;
+      context.moderatorExists = false;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).toBe(FlowStates.CREATING_SUMMARY);
+      expect(determineFlowState(context)).toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('does NOT return CREATING_SUMMARY when still streaming', () => {
+    it('does NOT return CREATING_MODERATOR when still streaming', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
       context.isAiSdkStreaming = true;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('does NOT return CREATING_SUMMARY when not all participants responded', () => {
+    it('does NOT return CREATING_MODERATOR when not all participants responded', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = false;
       context.participantCount = 2;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('does NOT return CREATING_SUMMARY when summary already exists', () => {
+    it('does NOT return CREATING_MODERATOR when moderator already exists', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
-      context.summaryExists = true;
+      context.moderatorExists = true;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('does NOT return CREATING_SUMMARY when no participants', () => {
+    it('does NOT return CREATING_MODERATOR when no participants', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = false; // Can't be true with 0 participants
       context.participantCount = 0;
       context.isAiSdkStreaming = false;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('does NOT return CREATING_SUMMARY when already creating summary', () => {
+    it('does NOT return CREATING_MODERATOR when already moderator streaming', () => {
       const context = createDefaultContext();
       context.allParticipantsResponded = true;
       context.participantCount = 2;
-      context.isCreatingSummary = true;
-      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_SUMMARY);
+      context.isModeratorStreaming = true;
+      expect(determineFlowState(context)).not.toBe(FlowStates.CREATING_MODERATOR);
     });
   });
 
-  describe('streaming Summary State', () => {
-    it('returns STREAMING_SUMMARY when summary status is streaming', () => {
+  describe('streaming Moderator State', () => {
+    it('returns STREAMING_MODERATOR when moderator status is streaming', () => {
       const context = createDefaultContext();
-      context.summaryStatus = MessageStatuses.STREAMING;
-      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
+      context.moderatorStatus = MessageStatuses.STREAMING;
+      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_MODERATOR);
     });
 
-    it('returns STREAMING_SUMMARY when summary exists and SDK streaming', () => {
+    it('returns STREAMING_MODERATOR when moderator exists and SDK streaming', () => {
       const context = createDefaultContext();
-      context.summaryExists = true;
+      context.moderatorExists = true;
       context.isAiSdkStreaming = true;
-      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
+      expect(determineFlowState(context)).toBe(FlowStates.STREAMING_MODERATOR);
     });
   });
 
   describe('navigating State', () => {
-    it('returns NAVIGATING when summary complete and has AI title', () => {
+    it('returns NAVIGATING when moderator complete and has AI title', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.OVERVIEW;
-      context.summaryStatus = MessageStatuses.COMPLETE;
+      context.moderatorStatus = MessageStatuses.COMPLETE;
       context.hasAiGeneratedTitle = true;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).toBe(FlowStates.NAVIGATING);
@@ -304,7 +304,7 @@ describe('flow State Machine - State Determination', () => {
     it('does NOT navigate without AI-generated title', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.OVERVIEW;
-      context.summaryStatus = MessageStatuses.COMPLETE;
+      context.moderatorStatus = MessageStatuses.COMPLETE;
       context.hasAiGeneratedTitle = false;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).not.toBe(FlowStates.NAVIGATING);
@@ -313,7 +313,7 @@ describe('flow State Machine - State Determination', () => {
     it('does NOT navigate on thread screen mode', () => {
       const context = createDefaultContext();
       context.screenMode = ScreenModes.THREAD;
-      context.summaryStatus = MessageStatuses.COMPLETE;
+      context.moderatorStatus = MessageStatuses.COMPLETE;
       context.hasAiGeneratedTitle = true;
       context.threadSlug = 'test-slug';
       expect(determineFlowState(context)).not.toBe(FlowStates.NAVIGATING);
@@ -413,7 +413,7 @@ describe('participant Completion Detection', () => {
 
     it('dOES count messages with UNKNOWN finishReason (stream ended)', () => {
       // ✅ FIX: 'unknown' finishReason means stream ended (possibly abnormally)
-      // For summarizer trigger purposes, we should accept any finishReason
+      // For moderator trigger purposes, we should accept any finishReason
       // The message has finished streaming, even if abnormally
       const messages = [
         { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
@@ -507,9 +507,9 @@ describe('participant Completion Detection', () => {
   });
 });
 
-describe('summary Triggering Guard Conditions', () => {
+describe('moderator Triggering Guard Conditions', () => {
   describe('full Flow Integration', () => {
-    it('prevents summary when first participant still streaming', () => {
+    it('prevents moderator when first participant still streaming', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
       context.participantCount = 2;
@@ -517,10 +517,10 @@ describe('summary Triggering Guard Conditions', () => {
 
       const state = determineFlowState(context);
       expect(state).toBe(FlowStates.STREAMING_PARTICIPANTS);
-      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(state).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('prevents summary when second participant has not started', () => {
+    it('prevents moderator when second participant has not started', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
       context.participantCount = 2;
@@ -531,26 +531,26 @@ describe('summary Triggering Guard Conditions', () => {
       expect(state).toBe(FlowStates.STREAMING_PARTICIPANTS);
     });
 
-    it('allows summary only after ALL participants complete', () => {
+    it('allows moderator only after ALL participants complete', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = false;
       context.participantCount = 2;
       context.allParticipantsResponded = true;
-      context.summaryExists = false;
+      context.moderatorExists = false;
 
       const state = determineFlowState(context);
-      expect(state).toBe(FlowStates.CREATING_SUMMARY);
+      expect(state).toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('transitions to STREAMING_SUMMARY after summary created', () => {
+    it('transitions to STREAMING_MODERATOR after moderator created', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = true;
       context.participantCount = 2;
       context.allParticipantsResponded = true;
-      context.summaryExists = true;
+      context.moderatorExists = true;
 
       const state = determineFlowState(context);
-      expect(state).toBe(FlowStates.STREAMING_SUMMARY);
+      expect(state).toBe(FlowStates.STREAMING_MODERATOR);
     });
   });
 
@@ -561,10 +561,10 @@ describe('summary Triggering Guard Conditions', () => {
       context.isAiSdkStreaming = false; // SDK not streaming (after refresh)
       context.participantCount = 2;
       context.allParticipantsResponded = false; // Only 1 message exists
-      context.summaryExists = false;
+      context.moderatorExists = false;
 
       const state = determineFlowState(context);
-      // Should stay IDLE, not jump to CREATING_SUMMARY
+      // Should stay IDLE, not jump to CREATING_MODERATOR
       expect(state).toBe(FlowStates.IDLE);
     });
 
@@ -576,19 +576,19 @@ describe('summary Triggering Guard Conditions', () => {
 
       const state = determineFlowState(context);
       expect(state).toBe(FlowStates.IDLE);
-      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
+      expect(state).not.toBe(FlowStates.CREATING_MODERATOR);
     });
 
-    it('prevents double summary creation', () => {
+    it('prevents double moderator creation', () => {
       const context = createDefaultContext();
       context.isAiSdkStreaming = false;
       context.participantCount = 2;
       context.allParticipantsResponded = true;
-      context.isCreatingSummary = true; // Already creating
+      context.isModeratorStreaming = true; // Already creating
 
       const state = determineFlowState(context);
-      // Should NOT return CREATING_SUMMARY when already creating
-      expect(state).not.toBe(FlowStates.CREATING_SUMMARY);
+      // Should NOT return CREATING_MODERATOR when already creating
+      expect(state).not.toBe(FlowStates.CREATING_MODERATOR);
     });
   });
 });
@@ -601,15 +601,15 @@ describe('state Priority', () => {
     context.isAiSdkStreaming = true;
     context.isCreatingThread = true;
     context.allParticipantsResponded = true;
-    context.summaryStatus = MessageStatuses.STREAMING;
+    context.moderatorStatus = MessageStatuses.STREAMING;
 
     expect(determineFlowState(context)).toBe(FlowStates.COMPLETE);
   });
 
-  it('nAVIGATING takes precedence over STREAMING_SUMMARY', () => {
+  it('nAVIGATING takes precedence over STREAMING_MODERATOR', () => {
     const context = createDefaultContext();
     context.screenMode = ScreenModes.OVERVIEW;
-    context.summaryStatus = MessageStatuses.COMPLETE;
+    context.moderatorStatus = MessageStatuses.COMPLETE;
     context.hasAiGeneratedTitle = true;
     context.threadSlug = 'test-slug';
     context.isAiSdkStreaming = true;
@@ -617,23 +617,23 @@ describe('state Priority', () => {
     expect(determineFlowState(context)).toBe(FlowStates.NAVIGATING);
   });
 
-  it('sTREAMING_ANALYSIS takes precedence over CREATING_SUMMARY', () => {
+  it('sTREAMING_MODERATOR takes precedence over CREATING_MODERATOR', () => {
     const context = createDefaultContext();
-    context.summaryStatus = MessageStatuses.STREAMING;
+    context.moderatorStatus = MessageStatuses.STREAMING;
     context.allParticipantsResponded = true;
     context.participantCount = 2;
 
-    expect(determineFlowState(context)).toBe(FlowStates.STREAMING_SUMMARY);
+    expect(determineFlowState(context)).toBe(FlowStates.STREAMING_MODERATOR);
   });
 
-  it('cREATING_ANALYSIS takes precedence over STREAMING_PARTICIPANTS when streaming stopped', () => {
+  it('cREATING_MODERATOR takes precedence over STREAMING_PARTICIPANTS when streaming stopped', () => {
     const context = createDefaultContext();
     context.isAiSdkStreaming = false;
     context.allParticipantsResponded = true;
     context.participantCount = 2;
-    context.summaryExists = false;
+    context.moderatorExists = false;
 
-    expect(determineFlowState(context)).toBe(FlowStates.CREATING_SUMMARY);
+    expect(determineFlowState(context)).toBe(FlowStates.CREATING_MODERATOR);
   });
 
   it('sTREAMING_PARTICIPANTS takes precedence over CREATING_THREAD', () => {

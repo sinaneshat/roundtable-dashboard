@@ -1,7 +1,7 @@
 /**
  * Message Parts Hook
  *
- * React hook wrapper for message parts analysis with automatic memoization.
+ * React hook wrapper for message parts with automatic memoization.
  * Delegates to core utility functions from message-status.ts.
  *
  * Use this hook in component scope for optimal performance.

@@ -6,6 +6,7 @@
  */
 
 export { useMessageSync } from './use-message-sync';
+export { useModeratorTrigger } from './use-moderator-trigger';
 export { useNavigationCleanup } from './use-navigation-cleanup';
 export { usePendingMessage } from './use-pending-message';
 export { usePreSearchResumption } from './use-pre-search-resumption';

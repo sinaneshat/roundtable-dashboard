@@ -14,8 +14,8 @@
  * INITIALIZATION FLOW:
  * 1. Set screen mode in store (for global access)
  * 2. Initialize thread with participants and messages (if provided)
- * 3. Enable summary orchestrator (thread mode only, when enabled)
- * 4. Register summary callbacks (handled by store subscriptions)
+ * 3. Enable moderator orchestrator (thread mode only, when enabled)
+ * 4. Register moderator callbacks (handled by store subscriptions)
  */
 
 'use client';
@@ -31,7 +31,6 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { usePreSearchOrchestrator } from './pre-search-orchestrator';
-import { useSummaryOrchestrator } from './summary-orchestrator';
 
 export type UseScreenInitializationOptions = {
   /** Screen mode: 'overview', 'thread', or 'public' */
@@ -47,7 +46,7 @@ export type UseScreenInitializationOptions = {
   /** Regeneration state (thread mode only) */
   isRegeneration?: boolean;
   regeneratingRoundNumber?: number | null;
-  /** Summary orchestrator enable flag */
+  /** Moderator orchestrator enable flag */
   enableOrchestrator?: boolean;
 };
 
@@ -141,14 +140,8 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // ORCHESTRATION HOOKS
   // ============================================================================
 
-  const shouldEnableOrchestrator = Boolean(thread?.id) && enableOrchestrator;
-  const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
-
-  useSummaryOrchestrator({
-    threadId: thread?.id || '',
-    enabled: shouldEnableOrchestrator,
-    deduplicationOptions: { regeneratingRoundNumber },
-  });
+  // ✅ TEXT STREAMING: Moderator messages are now in chatMessage table
+  // No separate orchestrator needed - loaded with messages automatically
 
   // ✅ BUG FIX: Always enable pre-search orchestrator regardless of current enableWebSearch
   // Pre-searches may exist from earlier rounds when web search was enabled

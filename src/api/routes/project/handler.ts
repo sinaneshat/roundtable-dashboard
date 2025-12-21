@@ -23,7 +23,7 @@ import {
 } from '@/api/services/upload-cleanup.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 
 import type {
   addAttachmentToProjectRoute,
@@ -1234,13 +1234,13 @@ export const getProjectContextHandler: RouteHandler<typeof getProjectContextRout
         })),
         totalCount: context.searches.totalCount,
       },
-      summaries: {
-        items: context.summaries.summaries.map(s => ({
-          threadTitle: s.threadTitle,
-          userQuestion: s.userQuestion,
-          summary: s.summary,
+      moderators: {
+        items: context.moderators.moderators.map(m => ({
+          threadTitle: m.threadTitle,
+          userQuestion: m.userQuestion,
+          moderator: m.moderator,
         })),
-        totalCount: context.summaries.totalCount,
+        totalCount: context.moderators.totalCount,
       },
     });
   },

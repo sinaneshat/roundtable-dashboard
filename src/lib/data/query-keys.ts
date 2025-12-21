@@ -73,8 +73,6 @@ export const queryKeys = {
     slugStatus: (id: string) => QueryKeyFactory.action('threads', 'slug-status', id),
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
     changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
-    summaries: (id: string) => QueryKeyFactory.action('threads', 'summaries', id),
-    // ❌ REMOVED: preSearch (single round) - frontend uses preSearches (list) via orchestrator
     preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
     feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
   },
@@ -199,13 +197,7 @@ export const invalidationPatterns = {
   threadDetail: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
-    queryKeys.threads.changelog(threadId), // ✅ Invalidate changelog when thread details change
-    // ❌ REMOVED: Don't invalidate summaries when thread details change
-    // Summaries are tied to specific rounds and don't change when participants/mode are updated
-    // Summaries are only invalidated when:
-    // 1. onRoundComplete callback (creates new pending summary)
-    // 2. onStreamComplete callback (summary finishes streaming)
-    // queryKeys.threads.summaries(threadId),
+    queryKeys.threads.changelog(threadId),
   ],
 
   // After thread message - invalidate thread detail and usage stats

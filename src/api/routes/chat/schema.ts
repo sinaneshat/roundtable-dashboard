@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
+import type { MessageStatus } from '@/api/core/enums';
 import {
   ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
@@ -37,7 +38,6 @@ import { userSelectSchema } from '@/db/validation/auth';
 import {
   chatCustomRoleSelectSchema,
   chatMessageSelectSchema,
-  chatModeratorAnalysisSelectSchema,
   chatParticipantSelectSchema,
   chatPreSearchSelectSchema,
   chatRoundFeedbackSelectSchema,
@@ -165,7 +165,7 @@ const StreamParticipantSchema = BaseParticipantSchema.pick({
 // ============================================================================
 
 // ✅ TYPE-SAFE: Use strongly-typed schemas from single source of truth
-const ChatParticipantSchema = chatParticipantSelectSchema
+export const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
     // ✅ TYPE-SAFE: Settings nullable (SQLite can return null)
     settings: DbParticipantSettingsSchema.nullable().optional(),
@@ -189,7 +189,7 @@ const ChatMessageSchema = chatMessageSelectSchema
   .openapi('ChatMessage');
 
 // ✅ TYPE-SAFE: Strictly typed thread metadata (tags, summary only)
-const ChatThreadSchema = chatThreadSelectSchema
+export const ChatThreadSchema = chatThreadSelectSchema
   .extend({
     metadata: DbThreadMetadataSchema.nullable().optional(),
   })
@@ -205,7 +205,7 @@ const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
 /**
  * Changelog schema with flexible date handling
  * Accepts both string and Date for createdAt (API returns strings, store may have Dates)
- * ✅ FOLLOWS: StoredPreSearchSchema and StoredRoundSummarySchema pattern
+ * ✅ FOLLOWS: StoredPreSearchSchema pattern
  */
 export const ChatThreadChangelogFlexibleSchema = chatThreadChangelogSelectSchema
   .extend({
@@ -316,9 +316,6 @@ const ThreadDetailPayloadSchema = z.object({
   participants: z.array(ChatParticipantSchema),
   messages: z.array(ChatMessageSchema),
   changelog: z.array(ChatThreadChangelogSchema),
-  summaries: z.array(chatModeratorAnalysisSelectSchema).optional().openapi({
-    description: 'Round summaries for each round (optional - excluded for public threads)',
-  }),
   feedback: z.array(chatRoundFeedbackSelectSchema).optional().openapi({
     description: 'User feedback for each round (optional - excluded for public threads)',
   }),
@@ -748,7 +745,6 @@ export type PartialPreSearchData = z.infer<typeof PartialPreSearchDataSchema>;
 
 /**
  * Stored pre-search schema (from database)
- * ✅ FOLLOWS: StoredRoundSummarySchema pattern
  * ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
  */
 export const StoredPreSearchSchema = chatPreSearchSelectSchema
@@ -839,7 +835,7 @@ export const CreateCustomRoleRequestSchema = z.object({
   description: z.string().max(500).nullable().optional().openapi({
     description: 'Optional description',
   }),
-  systemPrompt: z.string().min(1).max(4000).openapi({
+  systemPrompt: z.string().min(1).max(10000).openapi({
     description: 'System prompt for the role',
   }),
   metadata: DbCustomRoleMetadataSchema.nullable().optional().openapi({
@@ -858,7 +854,7 @@ export const UpdateCustomRoleRequestSchema = z.object({
   description: z.string().max(500).nullable().optional().openapi({
     description: 'Optional description',
   }),
-  systemPrompt: z.string().min(1).max(4000).optional().openapi({
+  systemPrompt: z.string().min(1).max(10000).optional().openapi({
     description: 'System prompt for the role',
   }),
   metadata: DbCustomRoleMetadataSchema.nullable().optional().openapi({
@@ -906,128 +902,59 @@ export const RoundtablePromptConfigSchema = z.object({
   customSystemPrompt: z.string().nullable().optional(),
 }).openapi('RoundtablePromptConfig');
 export type RoundtablePromptConfig = z.infer<typeof RoundtablePromptConfigSchema>;
-export const RoundSummaryRequestSchema = z.object({
+export const RoundModeratorRequestSchema = z.object({
   participantMessageIds: z.array(CoreSchemas.id()).optional().openapi({
     description: 'Array of message IDs from participants (optional - backend auto-queries from database if not provided)',
     example: ['msg_abc123', 'msg_def456', 'msg_ghi789'],
   }),
-}).openapi('RoundSummaryRequest');
+}).openapi('RoundModeratorRequest');
 
 // ============================================================================
-// ROUND SUMMARY SCHEMAS (Simplified)
+// MODERATOR SCHEMAS (Text Streaming Pattern)
 // ============================================================================
+// Moderator messages stream as text (like participant messages)
+// and are stored in chatMessage table with isModerator metadata
 
 /**
- * Round Summary Metrics - 4 simple metrics for rating the conversation
- * All metrics are 0-100 scale
+ * Moderator Metrics Schema
+ * Includes 4 metrics (engagement, insight, balance, clarity) for rating conversations.
  */
-export const RoundSummaryMetricsSchema = z.object({
+export const ModeratorMetricsSchema = z.object({
   engagement: z.coerce.number().min(0).max(100).describe('How engaged the participants were (0-100)'),
   insight: z.coerce.number().min(0).max(100).describe('Quality of insights provided (0-100)'),
   balance: z.coerce.number().min(0).max(100).describe('How balanced the perspectives were (0-100)'),
   clarity: z.coerce.number().min(0).max(100).describe('How clear the communication was (0-100)'),
-}).openapi('RoundSummaryMetrics');
+}).openapi('ModeratorMetrics');
 
 /**
- * Round Summary AI Content - What the AI model generates
- * ✅ STREAMING: Use this schema for streamObject - contains ONLY AI-generated fields
- * Server adds roundNumber, mode, userQuestion metadata after generation
+ * Moderator AI Content Schema
+ * Used for object streaming pattern with moderator messages.
  */
-export const RoundSummaryAIContentSchema = z.object({
-  summary: z.string().describe('Concise text summary of the round conversation (2-3 sentences)'),
-  metrics: RoundSummaryMetricsSchema.describe('Ratings for engagement, insight, balance, and clarity (0-100 each)'),
-}).openapi('RoundSummaryAIContent');
+export const ModeratorAIContentSchema = z.object({
+  summary: z.string().describe('Comprehensive structured summary in markdown format'),
+  metrics: ModeratorMetricsSchema.describe('Ratings for engagement, insight, balance, and clarity (0-100 each)'),
+}).openapi('ModeratorAIContent');
 
 /**
- * Round Summary Payload - Full payload with metadata
- * Used for stored/completed summaries, NOT for streaming
+ * Moderator Payload - Alias for ModeratorAIContentSchema
+ * Used in component streaming for moderator messages
  */
-export const RoundSummaryPayloadSchema = z.object({
+export const ModeratorPayloadSchema = ModeratorAIContentSchema;
+export type ModeratorPayload = z.infer<typeof ModeratorPayloadSchema>;
+
+/**
+ * Moderator Detail Payload Schema
+ * Returned from moderator endpoint with full metadata and metrics.
+ */
+export const ModeratorDetailPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
   mode: z.string(),
   userQuestion: z.string(),
-  summary: z.string().describe('Concise text summary of the round conversation'),
-  metrics: RoundSummaryMetricsSchema,
-}).openapi('RoundSummaryPayload');
+  summary: z.string().describe('Comprehensive structured summary in markdown format'),
+  metrics: ModeratorMetricsSchema,
+}).openapi('ModeratorDetailPayload');
 
-export const RoundSummaryResponseSchema = createApiResponseSchema(RoundSummaryPayloadSchema).openapi('RoundSummaryResponse');
-
-// ============================================================================
-// ROUND SUMMARY STREAMING SCHEMAS (Array Element Pattern)
-// ============================================================================
-// Uses AI SDK streamObject array mode with elementStream for field-by-field streaming
-// Each element is a complete update, not partial text characters
-// Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-object
-
-/**
- * Summary stream element - discriminated union for array streaming
- * Each element represents a complete field update, streamed one at a time
- *
- * ✅ AI SDK PATTERN: Use `output: 'array'` + `elementStream` for complete elements
- * Unlike `output: 'object'` which streams partial JSON text character-by-character,
- * array mode streams complete elements as they're generated.
- *
- * The model generates an array of these field updates in order:
- * 1. { type: 'summary', value: 'Full summary text here' }
- * 2. { type: 'engagement', value: 85 }
- * 3. { type: 'insight', value: 90 }
- * 4. { type: 'balance', value: 75 }
- * 5. { type: 'clarity', value: 80 }
- */
-export const SummaryFieldUpdateSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('summary'),
-    value: z.string().describe('Concise text summary of the round conversation (2-3 sentences)'),
-  }),
-  z.object({
-    type: z.literal('engagement'),
-    value: z.number().min(0).max(100).describe('How actively participants contributed (0-100)'),
-  }),
-  z.object({
-    type: z.literal('insight'),
-    value: z.number().min(0).max(100).describe('Quality and depth of ideas shared (0-100)'),
-  }),
-  z.object({
-    type: z.literal('balance'),
-    value: z.number().min(0).max(100).describe('How well perspectives were distributed (0-100)'),
-  }),
-  z.object({
-    type: z.literal('clarity'),
-    value: z.number().min(0).max(100).describe('How clear and understandable the discussion was (0-100)'),
-  }),
-]).openapi('SummaryFieldUpdate');
-
-export type SummaryFieldUpdate = z.infer<typeof SummaryFieldUpdateSchema>;
-
-export const SummaryAcceptedPayloadSchema = z.object({
-  summaryId: z.string(),
-  status: z.literal('processing'),
-  message: z.string().optional(),
-}).openapi('SummaryAcceptedPayload');
-
-export const SummaryAcceptedResponseSchema = SummaryAcceptedPayloadSchema.openapi('SummaryAcceptedResponse');
-
-// ✅ TYPE-SAFE: Stored round summary with properly typed summary data
-// ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
-export const StoredRoundSummarySchema = chatModeratorAnalysisSelectSchema
-  .extend({
-    summaryData: RoundSummaryPayloadSchema.omit({ roundNumber: true, mode: true, userQuestion: true }).nullable().optional(),
-    // Override date fields to accept both string and Date (transform handles conversion)
-    createdAt: z.union([z.string(), z.date()]),
-    completedAt: z.union([z.string(), z.date()]).nullable(),
-  })
-  .openapi('StoredRoundSummary');
-
-// ✅ EXPORTED: For store cache validation in actions/types.ts
-export const RoundSummaryListPayloadSchema = z.object({
-  items: z.array(StoredRoundSummarySchema),
-  count: z.number().int().nonnegative(),
-}).openapi('RoundSummaryListPayload');
-
-export const RoundSummaryListResponseSchema = createApiResponseSchema(RoundSummaryListPayloadSchema).openapi('RoundSummaryListResponse');
-
-export type RoundSummaryListResponse = z.infer<typeof RoundSummaryListResponseSchema>;
-export type RoundSummaryListPayload = z.infer<typeof RoundSummaryListPayloadSchema>;
+export const ModeratorResponseSchema = createApiResponseSchema(ModeratorDetailPayloadSchema).openapi('ModeratorResponse');
 
 // ============================================================================
 // CACHE VALIDATION SCHEMAS (Frontend React Query)
@@ -1074,21 +1001,6 @@ export const ChatThreadCacheSchema = z.object({
 }).openapi('ChatThreadCache');
 
 export type ChatThreadCache = z.infer<typeof ChatThreadCacheSchema>;
-
-/**
- * Summaries cache response schema
- * Wraps RoundSummaryListPayloadSchema with cache response wrapper
- */
-export const SummariesCacheResponseSchema = createCacheResponseSchema(
-  z.object({
-    items: z.array(StoredRoundSummarySchema),
-  }),
-);
-
-export type SummariesCacheResponse = z.infer<typeof SummariesCacheResponseSchema>;
-
-// Export schemas for store usage
-export { ChatParticipantSchema, ChatThreadSchema };
 
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequestSchema>;
@@ -1144,11 +1056,24 @@ export const ChangeDataSchema = z.discriminatedUnion('type', [
 ]);
 export type ChangeData = z.infer<typeof ChangeDataSchema>;
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
-export type RoundSummaryRequest = z.infer<typeof RoundSummaryRequestSchema>;
-export type RoundSummaryAIContent = z.infer<typeof RoundSummaryAIContentSchema>;
-export type RoundSummaryPayload = z.infer<typeof RoundSummaryPayloadSchema>;
-export type RoundSummaryMetrics = z.infer<typeof RoundSummaryMetricsSchema>;
-export type StoredRoundSummary = z.infer<typeof StoredRoundSummarySchema>;
+export type RoundModeratorRequest = z.infer<typeof RoundModeratorRequestSchema>;
+export type ModeratorAIContent = z.infer<typeof ModeratorAIContentSchema>;
+export type ModeratorMetrics = z.infer<typeof ModeratorMetricsSchema>;
+
+export type StoredModeratorData = {
+  id: string;
+  threadId: string;
+  roundNumber: number;
+  mode: string;
+  userQuestion: string;
+  status: MessageStatus;
+  moderatorData: { text: string; metrics: ModeratorMetrics } | null;
+  participantMessageIds: string[];
+  errorMessage: string | null;
+  createdAt: Date | string;
+  completedAt: Date | string | null;
+};
+
 export const RoundFeedbackParamSchema = z.object({
   threadId: z.string().openapi({
     description: 'Thread ID',
@@ -1304,31 +1229,31 @@ export const ParticipantPhaseStatusSchema = z.object({
 export type ParticipantPhaseStatus = z.infer<typeof ParticipantPhaseStatusSchema>;
 
 /**
- * Summarizer phase status schema for unified resumption
- * Tracks round summary generation status
+ * Moderator phase status schema for unified resumption
+ * Tracks round moderator message generation status
  */
-export const SummarizerPhaseStatusSchema = z.object({
+export const ModeratorPhaseStatusSchema = z.object({
   status: MessageStatusSchema.nullable().openapi({
-    description: 'Summarizer status (pending/streaming/complete/failed)',
+    description: 'Moderator status (pending/streaming/complete/failed)',
     example: 'streaming',
   }),
   streamId: z.string().nullable().openapi({
-    description: 'Active summary stream ID for resumption',
+    description: 'Active moderator stream ID for resumption',
     example: 'summary:thread_abc123:r0',
   }),
-  summaryId: z.string().nullable().openapi({
-    description: 'Database summary record ID',
+  moderatorMessageId: z.string().nullable().openapi({
+    description: 'Database moderator message record ID',
     example: 'summary_abc123',
   }),
-}).openapi('SummarizerPhaseStatus');
+}).openapi('ModeratorPhaseStatus');
 
-export type SummarizerPhaseStatus = z.infer<typeof SummarizerPhaseStatusSchema>;
+export type ModeratorPhaseStatus = z.infer<typeof ModeratorPhaseStatusSchema>;
 
 /**
  * Thread stream resumption state schema - UNIFIED VERSION
  *
  * Returns comprehensive metadata about ALL active streams for server-side prefetching.
- * Enables unified resumption across pre-search, participants, and summarizer phases.
+ * Enables unified resumption across pre-search, participants, and moderator phases.
  *
  * ✅ AI SDK v5 PATTERN: Supports resume across all streaming phases
  * ✅ RESUMABLE STREAMS: Enables Zustand pre-fill before React renders
@@ -1336,7 +1261,7 @@ export type SummarizerPhaseStatus = z.infer<typeof SummarizerPhaseStatusSchema>;
  * Phase detection logic:
  * 1. If preSearch.status is 'pending' or 'streaming' → currentPhase = 'pre_search'
  * 2. If participants.allComplete is false → currentPhase = 'participants'
- * 3. If summarizer.status is 'pending' or 'streaming' → currentPhase = 'summarizer'
+ * 3. If moderator.status is 'pending' or 'streaming' → currentPhase = 'moderator'
  * 4. Otherwise → currentPhase = 'complete' (or 'idle' if no round started)
  */
 export const ThreadStreamResumptionStateSchema = z.object({
@@ -1348,7 +1273,7 @@ export const ThreadStreamResumptionStateSchema = z.object({
 
   // Current phase for resumption logic
   currentPhase: RoundPhaseSchema.openapi({
-    description: 'Current phase of the round: idle, pre_search, participants, summarizer, or complete',
+    description: 'Current phase of the round: idle, pre_search, participants, moderator, or complete',
     example: 'participants',
   }),
 
@@ -1362,9 +1287,9 @@ export const ThreadStreamResumptionStateSchema = z.object({
     description: 'Participant streaming phase status',
   }),
 
-  // Summarizer/round summary phase status
-  summarizer: SummarizerPhaseStatusSchema.nullable().openapi({
-    description: 'Summarizer/round summary phase status',
+  // Moderator/round summary phase status
+  moderator: ModeratorPhaseStatusSchema.nullable().openapi({
+    description: 'Moderator/round summary phase status',
   }),
 
   // Overall round completion status
@@ -1769,7 +1694,7 @@ export function parsePreSearchEvent<T extends PreSearchSSEEvent>(
 
 /**
  * Schema for chat messages with their associated participants
- * Used in analysis and streaming handlers to validate query results
+ * Used in moderator and streaming handlers to validate query results
  *
  * Pattern: Combines chatMessageSelectSchema with nested participant relation
  * This replaces complex type extraction like:

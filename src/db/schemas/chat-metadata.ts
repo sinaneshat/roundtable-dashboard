@@ -54,7 +54,7 @@ export type Usage = z.infer<typeof UsageSchema>;
  * Citation Schema - RAG source references in AI responses
  *
  * When AI references information from project context (memories, other threads,
- * files, search results, or analyses), it includes inline citations that map
+ * files, search results, or moderator summaries), it includes inline citations that map
  * to specific source records.
  *
  * Citation Format: AI uses [source_id] markers in text (e.g., [mem_abc123])
@@ -245,17 +245,51 @@ export const DbPreSearchMessageMetadataSchema = z.object({
 export type DbPreSearchMessageMetadata = z.infer<typeof DbPreSearchMessageMetadataSchema>;
 
 /**
- * Complete Message Metadata Schema - Discriminated Union
+ * Moderator Message Metadata Schema
+ * System-generated round summaries that appear after all participants respond
+ *
+ * DISTINGUISHING CHARACTERISTICS:
+ * - role: 'assistant' (same as participants for rendering consistency)
+ * - isModerator: true (explicit discriminator)
+ * - NO participantId (not from a specific participant)
+ * - Streams text like participants (no structured JSON)
+ */
+export const DbModeratorMessageMetadataSchema = z.object({
+  role: z.literal('assistant'),
+  isModerator: z.literal(true), // Discriminator from participant messages
+  roundNumber: RoundNumberSchema, // ✅ 0-BASED
+  model: z.string().min(1), // AI model used for summary (e.g., gemini-2.0-flash)
+
+  // Completion tracking
+  finishReason: FinishReasonSchema.optional(),
+  usage: UsageSchema.optional(),
+
+  // Error state
+  hasError: z.boolean().default(false),
+  errorType: ErrorTypeSchema.optional(),
+  errorMessage: z.string().optional(),
+
+  // Timestamp
+  createdAt: z.string().datetime().optional(),
+});
+
+export type DbModeratorMessageMetadata = z.infer<typeof DbModeratorMessageMetadataSchema>;
+
+/**
+ * Complete Message Metadata Schema - Discriminated Union with Moderator Extension
  *
  * ✅ TYPE-SAFE DISCRIMINATION: Use 'role' field to determine message type
  * ✅ EXHAUSTIVE: All possible metadata shapes defined
  * ✅ NO ESCAPE HATCHES: No [key: string]: unknown
+ *
+ * NOTE: Moderator messages use role='assistant' like participants but are distinguished
+ * by isModerator=true. The .or() pattern handles this edge case cleanly.
  */
 export const DbMessageMetadataSchema = z.discriminatedUnion('role', [
   DbUserMessageMetadataSchema,
   DbAssistantMessageMetadataSchema,
   DbPreSearchMessageMetadataSchema,
-]);
+]).or(DbModeratorMessageMetadataSchema);
 
 export type DbMessageMetadata = z.infer<typeof DbMessageMetadataSchema>;
 
@@ -417,12 +451,22 @@ export function isPreSearchMessageMetadata(
 
 /**
  * Type guard: Check if message metadata is for participant message
- * (assistant messages that are not pre-search)
+ * (assistant messages that are not pre-search and not moderator)
  */
 export function isParticipantMessageMetadata(
   metadata: DbMessageMetadata,
 ): metadata is DbAssistantMessageMetadata {
-  return metadata.role === MessageRoles.ASSISTANT && 'participantId' in metadata;
+  return metadata.role === MessageRoles.ASSISTANT && 'participantId' in metadata && !('isModerator' in metadata);
+}
+
+/**
+ * Type guard: Check if message metadata is for moderator message
+ * (round summary after all participants respond)
+ */
+export function isModeratorMessageMetadata(
+  metadata: DbMessageMetadata,
+): metadata is DbModeratorMessageMetadata {
+  return metadata.role === MessageRoles.ASSISTANT && 'isModerator' in metadata && metadata.isModerator === true;
 }
 
 /**

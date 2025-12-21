@@ -10,15 +10,15 @@
  * 6. Participant 0 COMPLETE, participant 1 not started
  * 7. Participant N STREAMING (N > 0)
  * 8. Last participant STREAMING
- * 9. Last participant COMPLETE, summarizer not started
- * 10. Summarizer STREAMING
- * 11. Summarizer COMPLETE (round complete)
+ * 9. Last participant COMPLETE, moderator not started
+ * 10. Moderator STREAMING
+ * 11. Moderator COMPLETE (round complete)
  *
  * Also tests race conditions between:
  * - AI SDK resume and incomplete-round-resumption
  * - Pre-search completion and participant triggering
  * - Participant completion and next participant triggering
- * - Last participant completion and summarizer triggering
+ * - Last participant completion and moderator triggering
  * - Multiple effects trying to resume the same phase
  */
 
@@ -29,7 +29,6 @@ import { FinishReasons, MessageStatuses, RoundPhases } from '@/api/core/enums';
 import {
   createMockParticipant,
   createMockStoredPreSearch,
-  createMockSummary,
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
@@ -58,10 +57,10 @@ type StreamResumptionState = {
     nextParticipantToTrigger: number | null;
     allComplete: boolean;
   };
-  summarizer: {
+  moderator: {
     status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
     streamId: string | null;
-    summaryId: string | null;
+    moderatorId: string | null;
   } | null;
   roundComplete: boolean;
 };
@@ -76,7 +75,9 @@ type StoreState = {
   streamResumptionPrefilled: boolean;
   nextParticipantToTrigger: number | null;
   streamingRoundNumber: number | null;
-  isCreatingSummary: boolean;
+  isModeratorStreaming: boolean;
+  /** Track which round numbers have triggered moderator streams */
+  triggeredModeratorRounds: Set<number>;
 };
 
 // ============================================================================
@@ -92,7 +93,7 @@ function createServerResumptionState(
     participantCount?: number;
     completedParticipants?: number[];
     activeParticipantIndex?: number | null;
-    summarizerStatus?: 'pending' | 'streaming' | 'complete' | 'failed';
+    moderatorStatus?: 'pending' | 'streaming' | 'complete' | 'failed';
   } = {},
 ): StreamResumptionState {
   const {
@@ -101,7 +102,7 @@ function createServerResumptionState(
     participantCount = 3,
     completedParticipants = [],
     activeParticipantIndex = null,
-    summarizerStatus = null,
+    moderatorStatus = null,
   } = options;
 
   const participantStatuses: Record<string, 'active' | 'completed' | 'failed'> = {};
@@ -128,15 +129,15 @@ function createServerResumptionState(
       ? preSearchStatus === 'streaming'
       : phase === RoundPhases.PARTICIPANTS
         ? hasActiveParticipantStream
-        : phase === RoundPhases.SUMMARIZER
-          ? summarizerStatus === 'streaming'
+        : phase === RoundPhases.MODERATOR
+          ? moderatorStatus === 'streaming'
           : false,
     streamId: phase === RoundPhases.PRE_SEARCH
       ? `presearch_thread_123_${roundNumber}`
       : phase === RoundPhases.PARTICIPANTS && activeParticipantIndex !== null
         ? `thread_123_r${roundNumber}_p${activeParticipantIndex}`
-        : phase === RoundPhases.SUMMARIZER
-          ? `summary_thread_123_r${roundNumber}`
+        : phase === RoundPhases.MODERATOR
+          ? `moderator_thread_123_r${roundNumber}`
           : null,
     preSearch: preSearchEnabled
       ? {
@@ -155,11 +156,11 @@ function createServerResumptionState(
       nextParticipantToTrigger: nextToTrigger,
       allComplete,
     },
-    summarizer: phase === RoundPhases.SUMMARIZER || allComplete
+    moderator: phase === RoundPhases.MODERATOR || allComplete
       ? {
-          status: summarizerStatus,
-          streamId: summarizerStatus === 'streaming' ? `summary_thread_123_r${roundNumber}` : null,
-          summaryId: summarizerStatus ? `summary_${roundNumber}` : null,
+          status: moderatorStatus,
+          streamId: moderatorStatus === 'streaming' ? `moderator_thread_123_r${roundNumber}` : null,
+          moderatorId: moderatorStatus ? `moderator_${roundNumber}` : null,
         }
       : null,
     roundComplete: phase === RoundPhases.COMPLETE,
@@ -177,7 +178,8 @@ function createInitialStoreState(): StoreState {
     streamResumptionPrefilled: false,
     nextParticipantToTrigger: null,
     streamingRoundNumber: null,
-    isCreatingSummary: false,
+    isModeratorStreaming: false,
+    triggeredModeratorRounds: new Set(),
   };
 }
 
@@ -192,7 +194,7 @@ function simulatePrefillFromServer(
     streamingRoundNumber: serverState.roundNumber,
     nextParticipantToTrigger: serverState.participants.nextParticipantToTrigger,
     waitingToStartStreaming: serverState.hasActiveStream || serverState.participants.nextParticipantToTrigger !== null,
-    isCreatingSummary: serverState.currentPhase === RoundPhases.SUMMARIZER,
+    isModeratorStreaming: serverState.currentPhase === RoundPhases.MODERATOR,
   };
 }
 
@@ -529,17 +531,17 @@ describe('interruption Point 8: Last participant STREAMING', () => {
     expect(serverState.participants.allComplete).toBe(false);
   });
 
-  it('should NOT trigger summarizer while last participant still streaming', () => {
+  it('should NOT trigger moderator while last participant still streaming', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
       participantCount: 3,
       completedParticipants: [0, 1],
       activeParticipantIndex: 2,
     });
 
-    const shouldTriggerSummarizer = serverState.participants.allComplete
-      && serverState.summarizer === null;
+    const shouldTriggerModerator = serverState.participants.allComplete
+      && serverState.moderator === null;
 
-    expect(shouldTriggerSummarizer).toBe(false);
+    expect(shouldTriggerModerator).toBe(false);
   });
 
   it('should resume last participant stream via AI SDK', () => {
@@ -555,99 +557,102 @@ describe('interruption Point 8: Last participant STREAMING', () => {
 });
 
 // ============================================================================
-// INTERRUPTION POINT 9: Last participant COMPLETE, summarizer not started
+// INTERRUPTION POINT 9: Last participant COMPLETE, moderator not started
 // ============================================================================
 
-describe('interruption Point 9: Last participant COMPLETE, summarizer not started', () => {
-  it('should detect all participants complete with no summarizer', () => {
-    const serverState = createServerResumptionState(RoundPhases.SUMMARIZER, 0, {
+describe('interruption Point 9: Last participant COMPLETE, moderator not started', () => {
+  it('should detect all participants complete with no moderator', () => {
+    const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'pending',
+      moderatorStatus: 'pending',
     });
 
     expect(serverState.participants.allComplete).toBe(true);
-    expect(serverState.currentPhase).toBe(RoundPhases.SUMMARIZER);
-    expect(serverState.summarizer?.status).toBe('pending');
+    expect(serverState.currentPhase).toBe(RoundPhases.MODERATOR);
+    expect(serverState.moderator?.status).toBe('pending');
   });
 
-  it('should trigger summarizer via useIncompleteRoundResumption', () => {
-    const serverState = createServerResumptionState(RoundPhases.SUMMARIZER, 0, {
+  it('should trigger moderator via useIncompleteRoundResumption', () => {
+    const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'pending',
+      moderatorStatus: 'pending',
     });
     const initialState = createInitialStoreState();
     const prefilledState = simulatePrefillFromServer(initialState, serverState);
 
-    expect(prefilledState.currentResumptionPhase).toBe(RoundPhases.SUMMARIZER);
-    expect(prefilledState.isCreatingSummary).toBe(true);
+    expect(prefilledState.currentResumptionPhase).toBe(RoundPhases.MODERATOR);
+    expect(prefilledState.isModeratorStreaming).toBe(true);
   });
 
-  it('should return 204 with summarizer phase header', () => {
-    const serverState = createServerResumptionState(RoundPhases.SUMMARIZER, 0, {
+  it('should return 204 with moderator phase header', () => {
+    const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'pending',
+      moderatorStatus: 'pending',
     });
 
     const httpStatus = serverState.currentPhase !== RoundPhases.PARTICIPANTS ? 204 : 200;
     const phaseHeader = serverState.currentPhase;
 
     expect(httpStatus).toBe(204);
-    expect(phaseHeader).toBe(RoundPhases.SUMMARIZER);
+    expect(phaseHeader).toBe(RoundPhases.MODERATOR);
   });
 });
 
 // ============================================================================
-// INTERRUPTION POINT 10: Summarizer STREAMING
+// INTERRUPTION POINT 10: Moderator STREAMING
 // ============================================================================
 
-describe('interruption Point 10: Summarizer STREAMING', () => {
-  it('should detect streaming summarizer from server state', () => {
-    const serverState = createServerResumptionState(RoundPhases.SUMMARIZER, 0, {
+describe('interruption Point 10: Moderator STREAMING', () => {
+  it('should detect streaming moderator from server state', () => {
+    const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'streaming',
+      moderatorStatus: 'streaming',
     });
 
-    expect(serverState.currentPhase).toBe(RoundPhases.SUMMARIZER);
-    expect(serverState.summarizer?.status).toBe('streaming');
+    expect(serverState.currentPhase).toBe(RoundPhases.MODERATOR);
+    expect(serverState.moderator?.status).toBe('streaming');
     expect(serverState.hasActiveStream).toBe(true);
-    expect(serverState.streamId).toBe('summary_thread_123_r0');
+    expect(serverState.streamId).toBe('moderator_thread_123_r0');
   });
 
-  it('should return 204 for summarizer phase (handled by RoundSummaryStream)', () => {
-    const serverState = createServerResumptionState(RoundPhases.SUMMARIZER, 0, {
+  it('should return 204 for moderator phase (handled by useModeratorStream)', () => {
+    const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'streaming',
+      moderatorStatus: 'streaming',
     });
 
-    // Summarizer uses useObject, not AI SDK UIMessage stream
+    // Moderator uses useObject, not AI SDK UIMessage stream
     const httpStatus = serverState.currentPhase !== RoundPhases.PARTICIPANTS ? 204 : 200;
 
     expect(httpStatus).toBe(204);
   });
 
-  it('should resume summarizer via RoundSummaryStream.attemptSummaryResume', () => {
-    const summary = createMockSummary(0, MessageStatuses.STREAMING);
+  it('should track moderator stream trigger for resumption', () => {
+    const state = createInitialStoreState();
 
-    expect(summary.status).toBe(MessageStatuses.STREAMING);
-    // RoundSummaryStream component handles resumption
+    // Moderator streaming is tracked but moderators are now chat messages with isModerator: true
+    state.triggeredModeratorRounds.add(0);
+
+    expect(state.triggeredModeratorRounds.has(0)).toBe(true);
+    // useModeratorStream handles resumption via chat messages (inline rendering)
   });
 });
 
 // ============================================================================
-// INTERRUPTION POINT 11: Summarizer COMPLETE (round complete)
+// INTERRUPTION POINT 11: Moderator COMPLETE (round complete)
 // ============================================================================
 
-describe('interruption Point 11: Summarizer COMPLETE (round complete)', () => {
+describe('interruption Point 11: Moderator COMPLETE (round complete)', () => {
   it('should detect complete round with no resumption needed', () => {
     const serverState = createServerResumptionState(RoundPhases.COMPLETE, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'complete',
+      moderatorStatus: 'complete',
     });
 
     expect(serverState.currentPhase).toBe(RoundPhases.COMPLETE);
@@ -659,7 +664,7 @@ describe('interruption Point 11: Summarizer COMPLETE (round complete)', () => {
     const serverState = createServerResumptionState(RoundPhases.COMPLETE, 0, {
       participantCount: 3,
       completedParticipants: [0, 1, 2],
-      summarizerStatus: 'complete',
+      moderatorStatus: 'complete',
     });
 
     const shouldResume = !serverState.roundComplete && serverState.hasActiveStream;
@@ -796,8 +801,8 @@ describe('race Conditions: Participant Completion → Next Participant', () => {
   });
 });
 
-describe('race Conditions: Last Participant → Summarizer', () => {
-  it('should only trigger summarizer when ALL participants complete', () => {
+describe('race Conditions: Last Participant → Moderator', () => {
+  it('should only trigger moderator when ALL participants complete', () => {
     const participantStatuses = { 0: 'completed', 1: 'completed', 2: 'active' } as const;
     const totalParticipants = 3;
 
@@ -807,21 +812,21 @@ describe('race Conditions: Last Participant → Summarizer', () => {
     expect(allComplete).toBe(false);
   });
 
-  it('should trigger summarizer via onComplete callback', () => {
+  it('should trigger moderator via onComplete callback', () => {
     const allParticipantsComplete = true;
-    const summarizerStatus = null;
+    const moderatorStatus = null;
     const onCompleteCalled = true;
 
-    const shouldTriggerSummarizer = onCompleteCalled
+    const shouldTriggerModerator = onCompleteCalled
       && allParticipantsComplete
-      && summarizerStatus === null;
+      && moderatorStatus === null;
 
-    expect(shouldTriggerSummarizer).toBe(true);
+    expect(shouldTriggerModerator).toBe(true);
   });
 
-  it('should use summarizerPhaseResumptionAttemptedRef to prevent duplicate triggers', () => {
+  it('should use moderatorPhaseResumptionAttemptedRef to prevent duplicate triggers', () => {
     const ref = { current: null as string | null };
-    const key = 'thread-123_summarizer_0';
+    const key = 'thread-123_moderator_0';
 
     const canAttempt = ref.current !== key;
     expect(canAttempt).toBe(true);

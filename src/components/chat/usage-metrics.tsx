@@ -133,12 +133,12 @@ export function UsageMetrics() {
           />
         </div>
 
-        {/* Analysis Usage */}
+        {/* Moderator Usage */}
         <div className="space-y-0.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <BarChart3 className="size-2.5 text-muted-foreground" />
-              <span className="text-[10px] font-medium">{t('usage.analysis')}</span>
+              <span className="text-[10px] font-medium">{t('usage.moderator')}</span>
             </div>
             <span className={cn(
               'font-mono text-[10px] font-semibold tabular-nums',
@@ -155,7 +155,7 @@ export function UsageMetrics() {
             value={analysisPercentage}
             className="h-1"
             indicatorClassName={getProgressIndicatorColor(analysisStatus)}
-            aria-label={`${t('usage.analysis')}: ${usage.analysis.used} ${t('usage.of')} ${usage.analysis.limit} ${t('usage.used')}`}
+            aria-label={`${t('usage.moderator')}: ${usage.analysis.used} ${t('usage.of')} ${usage.analysis.limit} ${t('usage.used')}`}
           />
         </div>
       </div>

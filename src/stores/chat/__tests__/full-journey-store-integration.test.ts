@@ -5,7 +5,7 @@
  * Uses createChatStore factory to test real state transitions.
  *
  * Key Journeys:
- * - Thread creation → streaming → summary → navigation
+ * - Thread creation → streaming → moderator → navigation
  * - Multi-round conversations with state preservation
  * - Stream resumption after refresh
  * - Configuration changes between rounds
@@ -19,7 +19,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { ChatModes, FinishReasons, MessageStatuses, ScreenModes } from '@/api/core/enums';
+import { FinishReasons, ScreenModes } from '@/api/core/enums';
 import {
   createMockParticipants,
   createMockThread,
@@ -64,12 +64,9 @@ describe('store Initialization', () => {
     expect(typeof state.setShowInitialUI).toBe('function');
     expect(typeof state.setWaitingToStartStreaming).toBe('function');
 
-    // Summary actions
-    expect(typeof state.createPendingSummary).toBe('function');
-    expect(typeof state.updateSummaryStatus).toBe('function');
-
     // Tracking actions
-    expect(typeof state.tryMarkSummaryCreated).toBe('function');
+    expect(typeof state.tryMarkModeratorCreated).toBe('function');
+    expect(typeof state.setIsModeratorStreaming).toBe('function');
   });
 });
 
@@ -231,10 +228,10 @@ describe('message Accumulation', () => {
 });
 
 // ============================================================================
-// SUMMARY CREATION FLOW TESTS
+// MODERATOR TRACKING TESTS
 // ============================================================================
 
-describe('summary Creation Flow', () => {
+describe('moderator Tracking', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -244,98 +241,35 @@ describe('summary Creation Flow', () => {
     state.setParticipants(createMockParticipants(2));
   });
 
-  it('atomic summary creation prevents race conditions', () => {
+  it('atomic moderator creation prevents race conditions', () => {
     const state = getStoreState(store);
 
     // First caller marks round 0
-    const firstResult = state.tryMarkSummaryCreated(0);
+    const firstResult = state.tryMarkModeratorCreated(0);
     expect(firstResult).toBe(true);
 
     // Second caller (race condition) tries same round
-    const secondResult = state.tryMarkSummaryCreated(0);
+    const secondResult = state.tryMarkModeratorCreated(0);
     expect(secondResult).toBe(false);
 
     // Verify only marked once
-    expect(getStoreState(store).createdSummaryRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdSummaryRounds.size).toBe(1);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.size).toBe(1);
   });
 
-  it('creates pending summary with correct data', () => {
+  it('tracks moderator streaming flags', () => {
     const state = getStoreState(store);
 
-    const messages: UIMessage[] = [
-      createTestUserMessage({
-        id: 'thread-e2e-123_r0_user',
-        content: 'Test question',
-        roundNumber: 0,
-      }),
-      createTestAssistantMessage({
-        id: 'thread-e2e-123_r0_p0',
-        content: 'Response 0',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
-      createTestAssistantMessage({
-        id: 'thread-e2e-123_r0_p1',
-        content: 'Response 1',
-        roundNumber: 0,
-        participantId: 'participant-1',
-        participantIndex: 1,
-        finishReason: FinishReasons.STOP,
-      }),
-    ];
+    // Initially not streaming moderator
+    expect(getStoreState(store).isModeratorStreaming).toBe(false);
 
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Test question',
-      threadId: 'thread-e2e-123',
-      mode: ChatModes.ANALYZING,
-    });
+    // Set streaming moderator
+    state.setIsModeratorStreaming(true);
+    expect(getStoreState(store).isModeratorStreaming).toBe(true);
 
-    const summaries = getStoreState(store).summaries;
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0]!.roundNumber).toBe(0);
-    expect(summaries[0]!.status).toBe(MessageStatuses.PENDING);
-  });
-
-  it('updates summary status through lifecycle', () => {
-    const state = getStoreState(store);
-
-    // Create pending - requires valid participant messages
-    const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-msg', content: 'Test', roundNumber: 0 }),
-      createTestAssistantMessage({
-        id: 'p0-msg',
-        content: 'Response',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
-      }),
-    ];
-    state.setMessages(messages);
-
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Test',
-      threadId: 'thread-e2e-123',
-      mode: ChatModes.ANALYZING,
-    });
-
-    expect(getStoreState(store).summaries).toHaveLength(1);
-
-    // updateSummaryStatus takes roundNumber, not summaryId
-    // Transition to streaming
-    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
-
-    // Transition to complete
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+    // Clear streaming moderator
+    state.setIsModeratorStreaming(false);
+    expect(getStoreState(store).isModeratorStreaming).toBe(false);
   });
 });
 
@@ -355,10 +289,10 @@ describe('multi-Round Conversation', () => {
     state.setShowInitialUI(false);
   });
 
-  it('maintains separate summaries per round', () => {
+  it('can track moderator creation for multiple rounds', () => {
     const state = getStoreState(store);
 
-    // Round 0 messages (required for summary creation)
+    // Round 0 messages
     const round0Messages: UIMessage[] = [
       createTestUserMessage({ id: 'r0_user', content: 'Question 0', roundNumber: 0 }),
       createTestAssistantMessage({
@@ -384,31 +318,16 @@ describe('multi-Round Conversation', () => {
       }),
     ];
 
-    // Set all messages first
+    // Set all messages
     state.setMessages([...round0Messages, ...round1Messages]);
 
-    // Round 0 summary
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: [...round0Messages, ...round1Messages], // Pass all messages, it filters by roundNumber
-      userQuestion: 'Question 0',
-      threadId: 'thread-e2e-123',
-      mode: ChatModes.ANALYZING,
-    });
+    // Mark moderators as created for both rounds
+    expect(state.tryMarkModeratorCreated(0)).toBe(true);
+    expect(state.tryMarkModeratorCreated(1)).toBe(true);
 
-    // Round 1 summary
-    state.createPendingSummary({
-      roundNumber: 1,
-      messages: [...round0Messages, ...round1Messages],
-      userQuestion: 'Question 1',
-      threadId: 'thread-e2e-123',
-      mode: ChatModes.ANALYZING,
-    });
-
-    const summaries = getStoreState(store).summaries;
-    expect(summaries).toHaveLength(2);
-    expect(summaries[0]!.roundNumber).toBe(0);
-    expect(summaries[1]!.roundNumber).toBe(1);
+    // Verify tracking
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
   });
 
   it('preserves round 0 messages when adding round 1', () => {
@@ -501,40 +420,34 @@ describe('thread Navigation Reset', () => {
       }),
     ];
     state.setMessages(messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages,
-      userQuestion: 'Old',
-      threadId: 'old-thread',
-      mode: ChatModes.ANALYZING,
-    });
+    state.tryMarkModeratorCreated(0);
 
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).summaries).toHaveLength(1);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
 
     // Navigate to new thread - reset via resetForThreadNavigation
     state.resetForThreadNavigation();
 
     expect(getStoreState(store).messages).toEqual([]);
-    expect(getStoreState(store).summaries).toEqual([]);
     expect(getStoreState(store).thread).toBeNull();
+    expect(getStoreState(store).createdModeratorRounds.size).toBe(0);
   });
 
   it('clears tracking state on navigation', () => {
     const state = getStoreState(store);
 
     // Build up tracking state
-    state.tryMarkSummaryCreated(0);
-    state.tryMarkSummaryCreated(1);
+    state.tryMarkModeratorCreated(0);
+    state.tryMarkModeratorCreated(1);
     state.setHasSentPendingMessage(true);
 
-    expect(getStoreState(store).createdSummaryRounds.size).toBe(2);
+    expect(getStoreState(store).createdModeratorRounds.size).toBe(2);
     expect(getStoreState(store).hasSentPendingMessage).toBe(true);
 
     // Reset
     state.resetForThreadNavigation();
 
-    expect(getStoreState(store).createdSummaryRounds.size).toBe(0);
+    expect(getStoreState(store).createdModeratorRounds.size).toBe(0);
     expect(getStoreState(store).hasSentPendingMessage).toBe(false);
   });
 
@@ -687,7 +600,7 @@ describe('pre-Search State', () => {
 // ============================================================================
 
 describe('complete Round Journey (Integration)', () => {
-  it('full round: user message → participants → summary → complete', () => {
+  it('full round: user message → participants → moderator → complete', () => {
     const store = createChatStore();
     const state = getStoreState(store);
 
@@ -753,45 +666,28 @@ describe('complete Round Journey (Integration)', () => {
 
     expect(getStoreState(store).messages).toHaveLength(3);
 
-    // === STEP 5: All participants done, create summary ===
-    // Atomic check-and-mark
-    const canCreateSummary = state.tryMarkSummaryCreated(0);
-    expect(canCreateSummary).toBe(true);
-
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: [userMessage, p0Message, p1Message],
-      userQuestion: 'What is the best approach?',
-      threadId: 'thread-e2e-123',
-      mode: ChatModes.ANALYZING,
-    });
-
+    // === STEP 5: All participants done, streaming completes ===
     state.completeStreaming();
 
-    expect(getStoreState(store).summaries).toHaveLength(1);
     expect(getStoreState(store).isStreaming).toBe(false);
 
-    // === STEP 6: Summary streaming ===
-    // updateSummaryStatus takes roundNumber, not summaryId
-    state.setIsCreatingSummary(true);
-    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
+    // === STEP 6: Mark moderator as created (atomic check-and-mark) ===
+    const canCreateModerator = state.tryMarkModeratorCreated(0);
+    expect(canCreateModerator).toBe(true);
 
-    expect(getStoreState(store).isCreatingSummary).toBe(true);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
+    // === STEP 7: Moderator streaming initiated ===
+    state.setIsModeratorStreaming(true);
+    expect(getStoreState(store).isModeratorStreaming).toBe(true);
 
-    // === STEP 7: Summary complete ===
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
-    state.setIsCreatingSummary(false);
-
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
-    expect(getStoreState(store).isCreatingSummary).toBe(false);
+    // === STEP 8: Moderator complete ===
+    state.setIsModeratorStreaming(false);
+    expect(getStoreState(store).isModeratorStreaming).toBe(false);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
     expect(finalState.messages).toHaveLength(3);
-    expect(finalState.summaries).toHaveLength(1);
     expect(finalState.isStreaming).toBe(false);
-    expect(finalState.createdSummaryRounds.has(0)).toBe(true);
+    expect(finalState.createdModeratorRounds.has(0)).toBe(true);
   });
 });
 
@@ -838,7 +734,7 @@ describe('stop Button Behavior', () => {
     expect(getStoreState(store).isStreaming).toBe(false);
   });
 
-  it('stop prevents summary creation if not all participants done', () => {
+  it('stop prevents moderator creation if not all participants done', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
@@ -861,7 +757,6 @@ describe('stop Button Behavior', () => {
     // Stop with only 1/3 participants
     state.completeStreaming();
 
-    // No summary should be created (only 1 of 3 participants)
-    expect(getStoreState(store).summaries).toHaveLength(0);
+    // No moderator should be created (only 1 of 3 participants)
   });
 });

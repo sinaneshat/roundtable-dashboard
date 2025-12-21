@@ -84,19 +84,19 @@ function createMockTimelineItem(
     };
   }
 
-  if (type === 'summary') {
+  if (type === 'moderator') {
     return {
-      type: 'summary',
-      key: `round-${roundNumber}-summary`,
+      type: 'moderator',
+      key: `round-${roundNumber}-moderator`,
       roundNumber,
       data: {
-        id: `summary-${roundNumber}`,
+        id: `moderator-${roundNumber}`,
         threadId: 'thread-123',
         roundNumber,
         mode: 'analyzing' as const,
         userQuestion: 'Test question',
         status: 'complete' as const,
-        summaryData: null,
+        moderatorData: null,
         participantMessageIds: [],
         errorMessage: null,
         completedAt: new Date(),
@@ -194,7 +194,7 @@ describe('useVirtualizedTimeline', () => {
     it('should NOT call getVirtualItems during initial render - defers via RAF', () => {
       const timelineItems = [
         createMockTimelineItem(0, 'messages'),
-        createMockTimelineItem(0, 'summary'),
+        createMockTimelineItem(0, 'moderator'),
         createMockTimelineItem(1, 'messages'),
       ];
 

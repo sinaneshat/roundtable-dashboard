@@ -14,13 +14,14 @@ import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes, MessageStatuses } from '@/api/core/enums';
-import type { ChatThreadChangelog, StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
+import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
 import {
   createTestAssistantMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
 
 // ============================================================================
 // TEST HELPERS - Mimic production state structure
@@ -100,40 +101,23 @@ function createMockPreSearch(
   } as StoredPreSearch;
 }
 
-function createMockSummary(
+function createModeratorMessage(
   roundNumber: number,
-  status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
-  participantMessageIds: string[] = [],
-): StoredModeratorSummary {
-  return {
-    id: `summary-r${roundNumber}`,
-    threadId: 'thread-123',
+  text: string,
+): UIMessage {
+  const metadata: DbModeratorMessageMetadata = {
+    role: MessageRoles.ASSISTANT,
+    isModerator: true,
     roundNumber,
-    mode: ChatModes.DEBATING,
-    userQuestion: `Question for round ${roundNumber}`,
-    status: status === 'pending'
-      ? MessageStatuses.PENDING
-      : status === 'streaming'
-        ? MessageStatuses.STREAMING
-        : status === 'complete'
-          ? MessageStatuses.COMPLETE
-          : MessageStatuses.FAILED,
-    summaryData: status === 'complete'
-      ? {
-          confidence: { overall: 85, reasoning: 'Test' },
-          modelVoices: [],
-          article: { headline: 'Test', narrative: 'Test', keyTakeaway: 'Test' },
-          recommendations: [],
-          consensusTable: [],
-          minorityViews: [],
-          convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
-        }
-      : undefined,
-    participantMessageIds,
-    errorMessage: null,
-    completedAt: status === 'complete' ? new Date() : null,
-    createdAt: new Date(),
-  } as StoredModeratorSummary;
+    model: 'moderator-model',
+    hasError: false,
+  };
+  return {
+    id: `moderator-r${roundNumber}`,
+    role: MessageRoles.ASSISTANT,
+    parts: [{ type: MessagePartTypes.TEXT, text }],
+    metadata,
+  };
 }
 
 // ============================================================================
@@ -176,16 +160,9 @@ describe('bug #1: Changelog Display Between Rounds', () => {
         ]),
       ];
 
-      const summaries: StoredModeratorSummary[] = [
-        createMockSummary(0, 'complete', ['a0p0', 'a0p1', 'a0p2']),
-        createMockSummary(1, 'complete', ['a1p0', 'a1p1']),
-        createMockSummary(2, 'complete', ['a2p0']),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog,
           preSearches: [],
         }),
@@ -237,15 +214,9 @@ describe('bug #1: Changelog Display Between Rounds', () => {
         ]),
       ];
 
-      const summaries: StoredModeratorSummary[] = [
-        createMockSummary(2, 'complete', ['a2p0']),
-        createMockSummary(3, 'complete', ['a3p0']),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog,
           preSearches: [],
         }),
@@ -267,35 +238,30 @@ describe('bug #1: Changelog Display Between Rounds', () => {
 
 describe('bug #2: Timeline Element Ordering', () => {
   describe('correct element order per round', () => {
-    it('fAILS: timeline should maintain order: changelog -> user -> pre-search -> assistants -> summary', () => {
+    it('timeline maintains order: messages (with moderator sorted last)', () => {
       /**
+       * ✅ UNIFIED: Moderator is now included in messages, not as separate summary
+       *
        * Expected order for each round:
        * 1. Changelog (if config changed)
-       * 2. User message
-       * 3. Pre-search card (if web search enabled)
-       * 4. Assistant messages (in participant index order)
-       * 5. Summary card
+       * 2. Messages (user → participants → moderator, all in one item)
        *
-       * Bug: Order is sometimes wrong, especially pre-search position
+       * Pre-search is rendered INSIDE ChatMessageList, not as separate timeline item
        */
       const messages: UIMessage[] = [
         createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
         createTestAssistantMessage({ id: 'a0p0', content: 'P0', roundNumber: 0, participantId: 'p0', participantIndex: 0 }),
         createTestAssistantMessage({ id: 'a0p1', content: 'P1', roundNumber: 0, participantId: 'p1', participantIndex: 1 }),
+        createModeratorMessage(0, 'Round 0 moderator'),
       ];
 
       const preSearches: StoredPreSearch[] = [
         createMockPreSearch(0, 'complete'),
       ];
 
-      const summaries: StoredModeratorSummary[] = [
-        createMockSummary(0, 'complete', ['a0p0', 'a0p1']),
-      ];
-
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries,
           changelog: [],
           preSearches,
         }),
@@ -306,10 +272,15 @@ describe('bug #2: Timeline Element Ordering', () => {
       // Get order of elements for round 0
       const round0Items = timeline.filter(item => item.roundNumber === 0);
 
-      // Should have: messages, then summary
+      // ✅ UNIFIED: Only 'messages' item now (moderator is inside messages, sorted last)
       // Pre-search is rendered INSIDE ChatMessageList when messages exist
-      // So timeline should NOT have a separate pre-search item when messages exist
-      expect(round0Items.map(item => item.type)).toEqual(['messages', 'summary']);
+      expect(round0Items.map(item => item.type)).toEqual(['messages']);
+
+      // Verify moderator is last in messages
+      const messagesItem = round0Items.find(item => item.type === 'messages');
+      const roundMessages = messagesItem?.type === 'messages' ? messagesItem.data : [];
+      const lastMessage = roundMessages[roundMessages.length - 1];
+      expect(lastMessage?.metadata).toHaveProperty('isModerator', true);
     });
 
     it('fAILS: pre-search should render at timeline level ONLY when no messages exist (orphaned round)', () => {
@@ -334,7 +305,6 @@ describe('bug #2: Timeline Element Ordering', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries: [createMockSummary(0, 'complete', ['a0p0'])],
           changelog: [],
           preSearches,
         }),
@@ -369,7 +339,6 @@ describe('bug #2: Timeline Element Ordering', () => {
       const { result } = renderHook(() =>
         useThreadTimeline({
           messages,
-          summaries: [],
           changelog: [],
           preSearches: [],
         }),
@@ -428,11 +397,6 @@ describe('bug #3: Changelog Visibility After New Round Submission', () => {
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
-        summaries: [
-          createMockSummary(1, 'complete', ['a1p0']),
-          createMockSummary(2, 'complete', ['a2p0']),
-          createMockSummary(3, 'complete', ['a3p0']),
-        ],
         changelog,
         preSearches: [],
       }),
@@ -615,17 +579,9 @@ describe('production State Reproduction', () => {
       createMockPreSearch(2, 'complete'),
     ];
 
-    const summaries: StoredModeratorSummary[] = [
-      createMockSummary(0, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r0_p0', '01KCC1FR0V0ZS0X63M794KFE6X_r0_p1', '01KCC1FR0V0ZS0X63M794KFE6X_r0_p2']),
-      createMockSummary(1, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r1_p0', '01KCC1FR0V0ZS0X63M794KFE6X_r1_p1']),
-      createMockSummary(2, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r2_p0']),
-      createMockSummary(3, 'complete', ['01KCC1FR0V0ZS0X63M794KFE6X_r3_p0']),
-    ];
-
     const { result } = renderHook(() =>
       useThreadTimeline({
         messages,
-        summaries,
         changelog,
         preSearches,
       }),

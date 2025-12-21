@@ -17,8 +17,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
-import { MessageStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, StoredRoundSummary, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -104,15 +103,14 @@ export default function ChatThreadScreen({
   // STORE STATE
   // ============================================================================
 
-  const { isStreaming, isCreatingSummary, pendingMessage } = useChatStore(
+  const { isStreaming, isModeratorStreaming, pendingMessage } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
-      isCreatingSummary: s.isCreatingSummary,
+      isModeratorStreaming: s.isModeratorStreaming,
       pendingMessage: s.pendingMessage,
     })),
   );
 
-  const summaries = useChatStore(s => s.summaries);
   const selectedMode = useChatStore(s => s.selectedMode);
   const inputValue = useChatStore(s => s.inputValue);
   const selectedParticipants = useChatStore(s => s.selectedParticipants);
@@ -144,16 +142,12 @@ export default function ChatThreadScreen({
 
   const formActions = useChatFormActions();
 
-  // Screen initialization
-  const hasStreamingSummary = summaries.some(
-    (a: StoredRoundSummary) => a.status === MessageStatuses.PENDING || a.status === MessageStatuses.STREAMING,
-  );
-
   // ✅ FIX: Select individual values instead of nested object to avoid infinite loop
   // useShallow only does shallow comparison - nested objects create new references each time
   const isRegenerating = useChatStore(s => s.isRegenerating);
   const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
 
+  // ✅ TEXT STREAMING: isModeratorStreaming flag tracks moderator streaming
   useScreenInitialization({
     mode: 'thread',
     thread,
@@ -162,11 +156,11 @@ export default function ChatThreadScreen({
     chatMode: selectedMode || (thread.mode as ChatMode),
     isRegeneration: regeneratingRoundNumber !== null,
     regeneratingRoundNumber,
-    enableOrchestrator: !isRegenerating && !hasStreamingSummary,
+    enableOrchestrator: !isRegenerating && !isModeratorStreaming,
   });
 
   // Input blocking for submit guard only (ChatView handles its own input state)
-  const isSubmitBlocked = isStreaming || isCreatingSummary || Boolean(pendingMessage);
+  const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage);
 
   // ✅ SIMPLIFIED: Removed duplicate initialization useEffect
   // All state setup now happens in initializeThread (called by useScreenInitialization)

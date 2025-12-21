@@ -15,7 +15,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 
 import { validateRegenerateRound } from './round.service';
 
@@ -94,16 +94,11 @@ export async function handleRoundRegeneration(
     deletedMessagesCount = deletedMessages.length;
 
     // =========================================================================
-    // STEP 3: Delete analysis, feedback, and changelog entries
+    // STEP 3: Delete feedback and changelog entries
     // =========================================================================
-    // Use batch operations for atomicity
+    // ✅ TEXT STREAMING: Moderator messages are now stored in chatMessage
+    // and deleted in STEP 2 above (delete ALL messages from round)
     await executeBatch(db, [
-      db.delete(tables.chatModeratorAnalysis).where(
-        and(
-          eq(tables.chatModeratorAnalysis.threadId, threadId),
-          eq(tables.chatModeratorAnalysis.roundNumber, regenerateRound),
-        ),
-      ),
       db.delete(tables.chatRoundFeedback).where(
         and(
           eq(tables.chatRoundFeedback.threadId, threadId),

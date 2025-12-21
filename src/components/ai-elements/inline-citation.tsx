@@ -84,9 +84,9 @@ const SOURCE_TYPE_CONFIG: Record<CitationSourceType, {
     label: 'Search',
     color: 'text-amber-500',
   },
-  [CitationSourceTypes.SUMMARY]: {
+  [CitationSourceTypes.MODERATOR]: {
     icon: Search,
-    label: 'Summary',
+    label: 'Moderator',
     color: 'text-cyan-500',
   },
   [CitationSourceTypes.RAG]: {

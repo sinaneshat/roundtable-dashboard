@@ -1,2 +1,2 @@
-export { PlanSummaryCard } from './plan-summary-card';
+export { PlanOverviewCard } from './plan-summary-card';
 export { StatusPage, StatusPageActions } from './status-page';

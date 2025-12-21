@@ -25,7 +25,6 @@ import type {
   PreSearchState,
   ScreenState,
   StreamResumptionSliceState,
-  SummaryState,
   ThreadState,
   TrackingState,
   UIState,
@@ -65,14 +64,6 @@ export const UI_DEFAULTS = {
 } satisfies UIState;
 
 // ============================================================================
-// SUMMARY SLICE DEFAULTS
-// ============================================================================
-
-export const SUMMARY_DEFAULTS = {
-  summaries: [],
-} satisfies SummaryState;
-
-// ============================================================================
 // PRE-SEARCH SLICE DEFAULTS
 // ============================================================================
 
@@ -105,7 +96,7 @@ export const THREAD_DEFAULTS = {
 export const FLAGS_DEFAULTS = {
   hasInitiallyLoaded: false,
   isRegenerating: false,
-  isCreatingSummary: false,
+  isModeratorStreaming: false,
   isWaitingForChangelog: false,
   hasPendingConfigChanges: false,
 } satisfies FlagsState;
@@ -130,17 +121,17 @@ export const DATA_DEFAULTS = {
 // TRACKING SLICE DEFAULTS
 // ============================================================================
 
-// 🚨 BUG FIX: Using satisfies instead of as const to allow fresh Set instances on each reset
-// Without this fix, all resets reuse the same Set instances created at module load,
-// causing state pollution across thread navigations
+// Using satisfies instead of as const to allow fresh Set instances on each reset.
+// This prevents reusing the same Set instances created at module load,
+// which would cause state pollution across thread navigations.
 export const TRACKING_DEFAULTS = {
   hasSentPendingMessage: false,
-  createdSummaryRounds: new Set<number>(),
+  createdModeratorRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-  /** ✅ SUMMARY STREAM TRACKING: Prevents duplicate stream submissions by round number */
-  triggeredSummaryRounds: new Set<number>(),
-  /** ✅ SUMMARY STREAM TRACKING: Prevents duplicate stream submissions by summary ID */
-  triggeredSummaryIds: new Set<string>(),
+  /** Moderator stream tracking: Prevents duplicate stream submissions by round number */
+  triggeredModeratorRounds: new Set<number>(),
+  /** Moderator stream tracking: Prevents duplicate stream submissions by moderator ID */
+  triggeredModeratorIds: new Set<string>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Track when early optimistic message added by handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: false,
 } satisfies TrackingState;
@@ -178,8 +169,8 @@ export const STREAM_RESUMPTION_DEFAULTS = {
   currentResumptionPhase: null,
   /** Pre-search resumption state (null if web search not enabled) */
   preSearchResumption: null,
-  /** Summarizer resumption state */
-  summarizerResumption: null,
+  /** Moderator resumption state */
+  moderatorResumption: null,
   /** Current round number for resumption */
   resumptionRoundNumber: null,
 } satisfies StreamResumptionSliceState;
@@ -210,7 +201,7 @@ export const ATTACHMENTS_DEFAULTS = {
 
 /**
  * All streaming-related flags that must be cleared together
- * Used when streaming completes (participants or summary)
+ * Used when streaming completes (participants or moderator)
  */
 export const STREAMING_STATE_RESET = {
   isStreaming: false,
@@ -221,13 +212,14 @@ export const STREAMING_STATE_RESET = {
 } satisfies Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'>;
 
 /**
- * Summary creation flags
- * Used when summary creation/streaming completes
+ * Moderator creation flags
+ * Used when moderator creation/streaming completes
+ * Note: Moderator now renders inline via messages array with isModerator: true metadata
  */
-export const SUMMARY_STATE_RESET = {
-  isCreatingSummary: false,
+export const MODERATOR_STATE_RESET = {
+  isModeratorStreaming: false,
   isWaitingForChangelog: false,
-} satisfies Pick<FlagsState, 'isCreatingSummary' | 'isWaitingForChangelog'>;
+} satisfies Pick<FlagsState, 'isModeratorStreaming' | 'isWaitingForChangelog'>;
 
 /**
  * Pending message state that must be cleared after message is sent
@@ -268,7 +260,7 @@ export const COMPLETE_RESET_STATE = {
   selectedParticipants: FORM_DEFAULTS.selectedParticipants,
   enableWebSearch: FORM_DEFAULTS.enableWebSearch,
   modelOrder: FORM_DEFAULTS.modelOrder,
-  // Feedback state - 🚨 BUG FIX: Create fresh Map instance to prevent state pollution
+  // Feedback state - create fresh Map instance to prevent state pollution
   feedbackByRound: new Map(),
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
@@ -277,8 +269,6 @@ export const COMPLETE_RESET_STATE = {
   waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
   createdThreadId: UI_DEFAULTS.createdThreadId,
-  // Summary state
-  summaries: SUMMARY_DEFAULTS.summaries,
   // Pre-search state
   preSearches: PRESEARCH_DEFAULTS.preSearches,
   preSearchActivityTimes: new Map<number, number>(),
@@ -295,7 +285,7 @@ export const COMPLETE_RESET_STATE = {
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
-  isCreatingSummary: FLAGS_DEFAULTS.isCreatingSummary,
+  isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
   // Data state
@@ -308,11 +298,11 @@ export const COMPLETE_RESET_STATE = {
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  // 🚨 BUG FIX: Create fresh Set instances for each complete reset
-  createdSummaryRounds: new Set<number>(),
+  // Create fresh Set instances for each complete reset
+  createdModeratorRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-  triggeredSummaryRounds: new Set<number>(),
-  triggeredSummaryIds: new Set<string>(),
+  triggeredModeratorRounds: new Set<number>(),
+  triggeredModeratorIds: new Set<string>(),
   hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // Callbacks state
   onComplete: CALLBACKS_DEFAULTS.onComplete,
@@ -327,7 +317,7 @@ export const COMPLETE_RESET_STATE = {
   prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
   currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
   preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
-  summarizerResumption: STREAM_RESUMPTION_DEFAULTS.summarizerResumption,
+  moderatorResumption: STREAM_RESUMPTION_DEFAULTS.moderatorResumption,
   resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
   // Animation state
   pendingAnimations: new Set<number>(),
@@ -343,13 +333,13 @@ export const COMPLETE_RESET_STATE = {
  * Used by: resetThreadState (when unmounting thread screen)
  */
 export const THREAD_RESET_STATE = {
-  // UI state - 🚨 BUG FIX: Added missing streaming state properties
+  // UI state - includes streaming state properties
   waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   isStreaming: THREAD_DEFAULTS.isStreaming,
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
-  isCreatingSummary: FLAGS_DEFAULTS.isCreatingSummary,
+  isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
   // Data state
@@ -362,11 +352,11 @@ export const THREAD_RESET_STATE = {
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  // 🚨 BUG FIX: Create fresh Set/Map instances for each thread reset
-  createdSummaryRounds: new Set<number>(),
+  // Create fresh Set/Map instances for each thread reset
+  createdModeratorRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-  triggeredSummaryRounds: new Set<number>(),
-  triggeredSummaryIds: new Set<string>(),
+  triggeredModeratorRounds: new Set<number>(),
+  triggeredModeratorIds: new Set<string>(),
   preSearchActivityTimes: new Map<number, number>(),
   hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
   // AI SDK methods (thread-related)
@@ -383,7 +373,7 @@ export const THREAD_RESET_STATE = {
   prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
   currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
   preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
-  summarizerResumption: STREAM_RESUMPTION_DEFAULTS.summarizerResumption,
+  moderatorResumption: STREAM_RESUMPTION_DEFAULTS.moderatorResumption,
   resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
   // Animation state
   pendingAnimations: new Set<number>(),
@@ -396,7 +386,7 @@ export const THREAD_RESET_STATE = {
 /**
  * Full thread navigation reset state
  * 🚨 CRITICAL: Used when navigating BETWEEN threads (e.g., /chat/thread-1 → /chat/thread-2)
- * Unlike THREAD_RESET_STATE, this ALSO clears thread data (messages, participants, analyses)
+ * Unlike THREAD_RESET_STATE, this ALSO clears thread data (messages, participants, moderator)
  * This prevents stale data from previous thread leaking into new thread
  * Used by: resetForThreadNavigation
  */
@@ -409,13 +399,12 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   messages: THREAD_DEFAULTS.messages,
   error: THREAD_DEFAULTS.error,
   currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
-  // 🚨 CRITICAL: Clear summaries and pre-searches from previous thread
-  summaries: SUMMARY_DEFAULTS.summaries,
+  // 🚨 CRITICAL: Clear pre-searches from previous thread
   preSearches: PRESEARCH_DEFAULTS.preSearches,
-  // 🚨 CRITICAL: Reset UI flags related to thread creation
+  // Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
-  // 🚨 BUG FIX: Clear feedback state on thread navigation (thread-specific data)
+  // Clear feedback state on thread navigation (thread-specific data)
   feedbackByRound: new Map(),
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,

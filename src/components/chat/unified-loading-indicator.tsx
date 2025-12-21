@@ -17,7 +17,7 @@ export type UnifiedLoadingIndicatorProps = {
   loadingDetails: {
     isCreatingThread: boolean;
     isStreamingParticipants: boolean;
-    isStreamingSummary: boolean;
+    isStreamingModerator: boolean;
     isNavigating: boolean;
   };
   /** Pre-search items to check for active pre-search loading */
@@ -53,7 +53,11 @@ export function UnifiedLoadingIndicator({
     if (hasActivePreSearch) {
       return 'Searching';
     }
-    // Default for streaming participants or summary
+    // Show "Observing" only when moderator is streaming (and not participants)
+    if (loadingDetails.isStreamingModerator && !loadingDetails.isStreamingParticipants) {
+      return 'Observing';
+    }
+    // Default for streaming participants
     return 'Thinking';
   }, [loadingDetails, hasActivePreSearch]);
 

@@ -10,11 +10,11 @@
  * - useFeedbackActions: Round feedback management
  *
  * INTERNAL (not exported):
- * - useSummaryOrchestrator, usePreSearchOrchestrator
+ * - useModeratorOrchestrator, usePreSearchOrchestrator
  * These are used internally by useScreenInitialization and other composed hooks
  *
  * STORE SUBSCRIPTIONS (automatic):
- * - Summary triggering: Monitors isStreaming → false (all participants done)
+ * - Moderator triggering: Monitors isStreaming → false (all participants done)
  * - Streaming trigger: Monitors waitingToStartStreaming → true (thread ready)
  * - Pending message send: Monitors participant match + changelog ready
  */
@@ -39,7 +39,6 @@ export type { UseThreadActionsOptions } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
 export type {
   InfiniteQueryCache,
-  SummaryDeduplicationOptions,
   ThreadDetailCacheData,
   ThreadDetailPayloadCache,
   ThreadDetailResponseCache,
@@ -48,22 +47,22 @@ export type {
 } from './actions/types';
 export {
   validateInfiniteQueryCache,
-  validateSummariesCache,
   validateThreadDetailCache,
   validateThreadDetailPayloadCache,
   validateThreadDetailResponseCache,
   validateThreadsListPages,
   validateUsageStatsCache,
 } from './actions/types';
-// Store
-export type { ChatStore, ChatStoreApi } from './store';
+export type { ChatStoreApi } from './store';
 export { createChatStore } from './store';
 // Store Constants
 export {
   AnimationIndices,
   getStatusPriority,
-  SummaryTimeouts,
+  ModeratorTimeouts,
 } from './store-constants';
+// Store
+export type { ChatStore } from './store-schemas';
 // Pre-search utilities
 export type { ExecutePreSearchOptions } from './utils/pre-search-execution';
 export {
@@ -72,7 +71,3 @@ export {
   readPreSearchStreamData,
   shouldWaitForPreSearch,
 } from './utils/pre-search-execution';
-// Cache validation utilities (used by queries/mutations)
-// ✅ Canonical types from @/api/routes/chat/schema
-export type { ChatThreadCache, SummariesCacheResponse } from '@/api/routes/chat/schema';
-export type { PartialPreSearchData } from '@/api/routes/chat/schema';

@@ -98,3 +98,51 @@ export const ReasoningStates = {
   THINKING: 'thinking' as const,
   COMPLETE: 'complete' as const,
 } as const;
+
+// ============================================================================
+// STATUS VARIANT (for StatusPage component)
+// ============================================================================
+
+export const STATUS_VARIANTS = ['loading', 'success', 'error'] as const;
+
+export const StatusVariantSchema = z.enum(STATUS_VARIANTS);
+
+export type StatusVariant = z.infer<typeof StatusVariantSchema>;
+
+export const StatusVariants = {
+  LOADING: 'loading' as const,
+  SUCCESS: 'success' as const,
+  ERROR: 'error' as const,
+} as const;
+
+// ============================================================================
+// NETWORK ERROR TYPE (for ErrorState component)
+// ============================================================================
+
+export const NETWORK_ERROR_TYPES = ['offline', 'timeout', 'connection'] as const;
+
+export const NetworkErrorTypeSchema = z.enum(NETWORK_ERROR_TYPES);
+
+export type NetworkErrorType = z.infer<typeof NetworkErrorTypeSchema>;
+
+export const NetworkErrorTypes = {
+  OFFLINE: 'offline' as const,
+  TIMEOUT: 'timeout' as const,
+  CONNECTION: 'connection' as const,
+} as const;
+
+// ============================================================================
+// ERROR SEVERITY (for ErrorState component)
+// ============================================================================
+
+export const ERROR_SEVERITIES = ['failed', 'warning', 'info'] as const;
+
+export const ErrorSeveritySchema = z.enum(ERROR_SEVERITIES);
+
+export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
+
+export const ErrorSeverities = {
+  FAILED: 'failed' as const,
+  WARNING: 'warning' as const,
+  INFO: 'info' as const,
+} as const;

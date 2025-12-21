@@ -2,8 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
 
 import { ThreadStatuses } from '@/api/core/enums';
-import { getDbAsync } from '@/db';
-import { chatThread } from '@/db/schema';
+import { chatThread, getDbAsync } from '@/db';
 import { getBaseUrl } from '@/utils/helpers';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

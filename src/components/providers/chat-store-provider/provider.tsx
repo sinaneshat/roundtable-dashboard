@@ -13,22 +13,21 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { useMultiParticipantChat } from '@/hooks/utils';
-import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { getMessageMetadata } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { getThreadMessagesService, getThreadSummariesService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
 import { ChatStoreContext } from './context';
 import {
   useMessageSync,
+  useModeratorTrigger,
   useNavigationCleanup,
   usePendingMessage,
   usePreSearchResumption,
@@ -44,6 +43,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
   const queryClientRef = useRef(queryClient);
+  // Ref for moderator trigger - set later by useModeratorTrigger hook
+  const triggerModeratorRef = useRef<((roundNumber: number, participantMessageIds: string[]) => Promise<void>) | null>(null);
 
   // Initialize store once per provider
   if (storeRef.current === null) {
@@ -52,29 +53,42 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   const store = storeRef.current;
 
-  // Subscribe to store state for AI SDK hook initialization
-  const thread = useStore(store, s => s.thread);
-  const participants = useStore(store, s => s.participants);
-  const messages = useStore(store, s => s.messages);
-  const enableWebSearch = useStore(store, s => s.enableWebSearch);
-  const createdThreadId = useStore(store, s => s.createdThreadId);
-  const hasEarlyOptimisticMessage = useStore(store, s => s.hasEarlyOptimisticMessage);
-  const streamResumptionPrefilled = useStore(store, s => s.streamResumptionPrefilled);
-  const pendingAttachmentIds = useStore(store, s => s.pendingAttachmentIds);
-  const pendingFileParts = useStore(store, s => s.pendingFileParts);
+  // ✅ ZUSTAND v5: Batch store subscriptions with useShallow to prevent cascading re-renders
+  // Instead of 11 separate subscriptions, use a single batched subscription
+  const {
+    thread,
+    participants,
+    messages,
+    enableWebSearch,
+    createdThreadId,
+    hasEarlyOptimisticMessage,
+    streamResumptionPrefilled,
+    pendingAttachmentIds,
+    pendingFileParts,
+    clearAnimations,
+    completeAnimation,
+  } = useStore(store, useShallow(s => ({
+    thread: s.thread,
+    participants: s.participants,
+    messages: s.messages,
+    enableWebSearch: s.enableWebSearch,
+    createdThreadId: s.createdThreadId,
+    hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
+    pendingAttachmentIds: s.pendingAttachmentIds,
+    pendingFileParts: s.pendingFileParts,
+    clearAnimations: s.clearAnimations,
+    completeAnimation: s.completeAnimation,
+  })));
 
   const effectiveThreadId = thread?.id || createdThreadId || '';
-
-  // Animation tracking
-  const clearAnimations = useStore(store, s => s.clearAnimations);
-  const completeAnimation = useStore(store, s => s.completeAnimation);
 
   // Error handling callback
   const handleError = useCallback((error: Error) => {
     showApiErrorToast('Chat error', error);
   }, []);
 
-  // onComplete callback for summary triggering
+  // onComplete callback for moderator triggering
   const handleComplete = useCallback(async (sdkMessages: UIMessage[]) => {
     const currentState = store.getState();
 
@@ -87,88 +101,60 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         try {
           const roundNumber = getCurrentRoundNumber(sdkMessages);
 
-          if (currentState.hasSummaryBeenCreated(roundNumber)) {
+          if (currentState.hasModeratorBeenCreated(roundNumber)) {
             return;
           }
 
-          const userMessage = sdkMessages.findLast(m => m.role === MessageRoles.USER);
-          const userQuestion = userMessage?.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p)?.text || '';
-
+          // ✅ RACE FIX: Wait for ALL animations (pre-search, participants) before triggering moderator
+          // This prevents moderator from triggering while pre-search is still animating
           await currentState.waitForAllAnimations();
 
-          currentState.markSummaryCreated(roundNumber);
-
-          currentState.createPendingSummary({
-            roundNumber,
-            messages: sdkMessages,
-            userQuestion,
-            threadId,
-            mode,
-          });
-
-          currentState.completeStreaming();
-
-          // ✅ RATE LIMIT FIX: Use staleTime to prevent redundant fetches during rapid re-renders
-          // These fetches happen after participant streaming completes but before summary streaming starts.
-          // Without staleTime, rapid component updates can trigger multiple fetches causing 429 errors.
-          const FETCH_STALE_TIME = 5 * 1000; // 5 seconds - prevents redundant fetches during transition
-
-          // Fetch fresh messages for attachment URLs
-          try {
-            const result = await queryClientRef.current.fetchQuery({
-              queryKey: queryKeys.threads.messages(threadId),
-              queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
-              staleTime: FETCH_STALE_TIME,
-            });
-            if (result.success && result.data?.messages) {
-              const uiMessages = chatMessagesToUIMessages(result.data.messages, storeParticipants);
-              currentState.setMessages(uiMessages);
+          // ✅ RACE FIX: After waiting for animations, verify pre-search is complete if enabled
+          // This handles race where pre-search completes but animation just finished
+          const latestState = store.getState();
+          const webSearchEnabled = latestState.thread?.enableWebSearch || latestState.enableWebSearch;
+          if (webSearchEnabled) {
+            const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === roundNumber);
+            if (preSearchForRound && preSearchForRound.status !== 'complete') {
+              // Pre-search still running, don't trigger moderator yet
+              // The flow state machine will trigger it when pre-search completes
+              return;
             }
-          } catch {
-            // Non-blocking
           }
 
-          // ✅ AI SDK v5 FIX: Fetch summaries from backend to ensure frontend has latest data
-          // This is critical because frontend's createPendingSummary might have failed
-          // (e.g., due to metadata validation issues) but backend creates the summary
-          // Fetching ensures the pending summary from backend is loaded and can trigger streaming
-          try {
-            const summariesResult = await queryClientRef.current.fetchQuery({
-              queryKey: queryKeys.threads.summaries(threadId),
-              queryFn: () => getThreadSummariesService({ param: { id: threadId } }),
-              staleTime: FETCH_STALE_TIME,
-            });
-            if (summariesResult.success && summariesResult.data?.items) {
-              // Get current frontend summaries
-              const currentSummaries = currentState.summaries;
-              // Check if backend has summaries that frontend doesn't have
-              const backendSummaries = summariesResult.data.items;
-              const currentSummaryIds = new Set(currentSummaries.map((a: { id: string }) => a.id));
+          currentState.markModeratorCreated(roundNumber);
+          // ✅ FIX: Don't call completeStreaming() here - it resets isModeratorStreaming to false
+          // The moderator trigger will manage its own streaming state
+          // completeStreaming() will be called by the moderator trigger when it completes
 
-              // Find new summaries from backend
-              const newSummaries = backendSummaries.filter((ba: { id: string }) => !currentSummaryIds.has(ba.id));
+          // Trigger moderator stream programmatically
+          // Extract participant message IDs from SDK messages for this round
+          const participantMessageIds = sdkMessages
+            .filter((m) => {
+              const meta = getMessageMetadata(m.metadata);
+              if (!meta)
+                return false;
 
-              if (newSummaries.length > 0) {
-                // Merge backend summaries with frontend summaries, preferring backend data
-                const mergedSummaries = [
-                  ...currentSummaries.filter((ca: { roundNumber: number }) => !backendSummaries.some((ba: { roundNumber: number }) => ba.roundNumber === ca.roundNumber)),
-                  ...backendSummaries.map(ba => ({
-                    ...ba,
-                    // Convert dates from strings if needed
-                    createdAt: typeof ba.createdAt === 'string' ? new Date(ba.createdAt) : ba.createdAt,
-                    completedAt: ba.completedAt
-                      ? typeof ba.completedAt === 'string' ? new Date(ba.completedAt) : ba.completedAt
-                      : null,
-                  })),
-                ];
-                currentState.setSummaries(mergedSummaries as typeof currentSummaries);
-              }
-            }
-          } catch {
-            // Non-blocking - frontend will use whatever summaries it has
+              return (
+                meta.role === 'assistant'
+                && 'roundNumber' in meta
+                && meta.roundNumber === roundNumber
+                && !('isModerator' in meta)
+              );
+            })
+            .map(m => m.id);
+
+          // Trigger the moderator stream if we have participant messages
+          if (participantMessageIds.length > 0) {
+            // Set moderator streaming state for input blocking
+            currentState.setIsModeratorStreaming(true);
+            triggerModeratorRef.current?.(roundNumber, participantMessageIds);
           }
+
+          // Moderator messages are stored as chatMessage with isModerator: true metadata
+          // The triggerModerator function handles fetching messages after stream completes
         } catch (error) {
-          console.error('[Provider:handleComplete] Summary creation failed', {
+          console.error('[Provider:handleComplete] Moderator creation failed', {
             error,
             threadId,
             mode,
@@ -268,6 +254,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     store,
     prevPathnameRef,
   });
+
+  // Moderator trigger after participants complete
+  const { triggerModerator } = useModeratorTrigger({ store });
+
+  // ✅ CRITICAL FIX: Use useLayoutEffect to sync ref BEFORE other effects run
+  // Without this, handleComplete might call triggerModeratorRef.current with null
+  // when it runs before this effect has a chance to update the ref
+  useLayoutEffect(() => {
+    triggerModeratorRef.current = triggerModerator;
+  }, [triggerModerator]);
 
   return (
     <ChatStoreContext value={store}>

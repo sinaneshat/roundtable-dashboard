@@ -203,7 +203,7 @@ export function memoizeParticipantComparison<T extends (...args: unknown[]) => b
 /**
  * Memoize round number calculations
  *
- * **Use Case**: Frequently accessed round numbers in timeline/analysis
+ * **Use Case**: Frequently accessed round numbers in timeline/moderator
  * **Performance**: Avoids re-computing from message metadata
  *
  * @example
@@ -231,30 +231,30 @@ export function memoizeRoundCalculation<T>(
 }
 
 /**
- * Memoize summary state calculations
+ * Memoize moderator state calculations
  *
- * **Use Case**: Checking summary completion status
- * **Performance**: Avoids re-iterating summary arrays
+ * **Use Case**: Checking moderator completion status
+ * **Performance**: Avoids re-iterating moderator arrays
  *
  * @example
  * ```typescript
- * const checkComplete = memoizeSummaryCheck((summaries) => {
- *   return summaries.every(s => s.status === 'complete');
+ * const checkComplete = memoizeModeratorCheck((moderators) => {
+ *   return moderators.every(s => s.status === 'complete');
  * });
  * ```
  */
-export function memoizeSummaryCheck<T>(
-  fn: (summaries: unknown[]) => T,
-): (summaries: unknown[]) => T {
+export function memoizeModeratorCheck<T>(
+  fn: (moderators: unknown[]) => T,
+): (moderators: unknown[]) => T {
   const cache = new WeakMap<unknown[], T>();
 
-  return (summaries: unknown[]): T => {
-    if (cache.has(summaries)) {
-      return cache.get(summaries)!;
+  return (moderators: unknown[]): T => {
+    if (cache.has(moderators)) {
+      return cache.get(moderators)!;
     }
 
-    const result = fn(summaries);
-    cache.set(summaries, result);
+    const result = fn(moderators);
+    cache.set(moderators, result);
     return result;
   };
 }

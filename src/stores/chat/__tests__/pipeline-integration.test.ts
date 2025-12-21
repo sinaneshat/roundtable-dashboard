@@ -19,12 +19,10 @@ import {
   createMockParticipant,
   createMockPreSearch as createMockPreSearchBase,
   createMockThread as createMockThreadBase,
-} from '@/lib/testing/api-mocks';
-import { getStoreState } from '@/lib/testing/chat-store-helpers';
-import {
   createTestAssistantMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
+import { getStoreState } from '@/lib/testing/chat-store-helpers';
 
 import { createChatStore } from '../store';
 
@@ -185,7 +183,7 @@ describe('pipeline Phase Transitions', () => {
       expect(getStoreState(store).currentParticipantIndex).toBe(1);
     });
 
-    it('all participants complete enables summary phase', () => {
+    it('all participants complete enables moderator phase', () => {
       const state = getStoreState(store);
 
       const round0Messages = createRoundMessages(0, 2);
@@ -194,61 +192,42 @@ describe('pipeline Phase Transitions', () => {
       // All participants done
       state.setIsStreaming(false);
 
-      // Can now create summary
-      state.createPendingSummary({
-        roundNumber: 0,
-        messages: round0Messages,
-        userQuestion: 'Question for round 0',
-        threadId: 'thread-pipeline-123',
-        mode: ChatModes.ANALYZING,
-      });
-
-      expect(getStoreState(store).summaries).toHaveLength(1);
+      // Can now mark moderator as ready to create
+      expect(state.tryMarkModeratorCreated(0)).toBe(true);
+      expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
     });
   });
 
-  describe('summary Phase', () => {
-    it('summary uses participant messages from correct round', () => {
+  describe('moderator Phase', () => {
+    it('moderator tracking prevents duplicate creation', () => {
+      const state = getStoreState(store);
+
+      const round0Messages = createRoundMessages(0, 2);
+      state.setMessages(round0Messages);
+
+      // First attempt should succeed
+      expect(state.tryMarkModeratorCreated(0)).toBe(true);
+
+      // Second attempt should fail
+      expect(state.tryMarkModeratorCreated(0)).toBe(false);
+    });
+
+    it('moderator creation can be tracked per round', () => {
       const state = getStoreState(store);
 
       const round0Messages = createRoundMessages(0, 2);
       const round1Messages = createRoundMessages(1, 2);
       state.setMessages([...round0Messages, ...round1Messages]);
 
-      // Create summary for round 0 only
-      state.createPendingSummary({
-        roundNumber: 0,
-        messages: [...round0Messages, ...round1Messages],
-        userQuestion: 'Question for round 0',
-        threadId: 'thread-pipeline-123',
-        mode: ChatModes.ANALYZING,
-      });
+      // Round 0 moderator created
+      state.tryMarkModeratorCreated(0);
+      expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+      expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(false);
 
-      // Should only have round 0 participant message IDs
-      const summary = getStoreState(store).summaries[0]!;
-      expect(summary.participantMessageIds).toHaveLength(2);
-      expect(summary.participantMessageIds[0]).toContain('_r0_');
-      expect(summary.participantMessageIds[1]).toContain('_r0_');
-    });
-
-    it('summary completion marks round as finished', () => {
-      const state = getStoreState(store);
-
-      const round0Messages = createRoundMessages(0, 2);
-      state.setMessages(round0Messages);
-
-      state.createPendingSummary({
-        roundNumber: 0,
-        messages: round0Messages,
-        userQuestion: 'Q',
-        threadId: 'thread-pipeline-123',
-        mode: ChatModes.ANALYZING,
-      });
-
-      state.updateSummaryStatus(0, MessageStatuses.STREAMING);
-      state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
-
-      expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+      // Round 1 moderator created
+      state.tryMarkModeratorCreated(1);
+      expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+      expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
     });
   });
 });
@@ -282,22 +261,15 @@ describe('pipeline Data Flow', () => {
     expect(storedPreSearch.searchData!.summary).toBe('Search summary');
   });
 
-  it('participant messages feed into summary', () => {
+  it('participant messages available for moderator generation', () => {
     const state = getStoreState(store);
 
     const round0Messages = createRoundMessages(0, 3);
     state.setMessages(round0Messages);
 
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Question for round 0',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
-
-    // Summary has reference to all 3 participant messages
-    expect(getStoreState(store).summaries[0]!.participantMessageIds).toHaveLength(3);
+    // All participant messages are in the store and available for moderator
+    expect(getStoreState(store).messages).toHaveLength(4); // 1 user + 3 participants
+    expect(getStoreState(store).messages.filter(m => m.role === 'assistant')).toHaveLength(3);
   });
 
   it('userQuestion preserved through pipeline', () => {
@@ -321,15 +293,11 @@ describe('pipeline Data Flow', () => {
     ];
     state.setMessages(round0Messages);
 
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion,
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
-
-    expect(getStoreState(store).summaries[0]!.userQuestion).toBe(userQuestion);
+    // User question is available in messages
+    const userMessage = getStoreState(store).messages.find(m => m.role === 'user');
+    // Content is in parts array
+    const textPart = userMessage?.parts.find(p => p.type === 'text');
+    expect(textPart && 'text' in textPart ? textPart.text : undefined).toBe(userQuestion);
   });
 });
 
@@ -358,14 +326,7 @@ describe('multi-Round Pipeline', () => {
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q0',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
+    state.tryMarkModeratorCreated(0);
 
     // Round 1 pipeline
     const preSearch1 = createMockPreSearch(1, MessageStatuses.COMPLETE, true);
@@ -374,23 +335,14 @@ describe('multi-Round Pipeline', () => {
     const round1Messages = createRoundMessages(1, 2);
     state.setMessages([...round0Messages, ...round1Messages]);
 
-    state.createPendingSummary({
-      roundNumber: 1,
-      messages: [...round0Messages, ...round1Messages],
-      userQuestion: 'Q1',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(1, MessageStatuses.COMPLETE);
+    state.tryMarkModeratorCreated(1);
 
     // Verify independence
     expect(getStoreState(store).preSearches).toHaveLength(2);
     expect(getStoreState(store).preSearches[0]!.roundNumber).toBe(0);
     expect(getStoreState(store).preSearches[1]!.roundNumber).toBe(1);
-
-    expect(getStoreState(store).summaries).toHaveLength(2);
-    expect(getStoreState(store).summaries[0]!.roundNumber).toBe(0);
-    expect(getStoreState(store).summaries[1]!.roundNumber).toBe(1);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
   });
 
   it('round 1 can access round 0 context', () => {
@@ -399,13 +351,7 @@ describe('multi-Round Pipeline', () => {
     // Complete round 0
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q0',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
+    state.tryMarkModeratorCreated(0);
 
     // Round 1 has access to round 0 messages
     const round1Messages = createRoundMessages(1, 2);
@@ -441,27 +387,20 @@ describe('pipeline Deduplication', () => {
     expect(getStoreState(store).preSearches).toHaveLength(1);
   });
 
-  it('summary creation atomic prevents duplicates', () => {
+  it('moderator creation atomic prevents duplicates', () => {
     const state = getStoreState(store);
 
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    // First attempt
-    expect(state.tryMarkSummaryCreated(0)).toBe(true);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
+    // First attempt succeeds
+    expect(state.tryMarkModeratorCreated(0)).toBe(true);
 
     // Second attempt blocked
-    expect(state.tryMarkSummaryCreated(0)).toBe(false);
+    expect(state.tryMarkModeratorCreated(0)).toBe(false);
 
-    // Only one summary exists
-    expect(getStoreState(store).summaries).toHaveLength(1);
+    // Tracking shows moderator was created
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
   });
 
   it('pre-search trigger tracking prevents duplicates', () => {
@@ -481,7 +420,7 @@ describe('pipeline Deduplication', () => {
 // ============================================================================
 
 describe('complete Pipeline Journey', () => {
-  it('full round with web search: pre-search → participants → summary', () => {
+  it('full round with web search: pre-search → participants → moderator', () => {
     const store = createChatStore();
     const state = getStoreState(store);
 
@@ -561,33 +500,20 @@ describe('complete Pipeline Journey', () => {
     // All participants done
     expect(getStoreState(store).messages).toHaveLength(3);
 
-    // === PHASE 3: Summary ===
+    // === PHASE 3: Moderator ===
     // Complete streaming
     state.completeStreaming();
     expect(getStoreState(store).isStreaming).toBe(false);
 
-    // Atomic summary creation check
-    expect(state.tryMarkSummaryCreated(0)).toBe(true);
+    // Atomic moderator creation check
+    expect(state.tryMarkModeratorCreated(0)).toBe(true);
 
-    // Create pending summary
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: [userMessage, p0Message, p1Message],
-      userQuestion: 'What are the latest AI trends?',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
-    expect(getStoreState(store).summaries).toHaveLength(1);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.PENDING);
+    // Moderator is now created as a moderator message (handled by orchestrator/backend)
+    // The store just tracks that moderator was created for this round
+    state.setIsModeratorStreaming(true);
 
-    // Summary starts streaming
-    state.setIsCreatingSummary(true);
-    state.updateSummaryStatus(0, MessageStatuses.STREAMING);
-    expect(getStoreState(store).summaries[0]!.status).toBe(MessageStatuses.STREAMING);
-
-    // Summary completes
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
-    state.setIsCreatingSummary(false);
+    // Moderator completes
+    state.setIsModeratorStreaming(false);
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
@@ -600,21 +526,16 @@ describe('complete Pipeline Journey', () => {
     // All messages present
     expect(finalState.messages).toHaveLength(3);
 
-    // Summary complete
-    expect(finalState.summaries).toHaveLength(1);
-    expect(finalState.summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
-    expect(finalState.summaries[0]!.participantMessageIds).toHaveLength(2);
-
     // Tracking state correct
     expect(finalState.triggeredPreSearchRounds.has(0)).toBe(true);
-    expect(finalState.createdSummaryRounds.has(0)).toBe(true);
+    expect(finalState.createdModeratorRounds.has(0)).toBe(true);
 
     // Flags cleared
     expect(finalState.isStreaming).toBe(false);
-    expect(finalState.isCreatingSummary).toBe(false);
+    expect(finalState.isModeratorStreaming).toBe(false);
   });
 
-  it('pipeline without web search: participants → summary', () => {
+  it('pipeline without web search: participants → moderator', () => {
     const store = createChatStore();
     const state = getStoreState(store);
 
@@ -636,23 +557,16 @@ describe('complete Pipeline Journey', () => {
     state.setMessages(round0Messages);
     state.completeStreaming();
 
-    // === PHASE 2: Summary ===
-    state.tryMarkSummaryCreated(0);
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Question for round 0',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
-    state.updateSummaryStatus(0, MessageStatuses.COMPLETE);
+    // === PHASE 2: Moderator ===
+    state.tryMarkModeratorCreated(0);
+    state.setIsModeratorStreaming(true);
+    state.setIsModeratorStreaming(false);
 
     // === VERIFY ===
     const finalState = getStoreState(store);
     expect(finalState.preSearches).toHaveLength(0); // No pre-search
     expect(finalState.messages).toHaveLength(3);
-    expect(finalState.summaries).toHaveLength(1);
-    expect(finalState.summaries[0]!.status).toBe(MessageStatuses.COMPLETE);
+    expect(finalState.createdModeratorRounds.has(0)).toBe(true);
   });
 });
 
@@ -727,17 +641,11 @@ describe('pipeline Interruption Handling', () => {
     const round0Messages = createRoundMessages(0, 2);
     state.setMessages(round0Messages);
 
-    state.createPendingSummary({
-      roundNumber: 0,
-      messages: round0Messages,
-      userQuestion: 'Q',
-      threadId: 'thread-pipeline-123',
-      mode: ChatModes.ANALYZING,
-    });
+    state.tryMarkModeratorCreated(0);
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
     expect(getStoreState(store).messages).toHaveLength(3);
-    expect(getStoreState(store).summaries).toHaveLength(1);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
 
     // Navigate away
     state.resetForThreadNavigation();
@@ -745,8 +653,7 @@ describe('pipeline Interruption Handling', () => {
     // All cleared
     expect(getStoreState(store).preSearches).toEqual([]);
     expect(getStoreState(store).messages).toEqual([]);
-    expect(getStoreState(store).summaries).toEqual([]);
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(0);
-    expect(getStoreState(store).createdSummaryRounds.size).toBe(0);
+    expect(getStoreState(store).createdModeratorRounds.size).toBe(0);
   });
 });

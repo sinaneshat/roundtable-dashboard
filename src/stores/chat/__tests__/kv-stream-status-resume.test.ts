@@ -91,7 +91,7 @@ function mockGetStreamStatus(
   const entry = kvStore.get(streamId);
 
   if (!entry) {
-    return { status: 204 }; // No Content - no stream exists or still streaming (legacy)
+    return { status: 204 }; // No Content - no stream exists or still streaming
   }
 
   if (entry.status === StreamStatuses.ACTIVE) {

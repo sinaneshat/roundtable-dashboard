@@ -279,6 +279,3 @@ export {
   // Specialized validators
   Validators,
 } from './validation';
-
-// Export auth types from types module
-export type { AuthenticatedContext, AuthMode } from '@/api/types';

@@ -2,7 +2,7 @@
  * Store Constants - Shared Values Across Store and Orchestrators
  *
  * Centralized constants to ensure consistency between different parts of the store.
- * Extracted from inline definitions in summary-orchestrator.ts and pre-search-orchestrator.ts
+ * Extracted from inline definitions in moderator-orchestrator.ts and pre-search-orchestrator.ts
  *
  * PATTERN: Single source of truth for magic values
  * TYPE-SAFE: const assertions for literal types
@@ -10,10 +10,10 @@
  */
 
 import type { MessageStatus } from '@/api/core/enums';
-import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 
 /**
- * Priority order for summary/pre-search status resolution
+ * Priority order for moderator/pre-search status resolution
  *
  * When deduplicating or merging server/client state, higher priority wins.
  * Failed status has HIGHEST priority - server-side errors are authoritative.
@@ -39,17 +39,6 @@ export function getStatusPriority(status: MessageStatus): number {
 // ============================================================================
 // ORCHESTRATOR COMPARE KEYS - Type-safe field lists for state change detection
 // ============================================================================
-
-/**
- * Compare keys for RoundSummary - Must match component dependencies
- */
-export const ROUND_SUMMARY_COMPARE_KEYS = [
-  'roundNumber',
-  'status',
-  'id',
-  'summaryData',
-  'errorMessage',
-] as const satisfies ReadonlyArray<keyof StoredRoundSummary>;
 
 /**
  * Compare keys for PreSearch - Must match PreSearchStream effect dependencies
@@ -84,24 +73,24 @@ export const AnimationIndices = {
 } as const;
 
 // ============================================================================
-// SUMMARY TIMEOUT CONFIGURATION
+// MODERATOR TIMEOUT CONFIGURATION
 // ============================================================================
 
 /**
- * Summary timeout constants for stuck summary detection and cleanup
+ * Moderator timeout constants for stuck moderator detection and cleanup
  *
  * PATTERN: Centralized timeout configuration
- * SINGLE SOURCE OF TRUTH: Used by ChatView stuck summary cleanup
+ * SINGLE SOURCE OF TRUTH: Used by ChatView stuck moderator cleanup
  */
-export const SummaryTimeouts = {
+export const ModeratorTimeouts = {
   /**
-   * Maximum time (ms) a summary can be in streaming state before considered stuck
+   * Maximum time (ms) a moderator can be in streaming state before considered stuck
    * Default: 45 seconds (reduced from 90s for faster recovery from truncated streams)
    */
   STUCK_THRESHOLD_MS: 45_000,
 
   /**
-   * Interval (ms) between stuck summary checks
+   * Interval (ms) between stuck moderator checks
    * Default: 10 seconds
    */
   CHECK_INTERVAL_MS: 10_000,

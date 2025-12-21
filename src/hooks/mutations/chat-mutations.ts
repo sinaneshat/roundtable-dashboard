@@ -159,9 +159,9 @@ export function useUpdateThreadMutation() {
         },
       );
 
-      // ✅ CRITICAL FIX: Only update infinite queries (lists), not detail/analyses/etc queries
+      // ✅ CRITICAL FIX: Only update infinite queries (lists), not detail/moderator/etc queries
       // Using queryKeys.threads.all matches ALL queries starting with ['threads']
-      // This includes detail queries, analyses, changelog, etc. that don't have pages array
+      // This includes detail queries, moderator, changelog, etc. that don't have pages array
       // Use predicate to check if query key matches infinite query pattern
       queryClient.setQueriesData(
         {
@@ -292,9 +292,9 @@ export function useDeleteThreadMutation() {
       const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
       const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
 
-      // ✅ CRITICAL FIX: Only update infinite queries (lists), not detail/analyses/etc queries
+      // ✅ CRITICAL FIX: Only update infinite queries (lists), not detail/moderator/etc queries
       // Using queryKeys.threads.all matches ALL queries starting with ['threads']
-      // This includes detail queries, analyses, changelog, etc. that don't have pages array
+      // This includes detail queries, moderator, changelog, etc. that don't have pages array
       // Use predicate to check if query key matches infinite query pattern
       queryClient.setQueriesData(
         {
@@ -930,18 +930,18 @@ export function useDeleteCustomRoleMutation() {
 }
 
 // ============================================================================
-// Summary Mutations
+// Moderator Mutations
 // ============================================================================
 
 /**
- * ❌ REMOVED: useTriggerSummaryMutation
+ * ❌ REMOVED: useTriggerModeratorMutation
  *
- * Summary is now handled via:
+ * Moderator is now handled via:
  * 1. Auto-detection on backend (streamChatHandler onFinish callback)
  * 2. On-demand streaming via useObject hook from @ai-sdk/react
  *
- * No manual mutation needed - summary streams automatically when component renders
- * Reference: See src/components/chat/round-summary-stream.tsx for usage
+ * No manual mutation needed - moderator streams automatically when component renders
+ * Reference: See src/components/chat/round-moderator-stream.tsx for usage
  */
 
 // ============================================================================

@@ -7,7 +7,7 @@ type PlanStat = {
   value: number | string;
 };
 
-type PlanSummaryCardProps = {
+type PlanOverviewCardProps = {
   tierName: string;
   description?: string;
   status?: string;
@@ -15,13 +15,13 @@ type PlanSummaryCardProps = {
   activeUntil?: string;
 };
 
-export function PlanSummaryCard({
+export function PlanOverviewCard({
   tierName,
   description,
   status,
   stats,
   activeUntil,
-}: PlanSummaryCardProps) {
+}: PlanOverviewCardProps) {
   return (
     <Card className="w-full">
       <CardHeader className="pb-4">

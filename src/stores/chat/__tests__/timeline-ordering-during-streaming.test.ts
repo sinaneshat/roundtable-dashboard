@@ -4,7 +4,7 @@
  * Verifies timeline items appear in correct order during streaming:
  * 1. Pre-search should appear before participant messages
  * 2. User messages should appear before assistant responses
- * 3. Round summary should appear after all participants
+ * 3. Round moderator should appear after all participants
  * 4. Non-initial rounds should maintain correct ordering
  *
  * Bug scenarios tested:
@@ -16,7 +16,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 
 import { createChatStore } from '../store';
 
@@ -27,7 +29,7 @@ import { createChatStore } from '../store';
 type TimelineItemType = 'user-message'
   | 'assistant-message'
   | 'pre-search'
-  | 'round-summary'
+  | 'round-moderator' // Represents moderator message (isModerator: true)
   | 'pending-message'
   | 'pending-participant';
 
@@ -79,11 +81,15 @@ function createMockParticipants(threadId: string, count: number): ChatParticipan
 }
 
 function createUserMessage(threadId: string, roundNumber: number, text: string): ChatMessage {
+  const metadata: DbUserMessageMetadata = {
+    role: MessageRoles.USER,
+    roundNumber,
+  };
   return {
     id: `${threadId}_r${roundNumber}_user`,
     role: MessageRoles.USER,
     parts: [{ type: MessagePartTypes.TEXT, text }],
-    metadata: { role: MessageRoles.USER, roundNumber },
+    metadata,
   };
 }
 
@@ -94,17 +100,44 @@ function createAssistantMessage(
   participantId: string,
   text: string,
 ): ChatMessage {
+  const metadata: DbAssistantMessageMetadata = {
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
+    participantId,
+    participantIndex,
+    participantRole: null,
+    model: `provider/model-${participantIndex}`,
+    finishReason: 'stop',
+    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    hasError: false,
+    isTransient: false,
+    isPartialResponse: false,
+  };
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
     role: MessageRoles.ASSISTANT,
     parts: [{ type: MessagePartTypes.TEXT, text }],
-    metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantId,
-      participantIndex,
-      model: `provider/model-${participantIndex}`,
-    },
+    metadata,
+  };
+}
+
+function createModeratorMessage(
+  threadId: string,
+  roundNumber: number,
+  text: string,
+): ChatMessage {
+  const metadata: DbModeratorMessageMetadata = {
+    role: MessageRoles.ASSISTANT,
+    isModerator: true,
+    roundNumber,
+    model: 'moderator-model',
+    hasError: false,
+  };
+  return {
+    id: `${threadId}_r${roundNumber}_moderator`,
+    role: MessageRoles.ASSISTANT,
+    parts: [{ type: MessagePartTypes.TEXT, text }],
+    metadata,
   };
 }
 
@@ -152,42 +185,11 @@ function createCompletePreSearch(
   } as StoredPreSearch;
 }
 
-function createSummary(
-  threadId: string,
-  roundNumber: number,
-  status: 'pending' | 'streaming' | 'complete' = 'complete',
-): StoredRoundSummary {
-  return {
-    id: `summary-${threadId}-r${roundNumber}`,
-    threadId,
-    roundNumber,
-    mode: ChatModes.ANALYZING,
-    userQuestion: 'test question',
-    status: status === 'pending'
-      ? MessageStatuses.PENDING
-      : status === 'streaming'
-        ? MessageStatuses.STREAMING
-        : MessageStatuses.COMPLETE,
-    summaryData: status === 'complete'
-      ? {
-          confidence: { overall: 85, reasoning: 'test' },
-          modelVoices: [],
-          article: { headline: 'test', narrative: 'test', keyTakeaway: 'test' },
-          recommendations: [],
-          consensusTable: [],
-          minorityViews: [],
-          convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
-        }
-      : null,
-    participantMessageIds: [],
-    errorMessage: null,
-    completedAt: status === 'complete' ? new Date() : null,
-    createdAt: new Date(),
-  } as StoredRoundSummary;
-}
-
 /**
  * Helper to verify timeline ordering
+ *
+ * Note: 'round-moderator' represents moderator messages (isModerator: true in metadata)
+ * which render inline via ChatMessageList, placed LAST in each round by useThreadTimeline.
  */
 function verifyTimelineOrder(
   store: ReturnType<typeof createChatStore>,
@@ -196,13 +198,18 @@ function verifyTimelineOrder(
   const state = store.getState();
   const messages = state.messages;
   const preSearches = state.preSearches;
-  const summaries = state.summaries;
 
   const actualItems: MockTimelineItem[] = [];
 
   const messagesByRound = new Map<number, ChatMessage[]>();
   for (const msg of messages) {
-    const roundNum = (msg.metadata as { roundNumber?: number }).roundNumber ?? 0;
+    if (!msg.metadata)
+      continue;
+
+    if ('isModerator' in msg.metadata && msg.metadata.isModerator)
+      continue;
+
+    const roundNum = msg.metadata.roundNumber;
     if (!messagesByRound.has(roundNum)) {
       messagesByRound.set(roundNum, []);
     }
@@ -214,15 +221,19 @@ function verifyTimelineOrder(
     preSearchByRound.set(ps.roundNumber, ps);
   }
 
-  const summaryByRound = new Map<number, StoredRoundSummary>();
-  for (const s of summaries) {
-    summaryByRound.set(s.roundNumber, s);
+  const moderatorByRound = new Map<number, boolean>();
+  for (const msg of messages) {
+    if (!msg.metadata)
+      continue;
+    if ('isModerator' in msg.metadata && msg.metadata.isModerator) {
+      moderatorByRound.set(msg.metadata.roundNumber, true);
+    }
   }
 
   const rounds = [...new Set([
     ...messagesByRound.keys(),
     ...preSearchByRound.keys(),
-    ...summaryByRound.keys(),
+    ...moderatorByRound.keys(),
   ])].sort((a, b) => a - b);
 
   for (const roundNumber of rounds) {
@@ -233,21 +244,24 @@ function verifyTimelineOrder(
 
     const roundMessages = messagesByRound.get(roundNumber) || [];
     for (const msg of roundMessages) {
-      const metadata = msg.metadata as { roundNumber?: number; participantIndex?: number };
+      if (!msg.metadata)
+        continue;
+
       if (msg.role === MessageRoles.USER) {
         actualItems.push({ type: 'user-message', roundNumber });
-      } else {
+      } else if (msg.role === MessageRoles.ASSISTANT && 'participantIndex' in msg.metadata) {
         actualItems.push({
           type: 'assistant-message',
           roundNumber,
-          participantIndex: metadata.participantIndex ?? 0,
+          participantIndex: msg.metadata.participantIndex,
         });
       }
     }
 
-    const summary = summaryByRound.get(roundNumber);
-    if (summary) {
-      actualItems.push({ type: 'round-summary', roundNumber });
+    const moderator = moderatorByRound.get(roundNumber);
+    if (moderator) {
+      // Moderator message rendered inline, appears last in round
+      actualItems.push({ type: 'round-moderator', roundNumber });
     }
   }
 
@@ -279,7 +293,7 @@ describe('timeline ordering during streaming', () => {
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
       const userMsg = store.getState().messages.find(
-        m => m.role === MessageRoles.USER && (m.metadata as { roundNumber: number }).roundNumber === 0,
+        m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 0,
       );
 
       expect(preSearch).toBeDefined();
@@ -304,16 +318,6 @@ describe('timeline ordering during streaming', () => {
         createAssistantMessage(threadId, 0, 0, 'participant-0', 'Response 0'),
         createAssistantMessage(threadId, 0, 1, 'participant-1', 'Response 1'),
       ]);
-
-      store.getState().setSummaries([createSummary(threadId, 0)]);
-
-      verifyTimelineOrder(store, [
-        { type: 'pre-search', roundNumber: 0 },
-        { type: 'user-message', roundNumber: 0 },
-        { type: 'assistant-message', roundNumber: 0, participantIndex: 0 },
-        { type: 'assistant-message', roundNumber: 0, participantIndex: 1 },
-        { type: 'round-summary', roundNumber: 0 },
-      ]);
     });
   });
 
@@ -329,51 +333,24 @@ describe('timeline ordering during streaming', () => {
         [],
       );
 
+      // Add round 0 data
       store.getState().addPreSearch(createCompletePreSearch(threadId, 0, 'round 0 query'));
-      store.getState().setMessages([
-        createUserMessage(threadId, 0, 'round 0 query'),
-        createAssistantMessage(threadId, 0, 0, 'participant-0', 'Response 0'),
-        createAssistantMessage(threadId, 0, 1, 'participant-1', 'Response 1'),
-      ]);
-      store.getState().setSummaries([createSummary(threadId, 0)]);
-
-      store.getState().addPreSearch(createPlaceholderPreSearch(threadId, 1, 'round 1 query'));
-
-      const round0PreSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      const round1PreSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
-
-      expect(round0PreSearch).toBeDefined();
-      expect(round1PreSearch).toBeDefined();
-      expect(round0PreSearch!.status).toBe(MessageStatuses.COMPLETE);
-      expect(round1PreSearch!.status).toBe(MessageStatuses.PENDING);
-    });
-
-    it('should maintain correct order for multi-round conversation', () => {
-      const store = createChatStore();
-      const threadId = 'thread-123';
-      const participants = createMockParticipants(threadId, 2);
-
-      store.getState().initializeThread(
-        createMockThread(threadId),
-        participants,
-        [],
-      );
-
-      store.getState().addPreSearch(createCompletePreSearch(threadId, 0, 'round 0 query'));
+      // Add round 1 data
       store.getState().addPreSearch(createCompletePreSearch(threadId, 1, 'round 1 query'));
 
       store.getState().setMessages([
+        // Round 0 messages
         createUserMessage(threadId, 0, 'round 0 query'),
-        createAssistantMessage(threadId, 0, 0, 'participant-0', 'R0 Response 0'),
-        createAssistantMessage(threadId, 0, 1, 'participant-1', 'R0 Response 1'),
+        createAssistantMessage(threadId, 0, 0, 'participant-0', 'Response 0'),
+        createAssistantMessage(threadId, 0, 1, 'participant-1', 'Response 1'),
+        // Round 0 moderator
+        createModeratorMessage(threadId, 0, 'Round 0 summary'),
+        // Round 1 messages
         createUserMessage(threadId, 1, 'round 1 query'),
-        createAssistantMessage(threadId, 1, 0, 'participant-0', 'R1 Response 0'),
-        createAssistantMessage(threadId, 1, 1, 'participant-1', 'R1 Response 1'),
-      ]);
-
-      store.getState().setSummaries([
-        createSummary(threadId, 0),
-        createSummary(threadId, 1),
+        createAssistantMessage(threadId, 1, 0, 'participant-0', 'Response 0 R1'),
+        createAssistantMessage(threadId, 1, 1, 'participant-1', 'Response 1 R1'),
+        // Round 1 moderator
+        createModeratorMessage(threadId, 1, 'Round 1 summary'),
       ]);
 
       verifyTimelineOrder(store, [
@@ -381,12 +358,12 @@ describe('timeline ordering during streaming', () => {
         { type: 'user-message', roundNumber: 0 },
         { type: 'assistant-message', roundNumber: 0, participantIndex: 0 },
         { type: 'assistant-message', roundNumber: 0, participantIndex: 1 },
-        { type: 'round-summary', roundNumber: 0 },
+        { type: 'round-moderator', roundNumber: 0 },
         { type: 'pre-search', roundNumber: 1 },
         { type: 'user-message', roundNumber: 1 },
         { type: 'assistant-message', roundNumber: 1, participantIndex: 0 },
         { type: 'assistant-message', roundNumber: 1, participantIndex: 1 },
-        { type: 'round-summary', roundNumber: 1 },
+        { type: 'round-moderator', roundNumber: 1 },
       ]);
     });
   });
@@ -412,29 +389,6 @@ describe('timeline ordering during streaming', () => {
         totalTime: 100,
       });
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
-    });
-
-    it('should handle summary status transition from PENDING to STREAMING to COMPLETE', () => {
-      const store = createChatStore();
-      const threadId = 'thread-123';
-
-      store.getState().addSummary(createSummary(threadId, 0, 'pending'));
-      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.PENDING);
-
-      store.getState().updateSummaryStatus(0, MessageStatuses.STREAMING);
-      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.STREAMING);
-
-      const completeSummaryData = {
-        confidence: { overall: 85, reasoning: 'test' },
-        modelVoices: [],
-        article: { headline: 'test', narrative: 'test', keyTakeaway: 'test' },
-        recommendations: [],
-        consensusTable: [],
-        minorityViews: [],
-        convergenceDivergence: { convergedOn: [], divergedOn: [], evolved: [] },
-      };
-      store.getState().updateSummaryData(0, completeSummaryData);
-      expect(store.getState().summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
     });
   });
 
@@ -465,13 +419,27 @@ describe('timeline ordering during streaming', () => {
       expect(store.getState().participants[0]!.id).toBe('new-participant-0');
 
       const round0Messages = store.getState().messages.filter(m =>
-        (m.metadata as { roundNumber?: number }).roundNumber === 0,
+        m.metadata?.roundNumber === 0,
       );
       expect(round0Messages).toHaveLength(3);
 
       const r0AssistantMsgs = round0Messages.filter(m => m.role === MessageRoles.ASSISTANT);
-      expect(r0AssistantMsgs[0]?.metadata).toHaveProperty('participantId', round0Participants[0]!.id);
-      expect(r0AssistantMsgs[1]?.metadata).toHaveProperty('participantId', round0Participants[1]!.id);
+      expect(r0AssistantMsgs).toHaveLength(2);
+
+      const firstMsg = r0AssistantMsgs[0]!;
+      const secondMsg = r0AssistantMsgs[1]!;
+
+      expect(firstMsg.metadata).toBeDefined();
+      expect(secondMsg.metadata).toBeDefined();
+
+      const firstMetadata = firstMsg.metadata!;
+      const secondMetadata = secondMsg.metadata!;
+
+      expect(isAssistantMessageMetadata(firstMetadata)).toBe(true);
+      expect(isAssistantMessageMetadata(secondMetadata)).toBe(true);
+
+      expect(isAssistantMessageMetadata(firstMetadata) && firstMetadata.participantId).toBe(round0Participants[0]!.id);
+      expect(isAssistantMessageMetadata(secondMetadata) && secondMetadata.participantId).toBe(round0Participants[1]!.id);
     });
   });
 
@@ -535,31 +503,6 @@ describe('timeline ordering during streaming', () => {
 
       expect(store.getState().preSearches).toHaveLength(3);
       expect(store.getState().preSearches.map(ps => ps.roundNumber)).toEqual([0, 1, 2]);
-    });
-  });
-
-  describe('summary deduplication', () => {
-    it('should not duplicate summary when adding for same round', () => {
-      const store = createChatStore();
-      const threadId = 'thread-123';
-
-      store.getState().addSummary(createSummary(threadId, 0, 'pending'));
-      expect(store.getState().summaries).toHaveLength(1);
-
-      store.getState().addSummary(createSummary(threadId, 0, 'streaming'));
-      expect(store.getState().summaries).toHaveLength(1);
-    });
-
-    it('should add summary for different rounds', () => {
-      const store = createChatStore();
-      const threadId = 'thread-123';
-
-      store.getState().addSummary(createSummary(threadId, 0));
-      store.getState().addSummary(createSummary(threadId, 1));
-      store.getState().addSummary(createSummary(threadId, 2));
-
-      expect(store.getState().summaries).toHaveLength(3);
-      expect(store.getState().summaries.map(s => s.roundNumber)).toEqual([0, 1, 2]);
     });
   });
 });

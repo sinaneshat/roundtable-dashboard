@@ -3,9 +3,9 @@
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import type { StatusVariant } from '@/api/core/enums';
+import { StatusVariants } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
-
-type StatusVariant = 'loading' | 'success' | 'error';
 
 type StatusPageProps = {
   variant: StatusVariant;
@@ -16,22 +16,22 @@ type StatusPageProps = {
 };
 
 const statusConfig = {
-  loading: {
+  [StatusVariants.LOADING]: {
     icon: Loader2,
     iconClass: 'text-blue-500 animate-spin',
     ringClass: 'bg-blue-500/10 ring-blue-500/20',
   },
-  success: {
+  [StatusVariants.SUCCESS]: {
     icon: CheckCircle,
     iconClass: 'text-green-500',
     ringClass: 'bg-green-500/10 ring-green-500/20',
   },
-  error: {
+  [StatusVariants.ERROR]: {
     icon: AlertCircle,
     iconClass: 'text-destructive',
     ringClass: 'bg-destructive/10 ring-destructive/20',
   },
-} as const;
+} as const satisfies Record<StatusVariant, { icon: typeof Loader2 | typeof CheckCircle | typeof AlertCircle; iconClass: string; ringClass: string }>;
 
 export function StatusPage({ variant, title, description, children, actions }: StatusPageProps) {
   const config = statusConfig[variant];

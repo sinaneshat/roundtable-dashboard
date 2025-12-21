@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MessageStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import { createMockPreSearch as createMockPreSearchBase } from '@/lib/testing/helpers';
+import { createMockPreSearch as createMockPreSearchBase } from '@/lib/testing';
 
 import { shouldWaitForPreSearch } from '../utils/pre-search-execution';
 

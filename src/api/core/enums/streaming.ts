@@ -84,7 +84,7 @@ export const ParticipantStreamStatuses = {
 // FLOW STATE (Chat conversation flow lifecycle)
 // ============================================================================
 
-export const FLOW_STATES = ['idle', 'creating_thread', 'streaming_participants', 'creating_summary', 'streaming_summary', 'completing', 'navigating', 'complete'] as const;
+export const FLOW_STATES = ['idle', 'creating_thread', 'streaming_participants', 'creating_moderator', 'streaming_moderator', 'completing', 'navigating', 'complete'] as const;
 
 export const DEFAULT_FLOW_STATE: FlowState = 'idle';
 
@@ -99,8 +99,8 @@ export const FlowStates = {
   IDLE: 'idle' as const,
   CREATING_THREAD: 'creating_thread' as const,
   STREAMING_PARTICIPANTS: 'streaming_participants' as const,
-  CREATING_SUMMARY: 'creating_summary' as const,
-  STREAMING_SUMMARY: 'streaming_summary' as const,
+  CREATING_MODERATOR: 'creating_moderator' as const,
+  STREAMING_MODERATOR: 'streaming_moderator' as const,
   COMPLETING: 'completing' as const,
   NAVIGATING: 'navigating' as const,
   COMPLETE: 'complete' as const,
@@ -168,12 +168,12 @@ export const PendingMessageValidationReasons = {
  * Order of phases in a complete round:
  * 1. pre_search - Web search is executing (if enabled)
  * 2. participants - AI participants are streaming responses
- * 3. summarizer - Round summary is being generated
+ * 3. moderator - Moderator message is being generated
  * 4. complete - All phases finished successfully
  *
  * Used by ThreadStreamResumptionState to determine where to resume.
  */
-export const ROUND_PHASES = ['idle', 'pre_search', 'participants', 'summarizer', 'complete'] as const;
+export const ROUND_PHASES = ['idle', 'pre_search', 'participants', 'moderator', 'complete'] as const;
 
 export const RoundPhaseSchema = z.enum(ROUND_PHASES).openapi({
   description: 'Current phase of a conversation round for stream resumption',
@@ -186,6 +186,6 @@ export const RoundPhases = {
   IDLE: 'idle' as const,
   PRE_SEARCH: 'pre_search' as const,
   PARTICIPANTS: 'participants' as const,
-  SUMMARIZER: 'summarizer' as const,
+  MODERATOR: 'moderator' as const,
   COMPLETE: 'complete' as const,
 } as const;

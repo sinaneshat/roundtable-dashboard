@@ -24,7 +24,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MessagePartTypes, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { UIMessage } from '@/lib/schemas/message-schemas';
 import { getParticipantModelIds } from '@/lib/utils/participant';
 
@@ -104,20 +104,6 @@ function createPlaceholderPreSearch(roundNumber: number): StoredPreSearch {
   } as StoredPreSearch;
 }
 
-function createPlaceholderSummary(roundNumber: number): StoredRoundSummary {
-  return {
-    id: `placeholder-summary-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    status: MessageStatuses.PENDING,
-    moderatorModelId: 'gpt-4o',
-    summaryText: null,
-    leaderboard: null,
-    createdAt: new Date(),
-    completedAt: null,
-  } as StoredRoundSummary;
-}
-
 // ============================================================================
 // EXPECTED PARTICIPANT IDS TESTS
 // ============================================================================
@@ -165,7 +151,6 @@ describe('second round first participant streaming', () => {
         createMockAssistantMessage(0, 0, 'gpt-4o'),
         createMockAssistantMessage(0, 1, 'claude-3-opus'),
       ]);
-      store.getState().setSummaries([createPlaceholderSummary(0)]);
       store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Simulate handleUpdateThreadAndSend flow for round 1:
@@ -293,10 +278,6 @@ describe('second round first participant streaming', () => {
         createMockAssistantMessage(0, 0, 'gpt-4o', 'Response 0-0'),
         createMockAssistantMessage(0, 1, 'claude-3-opus', 'Response 0-1'),
       ]);
-      store.getState().setSummaries([{
-        ...createPlaceholderSummary(0),
-        status: MessageStatuses.COMPLETE,
-      }]);
       store.getState().setScreenMode(ScreenModes.THREAD);
     });
 
@@ -435,21 +416,6 @@ describe('second round first participant streaming', () => {
       expect(preSearches.find(ps => ps.roundNumber === 0)?.status).toBe(MessageStatuses.COMPLETE);
       expect(preSearches.find(ps => ps.roundNumber === 1)?.status).toBe(MessageStatuses.PENDING);
     });
-
-    it('should correctly order summaries across rounds', () => {
-      const store = createChatStore();
-
-      store.getState().setSummaries([
-        { ...createPlaceholderSummary(0), status: MessageStatuses.COMPLETE },
-        createPlaceholderSummary(1),
-      ]);
-
-      const summaries = store.getState().summaries;
-
-      expect(summaries).toHaveLength(2);
-      expect(summaries.find(s => s.roundNumber === 0)?.status).toBe(MessageStatuses.COMPLETE);
-      expect(summaries.find(s => s.roundNumber === 1)?.status).toBe(MessageStatuses.PENDING);
-    });
   });
 
   describe('race conditions in multi-round conversations', () => {
@@ -467,10 +433,6 @@ describe('second round first participant streaming', () => {
         createMockUserMessage(0),
         createMockAssistantMessage(0, 0, 'gpt-4o'),
       ]);
-      store.getState().setSummaries([{
-        ...createPlaceholderSummary(0),
-        status: MessageStatuses.COMPLETE,
-      }]);
 
       // Rapidly start round 1
       store.getState().setExpectedParticipantIds(expectedIds);
@@ -659,10 +621,6 @@ describe('second round first participant streaming', () => {
         createMockAssistantMessage(0, 0, 'gpt-4o', 'Answer 0-0'),
         createMockAssistantMessage(0, 1, 'claude-3-opus', 'Answer 0-1'),
       ]);
-      store.getState().setSummaries([{
-        ...createPlaceholderSummary(0),
-        status: MessageStatuses.COMPLETE,
-      }]);
       store.getState().completeStreaming();
 
       // Verify round 0 complete
@@ -684,10 +642,6 @@ describe('second round first participant streaming', () => {
         createMockAssistantMessage(1, 0, 'gpt-4o', 'Answer 1-0'),
         createMockAssistantMessage(1, 1, 'claude-3-opus', 'Answer 1-1'),
       ]);
-      store.getState().setSummaries([
-        ...store.getState().summaries,
-        { ...createPlaceholderSummary(1), status: MessageStatuses.COMPLETE },
-      ]);
       store.getState().completeStreaming();
 
       // Verify round 1 complete (3 from r0 + 1 optimistic user + 2 assistant = 6)
@@ -707,16 +661,11 @@ describe('second round first participant streaming', () => {
         createMockAssistantMessage(2, 0, 'gpt-4o', 'Answer 2-0'),
         createMockAssistantMessage(2, 1, 'claude-3-opus', 'Answer 2-1'),
       ]);
-      store.getState().setSummaries([
-        ...store.getState().summaries,
-        { ...createPlaceholderSummary(2), status: MessageStatuses.COMPLETE },
-      ]);
       store.getState().completeStreaming();
 
       // Verify full conversation (6 + 1 optimistic user + 2 assistant = 9)
       expect(store.getState().isStreaming).toBe(false);
       expect(store.getState().messages).toHaveLength(9);
-      expect(store.getState().summaries).toHaveLength(3);
 
       // Verify message ordering - filter out optimistic messages for cleaner assertions
       const finalMessages = store.getState().messages;

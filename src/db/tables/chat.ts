@@ -96,7 +96,7 @@ export const chatCustomRole = sqliteTable('chat_custom_role', {
     .references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(), // e.g., "The Devil's Advocate"
   description: text('description'), // Brief description of the role
-  systemPrompt: text('system_prompt').notNull(), // The actual prompt that defines the role behavior
+  systemPrompt: text('system_prompt'), // Optional - if null, generated at runtime from role name
   // ✅ TYPE-SAFE: Strictly typed metadata for custom roles
   metadata: text('metadata', { mode: 'json' }).$type<DbCustomRoleMetadata>(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
@@ -300,50 +300,6 @@ export const chatMessage = sqliteTable('chat_message', {
 ]);
 
 /**
- * Moderator Round Summary
- * Stores AI-generated summary results for each conversation round
- * Allows users to view past summaries when revisiting threads
- */
-export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
-  id: text('id').primaryKey(),
-  threadId: text('thread_id')
-    .notNull()
-    .references(() => chatThread.id, { onDelete: 'cascade' }),
-  roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
-  mode: text('mode', { enum: CHAT_MODES }).notNull(), // Mode when analysis was performed
-  userQuestion: text('user_question').notNull(), // The user's question/prompt for this round
-  // ✅ CRITICAL: Status field for idempotency and state tracking
-  // Prevents duplicate summary generation on page refresh
-  status: text('status', { enum: MESSAGE_STATUSES })
-    .notNull()
-    .default('pending'), // pending -> streaming -> complete/failed
-  summaryData: text('analysis_data', { mode: 'json' }).$type<{
-    summary: string;
-    metrics: {
-      engagement: number;
-      insight: number;
-      balance: number;
-      clarity: number;
-    };
-  }>(),
-  // Store participant message IDs that were analyzed
-  participantMessageIds: text('participant_message_ids', { mode: 'json' }).notNull().$type<string[]>(),
-  // ✅ Error tracking for failed summaries
-  errorMessage: text('error_message'),
-  // ✅ Completion timestamp (null until status = 'complete')
-  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
-}, table => [
-  index('chat_moderator_analysis_thread_idx').on(table.threadId),
-  index('chat_moderator_analysis_round_idx').on(table.threadId, table.roundNumber),
-  index('chat_moderator_analysis_created_idx').on(table.createdAt),
-  // ✅ NEW: Index on status for efficient querying of in-progress summaries
-  index('chat_moderator_analysis_status_idx').on(table.status),
-]);
-
-/**
  * Chat Round Feedback
  * Stores user feedback (like/dislike) for each round of conversation
  */
@@ -480,7 +436,6 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   participants: many(chatParticipant),
   messages: many(chatMessage),
   changelog: many(chatThreadChangelog), // Configuration change history
-  moderatorAnalyses: many(chatModeratorAnalysis), // AI-generated round summaries
   preSearches: many(chatPreSearch), // Web search results for rounds
   roundFeedback: many(chatRoundFeedback), // User feedback for rounds
 }));
@@ -526,16 +481,6 @@ export const chatMessageRelations = relations(chatMessage, ({ one, many }) => ({
 export const chatThreadChangelogRelations = relations(chatThreadChangelog, ({ one }) => ({
   thread: one(chatThread, {
     fields: [chatThreadChangelog.threadId],
-    references: [chatThread.id],
-  }),
-}));
-
-/**
- * Moderator Summary Relations
- */
-export const chatModeratorAnalysisRelations = relations(chatModeratorAnalysis, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [chatModeratorAnalysis.threadId],
     references: [chatThread.id],
   }),
 }));

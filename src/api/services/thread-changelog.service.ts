@@ -10,7 +10,7 @@ import type { ChatMode } from '@/api/core/enums';
 import { ChangelogTypes } from '@/api/core/enums';
 import type { CreateChangelogParams } from '@/api/routes/chat/schema';
 import { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 import type { ChatThreadChangelog } from '@/db/validation';
 
 /**

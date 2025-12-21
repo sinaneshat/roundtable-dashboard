@@ -27,7 +27,7 @@ type RefTracker = {
   resumptionAttempted: Map<string, boolean>;
   activeStreamCheck: Map<string, boolean>;
   preSearchResumptionAttempted: Map<string, boolean>;
-  summarizerResumptionAttempted: Map<string, boolean>;
+  moderatorResumptionAttempted: Map<string, boolean>;
   staleStateChecked: Map<string, boolean>;
 };
 
@@ -46,7 +46,7 @@ function createRefTracker(): RefTracker {
     resumptionAttempted: new Map(),
     activeStreamCheck: new Map(),
     preSearchResumptionAttempted: new Map(),
-    summarizerResumptionAttempted: new Map(),
+    moderatorResumptionAttempted: new Map(),
     staleStateChecked: new Map(),
   };
 }
@@ -178,29 +178,29 @@ describe('ref-Based Guard: preSearchPhaseResumptionAttemptedRef', () => {
   });
 });
 
-describe('ref-Based Guard: summarizerPhaseResumptionAttemptedRef', () => {
+describe('ref-Based Guard: moderatorPhaseResumptionAttemptedRef', () => {
   let refs: RefTracker;
 
   beforeEach(() => {
     refs = createRefTracker();
   });
 
-  it('allows first summarizer resumption attempt', () => {
-    const key = 'thread-123_summarizer_0';
+  it('allows first moderator resumption attempt', () => {
+    const key = 'thread-123_moderator_0';
     const result = simulateEffect(
-      'summarizer-resumption',
+      'moderator-resumption',
       refs,
       key,
-      'summarizerResumptionAttempted',
+      'moderatorResumptionAttempted',
     );
 
     expect(result.triggered).toBe(true);
   });
 
-  it('blocks duplicate summarizer resumption', () => {
-    const key = 'thread-123_summarizer_0';
-    simulateEffect('summarizer-resumption', refs, key, 'summarizerResumptionAttempted');
-    const result = simulateEffect('summarizer-resumption', refs, key, 'summarizerResumptionAttempted');
+  it('blocks duplicate moderator resumption', () => {
+    const key = 'thread-123_moderator_0';
+    simulateEffect('moderator-resumption', refs, key, 'moderatorResumptionAttempted');
+    const result = simulateEffect('moderator-resumption', refs, key, 'moderatorResumptionAttempted');
 
     expect(result.triggered).toBe(false);
   });
@@ -224,23 +224,23 @@ describe('concurrent Effect Prevention', () => {
     expect(shouldRunParticipantEffect).toBe(false);
   });
 
-  it('prevents participant and summarizer effects from running simultaneously', () => {
+  it('prevents participant and moderator effects from running simultaneously', () => {
     const currentPhase: RoundPhase = RoundPhases.PARTICIPANTS;
     const allParticipantsComplete = false;
 
     // Participant effect should run
     const shouldRunParticipantEffect = currentPhase === RoundPhases.PARTICIPANTS;
 
-    // Summarizer effect should NOT run until participants complete
-    const shouldRunSummarizerEffect = currentPhase === RoundPhases.SUMMARIZER
+    // Moderator effect should NOT run until participants complete
+    const shouldRunModeratorEffect = currentPhase === RoundPhases.MODERATOR
       || allParticipantsComplete;
 
     expect(shouldRunParticipantEffect).toBe(true);
-    expect(shouldRunSummarizerEffect).toBe(false);
+    expect(shouldRunModeratorEffect).toBe(false);
   });
 
   it('ensures only one phase-specific effect runs at a time', () => {
-    const effects = ['pre-search', 'participants', 'summarizer'];
+    const effects = ['pre-search', 'participants', 'moderator'];
     const runningEffects: string[] = [];
     const currentPhase: RoundPhase = RoundPhases.PARTICIPANTS;
 
@@ -253,8 +253,8 @@ describe('concurrent Effect Prevention', () => {
         case 'participants':
           shouldRun = currentPhase === RoundPhases.PARTICIPANTS;
           break;
-        case 'summarizer':
-          shouldRun = currentPhase === RoundPhases.SUMMARIZER;
+        case 'moderator':
+          shouldRun = currentPhase === RoundPhases.MODERATOR;
           break;
       }
       if (shouldRun) {
@@ -292,8 +292,8 @@ describe('aI SDK Resume vs Custom Resumption Coordination', () => {
     expect(httpStatus).toBe(204);
   });
 
-  it('custom resumption handles summarizer (AI SDK gets 204)', () => {
-    const phase: RoundPhase = RoundPhases.SUMMARIZER;
+  it('custom resumption handles moderator (AI SDK gets 204)', () => {
+    const phase: RoundPhase = RoundPhases.MODERATOR;
 
     const aiSdkShouldHandle = phase === RoundPhases.PARTICIPANTS;
     const httpStatus = aiSdkShouldHandle ? 200 : 204;
@@ -397,10 +397,10 @@ describe('phase Transition Atomicity', () => {
 
   it('clearStreamResumption resets all resumption state atomically', () => {
     const state = {
-      currentResumptionPhase: RoundPhases.SUMMARIZER as RoundPhase | null,
+      currentResumptionPhase: RoundPhases.MODERATOR as RoundPhase | null,
       streamResumptionPrefilled: true,
       preSearchResumption: null,
-      summarizerResumption: { status: 'complete', summaryId: 'sum_123' },
+      moderatorResumption: { status: 'complete', moderatorMessageId: 'mod_123' },
       resumptionRoundNumber: 0 as number | null,
     };
 
@@ -410,13 +410,13 @@ describe('phase Transition Atomicity', () => {
       currentResumptionPhase: RoundPhases.IDLE,
       streamResumptionPrefilled: false,
       preSearchResumption: null,
-      summarizerResumption: null,
+      moderatorResumption: null,
       resumptionRoundNumber: null,
     };
 
     expect(newState.currentResumptionPhase).toBe(RoundPhases.IDLE);
     expect(newState.streamResumptionPrefilled).toBe(false);
-    expect(newState.summarizerResumption).toBeNull();
+    expect(newState.moderatorResumption).toBeNull();
     expect(newState.resumptionRoundNumber).toBeNull();
   });
 });

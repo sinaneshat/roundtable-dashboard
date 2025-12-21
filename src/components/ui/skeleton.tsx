@@ -179,14 +179,14 @@ function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<
 }
 
 /**
- * Summary card skeleton - matches RoundSummaryCard ChainOfThought style
+ * Moderator card skeleton - matches moderator card ChainOfThought style
  * Reusable across thread and public loading pages
  */
-function SummaryCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+function ModeratorCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div className={cn("mt-6", className)} {...props}>
       <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-white/5">
-        {/* Summary header */}
+        {/* Moderator header */}
         <div className="flex items-center gap-2">
           <Skeleton className="size-4 rounded bg-white/15" />
           <Skeleton className="h-4 w-32 bg-white/15" />
@@ -243,17 +243,17 @@ function StickyInputSkeleton({ className, ...props }: React.ComponentProps<"div"
 }
 
 /**
- * Thread messages skeleton - user message + AI responses + summary
+ * Thread messages skeleton - user message + AI responses + moderator
  * Reusable pattern for chat thread loading states
  */
 function ThreadMessagesSkeleton({
   participantCount = 2,
-  showSummary = true,
+  showModerator = true,
   className,
   ...props
 }: {
   participantCount?: number;
-  showSummary?: boolean;
+  showModerator?: boolean;
 } & React.ComponentProps<"div">) {
   return (
     <div className={cn("space-y-3", className)} {...props}>
@@ -261,7 +261,7 @@ function ThreadMessagesSkeleton({
       {Array.from({ length: participantCount }, (_, i) => (
         <AssistantMessageSkeleton key={i} />
       ))}
-      {showSummary && <SummaryCardSkeleton />}
+      {showModerator && <ModeratorCardSkeleton />}
     </div>
   )
 }
@@ -364,7 +364,7 @@ export {
   SubscriptionSkeleton,
   UserMessageSkeleton,
   AssistantMessageSkeleton,
-  SummaryCardSkeleton,
+  ModeratorCardSkeleton,
   StickyInputSkeleton,
   ThreadMessagesSkeleton,
   QuickStartSkeleton,

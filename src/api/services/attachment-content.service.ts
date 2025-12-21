@@ -26,7 +26,7 @@ import type {
   ModelFilePart,
 } from '@/api/types/uploads';
 import { MAX_BASE64_FILE_SIZE } from '@/api/types/uploads';
-import * as tables from '@/db/schema';
+import * as tables from '@/db';
 
 // ============================================================================
 // Constants

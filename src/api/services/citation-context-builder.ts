@@ -151,34 +151,34 @@ function buildSearchSources(
 }
 
 /**
- * Build citable sources from moderator summaries
+ * Build citable sources from moderators
  */
-function buildSummarySources(
-  summaries: AggregatedProjectContext['summaries'],
+function buildModeratorSources(
+  moderators: AggregatedProjectContext['moderators'],
 ): CitableSource[] {
-  return summaries.summaries.map((summary) => {
+  return moderators.moderators.map((moderator) => {
     const content = [
-      `Question: ${summary.userQuestion}`,
-      `Summary: ${summary.summary}`,
-      summary.recommendations.length > 0
-        ? `Recommendations: ${summary.recommendations.join(', ')}`
+      `Question: ${moderator.userQuestion}`,
+      `Moderator: ${moderator.moderator}`,
+      moderator.recommendations.length > 0
+        ? `Recommendations: ${moderator.recommendations.join(', ')}`
         : '',
-      summary.keyThemes ? `Key Themes: ${summary.keyThemes}` : '',
+      moderator.keyThemes ? `Key Themes: ${moderator.keyThemes}` : '',
     ].filter(Boolean).join('\n');
 
     // Create unique ID from threadId + roundNumber
-    const uniqueId = `${summary.threadId}_r${summary.roundNumber}`;
+    const uniqueId = `${moderator.threadId}_r${moderator.roundNumber}`;
 
     return {
-      id: generateSourceId(CitationSourceTypes.SUMMARY, uniqueId),
-      type: CitationSourceTypes.SUMMARY,
+      id: generateSourceId(CitationSourceTypes.MODERATOR, uniqueId),
+      type: CitationSourceTypes.MODERATOR,
       sourceId: uniqueId,
-      title: `Summary: ${summary.userQuestion.slice(0, 50)}`,
+      title: `Moderator: ${moderator.userQuestion.slice(0, 50)}`,
       content,
       metadata: {
-        threadId: summary.threadId,
-        threadTitle: summary.threadTitle,
-        roundNumber: summary.roundNumber,
+        threadId: moderator.threadId,
+        threadTitle: moderator.threadTitle,
+        roundNumber: moderator.roundNumber,
       },
     };
   });
@@ -311,7 +311,7 @@ export async function buildCitableContext(
   const memorySources = buildMemorySources(aggregatedContext.memories);
   const threadSources = buildThreadSources(aggregatedContext.chats);
   const searchSources = buildSearchSources(aggregatedContext.searches);
-  const summarySources = buildSummarySources(aggregatedContext.summaries);
+  const moderatorSources = buildModeratorSources(aggregatedContext.moderators);
   const attachmentSources = buildAttachmentSources(aggregatedContext.attachments);
 
   // Combine all sources
@@ -319,7 +319,7 @@ export async function buildCitableContext(
     ...memorySources,
     ...threadSources,
     ...searchSources,
-    ...summarySources,
+    ...moderatorSources,
     ...attachmentSources,
   ];
 
@@ -346,7 +346,7 @@ export async function buildCitableContext(
         '- Cite threads with [thd_...] when referencing previous conversations',
         '- Cite attachments with [att_...] when referencing uploaded files',
         '- Cite searches with [sch_...] when referencing web search results',
-        '- Cite analyses with [ana_...] when referencing moderator analyses',
+        '- Cite moderators with [ana_...] when referencing moderators',
         '- Place citations inline where the information is used',
         '- You may cite multiple sources for the same point',
       ].join('\n')
@@ -360,7 +360,7 @@ export async function buildCitableContext(
       totalMemories: aggregatedContext.memories.totalCount,
       totalThreads: aggregatedContext.chats.totalThreads,
       totalSearches: aggregatedContext.searches.totalCount,
-      totalSummaries: aggregatedContext.summaries.totalCount,
+      totalModerators: aggregatedContext.moderators.totalCount,
       totalAttachments: attachmentSources.length,
     },
   };

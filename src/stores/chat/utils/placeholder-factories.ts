@@ -2,13 +2,13 @@
  * Placeholder Object Factories
  *
  * Centralized factory functions for creating placeholder/optimistic objects:
- * - Placeholder summary objects (for eager UI rendering)
+ * - Placeholder moderator objects (for test mocking)
  * - Placeholder pre-search objects (for web search UI)
  * - Optimistic user messages (for immediate UI feedback)
  *
  * ✅ PATTERN: Uses enum constants from @/api/core/enums for type-safe status values
  * ✅ SINGLE SOURCE: Eliminates duplicate inline object creation in form-actions.ts
- * ✅ TYPE-SAFE: Returns typed StoredRoundSummary, StoredPreSearch, and UIMessage objects
+ * ✅ TYPE-SAFE: Returns typed StoredModeratorData, StoredPreSearch, and UIMessage objects
  *
  * @module stores/chat/utils/placeholder-factories
  */
@@ -17,17 +17,17 @@ import type { UIMessage } from 'ai';
 
 import type { ChatMode } from '@/api/core/enums';
 import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
-import type { StoredPreSearch, StoredRoundSummary } from '@/api/routes/chat/schema';
+import type { StoredModeratorData, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 
 // ============================================================================
-// PLACEHOLDER SUMMARY FACTORY
+// PLACEHOLDER MODERATOR FACTORY
 // ============================================================================
 
 /**
- * Parameters for creating a placeholder summary
+ * Parameters for creating a placeholder moderator
  */
-export type CreatePlaceholderSummaryParams = {
+export type CreatePlaceholderModeratorParams = {
   threadId: string;
   roundNumber: number;
   mode: ChatMode;
@@ -35,33 +35,34 @@ export type CreatePlaceholderSummaryParams = {
 };
 
 /**
- * Create a placeholder summary object for eager UI rendering
+ * Create a placeholder moderator object for test mocking
  *
- * Creates a summary in PENDING status that allows RoundSummaryCard
- * to render with loading UI before participants finish streaming.
+ * This factory exists solely for test utilities that need to mock moderator objects
+ * without triggering the full moderator message flow.
+ *
+ * @see useModeratorTrigger - Production moderator triggering mechanism
  *
  * @example
- * // In handleCreateThread:
- * actions.addSummary(createPlaceholderSummary({
- *   threadId: thread.id,
+ * const mockModerator = createPlaceholderModerator({
+ *   threadId: 'test-thread',
  *   roundNumber: 0,
- *   mode: thread.mode,
- *   userQuestion: prompt,
- * }));
+ *   mode: ChatMode.BRAINSTORM,
+ *   userQuestion: 'Test question',
+ * });
  */
-export function createPlaceholderSummary(
-  params: CreatePlaceholderSummaryParams,
-): StoredRoundSummary {
+export function createPlaceholderModerator(
+  params: CreatePlaceholderModeratorParams,
+): StoredModeratorData {
   const { threadId, roundNumber, mode, userQuestion } = params;
 
   return {
-    id: `placeholder-summary-${threadId}-${roundNumber}`,
+    id: `placeholder-moderator-${threadId}-${roundNumber}`,
     threadId,
     roundNumber,
     mode,
     userQuestion,
     status: MessageStatuses.PENDING,
-    summaryData: null,
+    moderatorData: null,
     participantMessageIds: [],
     createdAt: new Date(),
     completedAt: null,

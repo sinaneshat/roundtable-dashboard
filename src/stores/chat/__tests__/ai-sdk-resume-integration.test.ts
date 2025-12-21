@@ -31,7 +31,7 @@ type ResumeResponse = {
   totalParticipants?: number;
   participantStatuses?: Record<string, StreamStatus>;
   nextParticipantIndex?: number;
-  summaryId?: string;
+  moderatorId?: string;
   stream?: ReadableStream<Uint8Array>;
 };
 
@@ -58,11 +58,11 @@ type PreSearchStreamMetadata = {
   completedAt?: number;
 };
 
-type SummaryStreamMetadata = {
+type ModeratorStreamMetadata = {
   streamId: string;
   threadId: string;
   roundNumber: number;
-  summaryId: string;
+  moderatorId: string;
   status: StreamStatus;
   chunkCount: number;
   createdAt: number;
@@ -145,11 +145,10 @@ function _generateParticipantStreamId(threadId: string, roundNumber: number, par
   return `${threadId}_r${roundNumber}_participant_${participantIndex}`;
 }
 
-function generateSummarizerStreamId(threadId: string, roundNumber: number): string {
-  return `${threadId}_r${roundNumber}_summarizer`;
+function generateModeratorStreamId(threadId: string, roundNumber: number): string {
+  return `${threadId}_r${roundNumber}_moderator`;
 }
 
-// Legacy format support
 function generateLegacyParticipantStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
   return `${threadId}_r${roundNumber}_p${participantIndex}`;
 }
@@ -181,7 +180,7 @@ function parseStreamId(streamId: string): {
     };
   }
 
-  // Legacy participant: {threadId}_r{roundNumber}_p{index}
+  // Participant format: {threadId}_r{roundNumber}_p{index}
   const legacyMatch = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
   if (legacyMatch) {
     return {
@@ -299,24 +298,24 @@ async function simulateResumeEndpoint(
     };
   }
 
-  // Phase 3: Check for active summarizer stream
-  const summarizerStreamId = generateSummarizerStreamId(threadId, currentRound);
-  const summarizerMetadata = await kv.get<SummaryStreamMetadata>(`summary:meta:${summarizerStreamId}`);
-  const summarizerChunks = await kv.get<StreamChunk[]>(`summary:chunks:${summarizerStreamId}`);
+  // Phase 3: Check for active moderator stream
+  const moderatorStreamId = generateModeratorStreamId(threadId, currentRound);
+  const moderatorMetadata = await kv.get<ModeratorStreamMetadata>(`moderator:meta:${moderatorStreamId}`);
+  const moderatorChunks = await kv.get<StreamChunk[]>(`moderator:chunks:${moderatorStreamId}`);
 
-  if (summarizerMetadata && (summarizerMetadata.status === 'active' || summarizerMetadata.status === 'streaming')) {
-    const lastChunkTime = summarizerChunks && summarizerChunks.length > 0
-      ? Math.max(...summarizerChunks.map(c => c.timestamp))
+  if (moderatorMetadata && (moderatorMetadata.status === 'active' || moderatorMetadata.status === 'streaming')) {
+    const lastChunkTime = moderatorChunks && moderatorChunks.length > 0
+      ? Math.max(...moderatorChunks.map(c => c.timestamp))
       : 0;
 
-    if (!isStreamStale(lastChunkTime, summarizerMetadata.createdAt, (summarizerChunks?.length ?? 0) > 0)) {
-      // Return 204 with phase metadata for summarizer (AI SDK ignores, custom handler takes over)
+    if (!isStreamStale(lastChunkTime, moderatorMetadata.createdAt, (moderatorChunks?.length ?? 0) > 0)) {
+      // Return 204 with phase metadata for moderator (AI SDK ignores, custom handler takes over)
       return {
         status: 204,
-        phase: 'summarizer',
+        phase: 'moderator',
         roundNumber: currentRound,
-        streamId: summarizerStreamId,
-        summaryId: summarizerMetadata.summaryId,
+        streamId: moderatorStreamId,
+        moderatorId: moderatorMetadata.moderatorId,
       };
     }
   }
@@ -421,28 +420,28 @@ async function setupActivePreSearchStream(
   }
 }
 
-async function setupActiveSummarizerStream(
+async function setupActiveModeratorStream(
   kv: MockKVStore,
   threadId: string,
   roundNumber: number,
-  summaryId: string,
+  moderatorId: string,
   chunks: StreamChunk[] = [],
 ): Promise<void> {
-  const streamId = generateSummarizerStreamId(threadId, roundNumber);
+  const streamId = generateModeratorStreamId(threadId, roundNumber);
 
-  await kv.put(`summary:meta:${streamId}`, {
+  await kv.put(`moderator:meta:${streamId}`, {
     streamId,
     threadId,
     roundNumber,
-    summaryId,
+    moderatorId,
     status: 'streaming' as StreamStatus,
     chunkCount: chunks.length,
     createdAt: Date.now(),
     completedAt: null,
-  } as SummaryStreamMetadata);
+  } as ModeratorStreamMetadata);
 
   if (chunks.length > 0) {
-    await kv.put(`summary:chunks:${streamId}`, chunks);
+    await kv.put(`moderator:chunks:${streamId}`, chunks);
   }
 }
 
@@ -573,20 +572,20 @@ describe('aI SDK Resume Integration', () => {
       expect(response.participantIndex).toBe(0);
     });
 
-    it('should return 204 with summarizer phase when summarizer is active', async () => {
-      const threadId = 'thread-summarizer-active';
+    it('should return 204 with moderator phase when moderator is active', async () => {
+      const threadId = 'thread-moderator-active';
       vi.setSystemTime(new Date());
 
-      await setupActiveSummarizerStream(kv, threadId, 0, 'summary-123', [
+      await setupActiveModeratorStream(kv, threadId, 0, 'moderator-123', [
         { data: '{"status":"analyzing"}', timestamp: Date.now() },
       ]);
 
       const response = await simulateResumeEndpoint(threadId, 0, kv);
 
       expect(response.status).toBe(204);
-      expect(response.phase).toBe('summarizer');
+      expect(response.phase).toBe('moderator');
       expect(response.roundNumber).toBe(0);
-      expect(response.summaryId).toBe('summary-123');
+      expect(response.moderatorId).toBe('moderator-123');
     });
 
     it('should return 204 with no phase when no active stream', async () => {
@@ -695,21 +694,21 @@ describe('aI SDK Resume Integration', () => {
       expect(response.phase).toBe('presearch');
     });
 
-    it('should handle refresh during summarizer phase', async () => {
-      const threadId = 'thread-nav-summarizer';
+    it('should handle refresh during moderator phase', async () => {
+      const threadId = 'thread-nav-moderator';
       vi.setSystemTime(new Date());
 
-      // User refreshed during summarizer
-      await setupActiveSummarizerStream(kv, threadId, 0, 'summary-789', [
+      // User refreshed during moderator
+      await setupActiveModeratorStream(kv, threadId, 0, 'moderator-789', [
         { data: '{"themes":["a"]}', timestamp: Date.now() - 1000 },
       ]);
 
       const response = await simulateResumeEndpoint(threadId, 0, kv);
 
-      // Should return 204 with summarizer phase - frontend handles resumption
+      // Should return 204 with moderator phase - frontend handles resumption
       expect(response.status).toBe(204);
-      expect(response.phase).toBe('summarizer');
-      expect(response.summaryId).toBe('summary-789');
+      expect(response.phase).toBe('moderator');
+      expect(response.moderatorId).toBe('moderator-789');
     });
   });
 
@@ -787,7 +786,7 @@ describe('aI SDK Resume Integration', () => {
       expect(parsed?.participantIndex).toBe(2);
     });
 
-    it('should parse legacy participant stream ID', () => {
+    it('should parse participant stream ID with short format', () => {
       const streamId = 'thread-abc_r0_p1';
       const parsed = parseStreamId(streamId);
 

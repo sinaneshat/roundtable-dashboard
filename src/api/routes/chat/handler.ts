@@ -10,6 +10,9 @@ export {
   getThreadMessagesHandler,
 } from './handlers/message.handler';
 export {
+  summarizeRoundHandler,
+} from './handlers/moderator.handler';
+export {
   addParticipantHandler,
   deleteParticipantHandler,
   updateParticipantHandler,
@@ -32,11 +35,6 @@ export {
 export {
   streamChatHandler,
 } from './handlers/streaming.handler';
-export {
-  getThreadSummariesHandler,
-  resumeSummaryStreamHandler,
-  summarizeRoundHandler,
-} from './handlers/summary.handler';
 export {
   createThreadHandler,
   deleteThreadHandler,

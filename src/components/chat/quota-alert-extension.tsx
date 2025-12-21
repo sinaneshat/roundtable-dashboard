@@ -68,11 +68,11 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
       };
     }
 
-    // Also check if analysis quota is exceeded (blocks multi-participant chats)
+    // Also check if moderator quota is exceeded (blocks multi-participant chats)
     if (data.analysis && data.analysis.remaining === 0) {
       return {
         isBlocked: true,
-        blockerType: 'summary' as const,
+        blockerType: 'moderator' as const,
         limit: data.analysis.limit,
       };
     }
@@ -87,8 +87,8 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
         return `You've reached your ${limit} thread limit for this month. Upgrade to create more threads.`;
       case 'messages':
         return `You've reached your ${limit} message limit for this month. Upgrade to continue chatting.`;
-      case 'summary':
-        return `You've reached your ${limit} summary limit for this month. Upgrade for multi-participant conversations.`;
+      case 'moderator':
+        return `You've reached your ${limit} moderator limit for this month. Upgrade for multi-participant conversations.`;
       default:
         return 'Upgrade your plan to continue.';
     }

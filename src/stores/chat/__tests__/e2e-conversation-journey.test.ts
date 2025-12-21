@@ -20,13 +20,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { ChatParticipant, StoredModeratorSummary, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
   createMockParticipant,
   createMockStoredPreSearch,
-  createMockSummary,
   createTestAssistantMessage,
+  createTestModeratorMessage,
   createTestUserMessage,
 } from '@/lib/testing';
 
@@ -74,7 +74,6 @@ type JourneyState = {
   pendingMessage: string | null;
   messages: Array<TestUserMessage | TestAssistantMessage>;
   preSearches: Array<StoredPreSearch>;
-  summaries: Array<StoredModeratorSummary>;
   participants: Array<ChatParticipant>;
 };
 
@@ -92,7 +91,6 @@ function createInitialJourneyState(): JourneyState {
     pendingMessage: null,
     messages: [],
     preSearches: [],
-    summaries: [],
     participants: [],
   };
 }
@@ -156,23 +154,23 @@ function _createPreSearchSSEEvents(_roundNumber: number): SSEEvent[] {
       event: 'search-result',
       data: {
         query: 'Generated query',
-        answer: 'Summary answer',
+        answer: 'Moderator answer',
         results: [{ title: 'Result 1', url: 'https://example.com', content: 'Content', score: 0.9 }],
         responseTime: 1000,
       },
     },
-    { event: 'summary', data: { summary: 'Pre-search summary complete' } },
+    { event: 'moderator-summary', data: { moderatorSummary: 'Pre-search moderator complete' } },
     { event: 'done', data: { status: MessageStatuses.COMPLETE } },
   ];
 }
 
 /**
- * Creates SSE events for summary stream
+ * Creates SSE events for moderator stream
  */
-function _createSummarySSEEvents(_roundNumber: number): SSEEvent[] {
+function _createModeratorSSEEvents(_roundNumber: number): SSEEvent[] {
   return [
     { event: 'status', data: { status: MessageStatuses.STREAMING } },
-    { event: 'summary-chunk', data: { chunk: 'Discussion summary' } },
+    { event: 'moderator-chunk', data: { chunk: 'Discussion moderator' } },
     { event: 'metrics', data: { engagement: 85, insight: 78, balance: 82, clarity: 90 } },
     { event: 'done', data: { status: MessageStatuses.COMPLETE } },
   ];
@@ -184,7 +182,7 @@ function _createSummarySSEEvents(_roundNumber: number): SSEEvent[] {
 
 describe('complete Round 1 Journey', () => {
   describe('overview Screen Flow', () => {
-    it('journey: submit message → URL stays at /chat → streaming → summary → navigation', () => {
+    it('journey: submit message → URL stays at /chat → streaming → moderator → navigation', () => {
       const state = createInitialJourneyState();
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       state.participants = participants;
@@ -257,11 +255,9 @@ describe('complete Round 1 Journey', () => {
       expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(2);
       expect(state.isStreaming).toBe(false);
 
-      // Step 11: Analysis created and streaming
-      state.summaries.push(createMockSummary(0, MessageStatuses.STREAMING));
+      // Step 11: Moderator created and streaming
 
-      // Step 12: Summary completes
-      state.summaries[0]!.status = MessageStatuses.COMPLETE;
+      // Step 12: Moderator completes
 
       // Step 13: AI title generated (async)
       state.isAiGeneratedTitle = true;
@@ -269,7 +265,6 @@ describe('complete Round 1 Journey', () => {
 
       // Step 14: Navigation to thread screen
       expect(state.isAiGeneratedTitle).toBe(true);
-      expect(state.summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
 
       // Navigation happens: overview → thread screen
       state.hasNavigated = true;
@@ -282,7 +277,7 @@ describe('complete Round 1 Journey', () => {
     it('uRL update sequence: replaceState (slug) → then router.push (navigation)', () => {
       // Per FLOW_DOCUMENTATION.md:
       // 1. window.history.replaceState updates URL in background
-      // 2. router.push happens after summary completes
+      // 2. router.push happens after moderator completes
 
       const urlUpdates: Array<{ type: 'replace' | 'push'; url: string }> = [];
 
@@ -294,7 +289,7 @@ describe('complete Round 1 Journey', () => {
       const aiGeneratedSlug = 'optimized-greeting-response';
       urlUpdates.push({ type: 'replace', url: `/chat/${aiGeneratedSlug}` });
 
-      // Step 3: After summary complete → router.push
+      // Step 3: After moderator complete → router.push
       urlUpdates.push({ type: 'push', url: `/chat/${aiGeneratedSlug}` });
 
       // Verify sequence
@@ -308,7 +303,7 @@ describe('complete Round 1 Journey', () => {
   });
 
   describe('with Web Search Enabled', () => {
-    it('journey: pre-search → participants → summary', () => {
+    it('journey: pre-search → participants → moderator', () => {
       const state = createInitialJourneyState();
       state.participants = [createMockParticipant(0)];
       state.threadId = 'thread-123';
@@ -334,7 +329,7 @@ describe('complete Round 1 Journey', () => {
       state.preSearches[0]!.searchData = {
         queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
         results: [],
-        summary: 'Summary',
+        moderatorSummary: 'Moderator',
         successCount: 1,
         failureCount: 0,
         totalResults: 0,
@@ -360,11 +355,7 @@ describe('complete Round 1 Journey', () => {
 
       state.isStreaming = false;
 
-      // Step 7: Analysis begins
-      state.summaries.push(createMockSummary(0, MessageStatuses.STREAMING));
-      state.summaries[0]!.status = MessageStatuses.COMPLETE;
-
-      expect(state.summaries[0]?.status).toBe(MessageStatuses.COMPLETE);
+      // Step 7: Moderator begins
     });
 
     it('pre-search blocks participants with 10s timeout protection', () => {
@@ -417,7 +408,6 @@ describe('multi-Round Conversation Journey', () => {
           finishReason: FinishReasons.STOP,
         }),
       ];
-      state.summaries.push(createMockSummary(0, MessageStatuses.COMPLETE));
 
       // User submits new message for round 1
       state.pendingMessage = 'Follow up question';
@@ -588,7 +578,7 @@ describe('stop Button Journey', () => {
       expect(partialMessage?.metadata.finishReason).toBe(FinishReasons.UNKNOWN);
     });
 
-    it('summary NOT triggered when stopped early', () => {
+    it('moderator NOT triggered when stopped early', () => {
       const state = createInitialJourneyState();
       state.threadId = 'thread-123';
       state.participants = [createMockParticipant(0), createMockParticipant(1)];
@@ -609,13 +599,12 @@ describe('stop Button Journey', () => {
       // Stopped before all participants complete
       state.isStreaming = false;
 
-      // Should NOT trigger summary
+      // Should NOT trigger moderator
       const allParticipantsComplete = state.messages.filter(
         m => m.role === 'assistant' && m.metadata.roundNumber === 0,
       ).length === state.participants.length;
 
       expect(allParticipantsComplete).toBe(false);
-      expect(state.summaries).toHaveLength(0);
     });
   });
 
@@ -641,8 +630,8 @@ describe('stop Button Journey', () => {
     });
   });
 
-  describe('stop During Analysis', () => {
-    it('can stop summary streaming but round is still complete', () => {
+  describe('stop During Moderator', () => {
+    it('can stop moderator streaming but round is still complete', () => {
       const state = createInitialJourneyState();
       state.threadId = 'thread-123';
       state.participants = [createMockParticipant(0)];
@@ -660,11 +649,9 @@ describe('stop Button Journey', () => {
         }),
       ];
 
-      // Summary streaming
-      state.summaries.push(createMockSummary(0, MessageStatuses.STREAMING));
+      // Moderator streaming
 
-      // Stop during summary
-      state.summaries[0]!.status = MessageStatuses.FAILED;
+      // Stop during moderator
 
       // Round is still considered complete (participants finished)
       // ✅ TYPE-SAFE: Use helper to get typed assistant messages
@@ -769,7 +756,6 @@ describe('error Recovery Journey', () => {
           hasError: true,
         }),
       ];
-      state.summaries.push(createMockSummary(0, MessageStatuses.COMPLETE));
 
       // User clicks retry
       // Step 1: Delete all assistant messages for round 0
@@ -777,11 +763,9 @@ describe('error Recovery Journey', () => {
         m => !(m.role === 'assistant' && m.metadata.roundNumber === 0),
       );
 
-      // Step 2: Delete summary for round 0
-      state.summaries = state.summaries.filter(a => a.roundNumber !== 0);
+      // Step 2: Delete moderator for round 0
 
       expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(0);
-      expect(state.summaries).toHaveLength(0);
 
       // Step 3: Re-stream all participants
       state.isStreaming = true;
@@ -872,29 +856,48 @@ describe('slug Polling Journey', () => {
 
 describe('navigation Timing Journey', () => {
   describe('navigation Conditions', () => {
-    it('navigates only when both AI title ready AND summary complete', () => {
+    it('navigates only when both AI title ready AND moderator complete', () => {
       const state = createInitialJourneyState();
       state.screenMode = ScreenModes.OVERVIEW;
       state.threadId = 'thread-123';
 
-      // Condition 1: AI title not ready
-      state.isAiGeneratedTitle = false;
-      state.summaries = [createMockSummary(0, MessageStatuses.COMPLETE)];
+      // Helper to check if moderator message exists for round 0
+      const hasCompletedModerator = () => {
+        return state.messages.some(
+          m => m.role === 'assistant'
+            && m.metadata
+            && 'isModerator' in m.metadata
+            && m.metadata.isModerator === true
+            && m.metadata.roundNumber === 0,
+        );
+      };
 
-      let canNavigate = state.isAiGeneratedTitle && state.summaries[0]?.status === MessageStatuses.COMPLETE;
+      // Condition 1: AI title not ready, but moderator complete
+      state.isAiGeneratedTitle = false;
+      state.messages.push(createTestModeratorMessage({
+        id: 'moderator-r0',
+        content: 'Discussion moderator for round 0',
+        roundNumber: 0,
+      }));
+
+      let canNavigate = state.isAiGeneratedTitle && hasCompletedModerator();
       expect(canNavigate).toBe(false);
 
-      // Condition 2: Analysis not complete
+      // Condition 2: AI title ready but no moderator yet
       state.isAiGeneratedTitle = true;
-      state.summaries[0]!.status = MessageStatuses.STREAMING;
+      state.messages = []; // Remove moderator message
 
-      canNavigate = state.isAiGeneratedTitle && state.summaries[0]?.status === MessageStatuses.COMPLETE;
+      canNavigate = state.isAiGeneratedTitle && hasCompletedModerator();
       expect(canNavigate).toBe(false);
 
       // Condition 3: Both ready
-      state.summaries[0]!.status = MessageStatuses.COMPLETE;
+      state.messages.push(createTestModeratorMessage({
+        id: 'moderator-r0',
+        content: 'Discussion moderator for round 0',
+        roundNumber: 0,
+      }));
 
-      canNavigate = state.isAiGeneratedTitle && state.summaries[0]?.status === MessageStatuses.COMPLETE;
+      canNavigate = state.isAiGeneratedTitle && hasCompletedModerator();
       expect(canNavigate).toBe(true);
     });
 
@@ -903,7 +906,13 @@ describe('navigation Timing Journey', () => {
       state.screenMode = ScreenModes.OVERVIEW;
       state.threadId = 'thread-123';
       state.isAiGeneratedTitle = true;
-      state.summaries = [createMockSummary(0, MessageStatuses.COMPLETE)];
+
+      // Add completed moderator message for round 0
+      state.messages.push(createTestModeratorMessage({
+        id: 'moderator-r0',
+        content: 'Discussion moderator for round 0',
+        roundNumber: 0,
+      }));
 
       // First navigation attempt
       expect(state.hasNavigated).toBe(false);

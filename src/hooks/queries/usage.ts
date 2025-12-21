@@ -27,7 +27,7 @@ import {
  * Returns ALL quota information in one call:
  * - threads: { used, limit, remaining, percentage, status }
  * - messages: { used, limit, remaining, percentage, status }
- * - analysis: { used, limit, remaining, percentage, status }
+ * - moderator: { used, limit, remaining, percentage, status }
  * - customRoles: { used, limit, remaining, percentage, status }
  * - period: { start, end, daysRemaining }
  * - subscription: { tier, isAnnual }

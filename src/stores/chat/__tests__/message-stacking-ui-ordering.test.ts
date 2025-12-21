@@ -27,7 +27,7 @@ import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import {
   createTestAssistantMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils/metadata';
 
 // ============================================================================
@@ -72,7 +72,6 @@ type RoundGroup = {
  */
 function groupMessagesByRound(
   messages: TestMessage[],
-  summaries: StoredModeratorSummary[],
 ): RoundGroup[] {
   const roundMap = new Map<number, RoundGroup>();
 
@@ -95,14 +94,6 @@ function groupMessagesByRound(
       group.userMessage = msg;
     } else if (isAssistantMessage(msg)) {
       group.participantMessages.push(msg);
-    }
-  });
-
-  // Add summaries to rounds
-  summaries.forEach((summary) => {
-    const group = roundMap.get(summary.roundNumber);
-    if (group) {
-      group.summary = summary;
     }
   });
 
@@ -333,23 +324,9 @@ describe('message Grouping by Round', () => {
         }),
       ];
 
-      const summaries: StoredModeratorSummary[] = [
-        {
-          id: 'summary-0',
-          threadId: 'thread-123',
-          roundNumber: 0,
-          status: MessageStatuses.COMPLETE,
-          summaryData: { keyInsights: [], participantAnalyses: [], verdict: '', recommendations: [] },
-          errorMessage: null,
-          createdAt: new Date(),
-          completedAt: new Date(),
-        } as StoredModeratorSummary,
-      ];
+      const groups = groupMessagesByRound(messages, []);
 
-      const groups = groupMessagesByRound(messages, summaries);
-
-      expect(groups[0]?.summary).toBeDefined();
-      expect(groups[0]?.summary?.status).toBe(MessageStatuses.COMPLETE);
+      expect(groups[0]).toBeDefined();
     });
   });
 });
@@ -606,26 +583,16 @@ describe('optimistic Message Handling', () => {
 describe('message Replacement Patterns', () => {
   describe('streaming Message Update', () => {
     it('replaces streaming message content in-place', () => {
-      const messages: UIMessage[] = [
+      const messages: TestMessage[] = [
         createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
-        {
+        createTestAssistantMessage({
           id: 'p0-r0',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Partial...' }],
-          metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
-            participantId: 'p0',
-            participantIndex: 0,
-            participantRole: null,
-            model: 'gpt-4',
-            finishReason: FinishReasons.UNKNOWN, // Still streaming
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: true,
-            isPartialResponse: true,
-          },
-        },
+          content: 'Partial...',
+          roundNumber: 0,
+          participantId: 'p0',
+          participantIndex: 0,
+          finishReason: FinishReasons.UNKNOWN, // Still streaming
+        }),
       ];
 
       // Simulate content update during streaming
@@ -644,40 +611,16 @@ describe('message Replacement Patterns', () => {
     });
 
     it('finalizes message with finish reason', () => {
-      const streamingMsg: UIMessage = {
+      const finalizedMsg = createTestAssistantMessage({
         id: 'p0-r0',
-        role: 'assistant' as const,
-        parts: [{ type: 'text' as const, text: 'Complete response' }],
-        metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
-          participantRole: null,
-          model: 'gpt-4',
-          finishReason: FinishReasons.UNKNOWN,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: true,
-          isPartialResponse: true,
-        },
-      };
+        content: 'Complete response',
+        roundNumber: 0,
+        participantId: 'p0',
+        participantIndex: 0,
+        finishReason: FinishReasons.STOP,
+      });
 
-      // Finalize message
-      const finalizedMsg = {
-        ...streamingMsg,
-        metadata: {
-          ...streamingMsg.metadata,
-          finishReason: FinishReasons.STOP,
-          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-          isTransient: false,
-          isPartialResponse: false,
-        },
-      };
-
-      // ✅ TYPE-SAFE: Access directly on constructed object
       expect(finalizedMsg.metadata.finishReason).toBe(FinishReasons.STOP);
-      expect(finalizedMsg.metadata.isPartialResponse).toBe(false);
     });
   });
 
@@ -856,26 +799,8 @@ describe('empty States', () => {
     });
   });
 
-  describe('orphan Summary', () => {
-    it('summary without messages is not displayed', () => {
-      const summaries: StoredModeratorSummary[] = [
-        {
-          id: 'summary-0',
-          threadId: 'thread-123',
-          roundNumber: 0,
-          status: MessageStatuses.COMPLETE,
-          summaryData: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          completedAt: new Date(),
-        } as StoredModeratorSummary,
-      ];
-
-      const groups = groupMessagesByRound([], summaries);
-
-      // No round group created without messages
-      expect(groups).toHaveLength(0);
-    });
+  describe.todo('orphan Summary - summary feature removed from codebase', () => {
+    it.todo('summary without messages is not displayed - summary feature removed');
   });
 });
 
@@ -908,38 +833,8 @@ describe('error Message Display', () => {
     });
   });
 
-  describe('summary Error', () => {
-    it('shows failed summary in round', () => {
-      const summaries: StoredModeratorSummary[] = [
-        {
-          id: 'summary-0',
-          threadId: 'thread-123',
-          roundNumber: 0,
-          status: MessageStatuses.FAILED,
-          summaryData: null,
-          errorMessage: 'Summary generation failed',
-          createdAt: new Date(),
-          completedAt: new Date(),
-        } as StoredModeratorSummary,
-      ];
-
-      const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
-        createTestAssistantMessage({
-          id: 'p0-r0',
-          content: 'R',
-          roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
-          finishReason: FinishReasons.STOP,
-        }),
-      ];
-
-      const groups = groupMessagesByRound(messages, summaries);
-
-      expect(groups[0]?.summary?.status).toBe(MessageStatuses.FAILED);
-      expect(groups[0]?.summary?.errorMessage).toBe('Summary generation failed');
-    });
+  describe.todo('summary Error - summary feature removed from codebase', () => {
+    it.todo('shows failed summary in round - summary feature removed');
   });
 });
 
@@ -976,7 +871,7 @@ describe('large Conversations', () => {
 
   describe('many Participants', () => {
     it('handles 10 participants per round', () => {
-      const messages: UIMessage[] = [
+      const messages: TestMessage[] = [
         createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
       ];
 

@@ -68,6 +68,8 @@ export { toast, useToast } from './use-toast';
 export { useTouchDevice } from './use-touch-device';
 export { useVisualViewportPosition } from './use-visual-viewport-position';
 export { useChatScroll } from './useChatScroll';
+export type { ModeratorStreamState } from './useModeratorStream';
+export { useModeratorStream } from './useModeratorStream';
 export type { TimelineItem, UseThreadTimelineOptions } from './useThreadTimeline';
 export { useThreadTimeline } from './useThreadTimeline';
 export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './useVirtualizedTimeline';

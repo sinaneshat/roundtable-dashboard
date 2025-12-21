@@ -8,14 +8,14 @@
  * 1. User message
  * 2. Pre-search card (if web search enabled)
  * 3. Participant responses (in priority order)
- * 4. Round summary/analysis card
- * 5. Feedback buttons (after summary)
+ * 4. Round moderator card
+ * 5. Feedback buttons (after moderator)
  *
  * Timeline Events:
  * - Thread creation
  * - Message timestamps
  * - Streaming start/end times
- * - Summary trigger times
+ * - Moderator trigger times
  *
  * Key Validations:
  * - Elements appear in correct order
@@ -31,14 +31,14 @@ import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/sch
 import {
   createTestAssistantMessage,
   createTestUserMessage,
-} from '@/lib/testing/helpers';
+} from '@/lib/testing';
 
 // ============================================================================
 // TEST HELPERS
 // ============================================================================
 
 type TimelineElement = {
-  type: 'user-message' | 'pre-search' | 'participant-message' | 'summary' | 'feedback';
+  type: 'user-message' | 'pre-search' | 'participant-message' | 'moderator' | 'feedback';
   roundNumber: number;
   participantIndex?: number;
   timestamp: Date;
@@ -97,13 +97,13 @@ function buildRoundTimeline(
   baseTime: Date,
   options?: {
     includePreSearch?: boolean;
-    includeSummary?: boolean;
+    includeModerator?: boolean;
     includeFeedback?: boolean;
   },
 ): TimelineElement[] {
   const {
     includePreSearch = true,
-    includeSummary = true,
+    includeModerator = true,
     includeFeedback = true,
   } = options ?? {};
 
@@ -125,13 +125,13 @@ function buildRoundTimeline(
     timeline.push(createTimelineElement('participant-message', roundNumber, currentTime, i));
   }
 
-  // 4. Summary
-  if (includeSummary) {
+  // 4. Moderator
+  if (includeModerator) {
     currentTime = new Date(currentTime.getTime() + 2000);
-    timeline.push(createTimelineElement('summary', roundNumber, currentTime));
+    timeline.push(createTimelineElement('moderator', roundNumber, currentTime));
   }
 
-  // 5. Feedback (after summary)
+  // 5. Feedback (after moderator)
   if (includeFeedback) {
     currentTime = new Date(currentTime.getTime() + 500);
     timeline.push(createTimelineElement('feedback', roundNumber, currentTime));
@@ -146,7 +146,7 @@ function buildRoundTimeline(
 
 describe('element Order Within Round', () => {
   describe('standard Round Order', () => {
-    it('elements appear in correct order: user -> pre-search -> participants -> analysis -> feedback', () => {
+    it('elements appear in correct order: user -> pre-search -> participants -> moderator -> feedback', () => {
       const timeline = buildRoundTimeline(0, 3, new Date());
 
       const expectedOrder: TimelineElement['type'][] = [
@@ -155,7 +155,7 @@ describe('element Order Within Round', () => {
         'participant-message',
         'participant-message',
         'participant-message',
-        'summary',
+        'moderator',
         'feedback',
       ];
 
@@ -179,25 +179,25 @@ describe('element Order Within Round', () => {
       expect(preSearchIndex).toBeLessThan(firstParticipantIndex);
     });
 
-    it('analysis appears after all participants', () => {
+    it('moderator appears after all participants', () => {
       const timeline = buildRoundTimeline(0, 3, new Date());
 
       const participantIndices = timeline
         .map((e, i) => (e.type === 'participant-message' ? i : -1))
         .filter(i => i !== -1);
-      const summaryIndex = timeline.findIndex(e => e.type === 'summary');
+      const moderatorIndex = timeline.findIndex(e => e.type === 'moderator');
       const lastParticipantIndex = Math.max(...participantIndices);
 
-      expect(summaryIndex).toBeGreaterThan(lastParticipantIndex);
+      expect(moderatorIndex).toBeGreaterThan(lastParticipantIndex);
     });
 
-    it('feedback appears after summary', () => {
+    it('feedback appears after moderator', () => {
       const timeline = buildRoundTimeline(0, 3, new Date());
 
-      const summaryIndex = timeline.findIndex(e => e.type === 'summary');
+      const moderatorIndex = timeline.findIndex(e => e.type === 'moderator');
       const feedbackIndex = timeline.findIndex(e => e.type === 'feedback');
 
-      expect(feedbackIndex).toBeGreaterThan(summaryIndex);
+      expect(feedbackIndex).toBeGreaterThan(moderatorIndex);
     });
   });
 
@@ -210,7 +210,7 @@ describe('element Order Within Round', () => {
         'participant-message',
         'participant-message',
         'participant-message',
-        'summary',
+        'moderator',
         'feedback',
       ];
 
@@ -225,10 +225,10 @@ describe('element Order Within Round', () => {
     });
   });
 
-  describe('round Without Summary', () => {
-    it('order is correct without analysis (e.g., brainstorming mode)', () => {
+  describe('round Without Moderator', () => {
+    it('order is correct without moderator (e.g., brainstorming mode)', () => {
       const timeline = buildRoundTimeline(0, 3, new Date(), {
-        includeSummary: false,
+        includeModerator: false,
         includeFeedback: false,
       });
 
@@ -428,14 +428,14 @@ describe('visual Ordering', () => {
       expect(preSearchIndex).toBeLessThan(firstParticipantIndex);
     });
 
-    it('analysis card appears after last participant card', () => {
+    it('moderator card appears after last participant card', () => {
       const elements = buildRoundTimeline(0, 2, new Date());
-      const summaryIndex = elements.findIndex(e => e.type === 'summary');
+      const moderatorIndex = elements.findIndex(e => e.type === 'moderator');
       const participantIndices = elements
         .map((e, i) => e.type === 'participant-message' ? i : -1)
         .filter(i => i !== -1);
 
-      expect(summaryIndex).toBeGreaterThan(Math.max(...participantIndices));
+      expect(moderatorIndex).toBeGreaterThan(Math.max(...participantIndices));
     });
   });
 
@@ -481,7 +481,7 @@ describe('special UI States', () => {
     it('timeline shows partial elements during streaming', () => {
       // Mid-streaming: user + pre-search + participant 0 + (participant 1 streaming)
       const partialTimeline = buildRoundTimeline(0, 2, new Date(), {
-        includeSummary: false, // Not yet triggered
+        includeModerator: false, // Not yet triggered
         includeFeedback: false,
       });
 
@@ -570,10 +570,10 @@ describe('element ID Patterns', () => {
     });
   });
 
-  describe('analysis IDs', () => {
-    it('analysis ID contains round number', () => {
-      const summaryId = 'summary-round-0';
-      expect(summaryId).toContain('0');
+  describe('moderator IDs', () => {
+    it('moderator ID contains round number', () => {
+      const moderatorId = 'moderator-round-0';
+      expect(moderatorId).toContain('0');
     });
   });
 });

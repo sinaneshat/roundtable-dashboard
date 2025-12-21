@@ -22,8 +22,8 @@ import { StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import { getDbAsync } from '@/db';
+import * as tables from '@/db';
 import { CustomerCacheTags, getUserSubscriptionCacheTags } from '@/db/cache/cache-tags';
-import * as tables from '@/db/schema';
 import { hasBillingCycleAnchor, hasPeriodTimestamps, isObject, isStripePaymentMethod, safeParse } from '@/lib/utils/type-guards';
 
 /**

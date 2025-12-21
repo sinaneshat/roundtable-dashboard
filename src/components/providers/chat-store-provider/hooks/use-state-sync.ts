@@ -12,6 +12,7 @@ import type { MutableRefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 
 import { queryKeys } from '@/lib/data/query-keys';
+import { devLog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getEffectiveWebSearchEnabled } from '@/stores/chat';
 
@@ -54,18 +55,20 @@ export function useStateSync({
   // 1. AI SDK sets isExplicitlyStreaming=true (during continueFromParticipant)
   // 2. React renders all components with new state
   // 3. flow-state-machine's useMemo runs DURING render - reads stale store.isStreaming (false)
-  // 4. flow-state-machine calculates state as CREATING_SUMMARY
+  // 4. flow-state-machine calculates state as STREAMING_MODERATOR
   // 5. If we used useEffect: sync happens AFTER render - too late!
   //
   // With useLayoutEffect:
   // - Sync happens immediately after DOM mutations, BEFORE paint
   // - Other effects and useMemo calculations in same render cycle see updated value
-  // - Prevents summary from triggering while last participant is streaming
+  // - Prevents moderator from triggering while last participant is streaming
   //
   useLayoutEffect(() => {
     const currentState = store.getState();
 
     if (currentState.isStreaming !== chat.isStreaming) {
+      // Debug: Track streaming state transitions (debounced)
+      devLog.d('StateSync', { str: chat.isStreaming, pIdx: chat.currentParticipantIndex, rnd: currentState.streamingRoundNumber });
       currentState.setIsStreaming(chat.isStreaming);
     }
 
@@ -115,13 +118,12 @@ export function useStateSync({
     return startRoundRef.current();
   }, [queryClientRef, storeRef, startRoundRef]) as () => Promise<void>;
 
-  // Sync callbacks to store once on mount
+  // Sync callbacks to store - updates when callbacks change
   useEffect(() => {
     storeRef.current?.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
       chatSetMessages: setMessagesRef.current,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sendMessageWithQuotaInvalidation, startRoundWithQuotaInvalidation, setMessagesRef, storeRef]);
 }
