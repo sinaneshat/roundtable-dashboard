@@ -16,26 +16,22 @@
 import { z as zOpenAPI } from '@hono/zod-openapi';
 import { z } from 'zod';
 
+import type { SubscriptionTier } from '@/api/core/enums';
+import {
+  SUBSCRIPTION_TIERS,
+  SubscriptionTiers,
+} from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
 import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
 
+// Re-export for convenience (consumers can import from either location)
+export { SUBSCRIPTION_TIERS, type SubscriptionTier, SubscriptionTiers };
+
 // ============================================================================
-// SUBSCRIPTION TIER
+// SUBSCRIPTION TIER (imported from core enums - DO NOT RE-EXPORT)
 // ============================================================================
-
-export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
-
-export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
-
-export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
-
-export const SubscriptionTiers = {
-  FREE: 'free' as const,
-  STARTER: 'starter' as const,
-  PRO: 'pro' as const,
-  POWER: 'power' as const,
-} as const;
+// Import SubscriptionTier directly from '@/api/core/enums' for type safety
 
 /**
  * Human-readable tier names

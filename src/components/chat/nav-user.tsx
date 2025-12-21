@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
+import type { SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { ApiKeysModal } from '@/components/modals/api-keys-modal';

@@ -1,20 +1,5 @@
 'use client';
 
-/**
- * ChatView - Unified Chat Content Component
- *
- * Single source of truth for chat content rendering.
- * Used by both ChatOverviewScreen and ChatThreadScreen to ensure
- * consistent behavior, loading states, and round continuation flows.
- *
- * ARCHITECTURE:
- * - Reads all state from Zustand store (single source of truth)
- * - Handles message rendering via ThreadTimeline
- * - Manages moderator streaming and completion
- * - Provides unified input with toolbar and modals
- * - Consistent loading indicators and scroll behavior
- */
-
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -30,8 +15,7 @@ import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
-import { useModelsQuery } from '@/hooks/queries/models';
+import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
   useBoolean,
@@ -53,18 +37,13 @@ import {
 } from '@/stores/chat';
 
 export type ChatViewProps = {
-  /** Current user info for message display */
   user: {
     name: string;
     image: string | null;
   };
-  /** Thread slug for navigation/actions (optional for overview before thread exists) */
   slug?: string;
-  /** Screen mode - affects some behavior differences */
   mode: 'overview' | 'thread';
-  /** Callback when form is submitted (for overview: creates thread, for thread: sends message) */
   onSubmit: (e: React.FormEvent) => Promise<void>;
-  /** Chat attachments state from parent screen - ensures single source of truth */
   chatAttachments: UseChatAttachmentsReturn;
 };
 
@@ -77,24 +56,17 @@ export function ChatView({
 }: ChatViewProps) {
   const t = useTranslations('chat');
 
-  // Modal state
   const isModeModalOpen = useBoolean(false);
   const isModelModalOpen = useBoolean(false);
 
-  // ✅ SIMPLIFIED: Ref-based attachment click (no registration callback needed)
   const attachmentClickRef = useRef<(() => void) | null>(null);
   const handleAttachmentClick = useCallback(() => {
     attachmentClickRef.current?.();
   }, []);
 
-  // ============================================================================
-  // STORE STATE
-  // ============================================================================
-
   const messages = useChatStore(s => s.messages);
   const isStreaming = useChatStore(s => s.isStreaming);
   const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
-  // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
   const contextParticipants = useChatStore(s => s.participants);
   const preSearches = useChatStore(s => s.preSearches);
 
@@ -105,8 +77,6 @@ export function ChatView({
     })),
   );
 
-  // ✅ MODERATOR FLAG: Track moderator streaming state for input blocking
-  // Moderator message now renders via normal message flow (added to messages array)
   const isModeratorStreaming = useChatStore(s => s.isModeratorStreaming);
 
   const { streamingRoundNumber, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded, preSearchResumption, moderatorResumption } = useChatStore(
@@ -121,7 +91,6 @@ export function ChatView({
     })),
   );
 
-  // Form state
   const selectedMode = useChatStore(s => s.selectedMode);
   const selectedParticipants = useChatStore(s => s.selectedParticipants);
   const inputValue = useChatStore(s => s.inputValue);
@@ -133,36 +102,21 @@ export function ChatView({
   const setModelOrder = useChatStore(s => s.setModelOrder);
   const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
 
-  // ============================================================================
-  // DERIVED STATE
-  // ============================================================================
-
   const effectiveThreadId = thread?.id || createdThreadId || '';
-  // Store guarantees participants are sorted by priority
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
-
-  // ============================================================================
-  // QUERIES
-  // ============================================================================
 
   const { data: modelsData } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
 
-  // Changelog query (for any screen with valid threadId - needed for round 1+ on both screens)
   const { data: changelogResponse, isFetching: isChangelogFetching } = useThreadChangelogQuery(
     effectiveThreadId,
     Boolean(effectiveThreadId),
   );
 
-  // Feedback query (only for thread mode with valid threadId)
   const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(
     effectiveThreadId,
     mode === 'thread' && Boolean(effectiveThreadId),
   );
-
-  // ============================================================================
-  // MEMOIZED DATA
-  // ============================================================================
 
   const allEnabledModels = useMemo(
     () => modelsData?.data?.items || [],
@@ -197,15 +151,11 @@ export function ChatView({
     return filtered;
   }, [changelogResponse]);
 
-  // ✅ TEXT STREAMING: Compute completed round numbers from moderator messages
-  // Moderator messages have metadata.isModerator: true and appear inline in messages array
-  // Rounds with completed moderator messages should NEVER show pending cards
   const completedRoundNumbers = useMemo(() => {
     const completed = new Set<number>();
     messages.forEach((msg) => {
       if (isModeratorMessage(msg)) {
         const moderatorMeta = getModeratorMetadata(msg.metadata);
-        // Only mark round as complete if moderator has finished (has finishReason)
         if (moderatorMeta?.finishReason) {
           const roundNum = getRoundNumber(msg.metadata);
           if (roundNum !== null) {
@@ -217,17 +167,13 @@ export function ChatView({
     return completed;
   }, [messages]);
 
-  // Model ordering for modal - stable references for Motion Reorder
   const orderedModels = useOrderedModels({
     selectedParticipants,
     allEnabledModels,
     modelOrder,
   });
 
-  // File capability: Compute incompatible models based on attachments AND existing thread files
-  // Models without vision cannot process images/PDFs - disable them proactively
   const incompatibleModelIds = useMemo(() => {
-    // Check existing messages for vision-required files (images/PDFs from previous rounds)
     const existingVisionFiles = messages.some((msg) => {
       if (!msg.parts)
         return false;
@@ -238,54 +184,34 @@ export function ChatView({
       });
     });
 
-    // Check new attachments for vision-required files
     const newVisionFiles = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
 
-    // If no vision files anywhere, no models are incompatible
     if (!existingVisionFiles && !newVisionFiles) {
       return new Set<string>();
     }
 
-    // Build file list for capability check (we just need to know vision is required)
-    // Using a single placeholder since we already know vision is needed
     const files = [{ mimeType: 'image/png' }];
 
     return getIncompatibleModelIds(allEnabledModels, files);
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
-  // ✅ STALE CLOSURE FIX: Track latest incompatibleModelIds in ref for callbacks
   const incompatibleModelIdsRef = useRef(incompatibleModelIds);
   useEffect(() => {
     incompatibleModelIdsRef.current = incompatibleModelIds;
   }, [incompatibleModelIds]);
 
-  // Timeline with messages, changelog, and pre-searches
-  // ✅ TEXT STREAMING: Moderator messages (with isModerator: true metadata) appear in messages array
-  // and are rendered inline by ChatMessageList via ModelMessageCard
-  // ✅ RESUMPTION FIX: Include preSearches for timeline-level rendering
-  // This enables rendering pre-search cards even when user message
-  // hasn't been persisted yet (e.g., page refresh during web search phase)
   const timelineItems: TimelineItem[] = useThreadTimeline({
     messages,
     changelog,
     preSearches,
   });
 
-  // ============================================================================
-  // HOOKS
-  // ============================================================================
-
-  // ✅ NOTE: Model order initialization happens in ChatOverviewScreen only
-  // ChatView receives already-initialized modelOrder from store
-
-  // Feedback management
   const feedbackByRound = useChatStore(s => s.feedbackByRound);
   const pendingFeedback = useChatStore(s => s.pendingFeedback);
   const feedbackActions = useFeedbackActions({ threadId: effectiveThreadId });
 
-  // Load feedback from server
   const lastLoadedFeedbackRef = useRef<string>('');
   useEffect(() => {
     if (feedbackSuccess && feedbackData) {
@@ -298,28 +224,20 @@ export function ChatView({
     }
   }, [feedbackData, feedbackSuccess, feedbackActions]);
 
-  // Input container ref for scrolling behavior
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Thread actions (for both screens - manages changelog waiting flag)
   const threadActions = useThreadActions({
     slug: slug || '',
     isRoundInProgress: isStreaming || isModeratorStreaming,
     isChangelogFetching,
   });
 
-  // Auto-deselect incompatible models when vision files are detected
-  // For thread mode: always check
-  // For overview mode: only when there are existing messages (continuing conversation)
-  // Initial overview (no messages) is handled by ChatOverviewScreen's own effect
   useEffect(() => {
-    // Skip initial overview state - ChatOverviewScreen handles that
     if (mode === 'overview' && messages.length === 0)
       return;
     if (incompatibleModelIds.size === 0)
       return;
 
-    // Find selected participants that are now incompatible
     const incompatibleSelected = selectedParticipants.filter(
       p => incompatibleModelIds.has(p.modelId),
     );
@@ -327,12 +245,10 @@ export function ChatView({
     if (incompatibleSelected.length === 0)
       return;
 
-    // Get model names for toast message
     const incompatibleModelNames = incompatibleSelected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
-    // Remove incompatible participants and re-index priorities
     const compatibleParticipants = selectedParticipants
       .filter(p => !incompatibleModelIds.has(p.modelId))
       .map((p, index) => ({ ...p, priority: index }));
@@ -343,7 +259,6 @@ export function ChatView({
       setSelectedParticipants(compatibleParticipants);
     }
 
-    // Show toast notification
     if (incompatibleModelNames.length > 0) {
       const modelList = incompatibleModelNames.length <= 2
         ? incompatibleModelNames.join(' and ')
@@ -356,28 +271,17 @@ export function ChatView({
     }
   }, [mode, incompatibleModelIds, selectedParticipants, messages.length, threadActions, setSelectedParticipants, allEnabledModels, t]);
 
-  // Form actions
   const formActions = useChatFormActions();
 
-  // Loading state - needed before scroll hook
   const { showLoader } = useFlowLoading({ mode });
 
-  // Scroll management - minimal hook for tracking scroll position
-  // Initial scroll and virtualization handled by useVirtualizedTimeline
   const isStoreReady = mode === 'thread' ? (hasInitiallyLoaded && messages.length > 0) : true;
 
-  // ✅ TEXT STREAMING: Moderator messages now in messages array with isModerator: true metadata
-  // Rendered inline by ChatMessageList, no separate moderator tracking needed for scroll
   useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
 
-  // Input blocking - unified calculation for both screens
-  // Blocks input during streaming, thread creation, resumption, or when loading indicator is visible
-  // ✅ RESUMPTION FIX: Only block when resumption is ACTIVELY in progress
-  // Don't check currentResumptionPhase directly - it can be stale after round completes
-  // Only check actual resumption status states which are properly managed
   const isResumptionActive = (
     preSearchResumption?.status === MessageStatuses.STREAMING
     || preSearchResumption?.status === MessageStatuses.PENDING
@@ -394,15 +298,7 @@ export function ChatView({
     || isResumptionActive
     || formActions.isSubmitting;
 
-  // Mobile keyboard handling
   const keyboardOffset = useVisualViewportPosition();
-
-  // ✅ TEXT STREAMING: Moderator triggered by useModeratorTrigger hook after participants complete
-  // Moderator message rendered inline in ChatMessageList when it has isModerator: true metadata
-
-  // ============================================================================
-  // CALLBACKS
-  // ============================================================================
 
   const handleModeSelect = useCallback((newMode: ChatMode) => {
     if (mode === 'thread') {
@@ -422,7 +318,6 @@ export function ChatView({
   }, [mode, threadActions, formActions]);
 
   const handleModelReorder = useCallback((reordered: typeof orderedModels) => {
-    // Extract model IDs and deduplicate to prevent corruption
     const seen = new Set<string>();
     const newModelOrder = reordered
       .map(om => om.model.id)
@@ -435,15 +330,12 @@ export function ChatView({
 
     setModelOrder(newModelOrder);
 
-    // Recalculate participants from current state using new order
-    // This ensures we use fresh data instead of potentially stale references
     const reorderedParticipants = newModelOrder
       .map((modelId, visualIndex) => {
         const participant = selectedParticipants.find(p => p.modelId === modelId);
         return participant ? { ...participant, priority: visualIndex } : null;
       })
       .filter((p): p is NonNullable<typeof p> => p !== null)
-      // Re-index priorities to be sequential (0, 1, 2...) for selected models only
       .map((p, idx) => ({ ...p, priority: idx }));
 
     if (mode === 'thread') {
@@ -469,7 +361,6 @@ export function ChatView({
       });
       updatedParticipants = sortedByVisualOrder.map((p, index) => ({ ...p, priority: index }));
     } else {
-      // ✅ VISION COMPATIBILITY: Block selection if model is incompatible with uploaded files
       const latestIncompatible = incompatibleModelIdsRef.current;
       if (latestIncompatible.has(modelId)) {
         toastManager.warning(
@@ -479,7 +370,6 @@ export function ChatView({
         return;
       }
 
-      // ✅ FIX: Use modelId as unique participant ID (each model = one participant)
       const newParticipant = {
         id: modelId,
         modelId,
@@ -523,15 +413,12 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
-  // Preset selection - replaces all selected models with preset's models and preferences
   const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    // ✅ VISION COMPATIBILITY: Double-check filtering at execution time
     const latestIncompatible = incompatibleModelIdsRef.current;
     const compatibleModels = latestIncompatible.size > 0
       ? models.filter(m => !latestIncompatible.has(m.id))
       : models;
 
-    // Show warning if any models were filtered
     const filteredCount = models.length - compatibleModels.length;
     if (filteredCount > 0 && compatibleModels.length > 0) {
       toastManager.warning(
@@ -540,7 +427,6 @@ export function ChatView({
       );
     }
 
-    // If ALL models are incompatible, don't apply preset
     if (compatibleModels.length === 0) {
       toastManager.error(
         t('models.presetIncompatible'),
@@ -549,7 +435,6 @@ export function ChatView({
       return;
     }
 
-    // Convert models to participant configs
     const newParticipants = compatibleModels.map((model, index) => ({
       id: model.id,
       modelId: model.id,
@@ -557,18 +442,15 @@ export function ChatView({
       priority: index,
     }));
 
-    // Update store based on mode
     if (mode === 'thread') {
       threadActions.handleParticipantsChange(newParticipants);
     } else {
       setSelectedParticipants(newParticipants);
     }
 
-    // Update model order
     const modelIds = newParticipants.map(p => p.modelId);
     setModelOrder(modelIds);
 
-    // Apply preset mode if recommended
     if (preset.recommendedMode) {
       if (mode === 'thread') {
         threadActions.handleModeChange(preset.recommendedMode);
@@ -577,7 +459,6 @@ export function ChatView({
       }
     }
 
-    // Apply preset web search preference
     if (preset.recommendWebSearch !== undefined) {
       if (mode === 'thread') {
         threadActions.handleWebSearchToggle(preset.recommendWebSearch);
@@ -588,20 +469,11 @@ export function ChatView({
   }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder, t]);
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
-    // Allow removing all - validation shown in UI
     removeParticipant(participantId);
     if (mode === 'thread') {
       setHasPendingConfigChanges(true);
     }
   }, [removeParticipant, mode, setHasPendingConfigChanges]);
-
-  // ✅ TEXT STREAMING: Moderator triggered via useModeratorTrigger hook, not component rendering
-  // After streaming completes, messages refetched and moderator appears in array with isModerator: true
-  // ChatMessageList renders moderator inline using ModelMessageCard component
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
 
   return (
     <>
@@ -635,19 +507,13 @@ export function ChatView({
             />
           </div>
 
-          {/* Chat input - sticky at bottom */}
           <div
             ref={inputContainerRef}
             className="sticky z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6 relative"
             style={{ bottom: `${keyboardOffset + 16}px` }}
           >
             <div className="w-full max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
-              {/* Scroll to bottom button - positioned above input */}
               <ChatScrollButton variant="input" />
-              {/* ✅ AI SDK RESUME PATTERN: No onStop prop - streams always complete
-                  Per AI SDK docs, resume: true is incompatible with abort/stop.
-                  Streams continue in background via waitUntil() and can be resumed.
-                  ✅ HYDRATION FIX: Pass isHydrating to suppress "no models" error flash */}
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
@@ -682,13 +548,11 @@ export function ChatView({
                 )}
               />
             </div>
-            {/* Bottom fill */}
             <div className="-z-10 absolute inset-x-0 top-full h-4 bg-background pointer-events-none" />
           </div>
         </div>
       </UnifiedErrorBoundary>
 
-      {/* Modals */}
       <ConversationModeModal
         open={isModeModalOpen.value}
         onOpenChange={isModeModalOpen.setValue}

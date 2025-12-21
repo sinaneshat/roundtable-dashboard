@@ -12,13 +12,12 @@ import {
   isUIBillingInterval,
   StripeSubscriptionStatuses,
 } from '@/api/core/enums';
-import type { Product } from '@/api/routes/billing/schema';
+import type { Product, Subscription } from '@/api/routes/billing/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FreePricingCard } from '@/components/ui/free-pricing-card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Subscription } from '@/types/billing';
 
 type PricingContentProps = {
   products: Product[];
@@ -34,11 +33,6 @@ type PricingContentProps = {
   showSubscriptionBanner?: boolean;
 };
 
-/**
- * Shared Pricing Content Component
- *
- * Displays available subscription plans with pricing and management options.
- */
 export function PricingContent({
   products,
   subscriptions,
@@ -56,29 +50,24 @@ export function PricingContent({
   const router = useRouter();
   const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>(DEFAULT_UI_BILLING_INTERVAL);
 
-  // Get active subscription (excluding canceled or scheduled for cancellation)
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
-  // Check if user has ANY active subscription (excluding canceled or scheduled for cancellation)
   const hasAnyActiveSubscription = subscriptions.some(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
-  // Get subscription for a specific price (differentiates monthly vs annual, excluding canceled)
   const getSubscriptionForPrice = (priceId: string) => {
     return subscriptions.find(
       sub => sub.priceId === priceId && (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
     );
   };
 
-  // Check if user has active subscription for a specific price (excluding canceled)
   const hasActiveSubscription = (priceId: string): boolean => {
     return !!getSubscriptionForPrice(priceId);
   };
 
-  // Filter products by interval
   const getProductsForInterval = (interval: UIBillingInterval) => {
     return products
       .map((product) => {
@@ -88,13 +77,11 @@ export function PricingContent({
       .filter(product => product.prices && product.prices.length > 0);
   };
 
-  // ✅ BACKEND-COMPUTED: Get annual savings from product data (no frontend calculation)
   const getAnnualSavings = (productId: string): number => {
     const product = products.find(p => p.id === productId);
     return product?.annualSavingsPercent ?? 0;
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -106,7 +93,6 @@ export function PricingContent({
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -124,7 +110,6 @@ export function PricingContent({
   return (
     <div className="mx-auto px-3 sm:px-4 md:px-6">
       <div className="space-y-8">
-        {/* Active Subscription Banner */}
         {showSubscriptionBanner && activeSubscription && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -160,13 +145,11 @@ export function PricingContent({
           </motion.div>
         )}
 
-        {/* Pricing Content */}
         <Tabs
           value={selectedInterval}
           onValueChange={value => isUIBillingInterval(value) && setSelectedInterval(value)}
           className="space-y-8"
         >
-          {/* Billing Interval Toggle */}
           <div className="flex justify-center">
             <TabsList>
               <TabsTrigger value="month">
@@ -178,7 +161,6 @@ export function PricingContent({
             </TabsList>
           </div>
 
-          {/* Monthly Plans */}
           <TabsContent value="month" className="mt-0">
             <ProductGrid
               products={getProductsForInterval('month')}
@@ -197,7 +179,6 @@ export function PricingContent({
             />
           </TabsContent>
 
-          {/* Annual Plans */}
           <TabsContent value="year" className="mt-0">
             <ProductGrid
               products={getProductsForInterval('year')}
@@ -221,7 +202,6 @@ export function PricingContent({
   );
 }
 
-// Product Grid Component
 type ProductGridProps = {
   products: Product[];
   interval: UIBillingInterval;
@@ -267,7 +247,6 @@ function ProductGrid({
     );
   }
 
-  // Define the free tier product
   const freeTierProduct = {
     id: 'free-tier',
     name: t('plans.pricing.free.name'),
@@ -282,9 +261,7 @@ function ProductGrid({
 
   return (
     <div className="w-full">
-      {/* Responsive grid - up to 4 columns on large screens */}
       <div className="grid grid-cols-1 gap-6 w-full sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {/* Free Tier Card - Always First */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -294,7 +271,7 @@ function ProductGrid({
             name={freeTierProduct.name}
             description={freeTierProduct.description}
             price={{
-              amount: 0, // Free tier
+              amount: 0,
               currency: 'usd',
               interval,
             }}
@@ -303,20 +280,15 @@ function ProductGrid({
           />
         </motion.div>
 
-        {/* Paid Plans */}
         {products.map((product, index) => {
-          const price = product.prices?.[0]; // Get first price for this interval
+          const price = product.prices?.[0];
 
-          // Skip products without valid prices
           if (!price || !price.unitAmount) {
             return null;
           }
 
-          // Check subscription by specific price ID (differentiates monthly vs annual)
           const subscription = getSubscriptionForPrice(price.id);
           const hasSubscription = hasActiveSubscription(price.id);
-
-          // Adjust most popular logic: middle card of paid plans (index 1 of paid plans = index 2 overall with free tier)
           const isMostPopular = products.length === 3 && index === 1;
 
           return (
@@ -345,7 +317,7 @@ function ProductGrid({
                 onSubscribe={() => onSubscribe(price.id)}
                 onCancel={subscription ? () => onCancel(subscription.id) : undefined}
                 onManageBilling={hasSubscription ? onManageBilling : undefined}
-                delay={(index + 1) * 0.1} // Add 1 to account for free tier being first
+                delay={(index + 1) * 0.1}
                 annualSavingsPercent={interval === 'year' ? getAnnualSavings(product.id) : undefined}
               />
             </motion.div>

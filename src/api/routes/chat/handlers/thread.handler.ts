@@ -1038,8 +1038,6 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
   async (c) => {
     const { slug } = c.validated.params;
     const db = await getDbAsync();
-    // ✅ BACKWARDS COMPATIBLE SLUGS: Check both current slug AND previousSlug
-    // This ensures public links with the initial (non-AI) slug continue to work
     const thread = await db.query.chatThread.findFirst({
       where: or(
         eq(tables.chatThread.slug, slug),
@@ -1190,9 +1188,6 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     const { user } = c.auth();
     const { slug } = c.validated.params;
     const db = await getDbAsync();
-    // ✅ BACKWARDS COMPATIBLE SLUGS: Check both current slug AND previousSlug
-    // This ensures links with the initial (non-AI) slug continue to work
-    // after the AI-generated title creates a new slug
     const thread = await db.query.chatThread.findFirst({
       where: or(
         eq(tables.chatThread.slug, slug),

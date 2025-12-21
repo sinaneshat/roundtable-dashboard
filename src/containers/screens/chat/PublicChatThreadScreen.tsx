@@ -10,7 +10,7 @@ import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
-import { usePublicThreadQuery } from '@/hooks/queries/chat';
+import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { transformPreSearches } from '@/lib/utils/date-transforms';

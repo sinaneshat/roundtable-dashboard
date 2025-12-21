@@ -359,7 +359,7 @@ export const FILE_PREVIEW_TYPE_LABELS: Record<FilePreviewType, string> = {
 };
 
 // ============================================================================
-// FILE CATEGORY (Alias for FilePreviewType - backward compatibility)
+// FILE CATEGORY
 // ============================================================================
 
 export const FILE_CATEGORIES = ['image', 'document', 'text', 'code', 'other'] as const;

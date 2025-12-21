@@ -77,9 +77,29 @@ function calculateAnnualSavings(prices: Array<{ interval: BillingInterval; unitA
 }
 
 /**
+ * Serialize subscription dates to ISO strings for JSON response
+ * ✅ DATE SERIALIZATION: Schema expects string fields for dates
+ */
+function serializeSubscriptionDates<T extends {
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  canceledAt: Date | null;
+  trialStart: Date | null;
+  trialEnd: Date | null;
+}>(subscription: T) {
+  return {
+    ...subscription,
+    currentPeriodStart: subscription.currentPeriodStart.toISOString(),
+    currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+    canceledAt: subscription.canceledAt?.toISOString() ?? null,
+    trialStart: subscription.trialStart?.toISOString() ?? null,
+    trialEnd: subscription.trialEnd?.toISOString() ?? null,
+  };
+}
+
+/**
  * Fetch refreshed subscription with nested price data
  * Used after subscription updates to get the latest state
- * ✅ NO TRANSFORMS: Returns Drizzle relation data directly
  */
 async function fetchRefreshedSubscription(
   db: Awaited<ReturnType<typeof getDbAsync>>,
@@ -444,7 +464,6 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
       // ✅ CACHING ENABLED: Relational query with 2-minute TTL for user subscriptions
       // User-specific data with short cache to balance freshness and performance
       // Cache automatically invalidates when subscriptions, prices, or products are updated
-      // ✅ NO TRANSFORMS: Using Drizzle with() to automatically load price relation
       // @see https://orm.drizzle.team/docs/cache
 
       // Fetch user subscriptions with nested price data via Drizzle relations
@@ -457,7 +476,10 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
         },
       });
 
-      return Responses.collection(c, subscriptions);
+      // ✅ DATE SERIALIZATION: Use helper to convert Date objects to ISO strings
+      const serializedSubscriptions = subscriptions.map(serializeSubscriptionDates);
+
+      return Responses.collection(c, serializedSubscriptions);
     } catch {
       throw createError.internal('Failed to retrieve subscriptions', ErrorContextBuilders.database('select', 'stripeSubscription'));
     }
@@ -480,7 +502,6 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
       // ✅ CACHING ENABLED: Relational query with 2-minute TTL for single subscription
       // User-specific data with short cache to balance freshness and performance
       // Cache automatically invalidates when subscription, price, or product is updated
-      // ✅ NO TRANSFORMS: Using Drizzle with() to automatically load price relation
       // @see https://orm.drizzle.team/docs/cache
 
       // Fetch single subscription with nested price data via Drizzle relations
@@ -501,7 +522,8 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
         throw createError.unauthorized('You do not have access to this subscription', ErrorContextBuilders.authorization('subscription', id, user.id));
       }
 
-      return Responses.ok(c, { subscription });
+      // ✅ DATE SERIALIZATION: Use helper to convert Date objects to ISO strings
+      return Responses.ok(c, { subscription: serializeSubscriptionDates(subscription) });
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
@@ -710,10 +732,10 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       // Fetch updated subscription from database with nested price data
       const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
+      // ✅ DATE SERIALIZATION: Serialize subscription for JSON response
       // ✅ Include old and new price information for success page comparison
-      // This allows the frontend to show before/after plan details
       return Responses.ok(c, {
-        subscription: refreshedSubscription,
+        subscription: serializeSubscriptionDates(refreshedSubscription),
         message: 'Subscription updated successfully',
         changeDetails: {
           oldPrice: currentPrice,
@@ -792,12 +814,14 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       // Fetch updated subscription from database with nested price data
       const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
+      // Build message using Date object (before serialization)
       const message = immediately
         ? 'Subscription canceled immediately. You no longer have access.'
         : `Subscription will be canceled at the end of the current billing period (${refreshedSubscription.currentPeriodEnd.toLocaleDateString()}). You retain access until then.`;
 
+      // ✅ DATE SERIALIZATION: Serialize subscription for JSON response
       return Responses.ok(c, {
-        subscription: refreshedSubscription,
+        subscription: serializeSubscriptionDates(refreshedSubscription),
         message,
       });
     } catch (error) {

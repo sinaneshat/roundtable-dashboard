@@ -4,11 +4,10 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import type { MessageStatus } from '@/api/core/enums';
-import { MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
+import type { MessageStatus, SubscriptionTier } from '@/api/core/enums';
+import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
@@ -491,10 +490,7 @@ function getParticipantInfoForMessage({
     // 'unknown' is a placeholder during streaming - NOT a completion reason
     // Only 'stop', 'length', 'content-filter', 'tool-calls' indicate actual completion
     const finishReason = assistantMetadata?.finishReason;
-    const hasActuallyFinished = finishReason === 'stop'
-      || finishReason === 'length'
-      || finishReason === 'content-filter'
-      || finishReason === 'tool-calls';
+    const hasActuallyFinished = isCompletionFinishReason(finishReason);
     return {
       participantIndex: assistantMetadata?.participantIndex ?? currentParticipantIndex,
       modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
@@ -579,6 +575,10 @@ type ChatMessageListProps = {
    * Current round number for this message list instance.
    */
   roundNumber?: number;
+  /**
+   * Demo mode - forces all models to be accessible (hides tier badges).
+   */
+  demoMode?: boolean;
 };
 export const ChatMessageList = memo(
   ({
@@ -600,6 +600,7 @@ export const ChatMessageList = memo(
     completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
     isModeratorStreaming = false,
     roundNumber: _roundNumber,
+    demoMode = false,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const tParticipant = useTranslations('chat.participant');
@@ -607,8 +608,9 @@ export const ChatMessageList = memo(
     const { findModel } = useModelLookup();
     const { data: usageData } = useUsageStatsQuery();
     // ✅ TYPE-SAFE: Use Zod validation instead of type casting
+    // In demo mode, use 'power' tier to make all models accessible
     const tierResult = subscriptionTierSchema.safeParse(usageData?.data?.subscription?.tier);
-    const userTier: SubscriptionTier = tierResult.success ? tierResult.data : 'free';
+    const userTier: SubscriptionTier = demoMode ? 'power' : (tierResult.success ? tierResult.data : 'free');
     const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
@@ -845,10 +847,7 @@ export const ChatMessageList = memo(
           // ✅ BUG FIX: Check finishReason for ACTUAL completion, not just presence
           // 'unknown' is a placeholder during streaming - NOT a completion reason
           const finishReason = moderatorMeta?.finishReason;
-          const hasActuallyFinished = finishReason === 'stop'
-            || finishReason === 'length'
-            || finishReason === 'content-filter'
-            || finishReason === 'tool-calls';
+          const hasActuallyFinished = isCompletionFinishReason(finishReason);
           return {
             message,
             index,
@@ -871,10 +870,7 @@ export const ChatMessageList = memo(
         // 2. finishReason that indicates ACTUAL completion (not 'unknown' placeholder)
         // 'unknown' is set during streaming before actual completion
         const finishReason = assistantMetadata?.finishReason;
-        const hasActualFinishReason = finishReason === 'stop'
-          || finishReason === 'length'
-          || finishReason === 'content-filter'
-          || finishReason === 'tool-calls';
+        const hasActualFinishReason = isCompletionFinishReason(finishReason);
         const isComplete = !!(assistantMetadata?.model && hasActualFinishReason);
 
         // ✅ For completed messages, return frozen metadata immediately without dependencies
@@ -1343,17 +1339,14 @@ export const ChatMessageList = memo(
                           const finishReason = assistantMeta?.finishReason;
 
                           // Signal 1: Standard finish reasons
-                          const hasStandardFinishReason = finishReason === 'stop'
-                            || finishReason === 'length'
-                            || finishReason === 'content-filter'
-                            || finishReason === 'tool-calls';
+                          const hasStandardFinishReason = isCompletionFinishReason(finishReason);
 
                           // Signal 2: Backend marked success with tokens generated
                           const backendMarkedSuccess = assistantMeta?.hasError === false
                             && (assistantMeta?.usage?.completionTokens ?? 0) > 0;
 
                           // Signal 3: NOT explicitly failed
-                          const isExplicitError = finishReason === 'failed' || assistantMeta?.hasError === true;
+                          const isExplicitError = finishReason === FinishReasons.FAILED || assistantMeta?.hasError === true;
 
                           // Signal 4: Participant streaming stopped (moderator started or all done)
                           // If isStreaming is false, all participants are definitely complete
@@ -1482,10 +1475,15 @@ export const ChatMessageList = memo(
                   // - Moderator shows "observing" text
                   // This creates a consistent visual where all participants are visible from the start.
                   const isStreamingRound = roundNumber === _streamingRoundNumber;
-                  const hasModeratorMessage = !!moderatorMessage;
+
+                  // ✅ DEMO FIX: Only show moderator in this section when streaming is active
+                  // When streaming ends, moderator renders via normal messageGroups path
+                  // Without this check, moderator renders BOTH here (before participants) AND
+                  // in messageGroups (after participants), causing wrong order + duplication
+                  const isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound;
                   const shouldShowModerator = isActuallyLatestRound
                     && !isRoundComplete
-                    && (isModeratorStreaming || moderatorHasContent || hasModeratorMessage || isStreamingRound);
+                    && isAnyStreamingActive;
 
                   if (!shouldShowModerator) {
                     return null;

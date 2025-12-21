@@ -32,6 +32,8 @@ export const BillingIntervals = {
 
 export const UI_BILLING_INTERVALS = ['month', 'year'] as const;
 
+export const DEFAULT_UI_BILLING_INTERVAL: UIBillingInterval = 'month';
+
 export const UIBillingIntervalSchema = z.enum(UI_BILLING_INTERVALS).openapi({
   description: 'UI billing cycle interval (monthly/annual)',
   example: 'month',
@@ -44,11 +46,6 @@ export const UIBillingIntervals = {
   YEAR: 'year' as const,
 } as const;
 
-export const DEFAULT_UI_BILLING_INTERVAL: UIBillingInterval = 'month';
-
-/**
- * Type guard to validate UIBillingInterval from string
- */
 export function isUIBillingInterval(value: string): value is UIBillingInterval {
   return UI_BILLING_INTERVALS.includes(value as UIBillingInterval);
 }
@@ -106,6 +103,28 @@ export const StripeSubscriptionStatuses = {
 } as const;
 
 // ============================================================================
+// SUBSCRIPTION TIER
+// ============================================================================
+
+export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
+
+export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
+
+export const SubscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS).openapi({
+  description: 'Subscription tier for user account',
+  example: 'pro',
+});
+
+export type SubscriptionTier = z.infer<typeof SubscriptionTierSchema>;
+
+export const SubscriptionTiers = {
+  FREE: 'free' as const,
+  STARTER: 'starter' as const,
+  PRO: 'pro' as const,
+  POWER: 'power' as const,
+} as const;
+
+// ============================================================================
 // USAGE STATUS
 // ============================================================================
 
@@ -117,3 +136,9 @@ export const UsageStatusSchema = z.enum(USAGE_STATUSES).openapi({
 });
 
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;
+
+export const UsageStatuses = {
+  DEFAULT: 'default' as const,
+  WARNING: 'warning' as const,
+  CRITICAL: 'critical' as const,
+} as const;

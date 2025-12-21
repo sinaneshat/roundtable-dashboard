@@ -44,6 +44,7 @@ function PreSearchStreamComponent({
   onStreamStart,
 }: PreSearchStreamProps) {
   const t = useTranslations('chat.preSearch');
+  const tErrors = useTranslations('errors');
   const is409Conflict = useBoolean(false);
   // ✅ AUTO-RETRY UI: Track when retrying after stream failure
   const isAutoRetrying = useBoolean(false);
@@ -507,7 +508,7 @@ function PreSearchStreamComponent({
         // Max retries exceeded - show error
         retryCountRef.current = 0; // Reset for next attempt
         isAutoRetrying.onFalse(); // Clear retrying state
-        setError(err instanceof Error ? err : new Error('Stream failed'));
+        setError(err instanceof Error ? err : new Error(tErrors('streamFailed')));
       }
     };
 
@@ -706,7 +707,7 @@ function PreSearchStreamComponent({
           <span>
             Failed to stream pre-search:
             {' '}
-            {error.message || 'Unknown error'}
+            {error.message || tErrors('unknownError')}
           </span>
         </div>
       </div>

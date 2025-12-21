@@ -2,19 +2,42 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
 
 /**
- * Chat scroll management hook - Minimal version
+ * Chat scroll management hook - Scroll position tracking and manual scroll control
  *
- * With window-based virtualization (useWindowVirtualizer), most scroll logic
- * is handled by TanStack Virtual. This hook provides:
+ * SCROLL BEHAVIOR GROUND RULES:
+ * ============================================================================================
  *
+ * WHEN SCROLL HAPPENS:
+ * - User manual action ONLY: ChatScrollButton click triggers scrollToBottom()
+ *
+ * WHEN SCROLL DOES NOT HAPPEN (NEVER AUTO-SCROLL):
+ * - Initial load: NO auto-scroll - user uses ChatScrollButton if needed
+ * - During streaming: NO auto-scroll - users control scroll position during AI responses
+ * - During message updates: NO auto-scroll - prevents interrupting user reading
+ * - During content changes: NO auto-scroll - users stay where they scrolled to
+ *
+ * HOW USERS CONTROL SCROLL:
+ * - ChatScrollButton: Manual scroll to bottom when user wants to jump to latest content
+ * - Natural scrolling: Users can scroll freely without auto-scroll interference
+ * - Sticky detection: isAtBottomRef tracks if user is at bottom (for scroll button visibility)
+ *
+ * SEPARATION OF CONCERNS:
+ * - useChatScroll (this hook): Tracks scroll position, provides manual scrollToBottom function
+ * - TanStack Virtual (useWindowVirtualizer): Handles virtualization and efficient rendering
+ * - ChatScrollButton: UI control for manual scroll to bottom
+ *
+ * ============================================================================================
+ *
+ * This hook provides:
  * 1. isAtBottomRef - Track if user is at bottom (for scroll button visibility)
- * 2. scrollToBottom - Simple window scroll function
- * 3. Auto-scroll on new user messages (submit flow)
+ * 2. scrollToBottom - Simple window scroll function (manual trigger only)
+ * 3. resetScrollState - Reset scroll tracking state
  *
  * What this hook does NOT do:
- * - Initial scroll to bottom (handled by useVirtualizedTimeline)
- * - Streaming auto-scroll (disabled - user controls scroll during streaming)
- * - Container-based scrolling (we use window scrolling)
+ * - ANY auto-scroll (DISABLED - user has full control)
+ * - Streaming auto-scroll (DISABLED - user controls scroll during streaming)
+ * - Container-based scrolling (we use window-based scrolling)
+ * - Auto-scroll on message updates (DISABLED - prevents interrupting user)
  */
 
 type UseChatScrollParams = {

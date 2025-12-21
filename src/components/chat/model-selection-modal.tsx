@@ -7,8 +7,8 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import type { SubscriptionTier } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { createRoleSystemPrompt } from '@/api/services/prompts.service';
 import { Button } from '@/components/ui/button';
 import {

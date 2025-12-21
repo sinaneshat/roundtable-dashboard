@@ -1,7 +1,9 @@
 'use client';
+
 import { AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { ErrorCategories, ErrorTypes } from '@/api/core/enums';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useBoolean } from '@/hooks/utils';
@@ -11,6 +13,7 @@ type MessageErrorDetailsProps = {
   metadata: DbMessageMetadata | null | undefined;
   className?: string;
 };
+
 export function MessageErrorDetails({
   metadata,
   className,
@@ -18,50 +21,48 @@ export function MessageErrorDetails({
   const t = useTranslations('chat.errors');
   const showDetails = useBoolean(false);
 
-  // ✅ STRICT TYPING: Only assistant messages have error state
-  // User messages don't have error fields, so check type first
   if (!metadata || !isAssistantMessageMetadata(metadata)) {
     return null;
   }
 
-  // Now metadata is AssistantMessageMetadata with all required + optional fields
-  // No type casting needed - all fields are properly typed
   const hasError = metadata.hasError || metadata.errorMessage;
   if (!hasError) {
     return null;
   }
+
   const providerMessage = metadata.providerMessage ? String(metadata.providerMessage) : null;
-  const errorMessage = providerMessage
-    || String(metadata.errorMessage || 'An unexpected error occurred');
+  const errorMessage = providerMessage || String(metadata.errorMessage || 'An unexpected error occurred');
   const errorType = String(metadata.errorType || 'unknown');
   const model = String(metadata.model || t('unknownModel'));
   const participantIndex = metadata.participantIndex;
   const aborted = metadata.aborted || false;
+
   const getErrorTitle = () => {
     if (aborted)
       return t('generationCancelled');
-    if (errorType === 'empty_response')
+    if (errorType === ErrorTypes.EMPTY_RESPONSE || errorType === ErrorCategories.EMPTY_RESPONSE)
       return t('emptyResponse');
-    if (errorType === 'rate_limit' || errorType === 'provider_rate_limit')
+    if (errorType === ErrorTypes.RATE_LIMIT || errorType === ErrorCategories.RATE_LIMIT || errorType === ErrorCategories.PROVIDER_RATE_LIMIT)
       return t('rateLimitReached');
-    if (errorType === 'context_length')
+    if (errorType === ErrorTypes.CONTEXT_LENGTH)
       return t('contextTooLong');
-    if (errorType === 'api_error')
+    if (errorType === ErrorTypes.API_ERROR)
       return t('apiError');
-    if (errorType === 'network' || errorType === 'provider_network')
+    if (errorType === ErrorTypes.NETWORK || errorType === ErrorCategories.NETWORK || errorType === ErrorCategories.PROVIDER_NETWORK)
       return t('networkError');
-    if (errorType === 'timeout')
+    if (errorType === ErrorTypes.TIMEOUT)
       return t('requestTimeout');
-    if (errorType === 'validation')
+    if (errorType === ErrorCategories.VALIDATION)
       return t('validationError');
-    if (errorType === 'model_not_found')
+    if (errorType === ErrorCategories.MODEL_NOT_FOUND)
       return t('modelNotFound');
-    if (errorType === 'model_content_filter')
+    if (errorType === ErrorCategories.MODEL_CONTENT_FILTER || errorType === ErrorCategories.CONTENT_FILTER)
       return t('contentFiltered');
-    if (errorType === 'authentication')
+    if (errorType === ErrorCategories.AUTHENTICATION)
       return t('authenticationError');
     return t('generationFailed');
   };
+
   return (
     <div className={`text-sm text-destructive/90 ${className || ''}`}>
       <div className="flex items-start gap-2">
@@ -125,7 +126,7 @@ export function MessageErrorDetails({
           )}
           {!aborted && (
             <div className="mt-2 pt-2 border-t border-destructive/20 text-xs">
-              {errorType === 'rate_limit' && (
+              {(errorType === ErrorTypes.RATE_LIMIT || errorType === ErrorCategories.RATE_LIMIT) && (
                 <div>
                   <p className="font-medium mb-1">{t('whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
@@ -136,16 +137,16 @@ export function MessageErrorDetails({
                   </ul>
                 </div>
               )}
-              {errorType === 'context_length' && (
+              {errorType === ErrorTypes.CONTEXT_LENGTH && (
                 <p>{t('shortenMessage')}</p>
               )}
-              {(errorType === 'network' || errorType === 'provider_network') && (
+              {(errorType === ErrorTypes.NETWORK || errorType === ErrorCategories.NETWORK || errorType === ErrorCategories.PROVIDER_NETWORK) && (
                 <p>{t('checkConnection')}</p>
               )}
-              {errorType === 'timeout' && (
+              {errorType === ErrorTypes.TIMEOUT && (
                 <p>{t('requestTookTooLong')}</p>
               )}
-              {errorType === 'validation' && (
+              {errorType === ErrorCategories.VALIDATION && (
                 <div>
                   <p className="font-medium mb-1">{t('whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
@@ -154,10 +155,10 @@ export function MessageErrorDetails({
                   </ul>
                 </div>
               )}
-              {errorType === 'model_not_found' && (
+              {errorType === ErrorCategories.MODEL_NOT_FOUND && (
                 <p>{t('modelNotFoundHint')}</p>
               )}
-              {(errorType === 'model_content_filter' || errorType === 'content_filter') && (
+              {(errorType === ErrorCategories.MODEL_CONTENT_FILTER || errorType === ErrorCategories.CONTENT_FILTER) && (
                 <div>
                   <p className="font-medium mb-1">{t('whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
@@ -165,7 +166,7 @@ export function MessageErrorDetails({
                   </ul>
                 </div>
               )}
-              {errorType === 'empty_response' && (
+              {(errorType === ErrorTypes.EMPTY_RESPONSE || errorType === ErrorCategories.EMPTY_RESPONSE) && (
                 <div>
                   <p className="font-medium mb-1">{t('whatToDo')}</p>
                   <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
@@ -175,7 +176,7 @@ export function MessageErrorDetails({
                   </ul>
                 </div>
               )}
-              {(errorType === 'model_unavailable' || errorType === 'api_error' || errorType === 'unknown') && (
+              {(errorType === ErrorTypes.MODEL_UNAVAILABLE || errorType === ErrorTypes.API_ERROR || errorType === ErrorTypes.UNKNOWN || errorType === ErrorCategories.UNKNOWN) && (
                 <p>{t('useRegenerateButton')}</p>
               )}
             </div>

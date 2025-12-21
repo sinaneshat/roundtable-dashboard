@@ -3,13 +3,6 @@ import { TypeValidationError, validateUIMessages } from 'ai';
 
 import type { ChatMessage } from '@/db/validation';
 
-// ============================================================================
-// NOTE: Dead code removed
-// - buildStreamErrorMessage → structureAIProviderError (error-handling.ts:528-706)
-// - extractOpenRouterError → structureAIProviderError (error-handling.ts:528-706)
-// - categorizeError → categorizeErrorMessage (error-schemas.ts:205)
-// ============================================================================
-
 /**
  * Convert database chat messages to UI Message format
  *
@@ -104,8 +97,3 @@ export async function chatMessagesToUIMessages(
     );
   }
 }
-
-// ============================================================================
-// NOTE: verifyThreadOwnership has been moved to /src/api/common/permissions.ts
-// Import from there instead: import { verifyThreadOwnership } from '@/api/common/permissions'
-// ============================================================================

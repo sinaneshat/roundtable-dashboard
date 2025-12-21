@@ -11,11 +11,9 @@ import { z } from '@hono/zod-openapi';
 // PLACEHOLDER PREFIX (Prompt Template Computation Modes)
 // ============================================================================
 
-export const PLACEHOLDER_PREFIXES = ['FROM_CONTEXT', 'COMPUTE', 'EXTRACT', 'OPTIONAL'] as const;
+export const DEFAULT_PLACEHOLDER_PREFIX = 'COMPUTE' as const;
 
-export const DEFAULT_PLACEHOLDER_PREFIX: PlaceholderPrefix = 'COMPUTE';
-
-export const PlaceholderPrefixSchema = z.enum(PLACEHOLDER_PREFIXES).openapi({
+export const PlaceholderPrefixSchema = z.enum(['FROM_CONTEXT', 'COMPUTE', 'EXTRACT', 'OPTIONAL']).openapi({
   description: 'Type of computation for AI prompt placeholder',
   example: 'COMPUTE',
 });

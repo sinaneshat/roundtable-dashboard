@@ -282,7 +282,3 @@ export type CompleteMultipartUploadRequest = z.infer<typeof CompleteMultipartUpl
 export type RequestUploadTicket = z.infer<typeof RequestUploadTicketSchema>;
 export type UploadTicketPayload = z.infer<typeof UploadTicketPayloadSchema>;
 export type UploadWithTicketQuery = z.infer<typeof UploadWithTicketQuerySchema>;
-
-// NOTE: ChatAttachmentStatus type is exported from @/api/core/enums
-// Import directly from @/api/core/enums for single source of truth
-// Example: import { type ChatAttachmentStatus } from '@/api/core/enums';

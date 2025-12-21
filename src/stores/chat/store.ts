@@ -122,6 +122,7 @@ import type {
   OperationsActions,
   PreSearchSlice,
   ScreenSlice,
+  StreamResumptionPrefillUpdate,
   StreamResumptionSlice,
   ThreadSlice,
   TrackingSlice,
@@ -289,8 +290,6 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
     set((draft) => {
       draft.preSearches.forEach((ps) => {
         if (ps.roundNumber === roundNumber) {
-          // ✅ PATTERN: Build partial PreSearchDataPayload with defaults for missing fields
-          // Partial data has minimal result structure; full data comes on DONE event
           const existingSummary = ps.searchData?.summary ?? '';
           ps.searchData = {
             queries: partialData.queries,
@@ -313,7 +312,6 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
             totalResults: partialData.totalResults ?? partialData.results.length,
             totalTime: partialData.totalTime ?? 0,
           };
-          // Do NOT change status - keep STREAMING until DONE event
         }
       });
     }, false, 'preSearch/updatePartialPreSearchData'),
@@ -371,40 +369,29 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   setThread: (thread: ChatThread | null) =>
     set({
       thread,
-      // ✅ FIX: Sync form state when thread is set
-      // Form state is the sole source of truth for web search enabled
       ...(thread ? { enableWebSearch: thread.enableWebSearch } : {}),
     }, false, 'thread/setThread'),
   setParticipants: (participants: ChatParticipant[]) =>
     set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {
-    // Use get() to avoid Draft type issues with function callbacks
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
 
-    // ✅ CONTENT-AWARE MERGE: Prevent stale updates from overwriting completed content
-    // This fixes race conditions where concurrent updates can lose moderator/complete content
     const mergedMessages = newMessages.map((newMsg) => {
       const existingMsg = prevMessages.find(m => m.id === newMsg.id);
       if (!existingMsg)
         return newMsg;
 
-      // Check if existing message has content
       const existingHasContent = existingMsg.parts?.some(
         p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
       );
-      // Check if new message has content
       const newHasContent = newMsg.parts?.some(
         p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
       );
 
-      // ✅ FIX: Check finishReason to detect complete vs partial messages
-      // Using type guards to avoid unsafe casts
       const existingIsComplete = isObject(existingMsg.metadata) && 'finishReason' in existingMsg.metadata;
       const newIsComplete = isObject(newMsg.metadata) && 'finishReason' in newMsg.metadata;
 
-      // If existing has content but new doesn't, preserve existing content
-      // This prevents empty placeholder updates from overwriting streamed content
       if (existingHasContent && !newHasContent) {
         return {
           ...newMsg,
@@ -412,13 +399,11 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
         };
       }
 
-      // ✅ FIX: If existing is complete but new is partial, preserve existing
-      // This prevents stale partial updates from overwriting completed messages
       if (existingIsComplete && !newIsComplete && existingHasContent) {
         return {
           ...newMsg,
           parts: existingMsg.parts,
-          metadata: existingMsg.metadata, // Preserve finishReason too
+          metadata: existingMsg.metadata,
         };
       }
 
@@ -443,7 +428,6 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     set((state) => {
       if (!state.isStreaming)
         return state;
-      // Force stop streaming - called by Provider when timeout detected
       return { isStreaming: false };
     }, false, 'thread/checkStuckStreams'),
 });
@@ -461,11 +445,10 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
   setIsModeratorStreaming: (value: boolean) =>
     set({ isModeratorStreaming: value }, false, 'flags/setIsModeratorStreaming'),
-  // Complete moderator stream - clears ALL moderator-related flags
   completeModeratorStream: () =>
     set({
       isModeratorStreaming: false,
-      isWaitingForChangelog: false, // ✅ FIX: Clear changelog flag with moderator completion
+      isWaitingForChangelog: false,
     }, false, 'flags/completeModeratorStream'),
   setIsWaitingForChangelog: (value: boolean) =>
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
@@ -497,7 +480,6 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
 /**
  * Tracking Slice - Deduplication tracking
  * Tracks which rounds have had moderators/pre-searches created to prevent duplicates
- * Note: Moderator now renders inline via messages array with isModerator: true metadata
  */
 const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
   ...TRACKING_DEFAULTS,
@@ -510,18 +492,15 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     }, false, 'tracking/markModeratorCreated'),
   hasModeratorBeenCreated: roundNumber =>
     get().createdModeratorRounds.has(roundNumber),
-  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasModeratorBeenCreated and markModeratorCreated
-  // Returns true if successfully marked (was not already created), false if already created
   tryMarkModeratorCreated: (roundNumber) => {
     const state = get();
     if (state.createdModeratorRounds.has(roundNumber)) {
-      return false; // Already created by another component
+      return false;
     }
-    // Add to set atomically - JavaScript is single-threaded so this is safe
     set((draft) => {
       draft.createdModeratorRounds.add(roundNumber);
     }, false, 'tracking/tryMarkModeratorCreated');
-    return true; // Successfully marked
+    return true;
   },
   clearModeratorTracking: roundNumber =>
     set((draft) => {
@@ -533,18 +512,15 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     }, false, 'tracking/markPreSearchTriggered'),
   hasPreSearchBeenTriggered: roundNumber =>
     get().triggeredPreSearchRounds.has(roundNumber),
-  // 🚨 ATOMIC CHECK-AND-MARK: Prevents race condition between hasPreSearchBeenTriggered and markPreSearchTriggered
-  // Returns true if successfully marked (was not already triggered), false if already triggered
   tryMarkPreSearchTriggered: (roundNumber) => {
     const state = get();
     if (state.triggeredPreSearchRounds.has(roundNumber)) {
-      return false; // Already triggered by another component
+      return false;
     }
-    // Add to set atomically - JavaScript is single-threaded so this is safe
     set((draft) => {
       draft.triggeredPreSearchRounds.add(roundNumber);
     }, false, 'tracking/tryMarkPreSearchTriggered');
-    return true; // Successfully marked
+    return true;
   },
   clearPreSearchTracking: roundNumber =>
     set((draft) => {
@@ -554,8 +530,6 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     set((draft) => {
       draft.triggeredPreSearchRounds = new Set<number>();
     }, false, 'tracking/clearAllPreSearchTracking'),
-  // ✅ MODERATOR STREAM TRACKING: Two-level deduplication for moderator streams
-  // Note: Moderator now renders inline via messages array with isModerator: true metadata
   markModeratorStreamTriggered: (moderatorMessageId, roundNumber) =>
     set((draft) => {
       draft.triggeredModeratorIds.add(moderatorMessageId);
@@ -567,10 +541,7 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
   },
   clearModeratorStreamTracking: roundNumber =>
     set((draft) => {
-      // Clear round tracking
       draft.triggeredModeratorRounds.delete(roundNumber);
-      // Clear moderator IDs that contain this round number
-      // Moderator IDs often contain round number in their format
       for (const id of draft.triggeredModeratorIds) {
         if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
           draft.triggeredModeratorIds.delete(id);
@@ -692,7 +663,6 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     set({
       streamResumptionState: null,
       nextParticipantToTrigger: hasMoreParticipants ? nextIndex : null,
-      // Set waitingToStartStreaming if there are more participants to trigger
       waitingToStartStreaming: hasMoreParticipants,
     }, false, 'streamResumption/handleResumedStreamComplete');
   },
@@ -749,6 +719,17 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       preSearchResumption: null,
     }, false, 'streamResumption/transitionToParticipantsPhase'),
 
+  // ✅ PHASE TRANSITION FIX: Transition from participants to moderator phase
+  // Called when all participants are complete but moderator hasn't started
+  // This handles the case where server prefilled 'participants' phase but all are done
+  transitionToModeratorPhase: () =>
+    set({
+      currentResumptionPhase: RoundPhases.MODERATOR,
+      // ✅ FIX: Also set isModeratorStreaming to trigger the moderator trigger hook
+      // The hook requires BOTH currentResumptionPhase='moderator' AND isModeratorStreaming=true
+      isModeratorStreaming: true,
+    }, false, 'streamResumption/transitionToModeratorPhase'),
+
   // ✅ RESUMABLE STREAMS: Pre-fill store with server-side KV state
   // Called during SSR to set up state BEFORE AI SDK resume runs
   // ✅ UNIFIED PHASES: Now handles pre-search, participants, and moderator phases
@@ -759,7 +740,8 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     }
 
     // Build the state update based on current phase
-    const stateUpdate: Record<string, unknown> = {
+    // ✅ TYPE-SAFE: Uses explicit type instead of Record<string, unknown>
+    const stateUpdate: StreamResumptionPrefillUpdate = {
       streamResumptionPrefilled: true,
       prefilledForThreadId: threadId,
       currentResumptionPhase: serverState.currentPhase,
@@ -778,7 +760,6 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
             preSearchId: serverState.preSearch.preSearchId,
           };
         }
-        // Set waitingToStartStreaming to enable provider effect to handle pre-search resumption
         stateUpdate.waitingToStartStreaming = true;
         break;
 
@@ -799,8 +780,10 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
             moderatorMessageId: serverState.moderator.moderatorMessageId,
           };
         }
-        // Set waitingToStartStreaming to enable provider effect to handle moderator resumption
         stateUpdate.waitingToStartStreaming = true;
+        // ✅ FIX: Set isModeratorStreaming so moderator trigger hook activates
+        // The moderator trigger requires BOTH currentResumptionPhase='moderator' AND isModeratorStreaming=true
+        stateUpdate.isModeratorStreaming = true;
         break;
     }
 
@@ -838,7 +821,6 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
       return Promise.resolve();
     }
 
-    // Create a promise that will be resolved when completeAnimation is called
     return new Promise<void>((resolve) => {
       set((current) => {
         const newResolvers = new Map(current.animationResolvers);
@@ -970,7 +952,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // Apply the navigation reset state
     set({
       ...THREAD_NAVIGATION_RESET_STATE,
-      // Create fresh Set instances
       createdModeratorRounds: new Set<number>(),
       triggeredPreSearchRounds: new Set<number>(),
       triggeredModeratorRounds: new Set<number>(),
@@ -996,7 +977,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // This prevents race condition where provider effect waits for screenMode='overview'
       // but useScreenInitialization hasn't run yet to set it.
       screenMode: ScreenModes.OVERVIEW,
-      // Create fresh Set instances (same as resetToNewChat)
       createdModeratorRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
       triggeredModeratorRounds: new Set(),
@@ -1067,7 +1047,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // ✅ CONSOLIDATED: All thread initialization + reset state in one place
     // Eliminates duplicate useEffects in ChatThreadScreen
     set({
-      // Reset flags (previously in ChatThreadScreen useEffect via resetThreadState)
       waitingToStartStreaming: false,
       isRegenerating: false,
       isModeratorStreaming: false,
@@ -1136,22 +1115,18 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           && (m.metadata as { isOptimistic?: boolean })?.isOptimistic === true,
       );
 
-      // Reset streaming state
       draft.waitingToStartStreaming = false;
       draft.isStreaming = false;
       draft.currentParticipantIndex = 0;
       draft.error = null;
 
-      // Reset regeneration state
       draft.isRegenerating = false;
       draft.regeneratingRoundNumber = null;
 
-      // Reset stream resumption
       draft.streamResumptionState = null;
       draft.resumptionAttempts = new Set<string>();
       draft.nextParticipantToTrigger = null;
 
-      // Set message state
       draft.isModeratorStreaming = false;
       draft.isWaitingForChangelog = true;
       draft.pendingMessage = message;
@@ -1166,7 +1141,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         ? draft.streamingRoundNumber
         : (isOnThreadScreen ? nextRoundNumber : null);
 
-      // Add optimistic user message if needed (prevent duplicates)
       if (isOnThreadScreen && !hasExistingOptimisticMessage && !hasOptimisticForTargetRound) {
         draft.messages.push({
           id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
@@ -1289,7 +1263,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // This prevents race condition where provider effect waits for screenMode='overview'
       // but useScreenInitialization hasn't run yet to set it
       screenMode: ScreenModes.OVERVIEW,
-      // ✅ CRITICAL: Reset tracking Sets (need new instances)
       createdModeratorRounds: new Set(),
       triggeredPreSearchRounds: new Set(),
       triggeredModeratorRounds: new Set(),

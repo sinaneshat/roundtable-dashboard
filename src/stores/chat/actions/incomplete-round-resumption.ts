@@ -49,7 +49,6 @@ import {
   getModeratorMessageForRound,
   getParticipantCompletionStatus,
   isMessageComplete,
-  logParticipantCompletionStatus,
 } from '../utils/participant-completion-gate';
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
 import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/pre-search-execution';
@@ -195,6 +194,8 @@ export function useIncompleteRoundResumption(
     setIsCreatingModerator: s.setIsModeratorStreaming,
     // ✅ PHASE TRANSITION FIX: Clear pre-search state when transitioning
     transitionToParticipantsPhase: s.transitionToParticipantsPhase,
+    // ✅ FIX: Add moderator phase transition for P2M resumption
+    transitionToModeratorPhase: s.transitionToModeratorPhase,
   })));
 
   // ============================================================================
@@ -1202,7 +1203,6 @@ export function useIncompleteRoundResumption(
     if (!completionStatus.allComplete) {
       // Participants still streaming - don't trigger moderator yet
       // The effect will re-run when messages update with completed participants
-      logParticipantCompletionStatus(completionStatus, 'incomplete-round-resumption:moderator');
       return;
     }
 

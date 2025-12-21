@@ -22,7 +22,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AccordionEntrance } from '@/components/ui/motion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
-import { safeExtractDomain } from '@/lib/utils';
+import { safeExtractDomain } from '@/lib/utils/web-search-utils';
 
 /**
  * Determine current streaming stage based on available data
@@ -46,6 +46,7 @@ export function WebSearchDisplay({
   autoParameters: _autoParameters,
 }: WebSearchDisplayExtendedProps) {
   const t = useTranslations('chat.tools.webSearch');
+  const tSteps = useTranslations('chat.preSearch.steps');
   const [isOpen, setIsOpen] = useState(true);
 
   // Show loading state while streaming
@@ -65,17 +66,17 @@ export function WebSearchDisplay({
             <ChainOfThoughtContent>
               <ChainOfThoughtStep
                 icon={Search}
-                label="Query"
+                label={tSteps('query')}
                 status={currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               />
               <ChainOfThoughtStep
                 icon={Globe}
-                label="Searching the web"
+                label={tSteps('searchingTheWeb')}
                 status={currentStage === WebSearchStreamingStages.SEARCH ? ChainOfThoughtStepStatuses.ACTIVE : currentStage === WebSearchStreamingStages.QUERY ? ChainOfThoughtStepStatuses.PENDING : ChainOfThoughtStepStatuses.COMPLETE}
               />
               <ChainOfThoughtStep
                 icon={Search}
-                label="Synthesizing answer"
+                label={tSteps('synthesizingAnswer')}
                 status={currentStage === WebSearchStreamingStages.SYNTHESIZE ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.PENDING}
               />
               <div className="space-y-2 mt-2">
@@ -144,7 +145,7 @@ export function WebSearchDisplay({
             {hasImages && (
               <ChainOfThoughtStep
                 icon={Globe}
-                label="Found images"
+                label={tSteps('foundImages')}
                 status={ChainOfThoughtStepStatuses.COMPLETE}
               >
                 <WebSearchImageGallery results={successfulResults} />
@@ -155,7 +156,7 @@ export function WebSearchDisplay({
             {(answer || isStreaming) && (
               <ChainOfThoughtStep
                 icon={Search}
-                label="Answer"
+                label={tSteps('answer')}
                 status={isStreaming ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               >
                 <div className="p-4 rounded-lg bg-muted/10 border border-border/30">

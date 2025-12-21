@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- Performance test file requires console for metrics */
 /**
  * Placeholder Timing & Transitions Tests
  *
@@ -12,10 +13,10 @@
  */
 
 import type { UIMessage } from 'ai';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
-import { createTestUserMessage, createTestAssistantMessage, createTestModeratorMessage } from '@/lib/testing/helpers';
+import { createTestUserMessage } from '@/lib/testing/helpers';
 
 import { createChatStore } from '../store';
 
@@ -71,11 +72,13 @@ function trackActionCall(tracker: UpdateTracker, actionName: string): void {
 }
 
 function getUpdatesPerSecond(tracker: UpdateTracker): number {
-  if (tracker.timestamps.length < 2) return 0;
+  if (tracker.timestamps.length < 2)
+    return 0;
   const first = tracker.timestamps[0]!;
   const last = tracker.timestamps[tracker.timestamps.length - 1]!;
   const durationSeconds = (last - first) / 1000;
-  if (durationSeconds === 0) return tracker.count;
+  if (durationSeconds === 0)
+    return tracker.count;
   return tracker.count / durationSeconds;
 }
 
@@ -169,7 +172,6 @@ describe('placeholder Timing After Submission', () => {
 
     const stateAfterSubmission = store.getState();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:SUBMIT] State after setStreamingRoundNumber:', JSON.stringify({
       streamingRoundNumber: stateAfterSubmission.streamingRoundNumber,
       isStreaming: stateAfterSubmission.isStreaming,
@@ -185,8 +187,8 @@ describe('placeholder Timing After Submission', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:SUBMIT] Total updates:', tracker.count);
+
     console.log('[TEST:SUBMIT] Changes:', JSON.stringify(tracker.changes));
   });
 
@@ -216,8 +218,8 @@ describe('placeholder Timing After Submission', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:SETUP] Total setup updates:', tracker.count);
+
     console.log('[TEST:SETUP] Changes:', JSON.stringify(tracker.changes));
 
     // Should have minimal updates for setup
@@ -253,7 +255,7 @@ describe('full Conversation Round Simulation', () => {
     });
 
     // --- PHASE 1: SUBMISSION ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 1: SUBMISSION ===');
 
     const userMessage = createTestUserMessage({
@@ -268,11 +270,11 @@ describe('full Conversation Round Simulation', () => {
     store.getState().setCurrentParticipantIndex(0);
 
     const updatesAfterSubmission = tracker.count;
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] Updates after submission:', updatesAfterSubmission);
 
     // --- PHASE 2: PARTICIPANT 0 STREAMING ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 2: PARTICIPANT 0 STREAMING ===');
 
     const p0Chunks = ['The ', 'meaning ', 'of ', 'life ', 'is...'];
@@ -282,11 +284,11 @@ describe('full Conversation Round Simulation', () => {
     }
 
     const updatesAfterP0Streaming = tracker.count - updatesAfterSubmission;
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] Updates during P0 streaming:', updatesAfterP0Streaming);
 
     // --- PHASE 3: PARTICIPANT 0 COMPLETE, TRANSITION TO PARTICIPANT 1 ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 3: P0 COMPLETE, TRANSITION TO P1 ===');
 
     const p0Final = createStreamingMessage(0, 0, 'The meaning of life is to find purpose.', FinishReasons.STOP);
@@ -298,11 +300,11 @@ describe('full Conversation Round Simulation', () => {
     store.getState().setMessages([userMessage, p0Final]);
 
     const updatesForP0ToP1Transition = tracker.count - updatesBeforeTransition;
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] Updates for P0→P1 transition:', updatesForP0ToP1Transition);
 
     // --- PHASE 4: PARTICIPANT 1 STREAMING ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 4: PARTICIPANT 1 STREAMING ===');
 
     const p1Chunks = ['I ', 'think ', 'it\'s ', 'about ', 'happiness.'];
@@ -312,11 +314,11 @@ describe('full Conversation Round Simulation', () => {
     }
 
     const updatesAfterP1Streaming = tracker.count - updatesBeforeTransition - updatesForP0ToP1Transition;
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] Updates during P1 streaming:', updatesAfterP1Streaming);
 
     // --- PHASE 5: PARTICIPANT 1 COMPLETE, TRANSITION TO PARTICIPANT 2 ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 5: P1 COMPLETE, TRANSITION TO P2 ===');
 
     const p1Final = createStreamingMessage(1, 0, 'I think it\'s about happiness.', FinishReasons.STOP);
@@ -327,11 +329,11 @@ describe('full Conversation Round Simulation', () => {
     store.getState().setMessages([userMessage, p0Final, p1Final]);
 
     const updatesForP1ToP2Transition = tracker.count - updatesBeforeP1P2Transition;
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] Updates for P1→P2 transition:', updatesForP1ToP2Transition);
 
     // --- PHASE 6: PARTICIPANT 2 STREAMING ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 6: PARTICIPANT 2 STREAMING ===');
 
     const p2Chunks = ['Love ', 'and ', 'connection.'];
@@ -341,7 +343,7 @@ describe('full Conversation Round Simulation', () => {
     }
 
     // --- PHASE 7: ALL PARTICIPANTS COMPLETE, TRANSITION TO MODERATOR ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 7: ALL PARTICIPANTS COMPLETE, TRANSITION TO MODERATOR ===');
 
     const p2Final = createStreamingMessage(2, 0, 'Love and connection.', FinishReasons.STOP);
@@ -354,7 +356,7 @@ describe('full Conversation Round Simulation', () => {
     store.getState().setMessages([userMessage, p0Final, p1Final, p2Final]);
 
     const updatesForModeratorTransition = tracker.count - updatesBeforeModeratorTransition;
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] Updates for participants→moderator transition:', updatesForModeratorTransition);
 
     // CRITICAL: This transition should be smooth with minimal updates
@@ -362,7 +364,7 @@ describe('full Conversation Round Simulation', () => {
     expect(updatesForModeratorTransition).toBeLessThanOrEqual(5);
 
     // --- PHASE 8: MODERATOR STREAMING ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 8: MODERATOR STREAMING ===');
 
     const moderatorChunks = ['All ', 'participants ', 'agree: ', 'purpose, ', 'happiness, ', 'love.'];
@@ -375,7 +377,7 @@ describe('full Conversation Round Simulation', () => {
     }
 
     // --- PHASE 9: MODERATOR COMPLETE, ROUND DONE ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === PHASE 9: MODERATOR COMPLETE, ROUND DONE ===');
 
     const moderatorFinal = createModeratorStreamingMessage(
@@ -391,9 +393,11 @@ describe('full Conversation Round Simulation', () => {
     unsubscribe();
 
     // --- SUMMARY ---
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:ROUND] === SUMMARY ===');
+
     console.log('[TEST:ROUND] Total updates for complete round:', tracker.count);
+
     console.log('[TEST:ROUND] Updates per second:', getUpdatesPerSecond(tracker).toFixed(2));
 
     // Verify final state
@@ -415,7 +419,7 @@ describe('full Conversation Round Simulation', () => {
       const nextState = store.getState();
       if (prevState.currentParticipantIndex !== nextState.currentParticipantIndex) {
         transitionUpdates.push(Date.now());
-        // eslint-disable-next-line no-console
+
         console.log('[TEST:TRANS] Participant transition:', {
           from: prevState.currentParticipantIndex,
           to: nextState.currentParticipantIndex,
@@ -443,12 +447,11 @@ describe('full Conversation Round Simulation', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:TRANS] Total participant transitions:', transitionUpdates.length);
 
     // Only 3 actual transitions (1, 2, 3) since 0→0 is skipped by store optimization
     // This is GOOD - it means the store doesn't trigger unnecessary updates
-    expect(transitionUpdates.length).toBe(3);
+    expect(transitionUpdates).toHaveLength(3);
   });
 });
 
@@ -493,7 +496,6 @@ describe('flashing Prevention During Transitions', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:CHURN] Message array updates:', messageArrayReferences.length);
 
     // Each setMessages creates a new array (expected)
@@ -544,20 +546,25 @@ describe('flashing Prevention During Transitions', () => {
     unsubscribe();
 
     // Verify message order is always correct (user, p0, p1)
-    for (const snapshot of messageOrderSnapshots) {
-      // eslint-disable-next-line no-console
-      console.log('[TEST:ORDER] Message IDs:', snapshot);
+    const snapshotsWithUser = messageOrderSnapshots.filter(s => s.includes('user_r0'));
+    const snapshotsWithBothParticipants = messageOrderSnapshots.filter(
+      s => s.includes('thread_r0_p0') && s.includes('thread_r0_p1'),
+    );
 
-      // User message should always be first if present
-      if (snapshot.includes('user_r0')) {
-        expect(snapshot.indexOf('user_r0')).toBe(0);
-      }
+    // User message should always be first when present
+    const userOrderViolations = snapshotsWithUser.filter((snapshot) => {
+      const userIndex = snapshot.indexOf('user_r0');
+      return userIndex !== 0;
+    });
+    expect(userOrderViolations).toHaveLength(0);
 
-      // P0 should come before P1 when both are present
-      if (snapshot.includes('thread_r0_p0') && snapshot.includes('thread_r0_p1')) {
-        expect(snapshot.indexOf('thread_r0_p0')).toBeLessThan(snapshot.indexOf('thread_r0_p1'));
-      }
-    }
+    // P0 should come before P1 when both are present
+    const p0p1OrderViolations = snapshotsWithBothParticipants.filter((snapshot) => {
+      const p0Index = snapshot.indexOf('thread_r0_p0');
+      const p1Index = snapshot.indexOf('thread_r0_p1');
+      return p0Index >= p1Index;
+    });
+    expect(p0p1OrderViolations).toHaveLength(0);
   });
 
   it('should detect status transitions that might cause flashing', () => {
@@ -580,7 +587,7 @@ describe('flashing Prevention During Transitions', () => {
               from: prevStatus,
               to: currStatus,
             });
-            // eslint-disable-next-line no-console
+
             console.log('[TEST:STATUS] Transition:', { id: curr.id, from: prevStatus, to: currStatus });
           }
         }
@@ -610,7 +617,6 @@ describe('flashing Prevention During Transitions', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:STATUS] Total status transitions:', statusTransitions.length);
 
     // Each message should have a clean transition: UNKNOWN → STOP
@@ -650,7 +656,6 @@ describe('moderator Placeholder Timing', () => {
 
     const state = store.getState();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:MOD-PLACEHOLDER] State after setStreamingRoundNumber:', {
       streamingRoundNumber: state.streamingRoundNumber,
       isStreaming: state.isStreaming,
@@ -692,7 +697,6 @@ describe('moderator Placeholder Timing', () => {
 
     const updatesBeforeTransition = tracker.count;
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:MOD-TRANS] State before transition:', {
       isStreaming: store.getState().isStreaming,
       isModeratorStreaming: store.getState().isModeratorStreaming,
@@ -704,11 +708,11 @@ describe('moderator Placeholder Timing', () => {
 
     const updatesForTransition = tracker.count - updatesBeforeTransition;
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:MOD-TRANS] State after transition:', {
       isStreaming: store.getState().isStreaming,
       isModeratorStreaming: store.getState().isModeratorStreaming,
     });
+
     console.log('[TEST:MOD-TRANS] Updates for transition:', updatesForTransition);
 
     unsubscribe();
@@ -754,7 +758,6 @@ describe('moderator Placeholder Timing', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:MOD-CHURN] Message count changes:', messageCountChanges);
 
     // Message count should only increase when adding new messages, not fluctuate
@@ -763,13 +766,15 @@ describe('moderator Placeholder Timing', () => {
     for (let i = 1; i < messageCountChanges.length; i++) {
       const prev = messageCountChanges[i - 1]!;
       const curr = messageCountChanges[i]!;
-      if (curr > prev) increases++;
-      if (curr < prev) decreases++;
+      if (curr > prev)
+        increases++;
+      if (curr < prev)
+        decreases++;
     }
 
     // Should have no decreases (no message removal churn)
     expect(decreases).toBe(0);
-    // eslint-disable-next-line no-console
+
     console.log('[TEST:MOD-CHURN] Increases:', increases, 'Decreases:', decreases);
   });
 });
@@ -816,7 +821,6 @@ describe('action Call Frequency', () => {
       store.getState().setMessages([userMessage, p0]);
     }
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:ACTION-FREQ] setMessages calls for 20 chunks:', setMessagesCount);
 
     // Should be exactly 20 calls (one per chunk)
@@ -832,7 +836,7 @@ describe('action Call Frequency', () => {
     store.setState({
       setIsStreaming: (isStreaming) => {
         setIsStreamingCount++;
-        // eslint-disable-next-line no-console
+
         console.log('[TEST:ACTION-FREQ] setIsStreaming called with:', isStreaming);
         originalSetIsStreaming(isStreaming);
       },
@@ -850,7 +854,6 @@ describe('action Call Frequency', () => {
 
     store.getState().setIsStreaming(false);
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:ACTION-FREQ] setIsStreaming calls during round:', setIsStreamingCount);
 
     // Should only be called once (false at end)
@@ -883,8 +886,8 @@ describe('action Call Frequency', () => {
     store.getState().setCurrentParticipantIndex(1);
     store.getState().setCurrentParticipantIndex(2);
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:ACTION-FREQ] setCurrentParticipantIndex calls:', setCurrentParticipantIndexCount);
+
     console.log('[TEST:ACTION-FREQ] Index sequence:', indexCalls);
 
     // Should be exactly 2 (1, 2)
@@ -984,10 +987,12 @@ describe('performance Regression Detection', () => {
     const endTime = Date.now();
     const duration = endTime - startTime;
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:PERF] === PERFORMANCE SUMMARY ===');
+
     console.log('[TEST:PERF] Total updates:', updateCount);
+
     console.log('[TEST:PERF] Duration:', duration, 'ms');
+
     console.log('[TEST:PERF] Updates per ms:', (updateCount / duration).toFixed(2));
 
     // Performance bounds
@@ -1014,11 +1019,26 @@ describe('performance Regression Detection', () => {
     const spySetIsModeratorStreaming = store.getState().setIsModeratorStreaming;
 
     store.setState({
-      setMessages: (m) => { metrics.setMessagesCount++; spySetMessages(m); },
-      setIsStreaming: (v) => { metrics.setIsStreamingCount++; spySetIsStreaming(v); },
-      setCurrentParticipantIndex: (v) => { metrics.setCurrentParticipantIndexCount++; spySetCurrentParticipantIndex(v); },
-      setStreamingRoundNumber: (v) => { metrics.setStreamingRoundNumberCount++; spySetStreamingRoundNumber(v); },
-      setIsModeratorStreaming: (v) => { metrics.setIsModeratorStreamingCount++; spySetIsModeratorStreaming(v); },
+      setMessages: (m) => {
+        metrics.setMessagesCount++;
+        spySetMessages(m);
+      },
+      setIsStreaming: (v) => {
+        metrics.setIsStreamingCount++;
+        spySetIsStreaming(v);
+      },
+      setCurrentParticipantIndex: (v) => {
+        metrics.setCurrentParticipantIndexCount++;
+        spySetCurrentParticipantIndex(v);
+      },
+      setStreamingRoundNumber: (v) => {
+        metrics.setStreamingRoundNumberCount++;
+        spySetStreamingRoundNumber(v);
+      },
+      setIsModeratorStreaming: (v) => {
+        metrics.setIsModeratorStreamingCount++;
+        spySetIsModeratorStreaming(v);
+      },
     });
 
     const unsubscribe = store.subscribe(() => {
@@ -1066,13 +1086,18 @@ describe('performance Regression Detection', () => {
 
     unsubscribe();
 
-    // eslint-disable-next-line no-console
     console.log('[TEST:BASELINE] === BASELINE METRICS ===');
+
     console.log('[TEST:BASELINE] setMessages calls:', metrics.setMessagesCount);
+
     console.log('[TEST:BASELINE] setIsStreaming calls:', metrics.setIsStreamingCount);
+
     console.log('[TEST:BASELINE] setCurrentParticipantIndex calls:', metrics.setCurrentParticipantIndexCount);
+
     console.log('[TEST:BASELINE] setStreamingRoundNumber calls:', metrics.setStreamingRoundNumberCount);
+
     console.log('[TEST:BASELINE] setIsModeratorStreaming calls:', metrics.setIsModeratorStreamingCount);
+
     console.log('[TEST:BASELINE] Total subscriber notifications:', metrics.totalSubscriberNotifications);
 
     // Expected baseline:

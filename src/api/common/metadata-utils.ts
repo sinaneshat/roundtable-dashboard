@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import type { SubscriptionTier } from '@/api/core/enums';
 import { subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 /**

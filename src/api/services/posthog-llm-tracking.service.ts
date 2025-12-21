@@ -139,7 +139,7 @@ export type LLMTrackingOptions = {
     function: {
       name: string;
       description?: string;
-      parameters?: unknown;
+      parameters?: Record<string, unknown>;
     };
   }>;
 
@@ -224,7 +224,7 @@ type LLMGenerationProperties = {
   $ai_request_url?: string; // Full URL of the request
 
   // Tool tracking
-  $ai_tools?: Array<{ type: string; function: { name: string; description?: string; parameters?: unknown } }>; // ✅ Available tools
+  $ai_tools?: Array<{ type: string; function: { name: string; description?: string; parameters?: Record<string, unknown> } }>; // ✅ Available tools
   $ai_tools_count?: number;
   $ai_tool_calls?: Array<{ name: string; arguments: string }>;
   $ai_tool_calls_count?: number;
@@ -237,8 +237,38 @@ type LLMGenerationProperties = {
   // Trace metadata
   $ai_span_name?: string;
 
-  // Custom properties
-  [key: string]: unknown;
+  // =====================================================================
+  // APPLICATION-SPECIFIC PROPERTIES (Roundtable Context)
+  // =====================================================================
+  thread_id?: string;
+  round_number?: number;
+  participant_id?: string;
+  participant_index?: number;
+  participant_role?: string | null;
+  model_name?: string;
+  conversation_mode?: string;
+  is_regeneration?: boolean;
+  subscription_tier?: string;
+  finish_reason?: string;
+  response_length_chars?: number;
+  response_length_words?: number;
+  latency_ms?: number;
+  tokens_per_second?: number;
+  total_tokens?: number;
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_tokens_cumulative?: number;
+  is_multi_step?: boolean;
+  has_reasoning?: boolean;
+  reasoning_tokens?: number;
+  cost_per_token?: number;
+  total_cost_usd?: number;
+  cost_per_second?: number;
+  cache_hit_tokens?: number;
+  cache_hit_rate?: number;
+  has_cache_hit?: boolean;
+  uses_dynamic_pricing?: boolean;
+  response_id?: string;
 };
 
 // ============================================================================

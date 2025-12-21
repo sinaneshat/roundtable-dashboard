@@ -1,6 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import { MessageStatuses } from '@/api/core/enums';
@@ -35,6 +36,8 @@ export function UnifiedLoadingIndicator({
   loadingDetails,
   preSearches = EMPTY_PRESEARCHES,
 }: UnifiedLoadingIndicatorProps) {
+  const t = useTranslations('chat.loading');
+
   // Check for active pre-search
   const hasActivePreSearch = useMemo(() => {
     return preSearches.some(
@@ -45,21 +48,21 @@ export function UnifiedLoadingIndicator({
   // Simple text based on current state
   const loadingText = useMemo(() => {
     if (loadingDetails.isCreatingThread) {
-      return 'Creating conversation';
+      return t('creatingConversation');
     }
     if (loadingDetails.isNavigating) {
-      return 'Opening conversation';
+      return t('openingConversation');
     }
     if (hasActivePreSearch) {
-      return 'Searching';
+      return t('searching');
     }
     // Show "Observing" only when moderator is streaming (and not participants)
     if (loadingDetails.isStreamingModerator && !loadingDetails.isStreamingParticipants) {
-      return 'Observing';
+      return t('observing');
     }
     // Default for streaming participants
-    return 'Thinking';
-  }, [loadingDetails, hasActivePreSearch]);
+    return t('thinking');
+  }, [loadingDetails, hasActivePreSearch, t]);
 
   // Determine if we should show the indicator
   const shouldShow = showLoader || hasActivePreSearch;

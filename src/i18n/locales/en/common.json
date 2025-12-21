@@ -447,6 +447,19 @@
         "stopRecording": "Stop recording"
       }
     },
+    "attachments": {
+      "defaultName": "Attachment",
+      "loadingPreview": "Loading preview...",
+      "previewUnavailable": "Preview unavailable",
+      "defaultFileType": "File"
+    },
+    "loading": {
+      "creatingConversation": "Creating conversation",
+      "openingConversation": "Opening conversation",
+      "searching": "Searching",
+      "thinking": "Thinking",
+      "observing": "Observing"
+    },
     "preSearch": {
       "title": "Web Research",
       "searching": "Searching",
@@ -462,6 +475,11 @@
       },
       "steps": {
         "understanding": "Understanding query",
+        "query": "Query",
+        "searchingTheWeb": "Searching the web",
+        "synthesizingAnswer": "Synthesizing answer",
+        "foundImages": "Found images",
+        "answer": "Answer",
         "searching": "Searching web sources",
         "searchComplete": "Web sources found",
         "searchingDesc": "Finding relevant sources...",
@@ -948,7 +966,9 @@
   "errorDetailsCopied": "ErrorDetailsCopied",
   "errorDetailsCopyFailed": "ErrorDetailsCopyFailed",
   "errors": {
-    "generic": "Generic"
+    "generic": "Generic",
+    "streamFailed": "Stream failed",
+    "unknownError": "Unknown error"
   },
   "forms": {
     "loading": "Loading",

@@ -24,7 +24,6 @@ import type { PendingAttachment } from '@/hooks/utils';
 import {
   useAutoResizeTextarea,
   useDragDrop,
-  useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -188,10 +187,6 @@ export const ChatInput = memo(({
     minHeight,
     maxHeight,
   });
-
-  // ✅ AUTO-SCROLL DISABLED: No forced scrolling on mobile keyboard focus
-  // User controls scroll position via manual scroll-to-bottom button
-  useKeyboardAwareScroll(textareaRef, { enabled: false });
 
   // Speech recognition - simple pattern: base text + hook's accumulated transcripts
   const baseTextRef = useRef('');

@@ -109,13 +109,11 @@ export const ChangelogTypes = {
 // CHANGELOG CHANGE TYPE (Thread changelog discriminator)
 // ============================================================================
 
-export const CHANGELOG_CHANGE_TYPES = [
+export const ChangelogChangeTypeSchema = z.enum([
   'participant',
   'participant_role',
   'mode_change',
-] as const;
-
-export const ChangelogChangeTypeSchema = z.enum(CHANGELOG_CHANGE_TYPES).openapi({
+]).openapi({
   description: 'Type of thread changelog change',
   example: 'participant',
 });
@@ -132,9 +130,7 @@ export const ChangelogChangeTypes = {
 // SCREEN MODE
 // ============================================================================
 
-export const SCREEN_MODES = ['overview', 'thread', 'public'] as const;
-
-export const ScreenModeSchema = z.enum(SCREEN_MODES).openapi({
+export const ScreenModeSchema = z.enum(['overview', 'thread', 'public']).openapi({
   description: 'Chat interface screen mode',
   example: 'thread',
 });
@@ -145,4 +141,24 @@ export const ScreenModes = {
   OVERVIEW: 'overview' as const,
   THREAD: 'thread' as const,
   PUBLIC: 'public' as const,
+} as const;
+
+// ============================================================================
+// PARTICIPANT COMPARISON MODE
+// ============================================================================
+
+export const PARTICIPANT_COMPARISON_MODES = ['modelIds', 'strict'] as const;
+
+export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 'strict';
+
+export const ParticipantComparisonModeSchema = z.enum(PARTICIPANT_COMPARISON_MODES).openapi({
+  description: 'Strategy for comparing participant configurations',
+  example: 'strict',
+});
+
+export type ParticipantComparisonMode = z.infer<typeof ParticipantComparisonModeSchema>;
+
+export const ParticipantComparisonModes = {
+  MODEL_IDS: 'modelIds' as const,
+  STRICT: 'strict' as const,
 } as const;

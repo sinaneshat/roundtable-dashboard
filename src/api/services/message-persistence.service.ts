@@ -11,26 +11,22 @@
  *
  * Note: Moderators are saved as chatMessage entries with metadata.isModerator: true
  * by the moderator handler, not this service. This service only persists participant messages.
- *
- * @see /src/api/types/citations.ts for citation type definitions
  */
 
 import { eq } from 'drizzle-orm';
 import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
-import type { z } from 'zod';
 
 import {
   MessagePartTypes,
   MessageRoles,
 } from '@/api/core/enums';
-import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { incrementMessageUsage } from '@/api/services/usage-tracking.service';
 import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { MessagePartSchema, StreamingFinishResult } from '@/lib/schemas/message-schemas';
+import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import {
   hasCitations,
   parseCitations,
@@ -39,16 +35,12 @@ import {
 import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
 import { isObject } from '@/lib/utils/type-guards';
 
-// Type inference from schema
-type MessagePart = z.infer<typeof MessagePartSchema>;
-
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 /**
  * Parameters for saving AI message to database
- * ✅ TYPE-SAFE: Uses StreamingFinishResult schema instead of inline type
  */
 export type SaveMessageParams = {
   messageId: string;
@@ -60,15 +52,11 @@ export type SaveMessageParams = {
   roundNumber: number;
   text: string;
   reasoningDeltas: string[];
-  /** ✅ SCHEMA-BASED: Uses StreamingFinishResult from @/lib/schemas/message-messages */
   finishResult: StreamingFinishResult;
   userId: string;
   db: Awaited<ReturnType<typeof getDbAsync>>;
-  /** Citation source map for resolving [source_id] markers in AI response */
   citationSourceMap?: CitationSourceMap;
-  /** Available sources (files/context available to AI, for "Sources" UI even without inline citations) */
   availableSources?: AvailableSource[];
-  /** Reasoning duration in seconds (for "Thought for X seconds" display on page refresh) */
   reasoningDuration?: number;
 };
 
@@ -85,22 +73,15 @@ export type SaveMessageParams = {
  * 3. finishResult.reasoning as array (Claude extended thinking, AI SDK v5)
  * 4. finishResult.reasoningText (Claude 4 models)
  * 5. providerMetadata reasoning fields
- *
- * ✅ AI SDK v5 FIX: Handle array format for Claude models with extended thinking
- * Claude models return reasoning as an array of parts: { type: 'thinking' | 'redacted', text: string }[]
- * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#reasoning
  */
 function extractReasoning(
   reasoningDeltas: string[],
   finishResult: SaveMessageParams['finishResult'],
 ): string | null {
-  // Priority 1: Use accumulated reasoning deltas from stream chunks
-  // This captures reasoning from extractReasoningMiddleware (DeepSeek, models with <think> tags)
   if (reasoningDeltas.length > 0) {
     return reasoningDeltas.join('');
   }
 
-  // Priority 2: Extract reasoning from finishResult directly (string format)
   if (
     typeof finishResult.reasoning === 'string'
     && finishResult.reasoning.trim()
@@ -108,9 +89,6 @@ function extractReasoning(
     return finishResult.reasoning.trim();
   }
 
-  // Priority 3: Extract reasoning from finishResult as array (Claude extended thinking, AI SDK v5)
-  // Claude models return: { type: 'thinking' | 'redacted', text: string }[]
-  // Other models may return: { text: string }[]
   if (
     Array.isArray(finishResult.reasoning)
     && finishResult.reasoning.length > 0
@@ -118,13 +96,11 @@ function extractReasoning(
     const reasoningTexts: string[] = [];
     for (const part of finishResult.reasoning) {
       if (part && typeof part === 'object') {
-        // Handle ReasoningPart with text property
         if (
           'text' in part
           && typeof part.text === 'string'
           && part.text.trim()
         ) {
-          // Skip redacted reasoning parts (Claude can redact sensitive thinking)
           if ('type' in part && part.type === 'redacted') {
             continue;
           }
@@ -137,9 +113,6 @@ function extractReasoning(
     }
   }
 
-  // Priority 4: Extract from reasoningText (Claude 4 models via AI SDK)
-  // Claude 4 with interleaved thinking returns reasoningText as a separate property
-  // ✅ TYPE-SAFE: reasoningText is now part of StreamingFinishResult schema
   if (
     typeof finishResult.reasoningText === 'string'
     && finishResult.reasoningText.trim()
@@ -147,18 +120,15 @@ function extractReasoning(
     return finishResult.reasoningText.trim();
   }
 
-  // Priority 5: Extract from providerMetadata
   const metadata = finishResult.providerMetadata;
   if (!metadata || typeof metadata !== 'object') {
     return null;
   }
 
-  // ✅ TYPE-SAFE: Use type guard from @/lib/utils
   if (!isObject(metadata)) {
     return null;
   }
 
-  // Helper to safely navigate nested paths
   const getNested = (obj: unknown, path: string[]): unknown => {
     let current = obj;
     for (const key of path) {
@@ -170,9 +140,8 @@ function extractReasoning(
     return current;
   };
 
-  // Check all possible reasoning field locations
   const fields = [
-    getNested(metadata, ['openai', 'reasoning']), // OpenAI o1/o3
+    getNested(metadata, ['openai', 'reasoning']),
     metadata.reasoning,
     metadata.thinking,
     metadata.thought,
@@ -186,7 +155,6 @@ function extractReasoning(
     if (typeof field === 'string' && field.trim()) {
       return field.trim();
     }
-    // ✅ TYPE-SAFE: Use type guard instead of cast
     if (isObject(field)) {
       if (typeof field.content === 'string' && field.content.trim()) {
         return field.content.trim();
@@ -198,40 +166,6 @@ function extractReasoning(
   }
 
   return null;
-}
-
-// ============================================================================
-// Error Detection
-// ============================================================================
-
-/**
- * Extract error metadata from AI provider response
- *
- * ✅ DELEGATED: Uses ErrorMetadataService for all error detection and categorization
- * ✅ SINGLE SOURCE OF TRUTH: No duplicate error handling logic
- *
- * This function maintains the original signature for backward compatibility
- * but delegates to the centralized error metadata service.
- *
- * @see ErrorMetadataService.extractErrorMetadata - Service implementation
- * @see /docs/backend-patterns.md - Service delegation pattern
- */
-function extractErrorMetadata(
-  providerMetadata: unknown,
-  response: unknown,
-  finishReason: string,
-  usage?: { inputTokens?: number; outputTokens?: number },
-  text?: string,
-  reasoning?: string,
-): ErrorMetadata {
-  return ErrorMetadataService.extractErrorMetadata({
-    providerMetadata,
-    response,
-    finishReason,
-    usage,
-    text,
-    reasoning,
-  });
 }
 
 // ============================================================================
@@ -252,8 +186,6 @@ function extractErrorMetadata(
  * Note: This service only persists participant messages. Moderators
  * are persisted by the moderator handler as chatMessage entries with
  * metadata.isModerator: true.
- *
- * Reference: streaming.handler.ts onFinish callback
  */
 export async function saveStreamedMessage(
   params: SaveMessageParams,
@@ -277,14 +209,8 @@ export async function saveStreamedMessage(
   } = params;
 
   try {
-    // Extract reasoning from multiple sources
     const reasoningText = extractReasoning(reasoningDeltas, finishResult);
 
-    // ✅ CRITICAL FIX: Use totalUsage as fallback for usage
-    // AI SDK v5 provides both usage (final step) and totalUsage (cumulative across all steps)
-    // Some models (DeepSeek) only populate totalUsage, not usage
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#onFinish
-    // Type-safe extraction of totalUsage from finishResult
     const getTotalUsage = () => {
       if (
         !('totalUsage' in finishResult)
@@ -306,22 +232,15 @@ export async function saveStreamedMessage(
     };
     const usageData = finishResult.usage || getTotalUsage();
 
-    // Extract error metadata
-    // ✅ CRITICAL FIX: Pass reasoning to error detection for o1/o3 models
-    // These models output content as reasoning instead of text, which was causing
-    // false empty_response errors when text was empty but reasoning had content
-    const errorMetadata = extractErrorMetadata(
-      finishResult.providerMetadata,
-      finishResult.response,
-      finishResult.finishReason,
-      usageData,
+    const errorMetadata = ErrorMetadataService.extractErrorMetadata({
+      providerMetadata: finishResult.providerMetadata,
+      response: finishResult.response,
+      finishReason: finishResult.finishReason,
+      usage: usageData,
       text,
-      reasoningText || undefined,
-    );
+      reasoning: reasoningText || undefined,
+    });
 
-    // Build parts[] array (AI SDK v5 pattern)
-    // ✅ CRITICAL: AI SDK v5 requires tool results in separate tool messages
-    // Using text, reasoning, tool-call part types for assistant message
     const parts: MessagePart[] = [];
 
     if (text) {
@@ -332,7 +251,6 @@ export async function saveStreamedMessage(
       parts.push({ type: MessagePartTypes.REASONING, text: reasoningText });
     }
 
-    // Add tool calls if present (from AI SDK v5 finishResult)
     const toolCalls
       = finishResult.toolCalls && Array.isArray(finishResult.toolCalls)
         ? finishResult.toolCalls
@@ -347,33 +265,23 @@ export async function saveStreamedMessage(
       });
     }
 
-    // Collect tool results for separate tool message (AI SDK v5 pattern)
     const toolResults
       = finishResult.toolResults && Array.isArray(finishResult.toolResults)
         ? finishResult.toolResults
         : [];
 
-    // Ensure at least one part exists (empty text for error messages)
     if (parts.length === 0) {
       parts.push({ type: MessagePartTypes.TEXT, text: '' });
     }
 
-    // ✅ CRITICAL FIX: Check for existing message with same ID before insert
-    // If message already exists, it's likely a duplicate ID from backend
-    // This prevents silent failures with onConflictDoNothing()
     const existingMessage = await db.query.chatMessage.findFirst({
       where: eq(tables.chatMessage.id, messageId),
     });
 
     if (existingMessage) {
-      // Message with this ID already exists - log warning but continue
-      // This should never happen with ULIDs, but handle gracefully
       return;
     }
 
-    // ✅ FIX: Create usage metadata with fallback when usage data is missing
-    // Uses usageData which already checks totalUsage as fallback
-    // If both are missing, estimate from text length (1 token ≈ 4 characters)
     const usageMetadata = usageData
       ? {
           promptTokens: usageData.inputTokens ?? 0,
@@ -383,8 +291,8 @@ export async function saveStreamedMessage(
         }
       : text.trim().length > 0
         ? {
-            promptTokens: 0, // Can't estimate input without usage data
-            completionTokens: Math.ceil(text.length / 4), // Rough estimate
+            promptTokens: 0,
+            completionTokens: Math.ceil(text.length / 4),
             totalTokens: Math.ceil(text.length / 4),
           }
         : {
@@ -393,14 +301,10 @@ export async function saveStreamedMessage(
             totalTokens: 0,
           };
 
-    // ✅ CITATION RESOLUTION: Parse and resolve citations from AI response text
-    // Citations appear as [source_id] markers (e.g., [att_abc12345], [mem_xyz789])
-    // Convert to DbCitation objects with full source metadata for UI rendering
     let resolvedCitations;
     if (text && citationSourceMap && hasCitations(text)) {
       const parsedResult = parseCitations(text);
       if (parsedResult.citations.length > 0) {
-        // Resolve parsed citations to full DbCitation objects using source map
         resolvedCitations = toDbCitations(
           parsedResult.citations,
           (sourceId) => {
@@ -424,8 +328,6 @@ export async function saveStreamedMessage(
       }
     }
 
-    // ✅ TYPE-SAFE METADATA: Use builder to ensure all required fields
-    // Compile-time guarantee that metadata matches ParticipantMessageMetadataSchema
     const messageMetadata = createParticipantMetadata({
       roundNumber,
       participantId,
@@ -459,15 +361,11 @@ export async function saveStreamedMessage(
       openRouterError: errorMetadata.openRouterError
         ? { message: errorMetadata.openRouterError }
         : undefined,
-      // ✅ CITATIONS: Include resolved citations if AI referenced sources
       citations: resolvedCitations,
-      // ✅ AVAILABLE SOURCES: Include files/context available to AI for "Sources" UI
       availableSources,
-      // ✅ REASONING DURATION: Track how long reasoning took for "Thought for X seconds" display
       reasoningDuration,
     });
 
-    // Save message to database
     await db
       .insert(tables.chatMessage)
       .values({
@@ -482,8 +380,6 @@ export async function saveStreamedMessage(
       })
       .returning();
 
-    // ✅ AI SDK v5 PATTERN: Save tool results in separate tool message
-    // Tool results must be in their own message with role='tool'
     if (toolResults.length > 0) {
       const toolMessageId = ulid();
       const toolParts: MessagePart[] = toolResults.map(toolResult => ({
@@ -494,14 +390,11 @@ export async function saveStreamedMessage(
         isError: toolResult.isError,
       }));
 
-      // Check for existing tool message
       const existingToolMessage = await db.query.chatMessage.findFirst({
         where: eq(tables.chatMessage.id, toolMessageId),
       });
 
       if (!existingToolMessage) {
-        // ✅ CRITICAL: Tool messages don't use discriminated metadata
-        // They store minimal info since they're just tool results
         await db.insert(tables.chatMessage).values({
           id: toolMessageId,
           threadId,
@@ -509,32 +402,16 @@ export async function saveStreamedMessage(
           role: MessageRoles.TOOL,
           parts: toolParts,
           roundNumber,
-          metadata: null, // Tool messages have no metadata (just parts with tool-result type)
+          metadata: null,
           createdAt: new Date(),
         });
       }
     }
 
-    // Cache invalidation
     revalidateTag(`thread:${threadId}:messages`, 'max');
 
-    // RAG REMOVED: AutoRAG now handles knowledge indexing from project files
-    // Per-message embeddings are no longer needed - project-based knowledge only
-
-    // Increment message usage quota (charged regardless of stream completion)
     await incrementMessageUsage(userId, 1);
-
-    // ✅ MODERATOR ARCHITECTURE: Moderator creation is triggered by frontend
-    // useModeratorStream hook calls POST /api/v1/chat/threads/:threadId/rounds/:roundNumber/moderator
-    // Moderators are stored in chatMessage table with metadata.isModerator: true
-    // ChatMessageList component renders moderator messages alongside participant messages
   } catch {
     // Non-blocking error - allow round to continue
-    // This allows the next participant to respond even if this one failed to save
   }
 }
-
-// ✅ MODERATOR ARCHITECTURE: Moderator creation handled by moderator handler
-// useModeratorStream hook calls POST /api/v1/chat/threads/:threadId/rounds/:roundNumber/moderator
-// Moderators are stored as chatMessage entries with metadata.isModerator: true
-// ChatMessageList component renders moderator messages alongside participant messages

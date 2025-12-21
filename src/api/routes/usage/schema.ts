@@ -1,8 +1,8 @@
 import { z } from '@hono/zod-openapi';
 
-import { UsageStatusSchema } from '@/api/core/enums';
+import { SUBSCRIPTION_TIERS, UsageStatusSchema } from '@/api/core/enums';
 import { createApiResponseSchema } from '@/api/core/schemas';
-import { SUBSCRIPTION_TIERS, subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
+import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 
 // ============================================================================
 // Usage Statistics API Schemas

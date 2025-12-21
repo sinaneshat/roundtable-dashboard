@@ -1,34 +1,18 @@
 /**
  * API Response Mocks for Testing
  *
- * ✅ ZOD-FIRST PATTERN: All mocks follow backend schema structures
- * ✅ TYPE-SAFE: Uses inferred types from route schemas
- * ✅ COMPREHENSIVE: Covers all chat API endpoints
- *
- * These mocks simulate backend responses for testing store actions
- * and ensuring proper data flow from API → Store → UI State
+ * Type-safe mocks following Zod schema patterns from backend routes.
  */
 
 import { ChatModes, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
 import type {
-  ChangelogListResponse,
   MessagesListResponse,
-  ParticipantDetailResponse,
   PreSearchListResponse,
   StoredPreSearch,
   ThreadDetailResponse,
-  ThreadListResponse,
 } from '@/api/routes/chat/schema';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation/chat';
 
-// ============================================================================
-// Mock Data Generators
-// ============================================================================
-
-/**
- * Creates a mock chat thread with realistic data
- * ✅ FOLLOWS: ChatThread schema from database validation
- */
 export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   const now = new Date();
 
@@ -38,7 +22,7 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
     projectId: null,
     title: 'Test Thread',
     slug: 'test-thread-abc123',
-    previousSlug: null, // ✅ BACKWARDS COMPATIBLE SLUGS
+    previousSlug: null,
     mode: ChatModes.DEBATING,
     status: ThreadStatuses.ACTIVE,
     isFavorite: false,
@@ -54,10 +38,6 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   };
 }
 
-/**
- * Creates a mock chat participant
- * ✅ FOLLOWS: ChatParticipant schema from database validation
- */
 export function createMockParticipant(overrides?: Partial<ChatParticipant>): ChatParticipant {
   const now = new Date();
 
@@ -76,11 +56,6 @@ export function createMockParticipant(overrides?: Partial<ChatParticipant>): Cha
   };
 }
 
-/**
- * Creates a mock chat message
- * ✅ FOLLOWS: ChatMessage schema from database validation
- * ✅ 0-BASED INDEXING: Supports roundNumber: 0
- */
 export function createMockMessage(overrides?: Partial<ChatMessage>): ChatMessage {
   const now = new Date();
 
@@ -101,10 +76,6 @@ export function createMockMessage(overrides?: Partial<ChatMessage>): ChatMessage
   };
 }
 
-/**
- * Creates a mock assistant message with complete metadata
- * ✅ FOLLOWS: DbAssistantMessageMetadata schema
- */
 export function createMockAssistantMessage(
   threadId: string,
   roundNumber: number,
@@ -144,14 +115,6 @@ export function createMockAssistantMessage(
   };
 }
 
-// ============================================================================
-// API Response Mocks
-// ============================================================================
-
-/**
- * Mock response for GET /chat/threads/:id
- * ✅ FOLLOWS: ThreadDetailResponseSchema
- */
 export function createMockThreadDetailResponse(
   threadOverrides?: Partial<ChatThread>,
   participantsOverrides?: Partial<ChatParticipant>[],
@@ -177,43 +140,6 @@ export function createMockThreadDetailResponse(
   };
 }
 
-/**
- * Mock response for GET /chat/threads
- * ✅ FOLLOWS: ThreadListResponseSchema with cursor pagination
- */
-export function createMockThreadListResponse(
-  threadsCount: number = 3,
-): ThreadListResponse {
-  const threads: ChatThread[] = [];
-  for (let i = 0; i < threadsCount; i++) {
-    threads.push(
-      createMockThread({
-        id: `thread_${i}`,
-        title: `Thread ${i + 1}`,
-        slug: `thread-${i + 1}-abc`,
-        createdAt: new Date(Date.now() - i * 1000 * 60 * 60),
-      }),
-    );
-  }
-
-  return {
-    success: true,
-    data: {
-      items: threads,
-      pagination: {
-        nextCursor: null,
-        hasMore: false,
-        count: threads.length,
-      },
-    },
-  };
-}
-
-/**
- * Mock response for GET /chat/threads/:id/messages
- * ✅ FOLLOWS: MessagesListResponseSchema
- * ✅ INCLUDES: Complete round (user + assistant messages)
- */
 export function createMockMessagesListResponse(
   threadId: string,
   roundNumber: number = 0,
@@ -221,7 +147,6 @@ export function createMockMessagesListResponse(
 ): MessagesListResponse {
   const messages: ChatMessage[] = [];
 
-  // User message
   messages.push(
     createMockMessage({
       id: `user_r${roundNumber}`,
@@ -235,7 +160,6 @@ export function createMockMessagesListResponse(
     }),
   );
 
-  // Participant responses
   for (let i = 0; i < participantCount; i++) {
     messages.push(createMockAssistantMessage(threadId, roundNumber, i));
   }
@@ -249,39 +173,6 @@ export function createMockMessagesListResponse(
   };
 }
 
-/**
- * Mock response for GET /chat/threads/:id/participants (single participant)
- * ✅ FOLLOWS: ParticipantDetailResponseSchema
- */
-export function createMockParticipantDetailResponse(
-  participantOverrides?: Partial<ChatParticipant>,
-): ParticipantDetailResponse {
-  return {
-    success: true,
-    data: {
-      participant: createMockParticipant(participantOverrides),
-    },
-  };
-}
-
-/**
- * Mock response for GET /chat/threads/:id/changelog
- * ✅ FOLLOWS: ChangelogListResponseSchema
- */
-export function createMockChangelogListResponse(): ChangelogListResponse {
-  return {
-    success: true,
-    data: {
-      items: [],
-      count: 0,
-    },
-  };
-}
-
-/**
- * Creates a single mock StoredPreSearch for testing
- * ✅ FOLLOWS: StoredPreSearchSchema
- */
 export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): StoredPreSearch {
   const now = new Date();
 
@@ -329,11 +220,6 @@ export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): Store
   };
 }
 
-/**
- * Mock response for GET /chat/threads/:id/pre-searches
- * ✅ FOLLOWS: PreSearchListResponseSchema
- * ✅ ENHANCED: Supports enhanced search features (fullContent, metadata, etc.)
- */
 export function createMockPreSearchesListResponse(
   threadId: string,
   roundNumber: number = 0,
@@ -408,45 +294,4 @@ export function createMockPreSearchesListResponse(
       count: 1,
     },
   };
-}
-
-// ============================================================================
-// Mock Fetch Helpers
-// ============================================================================
-
-/**
- * Creates a mock fetch response for successful API calls
- * ✅ PATTERN: Mimics backend API response format
- */
-export function createMockFetchResponse<T>(data: T, status: number = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => data,
-    text: async () => JSON.stringify(data),
-    headers: new Headers({
-      'content-type': 'application/json',
-    }),
-  } as Response;
-}
-
-/**
- * Creates a mock fetch error response
- * ✅ PATTERN: Mimics backend error response format
- */
-export function createMockFetchError(
-  message: string,
-  status: number = 400,
-): Response {
-  return createMockFetchResponse(
-    {
-      success: false,
-      data: null,
-      error: {
-        message,
-        code: 'TEST_ERROR',
-      },
-    },
-    status,
-  );
 }

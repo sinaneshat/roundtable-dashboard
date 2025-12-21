@@ -86,6 +86,9 @@ type ThreadTimelineProps = {
   // ✅ MODERATOR FLAG: Indicates moderator is streaming (for input blocking)
   // Moderator message now renders via normal message flow
   isModeratorStreaming?: boolean;
+
+  // Demo mode - forces all models to be accessible (hides tier badges)
+  demoMode?: boolean;
 };
 
 // Stable empty set to prevent render loops
@@ -113,6 +116,7 @@ export function ThreadTimeline({
   skipEntranceAnimations = false,
   completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
   isModeratorStreaming = false,
+  demoMode = false,
 }: ThreadTimelineProps) {
   // TanStack Virtual hook - official pattern
   const {
@@ -263,6 +267,7 @@ export function ThreadTimeline({
                       completedRoundNumbers={completedRoundNumbers}
                       isModeratorStreaming={isModeratorStreaming}
                       roundNumber={item.roundNumber}
+                      demoMode={demoMode}
                     />
                   </UnifiedErrorBoundary>
 

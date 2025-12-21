@@ -10,10 +10,6 @@ import { useThreadTimeline } from '@/hooks/utils';
 import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animations';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
-// ============================================================================
-// DEMO DATA
-// ============================================================================
-
 const DEMO_USER = {
   name: 'Sarah Chen',
   image: null,
@@ -26,6 +22,43 @@ const DEMO_PARTICIPANTS_DATA = [
   { modelId: 'openai/gpt-4.1', role: 'Growth Advisor' },
   { modelId: 'google/gemini-2.5-pro', role: 'Operations Expert' },
 ];
+
+const DEMO_MODERATOR_SUMMARY = `### Summary Conclusion
+
+The council recommends a **staged approach**: run a 90-day enterprise experiment with 5 existing customers before committing to a full pivot.
+
+---
+
+### Key Strategic Factors
+
+**Current Position:** $2M ARR, 14-day sales cycle, $8K ACV indicates a healthy SMB motion with ~250+ customers.
+
+**Enterprise Trade-offs:**
+- Sales cycles extend to 3-6 months
+- ACV increases to $50K-$200K
+- Requires significant infrastructure (SOC 2, legal, sales engineers)
+
+**SMB Scale Path:**
+- Need ~1,250 customers at current ACV to reach $10M
+- Focus on product-led growth and automation
+- Lower talent costs, faster iteration
+
+---
+
+### Areas of Agreement
+
+All participants agreed on:
+1. **Data-driven decision**: Audit top 20 customers before choosing
+2. **Avoid splitting focus**: Doing both simultaneously is the most common way startups stall
+3. **Mid-market option**: "Enterprise Lite" at $25K ACV offers a middle path
+
+---
+
+### Recommended Action
+
+Run a controlled 90-day experiment with 5 enterprise prospects from your existing customer base. Track time-to-close, resources required, product gaps, and deal economics. This provides real data instead of speculation.
+
+**Consensus Status:** Strong alignment on experimental approach before major strategic commitment.`;
 
 const DEMO_RESPONSES = [
   `This is a pivotal decision that will fundamentally shape your company's trajectory. Let me break down the key factors:
@@ -89,10 +122,6 @@ This gives you real data instead of speculation. If the experiment succeeds, you
 **One warning:** Trying to do both simultaneously at your stage is the most common way startups stall. Pick one, execute relentlessly, then expand.`,
 ];
 
-// ============================================================================
-// STATIC DATA FOR TIMELINE
-// ============================================================================
-
 const STATIC_PARTICIPANTS: ChatParticipant[] = DEMO_PARTICIPANTS_DATA.map((p, idx) => ({
   id: `participant-${idx}`,
   threadId: 'demo-thread',
@@ -150,27 +179,41 @@ function createParticipantMessage(index: number, text: string): ChatMessage {
   };
 }
 
-// ============================================================================
-// COMPONENT - Simplified, no completion tracking
-// ============================================================================
+function createModeratorMessage(text: string): ChatMessage {
+  return {
+    id: 'msg-demo-moderator',
+    threadId: 'demo-thread',
+    participantId: null,
+    role: MessageRoles.ASSISTANT,
+    parts: [{ type: MessagePartTypes.TEXT, text }],
+    roundNumber: 1,
+    createdAt: new Date(),
+    metadata: {
+      role: MessageRoles.ASSISTANT,
+      roundNumber: 1,
+      isModerator: true,
+      participantIndex: -99,
+      model: 'Council Moderator',
+      finishReason: 'stop' as const,
+      hasError: false,
+    },
+  };
+}
 
-// Module-level flag to track completion (persists across remounts)
 let demoHasCompleted = false;
 
 export function LiveChatDemo() {
-  // -1 = waiting, 0/1/2 = streaming that participant, 3 = all done
-  const [activeParticipant, setActiveParticipant] = useState(() => demoHasCompleted ? 3 : -1);
+  const [activeParticipant, setActiveParticipant] = useState(() => demoHasCompleted ? 4 : -1);
   const [streamedText, setStreamedText] = useState(() => demoHasCompleted ? [...DEMO_RESPONSES] : ['', '', '']);
+  const [moderatorText, setModeratorText] = useState(() => demoHasCompleted ? DEMO_MODERATOR_SUMMARY : '');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Mark complete when animation finishes
   useEffect(() => {
-    if (activeParticipant >= 3) {
+    if (activeParticipant >= 4) {
       demoHasCompleted = true;
     }
   }, [activeParticipant]);
 
-  // Start animation on mount - only if not already completed
   useEffect(() => {
     if (demoHasCompleted) {
       return;
@@ -183,9 +226,9 @@ export function LiveChatDemo() {
     return () => clearTimeout(timeout);
   }, []);
 
-  // Animation function - setState calls are inside async callbacks (setInterval/setTimeout)
   const runAnimation = useCallback((index: number) => {
-    const fullText = DEMO_RESPONSES[index] || '';
+    const isModerator = index === 3;
+    const fullText = isModerator ? DEMO_MODERATOR_SUMMARY : (DEMO_RESPONSES[index] || '');
     let charIndex = 0;
 
     if (intervalRef.current) {
@@ -197,37 +240,40 @@ export function LiveChatDemo() {
 
       if (charIndex >= fullText.length) {
         charIndex = fullText.length;
-        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Inside setInterval callback (async)
-        setStreamedText((prev) => {
-          const next = [...prev];
-          next[index] = fullText;
-          return next;
-        });
+        if (isModerator) {
+          setModeratorText(fullText);
+        } else {
+          setStreamedText((prev) => {
+            const next = [...prev];
+            next[index] = fullText;
+            return next;
+          });
+        }
 
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
         }
 
-        // Next participant after pause
         setTimeout(() => {
-          // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Inside setTimeout callback (async)
           setActiveParticipant(index + 1);
         }, 300);
       } else {
-        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Inside setInterval callback (async)
-        setStreamedText((prev) => {
-          const next = [...prev];
-          next[index] = fullText.slice(0, charIndex);
-          return next;
-        });
+        if (isModerator) {
+          setModeratorText(fullText.slice(0, charIndex));
+        } else {
+          setStreamedText((prev) => {
+            const next = [...prev];
+            next[index] = fullText.slice(0, charIndex);
+            return next;
+          });
+        }
       }
     }, TYPING_FRAME_INTERVAL);
   }, []);
 
-  // Trigger animation when activeParticipant changes
   useEffect(() => {
-    if (activeParticipant >= 0 && activeParticipant < 3) {
+    if (activeParticipant >= 0 && activeParticipant <= 3) {
       runAnimation(activeParticipant);
     }
 
@@ -239,25 +285,27 @@ export function LiveChatDemo() {
     };
   }, [activeParticipant, runAnimation]);
 
-  // Build messages
   const messages: ChatMessage[] = [createUserMessage()];
 
-  // All done - show all participants with full text
-  if (activeParticipant >= 3) {
+  if (activeParticipant >= 4) {
     for (let i = 0; i < 3; i++) {
       messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));
     }
+    messages.push(createModeratorMessage(DEMO_MODERATOR_SUMMARY));
+  } else if (activeParticipant === 3) {
+    for (let i = 0; i < 3; i++) {
+      messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));
+    }
+    if (moderatorText) {
+      messages.push(createModeratorMessage(moderatorText));
+    }
   } else {
-    // Animation in progress
     for (let i = 0; i < 3; i++) {
       if (activeParticipant > i) {
-        // This participant finished - full text
         messages.push(createParticipantMessage(i, DEMO_RESPONSES[i] || ''));
       } else if (activeParticipant === i) {
-        // Currently streaming
         messages.push(createParticipantMessage(i, streamedText[i] || ''));
       }
-      // else: not started yet, don't add
     }
   }
 
@@ -267,7 +315,10 @@ export function LiveChatDemo() {
     changelog: [],
   });
 
-  const isStreaming = activeParticipant >= 0 && activeParticipant < 3;
+  // Streaming states - participants (0-2) vs moderator (3)
+  const isParticipantStreaming = activeParticipant >= 0 && activeParticipant <= 2;
+  const isModeratorStreaming = activeParticipant === 3;
+  const isAnyStreaming = isParticipantStreaming || isModeratorStreaming;
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
@@ -278,13 +329,15 @@ export function LiveChatDemo() {
             user={DEMO_USER}
             participants={STATIC_PARTICIPANTS}
             threadId="demo-thread"
-            isStreaming={isStreaming}
-            currentParticipantIndex={isStreaming ? activeParticipant : 0}
-            currentStreamingParticipant={isStreaming ? STATIC_PARTICIPANTS[activeParticipant] ?? null : null}
-            streamingRoundNumber={isStreaming ? 1 : null}
+            isStreaming={isParticipantStreaming}
+            currentParticipantIndex={isParticipantStreaming ? activeParticipant : 0}
+            currentStreamingParticipant={isParticipantStreaming ? STATIC_PARTICIPANTS[activeParticipant] ?? null : null}
+            streamingRoundNumber={isAnyStreaming ? 1 : null}
             preSearches={[]}
             isReadOnly={true}
             skipEntranceAnimations={false}
+            demoMode={true}
+            isModeratorStreaming={isModeratorStreaming}
           />
         </div>
       </ScrollArea>

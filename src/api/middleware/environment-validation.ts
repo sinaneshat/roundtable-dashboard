@@ -13,7 +13,19 @@ import { createError } from '@/api/common/error-handling';
 import { validateEnvironmentVariables } from '@/api/common/fetch-utilities';
 import type { HealthStatus } from '@/api/core/enums';
 import { HealthStatuses } from '@/api/core/enums';
-import type { SafeEnvironmentSummary } from '@/api/types/http';
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+export type SafeEnvironmentSummary = {
+  NODE_ENV: string;
+  LOG_LEVEL: string;
+  ENVIRONMENT_VERIFIED: boolean;
+  DATABASE_CONNECTION_STATUS: 'connected' | 'disconnected' | 'pending';
+  OAUTH_STATUS: 'configured' | 'missing' | 'invalid';
+  TIMESTAMP: string;
+};
 
 // ============================================================================
 // ENVIRONMENT VARIABLE DEFINITIONS

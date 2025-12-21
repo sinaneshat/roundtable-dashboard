@@ -15,57 +15,45 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
 
   return (
     <div className="relative min-h-svh">
-      {/* Pulsating radial glow background - full screen coverage */}
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
-          {/* Mobile portrait (<640px wide) */}
           <div className="block sm:hidden">
             <RadialGlow
               size={600}
               offsetY={0}
               duration={18}
               animate={true}
-              useLogoColors={true}
             />
           </div>
-          {/* Tablet (640px-1024px) */}
           <div className="hidden sm:block lg:hidden">
             <RadialGlow
               size={900}
               offsetY={0}
               duration={18}
               animate={true}
-              useLogoColors={true}
             />
           </div>
-          {/* Desktop (1024px-1920px) */}
           <div className="hidden lg:block 2xl:hidden">
             <RadialGlow
               size={1200}
               offsetY={0}
               duration={18}
               animate={true}
-              useLogoColors={true}
             />
           </div>
-          {/* Large desktop (>1920px) */}
           <div className="hidden 2xl:block">
             <RadialGlow
               size={1600}
               offsetY={0}
               duration={18}
               animate={true}
-              useLogoColors={true}
             />
           </div>
         </div>
       </div>
 
-      {/* Main content container */}
       <div className="relative z-10 flex min-h-svh flex-col items-center justify-center gap-6 sm:gap-8 p-4 sm:p-6 md:p-10">
-        {/* Animated content wrapper */}
         <div className="flex w-full max-w-sm flex-col gap-6 sm:gap-8 animate-fade-in-up">
-          {/* Logo section with animation */}
           <div className="flex flex-col items-center gap-4 animate-fade-in">
             <div className="flex items-center gap-3 sm:gap-4">
               <Logo
@@ -84,7 +72,6 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
             </div>
           </div>
 
-          {/* Auth form content */}
           <div className="animate-fade-in-up delay-200">
             {children}
           </div>

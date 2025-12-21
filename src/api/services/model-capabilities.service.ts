@@ -12,23 +12,11 @@
 import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
-
-// ============================================================================
-// JSON MODE QUALITY
-// ============================================================================
-
-export const JSON_MODE_QUALITIES = ['excellent', 'good', 'fair', 'poor'] as const;
-
-export const JsonModeQualitySchema = z.enum(JSON_MODE_QUALITIES);
-
-export type JsonModeQuality = z.infer<typeof JsonModeQualitySchema>;
-
-export const JsonModeQualities = {
-  EXCELLENT: 'excellent' as const,
-  GOOD: 'good' as const,
-  FAIR: 'fair' as const,
-  POOR: 'poor' as const,
-} as const;
+import type { JsonModeQuality } from '@/api/core/enums';
+import {
+  JsonModeQualities,
+  JsonModeQualitySchema,
+} from '@/api/core/enums';
 
 /**
  * Quality order for comparison (higher number = better quality)

@@ -7,11 +7,6 @@
  * STATE MACHINE:
  * idle → creating_thread → streaming_participants → creating_moderator →
  * streaming_moderator → complete → navigating
- *
- * CRITICAL: This is a PURE STATE CALCULATOR, not an orchestrator
- * Navigation and side effects handled by flow-controller.ts
- *
- * Location: /src/stores/chat/actions/flow-state-machine.ts
  */
 
 'use client';
@@ -35,58 +30,30 @@ import {
   getMessageStreamingStatus,
   getModeratorMessageForRound,
   getParticipantCompletionStatus,
-  logParticipantCompletionStatus,
 } from '../utils/participant-completion-gate';
 
-// ============================================================================
-// FLOW STATE MACHINE TYPES
-// ============================================================================
-
-/**
- * Flow context contains all data needed to determine state transitions
- * FlowState type is imported from @/api/core/enums (5-part enum pattern)
- */
 export type FlowContext = {
   // Thread state
   threadId: string | null;
   threadSlug: string | null;
   hasAiGeneratedTitle: boolean;
-
-  // Message/participant state
   currentRound: number;
   hasMessages: boolean;
   participantCount: number;
-  allParticipantsResponded: boolean; // All participants responded for current round
-
-  // Moderator state
+  allParticipantsResponded: boolean;
   moderatorStatus:
     | (typeof MessageStatuses)[keyof typeof MessageStatuses]
     | null;
   moderatorExists: boolean;
-
-  // SDK state
   isAiSdkStreaming: boolean;
-  // ✅ FIX: Track if streaming just completed (within delay window)
-  // Prevents moderator from triggering before UI renders final content
   streamingJustCompleted: boolean;
-
-  // Animation state
-  // ✅ RACE FIX: Track pending animations (pre-search, participants)
-  // Prevents moderator from triggering before animations complete
   pendingAnimations: Set<number>;
-
-  // Flags
   isCreatingThread: boolean;
   isCreatingModerator: boolean;
   hasNavigated: boolean;
-
-  // Screen mode
   screenMode: ScreenMode | null;
 };
 
-/**
- * Flow actions that can be triggered by state transitions
- */
 export type FlowAction
   = | { type: 'CREATE_THREAD' }
     | { type: 'START_PARTICIPANT_STREAMING' }
@@ -97,22 +64,11 @@ export type FlowAction
     | { type: 'COMPLETE_FLOW' }
     | { type: 'RESET' };
 
-// ============================================================================
-// STATE MACHINE LOGIC
-// ============================================================================
-
-/**
- * Determines current flow state based on context
- * SINGLE SOURCE OF TRUTH for what state we're in
- */
 function determineFlowState(context: FlowContext): FlowState {
-  // Priority 1: Navigation complete
   if (context.hasNavigated) {
     return FlowStates.COMPLETE;
   }
 
-  // Priority 2: Ready to navigate (moderator done + title ready)
-  // Only navigate in overview mode - thread screen already at destination
   if (
     context.screenMode === ScreenModes.OVERVIEW
     && context.moderatorStatus === MessageStatuses.COMPLETE
@@ -122,9 +78,6 @@ function determineFlowState(context: FlowContext): FlowState {
     return FlowStates.NAVIGATING;
   }
 
-  // Priority 3: Moderator streaming
-  // Also consider moderator streaming if moderator exists and AI SDK is streaming
-  // This handles race condition where status hasn't been updated to 'streaming' yet
   if (
     context.moderatorStatus === MessageStatuses.STREAMING
     || (context.moderatorExists && context.isAiSdkStreaming)
@@ -132,50 +85,33 @@ function determineFlowState(context: FlowContext): FlowState {
     return FlowStates.STREAMING_MODERATOR;
   }
 
-  // Priority 4: Creating moderator (participants done, no moderator yet)
-  // Check if all participants responded for CURRENT round before creating moderator
-  // ✅ FIX: Also check streamingJustCompleted to ensure UI has rendered final content
-  // ✅ RACE FIX: Don't create moderator if ANY animations still pending (pre-search, participants)
   if (
     !context.isAiSdkStreaming
-    && !context.streamingJustCompleted // Wait for delay after streaming ends
-    && context.allParticipantsResponded // All participants must respond for current round
+    && !context.streamingJustCompleted
+    && context.allParticipantsResponded
     && context.participantCount > 0
-    && !context.moderatorExists // Checks current round
+    && !context.moderatorExists
     && !context.isCreatingModerator
-    && context.pendingAnimations.size === 0 // Wait for ALL animations (pre-search, participants) to complete
+    && context.pendingAnimations.size === 0
   ) {
     return FlowStates.CREATING_MODERATOR;
   }
 
-  // Priority 5: Participants streaming
-  // Only return streaming_participants if no moderator exists yet
-  // Once moderator exists and isAiSdkStreaming is true, that's moderator streaming (Priority 3),
-  // not participant streaming. This prevents falling back to streaming_participants during moderator.
   if (context.isAiSdkStreaming && !context.moderatorExists) {
     return FlowStates.STREAMING_PARTICIPANTS;
   }
 
-  // Priority 6: Thread creation
   if (context.isCreatingThread) {
     return FlowStates.CREATING_THREAD;
   }
 
-  // Default: Idle
   return FlowStates.IDLE;
 }
 
-/**
- * Determines if any loading indicator should be shown
- * SINGLE SOURCE OF TRUTH for loading state
- */
 function shouldShowLoading(state: FlowState): boolean {
   return state !== FlowStates.IDLE && state !== FlowStates.COMPLETE;
 }
 
-/**
- * Gets user-facing loading message for current state
- */
 function getLoadingMessage(state: FlowState): string {
   switch (state) {
     case FlowStates.CREATING_THREAD:
@@ -195,23 +131,11 @@ function getLoadingMessage(state: FlowState): string {
   }
 }
 
-/**
- * Determines which action should be triggered for state transition
- */
 function getNextAction(
   prevState: FlowState,
   currentState: FlowState,
   context: FlowContext,
 ): FlowAction | null {
-  // Transition: idle → creating_thread (handled by form submission)
-  // No action needed here
-
-  // Transition: creating_thread → streaming_participants (handled by AI SDK)
-  // No action needed here
-
-  // Transition: * → creating_moderator
-  // Trigger CREATE_MODERATOR from any previous state (not just streaming_participants)
-  // This handles race condition where streaming finishes before component mounts
   if (
     currentState === FlowStates.CREATING_MODERATOR
     && prevState !== FlowStates.CREATING_MODERATOR
@@ -220,11 +144,6 @@ function getNextAction(
     return { type: 'CREATE_MODERATOR' };
   }
 
-  // Transition: creating_moderator → streaming_moderator (handled by moderator component)
-  // No action needed here
-
-  // Transition: streaming_moderator → navigating (cache invalidation)
-  // PRIORITY 1: Invalidate cache BEFORE navigating
   if (
     prevState === FlowStates.STREAMING_MODERATOR
     && currentState === FlowStates.NAVIGATING
@@ -234,17 +153,11 @@ function getNextAction(
     return { type: 'INVALIDATE_CACHE' };
   }
 
-  // Transition: * → navigating (navigation execution)
-  // PRIORITY 2: Execute navigation when in navigating state and not yet navigated
-  // Handles both:
-  // 1. Direct jump to navigating (prevState !== FlowStates.NAVIGATING)
-  // 2. After cache invalidation (prevState === FlowStates.NAVIGATING, currentState === FlowStates.NAVIGATING)
   if (
     currentState === FlowStates.NAVIGATING
     && !context.hasNavigated
     && context.threadSlug
   ) {
-    // Skip if we just returned INVALIDATE_CACHE (will be handled in next effect run)
     if (prevState === FlowStates.STREAMING_MODERATOR) {
       return null;
     }
@@ -254,23 +167,14 @@ function getNextAction(
   return null;
 }
 
-// ============================================================================
-// ORCHESTRATOR HOOK
-// ============================================================================
-
 export type UseFlowOrchestratorOptions = {
-  /** Screen mode - determines which transitions are active */
   mode: ScreenMode;
 };
 
 export type UseFlowOrchestratorReturn = {
-  /** Current flow state */
   flowState: FlowState;
-  /** Whether any loading indicator should show */
   isLoading: boolean;
-  /** User-facing loading message */
   loadingMessage: string;
-  /** Current round number */
   currentRound: number;
 };
 
@@ -527,7 +431,6 @@ export function useFlowStateMachine(
             );
 
             if (!completionStatus.allComplete) {
-              logParticipantCompletionStatus(completionStatus, 'flow-state-machine:CREATE_MODERATOR');
               return; // Exit effect without updating prevStateRef
             }
 

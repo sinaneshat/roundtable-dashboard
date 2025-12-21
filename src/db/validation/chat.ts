@@ -70,7 +70,7 @@ export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
  * ✅ AI SDK v5 ALIGNMENT: parts[] array replaces content/reasoning fields
  */
 export const chatMessageSelectSchema = createSelectSchema(chatMessage).extend({
-  // ✅ TYPE-SAFE: Discriminated union metadata (nullable for legacy data compatibility)
+  // ✅ TYPE-SAFE: Discriminated union metadata
   metadata: DbMessageMetadataSchema.nullable(),
 });
 export const chatMessageInsertSchema = createInsertSchema(chatMessage, {

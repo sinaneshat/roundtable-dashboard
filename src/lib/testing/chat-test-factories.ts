@@ -1,13 +1,7 @@
 /**
  * Chat Store Test Factories
  *
- * Shared mock factories for chat store testing.
- * Consolidates duplicated patterns across test files.
- *
- * NOTE: For API response mocks, use ./api-mocks.ts instead
- * This file focuses on store-specific test utilities.
- *
- * @module lib/testing/chat-test-factories
+ * Shared mock factories for chat store testing with test-friendly defaults.
  */
 
 import type { MessageStatus, StreamStatus } from '@/api/core/enums';
@@ -17,20 +11,12 @@ import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 import {
-  createMockParticipant as _createMockParticipant,
-  createMockThread as _createMockThread,
+  createMockParticipant as createApiMockParticipant,
+  createMockThread as createApiMockThread,
 } from './api-mocks';
 
-// ============================================================================
-// THREAD FACTORIES
-// ============================================================================
-
-/**
- * Creates a mock ChatThread for testing with test-friendly defaults
- * Uses 'thread-123' as default ID to match test conventions
- */
 export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
-  return _createMockThread({
+  return createApiMockThread({
     id: 'thread-123',
     userId: 'user-123',
     title: 'Test Thread',
@@ -41,23 +27,9 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   });
 }
 
-// ============================================================================
-// PARTICIPANT FACTORIES
-// ============================================================================
-
-/**
- * Creates a mock ChatParticipant for testing with index-based defaults
- * This is the preferred version for tests that work with participant arrays
- *
- * @param index - Participant index (used for id, modelId, role, priority)
- * @param overrides - Optional overrides
- */
-export function createMockParticipant(
-  index: number,
-  overrides?: Partial<ChatParticipant>,
-): ChatParticipant {
+export function createMockParticipant(index: number, overrides?: Partial<ChatParticipant>): ChatParticipant {
   const models = ['gpt-4o', 'claude-3-opus', 'gemini-pro', 'mistral-large'];
-  return _createMockParticipant({
+  return createApiMockParticipant({
     id: `participant-${index}`,
     threadId: 'thread-123',
     modelId: models[index % models.length] as string,
@@ -67,30 +39,11 @@ export function createMockParticipant(
   });
 }
 
-/**
- * Creates multiple mock ChatParticipants for testing
- * Convenience wrapper around createMockParticipant
- */
-export function createMockParticipants(
-  count: number,
-  threadId = 'thread-123',
-): ChatParticipant[] {
-  return Array.from({ length: count }, (_, i) =>
-    createMockParticipant(i, { threadId }));
+export function createMockParticipants(count: number, threadId = 'thread-123'): ChatParticipant[] {
+  return Array.from({ length: count }, (_, i) => createMockParticipant(i, { threadId }));
 }
 
-// ============================================================================
-// PARTICIPANT CONFIG FACTORIES (Form State)
-// ============================================================================
-
-/**
- * Creates a ParticipantConfig for form state testing
- * Different from createMockParticipant - this is for the form slice, not DB entities
- */
-export function createParticipantConfig(
-  index: number,
-  overrides?: Partial<ParticipantConfig>,
-): ParticipantConfig {
+export function createParticipantConfig(index: number, overrides?: Partial<ParticipantConfig>): ParticipantConfig {
   return {
     id: `participant-${index}`,
     modelId: `model-${index}`,
@@ -100,21 +53,10 @@ export function createParticipantConfig(
   };
 }
 
-/**
- * Creates multiple ParticipantConfigs for form state testing
- */
 export function createParticipantConfigs(count: number): ParticipantConfig[] {
   return Array.from({ length: count }, (_, i) => createParticipantConfig(i));
 }
 
-// ============================================================================
-// PRE-SEARCH FACTORIES (Stored/Simplified)
-// ============================================================================
-
-/**
- * Creates a simplified mock StoredPreSearch for store testing
- * Use createMockPreSearchesListResponse for API response testing
- */
 export function createMockStoredPreSearch(
   roundNumber: number,
   status: MessageStatus = MessageStatuses.COMPLETE,
@@ -146,13 +88,6 @@ export function createMockStoredPreSearch(
   } as StoredPreSearch;
 }
 
-// ============================================================================
-// STREAM / KV FACTORIES
-// ============================================================================
-
-/**
- * Stream KV entry for testing stream status tracking
- */
 export type StreamKVEntry = {
   streamId: string;
   threadId: string;
@@ -165,21 +100,10 @@ export type StreamKVEntry = {
   errorMessage?: string;
 };
 
-/**
- * Generates stream ID following the documented pattern
- * Pattern: {threadId}_r{roundNumber}_p{participantIndex}
- */
-export function generateStreamId(
-  threadId: string,
-  roundNumber: number,
-  participantIndex: number,
-): string {
+export function generateStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
   return `${threadId}_r${roundNumber}_p${participantIndex}`;
 }
 
-/**
- * Creates a mock StreamKVEntry for testing
- */
 export function createStreamKVEntry(
   threadId: string,
   roundNumber: number,
@@ -199,13 +123,6 @@ export function createStreamKVEntry(
   };
 }
 
-// ============================================================================
-// STORE STATE FACTORIES
-// ============================================================================
-
-/**
- * Initial store state shape for testing state transitions
- */
 export type TestStoreState = {
   isStreaming: boolean;
   waitingToStartStreaming: boolean;
@@ -218,20 +135,12 @@ export type TestStoreState = {
   error: Error | null;
   preSearches: StoredPreSearch[];
   triggeredPreSearchRounds: Set<number>;
-  /** Track which rounds have had moderators created */
   createdModeratorRounds: Set<number>;
-  /** Track which round numbers have triggered moderator streams */
   triggeredModeratorRounds: Set<number>;
-  /** Track which moderator IDs have triggered moderator streams */
   triggeredModeratorIds: Set<string>;
 };
 
-/**
- * Creates initial store state for testing
- */
-export function createInitialStoreState(
-  overrides?: Partial<TestStoreState>,
-): TestStoreState {
+export function createInitialStoreState(overrides?: Partial<TestStoreState>): TestStoreState {
   return {
     isStreaming: false,
     waitingToStartStreaming: false,
@@ -251,13 +160,6 @@ export function createInitialStoreState(
   };
 }
 
-// ============================================================================
-// OPTIMISTIC MESSAGE FACTORIES
-// ============================================================================
-
-/**
- * Base message type for optimistic update testing
- */
 export type BaseTestMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -265,18 +167,12 @@ export type BaseTestMessage = {
   createdAt: Date;
 };
 
-/**
- * Optimistic message type for testing
- */
 export type OptimisticTestMessage = BaseTestMessage & {
   isOptimistic: true;
   tempId: string;
   status: 'pending' | 'sending' | 'failed';
 };
 
-/**
- * Confirmed message type for testing
- */
 export type ConfirmedTestMessage = BaseTestMessage & {
   isOptimistic: false;
   serverId: string;
@@ -284,18 +180,9 @@ export type ConfirmedTestMessage = BaseTestMessage & {
   roundNumber: number;
 };
 
-/**
- * Union type for UI messages in tests
- */
 export type TestUIMessage = OptimisticTestMessage | ConfirmedTestMessage;
 
-/**
- * Creates an optimistic message for testing
- */
-export function createOptimisticTestMessage(
-  content: string,
-  tempId: string,
-): OptimisticTestMessage {
+export function createOptimisticTestMessage(content: string, tempId: string): OptimisticTestMessage {
   return {
     id: tempId,
     tempId,
@@ -307,9 +194,6 @@ export function createOptimisticTestMessage(
   };
 }
 
-/**
- * Creates a confirmed message for testing
- */
 export function createConfirmedTestMessage(
   content: string,
   serverId: string,
@@ -328,13 +212,6 @@ export function createConfirmedTestMessage(
   };
 }
 
-// ============================================================================
-// STREAM STATE FACTORIES (Complex Resumption)
-// ============================================================================
-
-/**
- * Stream state for resumption testing
- */
 export type TestStreamState = {
   streamId: string;
   threadId: string;
@@ -354,9 +231,6 @@ export type TestStreamState = {
   timestamp: number;
 };
 
-/**
- * KV stream data for resumption testing
- */
 export type TestKVStreamData = {
   state: TestStreamState;
   events: Array<{
@@ -372,12 +246,7 @@ export type TestKVStreamData = {
   };
 };
 
-/**
- * Creates test stream state for resumption testing
- */
-export function createTestStreamState(
-  overrides?: Partial<TestStreamState>,
-): TestStreamState {
+export function createTestStreamState(overrides?: Partial<TestStreamState>): TestStreamState {
   return {
     streamId: 'stream-123',
     threadId: 'thread-123',
@@ -394,9 +263,6 @@ export function createTestStreamState(
   };
 }
 
-/**
- * Creates test KV stream data for resumption testing
- */
 export function createTestKVStreamData(
   state?: Partial<TestStreamState>,
   overrides?: Partial<Omit<TestKVStreamData, 'state'>>,
@@ -414,14 +280,6 @@ export function createTestKVStreamData(
   };
 }
 
-// ============================================================================
-// MODERATOR PAYLOAD FACTORIES (Moderator Data)
-// ============================================================================
-
-/**
- * Moderator metrics type for testing
- * Matches ModeratorMetricsSchema from API
- */
 export type TestModeratorMetrics = {
   engagement: number;
   insight: number;
@@ -429,22 +287,12 @@ export type TestModeratorMetrics = {
   clarity: number;
 };
 
-/**
- * Moderator payload type for testing
- * Matches ModeratorPayload from API
- */
 export type TestModeratorPayload = {
   summary: string;
   metrics: TestModeratorMetrics;
 };
 
-/**
- * Creates mock moderator metrics for testing
- * All values default to valid range (0-100)
- */
-export function createMockModeratorMetrics(
-  overrides?: Partial<TestModeratorMetrics>,
-): TestModeratorMetrics {
+export function createMockModeratorMetrics(overrides?: Partial<TestModeratorMetrics>): TestModeratorMetrics {
   return {
     engagement: 85,
     insight: 78,
@@ -454,25 +302,7 @@ export function createMockModeratorMetrics(
   };
 }
 
-/**
- * Creates mock moderator payload for testing
- * Used when testing moderator streaming or moderator data display
- *
- * @example
- * ```typescript
- * // Complete moderator
- * const moderatorData = createMockModeratorPayload();
- *
- * // Partial moderator (streaming state)
- * const partialData = createMockModeratorPayload({
- *   summary: 'Partial text...',
- *   metrics: undefined, // Not yet streamed
- * });
- * ```
- */
-export function createMockModeratorPayload(
-  overrides?: Partial<TestModeratorPayload>,
-): TestModeratorPayload {
+export function createMockModeratorPayload(overrides?: Partial<TestModeratorPayload>): TestModeratorPayload {
   return {
     summary: 'The participants provided diverse perspectives on the topic, reaching consensus on key factors.',
     metrics: createMockModeratorMetrics(),
@@ -480,22 +310,7 @@ export function createMockModeratorPayload(
   };
 }
 
-/**
- * Creates partial moderator payload for streaming tests
- * Useful for testing progressive streaming states
- *
- * @example
- * ```typescript
- * // Just summary, no metrics yet
- * const partial = createPartialModeratorPayload({ summary: 'Test' });
- *
- * // Empty state
- * const empty = createPartialModeratorPayload({});
- * ```
- */
-export function createPartialModeratorPayload(
-  overrides?: Partial<TestModeratorPayload>,
-): Partial<TestModeratorPayload> {
+export function createPartialModeratorPayload(overrides?: Partial<TestModeratorPayload>): Partial<TestModeratorPayload> {
   return {
     ...overrides,
   };

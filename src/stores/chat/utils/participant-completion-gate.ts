@@ -230,20 +230,6 @@ export function areAllParticipantsCompleteForRound(
   return status.allComplete;
 }
 
-/**
- * Log participant completion status for debugging
- *
- * Only logs in development mode.
- */
-export function logParticipantCompletionStatus(
-  _status: ParticipantCompletionStatus,
-  _context: string,
-): void {
-  if (process.env.NODE_ENV !== 'development') {
-    // No-op in production
-  }
-}
-
 // ============================================================================
 // Moderator Message Utilities
 // ============================================================================

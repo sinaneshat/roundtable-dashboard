@@ -1,5 +1,4 @@
 import { z } from '@hono/zod-openapi';
-import type Stripe from 'stripe';
 
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
@@ -10,13 +9,9 @@ import {
 } from '@/db/validation/billing';
 
 // ============================================================================
-// Product & Price Schemas (Reusing Database Validation Schemas)
+// Product & Price Schemas
 // ============================================================================
 
-/**
- * ✅ REUSE: Price schema from database validation
- * Extended with OpenAPI metadata for API documentation
- */
 const PriceSchema = stripePriceSelectSchema
   .pick({
     id: true,
@@ -29,10 +24,6 @@ const PriceSchema = stripePriceSelectSchema
   })
   .openapi('Price');
 
-/**
- * ✅ REUSE: Product schema from database validation
- * Extended with prices relationship for API response
- */
 const ProductSchema = stripeProductSelectSchema
   .pick({
     id: true,
@@ -125,29 +116,22 @@ const CustomerPortalPayloadSchema = z.object({
 export const CustomerPortalResponseSchema = createApiResponseSchema(CustomerPortalPayloadSchema).openapi('CustomerPortalResponse');
 
 // ============================================================================
-// Subscription Schemas (Reusing Database Validation Schemas)
+// Subscription Schemas
 // ============================================================================
 
-/**
- * ✅ REUSE: Subscription schema from database validation
- * Picked fields relevant for API responses
- * ✅ NO TRANSFORMS: Returns DB data directly via Drizzle relations
- * productId comes from stripeSubscription -> price -> product relationship (no manual transformation)
- */
 const SubscriptionSchema = stripeSubscriptionSelectSchema
   .pick({
     id: true,
     status: true,
     priceId: true,
-    currentPeriodStart: true,
-    currentPeriodEnd: true,
     cancelAtPeriodEnd: true,
-    canceledAt: true,
-    trialStart: true,
-    trialEnd: true,
   })
   .extend({
-    // Nested price relation with product
+    currentPeriodStart: z.string().openapi({ description: 'Current period start date (ISO string)' }),
+    currentPeriodEnd: z.string().openapi({ description: 'Current period end date (ISO string)' }),
+    canceledAt: z.string().nullable().openapi({ description: 'Cancellation date (ISO string or null)' }),
+    trialStart: z.string().nullable().openapi({ description: 'Trial start date (ISO string or null)' }),
+    trialEnd: z.string().nullable().openapi({ description: 'Trial end date (ISO string or null)' }),
     price: stripePriceSelectSchema
       .pick({ productId: true })
       .openapi({
@@ -253,10 +237,6 @@ const SubscriptionChangePayloadSchema = z.object({
 
 export const SubscriptionChangeResponseSchema = createApiResponseSchema(SubscriptionChangePayloadSchema).openapi('SubscriptionChangeResponse');
 
-// ============================================================================
-// TYPE EXPORTS FOR FRONTEND & BACKEND
-// ============================================================================
-
 export type Product = z.infer<typeof ProductSchema>;
 export type Price = z.infer<typeof PriceSchema>;
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
@@ -327,18 +307,7 @@ export const WebhookHeadersSchema = z.object({
   }),
 });
 
-// ============================================================================
-// Type Exports
-// ============================================================================
-
-/**
- * Subscription type for API responses
- * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
- */
 export type Subscription = z.infer<typeof SubscriptionSchema>;
-
-// Use official Stripe SDK type for subscription status
-export type SubscriptionStatus = Stripe.Subscription.Status;
 
 export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequestSchema>;
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;

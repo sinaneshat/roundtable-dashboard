@@ -14,13 +14,12 @@ import { z } from '@hono/zod-openapi';
 // AI SDK STATUS (AI SDK v5 useChat hook status values)
 // ============================================================================
 
-/**
- * AI SDK v5 ChatStatus values - matches AI SDK exactly
- * @see https://github.com/vercel/ai/blob/main/packages/ai/src/ui/chat.ts#L86
- */
 export const AI_SDK_STATUSES = ['ready', 'submitted', 'streaming', 'error'] as const;
 
-export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES);
+export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES).openapi({
+  description: 'AI SDK v5 ChatStatus values - matches AI SDK exactly',
+  example: 'streaming',
+});
 
 export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
 
@@ -35,12 +34,6 @@ export const AiSdkStatuses = {
 // FINISH REASON (AI SDK Response Completion Status)
 // ============================================================================
 
-/**
- * AI SDK v5 FinishReason values - matches AI SDK LanguageModelV3FinishReason
- * @see https://github.com/vercel/ai/blob/main/packages/provider/src/language-model/v3/language-model-v3-finish-reason.ts
- *
- * Note: 'failed' is our extension for internal error tracking
- */
 export const FINISH_REASONS = [
   'stop',
   'length',
@@ -70,14 +63,19 @@ export const FinishReasons = {
   UNKNOWN: 'unknown' as const,
 } as const;
 
+export function isCompletionFinishReason(
+  finishReason: FinishReason | null | undefined,
+): finishReason is 'stop' | 'length' | 'tool-calls' | 'content-filter' {
+  if (!finishReason) {
+    return false;
+  }
+  return (['stop', 'length', 'tool-calls', 'content-filter'] as const).includes(finishReason as 'stop' | 'length' | 'tool-calls' | 'content-filter');
+}
+
 // ============================================================================
 // UI MESSAGE ROLE (AI SDK v5 - only 'user', 'assistant', 'system')
 // ============================================================================
 
-/**
- * AI SDK v5 UIMessage role values
- * @see https://github.com/vercel/ai/blob/main/packages/ai/src/ui/validate-ui-messages.ts#L27
- */
 export const UI_MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
 
 export const UIMessageRoleSchema = z.enum(UI_MESSAGE_ROLES).openapi({
@@ -119,10 +117,6 @@ export const MessagePartTypes = {
 // REASONING PART TYPE (Extended AI SDK types for reasoning/thinking content)
 // ============================================================================
 
-/**
- * Reasoning part types - AI SDK uses 'reasoning', Claude adds 'thinking' and 'redacted'
- * @see https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#reasoning
- */
 export const REASONING_PART_TYPES = ['reasoning', 'thinking', 'redacted', 'text'] as const;
 
 export const ReasoningPartTypeSchema = z.enum(REASONING_PART_TYPES).openapi({

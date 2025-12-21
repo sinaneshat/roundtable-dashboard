@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
-import { buildGoogleFaviconUrl, handleImageError, safeExtractDomain } from '@/lib/utils';
+import { buildGoogleFaviconUrl, handleImageError, safeExtractDomain } from '@/lib/utils/web-search-utils';
 
 export function WebSearchResultItem({
   result,

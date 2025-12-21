@@ -49,28 +49,12 @@ import {
 } from '@/db/validation/chat';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
-/**
- * Message content validation schema with sanitization
- * - Trims whitespace from both ends
- * - Normalizes unicode characters (prevents homograph attacks)
- * - Enforces min/max length from shared constants
- *
- * @see STRING_LIMITS.MESSAGE_MAX - Single source of truth for max length
- */
 export const MessageContentSchema = z.string()
   .trim()
   .normalize()
   .min(STRING_LIMITS.MESSAGE_MIN, 'Message is required')
   .max(STRING_LIMITS.MESSAGE_MAX, `Message is too long (max ${STRING_LIMITS.MESSAGE_MAX} characters)`);
 
-// ============================================================================
-// PARTICIPANT SCHEMAS - Consolidated
-// ============================================================================
-
-/**
- * Unique model ID validation refinement
- * Applied once at base schema level to avoid duplicate validation
- */
 const uniqueModelIdsRefinement = {
   check: (participants: Array<{ modelId: string; isEnabled?: boolean }>) => {
     const enabledParticipants = participants.filter(p => p.isEnabled !== false);
@@ -81,10 +65,6 @@ const uniqueModelIdsRefinement = {
   message: 'Duplicate modelIds detected. Each enabled participant must have a unique model.',
 };
 
-/**
- * Base participant schema - single source of truth for participant fields
- * All participant variants derive from this schema using pick/omit
- */
 const BaseParticipantSchema = z.object({
   id: CoreSchemas.id().openapi({
     description: 'Participant ID',
@@ -119,20 +99,12 @@ const BaseParticipantSchema = z.object({
   }),
 });
 
-/**
- * Participant schema for create operations - omits server-generated fields
- */
 const CreateParticipantSchema = BaseParticipantSchema.omit({
   id: true,
   priority: true,
   isEnabled: true,
 });
 
-/**
- * Participant schema for update operations - partial updates allowed
- * Note: id is optional to support both updating existing participants (with id)
- * and creating new participants (without id or with empty id)
- */
 const UpdateParticipantSchema = BaseParticipantSchema.pick({
   id: true,
   modelId: true,
@@ -141,16 +113,12 @@ const UpdateParticipantSchema = BaseParticipantSchema.pick({
   priority: true,
   isEnabled: true,
 }).extend({
-  // Override id to be optional - allows creating new participants without IDs
   id: CoreSchemas.id().optional().or(z.literal('')).openapi({
     description: 'Participant ID (optional - omit or use empty string for new participants)',
     example: 'participant_1',
   }),
 });
 
-/**
- * Participant schema for streaming requests - minimal required fields
- */
 const StreamParticipantSchema = BaseParticipantSchema.pick({
   id: true,
   modelId: true,
@@ -160,19 +128,12 @@ const StreamParticipantSchema = BaseParticipantSchema.pick({
   isEnabled: true,
 });
 
-// ============================================================================
-// ENTITY SCHEMAS
-// ============================================================================
-
-// ✅ TYPE-SAFE: Use strongly-typed schemas from single source of truth
 export const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
-    // ✅ TYPE-SAFE: Settings nullable (SQLite can return null)
     settings: DbParticipantSettingsSchema.nullable().optional(),
   })
   .openapi('ChatParticipant');
 
-// ✅ TYPE-SAFE: Discriminated union metadata (user | assistant | pre-search, nullable for legacy)
 const ChatMessageSchema = chatMessageSelectSchema
   .extend({
     toolCalls: z.array(z.object({
@@ -183,30 +144,22 @@ const ChatMessageSchema = chatMessageSelectSchema
         arguments: z.string(),
       }),
     })).nullable().optional(),
-    // ✅ TYPE-SAFE: Metadata typed by discriminated union (nullable for legacy data)
     metadata: DbMessageMetadataSchema.nullable(),
   })
   .openapi('ChatMessage');
 
-// ✅ TYPE-SAFE: Strictly typed thread metadata (tags, summary only)
 export const ChatThreadSchema = chatThreadSelectSchema
   .extend({
     metadata: DbThreadMetadataSchema.nullable().optional(),
   })
   .openapi('ChatThread');
 
-// ✅ TYPE-SAFE: Discriminated union changelog data (4 change types)
 const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
   .extend({
     changeData: DbChangelogDataSchema,
   })
   .openapi('ChatThreadChangelog');
 
-/**
- * Changelog schema with flexible date handling
- * Accepts both string and Date for createdAt (API returns strings, store may have Dates)
- * ✅ FOLLOWS: StoredPreSearchSchema pattern
- */
 export const ChatThreadChangelogFlexibleSchema = chatThreadChangelogSelectSchema
   .extend({
     changeData: DbChangelogDataSchema,
@@ -216,11 +169,6 @@ export const ChatThreadChangelogFlexibleSchema = chatThreadChangelogSelectSchema
 
 export type ChatThreadChangelogFlexible = z.infer<typeof ChatThreadChangelogFlexibleSchema>;
 
-/**
- * Configuration changes group schema for UI components
- * Single source of truth for changelog grouping props
- * ✅ FIX: Accepts Date or ISO string for timestamp (JSON serialization uses strings)
- */
 export const ConfigurationChangesGroupSchema = z.object({
   timestamp: z.union([z.date(), z.string()]),
   changes: z.array(ChatThreadChangelogFlexibleSchema),
@@ -228,9 +176,6 @@ export const ConfigurationChangesGroupSchema = z.object({
 
 export type ConfigurationChangesGroup = z.infer<typeof ConfigurationChangesGroupSchema>;
 
-/**
- * Props schema for ConfigurationChangesGroup component
- */
 export const ConfigurationChangesGroupPropsSchema = z.object({
   group: ConfigurationChangesGroupSchema,
   className: z.string().optional(),
@@ -238,7 +183,6 @@ export const ConfigurationChangesGroupPropsSchema = z.object({
 
 export type ConfigurationChangesGroupProps = z.infer<typeof ConfigurationChangesGroupPropsSchema>;
 
-// ✅ TYPE-SAFE: Strictly typed custom role metadata (tags, category only)
 const ChatCustomRoleSchema = chatCustomRoleSelectSchema
   .extend({
     metadata: DbCustomRoleMetadataSchema.nullable().optional(),
@@ -333,7 +277,6 @@ export type ThreadListResponse = z.infer<typeof ThreadListResponseSchema>;
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');
 export type ThreadDetailResponse = z.infer<typeof ThreadDetailResponseSchema>;
 
-// Thread slug status payload (lightweight for polling during AI title generation)
 const ThreadSlugStatusPayloadSchema = z.object({
   slug: z.string().openapi({
     description: 'Thread URL slug',
@@ -351,17 +294,12 @@ const ThreadSlugStatusPayloadSchema = z.object({
 
 export const ThreadSlugStatusResponseSchema = createApiResponseSchema(ThreadSlugStatusPayloadSchema).openapi('ThreadSlugStatusResponse');
 
-// Inferred type for thread slug status polling
 export type ThreadSlugStatus = z.infer<typeof ThreadSlugStatusPayloadSchema>;
 
 export const DeleteThreadResponseSchema = createApiResponseSchema(z.object({
   deleted: z.boolean().openapi({ example: true }),
 })).openapi('DeleteThreadResponse');
-/**
- * AddParticipantRequest schema
- * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
- * (drizzle-zod .pick() loses type information with OpenAPI extensions)
- */
+
 export const AddParticipantRequestSchema = z.object({
   modelId: CoreSchemas.id().openapi({
     description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
@@ -379,10 +317,6 @@ export const AddParticipantRequestSchema = z.object({
   }),
 }).openapi('AddParticipantRequest');
 
-/**
- * UpdateParticipantRequest schema
- * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
- */
 export const UpdateParticipantRequestSchema = z.object({
   role: z.string().min(1).max(100).nullish().openapi({
     description: 'Optional role name',
@@ -1298,25 +1232,24 @@ export const ThreadStreamResumptionStateSchema = z.object({
     example: false,
   }),
 
-  // Legacy compatibility fields
   hasActiveStream: z.boolean().openapi({
-    description: 'LEGACY: Use currentPhase !== "complete" instead. Whether any stream is active',
+    description: 'Whether any stream is active (derived from currentPhase)',
     example: true,
   }),
   streamId: z.string().nullable().openapi({
-    description: 'LEGACY: Use phase-specific streamId. Active participant stream ID',
+    description: 'Active participant stream ID (use participants.streamId for phase-specific ID)',
     example: 'thread_abc123_r0_p1',
   }),
   totalParticipants: RoundNumberSchema.nullable().openapi({
-    description: 'LEGACY: Use participants.totalParticipants',
+    description: 'Total number of participants (use participants.totalParticipants)',
     example: 3,
   }),
   participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema).nullable().openapi({
-    description: 'LEGACY: Use participants.participantStatuses',
+    description: 'Status of each participant (use participants.participantStatuses)',
     example: { 0: 'completed', 1: 'active', 2: 'active' },
   }),
   nextParticipantToTrigger: RoundNumberSchema.nullable().openapi({
-    description: 'LEGACY: Use participants.nextParticipantToTrigger',
+    description: 'Index of next participant to trigger (use participants.nextParticipantToTrigger)',
     example: 2,
   }),
 }).openapi('ThreadStreamResumptionState');

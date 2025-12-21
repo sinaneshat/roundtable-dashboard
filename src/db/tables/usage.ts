@@ -1,7 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import { SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
+import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
 
 import { user } from './auth';
 

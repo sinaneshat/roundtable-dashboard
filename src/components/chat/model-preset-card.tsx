@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
 
+import type { SubscriptionTier } from '@/api/core/enums';
 import type { BaseModelResponse, EnhancedModelResponse } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Badge } from '@/components/ui/badge';

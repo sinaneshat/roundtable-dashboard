@@ -56,7 +56,10 @@ export const DatabaseOperations = {
 
 export const HEALTH_STATUSES = ['healthy', 'degraded', 'unhealthy'] as const;
 
-export const HealthStatusSchema = z.enum(HEALTH_STATUSES);
+export const HealthStatusSchema = z.enum(HEALTH_STATUSES).openapi({
+  description: 'System health status',
+  example: 'healthy',
+});
 
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
 
@@ -99,6 +102,8 @@ export const SortDirectionSchema = z.enum(SORT_DIRECTIONS).default('desc').opena
 });
 
 export type SortDirection = z.infer<typeof SortDirectionSchema>;
+
+export const DEFAULT_SORT_DIRECTION: SortDirection = 'desc';
 
 export const SortDirections = {
   ASC: 'asc' as const,

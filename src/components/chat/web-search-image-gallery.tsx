@@ -7,7 +7,7 @@ import { useState } from 'react';
 
 import type { WebSearchImageGalleryProps, WebSearchImageItem } from '@/api/routes/chat/schema';
 import { cn } from '@/lib/ui/cn';
-import { safeExtractDomain } from '@/lib/utils';
+import { safeExtractDomain } from '@/lib/utils/web-search-utils';
 
 export function WebSearchImageGallery({ results, className }: WebSearchImageGalleryProps) {
   const tImages = useTranslations('chat.tools.webSearch.images');

@@ -11,6 +11,7 @@ import {
   getCursorOrderBy,
   Responses,
 } from '@/api/core';
+import { DEFAULT_PROJECT_INDEX_STATUS } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
 import {
   getAggregatedProjectContext,
@@ -524,8 +525,7 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
         projectId,
         uploadId: body.uploadId,
         addedBy: user.id,
-        // Set as pending - AI Search auto-indexes R2 every 6 hours
-        indexStatus: 'pending',
+        indexStatus: DEFAULT_PROJECT_INDEX_STATUS,
         ragMetadata: {
           context: body.context,
           description: body.description,

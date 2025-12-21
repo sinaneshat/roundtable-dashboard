@@ -515,7 +515,7 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
  *
  * Security model:
  * 1. If signed URL params present: Validate signature (supports shared access)
- * 2. If no signature: Require session auth + ownership check (backward compat)
+ * 2. If no signature: Require session auth + ownership check
  *
  * @see https://developers.cloudflare.com/r2/api/workers/workers-api-usage
  */
@@ -623,7 +623,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       return buildStreamingResponse(result, uploadRecord, cacheControl);
     }
 
-    // SECURITY CHECK 2: Session auth + ownership (backward compatibility)
+    // SECURITY CHECK 2: Session auth + ownership
     const auth = c.auth();
     if (!auth?.user) {
       throw createError.unauthenticated('Authentication required for unsigned download URLs', {
@@ -815,7 +815,7 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
     return Responses.ok(c, {
       uploadId: multipartUpload.uploadId,
       key: r2Key,
-      attachmentId: uploadId, // For backwards compatibility
+      attachmentId: uploadId,
     });
   },
 );

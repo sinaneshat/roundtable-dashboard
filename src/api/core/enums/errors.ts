@@ -10,7 +10,7 @@ import { z } from '@hono/zod-openapi';
 // ERROR TYPE (AI Operation Error Classification)
 // ============================================================================
 
-export const ERROR_TYPES = [
+export const ErrorTypeSchema = z.enum([
   'rate_limit',
   'context_length',
   'api_error',
@@ -19,9 +19,7 @@ export const ERROR_TYPES = [
   'model_unavailable',
   'empty_response',
   'unknown',
-] as const;
-
-export const ErrorTypeSchema = z.enum(ERROR_TYPES).openapi({
+]).openapi({
   description: 'Type of error that occurred during AI operations',
   example: 'api_error',
 });
@@ -72,16 +70,14 @@ export const StreamErrorTypes = {
 // AUTHENTICATION FAILURE REASON
 // ============================================================================
 
-export const AUTH_FAILURE_REASONS = [
+export const AuthFailureReasonSchema = z.enum([
   'invalid_credentials',
   'account_locked',
   'token_expired',
   'missing_token',
   'session_required',
   'session_expired',
-] as const;
-
-export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS);
+]);
 
 export type AuthFailureReason = z.infer<typeof AuthFailureReasonSchema>;
 
@@ -89,9 +85,7 @@ export type AuthFailureReason = z.infer<typeof AuthFailureReasonSchema>;
 // RESOURCE UNAVAILABILITY REASON
 // ============================================================================
 
-export const RESOURCE_UNAVAILABLE_REASONS = ['deleted', 'archived', 'private', 'expired'] as const;
-
-export const ResourceUnavailableReasonSchema = z.enum(RESOURCE_UNAVAILABLE_REASONS);
+export const ResourceUnavailableReasonSchema = z.enum(['deleted', 'archived', 'private', 'expired']);
 
 export type ResourceUnavailableReason = z.infer<typeof ResourceUnavailableReasonSchema>;
 
@@ -99,9 +93,7 @@ export type ResourceUnavailableReason = z.infer<typeof ResourceUnavailableReason
 // AUTH ACTION
 // ============================================================================
 
-export const AUTH_ACTIONS = ['login', 'logout', 'token_refresh', 'permission_check', 'registration'] as const;
-
-export const AuthActionSchema = z.enum(AUTH_ACTIONS).openapi({
+export const AuthActionSchema = z.enum(['login', 'logout', 'token_refresh', 'permission_check', 'registration']).openapi({
   description: 'Authentication action type',
   example: 'login',
 });
@@ -120,9 +112,7 @@ export const AuthActions = {
 // VALIDATION TYPE
 // ============================================================================
 
-export const VALIDATION_TYPES = ['body', 'query', 'params', 'headers'] as const;
-
-export const ValidationTypeSchema = z.enum(VALIDATION_TYPES).openapi({
+export const ValidationTypeSchema = z.enum(['body', 'query', 'params', 'headers']).openapi({
   description: 'Request validation context type',
   example: 'body',
 });
@@ -140,7 +130,7 @@ export const ValidationTypes = {
 // ERROR CATEGORY (UI Error Classification)
 // ============================================================================
 
-export const ERROR_CATEGORIES = [
+export const ErrorCategorySchema = z.enum([
   'model_not_found',
   'content_filter',
   'rate_limit',
@@ -151,13 +141,10 @@ export const ERROR_CATEGORIES = [
   'silent_failure',
   'empty_response',
   'unknown',
-  // Backend-specific categories (from AIProviderErrorCategory)
   'provider_rate_limit',
   'provider_network',
   'model_content_filter',
-] as const;
-
-export const ErrorCategorySchema = z.enum(ERROR_CATEGORIES).openapi({
+]).openapi({
   description: 'Error category for UI display and handling',
   example: 'provider_error',
 });
@@ -223,9 +210,7 @@ export const UIMessageErrorTypes = {
 // AI HISTORY STATUS (Operation Result Status)
 // ============================================================================
 
-export const AI_HISTORY_STATUSES = ['aborted', 'success', 'failed'] as const;
-
-export const AIHistoryStatusSchema = z.enum(AI_HISTORY_STATUSES).openapi({
+export const AIHistoryStatusSchema = z.enum(['aborted', 'success', 'failed']).openapi({
   description: 'AI operation result status',
   example: 'success',
 });

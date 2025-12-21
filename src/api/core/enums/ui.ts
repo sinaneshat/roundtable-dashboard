@@ -12,7 +12,10 @@ import { z } from '@hono/zod-openapi';
 
 export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'success', 'warning', 'glass'] as const;
 
-export const ComponentVariantSchema = z.enum(COMPONENT_VARIANTS);
+export const ComponentVariantSchema = z.enum(COMPONENT_VARIANTS).openapi({
+  description: 'UI component visual variant',
+  example: 'default',
+});
 
 export type ComponentVariant = z.infer<typeof ComponentVariantSchema>;
 
@@ -34,7 +37,10 @@ export const ComponentVariants = {
 
 export const COMPONENT_SIZES = ['sm', 'md', 'lg', 'xl', 'icon', 'default'] as const;
 
-export const ComponentSizeSchema = z.enum(COMPONENT_SIZES);
+export const ComponentSizeSchema = z.enum(COMPONENT_SIZES).openapi({
+  description: 'UI component size',
+  example: 'default',
+});
 
 export type ComponentSize = z.infer<typeof ComponentSizeSchema>;
 
@@ -53,7 +59,10 @@ export const ComponentSizes = {
 
 export const TEXT_ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
 
-export const TextAlignmentSchema = z.enum(TEXT_ALIGNMENTS);
+export const TextAlignmentSchema = z.enum(TEXT_ALIGNMENTS).openapi({
+  description: 'Text alignment direction',
+  example: 'left',
+});
 
 export type TextAlignment = z.infer<typeof TextAlignmentSchema>;
 
@@ -70,7 +79,10 @@ export const TextAlignments = {
 
 export const TOAST_VARIANTS = ['default', 'destructive', 'success', 'warning', 'info', 'loading'] as const;
 
-export const ToastVariantSchema = z.enum(TOAST_VARIANTS);
+export const ToastVariantSchema = z.enum(TOAST_VARIANTS).openapi({
+  description: 'Toast notification variant',
+  example: 'default',
+});
 
 export type ToastVariant = z.infer<typeof ToastVariantSchema>;
 
@@ -89,7 +101,10 @@ export const ToastVariants = {
 
 export const REASONING_STATES = ['idle', 'thinking', 'complete'] as const;
 
-export const ReasoningStateSchema = z.enum(REASONING_STATES);
+export const ReasoningStateSchema = z.enum(REASONING_STATES).openapi({
+  description: 'Reasoning animation state',
+  example: 'thinking',
+});
 
 export type ReasoningState = z.infer<typeof ReasoningStateSchema>;
 
@@ -105,7 +120,10 @@ export const ReasoningStates = {
 
 export const STATUS_VARIANTS = ['loading', 'success', 'error'] as const;
 
-export const StatusVariantSchema = z.enum(STATUS_VARIANTS);
+export const StatusVariantSchema = z.enum(STATUS_VARIANTS).openapi({
+  description: 'Status page variant',
+  example: 'loading',
+});
 
 export type StatusVariant = z.infer<typeof StatusVariantSchema>;
 
@@ -121,7 +139,10 @@ export const StatusVariants = {
 
 export const NETWORK_ERROR_TYPES = ['offline', 'timeout', 'connection'] as const;
 
-export const NetworkErrorTypeSchema = z.enum(NETWORK_ERROR_TYPES);
+export const NetworkErrorTypeSchema = z.enum(NETWORK_ERROR_TYPES).openapi({
+  description: 'Network error type',
+  example: 'offline',
+});
 
 export type NetworkErrorType = z.infer<typeof NetworkErrorTypeSchema>;
 
@@ -137,7 +158,10 @@ export const NetworkErrorTypes = {
 
 export const ERROR_SEVERITIES = ['failed', 'warning', 'info'] as const;
 
-export const ErrorSeveritySchema = z.enum(ERROR_SEVERITIES);
+export const ErrorSeveritySchema = z.enum(ERROR_SEVERITIES).openapi({
+  description: 'Error severity level',
+  example: 'failed',
+});
 
 export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
 

@@ -1,9 +1,11 @@
 /**
  * Test Providers Component
  *
- * Wraps test components with necessary providers for testing:
+ * Wraps test components with necessary providers:
  * - QueryClientProvider (TanStack Query)
- * - Mocked i18n (next-intl)
+ * - NextIntlClientProvider (i18n)
+ * - ChatStoreProvider (Zustand store)
+ * - ThreadHeaderProvider (Thread context)
  * - TooltipProvider (Radix UI)
  */
 
@@ -14,16 +16,14 @@ import type { ReactNode } from 'react';
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { ChatStoreProvider } from '@/components/providers/chat-store-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import testMessages from '@/i18n/locales/en/common.json';
 
-// ✅ Official next-intl testing pattern: Centralized test messages
-// Reference: https://next-intl-docs.vercel.app/docs/environments/testing
-import { testLocale, testMessages, testTimeZone } from './test-messages';
+import { testLocale, testTimeZone } from './test-messages';
 
 type TestProvidersProps = {
   children: ReactNode;
 };
 
-// Create a new QueryClient instance for each test to ensure isolation
 function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -43,16 +43,10 @@ export function TestProviders({ children }: TestProvidersProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <NextIntlClientProvider
-        locale={testLocale}
-        messages={testMessages}
-        timeZone={testTimeZone}
-      >
+      <NextIntlClientProvider locale={testLocale} messages={testMessages} timeZone={testTimeZone}>
         <ChatStoreProvider>
           <ThreadHeaderProvider>
-            <TooltipProvider>
-              {children}
-            </TooltipProvider>
+            <TooltipProvider>{children}</TooltipProvider>
           </ThreadHeaderProvider>
         </ChatStoreProvider>
       </NextIntlClientProvider>

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import type { SubscriptionTier } from '@/api/core/enums';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import type { Chat } from '@/components/chat/chat-list';
 import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
@@ -29,8 +29,7 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
-import { useThreadsQuery } from '@/hooks/queries/chat';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { useNavigationReset } from '@/stores/chat';
 

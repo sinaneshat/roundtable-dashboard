@@ -17,6 +17,7 @@
  */
 
 import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { SmartImage } from '@/components/ui/smart-image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -88,10 +89,11 @@ function AttachmentThumbnail({
   attachment: MessageAttachment;
   messageId: string;
 }) {
+  const t = useTranslations('chat.attachments');
   const { url: originalUrl, filename, mediaType, uploadId } = attachment;
   const isImage = mediaType?.startsWith('image/');
   const iconType = getIconType(mediaType);
-  const displayName = filename || 'Attachment';
+  const displayName = filename || t('defaultName');
 
   // Determine if we need to fetch a signed URL
   const needsFetch = !isValidDisplayUrl(originalUrl) && !isDataUrl(originalUrl) && !!uploadId;
@@ -124,11 +126,11 @@ function AttachmentThumbnail({
   // Determine tooltip status message
   const getStatusMessage = () => {
     if (isLoading)
-      return 'Loading preview...';
+      return t('loadingPreview');
     if (fetchError)
-      return 'Preview unavailable';
+      return t('previewUnavailable');
     if (!hasValidUrl)
-      return 'Preview unavailable';
+      return t('previewUnavailable');
     return null;
   };
 
@@ -188,7 +190,7 @@ function AttachmentThumbnail({
       <TooltipContent side="top" className="max-w-[200px]">
         <div className="space-y-1">
           <p className="text-xs font-medium break-all">{displayName}</p>
-          <p className="text-xs text-muted-foreground">{mediaType ? getFileTypeLabel(mediaType) : 'File'}</p>
+          <p className="text-xs text-muted-foreground">{mediaType ? getFileTypeLabel(mediaType) : t('defaultFileType')}</p>
           {statusMessage && (
             <p className={cn(
               'text-xs',

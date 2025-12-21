@@ -15,6 +15,10 @@ import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import {
+  isParticipantRoleChange,
+  safeParseChangelogData,
+} from '@/db/schemas/chat-metadata';
 import { calculateNextRound, NO_ROUND_SENTINEL } from '@/lib/schemas/round-schemas';
 
 import type {
@@ -37,16 +41,12 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
   async (c, batch) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    // ✅ TYPE-SAFE: createHandler validates body via validateBody config
     const body = c.validated.body;
     const db = batch.db;
     await verifyThreadOwnership(id, user.id, db);
     const userTier = await getUserTier(user.id);
 
-    // Validate tier limits (max models per conversation)
     await validateTierLimits(id, userTier, db);
-
-    // Validate model access (tier permissions)
     await validateModelAccess(body.modelId, userTier);
     const participantId = ulid();
     const now = new Date();
@@ -76,7 +76,6 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
     const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
-    // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
     await logParticipantAdded(
       id,
       nextRoundNumber,
@@ -100,7 +99,6 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-    // ✅ TYPE-SAFE: createHandler validates body via validateBody config
     const body = c.validated.body;
     const db = await getDbAsync();
     const participant = await verifyParticipantOwnership(id, user.id, db);
@@ -128,9 +126,6 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
       const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
-      // ✅ DEDUPLICATION FIX: If role was updated multiple times before next round,
-      // update the existing entry instead of creating duplicates.
-      // This shows the NET change (original role → final role).
       const existingRoleChange = await db.query.chatThreadChangelog.findFirst({
         where: and(
           eq(tables.chatThreadChangelog.threadId, participant.threadId),
@@ -141,34 +136,35 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       });
 
       if (existingRoleChange) {
-        // Existing entry found - use its oldRole as the baseline
-        const existingData = existingRoleChange.changeData as { type: 'participant_role'; oldRole: string | null; newRole: string | null; participantId: string; modelId: string };
-        const baselineRole = existingData.oldRole;
-        const newRole = body.role ?? null;
-
-        if (baselineRole === newRole) {
-          // ✅ NO NET CHANGE: Role changed back to baseline - delete the entry
+        const validated = safeParseChangelogData(existingRoleChange.changeData);
+        if (!validated || !isParticipantRoleChange(validated)) {
           await db.delete(tables.chatThreadChangelog)
             .where(eq(tables.chatThreadChangelog.id, existingRoleChange.id));
         } else {
-          // ✅ NET CHANGE EXISTS: Update entry with baseline oldRole → new newRole
-          const modelName = participant.modelId.split('/').pop() || participant.modelId;
-          await db.update(tables.chatThreadChangelog)
-            .set({
-              changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
-              changeData: {
-                type: 'participant_role' as const,
-                participantId: id,
-                modelId: participant.modelId,
-                oldRole: baselineRole,
-                newRole,
-              },
-              createdAt: new Date(),
-            })
-            .where(eq(tables.chatThreadChangelog.id, existingRoleChange.id));
+          const baselineRole = validated.oldRole ?? null;
+          const newRole = body.role ?? null;
+
+          if (baselineRole === newRole) {
+            await db.delete(tables.chatThreadChangelog)
+              .where(eq(tables.chatThreadChangelog.id, existingRoleChange.id));
+          } else {
+            const modelName = participant.modelId.split('/').pop() || participant.modelId;
+            await db.update(tables.chatThreadChangelog)
+              .set({
+                changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
+                changeData: {
+                  type: 'participant_role' as const,
+                  participantId: id,
+                  modelId: participant.modelId,
+                  oldRole: baselineRole,
+                  newRole,
+                },
+                createdAt: new Date(),
+              })
+              .where(eq(tables.chatThreadChangelog.id, existingRoleChange.id));
+          }
         }
       } else {
-        // ✅ SERVICE LAYER: Use thread-changelog.service for new changelog creation
         await logParticipantUpdated(
           participant.threadId,
           nextRoundNumber,
@@ -207,7 +203,6 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
     const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
-    // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
     await logParticipantRemoved(
       participant.threadId,
       nextRoundNumber,
@@ -216,7 +211,6 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       participant.role,
     );
 
-    // Delete participant
     await db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id));
 
     return Responses.ok(c, {

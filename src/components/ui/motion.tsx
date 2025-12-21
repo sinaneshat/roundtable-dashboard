@@ -93,7 +93,6 @@ type SimpleEntranceProps = {
   className?: string;
   skipAnimation?: boolean;
   index?: number;
-  // Legacy props - kept for compatibility but ignored (no scroll effects)
   enableScrollEffect?: boolean;
   scrollIntensity?: number;
   skipScale?: boolean;

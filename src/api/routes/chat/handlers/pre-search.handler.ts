@@ -46,6 +46,7 @@ import {
   failPreSearchStreamBuffer,
   generatePreSearchStreamId,
   getActivePreSearchStreamId,
+  getPreSearchStreamChunks,
   initializePreSearchStreamBuffer,
   isPreSearchBufferStale,
 } from '@/api/services/pre-search-stream-buffer.service';
@@ -199,7 +200,6 @@ async function analyzeImagesForSearchContext(
  * - Direct use of streamSearchQuery() instead of callback-based performPreSearches()
  * - Streaming answer integration via streamAnswerSummary() (75-80% faster TTFC)
  * - Simplified streaming logic - no nested callbacks
- * - Maintained backward compatibility with PreSearchDataPayloadSchema
  *
  * **PATTERN**: Identical to summarizeRoundHandler architecture
  * **REFERENCE**: moderator.handler.ts:227-648, backend-patterns.md:546-693
@@ -1170,7 +1170,10 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
     });
 
     // Mark stale STREAMING/PENDING searches as FAILED
-    const orphanedSearches = allPreSearches.filter((search) => {
+    // ✅ FIX: Check KV buffer for recent activity before marking as orphaned
+    // A search with recent KV chunks is still actively running and should not be marked failed
+    const STALE_CHUNK_TIMEOUT_MS = 30_000; // 30 seconds - matches stream-resume handler
+    const potentialOrphans = allPreSearches.filter((search) => {
       if (search.status !== MessageStatuses.STREAMING && search.status !== MessageStatuses.PENDING) {
         return false;
       }
@@ -1179,9 +1182,33 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
       return hasTimestampExceededTimeout(search.createdAt, STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS);
     });
 
+    // Filter to truly orphaned searches by checking KV for recent activity
+    const orphanedSearches: typeof potentialOrphans = [];
+    for (const search of potentialOrphans) {
+      const streamId = generatePreSearchStreamId(threadId, search.roundNumber);
+      const chunks = await getPreSearchStreamChunks(streamId, c.env);
+
+      // If KV has recent chunks, the stream is still active - don't mark as orphaned
+      if (chunks && chunks.length > 0) {
+        const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
+        const isStale = Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
+
+        if (!isStale) {
+          // Stream is still active, skip orphan cleanup for this search
+          continue;
+        }
+      }
+
+      // No recent KV activity OR no KV available - this is truly orphaned
+      orphanedSearches.push(search);
+    }
+
     if (orphanedSearches.length > 0) {
       // Update orphaned searches to FAILED status
       for (const search of orphanedSearches) {
+        // Clean up KV tracking for this orphaned search
+        await clearActivePreSearchStream(threadId, search.roundNumber, c.env);
+
         await db.update(tables.chatPreSearch)
           .set({
             status: MessageStatuses.FAILED,

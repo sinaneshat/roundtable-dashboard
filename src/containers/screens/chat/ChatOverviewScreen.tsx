@@ -1,18 +1,5 @@
 'use client';
 
-/**
- * ChatOverviewScreen - Initial Chat Landing Page
- *
- * Shows the initial UI (logo, tagline, suggestions) and handles thread creation.
- * Once a thread is created, delegates all rendering to ChatView for consistent
- * behavior with the thread screen.
- *
- * ARCHITECTURE:
- * - Initial UI: Logo, tagline, quick start suggestions
- * - Thread creation: handleCreateThread via form actions
- * - Post-creation: ChatView handles all rendering (same as thread screen)
- */
-
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -33,8 +20,7 @@ import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
-import { useCustomRolesQuery } from '@/hooks/queries/chat';
-import { useModelsQuery } from '@/hooks/queries/models';
+import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
   useBoolean,
   useChatAttachments,
@@ -67,15 +53,8 @@ export default function ChatOverviewScreen() {
   const { data: session } = useSession();
   const sessionUser = session?.user;
 
-  // Model lookup for defaults
   const { defaultModelId } = useModelLookup();
 
-  // ============================================================================
-  // PREFERENCES STORE (Cookie-persisted model selection + mode/webSearch)
-  // ============================================================================
-  // ✅ FIX: Read _hasHydrated directly from store state instead of useModelPreferencesHydrated hook
-  // The hook uses useState(false) + useEffect which creates a timing gap on first render.
-  // Reading from store state ensures we see the true hydration status immediately.
   const {
     _hasHydrated: preferencesHydrated,
     modelOrder: persistedModelOrder,
@@ -99,10 +78,6 @@ export default function ChatOverviewScreen() {
     setEnableWebSearch: s.setEnableWebSearch,
     syncWithAccessibleModels: s.syncWithAccessibleModels,
   })));
-
-  // ============================================================================
-  // STORE STATE
-  // ============================================================================
 
   const { isStreaming, error: streamError, isModeratorStreaming } = useChatStore(
     useShallow(s => ({
@@ -140,8 +115,6 @@ export default function ChatOverviewScreen() {
   const preSearches = useChatStore(s => s.preSearches);
   const messages = useChatStore(s => s.messages);
 
-  // Store actions
-  // ✅ AI SDK RESUME PATTERN: No stop selector - streams always complete
   const { setInputValue, setSelectedMode, setSelectedParticipants, addParticipant, removeParticipant, updateParticipant, setEnableWebSearch } = useChatStore(
     useShallow(s => ({
       setInputValue: s.setInputValue,
@@ -155,44 +128,26 @@ export default function ChatOverviewScreen() {
   );
   const resetToOverview = useChatStore(s => s.resetToOverview);
 
-  // Store API for imperative access (getState)
   const storeApi = useChatStoreApi();
-
-  // ============================================================================
-  // LOCAL STATE & REFS
-  // ============================================================================
 
   const hasSentInitialPromptRef = useRef(false);
   const hasInitializedModelsRef = useRef(false);
-  // ✅ ZUSTAND PATTERN: Thread title comes from store - only manage threadActions here
   const { setThreadActions } = useThreadHeader();
 
-  // Modal state
   const modeModal = useBoolean(false);
   const modelModal = useBoolean(false);
 
-  // Responsive breakpoint - use hook pattern instead of CSS for SSR safety
   const isMobile = useIsMobile();
 
-  // Chat attachments
   const chatAttachments = useChatAttachments();
 
-  // ✅ SIMPLIFIED: Ref-based attachment click (no registration callback needed)
   const attachmentClickRef = useRef<(() => void) | null>(null);
   const handleAttachmentClick = useCallback(() => {
     attachmentClickRef.current?.();
   }, []);
 
-  // ============================================================================
-  // QUERIES
-  // ============================================================================
-
   const { data: modelsData } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
-
-  // ============================================================================
-  // MEMOIZED DATA
-  // ============================================================================
 
   const allEnabledModels = useMemo(
     () => modelsData?.data?.items || [],
@@ -210,13 +165,9 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  // ✅ REACT 19: Separate selectors instead of array (avoids new array on every render)
   const modelOrder = useChatStore(s => s.modelOrder);
   const setModelOrder = useChatStore(s => s.setModelOrder);
 
-  // ============================================================================
-  // ACCESSIBLE MODELS (computed from enabled models)
-  // ============================================================================
   const accessibleModelIds = useMemo(() => {
     if (allEnabledModels.length === 0)
       return [];
@@ -225,19 +176,11 @@ export default function ChatOverviewScreen() {
       .map(m => m.id);
   }, [allEnabledModels]);
 
-  // ============================================================================
-  // INITIAL PARTICIPANTS (pure computation - NO side effects)
-  // - Uses persisted selection if valid models exist
-  // - Otherwise uses first 3 accessible models
-  // - Side effect (persisting defaults) handled in useEffect below
-  // ============================================================================
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
-    // Wait for preferences to hydrate and models to load
     if (!preferencesHydrated || accessibleModelIds.length === 0) {
       return [];
     }
 
-    // PRIORITY 1: Use persisted selection if valid models exist
     if (persistedModelIds.length > 0) {
       const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
       if (validIds.length > 0) {
@@ -250,7 +193,6 @@ export default function ChatOverviewScreen() {
       }
     }
 
-    // PRIORITY 2: Use first 3 accessible models as defaults
     const defaultIds = accessibleModelIds.slice(0, 3);
     if (defaultIds.length > 0) {
       return defaultIds.map((modelId, index) => ({
@@ -261,7 +203,6 @@ export default function ChatOverviewScreen() {
       }));
     }
 
-    // Fallback to default model
     if (defaultModelId) {
       return [{
         id: defaultModelId,
@@ -280,51 +221,29 @@ export default function ChatOverviewScreen() {
     modelOrder,
   });
 
-  // ============================================================================
-  // FILE CAPABILITY: Compute incompatible models based on attachments AND thread history
-  // Models without vision capability cannot process images/PDFs
-  // ============================================================================
   const incompatibleModelIds = useMemo(() => {
-    // Check existing thread messages for vision-required files (images/PDFs)
     const existingVisionFiles = threadHasVisionRequiredFiles(messages);
 
-    // Check new attachments for vision-required files
     const newVisionFiles = chatAttachments.attachments.some(att =>
       isVisionRequiredMimeType(att.file.type),
     );
 
-    // If no vision files anywhere, no models are incompatible
     if (!existingVisionFiles && !newVisionFiles) {
       return new Set<string>();
     }
 
-    // Build file list for capability check (placeholder since we know vision is required)
     const files = [{ mimeType: 'image/png' }];
     return getIncompatibleModelIds(allEnabledModels, files);
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
-  // ✅ STALE CLOSURE FIX: Track latest incompatibleModelIds in ref for callbacks
-  // Callbacks created with useCallback may have stale closure references.
-  // This ref ensures we always check the latest incompatibility state.
   const incompatibleModelIdsRef = useRef(incompatibleModelIds);
   useEffect(() => {
     incompatibleModelIdsRef.current = incompatibleModelIds;
   }, [incompatibleModelIds]);
 
-  // ============================================================================
-  // HOOKS
-  // ============================================================================
-
   const formActions = useChatFormActions();
   const overviewActions = useOverviewActions();
 
-  // ============================================================================
-  // CONSOLIDATED INITIALIZATION EFFECT
-  // React 19: Single effect for all initialization that requires external sync
-  // Combines previously scattered effects into one with proper state tracking
-  // ============================================================================
-
-  // Track what has been initialized to prevent re-running
   const initStateRef = useRef({
     persistedDefaults: false,
     syncedModels: false,
@@ -336,7 +255,6 @@ export default function ChatOverviewScreen() {
   useEffect(() => {
     const init = initStateRef.current;
 
-    // INIT 1: Persist defaults when no saved selection
     if (
       !init.persistedDefaults
       && preferencesHydrated
@@ -350,7 +268,6 @@ export default function ChatOverviewScreen() {
       }
     }
 
-    // INIT 2: Sync models with accessible list (one-time when models load)
     if (
       !init.syncedModels
       && preferencesHydrated
@@ -360,7 +277,6 @@ export default function ChatOverviewScreen() {
       syncWithAccessibleModels(accessibleModelIds);
     }
 
-    // INIT 3: Model order initialization
     if (
       !init.modelOrder
       && allEnabledModels.length > 0
@@ -382,7 +298,6 @@ export default function ChatOverviewScreen() {
       setModelOrder(fullOrder);
     }
 
-    // INIT 4: Initialize participants when models available
     if (
       !init.participants
       && selectedParticipants.length === 0
@@ -398,7 +313,6 @@ export default function ChatOverviewScreen() {
       setEnableWebSearch(persistedWebSearch);
     }
 
-    // INIT 5: Clear thread actions for overview
     if (!init.threadActions) {
       init.threadActions = true;
       setThreadActions(null);
@@ -425,15 +339,10 @@ export default function ChatOverviewScreen() {
     setThreadActions,
   ]);
 
-  // ============================================================================
-  // AUTO-DESELECT INCOMPATIBLE MODELS
-  // When files are uploaded that require vision, auto-deselect models without vision
-  // ============================================================================
   useEffect(() => {
     if (incompatibleModelIds.size === 0)
       return;
 
-    // Find selected participants that are now incompatible
     const incompatibleSelected = selectedParticipants.filter(
       p => incompatibleModelIds.has(p.modelId),
     );
@@ -441,17 +350,14 @@ export default function ChatOverviewScreen() {
     if (incompatibleSelected.length === 0)
       return;
 
-    // Get model names for toast message
     const incompatibleModelNames = incompatibleSelected
       .map(p => allEnabledModels.find(m => m.id === p.modelId)?.name)
       .filter((name): name is string => Boolean(name));
 
-    // Remove incompatible participants
     const compatibleParticipants = selectedParticipants.filter(
       p => !incompatibleModelIds.has(p.modelId),
     );
 
-    // Re-index priorities
     const reindexed = compatibleParticipants.map((p, index) => ({
       ...p,
       priority: index,
@@ -460,7 +366,6 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(reindexed);
     setPersistedModelIds(reindexed.map(p => p.modelId));
 
-    // Show toast notification
     if (incompatibleModelNames.length > 0) {
       const modelList = incompatibleModelNames.length <= 2
         ? incompatibleModelNames.join(' and ')
@@ -473,12 +378,6 @@ export default function ChatOverviewScreen() {
     }
   }, [incompatibleModelIds, selectedParticipants, setSelectedParticipants, setPersistedModelIds, allEnabledModels, t]);
 
-  // ============================================================================
-  // THREAD ACTIONS SYNC (for header when thread is active on overview)
-  // ============================================================================
-  // When a thread is created from overview, set thread actions for the header
-  // This mirrors what ChatThreadScreen does via useThreadHeaderUpdater
-  // ✅ REACT 19: Effect is valid - syncing with context (external to this component)
   const threadActions = useMemo(
     () => currentThread && !showInitialUI
       ? <ChatThreadActions thread={currentThread} slug={currentThread.slug} />
@@ -490,12 +389,10 @@ export default function ChatOverviewScreen() {
     setThreadActions(threadActions);
   }, [threadActions, setThreadActions]);
 
-  // Screen initialization for orchestrator
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
   const hasActivePreSearch = preSearches.some(
     ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
   );
-  // ✅ TEXT STREAMING: isModeratorStreaming flag tracks moderator streaming
 
   useScreenInitialization({
     mode: 'overview',
@@ -510,28 +407,14 @@ export default function ChatOverviewScreen() {
     ),
   });
 
-  // Input blocking state
-  // For initial UI (no thread): block during thread creation
-  // For existing thread (reusing thread screen flow): block during streaming/moderator
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  // ✅ SUBMIT FIX: Include formActions.isSubmitting for immediate blocking on submit click
   const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
-  // ============================================================================
-  // LAYOUT EFFECTS (external system sync only - DOM, scroll, navigation)
-  // ============================================================================
-
-  // ✅ SIMPLIFIED: Reset on navigation to /chat
-  // Single ref tracks last reset pathname to prevent duplicate resets
   const lastResetPathRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
-    // Only reset when navigating TO /chat from elsewhere (or on initial mount at /chat)
     if (pathname === '/chat' && lastResetPathRef.current !== '/chat') {
-      // ✅ FIX: Check for active conversation/streaming state before resetting
-      // This prevents wiping state when user clicks recommended models from round moderator
-      // and submits - the ref check can fail due to re-renders but state should be preserved
       const currentState = storeApi.getState();
       const hasActiveConversation = currentState.messages.length > 0
         || currentState.thread !== null
@@ -543,7 +426,6 @@ export default function ChatOverviewScreen() {
       );
 
       if (hasActiveConversation || isFormSubmitting || isStreamingActive || hasActivePreSearch) {
-        // Update ref but don't reset - preserve active conversation state
         lastResetPathRef.current = '/chat';
         return;
       }
@@ -551,12 +433,9 @@ export default function ChatOverviewScreen() {
       lastResetPathRef.current = '/chat';
       resetToOverview();
       hasSentInitialPromptRef.current = false;
-      hasInitializedModelsRef.current = false; // Reset so we can re-initialize
+      hasInitializedModelsRef.current = false;
       chatAttachments.clearAttachments();
 
-      // ✅ RACE CONDITION FIX: Reset initialization state to allow re-initialization
-      // When navigating back to /chat, the consolidated init effect needs to run again
-      // Previously, init.participants stayed true which blocked re-initialization
       initStateRef.current = {
         persistedDefaults: false,
         syncedModels: false,
@@ -564,47 +443,28 @@ export default function ChatOverviewScreen() {
         participants: false,
         threadActions: false,
       };
-
-      // ✅ SIMPLIFIED: Don't try to set participants here - let the consolidated useEffect handle it
-      // The useEffect has proper guards for preferencesHydrated and initialParticipants
-      // Setting participants here created a race condition where preferences weren't hydrated yet
     } else {
       lastResetPathRef.current = pathname;
     }
   }, [pathname, resetToOverview, chatAttachments, storeApi]);
 
-  // ✅ AI SDK RESUME PATTERN: Do NOT stop streaming when returning to initial UI
-  // Per AI SDK docs, resume: true is incompatible with abort/stop.
-  // Streams continue in background via waitUntil() and can be resumed.
-
-  // ✅ MOBILE FIX: Removed overflow-hidden to allow scrolling on small screens
-  // Previously prevented scrolling which caused content to be cut off on small mobile devices
-
-  // ============================================================================
-  // CALLBACKS
-  // ============================================================================
-
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      // Check if thread already exists (reuse thread screen flow)
       const existingThreadId = currentThread?.id || createdThreadId;
 
       if (existingThreadId) {
-        // Thread exists: use thread screen flow (handleUpdateThreadAndSend)
         if (!inputValue.trim() || selectedParticipants.length === 0 || isSubmitBlocked) {
           return;
         }
 
-        // Wait for all uploads to complete before sending
         if (!chatAttachments.allUploaded) {
           return;
         }
 
         try {
           const attachmentIds = chatAttachments.getUploadIds();
-          // Build attachment info for optimistic message file parts
           const attachmentInfos = chatAttachments.attachments
             .filter(att => att.status === 'completed' && att.uploadId)
             .map(att => ({
@@ -614,27 +474,22 @@ export default function ChatOverviewScreen() {
               previewUrl: att.preview?.url,
             }));
           await formActions.handleUpdateThreadAndSend(existingThreadId, attachmentIds, attachmentInfos);
-          // ✅ Clear store attachments is called inside handleUpdateThreadAndSend
-          // ✅ Clear hook local state AFTER thread is created (user request)
           chatAttachments.clearAttachments();
         } catch (error) {
           console.error('[ChatOverview] Error sending message:', error);
           showApiErrorToast('Error sending message', error);
         }
       } else {
-        // No thread: create new thread (original overview flow)
         if (!inputValue.trim() || selectedParticipants.length === 0 || isInitialUIInputBlocked) {
           return;
         }
 
-        // Wait for all uploads to complete before creating thread
         if (!chatAttachments.allUploaded) {
           return;
         }
 
         try {
           const attachmentIds = chatAttachments.getUploadIds();
-          // Build attachment info for optimistic message file parts (for handleCreateThread if needed)
           const attachmentInfos = chatAttachments.attachments
             .filter(att => att.status === 'completed' && att.uploadId)
             .map(att => ({
@@ -645,8 +500,6 @@ export default function ChatOverviewScreen() {
             }));
           await formActions.handleCreateThread(attachmentIds, attachmentInfos);
           hasSentInitialPromptRef.current = true;
-          // ✅ Clear store attachments is called inside handleCreateThread
-          // ✅ Clear hook local state AFTER thread is created (user request)
           chatAttachments.clearAttachments();
         } catch (error) {
           console.error('[ChatOverview] Error creating thread:', error);
@@ -657,8 +510,6 @@ export default function ChatOverviewScreen() {
     [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments],
   );
 
-  // Model modal callbacks
-  // ✅ STALE CLOSURE FIX: Use store actions instead of closure-based state manipulation
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
     if (!orderedModel) {
@@ -666,14 +517,10 @@ export default function ChatOverviewScreen() {
     }
 
     if (orderedModel.participant) {
-      // Use store action to remove - avoids stale closure
       removeParticipant(modelId);
-      // Get current state from store API for persistence
       const currentParticipants = storeApi.getState().selectedParticipants;
       setPersistedModelIds(currentParticipants.map(p => p.modelId));
     } else {
-      // ✅ VISION COMPATIBILITY: Block selection if model is incompatible with uploaded files
-      // Use ref to get latest incompatibility state (avoids stale closure)
       const latestIncompatible = incompatibleModelIdsRef.current;
       if (latestIncompatible.has(modelId)) {
         toastManager.warning(
@@ -683,22 +530,18 @@ export default function ChatOverviewScreen() {
         return;
       }
 
-      // Use store action to add - avoids stale closure
       const newParticipant: ParticipantConfig = {
         id: modelId,
         modelId,
         role: '',
-        priority: 0, // Will be reindexed by store action
+        priority: 0,
       };
       addParticipant(newParticipant);
-      // Get current state from store API for persistence
       const currentParticipants = storeApi.getState().selectedParticipants;
       setPersistedModelIds(currentParticipants.map(p => p.modelId));
     }
   }, [orderedModels, removeParticipant, addParticipant, setPersistedModelIds, storeApi, t]);
 
-  // ✅ STALE CLOSURE FIX: Use store action instead of closure-based map
-  // The old pattern captured selectedParticipants in closure, causing deselection bugs
   const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
     updateParticipant(modelId, { role, customRoleId });
   }, [updateParticipant]);
@@ -720,27 +563,21 @@ export default function ChatOverviewScreen() {
       }));
     setSelectedParticipants(reorderedParticipants);
 
-    // Persist to cookie storage
     setPersistedModelOrder(newModelOrder);
     setPersistedModelIds(reorderedParticipants.map(p => p.modelId));
   }, [setSelectedParticipants, setModelOrder, setPersistedModelOrder, setPersistedModelIds]);
 
-  // Web search toggle with persistence
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
     setEnableWebSearch(enabled);
-    setPersistedWebSearch(enabled); // Persist to cookie
+    setPersistedWebSearch(enabled);
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  // Preset selection - replaces all selected models with preset's models and preferences
   const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    // ✅ VISION COMPATIBILITY: Double-check filtering at execution time
-    // The modal filters before calling this, but use ref to ensure latest state
     const latestIncompatible = incompatibleModelIdsRef.current;
     const compatibleModels = latestIncompatible.size > 0
       ? models.filter(m => !latestIncompatible.has(m.id))
       : models;
 
-    // Show warning if any models were filtered
     const filteredCount = models.length - compatibleModels.length;
     if (filteredCount > 0 && compatibleModels.length > 0) {
       toastManager.warning(
@@ -749,7 +586,6 @@ export default function ChatOverviewScreen() {
       );
     }
 
-    // If ALL models are incompatible, don't apply preset
     if (compatibleModels.length === 0) {
       toastManager.error(
         t('chat.models.presetIncompatible'),
@@ -758,7 +594,6 @@ export default function ChatOverviewScreen() {
       return;
     }
 
-    // Convert models to participant configs
     const newParticipants: ParticipantConfig[] = compatibleModels.map((model, index) => ({
       id: model.id,
       modelId: model.id,
@@ -766,31 +601,23 @@ export default function ChatOverviewScreen() {
       priority: index,
     }));
 
-    // Update store and persist
     setSelectedParticipants(newParticipants);
     const modelIds = newParticipants.map(p => p.modelId);
     setPersistedModelIds(modelIds);
     setModelOrder(modelIds);
     setPersistedModelOrder(modelIds);
 
-    // Apply preset mode if recommended
     if (preset.recommendedMode) {
       setSelectedMode(preset.recommendedMode);
       setPersistedMode(preset.recommendedMode);
     }
 
-    // Apply preset web search preference
     if (preset.recommendWebSearch !== undefined) {
       setEnableWebSearch(preset.recommendWebSearch);
       setPersistedWebSearch(preset.recommendWebSearch);
     }
   }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch, t]);
 
-  // ============================================================================
-  // MEMOIZED CHAT INPUT PROPS (DRY - shared between desktop and mobile)
-  // ============================================================================
-
-  // ✅ REACT 19: Memoize toolbar to prevent recreation on every render
   const chatInputToolbar = useMemo(() => (
     <ChatInputToolbarMenu
       selectedParticipants={selectedParticipants}
@@ -818,7 +645,6 @@ export default function ChatOverviewScreen() {
     isInitialUIInputBlocked,
   ]);
 
-  // ✅ REACT 19: Shared ChatInput props (DRY - prevents duplicate prop lists)
   const sharedChatInputProps = useMemo(() => ({
     value: inputValue,
     onChange: setInputValue,
@@ -853,18 +679,12 @@ export default function ChatOverviewScreen() {
     chatAttachments.isUploading,
   ]);
 
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-
-  // Show ChatView after thread creation for unified behavior
   const showChatView = !showInitialUI && (currentThread || createdThreadId);
 
   return (
     <>
       <UnifiedErrorBoundary context="chat">
         <div className="flex flex-col relative flex-1 min-h-dvh">
-          {/* Radial glow - fixed positioning */}
           <AnimatePresence mode="wait">
             {showInitialUI && (
               <motion.div
@@ -889,17 +709,14 @@ export default function ChatOverviewScreen() {
                     offsetY={0}
                     duration={18}
                     animate={true}
-                    useLogoColors={true}
                   />
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Initial UI - logo, tagline, suggestions */}
           {showInitialUI && (
             <>
-              {/* Scrollable content area */}
               <div className="flex-1 overflow-y-auto">
                 <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
                   <motion.div
@@ -960,7 +777,6 @@ export default function ChatOverviewScreen() {
                         <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
                       </motion.div>
 
-                      {/* Desktop: Chat input inline under suggestions */}
                       {!isMobile && (
                         <motion.div
                           className="w-full mt-6"
@@ -977,7 +793,6 @@ export default function ChatOverviewScreen() {
                 </div>
               </div>
 
-              {/* Mobile: Sticky input at bottom */}
               {isMobile && (
                 <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-4">
                   <div className="container max-w-3xl mx-auto px-2 sm:px-4 pb-4">
@@ -995,7 +810,6 @@ export default function ChatOverviewScreen() {
             </>
           )}
 
-          {/* Chat UI - unified with thread screen via ChatView */}
           {showChatView && (
             <ChatView
               user={{
@@ -1008,7 +822,6 @@ export default function ChatOverviewScreen() {
             />
           )}
 
-          {/* Error display */}
           {streamError && !isStreaming && !showInitialUI && (
             <div className="flex justify-center mt-4">
               <div className="px-4 py-2 text-sm text-destructive">
@@ -1019,14 +832,13 @@ export default function ChatOverviewScreen() {
         </div>
       </UnifiedErrorBoundary>
 
-      {/* Modals */}
       <ConversationModeModal
         open={modeModal.value}
         onOpenChange={modeModal.setValue}
         selectedMode={selectedMode || getDefaultChatMode()}
         onModeSelect={(mode) => {
           setSelectedMode(mode);
-          setPersistedMode(mode); // Persist to cookie
+          setPersistedMode(mode);
           modeModal.onFalse();
         }}
       />

@@ -146,20 +146,20 @@ const {
 });
 ```
 
-#### `useChatScroll.ts` (184 lines)
-Scroll management for chat interfaces with auto-scroll behavior.
+#### `useChatScroll.ts` (169 lines)
+Manual scroll control for chat interfaces.
 - **Features:**
-  - Near-bottom detection (within threshold)
-  - Auto-scroll to bottom when sending or receiving messages
-  - Smooth scrolling animation
-- **Integration:** Works with messages, analyses, streaming state
-- **Returns:** `{ scrollRef, scrollToBottom, isNearBottom, isAtBottom }`
+  - Manual scroll to bottom via `scrollToBottom()` function
+  - Near-bottom detection (tracks if user is at bottom)
+  - NO auto-scroll - user has full control
+- **Integration:** Works with TanStack Virtual window scrolling
+- **Returns:** `{ isAtBottomRef, scrollToBottom, resetScrollState }`
+- **Pattern:** User triggers scroll via ChatScrollButton only
 
 ```typescript
-const { scrollRef, scrollToBottom, isNearBottom } = useChatScroll({
+const { isAtBottomRef, scrollToBottom } = useChatScroll({
   messages,
-  isStreaming,
-  threshold: 100
+  autoScrollThreshold: 100
 });
 ```
 
@@ -181,41 +181,8 @@ const textareaRef = useAutoResizeTextarea({
 <textarea ref={textareaRef} value={inputValue} />
 ```
 
-#### `use-fuzzy-search.ts` (56 lines)
-Fuse.js wrapper for fuzzy searching with configurable options.
-- **Usage:** Participant search, model search, any list filtering
-- **Features:** Debounced search, configurable fuse options
-- **Returns:** Filtered results based on search query
-
-```typescript
-const results = useFuzzySearch({
-  items: participants,
-  query: searchQuery,
-  options: {
-    keys: ['name', 'description'],
-    threshold: 0.3
-  }
-});
-```
 
 ### Streaming/SSE
-
-#### `use-pre-search-sse.ts` (225 lines)
-Custom SSE streaming for pre-search results (NOT using AI SDK).
-- **Pattern:** Manual ReadableStream processing for custom backend SSE format
-- **Reason:** Backend uses custom SSE format (not AI SDK compatible)
-- **Usage:** Pre-search result streaming with real-time updates
-- **Returns:** `{ searchResults, isSearching, error, startSearch }`
-
-```typescript
-const {
-  searchResults,
-  isSearching,
-  startSearch
-} = usePreSearchSSE();
-
-startSearch({ query: 'React patterns', threadId });
-```
 
 #### `use-multi-participant-chat.ts` (936 lines)
 Multi-participant chat orchestration with sequential streaming.
@@ -351,18 +318,6 @@ const onComplete = useCallback(() => {
 }, []); // Empty deps OK, ref is mutable
 ```
 
-### Custom SSE Streaming Pattern
-
-When AI SDK doesn't fit:
-
-```typescript
-// Backend uses custom SSE format
-// Hook manages ReadableStream manually
-const { data, isLoading, start } = usePreSearchSSE();
-
-// AI SDK for standard chat
-const { messages, isLoading } = useChat();
-```
 
 ## Maintenance
 
@@ -465,8 +420,8 @@ useEffect(() => {
 | Responsive/Browser | 2 | 196 | High |
 | Message/Chat Processing | 2 | 232 | Medium (domain-specific) |
 | Timeline/Virtualization | 4 | 807 | Medium |
-| Form/Input | 2 | 106 | High |
-| Streaming/SSE | 2 | 1,161 | Low (app-specific) |
+| Form/Input | 1 | 50 | High |
+| Streaming/SSE | 1 | 936 | Low (app-specific) |
 | React Patterns | 1 | 85 | Very High |
 
 ## Contributing

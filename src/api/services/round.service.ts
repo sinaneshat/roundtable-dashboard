@@ -38,7 +38,6 @@ export type RoundCalculationMessage = {
   metadata?: {
     isParticipantTrigger?: boolean;
     roundNumber?: number;
-    [key: string]: unknown;
   };
   parts?: Array<{
     type: string;

@@ -1,39 +1,23 @@
-/**
- * Moderator Trigger Hook
- *
- * Triggers the moderator stream after all participants complete.
- * Uses RAF-based updates for smooth streaming display.
- *
- * AI SDK toUIMessageStreamResponse format:
- * - `0:"text"` - Text delta (text is JSON-encoded string)
- * - `d:{...}` - Done event with finishReason
- * - `e:{...}` - Error event
- */
-
 'use client';
 
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, RoundPhases } from '@/api/core/enums';
 import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/components/chat/round-summary/moderator-constants';
+import { getMessageMetadata, getRoundNumber } from '@/lib/utils/metadata';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {
   store: ChatStoreApi;
 };
 
-/**
- * Parse AI SDK stream line
- * Returns the text delta or null if not a text line
- */
 function parseAiSdkStreamLine(line: string): string | null {
   const trimmed = line.trim();
   if (!trimmed)
     return null;
 
-  // AI SDK text delta format: 0:"text content"
   if (trimmed.startsWith('0:')) {
     try {
       const jsonStr = trimmed.slice(2);
@@ -46,7 +30,6 @@ function parseAiSdkStreamLine(line: string): string | null {
     }
   }
 
-  // Standard SSE format: data: {...}
   if (trimmed.startsWith('data: ')) {
     const jsonStr = trimmed.slice(6);
     if (jsonStr === '[DONE]')
@@ -55,7 +38,6 @@ function parseAiSdkStreamLine(line: string): string | null {
     try {
       const parsed = JSON.parse(jsonStr);
       if (parsed && typeof parsed === 'object') {
-        // Handle text-delta type
         if (parsed.type === 'text-delta') {
           return parsed.textDelta || parsed.delta || parsed.text || '';
         }
@@ -68,24 +50,15 @@ function parseAiSdkStreamLine(line: string): string | null {
   return null;
 }
 
-/**
- * Hook to automatically trigger the moderator stream after participants complete
- * Used by ChatStoreProvider to handle the transition from participant streaming to moderator
- */
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
-  // Subscribe to store state (only what we need for threadId)
   const thread = useStore(store, s => s.thread);
   const createdThreadId = useStore(store, s => s.createdThreadId);
 
-  // Refs for callbacks
   const abortControllerRef = useRef<AbortController | null>(null);
   const triggeringRoundRef = useRef<number | null>(null);
 
   const effectiveThreadId = thread?.id || createdThreadId || '';
 
-  /**
-   * Trigger the moderator stream for a specific round
-   */
   const triggerModerator = useCallback(async (
     roundNumber: number,
     participantMessageIds: string[],
@@ -95,7 +68,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     // eslint-disable-next-line no-console
     console.log('[MOD]', JSON.stringify({ ev: 'start', rnd: roundNumber, msgs: participantMessageIds.length }));
 
-    // Early returns - clear streaming state if it was pre-set by handleComplete
     if (!effectiveThreadId) {
       // eslint-disable-next-line no-console
       console.log('[MOD]', JSON.stringify({ ev: 'err', rnd: roundNumber, reason: 'noThread' }));
@@ -103,7 +75,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       return;
     }
 
-    // Check if already triggered
     const moderatorId = `${effectiveThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
       // eslint-disable-next-line no-console
@@ -112,23 +83,17 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       return;
     }
 
-    // Prevent concurrent triggers
     if (triggeringRoundRef.current !== null) {
-      return; // Silent - another trigger in progress
+      return;
     }
 
-    // Mark as triggered (streaming state already set by handleComplete)
     state.markModeratorStreamTriggered(moderatorId, roundNumber);
     triggeringRoundRef.current = roundNumber;
 
-    // ✅ RACE CONDITION FIX: Add moderator placeholder HERE, AFTER participants complete
-    // Previously, placeholder was added in use-streaming-trigger.ts and use-pending-message.ts
-    // BEFORE participants started streaming, causing: User → Moderator → Participants (wrong)
-    // Now placeholder is added AFTER participants complete: User → Participants → Moderator (correct)
     const moderatorPlaceholder: UIMessage = {
       id: moderatorId,
       role: 'assistant',
-      parts: [], // Empty parts = pending state, will be updated during streaming
+      parts: [],
       metadata: {
         isModerator: true,
         roundNumber,
@@ -138,7 +103,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       },
     };
 
-    // Add moderator placeholder to messages (if not already present)
     state.setMessages((currentMessages) => {
       const hasExisting = currentMessages.some(m => m.id === moderatorId);
       if (hasExisting)
@@ -146,7 +110,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       return [...currentMessages, moderatorPlaceholder];
     });
 
-    // Abort any existing stream
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -171,14 +134,11 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
       const contentType = response.headers.get('content-type') || '';
 
-      // Track accumulated text for moderator message creation
       let accumulatedText = '';
 
-      // Handle non-streaming response (message already exists)
       if (contentType.includes('application/json')) {
         // Message already exists - no streaming needed
       } else {
-        // Handle streaming response
         const reader = response.body?.getReader();
         if (reader) {
           const decoder = new TextDecoder();
@@ -187,10 +147,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
           let rafId: number | null = null;
           let pendingFlush = false;
 
-          // ✅ FLASH FIX: Use RAF for smooth streaming updates
-          // Previous issue: Content appeared all at once because throttling
-          // accumulated everything before flushing.
-          // Fix: Flush immediately on first chunk, then use RAF for smooth updates
           const scheduleFlush = () => {
             if (pendingFlush || !accumulatedText)
               return;
@@ -221,7 +177,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
 
-            // Process complete lines
             const lines = buffer.split('\n');
             buffer = lines.pop() || '';
 
@@ -230,10 +185,8 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
               if (textDelta !== null) {
                 accumulatedText += textDelta;
 
-                // ✅ FLASH FIX: Immediate flush on first chunk to show content fast
                 if (isFirstChunk) {
                   isFirstChunk = false;
-                  // Sync update for first chunk - no RAF delay
                   const textToSet = accumulatedText;
                   store.getState().setMessages(currentMessages =>
                     currentMessages.map(msg =>
@@ -252,12 +205,10 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
             }
           }
 
-          // Cleanup RAF if pending
           if (rafId !== null) {
             cancelAnimationFrame(rafId);
           }
 
-          // Process any remaining buffer
           if (buffer.trim()) {
             const textDelta = parseAiSdkStreamLine(buffer);
             if (textDelta !== null) {
@@ -267,8 +218,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
         }
       }
 
-      // ✅ UNIFIED RENDERING: Update existing placeholder with final content
-      // The placeholder was added above, AFTER participants completed streaming
       const finalText = accumulatedText;
       const moderatorMessageId = `${effectiveThreadId}_r${roundNumber}_moderator`;
 
@@ -276,13 +225,10 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       console.log('[MOD]', JSON.stringify({ ev: 'done', rnd: roundNumber, len: finalText.length }));
 
       if (finalText.length > 0) {
-        // Update existing moderator placeholder with final content
-        // Use function updater to reduce race conditions with concurrent updates
         store.getState().setMessages((currentMessages) => {
           const hasExistingPlaceholder = currentMessages.some(msg => msg.id === moderatorMessageId);
 
           if (hasExistingPlaceholder) {
-            // Update existing placeholder
             return currentMessages.map(msg =>
               msg.id === moderatorMessageId
                 ? {
@@ -296,7 +242,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                 : msg,
             );
           } else {
-            // Fallback: Create new message if placeholder doesn't exist (e.g., resumption)
             const moderatorMessage = {
               id: moderatorMessageId,
               role: 'assistant' as const,
@@ -315,22 +260,18 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        return; // Silent - intentional abort
+        return;
       }
       // eslint-disable-next-line no-console
       console.log('[MOD]', JSON.stringify({ ev: 'err', rnd: roundNumber, msg: String(error).slice(0, 50) }));
     } finally {
-      // Complete moderator stream - sets isModeratorStreaming=false
       store.getState().completeModeratorStream();
-      // ✅ CRITICAL FIX: Also call completeStreaming to clear pendingMessage and streamingRoundNumber
-      // Without this, the chat input remains disabled because pendingMessage is never cleared
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;
     }
   }, [effectiveThreadId, store]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -338,6 +279,84 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
     };
   }, []);
+
+  const isModeratorStreaming = useStore(store, s => s.isModeratorStreaming);
+  const currentResumptionPhase = useStore(store, s => s.currentResumptionPhase);
+  const resumptionRoundNumber = useStore(store, s => s.resumptionRoundNumber);
+  const messages = useStore(store, s => s.messages);
+  const participants = useStore(store, s => s.participants);
+  const resumptionTriggerAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isModeratorStreaming || currentResumptionPhase !== RoundPhases.MODERATOR) {
+      return;
+    }
+
+    if (!effectiveThreadId || resumptionRoundNumber === null) {
+      return;
+    }
+
+    if (triggeringRoundRef.current !== null) {
+      return;
+    }
+
+    const triggerKey = `${effectiveThreadId}_resumption_${resumptionRoundNumber}`;
+    if (resumptionTriggerAttemptedRef.current === triggerKey) {
+      return;
+    }
+
+    const moderatorExists = messages.some((m) => {
+      const metadata = getMessageMetadata(m.metadata);
+      const isModerator = metadata && 'isModerator' in metadata && metadata.isModerator === true;
+      return (
+        isModerator
+        && getRoundNumber(m.metadata) === resumptionRoundNumber
+      );
+    });
+
+    if (moderatorExists) {
+      resumptionTriggerAttemptedRef.current = triggerKey;
+      store.getState().completeModeratorStream();
+      store.getState().clearStreamResumption();
+      return;
+    }
+
+    const participantMessageIds = messages
+      .filter((m) => {
+        const metadata = getMessageMetadata(m.metadata);
+        if (!metadata)
+          return false;
+        const isModerator = 'isModerator' in metadata && metadata.isModerator === true;
+        return (
+          m.role === 'assistant'
+          && getRoundNumber(m.metadata) === resumptionRoundNumber
+          && !isModerator
+        );
+      })
+      .map(m => m.id);
+
+    if (participantMessageIds.length < participants.length) {
+      return;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log('[MOD]', JSON.stringify({ ev: 'resumption_trigger', rnd: resumptionRoundNumber, msgs: participantMessageIds.length }));
+
+    resumptionTriggerAttemptedRef.current = triggerKey;
+
+    queueMicrotask(() => {
+      triggerModerator(resumptionRoundNumber, participantMessageIds);
+    });
+  }, [
+    isModeratorStreaming,
+    currentResumptionPhase,
+    resumptionRoundNumber,
+    effectiveThreadId,
+    messages,
+    participants,
+    store,
+    triggerModerator,
+  ]);
 
   return {
     triggerModerator,

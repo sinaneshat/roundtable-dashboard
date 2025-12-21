@@ -3,12 +3,10 @@ import { MessageSquare, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
-import type { ChatMode } from '@/api/core/enums';
-import { ChatModes } from '@/api/core/enums';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
+import { ChatModes, SubscriptionTiers } from '@/api/core/enums';
 import {
   MIN_MODELS_REQUIRED,
-  SubscriptionTiers,
 } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { useModelsQuery } from '@/hooks/queries/models';

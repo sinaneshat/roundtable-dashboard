@@ -149,7 +149,7 @@ function generateModeratorStreamId(threadId: string, roundNumber: number): strin
   return `${threadId}_r${roundNumber}_moderator`;
 }
 
-function generateLegacyParticipantStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
+function generateCompactParticipantStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
   return `${threadId}_r${roundNumber}_p${participantIndex}`;
 }
 
@@ -180,14 +180,14 @@ function parseStreamId(streamId: string): {
     };
   }
 
-  // Participant format: {threadId}_r{roundNumber}_p{index}
-  const legacyMatch = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
-  if (legacyMatch) {
+  // Compact participant format: {threadId}_r{roundNumber}_p{index}
+  const compactMatch = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
+  if (compactMatch) {
     return {
-      threadId: legacyMatch[1]!,
-      roundNumber: Number.parseInt(legacyMatch[2]!, 10),
+      threadId: compactMatch[1]!,
+      roundNumber: Number.parseInt(compactMatch[2]!, 10),
       phase: 'participant',
-      participantIndex: Number.parseInt(legacyMatch[3]!, 10),
+      participantIndex: Number.parseInt(compactMatch[3]!, 10),
     };
   }
 
@@ -362,7 +362,7 @@ async function setupActiveParticipantStream(
   totalParticipants: number,
   chunks: StreamChunk[] = [],
 ): Promise<void> {
-  const streamId = generateLegacyParticipantStreamId(threadId, roundNumber, participantIndex);
+  const streamId = generateCompactParticipantStreamId(threadId, roundNumber, participantIndex);
 
   const participantStatuses: Record<string, StreamStatus> = {};
   for (let i = 0; i < participantIndex; i++) {
@@ -648,7 +648,7 @@ describe('aI SDK Resume Integration', () => {
       ];
 
       await kv.put(`thread:${threadId}:active`, {
-        streamId: generateLegacyParticipantStreamId(threadId, 0, 0),
+        streamId: generateCompactParticipantStreamId(threadId, 0, 0),
         roundNumber: 0,
         participantIndex: 0,
         createdAt: new Date(oldTime).toISOString(),
@@ -656,8 +656,8 @@ describe('aI SDK Resume Integration', () => {
         participantStatuses: { 0: 'active' },
       } as ThreadActiveStream);
 
-      await kv.put(`stream:meta:${generateLegacyParticipantStreamId(threadId, 0, 0)}`, {
-        streamId: generateLegacyParticipantStreamId(threadId, 0, 0),
+      await kv.put(`stream:meta:${generateCompactParticipantStreamId(threadId, 0, 0)}`, {
+        streamId: generateCompactParticipantStreamId(threadId, 0, 0),
         threadId,
         roundNumber: 0,
         participantIndex: 0,
@@ -668,7 +668,7 @@ describe('aI SDK Resume Integration', () => {
         errorMessage: null,
       } as StreamBufferMetadata);
 
-      await kv.put(`stream:chunks:${generateLegacyParticipantStreamId(threadId, 0, 0)}`, chunks);
+      await kv.put(`stream:chunks:${generateCompactParticipantStreamId(threadId, 0, 0)}`, chunks);
 
       const response = await simulateResumeEndpoint(threadId, 0, kv);
 
@@ -719,7 +719,7 @@ describe('aI SDK Resume Integration', () => {
 
       // P0 completed, P1 active, P2 not started
       await kv.put(`thread:${threadId}:active`, {
-        streamId: generateLegacyParticipantStreamId(threadId, 0, 1),
+        streamId: generateCompactParticipantStreamId(threadId, 0, 1),
         roundNumber: 0,
         participantIndex: 1,
         createdAt: new Date().toISOString(),
@@ -727,8 +727,8 @@ describe('aI SDK Resume Integration', () => {
         participantStatuses: { 0: 'completed', 1: 'active' },
       } as ThreadActiveStream);
 
-      await kv.put(`stream:meta:${generateLegacyParticipantStreamId(threadId, 0, 1)}`, {
-        streamId: generateLegacyParticipantStreamId(threadId, 0, 1),
+      await kv.put(`stream:meta:${generateCompactParticipantStreamId(threadId, 0, 1)}`, {
+        streamId: generateCompactParticipantStreamId(threadId, 0, 1),
         threadId,
         roundNumber: 0,
         participantIndex: 1,
@@ -751,7 +751,7 @@ describe('aI SDK Resume Integration', () => {
       vi.setSystemTime(new Date());
 
       await kv.put(`thread:${threadId}:active`, {
-        streamId: generateLegacyParticipantStreamId(threadId, 0, 2),
+        streamId: generateCompactParticipantStreamId(threadId, 0, 2),
         roundNumber: 0,
         participantIndex: 2,
         createdAt: new Date().toISOString(),

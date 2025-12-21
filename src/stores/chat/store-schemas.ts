@@ -225,7 +225,6 @@ export const UISliceSchema = z.intersection(UIStateSchema, UIActionsSchema);
 
 export const PreSearchStateSchema = z.object({
   preSearches: z.array(StoredPreSearchSchema),
-  /** Tracks last activity timestamp per round number for dynamic timeout calculation */
   preSearchActivityTimes: z.custom<Map<number, number>>(),
 });
 
@@ -233,7 +232,6 @@ export const PreSearchActionsSchema = z.object({
   setPreSearches: z.custom<SetPreSearches>(),
   addPreSearch: z.custom<AddPreSearch>(),
   updatePreSearchData: z.custom<UpdatePreSearchData>(),
-  /** ✅ PROGRESSIVE UI: Update searchData WITHOUT changing status (for streaming updates) */
   updatePartialPreSearchData: z.custom<UpdatePartialPreSearchData>(),
   updatePreSearchStatus: z.custom<UpdatePreSearchStatus>(),
   removePreSearch: z.custom<RemovePreSearch>(),
@@ -284,7 +282,6 @@ export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActions
 export const FlagsStateSchema = z.object({
   hasInitiallyLoaded: z.boolean(),
   isRegenerating: z.boolean(),
-  /** Flag indicating moderator is streaming - used to block input */
   isModeratorStreaming: z.boolean(),
   isWaitingForChangelog: z.boolean(),
   hasPendingConfigChanges: z.boolean(),
@@ -309,8 +306,6 @@ export const DataStateSchema = z.object({
   regeneratingRoundNumber: z.number().nullable(),
   pendingMessage: z.string().nullable(),
   pendingAttachmentIds: z.array(z.string()).nullable(),
-  /** File parts for AI SDK message creation - set before clearAttachments() */
-  // ✅ Use ExtendedFilePartSchema to include uploadId for backend fallback loading
   pendingFileParts: z.array(ExtendedFilePartSchema).nullable(),
   expectedParticipantIds: z.array(z.string()).nullable(),
   streamingRoundNumber: z.number().nullable(),
@@ -336,11 +331,8 @@ export const TrackingStateSchema = z.object({
   hasSentPendingMessage: z.boolean(),
   createdModeratorRounds: z.custom<Set<number>>(),
   triggeredPreSearchRounds: z.custom<Set<number>>(),
-  /** Moderator stream tracking: Prevents duplicate stream submissions by round number */
   triggeredModeratorRounds: z.custom<Set<number>>(),
-  /** Moderator stream tracking: Prevents duplicate stream submissions by moderator ID */
   triggeredModeratorIds: z.custom<Set<string>>(),
-  /** ✅ IMMEDIATE UI FEEDBACK: Flag to track early optimistic message from handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: z.boolean(),
 });
 
@@ -348,22 +340,16 @@ export const TrackingActionsSchema = z.object({
   setHasSentPendingMessage: z.custom<SetHasSentPendingMessage>(),
   markModeratorCreated: z.custom<MarkModeratorCreated>(),
   hasModeratorBeenCreated: z.custom<HasModeratorBeenCreated>(),
-  /** Atomic check-and-mark to prevent race conditions in moderator creation */
   tryMarkModeratorCreated: z.custom<TryMarkModeratorCreated>(),
   clearModeratorTracking: z.custom<ClearModeratorTracking>(),
   markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
-  /** Atomic check-and-mark to prevent race conditions in pre-search triggering */
   tryMarkPreSearchTriggered: z.custom<TryMarkPreSearchTriggered>(),
   clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
   clearAllPreSearchTracking: z.custom<ClearAllPreSearchTracking>(),
-  /** Moderator stream tracking: Mark as triggered (ID + round) to prevent duplicates */
   markModeratorStreamTriggered: z.custom<MarkModeratorStreamTriggered>(),
-  /** Moderator stream tracking: Check if moderator stream was triggered */
   hasModeratorStreamBeenTriggered: z.custom<HasModeratorStreamBeenTriggered>(),
-  /** Moderator stream tracking: Clear for regeneration */
   clearModeratorStreamTracking: z.custom<ClearModeratorStreamTracking>(),
-  /** ✅ IMMEDIATE UI FEEDBACK: Set when early optimistic message added by handleUpdateThreadAndSend */
   setHasEarlyOptimisticMessage: z.custom<SetHasEarlyOptimisticMessage>(),
 });
 
@@ -406,7 +392,6 @@ export const ScreenSliceSchema = z.intersection(ScreenStateSchema, ScreenActions
 /**
  * Stream resumption state entity - Zod-first pattern
  * Uses StreamStatusSchema from enums for type safety
- * ✅ FIX: Accepts Date or ISO string for dates (API returns strings, runtime uses Date)
  */
 export const StreamResumptionStateEntitySchema = z.object({
   streamId: z.string().min(1),
@@ -452,19 +437,26 @@ export const StreamResumptionSliceStateSchema = z.object({
   streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
   resumptionAttempts: z.custom<Set<string>>(),
   nextParticipantToTrigger: z.number().nullable(),
-  /** Flag set when server-side prefilled resumption state - guards AI SDK phantom resume */
   streamResumptionPrefilled: z.boolean(),
-  /** Thread ID that the prefilled state is for - ensures state matches current thread */
   prefilledForThreadId: z.string().nullable(),
-  /** ✅ UNIFIED PHASES: Current phase for resumption logic */
   currentResumptionPhase: RoundPhaseSchema.nullable(),
-  /** Pre-search resumption state (null if web search not enabled) */
   preSearchResumption: PreSearchResumptionStateSchema.nullable(),
-  /** Moderator resumption state */
   moderatorResumption: ModeratorResumptionStateSchema.nullable(),
-  /** Current round number for resumption */
   resumptionRoundNumber: z.number().nullable(),
 });
+
+export type StreamResumptionPrefillUpdate = {
+  streamResumptionPrefilled: boolean;
+  prefilledForThreadId: string;
+  currentResumptionPhase: z.infer<typeof RoundPhaseSchema>;
+  resumptionRoundNumber: number | null;
+  preSearchResumption?: PreSearchResumptionState | null;
+  moderatorResumption?: ModeratorResumptionState | null;
+  nextParticipantToTrigger?: number | null;
+  waitingToStartStreaming?: boolean;
+  // ✅ FIX: Allow setting isModeratorStreaming during moderator phase prefill
+  isModeratorStreaming?: boolean;
+};
 
 export const StreamResumptionActionsSchema = z.object({
   setStreamResumptionState: z.custom<(state: StreamResumptionState | null) => void>(),
@@ -478,8 +470,8 @@ export const StreamResumptionActionsSchema = z.object({
   needsMessageSync: z.custom<NeedsMessageSync>(),
   clearStreamResumption: z.custom<ClearStreamResumption>(),
   prefillStreamResumptionState: z.custom<PrefillStreamResumptionState>(),
-  /** Transition from pre-search phase to participants phase, clearing pre-search state */
   transitionToParticipantsPhase: z.custom<() => void>(),
+  transitionToModeratorPhase: z.custom<() => void>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);
@@ -488,10 +480,6 @@ export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceS
 // ANIMATION SLICE SCHEMAS
 // ============================================================================
 
-/**
- * Animation completion tracking state
- * Tracks pending animations per participant to ensure sequential animation completion
- */
 export const AnimationStateSchema = z.object({
   pendingAnimations: z.custom<Set<number>>(),
   animationResolvers: z.custom<Map<number, AnimationResolver>>(),
@@ -511,12 +499,6 @@ export const AnimationSliceSchema = z.intersection(AnimationStateSchema, Animati
 // ATTACHMENTS SLICE SCHEMAS
 // ============================================================================
 
-/**
- * Pending attachment schema for chat input file attachments
- * Combines file with optional upload item and preview
- *
- * Uses proper type imports from hooks (imported at top of file)
- */
 export const PendingAttachmentSchema = z.object({
   id: z.string(),
   file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
@@ -561,13 +543,6 @@ export const OperationsActionsSchema = z.object({
 // COMPLETE STORE SCHEMA
 // ============================================================================
 
-/**
- * Combined slice schemas for the complete ChatStore type
- *
- * ✅ PATTERN: Direct z.intersection chain instead of reduce
- * Zod's z.intersection loses type info when used with reduce, causing ChatStore to become unknown.
- * Using direct chaining preserves full type inference.
- */
 export const ChatStoreSchema = z.intersection(
   z.intersection(
     z.intersection(
@@ -613,14 +588,6 @@ export const ChatStoreSchema = z.intersection(
 // STORE TYPE INFERENCE
 // ============================================================================
 
-/**
- * Complete Chat Store type inferred from Zod schemas
- * All slices are combined into a single store type
- *
- * ✅ SINGLE SOURCE: Type derived from schemas
- * ✅ TYPE-SAFE: All store operations validated
- * ✅ ZUSTAND V5: Ready for combine middleware
- */
 export type ChatStore = z.infer<typeof ChatStoreSchema>;
 
 // Slice types inferred from schemas above

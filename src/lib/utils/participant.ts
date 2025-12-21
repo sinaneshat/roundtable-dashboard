@@ -13,8 +13,13 @@
  * @module lib/utils/participant
  */
 
-import { z } from 'zod';
-
+import type { ParticipantComparisonMode } from '@/api/core/enums';
+import {
+  DEFAULT_PARTICIPANT_COMPARISON_MODE,
+  PARTICIPANT_COMPARISON_MODES,
+  ParticipantComparisonModes,
+  ParticipantComparisonModeSchema,
+} from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
@@ -81,21 +86,16 @@ export type ComparableParticipant = Pick<
 };
 
 // ============================================================================
-// PARTICIPANT COMPARISON MODE
+// PARTICIPANT COMPARISON MODE (re-exported from core enums for convenience)
 // ============================================================================
 
-export const PARTICIPANT_COMPARISON_MODES = ['modelIds', 'strict'] as const;
-
-export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 'strict';
-
-export const ParticipantComparisonModeSchema = z.enum(PARTICIPANT_COMPARISON_MODES);
-
-export type ParticipantComparisonMode = z.infer<typeof ParticipantComparisonModeSchema>;
-
-export const ParticipantComparisonModes = {
-  MODEL_IDS: 'modelIds' as const,
-  STRICT: 'strict' as const,
-} as const;
+export {
+  DEFAULT_PARTICIPANT_COMPARISON_MODE,
+  PARTICIPANT_COMPARISON_MODES,
+  type ParticipantComparisonMode,
+  ParticipantComparisonModes,
+  ParticipantComparisonModeSchema,
+};
 
 /**
  * Update payload for participant changes

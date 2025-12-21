@@ -1,27 +1,9 @@
-/**
- * Streaming Trigger Hook Tests
- *
- * Tests for the useStreamingTrigger hook that handles:
- * 1. Round 0 streaming trigger for initial thread creation
- * 2. Pre-search execution and resumption
- * 3. Timeout protection for stuck streams
- *
- * Key Issues Tested:
- * - Pre-search resumption after page refresh
- * - Participant streaming trigger timing
- * - Stuck state timeout and recovery
- */
-
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createStore } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-
-// ============================================================================
-// MOCK TYPES
-// ============================================================================
 
 type MockParticipant = {
   id: string;
@@ -64,10 +46,6 @@ type MockStoreState = {
   getPreSearchActivityTime: (round: number) => number | undefined;
   checkStuckPreSearches: () => void;
 };
-
-// ============================================================================
-// MOCK SETUP
-// ============================================================================
 
 function createMockStore(initial?: Partial<MockStoreState>) {
   const triggeredPreSearchRounds = new Set<number>();
@@ -149,10 +127,6 @@ function createMockPreSearch(
   } as StoredPreSearch;
 }
 
-// ============================================================================
-// TESTS
-// ============================================================================
-
 describe('useStreamingTrigger', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -178,7 +152,6 @@ describe('useStreamingTrigger', () => {
 
       const state = store.getState();
 
-      // Pre-search is pending and web search enabled
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.PENDING);
       expect(state.thread?.enableWebSearch).toBe(true);
       expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
@@ -193,13 +166,10 @@ describe('useStreamingTrigger', () => {
 
       const state = store.getState();
 
-      // Mark as triggered
       state.markPreSearchTriggered(0);
 
-      // Should now be tracked
       expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
 
-      // Second trigger should be blocked
       expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
     });
 
@@ -211,19 +181,13 @@ describe('useStreamingTrigger', () => {
         participants: [createMockParticipant(0)],
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        // Pre-search was streaming when page refreshed
         preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)],
       });
 
       const state = store.getState();
 
-      // Pre-search is in STREAMING state but NOT tracked locally
-      // (triggeredPreSearchRounds is a Set - not persisted across refresh)
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
       expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
-
-      // This indicates resumption should happen
-      // The hook should detect this and re-execute the pre-search
     });
   });
 
@@ -242,7 +206,6 @@ describe('useStreamingTrigger', () => {
 
       const state = store.getState();
 
-      // Pre-search still streaming
       const preSearch = state.preSearches[0];
       const isBlocked = preSearch?.status === MessageStatuses.STREAMING
         || preSearch?.status === MessageStatuses.PENDING;
@@ -265,14 +228,12 @@ describe('useStreamingTrigger', () => {
 
       const state = store.getState();
 
-      // Pre-search complete
       const preSearch = state.preSearches[0];
       const isBlocked = preSearch?.status === MessageStatuses.STREAMING
         || preSearch?.status === MessageStatuses.PENDING;
 
       expect(isBlocked).toBe(false);
 
-      // Conditions for starting participants
       const canStart = state.waitingToStartStreaming
         && !state.isStreaming
         && state.screenMode === ScreenModes.OVERVIEW
@@ -287,17 +248,15 @@ describe('useStreamingTrigger', () => {
       const store = createMockStore({
         waitingToStartStreaming: true,
         isStreaming: false,
-        screenMode: ScreenModes.THREAD, // Thread screen
+        screenMode: ScreenModes.THREAD,
         participants: [createMockParticipant(0)],
         messages: [createMockUserMessage(0)],
       });
 
       const state = store.getState();
 
-      // Thread screen uses continueFromParticipant, not startRound
       expect(state.screenMode).toBe(ScreenModes.THREAD);
 
-      // Should NOT start round on thread screen
       const shouldStart = state.screenMode === ScreenModes.OVERVIEW
         || state.screenMode === null;
 
@@ -312,12 +271,10 @@ describe('useStreamingTrigger', () => {
         isStreaming: false,
       });
 
-      // Simulate streaming start
       store.setState({ isStreaming: true });
 
       const state = store.getState();
 
-      // When both are true, hook should clear waitingToStartStreaming
       if (state.waitingToStartStreaming && state.isStreaming) {
         store.getState().setWaitingToStartStreaming(false);
       }
@@ -339,15 +296,12 @@ describe('useStreamingTrigger', () => {
         messages: [],
       });
 
-      // Wait for default timeout (30 seconds for non-websearch)
       await act(async () => {
         vi.advanceTimersByTime(30000);
       });
 
-      // In real hook, this would trigger reset
       const state = store.getState();
 
-      // Stuck detection conditions
       const isStuck = state.waitingToStartStreaming
         && !state.isStreaming
         && state.createdThreadId !== null;
@@ -365,12 +319,10 @@ describe('useStreamingTrigger', () => {
         preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)],
       });
 
-      // Pre-search has its own timeout logic (60 seconds max)
       await act(async () => {
         vi.advanceTimersByTime(60000);
       });
 
-      // Hook should check pre-search activity time
       const state = store.getState();
 
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
@@ -384,7 +336,6 @@ describe('useStreamingTrigger', () => {
         checkStuckPreSearches,
       });
 
-      // Simulate mount - hook calls checkStuckPreSearches immediately
       store.getState().checkStuckPreSearches();
 
       expect(checkStuckPreSearches).toHaveBeenCalled();
@@ -396,7 +347,6 @@ describe('useStreamingTrigger', () => {
         checkStuckPreSearches,
       });
 
-      // Simulate the interval (5 seconds)
       for (let i = 0; i < 3; i++) {
         await act(async () => {
           vi.advanceTimersByTime(5000);
@@ -424,13 +374,11 @@ describe('useStreamingTrigger', () => {
 
       const currentRound = 0;
 
-      // First call
       if (startRoundCalledForRound !== currentRound) {
         startRoundCalledForRound = currentRound;
         startRound();
       }
 
-      // Duplicate call (should be blocked)
       if (startRoundCalledForRound !== currentRound) {
         startRoundCalledForRound = currentRound;
         startRound();
@@ -449,11 +397,10 @@ describe('useStreamingTrigger', () => {
       });
 
       const chatRefs = {
-        isTriggeringRef: { current: true }, // Already triggering
+        isTriggeringRef: { current: true },
         isStreamingRef: { current: false },
       };
 
-      // Should NOT start if already triggering
       const canStart = !chatRefs.isTriggeringRef.current
         && !chatRefs.isStreamingRef.current;
 
@@ -474,12 +421,11 @@ describe('streaming trigger edge cases', () => {
   it('should handle null screenMode gracefully', () => {
     const store = createMockStore({
       waitingToStartStreaming: true,
-      screenMode: null, // Not yet determined
+      screenMode: null,
     });
 
     const state = store.getState();
 
-    // With null screenMode, should not proceed
     const shouldProceed = state.screenMode !== null
       && state.screenMode !== ScreenModes.THREAD;
 
@@ -493,13 +439,11 @@ describe('streaming trigger edge cases', () => {
       screenMode: ScreenModes.OVERVIEW,
       participants: [createMockParticipant(0)],
       messages: [createMockUserMessage(0)],
-      thread: null, // Thread not yet loaded
+      thread: null,
     });
 
     const state = store.getState();
 
-    // Can still proceed without thread for non-websearch scenarios
-    // but enableWebSearch check would be false
     const webSearchEnabled = state.thread?.enableWebSearch ?? false;
 
     expect(webSearchEnabled).toBe(false);
@@ -514,32 +458,27 @@ describe('streaming trigger edge cases', () => {
       messages: [createMockUserMessage(0)],
       thread: { id: 'thread-123', enableWebSearch: true },
       preSearches: [createMockPreSearch(0, MessageStatuses.COMPLETE)],
-      pendingAnimations: new Map([[0, true]]), // Pre-search animation pending
+      pendingAnimations: new Map([[0, true]]),
     });
 
     const state = store.getState();
 
-    // Animation index 0 is PRE_SEARCH
     const isAnimating = state.pendingAnimations.has(0);
 
     expect(isAnimating).toBe(true);
-
-    // Should wait for animation to complete
   });
 
   it('should apply defensive timing guard after pre-search completion', () => {
     const now = Date.now();
-    const completedAt = new Date(now - 10); // Completed 10ms ago
+    const completedAt = new Date(now - 10);
 
     createMockPreSearch(0, MessageStatuses.COMPLETE);
 
-    // Timing guard: wait at least 50ms after completion
     const timeSinceComplete = now - completedAt.getTime();
     const shouldWait = timeSinceComplete < 50;
 
     expect(shouldWait).toBe(true);
 
-    // After 50ms, should proceed
     const laterTime = now + 50;
     const laterTimeSinceComplete = laterTime - completedAt.getTime();
 
