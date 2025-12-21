@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo uses setInterval pattern */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

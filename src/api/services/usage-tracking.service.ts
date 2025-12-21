@@ -23,7 +23,7 @@ import { ulid } from 'ulid';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import type { StripeSubscriptionStatus } from '@/api/core/enums';
+import type { StripeSubscriptionStatus, SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -31,7 +31,6 @@ import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags
 import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload, UsageStatus } from '../routes/usage/schema';
-import type { SubscriptionTier } from './product-logic.service';
 import { subscriptionTierSchema, TIER_QUOTAS } from './product-logic.service';
 
 /**

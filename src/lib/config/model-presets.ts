@@ -20,11 +20,11 @@ import {
 } from 'lucide-react';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
+import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import {
   canAccessModelByPricing,
   getRequiredTierForModel,
-  SUBSCRIPTION_TIERS,
 } from '@/api/services/product-logic.service';
 
 // ============================================================================
