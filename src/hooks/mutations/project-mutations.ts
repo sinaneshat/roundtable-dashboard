@@ -12,7 +12,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
-import type { listProjectsService } from '@/services/api';
 import {
   addUploadToProjectService,
   createProjectMemoryService,
@@ -68,16 +67,22 @@ export function useUpdateProjectMutation() {
       if (response.success && response.data) {
         const updatedProject = response.data;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof listProjectsService>>>(
+        queryClient.setQueryData(
           queryKeys.projects.list(),
-          (oldData: Awaited<ReturnType<typeof listProjectsService>> | undefined) => {
-            if (!oldData?.success || !oldData.data?.items) {
+          (oldData: unknown) => {
+            if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+              return oldData;
+            }
+            if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
+              return oldData;
+            }
+            if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
               return oldData;
             }
 
             // Replace the updated project in the list
-            const updatedProjects = oldData.data.items.map((project: typeof updatedProject) =>
-              project.id === updatedProject.id ? updatedProject : project,
+            const updatedProjects = oldData.data.items.map(
+              project => (typeof project === 'object' && project && 'id' in project && project.id === updatedProject.id) ? updatedProject : project,
             );
 
             return {
@@ -134,15 +139,23 @@ export function useDeleteProjectMutation() {
       const previousProjects = queryClient.getQueryData(queryKeys.projects.list());
 
       // Optimistically remove the project from the list
-      queryClient.setQueryData<Awaited<ReturnType<typeof listProjectsService>>>(
+      queryClient.setQueryData(
         queryKeys.projects.list(),
-        (oldData: Awaited<ReturnType<typeof listProjectsService>> | undefined) => {
-          if (!oldData?.success || !oldData.data?.items) {
+        (oldData: unknown) => {
+          if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+            return oldData;
+          }
+          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
+            return oldData;
+          }
+          if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
             return oldData;
           }
 
           // Filter out the deleted project
-          const filteredProjects = oldData.data.items.filter((project: { id: string }) => project.id !== projectId);
+          const filteredProjects = oldData.data.items.filter(
+            project => !(typeof project === 'object' && project && 'id' in project && project.id === projectId),
+          );
 
           return {
             ...oldData,

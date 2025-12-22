@@ -14,12 +14,7 @@
  */
 
 import type { ParticipantComparisonMode } from '@/api/core/enums';
-import {
-  DEFAULT_PARTICIPANT_COMPARISON_MODE,
-  PARTICIPANT_COMPARISON_MODES,
-  ParticipantComparisonModes,
-  ParticipantComparisonModeSchema,
-} from '@/api/core/enums';
+import { ParticipantComparisonModes } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
@@ -83,18 +78,6 @@ export type ComparableParticipant = Pick<
 > & {
   customRoleId?: string | null;
   isEnabled?: boolean;
-};
-
-// ============================================================================
-// PARTICIPANT COMPARISON MODE (re-exported from core enums for convenience)
-// ============================================================================
-
-export {
-  DEFAULT_PARTICIPANT_COMPARISON_MODE,
-  PARTICIPANT_COMPARISON_MODES,
-  type ParticipantComparisonMode,
-  ParticipantComparisonModes,
-  ParticipantComparisonModeSchema,
 };
 
 /**

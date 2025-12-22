@@ -2,7 +2,6 @@
  * Checkout Mutation Hooks
  *
  * TanStack Mutation hooks for Stripe checkout operations
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  */
 
 'use client';

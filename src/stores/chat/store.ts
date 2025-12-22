@@ -886,6 +886,7 @@ const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
         draft.pendingAttachments.push({
           id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           file,
+          status: 'pending',
         });
       });
     }, false, 'attachments/addAttachments'),

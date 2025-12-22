@@ -158,8 +158,8 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
 
           await reg.update();
         }
-      } catch (error) {
-        console.error('[PWA] Error checking for updates:', error);
+      } catch {
+        // Silent error - updates will be checked again on next interval
       }
     };
 
@@ -194,8 +194,8 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
         currentReg = reg;
         // eslint-disable-next-line react-web-api/no-leaked-event-listener -- cleaned up in useEffect return
         reg.addEventListener('updatefound', handleUpdateFound);
-      } catch (error) {
-        console.error('[PWA] Error setting up update listener:', error);
+      } catch {
+        // Silent error - setup will be retried on next component mount
       }
     };
 

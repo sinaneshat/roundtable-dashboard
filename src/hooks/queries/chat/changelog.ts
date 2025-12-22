@@ -38,10 +38,7 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
     staleTime: STALE_TIMES.threadChangelog, // 30 seconds
     // ✅ STREAMING PROTECTION: All refetch settings now handled globally
     // See query-client.ts for global defaults (all disabled)
-    // ✅ CRITICAL FIX: Preserve previous data during refetches
-    // This prevents changelog from disappearing when query is invalidated
-    // Without this, changelog temporarily becomes empty array during refetch,
-    // causing items to be removed from DOM and re-added at the bottom
+    // Preserve previous data during refetches to prevent flickering
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,

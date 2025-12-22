@@ -88,7 +88,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   // Focus input after modal renders and paints
   useEffect(() => {
     if (isOpen) {
-      return afterPaint(() => searchInputRef.current?.focus());
+      return afterPaint(() => searchInputRef.current?.focus({ preventScroll: true }));
     }
     return undefined;
   }, [isOpen]);

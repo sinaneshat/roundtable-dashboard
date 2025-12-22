@@ -1,10 +1,10 @@
 # Testing Setup - Roundtable Project
 
-This document provides a comprehensive overview of the Jest and React Testing Library setup for the Roundtable project.
+This document provides a comprehensive overview of the Vitest and React Testing Library setup for the Roundtable project.
 
 ## Setup Summary
 
-The testing infrastructure has been configured following official Next.js, Jest, and React Testing Library best practices from Context7 MCP documentation.
+The testing infrastructure has been configured following official Next.js, Vitest, and React Testing Library best practices.
 
 ## Installed Dependencies
 
@@ -13,14 +13,13 @@ The testing infrastructure has been configured following official Next.js, Jest,
 ```json
 {
   "devDependencies": {
-    "jest": "^30.2.0",
-    "jest-environment-jsdom": "^30.2.0",
+    "vitest": "^4.0.15",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite-tsconfig-paths": "^5.1.4",
     "@testing-library/react": "^16.3.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/jest": "^30.0.0",
-    "ts-node": "^10.9.2"
+    "@testing-library/user-event": "^14.6.1"
   }
 }
 ```
@@ -30,7 +29,7 @@ The testing infrastructure has been configured following official Next.js, Jest,
 ```json
 {
   "devDependencies": {
-    "eslint-plugin-jest": "^29.1.0",
+    "eslint-plugin-vitest": "latest",
     "eslint-plugin-jest-dom": "^5.5.0",
     "eslint-plugin-testing-library": "^7.13.4"
   }
@@ -39,25 +38,27 @@ The testing infrastructure has been configured following official Next.js, Jest,
 
 ## Configuration Files
 
-### 1. `jest.config.ts`
+### 1. `vitest.config.ts`
 
-Next.js-optimized Jest configuration using `next/jest` for automatic setup:
+Vitest v4 configuration optimized for Next.js and React Testing Library:
 
 - **Test Environment**: `jsdom` for DOM-like testing
 - **Coverage Provider**: `v8` for fast coverage reports
-- **Setup Files**: `jest.setup.ts` runs before all tests
-- **Module Paths**: Configured with `@/` alias support
+- **Setup Files**: `vitest.setup.ts` runs before all tests
+- **Module Paths**: Configured with `@/` alias support via vite-tsconfig-paths
 - **Test Match Patterns**: Finds tests in `__tests__/` directories and `*.test.*` files
-- **Transform Ignore Patterns**: Configured to transform ESM-only modules
+- **ESM Support**: Inline scoped packages for proper ESM module handling
 
-### 2. `jest.setup.ts`
+### 2. `vitest.setup.ts`
 
 Global test setup file that runs before all tests:
 
-- Imports `@testing-library/jest-dom` for custom matchers
+- Imports `@testing-library/jest-dom/vitest` for custom matchers
 - Mocks `window.matchMedia` for responsive design testing
 - Mocks `IntersectionObserver` for scroll-based components
 - Mocks `ResizeObserver` for dynamic sizing components
+- Polyfills `TextEncoder`/`TextDecoder` for streaming tests
+- Mocks `ReadableStream`, `WritableStream`, `TransformStream` for AI SDK streaming
 - Sets up environment variables for testing
 
 ### 3. `src/lib/testing/`
@@ -116,11 +117,12 @@ describe('MyComponent', () => {
 ```tsx
 import { render, screen, userEvent } from '@/lib/testing';
 import { Button } from '@/components/ui/button';
+import { vi } from 'vitest';
 
 describe('Button interactions', () => {
   it('handles click events', async () => {
     const user = userEvent.setup();
-    const handleClick = jest.fn();
+    const handleClick = vi.fn();
 
     render(<Button onClick={handleClick}>Click me</Button>);
 
@@ -152,12 +154,10 @@ describe('Chat Participant Turn-Taking', () => {
 
 ```
 project-root/
-├── jest.config.ts                 # Jest configuration
-├── jest.setup.ts                  # Global test setup
+├── vitest.config.ts               # Vitest configuration
+├── vitest.setup.ts                # Global test setup
 ├── src/
 │   ├── __tests__/                 # General test files
-│   │   ├── example.test.tsx       # Example tests
-│   │   └── README.md              # Testing guide
 │   ├── components/
 │   │   └── __tests__/             # Component tests
 │   ├── stores/
@@ -167,7 +167,10 @@ project-root/
 │       └── testing/               # Testing utilities
 │           ├── index.ts           # Barrel export
 │           ├── render.tsx         # Custom render with providers
-│           └── helpers.ts         # Test helper utilities
+│           ├── helpers.ts         # Test helper utilities
+│           ├── chat-test-factories.ts  # Chat-specific test factories
+│           ├── api-mocks.ts       # API response mocks
+│           └── test-providers.tsx # Test provider wrappers
 └── package.json                   # Test scripts
 ```
 
@@ -181,9 +184,9 @@ project-root/
 6. **Keep tests focused** - One assertion per test when possible
 7. **Mock external dependencies** - API calls, third-party libraries
 
-## Common Jest Matchers
+## Common Test Matchers
 
-From `@testing-library/jest-dom`:
+From `@testing-library/jest-dom/vitest`:
 
 - `toBeInTheDocument()` - Element exists in the document
 - `toBeVisible()` - Element is visible to users
@@ -193,29 +196,37 @@ From `@testing-library/jest-dom`:
 - `toHaveClass(className)` - Element has CSS class
 - `toHaveFormValues(values)` - Form has specific values
 
+From Vitest:
+
+- `vi.fn()` - Create mock function
+- `vi.mock()` - Mock module
+- `vi.spyOn()` - Spy on method
+- `expect.any()` - Match any value of type
+- `expect.objectContaining()` - Partial object match
+
 ## Next Steps
 
-1. **Configure ESLint** - Add testing plugins to `eslint.config.mjs`
-2. **Write Chat Tests** - Focus on participant behavior and turn-taking
-3. **Add Provider Support** - Uncomment provider code in `src/lib/testing/render.tsx` when needed
-4. **Configure Coverage Thresholds** - Add to `jest.config.ts` as needed
-5. **Add Pre-commit Hook** - Run tests before commits
+1. **Write comprehensive tests** - Focus on participant behavior and turn-taking
+2. **Maintain test utilities** - Keep `src/lib/testing/` up to date
+3. **Monitor coverage** - Aim for 80%+ coverage on critical paths
+4. **Update test factories** - Add new factories as domain models evolve
+5. **Review test performance** - Keep tests fast and focused
 
 ## Resources
 
-- [Jest Documentation](https://jestjs.io/docs/getting-started)
+- [Vitest Documentation](https://vitest.dev/guide/)
 - [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/)
-- [Next.js Testing Guide](https://nextjs.org/docs/app/guides/testing/jest)
+- [Next.js Testing Guide](https://nextjs.org/docs/app/guides/testing)
 - [Testing Library Best Practices](https://kentcdodds.com/blog/common-mistakes-with-react-testing-library)
 - [User Event Documentation](https://testing-library.com/docs/user-event/intro)
 
-## ESLint Configuration (TODO)
+## ESLint Configuration
 
-To enable ESLint rules for testing, add these to your `eslint.config.mjs`:
+ESLint rules for testing are configured in `eslint.config.mjs`:
 
 ```js
-// Add to your eslint.config.mjs file
-import jest from 'eslint-plugin-jest';
+// Example ESLint configuration for Vitest tests
+import vitest from 'eslint-plugin-vitest';
 import jestDom from 'eslint-plugin-jest-dom';
 import testingLibrary from 'eslint-plugin-testing-library';
 
@@ -224,16 +235,16 @@ export default [
   {
     files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*'],
     plugins: {
-      jest,
+      vitest,
       'jest-dom': jestDom,
       'testing-library': testingLibrary,
     },
     rules: {
-      'jest/no-disabled-tests': 'warn',
-      'jest/no-focused-tests': 'error',
-      'jest/no-identical-title': 'error',
-      'jest/prefer-to-have-length': 'warn',
-      'jest/valid-expect': 'error',
+      'vitest/no-disabled-tests': 'warn',
+      'vitest/no-focused-tests': 'error',
+      'vitest/no-identical-title': 'error',
+      'vitest/prefer-to-have-length': 'warn',
+      'vitest/valid-expect': 'error',
       'testing-library/await-async-queries': 'error',
       'testing-library/no-await-sync-queries': 'error',
       'testing-library/no-debugging-utils': 'warn',
@@ -247,25 +258,32 @@ export default [
 
 ### ESM Module Errors
 
-If you encounter errors with ESM modules (like `next-intl`, `nuqs`):
+If you encounter errors with ESM modules:
 
-1. The current setup uses a simplified render without providers
-2. To add full provider support, configure ESM transformation in `jest.config.ts`
-3. Uncomment provider code in `src/lib/testing/render.tsx`
-4. See comments in those files for guidance
+1. Check `vitest.config.ts` server.deps.inline configuration
+2. ESM packages like `next-intl` are configured to be inlined
+3. The test setup includes proper provider wrappers in `src/lib/testing/test-providers.tsx`
 
 ### Type Errors
 
-- Ensure `@types/jest` is installed
-- Check `tsconfig.json` includes test files
+- Ensure Vitest types are properly configured in `tsconfig.json`
+- Add `/// <reference types="vitest" />` to test files if needed
+- Check that `vitest.config.ts` has the reference comment at the top
 - Restart TypeScript server in your IDE
 
 ### Coverage Not Generated
 
+- Install `@vitest/coverage-v8` package: `pnpm add -D @vitest/coverage-v8`
 - Run `pnpm test:coverage` instead of `pnpm test`
-- Check `collectCoverageFrom` patterns in `jest.config.ts`
+- Check `coverage` configuration in `vitest.config.ts`
 - Coverage reports are saved to `/coverage` directory
+
+### Streaming/TextEncoder Errors
+
+- `vitest.setup.ts` includes polyfills for TextEncoder/TextDecoder
+- Mock ReadableStream/WritableStream/TransformStream are configured
+- These are required for AI SDK streaming tests
 
 ---
 
-**Setup completed**: All boilerplate and configurations are in place. You can now begin writing unit tests for your chat participants and other components!
+**Setup completed**: All configurations are in place with Vitest v4, React Testing Library, and comprehensive test utilities for chat participants and store testing!

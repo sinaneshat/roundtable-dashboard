@@ -2,6 +2,8 @@
 
 import { motion } from 'motion/react';
 
+import { cn } from '@/lib/ui/cn';
+
 type RadialGlowProps = {
   size?: number;
   duration?: number;
@@ -19,7 +21,7 @@ export const RadialGlow = ({
 }: RadialGlowProps = {}) => {
   return (
     <div
-      className={`absolute left-1/2 top-1/2 pointer-events-none ${className}`}
+      className={cn('absolute left-1/2 top-1/2 pointer-events-none', className)}
       style={{
         width: 0,
         height: 0,

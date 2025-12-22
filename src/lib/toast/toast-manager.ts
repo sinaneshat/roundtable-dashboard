@@ -108,6 +108,17 @@ function showToastInternal(options: ToastOptions): void {
   activeToasts.add(toastId);
 
   // Enhanced toast configuration
+  const actionElement = action
+    ? React.createElement(
+        ToastAction,
+        {
+          altText: action.label,
+          onClick: action.onClick,
+        },
+        action.label,
+      )
+    : undefined;
+
   const toastConfig: Parameters<typeof baseToast>[0] = {
     title,
     description,
@@ -115,14 +126,11 @@ function showToastInternal(options: ToastOptions): void {
       ? ToastVariants.DEFAULT
       : variant,
     duration,
-    // ToastActionElement type mismatch requires double cast - React.createElement returns
-    // FunctionComponentElement which doesn't directly satisfy ReactElement<typeof ToastAction>
-    action: action
-      ? React.createElement(ToastAction, {
-        altText: action.label,
-        onClick: action.onClick,
-      }, action.label) as unknown as ToastActionElement
-      : undefined,
+    // Double cast is necessary: React.createElement returns FunctionComponentElement<ToastActionProps>
+    // but ToastActionElement is defined as ReactElement<typeof ToastAction>. These types don't overlap
+    // (FunctionComponentElement props don't include 'displayName' from typeof ToastAction), but at
+    // runtime they're compatible. TypeScript requires the 'unknown' intermediate step for non-overlapping casts.
+    action: actionElement as unknown as ToastActionElement,
   };
 
   // Show the toast

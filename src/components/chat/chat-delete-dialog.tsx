@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
-import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useDeleteThreadMutation } from '@/hooks/mutations';
 import { toastManager } from '@/lib/toast';
 
 type ChatDeleteDialogProps = {

@@ -761,10 +761,3 @@ appRoutes.get('/llms.txt', async (c) => {
 // ============================================================================
 
 export default appRoutes;
-
-// ============================================================================
-// Cloudflare Workflows - REMOVED
-// ============================================================================
-
-// Workflows have been removed in favor of user-initiated streaming summary generation
-// Round summaries are now triggered exclusively via POST /chat/threads/:id/rounds/:roundNumber/moderator

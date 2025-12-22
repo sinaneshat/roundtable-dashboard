@@ -117,7 +117,7 @@ export function ScrollAwareUserMessage({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
@@ -143,7 +143,7 @@ export function ScrollAwareParticipant({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, delay: index * 0.05, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
@@ -169,7 +169,7 @@ export function TimelineEntrance({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
       className={cn(className)}
     >
@@ -194,7 +194,7 @@ export function ScrollFromTop({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
@@ -219,7 +219,7 @@ export function ScrollFromBottom({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >
@@ -275,7 +275,7 @@ export function AccordionEntrance({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, ease: ANIMATION_EASE.enter }}
       className={cn(className)}
     >
@@ -358,7 +358,6 @@ type AnimatedAccordionContentProps = {
   children: ReactNode;
   className?: string;
   isOpen: boolean;
-  isStreaming?: boolean;
   onAnimationComplete?: () => void;
 };
 
@@ -370,14 +369,12 @@ export function AnimatedAccordionContent({
   children,
   className,
   isOpen,
-  isStreaming,
   onAnimationComplete,
 }: AnimatedAccordionContentProps) {
   return (
     <AnimatePresence mode="wait" initial={false}>
       {isOpen && (
         <motion.div
-          layout
           initial={{ opacity: 0, height: 0 }}
           animate={{
             opacity: 1,
@@ -403,19 +400,10 @@ export function AnimatedAccordionContent({
           onAnimationComplete={onAnimationComplete}
           className={cn('overflow-hidden', className)}
         >
-          {/* Inner container with layout for smooth content changes during streaming */}
-          <motion.div
-            layout={isStreaming}
-            transition={{
-              layout: {
-                type: 'spring',
-                stiffness: 400,
-                damping: 30,
-              },
-            }}
-          >
+          {/* Content renders without layout animations to prevent scroll issues */}
+          <div>
             {children}
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -429,8 +417,6 @@ export function AnimatedAccordionContent({
 type StreamingMessageContentProps = {
   children: ReactNode;
   className?: string;
-  isStreaming?: boolean;
-  layoutId?: string;
 };
 
 /**
@@ -739,7 +725,7 @@ export function ScrollFadeEntrance({
     <motion.div
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
-      viewport={{ amount: VIEWPORT_THRESHOLD }}
+      viewport={{ amount: VIEWPORT_THRESHOLD, once: true }}
       transition={{ duration: 0.25, delay: index * 0.03, ease: ANIMATION_EASE.enter }}
       className={cn('w-full', className)}
     >

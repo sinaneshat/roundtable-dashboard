@@ -226,6 +226,14 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
       if (finalText.length > 0) {
         store.getState().setMessages((currentMessages) => {
+          // ✅ DEBUG: Log all message IDs to detect if wrong message gets updated
+          // eslint-disable-next-line no-console
+          console.log('[MOD-UPDATE]', JSON.stringify({
+            targetId: moderatorMessageId,
+            allIds: currentMessages.map(m => m.id),
+            textPreview: finalText.slice(0, 40),
+          }));
+
           const hasExistingPlaceholder = currentMessages.some(msg => msg.id === moderatorMessageId);
 
           if (hasExistingPlaceholder) {

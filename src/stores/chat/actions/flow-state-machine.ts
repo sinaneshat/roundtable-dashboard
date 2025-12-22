@@ -435,14 +435,21 @@ export function useFlowStateMachine(
             }
 
             // 🚨 ATOMIC: tryMarkModeratorCreated returns false if already created
-            if (!tryMarkModeratorCreated(currentRound)) {
+            // ✅ RACE FIX: Only call completeStreaming() once, regardless of whether
+            // moderator was just created or already existed
+            const moderatorJustCreated = tryMarkModeratorCreated(currentRound);
+
+            // ✅ TEXT STREAMING: Complete streaming state (only once)
+            // useModeratorTrigger hook triggers POST /api/v1/chat/moderator
+            if (!freshState.isModeratorStreaming) {
+              // Only complete if moderator streaming hasn't started yet
+              // This prevents double-completion when moderator trigger is already running
               completeStreaming();
-              break; // Moderator already created by another component, skip
             }
 
-            // ✅ TEXT STREAMING: Just complete streaming state
-            // useModeratorTrigger hook triggers POST /api/v1/chat/moderator
-            completeStreaming();
+            if (!moderatorJustCreated) {
+              break; // Moderator already created by another component, skip
+            }
           }
           break;
         }

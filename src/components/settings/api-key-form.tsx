@@ -97,7 +97,6 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
         // Don't reset form or call onCreated() yet - let user see and copy the key first
       }
     } catch (error) {
-      console.error('[ApiKeyForm] Failed to create API key:', error);
       showApiErrorToast('Failed to create API key', error);
     }
   };

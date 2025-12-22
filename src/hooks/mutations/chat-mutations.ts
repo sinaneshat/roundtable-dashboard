@@ -585,19 +585,11 @@ export function useTogglePublicMutation() {
     onSuccess: async (_data, _variables) => {
       // ✅ NO invalidation except for public page cache
       // Public pages will be regenerated on next request via ISR
-      // Server Action revalidation removed to fix HMR bundling issues
     },
     retry: false,
     throwOnError: false,
   });
 }
-
-// ============================================================================
-// Message Mutations
-// ============================================================================
-// NOTE: useSendMessageMutation removed - use AI SDK v5 useChat hook for all message operations
-// All messages are now streamed via streamChatService for better UX
-// Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
 
 // ============================================================================
 // Participant Mutations
@@ -928,21 +920,6 @@ export function useDeleteCustomRoleMutation() {
     throwOnError: false,
   });
 }
-
-// ============================================================================
-// Moderator Mutations
-// ============================================================================
-
-/**
- * ❌ REMOVED: useTriggerModeratorMutation
- *
- * Moderator is now handled via:
- * 1. Auto-detection on backend (streamChatHandler onFinish callback)
- * 2. On-demand streaming via useObject hook from @ai-sdk/react
- *
- * No manual mutation needed - moderator streams automatically when component renders
- * Reference: See src/components/chat/round-moderator-stream.tsx for usage
- */
 
 // ============================================================================
 // Round Feedback Mutations

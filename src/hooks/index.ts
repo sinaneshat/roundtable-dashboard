@@ -2,17 +2,16 @@
  * Hooks - Centralized Exports
  *
  * Single import point for all React hooks
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  */
 
 // ============================================================================
-// QUERY HOOKS
+// MUTATION HOOKS
 // ============================================================================
 
 export * from './mutations';
 
 // ============================================================================
-// MUTATION HOOKS
+// QUERY HOOKS
 // ============================================================================
 
 export * from './queries';

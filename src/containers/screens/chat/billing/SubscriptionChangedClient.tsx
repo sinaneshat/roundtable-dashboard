@@ -12,8 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useCurrentSubscriptionQuery, useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
 function ChangeBadge({ changeType, t }: {
@@ -184,7 +183,6 @@ function SubscriptionChangedContent() {
                 : t('billing.subscriptionChanged.changeDescription')}
           </p>
 
-          {}
           {isDowngrade && effectiveDate && (
             <div className="pt-2 px-4 py-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
               <p className="text-sm font-medium text-blue-600">
@@ -200,14 +198,12 @@ function SubscriptionChangedContent() {
           </div>
         </StaggerItem>
 
-        {}
         {oldTier && oldTierName && (
           <StaggerItem className="w-full">
             {isDowngrade
               ? (
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {}
                     <Card className="border-primary/50 bg-primary/5">
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -231,7 +227,6 @@ function SubscriptionChangedContent() {
                       </CardContent>
                     </Card>
 
-                    {}
                     <Card className="border-muted">
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -259,7 +254,6 @@ function SubscriptionChangedContent() {
               : (
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {}
                     <Card className="border-muted">
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -283,7 +277,6 @@ function SubscriptionChangedContent() {
                       </CardContent>
                     </Card>
 
-                    {}
                     <Card className="border-primary/50 bg-primary/5">
                       <CardHeader>
                         <div className="flex items-center justify-between">
@@ -343,7 +336,6 @@ function SubscriptionChangedContent() {
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.maxMemories')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {}
                       0
                     </p>
                   </div>

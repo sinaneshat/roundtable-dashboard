@@ -18,6 +18,8 @@
  * MIDDLEWARE ORDER: devtools(persist(immer(...)))
  */
 
+import type { Draft } from 'immer';
+import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
@@ -75,51 +77,57 @@ const cookieStorage = {
 };
 
 // ============================================================================
-// STATE TYPES (Official Pattern: Separate State from Actions)
+// STATE TYPES (Zod-First Pattern for Runtime Validation)
 // ============================================================================
+// Following chat store pattern: schemas define state, types inferred
 
 /**
- * State shape for model preferences
- * Source: nextjs.md - "CounterState" pattern
+ * State shape for model preferences - Zod schema
+ * Source: nextjs.md - "CounterState" pattern + Zod-first
  */
-export type ModelPreferencesState = {
+const ModelPreferencesStateSchema = z.object({
   /** Selected model IDs (user's selection) */
-  selectedModelIds: string[];
+  selectedModelIds: z.array(z.string()),
   /** Model order for display (drag-and-drop order) */
-  modelOrder: string[];
+  modelOrder: z.array(z.string()),
   /** Selected chat mode (analyzing/brainstorming/etc) */
-  selectedMode: string | null;
+  selectedMode: z.string().nullable(),
   /** Web search enabled preference */
-  enableWebSearch: boolean;
+  enableWebSearch: z.boolean(),
   /** Hydration tracking for SSR */
-  _hasHydrated: boolean;
-};
+  _hasHydrated: z.boolean(),
+});
 
 /**
- * Actions for model preferences
- * Source: nextjs.md - "CounterActions" pattern
+ * Actions for model preferences - Zod schema with z.custom<> for functions
+ * Source: nextjs.md - "CounterActions" pattern + Zod-first
  */
-export type ModelPreferencesActions = {
-  setSelectedModelIds: (ids: string[]) => void;
-  toggleModel: (modelId: string) => boolean;
-  setModelOrder: (order: string[]) => void;
-  setSelectedMode: (mode: string | null) => void;
-  setEnableWebSearch: (enabled: boolean) => void;
-  getInitialModelIds: (accessibleModelIds: string[]) => string[];
-  /**
-   * Sync persisted preferences with currently accessible models
-   * Removes invalid models from persistence and updates order
-   * Call this when accessible models change (tier change, models disabled)
-   */
-  syncWithAccessibleModels: (accessibleModelIds: string[]) => void;
-  setHasHydrated: (state: boolean) => void;
-};
+const ModelPreferencesActionsSchema = z.object({
+  setSelectedModelIds: z.custom<(ids: string[]) => void>(),
+  toggleModel: z.custom<(modelId: string) => boolean>(),
+  setModelOrder: z.custom<(order: string[]) => void>(),
+  setSelectedMode: z.custom<(mode: string | null) => void>(),
+  setEnableWebSearch: z.custom<(enabled: boolean) => void>(),
+  getInitialModelIds: z.custom<(accessibleModelIds: string[]) => string[]>(),
+  syncWithAccessibleModels: z.custom<(accessibleModelIds: string[]) => void>(),
+  setHasHydrated: z.custom<(state: boolean) => void>(),
+});
 
 /**
- * Complete store type
- * Source: nextjs.md - "CounterStore = CounterState & CounterActions"
+ * Complete store schema
+ * Source: nextjs.md - "CounterStore = CounterState & CounterActions" + Zod-first
  */
-export type ModelPreferencesStore = ModelPreferencesState & ModelPreferencesActions;
+const _ModelPreferencesStoreSchema = z.intersection(
+  ModelPreferencesStateSchema,
+  ModelPreferencesActionsSchema,
+);
+
+/**
+ * Inferred types from Zod schemas (single source of truth)
+ */
+export type ModelPreferencesState = z.infer<typeof ModelPreferencesStateSchema>;
+export type ModelPreferencesActions = z.infer<typeof ModelPreferencesActionsSchema>;
+export type ModelPreferencesStore = z.infer<typeof _ModelPreferencesStoreSchema>;
 
 /**
  * Persisted state subset (what gets saved to cookie)
@@ -254,7 +262,7 @@ export function createModelPreferencesStore(
               return;
             }
             set(
-              (draft) => {
+              (draft: Draft<ModelPreferencesState>) => {
                 draft.selectedModelIds = ids;
               },
               false,
@@ -272,7 +280,7 @@ export function createModelPreferencesStore(
                 return false;
               }
               set(
-                (draft) => {
+                (draft: Draft<ModelPreferencesState>) => {
                   draft.selectedModelIds.splice(idx, 1);
                 },
                 false,
@@ -280,7 +288,7 @@ export function createModelPreferencesStore(
               );
             } else {
               set(
-                (draft) => {
+                (draft: Draft<ModelPreferencesState>) => {
                   draft.selectedModelIds.push(modelId);
                 },
                 false,
@@ -292,7 +300,7 @@ export function createModelPreferencesStore(
 
           setModelOrder: (order: string[]) =>
             set(
-              (draft) => {
+              (draft: Draft<ModelPreferencesState>) => {
                 draft.modelOrder = order;
               },
               false,
@@ -301,7 +309,7 @@ export function createModelPreferencesStore(
 
           setSelectedMode: (mode: string | null) =>
             set(
-              (draft) => {
+              (draft: Draft<ModelPreferencesState>) => {
                 draft.selectedMode = mode;
               },
               false,
@@ -310,7 +318,7 @@ export function createModelPreferencesStore(
 
           setEnableWebSearch: (enabled: boolean) =>
             set(
-              (draft) => {
+              (draft: Draft<ModelPreferencesState>) => {
                 draft.enableWebSearch = enabled;
               },
               false,
@@ -322,7 +330,7 @@ export function createModelPreferencesStore(
 
             // PRIORITY 1: Use persisted selection if valid models exist
             if (state.selectedModelIds.length > 0) {
-              const validPersistedIds = state.selectedModelIds.filter(id =>
+              const validPersistedIds = state.selectedModelIds.filter((id: string) =>
                 accessibleModelIds.includes(id),
               );
               if (validPersistedIds.length > 0) {
@@ -330,7 +338,7 @@ export function createModelPreferencesStore(
                 // This ensures stale/invalid models don't stay in persistence
                 if (validPersistedIds.length !== state.selectedModelIds.length) {
                   set(
-                    (draft) => {
+                    (draft: Draft<ModelPreferencesState>) => {
                       draft.selectedModelIds = validPersistedIds;
                     },
                     false,
@@ -345,7 +353,7 @@ export function createModelPreferencesStore(
             const defaultIds = accessibleModelIds.slice(0, MIN_MODELS_REQUIRED);
             if (defaultIds.length > 0) {
               set(
-                (draft) => {
+                (draft: Draft<ModelPreferencesState>) => {
                   draft.selectedModelIds = defaultIds;
                 },
                 false,
@@ -360,12 +368,12 @@ export function createModelPreferencesStore(
             const accessibleSet = new Set(accessibleModelIds);
 
             // Filter out invalid models from selection
-            const validSelectedIds = state.selectedModelIds.filter(id =>
+            const validSelectedIds = state.selectedModelIds.filter((id: string) =>
               accessibleSet.has(id),
             );
 
             // Filter out invalid models from order
-            const validOrder = state.modelOrder.filter(id =>
+            const validOrder = state.modelOrder.filter((id: string) =>
               accessibleSet.has(id),
             );
 
@@ -382,7 +390,7 @@ export function createModelPreferencesStore(
 
             if (selectionChanged || orderChanged) {
               set(
-                (draft) => {
+                (draft: Draft<ModelPreferencesState>) => {
                   if (selectionChanged) {
                     draft.selectedModelIds = validSelectedIds;
                   }
@@ -398,7 +406,7 @@ export function createModelPreferencesStore(
 
           setHasHydrated: (hydrated: boolean) =>
             set(
-              (draft) => {
+              (draft: Draft<ModelPreferencesState>) => {
                 draft._hasHydrated = hydrated;
               },
               false,
@@ -419,15 +427,12 @@ export function createModelPreferencesStore(
               cookieStorage.removeItem(name);
             },
           },
-          // ✅ TYPE WORKAROUND: Zustand persist expects partialize to return full store type,
-          // but semantically it returns a subset. Cast to PersistedModelPreferences for clarity,
-          // then to full store type to satisfy the middleware's type constraints.
           partialize: state => ({
             selectedModelIds: state.selectedModelIds,
             modelOrder: state.modelOrder,
             selectedMode: state.selectedMode,
             enableWebSearch: state.enableWebSearch,
-          } satisfies PersistedModelPreferences as ModelPreferencesStore),
+          }) as ModelPreferencesStore,
           // ✅ OFFICIAL PATTERN: skipHydration for SSR
           // Source: persist.md - prevents automatic hydration
           skipHydration: true,

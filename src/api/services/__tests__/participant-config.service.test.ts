@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ChatParticipant, ParticipantConfigInput } from '@/api/routes/chat/schema';
 
-import { detectParticipantChanges } from '../participant-config.service';
+import { categorizeParticipantChanges } from '../participant-config.service';
 
 // ============================================================================
 // TEST HELPER FUNCTIONS
@@ -60,7 +60,7 @@ function createParticipantConfig(
 // BASIC DETECTION TESTS
 // ============================================================================
 
-describe('detectParticipantChanges', () => {
+describe('categorizeParticipantChanges', () => {
   describe('basic change detection', () => {
     it('should detect no changes when configurations are identical', () => {
       const dbParticipants = [
@@ -73,7 +73,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p2', 'anthropic/claude-3', 1),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.addedParticipants).toHaveLength(0);
       expect(result.removedParticipants).toHaveLength(0);
@@ -91,7 +91,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p2', 'anthropic/claude-3', 1),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.addedParticipants).toHaveLength(1);
       expect(result.addedParticipants[0]?.modelId).toBe('anthropic/claude-3');
@@ -107,7 +107,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p1', 'openai/gpt-4', 0),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.removedParticipants).toHaveLength(1);
       expect(result.removedParticipants[0]?.modelId).toBe('anthropic/claude-3');
@@ -131,7 +131,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('new-id', 'anthropic/claude-3', 1), // Re-adding Claude
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
       expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
@@ -151,7 +151,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('new-gemini', 'google/gemini-pro', 2), // Truly new
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
       expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
@@ -179,7 +179,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('new-claude', 'anthropic/claude-3', 1), // 3rd addition
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       // Should be detected as re-enabled, not new
       expect(result.reenabledParticipants).toHaveLength(1);
@@ -201,7 +201,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('new-gemini', 'google/gemini-pro', 2), // Re-enabling
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       // Both should be re-enabled
       expect(result.reenabledParticipants).toHaveLength(2);
@@ -227,7 +227,7 @@ describe('detectParticipantChanges', () => {
         // Gemini is being REMOVED (not in provided list)
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
       expect(result.reenabledParticipants[0]?.modelId).toBe('anthropic/claude-3');
@@ -251,7 +251,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p1', 'openai/gpt-4', 0, 'Critic'), // Role changed
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.updatedParticipants).toHaveLength(1);
       expect(result.updatedParticipants[0]?.modelId).toBe('openai/gpt-4');
@@ -266,7 +266,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p1', 'openai/gpt-4', 0, 'New Role'),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.updatedParticipants).toHaveLength(1);
     });
@@ -280,7 +280,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p1', 'openai/gpt-4', 0, undefined), // Role removed
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.updatedParticipants).toHaveLength(1);
     });
@@ -299,7 +299,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p2', 'anthropic/claude-3', 1),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.addedParticipants).toHaveLength(2);
       expect(result.reenabledParticipants).toHaveLength(0);
@@ -313,7 +313,7 @@ describe('detectParticipantChanges', () => {
 
       const providedParticipants: ParticipantConfigInput[] = [];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.removedParticipants).toHaveLength(2);
       expect(result.addedParticipants).toHaveLength(0);
@@ -329,7 +329,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('new-p1', 'openai/gpt-4', 0),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       expect(result.reenabledParticipants).toHaveLength(1);
       expect(result.reenabledParticipants[0]?.modelId).toBe('openai/gpt-4');
@@ -345,7 +345,7 @@ describe('detectParticipantChanges', () => {
         createParticipantConfig('p1', 'openai/gpt-4', 0),
       ];
 
-      const result = detectParticipantChanges(dbParticipants, providedParticipants);
+      const result = categorizeParticipantChanges(dbParticipants, providedParticipants);
 
       // allDbParticipants should be included in result for buildParticipantOperations
       expect(result.allDbParticipants).toBeDefined();

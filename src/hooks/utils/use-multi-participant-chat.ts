@@ -785,6 +785,20 @@ export function useMultiParticipantChat(
      * AI SDK v5 Pattern: Trust the SDK's built-in deduplication
      */
     onFinish: async (data) => {
+      // ✅ DEBUG: Log onFinish data to trace content corruption
+      // eslint-disable-next-line no-console
+      console.log('[FINISH]', JSON.stringify({
+        msgId: data.message?.id,
+        textLen: data.message?.parts?.find(p => p.type === 'text' && 'text' in p)
+          ? String((data.message.parts.find(p => p.type === 'text' && 'text' in p) as { text: string }).text || '').length
+          : 0,
+        textPreview: data.message?.parts?.find(p => p.type === 'text' && 'text' in p)
+          ? String((data.message.parts.find(p => p.type === 'text' && 'text' in p) as { text: string }).text || '').slice(0, 50)
+          : '',
+        finishReason: data.finishReason,
+        pIdx: currentIndexRef.current,
+      }));
+
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
       const emptyParts = data.message?.parts?.length === 0;
@@ -1025,9 +1039,20 @@ export function useMultiParticipantChat(
               // We correct this using the backend's deterministic ID format
             }
 
+            // ✅ CRITICAL FIX: Ensure all parts have state='done' when onFinish is called
+            // AI SDK may leave parts with state='streaming' even after stream completes
+            // This causes the participant completion gate to fail, preventing moderator trigger
+            const completedParts = data.message.parts?.map((part) => {
+              if ('state' in part && part.state === 'streaming') {
+                return { ...part, state: 'done' as const };
+              }
+              return part;
+            }) ?? [];
+
             const completeMessage: UIMessage = {
               ...data.message,
               id: correctId, // ✅ Use correct ID from backend metadata
+              parts: completedParts, // ✅ Ensure all parts have state='done'
               metadata: completeMetadata, // ✅ Now uses strictly typed metadata
             };
 
@@ -1157,7 +1182,8 @@ export function useMultiParticipantChat(
         if (hasErrorInMetadata) {
           // Error messages don't animate - trigger next participant after frame
           // ✅ FIX: Must await to block onFinish from returning before next trigger
-          await new Promise(resolve => requestAnimationFrame(resolve));
+          // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           triggerNextParticipantWithRefs();
           return;
         }
@@ -1170,7 +1196,9 @@ export function useMultiParticipantChat(
       // ✅ FIX: Must await to block onFinish from returning before next participant triggers
       // Without await, onFinish returns immediately and AI SDK status changes,
       // allowing multiple streams to start concurrently (race condition)
-      await new Promise(resolve => requestAnimationFrame(resolve));
+      // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
+      // Single RAF only waits for next paint, but React might batch updates across frames
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       triggerNextParticipantWithRefs();
     },
 

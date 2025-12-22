@@ -565,10 +565,11 @@ export const CommonFieldSchemas = {
 /**
  * Thread ID path parameter
  * ✅ REUSABLE: Used across all chat thread endpoints
+ * ✅ MATCHES route paths: /chat/threads/:threadId/...
  */
 export const ThreadIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    param: { name: 'id', in: 'path' },
+  threadId: CoreSchemas.id().openapi({
+    param: { name: 'threadId', in: 'path' },
     description: 'Thread identifier',
     example: 'thread_abc123',
   }),

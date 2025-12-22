@@ -22,7 +22,7 @@ export type Chat = {
   id: string;
   title: string;
   slug: string;
-  previousSlug?: string | null; // ✅ BACKWARDS COMPATIBLE: Original slug before AI title generation
+  previousSlug?: string | null;
   createdAt: Date;
   updatedAt: Date;
   messages: never[];
@@ -37,7 +37,6 @@ export type ChatGroup = {
 
 /**
  * Check if a chat is active by comparing pathname against both current slug and previousSlug
- * ✅ BACKWARDS COMPATIBLE: Supports both AI-generated and original slugs
  */
 function isChatActive(chat: Chat, pathname: string): boolean {
   const currentSlugUrl = `/chat/${chat.slug}`;

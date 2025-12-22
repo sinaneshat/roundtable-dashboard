@@ -1146,14 +1146,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           if (!hasContent) {
             // ✅ CRITICAL: Throw error for empty responses to prevent AI SDK state corruption
             // This ensures the error is properly handled by onError callback in use-multi-participant-chat
-            // The error message follows error-metadata-builders pattern for consistent error handling
-            const errorMessage = JSON.stringify({
-              errorCategory: 'empty_response',
-              rawErrorMessage: `The model (${participant.modelId}) did not generate a response.`,
-              isTransient: false,
-              errorType: 'empty_response',
-            });
-            throw new Error(errorMessage);
+            throw createError.internal(
+              `The model (${participant.modelId}) did not generate a response.`,
+              {
+                errorType: 'external_service',
+                service: 'openrouter',
+                operation: 'stream_text',
+                resourceId: participant.modelId,
+              },
+            );
           }
 
           // Delegate to message persistence service

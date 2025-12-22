@@ -407,8 +407,6 @@ describe('timeline Duplication Detection', () => {
       expect(store.getState().preSearches).toHaveLength(2);
     });
   });
-
-  describe.todo('moderator Duplication - moderator functionality integrated into messages with isModerator metadata');
 });
 
 // ============================================================================

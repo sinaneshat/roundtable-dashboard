@@ -17,16 +17,16 @@ import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { ulid } from 'ulid';
 
-import { createError, normalizeError } from '@/api/common/error-handling';
+import { normalizeError } from '@/api/common/error-handling';
 import { ChangelogTypes } from '@/api/core/enums';
-import type {
-  ChatParticipant,
-  ParticipantConfigInput,
-} from '@/api/routes/chat/schema';
+import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { TypedLogger } from '@/api/types/logger';
 import type { DbType } from '@/db';
 import * as tables from '@/db';
 import type { DbChangelogData } from '@/db/schemas/chat-metadata';
+import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
+
+import { validateParticipantUniqueness } from './participant-validation.service';
 
 // ============================================================================
 // TYPES (imported from schema.ts - no manual definitions)
@@ -51,52 +51,6 @@ export type ChangelogEntry = {
 };
 
 // ============================================================================
-// VALIDATION
-// ============================================================================
-
-/**
- * Validates that all provided participants have unique modelIds
- *
- * ✅ ERROR HANDLING: Comprehensive error context following error-metadata.service.ts pattern
- * ✅ LOGGING: Edge case logging for duplicate detection
- *
- * @param participants - Array of participant configurations to validate
- * @param logger - Optional logger for edge case tracking
- * @throws BadRequestError if duplicates found
- */
-export function validateParticipantUniqueness(
-  participants: ParticipantConfigInput[],
-  logger?: TypedLogger,
-): void {
-  const modelIds = participants.map(p => p.modelId);
-  const uniqueModelIds = new Set(modelIds);
-
-  if (modelIds.length !== uniqueModelIds.size) {
-    // Find duplicates for error message
-    const duplicates = modelIds.filter((id, index) => modelIds.indexOf(id) !== index);
-
-    // ✅ LOG: Duplicate modelIds detected (validation edge case)
-    if (logger) {
-      logger.warn('Duplicate modelIds detected in participant configuration', {
-        logType: 'validation',
-        duplicates,
-        totalParticipants: participants.length,
-        uniqueCount: uniqueModelIds.size,
-      });
-    }
-
-    // ✅ ERROR CONTEXT: Validation error with field context
-    throw createError.badRequest(
-      `Duplicate modelIds found in participants: ${duplicates.join(', ')}. Each model can only appear once.`,
-      {
-        errorType: 'validation',
-        field: 'participants',
-      },
-    );
-  }
-}
-
-// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
@@ -113,26 +67,26 @@ function extractModelName(modelId: string): string {
 // ============================================================================
 
 /**
- * Detects all types of participant changes between current and provided state
+ * Categorize participant changes for database operations
+ *
+ * Analyzes the difference between existing database participants and new API input
+ * to determine which operations are needed (add, remove, re-enable, update).
  *
  * ✅ ERROR HANDLING: Validates unique modelIds with error context
- * ✅ LOGGING: Optional logger for validation edge cases
  *
  * @param allDbParticipants - All participants from database (including disabled)
  * @param providedParticipants - New participant configuration from API
- * @param logger - Optional logger for edge case tracking
- * @returns Categorized participant changes
+ * @returns Categorized participant changes (added, removed, re-enabled, updated)
  */
-export function detectParticipantChanges(
+export function categorizeParticipantChanges(
   allDbParticipants: ChatParticipant[],
   providedParticipants: ParticipantConfigInput[],
-  logger?: TypedLogger,
 ) {
   const enabledDbParticipants = allDbParticipants.filter(p => p.isEnabled);
   const providedEnabledParticipants = providedParticipants.filter(p => p.isEnabled !== false);
 
   // Validate no duplicates in provided participants
-  validateParticipantUniqueness(providedEnabledParticipants, logger);
+  validateParticipantUniqueness(providedEnabledParticipants);
 
   // Detect removed participants (in enabled DB but not in provided list)
   const removedParticipants = enabledDbParticipants.filter(
@@ -188,7 +142,7 @@ export function detectParticipantChanges(
  */
 export function buildParticipantOperations(
   db: DbType,
-  changes: ReturnType<typeof detectParticipantChanges>,
+  changes: ReturnType<typeof categorizeParticipantChanges>,
   threadId: string,
   roundNumber: number,
 ): ParticipantChangeResult {
@@ -457,8 +411,8 @@ export function processParticipantChanges(
   logger?: TypedLogger,
 ): ParticipantChangeResult & { hasChanges: boolean } {
   try {
-    // Detect all changes
-    const changes = detectParticipantChanges(allDbParticipants, providedParticipants, logger);
+    // Categorize all changes
+    const changes = categorizeParticipantChanges(allDbParticipants, providedParticipants);
 
     // Build operations
     const operations = buildParticipantOperations(db, changes, threadId, roundNumber);

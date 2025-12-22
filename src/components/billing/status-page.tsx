@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { StatusVariant } from '@/api/core/enums';
 import { StatusVariants } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/ui/cn';
 
 type StatusPageProps = {
   variant: StatusVariant;
@@ -40,8 +41,8 @@ export function StatusPage({ variant, title, description, children, actions }: S
   return (
     <div className="flex flex-1 min-h-0 w-full flex-col items-center px-4 py-8">
       <div className="flex flex-col items-center gap-6 w-full max-w-md">
-        <div className={`flex size-16 items-center justify-center rounded-full ring-4 ${config.ringClass}`}>
-          <Icon className={`size-8 ${config.iconClass}`} strokeWidth={2} />
+        <div className={cn('flex size-16 items-center justify-center rounded-full ring-4', config.ringClass)}>
+          <Icon className={cn('size-8', config.iconClass)} strokeWidth={2} />
         </div>
 
         <div className="space-y-1.5 text-center">

@@ -132,6 +132,11 @@ export function ThreadTimeline({
     isDataReady,
   });
 
+  // ✅ SCROLL FIX: During active streaming, skip measurement to prevent scroll jumps
+  // When streaming ends, remeasurement will occur naturally on next scroll
+  const isActivelyStreaming = isStreaming || isModeratorStreaming;
+  const stableMeasureElement = isActivelyStreaming ? undefined : measureElement;
+
   // ✅ ANIMATION: Track items already animated to prevent re-animation on scroll
   // Items that existed on initial load should NOT animate (skipInitialAnimation)
   const animatedItemsRef = useRef<Set<string>>(new Set());
@@ -181,13 +186,13 @@ export function ThreadTimeline({
           // Official TanStack Virtual pattern:
           // - key={virtualItem.key}
           // - data-index={virtualItem.index}
-          // - ref={measureElement}
+          // - ref={measureElement} (disabled during streaming to prevent scroll jumps)
           // - position: absolute, top: 0, left: 0
           // - transform: translateY(item.start - scrollMargin)
           <div
             key={virtualItem.key}
             data-index={virtualItem.index}
-            ref={measureElement}
+            ref={stableMeasureElement}
             style={{
               position: 'absolute',
               top: 0,

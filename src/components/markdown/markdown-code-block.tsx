@@ -41,7 +41,6 @@ function extractTextContent(children: ReactNode): string {
 
 type MarkdownCodeProps = HTMLAttributes<HTMLElement> & {
   inline?: boolean;
-  node?: unknown;
 };
 
 /**
@@ -79,9 +78,7 @@ export function MarkdownCode({
   );
 }
 
-type MarkdownPreProps = HTMLAttributes<HTMLPreElement> & {
-  node?: unknown;
-};
+type MarkdownPreProps = HTMLAttributes<HTMLPreElement>;
 
 /**
  * MarkdownPre - Pre element for markdown that works with MarkdownCode

@@ -798,10 +798,6 @@ describe('empty States', () => {
       expect(groups[0]?.participantMessages).toHaveLength(0);
     });
   });
-
-  describe.todo('orphan Summary - summary feature removed from codebase', () => {
-    it.todo('summary without messages is not displayed - summary feature removed');
-  });
 });
 
 // ============================================================================
@@ -831,10 +827,6 @@ describe('error Message Display', () => {
       expect(errorMsg?.metadata.hasError).toBe(true);
       expect(errorMsg?.metadata.finishReason).toBe(FinishReasons.ERROR);
     });
-  });
-
-  describe.todo('summary Error - summary feature removed from codebase', () => {
-    it.todo('shows failed summary in round - summary feature removed');
   });
 });
 

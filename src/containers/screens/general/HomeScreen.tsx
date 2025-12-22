@@ -26,11 +26,8 @@ export default async function HomeScreen(): Promise<never> {
   const session = await auth.api.getSession({ headers: headersList });
 
   if (session?.user) {
-    // User is authenticated, redirect to chat dashboard
     redirect('/chat');
   } else {
-    // Intentionally empty
-    // User is not authenticated, redirect to sign-in
     redirect('/auth/sign-in');
   }
 }

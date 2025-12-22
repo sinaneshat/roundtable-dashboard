@@ -17,9 +17,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
+import { MessageRoles } from '@/api/core/enums';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
-import { getMessageMetadata } from '@/lib/utils/metadata';
+import { getMessageMetadata, getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
@@ -88,12 +89,99 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     showApiErrorToast('Chat error', error);
   }, []);
 
+  // ✅ CRITICAL: Helper to wait for store messages to have all parts with state='done'
+  // This ensures UI has fully updated before we trigger moderator
+  const waitForStoreSync = useCallback(async (
+    sdkMessages: UIMessage[],
+    roundNumber: number,
+    maxWaitMs = 2000,
+  ): Promise<boolean> => {
+    const startTime = Date.now();
+    const checkInterval = 50; // Check every 50ms
+
+    // First, sync the SDK messages directly to the store to bypass throttling
+    // This ensures the store gets the latest state immediately
+    const participantMessagesFromSdk = sdkMessages.filter((m) => {
+      const meta = getMessageMetadata(m.metadata);
+      return (
+        m.role === MessageRoles.ASSISTANT
+        && meta
+        && 'roundNumber' in meta
+        && meta.roundNumber === roundNumber
+        && !('isModerator' in meta)
+      );
+    });
+
+    // Force update store with SDK messages that have state='done'
+    if (participantMessagesFromSdk.length > 0) {
+      const currentStoreMessages = store.getState().messages;
+      const updatedMessages = currentStoreMessages.map((storeMsg) => {
+        const sdkMatch = participantMessagesFromSdk.find(sdk => sdk.id === storeMsg.id);
+        if (sdkMatch) {
+          // Use SDK message parts (which should have state='done')
+          return {
+            ...storeMsg,
+            parts: sdkMatch.parts,
+            metadata: sdkMatch.metadata,
+          };
+        }
+        return storeMsg;
+      });
+
+      // Check if any messages from SDK are missing in store
+      const storeMsgIds = new Set(currentStoreMessages.map(m => m.id));
+      const missingFromStore = participantMessagesFromSdk.filter(m => !storeMsgIds.has(m.id));
+      if (missingFromStore.length > 0) {
+        updatedMessages.push(...missingFromStore);
+      }
+
+      store.getState().setMessages(updatedMessages);
+    }
+
+    // Now verify the sync completed
+    while (Date.now() - startTime < maxWaitMs) {
+      const storeMessages = store.getState().messages;
+
+      // Get participant messages for this round from store
+      const participantMessages = storeMessages.filter((m) => {
+        if (m.role !== MessageRoles.ASSISTANT)
+          return false;
+        const meta = getMessageMetadata(m.metadata);
+        if (!meta)
+          return false;
+        const msgRound = getRoundNumber(m.metadata);
+        const isModerator = 'isModerator' in meta && meta.isModerator === true;
+        return msgRound === roundNumber && !isModerator;
+      });
+
+      // Check if all have state='done' (no streaming parts)
+      const allComplete = participantMessages.every((msg) => {
+        const hasStreamingParts = msg.parts?.some(
+          p => 'state' in p && p.state === 'streaming',
+        );
+        return !hasStreamingParts;
+      });
+
+      if (allComplete && participantMessages.length > 0) {
+        return true;
+      }
+
+      // Wait before next check
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+
+    // Timed out - log warning but proceed anyway
+    // eslint-disable-next-line no-console
+    console.warn('[handleComplete] Store sync timed out, proceeding anyway');
+    return false;
+  }, [store]);
+
   // onComplete callback for moderator triggering
   const handleComplete = useCallback(async (sdkMessages: UIMessage[]) => {
     const currentState = store.getState();
 
     if (currentState.thread || currentState.createdThreadId) {
-      const { thread: storeThread, participants: storeParticipants, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;
+      const { thread: storeThread, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;
       const threadId = storeThread?.id || storeCreatedThreadId;
       const mode = storeThread?.mode || selectedMode;
 
@@ -104,6 +192,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           if (currentState.hasModeratorBeenCreated(roundNumber)) {
             return;
           }
+
+          // ✅ CRITICAL FIX: Wait for store to sync before proceeding
+          // This ensures UI has fully updated with state='done' for all parts
+          await waitForStoreSync(sdkMessages, roundNumber);
 
           // ✅ RACE FIX: Wait for ALL animations (pre-search, participants) before triggering moderator
           // This prevents moderator from triggering while pre-search is still animating
@@ -153,19 +245,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
           // Moderator messages are stored as chatMessage with isModerator: true metadata
           // The triggerModerator function handles fetching messages after stream completes
-        } catch (error) {
-          console.error('[Provider:handleComplete] Moderator creation failed', {
-            error,
-            threadId,
-            mode,
-            messageCount: sdkMessages.length,
-            participantCount: storeParticipants.length,
-            screenMode: currentState.screenMode,
-          });
+        } catch {
+          // Moderator creation failed
         }
       }
     }
-  }, [store]);
+  }, [store, waitForStoreSync]);
 
   // Initialize AI SDK hook
   const chat = useMultiParticipantChat({

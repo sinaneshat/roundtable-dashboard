@@ -16,7 +16,7 @@
 import { useMemo } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import { useModelsQuery } from '@/hooks/queries/models';
+import { useModelsQuery } from '@/hooks/queries';
 
 /**
  * Return value from useModelLookup hook

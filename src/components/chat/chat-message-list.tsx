@@ -20,7 +20,7 @@ import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@
 import { BRAND } from '@/constants/brand';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useUsageStatsQuery } from '@/hooks/queries';
 import { useModelLookup } from '@/hooks/utils';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
@@ -140,8 +140,7 @@ const ParticipantHeader = memo(({
         if (mounted)
           setColorClass(color);
       })
-      .catch((error) => {
-        console.error('[ChatMessageList] Failed to extract color from image:', error);
+      .catch(() => {
         if (mounted)
           setColorClass('muted-foreground');
       });
@@ -243,12 +242,10 @@ const ParticipantMessageWrapper = memo(({
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
   const hasError = status === MessageStatuses.FAILED || assistantMetadata?.hasError;
 
-  // Track status transitions for flash debugging
+  // Track status transitions
   const prevStatusRef = useRef(status);
   useEffect(() => {
     if (prevStatusRef.current !== status) {
-      // eslint-disable-next-line no-console
-      console.log('[TRANS]', JSON.stringify({ idx: participantIndex, f: prevStatusRef.current.slice(0, 4), t: status.slice(0, 4), p: parts.length }));
       prevStatusRef.current = status;
     }
   }, [status, participantIndex, parts.length]);
@@ -1113,8 +1110,6 @@ export const ChatMessageList = memo(
       messageGroupsByRound.get(roundNumber)!.push(group);
     });
 
-    // Debug logging removed - use devLog for targeted debugging when needed
-
     return (
       <div className="touch-pan-y space-y-8">
         {messageGroups.map((group, groupIndex) => {
@@ -1310,16 +1305,24 @@ export const ChatMessageList = memo(
                   const isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound;
                   const shouldShowPendingCards = !isRoundComplete && (preSearchActive || preSearchComplete || isAnyStreamingActive);
 
-                  if (!shouldShowPendingCards) {
-                    return null;
-                  }
+                  // ✅ FLASH FIX: Keep component mounted but hidden instead of return null
+                  // Previously returning null caused React to unmount/remount when transitioning
+                  // from pending cards to messageGroups, triggering animation replays (FLASH).
+                  // Now we use opacity + pointer-events to hide without unmounting.
 
                   // Render ALL enabled participants in priority order (store guarantees sort)
                   // Each participant shows either their actual content or shimmer, maintaining stable positions.
 
                   return (
                     // mt-8 provides consistent 2rem spacing from user message (matches space-y-8 between participants)
-                    <div className="mt-8 space-y-8">
+                    // ✅ FLASH FIX: Use opacity transition instead of conditional rendering
+                    <div
+                      className={cn(
+                        'mt-8 space-y-8 transition-opacity duration-150',
+                        shouldShowPendingCards ? 'opacity-100' : 'opacity-0 pointer-events-none absolute -z-10',
+                      )}
+                      aria-hidden={!shouldShowPendingCards}
+                    >
                       {enabledParticipants.map((participant, participantIdx) => {
                         const model = findModel(participant.modelId);
                         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
@@ -1485,10 +1488,6 @@ export const ChatMessageList = memo(
                     && !isRoundComplete
                     && isAnyStreamingActive;
 
-                  if (!shouldShowModerator) {
-                    return null;
-                  }
-
                   const enabledParticipants = getEnabledParticipants(participants);
 
                   // ✅ FLASH FIX: Use stable key and single component for all moderator states
@@ -1513,11 +1512,15 @@ export const ChatMessageList = memo(
                     ? (isModeratorStreaming ? MessageStatuses.STREAMING : MessageStatuses.COMPLETE)
                     : MessageStatuses.PENDING;
 
-                  // eslint-disable-next-line no-console
-                  console.log('[MOD-UI]', JSON.stringify({ rnd: roundNumber, st: moderatorStatus.slice(0, 4), p: moderatorParts.length }));
-
+                  // ✅ FLASH FIX: Keep component mounted but hidden instead of return null
                   return (
-                    <div className="mt-8">
+                    <div
+                      className={cn(
+                        'mt-8 transition-opacity duration-150',
+                        shouldShowModerator ? 'opacity-100' : 'opacity-0 pointer-events-none absolute -z-10',
+                      )}
+                      aria-hidden={!shouldShowModerator}
+                    >
                       <ScrollAwareParticipant
                         key={`moderator-${roundNumber}`}
                         index={enabledParticipants.length}
@@ -1625,7 +1628,7 @@ export const ChatMessageList = memo(
             const round = getRoundNumber(m.metadata);
             const isMod = m.metadata && typeof m.metadata === 'object'
               && 'isModerator' in m.metadata && m.metadata.isModerator === true;
-            return round === latestRound && m.role === 'assistant' && !isMod;
+            return round === latestRound && m.role === MessageRoles.ASSISTANT && !isMod;
           });
 
           const enabledParticipants = getEnabledParticipants(participants);

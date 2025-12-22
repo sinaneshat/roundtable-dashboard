@@ -18,6 +18,7 @@ import {
 import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants/brand';
 import { spaceGrotesk } from '@/lib/fonts';
+import { cn } from '@/lib/ui/cn';
 import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
 import { createMetadata } from '@/utils/metadata';
 
@@ -88,7 +89,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
     <html
       lang="en"
       dir="ltr"
-      className={`dark ${GeistSans.variable} ${GeistMono.variable} ${spaceGrotesk.variable}`}
+      className={cn('dark', GeistSans.variable, GeistMono.variable, spaceGrotesk.variable)}
     >
       <head>
         {/* 2025 AI Search Optimization - Answer Engine Optimization */}

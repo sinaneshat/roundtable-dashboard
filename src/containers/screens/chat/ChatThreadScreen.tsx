@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
+import { UploadStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
@@ -186,7 +187,7 @@ export default function ChatThreadScreen({
       const attachmentIds = chatAttachments.getUploadIds();
       // Build attachment info for optimistic message file parts
       const attachmentInfos = chatAttachments.attachments
-        .filter(att => att.status === 'completed' && att.uploadId)
+        .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
         .map(att => ({
           uploadId: att.uploadId!,
           filename: att.file.name,

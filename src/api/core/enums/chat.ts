@@ -14,6 +14,14 @@ export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] 
 
 export const DEFAULT_CHAT_MODE: ChatMode = 'debating';
 
+export const DEFAULT_THREAD_STATUS: ThreadStatus = 'active';
+
+export const DEFAULT_MESSAGE_STATUS: MessageStatus = 'pending';
+
+export const DEFAULT_MESSAGE_ROLE: MessageRole = 'user';
+
+export const DEFAULT_CHANGELOG_TYPE: ChangelogType = 'added';
+
 export const ChatModeSchema = z.enum(CHAT_MODES).openapi({
   description: 'Conversation mode for roundtable discussions',
   example: 'brainstorming',
@@ -109,11 +117,9 @@ export const ChangelogTypes = {
 // CHANGELOG CHANGE TYPE (Thread changelog discriminator)
 // ============================================================================
 
-export const ChangelogChangeTypeSchema = z.enum([
-  'participant',
-  'participant_role',
-  'mode_change',
-]).openapi({
+export const CHANGELOG_CHANGE_TYPES = ['participant', 'participant_role', 'mode_change'] as const;
+
+export const ChangelogChangeTypeSchema = z.enum(CHANGELOG_CHANGE_TYPES).openapi({
   description: 'Type of thread changelog change',
   example: 'participant',
 });
@@ -130,7 +136,11 @@ export const ChangelogChangeTypes = {
 // SCREEN MODE
 // ============================================================================
 
-export const ScreenModeSchema = z.enum(['overview', 'thread', 'public']).openapi({
+export const SCREEN_MODES = ['overview', 'thread', 'public'] as const;
+
+export const DEFAULT_SCREEN_MODE: ScreenMode = 'overview';
+
+export const ScreenModeSchema = z.enum(SCREEN_MODES).openapi({
   description: 'Chat interface screen mode',
   example: 'thread',
 });

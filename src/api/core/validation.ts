@@ -114,10 +114,14 @@ export function createUpdateSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
-  const omitObj: Record<string, true> = {};
-  omitFields.forEach((key) => {
-    omitObj[String(key)] = true;
-  });
+  // Build the omit object with proper type safety
+  const omitObj = omitFields.reduce<Partial<Record<keyof T, true>>>(
+    (acc, key) => {
+      acc[key] = true;
+      return acc;
+    },
+    {} as Partial<Record<keyof T, true>>,
+  );
   return schema.omit(omitObj as Record<keyof T, true>);
 }
 
@@ -128,10 +132,14 @@ export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
-  const pickObj: Record<string, true> = {};
-  pickFields.forEach((key) => {
-    pickObj[String(key)] = true;
-  });
+  // Build the pick object with proper type safety
+  const pickObj = pickFields.reduce<Partial<Record<keyof T, true>>>(
+    (acc, key) => {
+      acc[key] = true;
+      return acc;
+    },
+    {} as Partial<Record<keyof T, true>>,
+  );
   return schema.pick(pickObj as Record<keyof T, true>);
 }
 

@@ -1,5 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider';
 
@@ -9,9 +10,14 @@ export function ChatHeaderSwitch() {
   const pathname = usePathname();
 
   // Store state to detect active thread even when URL is still /chat
-  const showInitialUI = useChatStore(s => s.showInitialUI);
-  const createdThreadId = useChatStore(s => s.createdThreadId);
-  const thread = useChatStore(s => s.thread);
+  // ✅ OPTIMIZATION: Batch all selectors with useShallow to prevent multiple re-renders
+  const { showInitialUI, createdThreadId, thread } = useChatStore(
+    useShallow(s => ({
+      showInitialUI: s.showInitialUI,
+      createdThreadId: s.createdThreadId,
+      thread: s.thread,
+    })),
+  );
 
   // Thread is active when created from overview (URL stays /chat but store has thread)
   const hasActiveThread = !showInitialUI && (createdThreadId || thread);

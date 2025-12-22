@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -115,7 +115,7 @@ export function ChatView({
 
   const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(
     effectiveThreadId,
-    mode === 'thread' && Boolean(effectiveThreadId),
+    mode === ScreenModes.THREAD && Boolean(effectiveThreadId),
   );
 
   const allEnabledModels = useMemo(
@@ -233,7 +233,7 @@ export function ChatView({
   });
 
   useEffect(() => {
-    if (mode === 'overview' && messages.length === 0)
+    if (mode === ScreenModes.OVERVIEW && messages.length === 0)
       return;
     if (incompatibleModelIds.size === 0)
       return;
@@ -253,7 +253,7 @@ export function ChatView({
       .filter(p => !incompatibleModelIds.has(p.modelId))
       .map((p, index) => ({ ...p, priority: index }));
 
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(compatibleParticipants);
     } else {
       setSelectedParticipants(compatibleParticipants);
@@ -275,7 +275,7 @@ export function ChatView({
 
   const { showLoader } = useFlowLoading({ mode });
 
-  const isStoreReady = mode === 'thread' ? (hasInitiallyLoaded && messages.length > 0) : true;
+  const isStoreReady = mode === ScreenModes.THREAD ? (hasInitiallyLoaded && messages.length > 0) : true;
 
   useChatScroll({
     messages,
@@ -301,7 +301,7 @@ export function ChatView({
   const keyboardOffset = useVisualViewportPosition();
 
   const handleModeSelect = useCallback((newMode: ChatMode) => {
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleModeChange(newMode);
     } else {
       formActions.handleModeChange(newMode);
@@ -310,7 +310,7 @@ export function ChatView({
   }, [mode, threadActions, formActions, isModeModalOpen]);
 
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleWebSearchToggle(enabled);
     } else {
       formActions.handleWebSearchToggle(enabled);
@@ -338,7 +338,7 @@ export function ChatView({
       .filter((p): p is NonNullable<typeof p> => p !== null)
       .map((p, idx) => ({ ...p, priority: idx }));
 
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(reorderedParticipants);
     } else {
       setSelectedParticipants(reorderedParticipants);
@@ -384,7 +384,7 @@ export function ChatView({
       updatedParticipants = updated.map((p, index) => ({ ...p, priority: index }));
     }
 
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(updatedParticipants);
     } else {
       setSelectedParticipants(updatedParticipants);
@@ -395,7 +395,7 @@ export function ChatView({
     const updated = selectedParticipants.map(p =>
       p.modelId === modelId ? { ...p, role, customRoleId } : p,
     );
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(updated);
     } else {
       setSelectedParticipants(updated);
@@ -406,7 +406,7 @@ export function ChatView({
     const updated = selectedParticipants.map(p =>
       p.modelId === modelId ? { ...p, role: '', customRoleId: undefined } : p,
     );
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(updated);
     } else {
       setSelectedParticipants(updated);
@@ -442,7 +442,7 @@ export function ChatView({
       priority: index,
     }));
 
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(newParticipants);
     } else {
       setSelectedParticipants(newParticipants);
@@ -452,7 +452,7 @@ export function ChatView({
     setModelOrder(modelIds);
 
     if (preset.recommendedMode) {
-      if (mode === 'thread') {
+      if (mode === ScreenModes.THREAD) {
         threadActions.handleModeChange(preset.recommendedMode);
       } else {
         formActions.handleModeChange(preset.recommendedMode);
@@ -460,7 +460,7 @@ export function ChatView({
     }
 
     if (preset.recommendWebSearch !== undefined) {
-      if (mode === 'thread') {
+      if (mode === ScreenModes.THREAD) {
         threadActions.handleWebSearchToggle(preset.recommendWebSearch);
       } else {
         formActions.handleWebSearchToggle(preset.recommendWebSearch);
@@ -470,7 +470,7 @@ export function ChatView({
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
     removeParticipant(participantId);
-    if (mode === 'thread') {
+    if (mode === ScreenModes.THREAD) {
       setHasPendingConfigChanges(true);
     }
   }, [removeParticipant, mode, setHasPendingConfigChanges]);
@@ -521,7 +521,7 @@ export function ChatView({
                 status={isInputBlocked ? 'submitted' : 'ready'}
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
-                quotaCheckType={mode === 'overview' ? 'threads' : 'messages'}
+                quotaCheckType={mode === ScreenModes.OVERVIEW ? 'threads' : 'messages'}
                 onRemoveParticipant={isInputBlocked ? undefined : handleRemoveParticipant}
                 attachments={chatAttachments.attachments}
                 onAddAttachments={chatAttachments.addFiles}
@@ -529,7 +529,7 @@ export function ChatView({
                 enableAttachments={!isInputBlocked}
                 attachmentClickRef={attachmentClickRef}
                 isUploading={chatAttachments.isUploading}
-                isHydrating={mode === 'thread' && !hasInitiallyLoaded}
+                isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
                 isSubmitting={formActions.isSubmitting}
                 toolbar={(
                   <ChatInputToolbarMenu

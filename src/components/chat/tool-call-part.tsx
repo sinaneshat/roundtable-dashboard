@@ -2,6 +2,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
+import { cn } from '@/lib/ui/cn';
 
 type ToolCallPartProps = {
   part: Extract<MessagePart, { type: 'tool-call' }>;
@@ -9,7 +10,7 @@ type ToolCallPartProps = {
 };
 export function ToolCallPart({ part, className }: ToolCallPartProps) {
   return (
-    <Card className={`border-primary/20 bg-primary/5 ${className || ''}`}>
+    <Card className={cn('border-primary/20 bg-primary/5', className)}>
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <span className="text-primary" aria-label="Tool">

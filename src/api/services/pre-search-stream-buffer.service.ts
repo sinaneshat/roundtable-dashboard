@@ -41,17 +41,6 @@ function getActiveKey(threadId: string, roundNumber: number): string {
   return `${PRESEARCH_ACTIVE_PREFIX}:${threadId}:${roundNumber}`;
 }
 
-/**
- * Generate unified stream ID for pre-search
- * Format: {threadId}_r{roundNumber}_presearch
- *
- * ✅ UNIFIED STREAM ID: Follows pattern from @/api/types/streaming.ts
- * This enables the unified resume handler to detect and route pre-search streams.
- */
-export function generatePreSearchStreamId(threadId: string, roundNumber: number): string {
-  return `${threadId}_r${roundNumber}_presearch`;
-}
-
 // ============================================================================
 // Buffer Operations
 // ============================================================================

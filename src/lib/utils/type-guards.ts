@@ -15,6 +15,18 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Type guard: Check if value is a Record<string, string> (Stripe metadata format)
+ * Stripe metadata must be a flat object with string values only
+ */
+export function isStringRecord(value: unknown): value is Record<string, string> {
+  if (!isObject(value)) {
+    return false;
+  }
+  // Verify all values are strings
+  return Object.values(value).every(v => typeof v === 'string');
+}
+
 export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }

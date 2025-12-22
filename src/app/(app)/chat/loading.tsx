@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
+import { cn } from '@/lib/ui/cn';
 
 export default function ChatOverviewLoading() {
   return (
@@ -47,7 +48,7 @@ export default function ChatOverviewLoading() {
                 {[0, 1, 2].map(i => (
                   <div
                     key={i}
-                    className={`px-4 py-3 ${i < 2 ? 'border-b border-white/[0.06]' : ''}`}
+                    className={cn('px-4 py-3', i < 2 && 'border-b border-white/[0.06]')}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
                       <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4 bg-white/15" />

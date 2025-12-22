@@ -273,8 +273,6 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
   return { isValid: errors.length === 0, errors };
 }
 
-describe.todo('single Round Timeline Integrity - test needs rewrite for moderator messages with isModerator metadata instead of separate moderator entries');
-
 // ============================================================================
 // MULTI-ROUND TIMELINE TESTS
 // ============================================================================

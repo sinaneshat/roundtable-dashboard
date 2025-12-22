@@ -10,7 +10,7 @@ import { z } from '@hono/zod-openapi';
 // ERROR TYPE (AI Operation Error Classification)
 // ============================================================================
 
-export const ErrorTypeSchema = z.enum([
+export const ERROR_TYPES = [
   'rate_limit',
   'context_length',
   'api_error',
@@ -19,7 +19,11 @@ export const ErrorTypeSchema = z.enum([
   'model_unavailable',
   'empty_response',
   'unknown',
-]).openapi({
+] as const;
+
+export const DEFAULT_ERROR_TYPE: ErrorType = 'unknown';
+
+export const ErrorTypeSchema = z.enum(ERROR_TYPES).openapi({
   description: 'Type of error that occurred during AI operations',
   example: 'api_error',
 });
@@ -70,30 +74,57 @@ export const StreamErrorTypes = {
 // AUTHENTICATION FAILURE REASON
 // ============================================================================
 
-export const AuthFailureReasonSchema = z.enum([
+export const AUTH_FAILURE_REASONS = [
   'invalid_credentials',
   'account_locked',
   'token_expired',
   'missing_token',
   'session_required',
   'session_expired',
-]);
+] as const;
+
+export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS);
 
 export type AuthFailureReason = z.infer<typeof AuthFailureReasonSchema>;
+
+export const AuthFailureReasons = {
+  INVALID_CREDENTIALS: 'invalid_credentials' as const,
+  ACCOUNT_LOCKED: 'account_locked' as const,
+  TOKEN_EXPIRED: 'token_expired' as const,
+  MISSING_TOKEN: 'missing_token' as const,
+  SESSION_REQUIRED: 'session_required' as const,
+  SESSION_EXPIRED: 'session_expired' as const,
+} as const;
 
 // ============================================================================
 // RESOURCE UNAVAILABILITY REASON
 // ============================================================================
 
-export const ResourceUnavailableReasonSchema = z.enum(['deleted', 'archived', 'private', 'expired']);
+export const RESOURCE_UNAVAILABLE_REASONS = ['deleted', 'archived', 'private', 'expired'] as const;
+
+export const ResourceUnavailableReasonSchema = z.enum(RESOURCE_UNAVAILABLE_REASONS).openapi({
+  description: 'Reason why a resource is unavailable',
+  example: 'deleted',
+});
 
 export type ResourceUnavailableReason = z.infer<typeof ResourceUnavailableReasonSchema>;
+
+export const DEFAULT_RESOURCE_UNAVAILABLE_REASON: ResourceUnavailableReason = 'deleted';
+
+export const ResourceUnavailableReasons = {
+  DELETED: 'deleted' as const,
+  ARCHIVED: 'archived' as const,
+  PRIVATE: 'private' as const,
+  EXPIRED: 'expired' as const,
+} as const;
 
 // ============================================================================
 // AUTH ACTION
 // ============================================================================
 
-export const AuthActionSchema = z.enum(['login', 'logout', 'token_refresh', 'permission_check', 'registration']).openapi({
+export const AUTH_ACTIONS = ['login', 'logout', 'token_refresh', 'permission_check', 'registration'] as const;
+
+export const AuthActionSchema = z.enum(AUTH_ACTIONS).openapi({
   description: 'Authentication action type',
   example: 'login',
 });

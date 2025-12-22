@@ -125,61 +125,45 @@ export function getUploadIdFromFilePart(part: FilePart): string | null {
 
 /**
  * Safely extract filename from a part object
- * ✅ TYPE-SAFE: No force casting, handles unknown part types
+ * ✅ TYPE-SAFE: Uses Zod validation, no force casting
  *
  * @param part - Part object that may have a filename property
  * @returns filename string or undefined
  */
 export function getFilenameFromPart(part: unknown): string | undefined {
-  if (!part || typeof part !== 'object')
-    return undefined;
-  if ('filename' in part) {
-    const filenameValue = (part as Record<string, unknown>).filename;
-    if (typeof filenameValue === 'string') {
-      return filenameValue;
-    }
+  const parseResult = FilePartSchema.safeParse(part);
+  if (parseResult.success && parseResult.data.filename) {
+    return parseResult.data.filename;
   }
   return undefined;
 }
 
 /**
  * Safely extract mimeType from a part object
- * ✅ TYPE-SAFE: Checks both mimeType and mediaType (AI SDK v5 uses mediaType)
+ * ✅ TYPE-SAFE: Uses Zod validation, checks both mimeType and mediaType (AI SDK v5 uses mediaType)
  *
  * @param part - Part object that may have a mimeType or mediaType property
  * @returns mimeType string or default
  */
 export function getMimeTypeFromPart(part: unknown, defaultType = 'application/octet-stream'): string {
-  if (!part || typeof part !== 'object')
-    return defaultType;
-
-  const partRecord = part as Record<string, unknown>;
-
-  // Check mimeType first (legacy), then mediaType (AI SDK v5)
-  if ('mimeType' in part && typeof partRecord.mimeType === 'string') {
-    return partRecord.mimeType;
-  }
-  if ('mediaType' in part && typeof partRecord.mediaType === 'string') {
-    return partRecord.mediaType;
+  const parseResult = FilePartSchema.safeParse(part);
+  if (parseResult.success) {
+    return parseResult.data.mediaType;
   }
   return defaultType;
 }
 
 /**
  * Safely extract URL from a part object
- * ✅ TYPE-SAFE: No force casting
+ * ✅ TYPE-SAFE: Uses Zod validation, no force casting
  *
  * @param part - Part object that may have a url property
  * @returns url string or undefined
  */
 export function getUrlFromPart(part: unknown): string | undefined {
-  if (!part || typeof part !== 'object')
-    return undefined;
-  if ('url' in part) {
-    const urlValue = (part as Record<string, unknown>).url;
-    if (typeof urlValue === 'string') {
-      return urlValue;
-    }
+  const parseResult = FilePartSchema.safeParse(part);
+  if (parseResult.success) {
+    return parseResult.data.url;
   }
   return undefined;
 }

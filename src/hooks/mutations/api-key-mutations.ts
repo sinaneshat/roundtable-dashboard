@@ -10,7 +10,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import type { listApiKeysService } from '@/services/api';
 import {
   createApiKeyService,
   deleteApiKeyService,
@@ -64,16 +63,22 @@ export function useUpdateApiKeyMutation() {
       if (response.success && response.data?.apiKey) {
         const updatedApiKey = response.data.apiKey;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof listApiKeysService>>>(
+        queryClient.setQueryData(
           queryKeys.apiKeys.list(),
-          (oldData: Awaited<ReturnType<typeof listApiKeysService>> | undefined) => {
-            if (!oldData?.success || !oldData.data?.items) {
+          (oldData: unknown) => {
+            if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+              return oldData;
+            }
+            if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
+              return oldData;
+            }
+            if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
               return oldData;
             }
 
             // Replace the updated API key in the list
-            const updatedApiKeys = oldData.data.items.map((key: typeof updatedApiKey) =>
-              key.id === updatedApiKey.id ? updatedApiKey : key,
+            const updatedApiKeys = oldData.data.items.map(
+              key => (typeof key === 'object' && key && 'id' in key && key.id === updatedApiKey.id) ? updatedApiKey : key,
             );
 
             return {
@@ -131,15 +136,23 @@ export function useDeleteApiKeyMutation() {
       const previousApiKeys = queryClient.getQueryData(queryKeys.apiKeys.list());
 
       // Optimistically remove the key from the list
-      queryClient.setQueryData<Awaited<ReturnType<typeof listApiKeysService>>>(
+      queryClient.setQueryData(
         queryKeys.apiKeys.list(),
-        (oldData: Awaited<ReturnType<typeof listApiKeysService>> | undefined) => {
-          if (!oldData?.success || !oldData.data?.items) {
+        (oldData: unknown) => {
+          if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+            return oldData;
+          }
+          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
+            return oldData;
+          }
+          if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
             return oldData;
           }
 
           // Filter out the deleted key
-          const filteredApiKeys = oldData.data.items.filter((key: { id: string }) => key.id !== keyId);
+          const filteredApiKeys = oldData.data.items.filter(
+            key => !(typeof key === 'object' && key && 'id' in key && key.id === keyId),
+          );
 
           return {
             ...oldData,

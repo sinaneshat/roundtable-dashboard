@@ -3,6 +3,7 @@ import { WebSearchResultSchema } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
+import { cn } from '@/lib/ui/cn';
 
 import { WebSearchDisplay } from './web-search-display';
 
@@ -34,7 +35,7 @@ export function ToolResultPart({ part, className }: ToolResultPartProps) {
   }
 
   return (
-    <Card className={`${borderColor} ${bgColor} ${className || ''}`}>
+    <Card className={cn(borderColor, bgColor, className)}>
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <span aria-label={`Tool ${statusText}`}>

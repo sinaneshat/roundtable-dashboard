@@ -8,9 +8,8 @@ import type { SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
-import { useSyncAfterCheckoutMutation } from '@/hooks/mutations/checkout';
-import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
+import { useCurrentSubscriptionQuery, useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
 export function BillingSuccessClient() {

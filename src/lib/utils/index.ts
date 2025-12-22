@@ -22,27 +22,29 @@ export * from './ai-display';
 // Data & Caching
 // ============================================================================
 export * from './cache-helpers';
+// ============================================================================
+// Domain Utilities
+// ============================================================================
+export * from './citation-parser';
 export * from './date-transforms';
-
 // ============================================================================
 // Error Handling
 // ============================================================================
 export * from './error-handling';
-
+export * from './error-metadata-builders';
+export * from './file-capability';
 // ============================================================================
 // Performance
 // ============================================================================
 export * from './memo-utils';
-
-// ============================================================================
-// Domain Utilities
-// ============================================================================
 export * from './message-status';
 export * from './message-transforms';
 export * from './metadata';
 export * from './metadata-builder';
 export * from './moderator-utils';
 export * from './participant';
+export * from './participant-message-lookup';
+export * from './role-colors';
 export * from './round-utils';
 
 // ============================================================================
@@ -55,3 +57,8 @@ export * from './state-merge';
 // ============================================================================
 export * from './type-guards';
 export * from './web-search-utils';
+
+// ============================================================================
+// Development Only (import directly from source)
+// ============================================================================
+// export * from './dev-logger'; // NOT exported - dev-only, import directly

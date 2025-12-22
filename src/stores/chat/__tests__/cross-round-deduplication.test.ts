@@ -202,8 +202,6 @@ describe('cross-Round Message Deduplication', () => {
       expect(round1Assistant).toBeUndefined(); // Dropped
     });
 
-    it.todo('should keep both messages when ID collides across different rounds - KNOWN BUG: seenMessageIds deduplicates globally, second occurrence dropped by line 653 check');
-
     it('sHOULD preserve both messages when same participant ID pattern in consecutive rounds', () => {
       // Common pattern: participant-0, participant-1 used every round
       const messages = [
@@ -417,8 +415,6 @@ describe('cross-Round Message Deduplication', () => {
       );
       expect(round0Users).toHaveLength(2); // Both optimistic and real kept
     });
-
-    it.todo('should deduplicate user messages within same round (prefer real over optimistic) - KNOWN BUG: user messages NOT deduplicated by round, both optimistic and real kept with different IDs');
 
     it('sHOULD handle optimistic assistant messages per round', () => {
       const messages = [

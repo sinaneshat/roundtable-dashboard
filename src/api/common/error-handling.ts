@@ -85,14 +85,14 @@ export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 export const ERROR_CODES = ErrorCodeSchema.enum;
 
 /**
- * Error severity levels schema - Zod enum for validation
+ * API error severity levels schema - Zod enum for validation
  */
-export const ErrorSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
+export const ApiErrorSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
 
 /**
  * Inferred type from Zod schema - replaces hard-coded type
  */
-export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
+export type ApiErrorSeverity = z.infer<typeof ApiErrorSeveritySchema>;
 
 /**
  * Error severity constant for easy access (derived from schema)
@@ -116,7 +116,7 @@ export const AppErrorConfigSchema = z.object({
   message: z.string().min(1),
   code: ErrorCodeSchema,
   statusCode: z.number().int().min(100).max(599),
-  severity: ErrorSeveritySchema.optional().default('medium'),
+  severity: ApiErrorSeveritySchema.optional().default('medium'),
   details: z.unknown().optional(),
   context: ErrorContextSchema.optional(),
   correlationId: z.string().optional(),
@@ -139,7 +139,7 @@ export type AppErrorConfig = z.input<typeof AppErrorConfigSchema>;
 class AppError extends Error {
   public readonly code: ErrorCode;
   public readonly statusCode: number;
-  public readonly severity: ErrorSeverity;
+  public readonly severity: ApiErrorSeverity;
   public readonly details?: unknown;
   public readonly context?: ErrorContext;
   public readonly timestamp: Date;

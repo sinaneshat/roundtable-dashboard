@@ -2,7 +2,6 @@
  * Mutation Hooks - Centralized Exports
  *
  * Single import point for all TanStack Mutation hooks
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  */
 
 // ============================================================================
@@ -24,6 +23,7 @@ export {
   useDeleteCustomRoleMutation,
   useDeleteParticipantMutation,
   useDeleteThreadMutation,
+  useSetRoundFeedbackMutation,
   useToggleFavoriteMutation,
   useTogglePublicMutation,
   useUpdateCustomRoleMutation,
@@ -41,6 +41,19 @@ export {
 export {
   useCreateCustomerPortalSessionMutation,
 } from './customer-portal';
+
+// Project mutations (protected)
+export {
+  useAddAttachmentToProjectMutation,
+  useCreateProjectMemoryMutation,
+  useCreateProjectMutation,
+  useDeleteProjectMemoryMutation,
+  useDeleteProjectMutation,
+  useRemoveAttachmentFromProjectMutation,
+  useUpdateProjectAttachmentMutation,
+  useUpdateProjectMemoryMutation,
+  useUpdateProjectMutation,
+} from './project-mutations';
 
 // Subscription Management mutations (protected) - In-app subscription changes
 export {

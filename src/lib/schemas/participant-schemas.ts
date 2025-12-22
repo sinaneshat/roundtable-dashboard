@@ -85,40 +85,9 @@ export const ModelIdSchema = z.string().min(1, 'Model ID required');
 // ============================================================================
 // METADATA EXTRACTION UTILITIES
 // ============================================================================
-
-/**
- * Extract participant index from metadata safely
- * SINGLE SOURCE OF TRUTH for participant index extraction
- *
- * @param metadata - Message metadata
- * @param fallback - Fallback value if extraction fails (default: 0)
- * @returns Participant index or fallback
- *
- * @example
- * ```typescript
- * const index = extractParticipantIndex(message.metadata); // Returns 0 if missing
- * const index = extractParticipantIndex(message.metadata, -1); // Returns -1 if missing
- * ```
- */
-export function extractParticipantIndex(
-  metadata: unknown,
-  fallback: number = DEFAULT_PARTICIPANT_INDEX,
-): ParticipantIndex {
-  if (!metadata || typeof metadata !== 'object') {
-    return fallback;
-  }
-
-  // ✅ TYPE-SAFE: Check for field existence before access
-  if (
-    'participantIndex' in metadata
-    && typeof metadata.participantIndex === 'number'
-    && metadata.participantIndex >= 0
-  ) {
-    return metadata.participantIndex;
-  }
-
-  return fallback;
-}
+// ✅ SINGLE SOURCE OF TRUTH: /src/lib/utils/metadata.ts
+// Import getParticipantId, getParticipantIndex, getParticipantRole, getModel from there
+// Those functions use Zod validation and are more robust
 
 /**
  * Get display participant index (1-based for UI)
@@ -157,95 +126,6 @@ export function formatParticipantIndex(
   participantIndex: ParticipantIndex,
 ): string {
   return `Participant #${getDisplayParticipantIndex(participantIndex)}`;
-}
-
-/**
- * Extract participant ID from metadata safely
- * SINGLE SOURCE OF TRUTH for participant ID extraction
- *
- * @param metadata - Message metadata
- * @returns Participant ID or null
- *
- * @example
- * ```typescript
- * const id = extractParticipantId(message.metadata);
- * if (id) {
- *   // Use participant ID
- * }
- * ```
- */
-export function extractParticipantId(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  // ✅ TYPE-SAFE: Check for field existence before access
-  if (
-    'participantId' in metadata
-    && typeof metadata.participantId === 'string'
-    && metadata.participantId.length > 0
-  ) {
-    return metadata.participantId;
-  }
-
-  return null;
-}
-
-/**
- * Extract participant role from metadata safely
- * SINGLE SOURCE OF TRUTH for participant role extraction
- *
- * @param metadata - Message metadata
- * @returns Participant role or null
- *
- * @example
- * ```typescript
- * const role = extractParticipantRole(message.metadata);
- * ```
- */
-export function extractParticipantRole(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  // ✅ TYPE-SAFE: Check for field existence before access
-  if (
-    'participantRole' in metadata
-    && typeof metadata.participantRole === 'string'
-  ) {
-    return metadata.participantRole;
-  }
-
-  return null;
-}
-
-/**
- * Extract model from metadata safely
- * SINGLE SOURCE OF TRUTH for model extraction
- *
- * @param metadata - Message metadata
- * @returns Model ID or null
- *
- * @example
- * ```typescript
- * const model = extractModel(message.metadata);
- * ```
- */
-export function extractModel(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  // ✅ TYPE-SAFE: Check for field existence before access
-  if (
-    'model' in metadata
-    && typeof metadata.model === 'string'
-    && metadata.model.length > 0
-  ) {
-    return metadata.model;
-  }
-
-  return null;
 }
 
 // ============================================================================
@@ -432,7 +312,7 @@ export function isMinimalParticipant(
 const BaseParticipantConfigSchema = z.object({
   id: z.string(),
   modelId: z.string().min(1, 'Model ID is required'),
-  role: z.string().nullable(),
+  role: z.string().nullable().optional(),
   priority: z.number().int().nonnegative(),
 });
 

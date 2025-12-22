@@ -26,7 +26,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { ScreenModes } from '@/api/core/enums';
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
-import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
+import { useThreadSlugStatusQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { createEmptyListCache, createPrefetchMeta } from '@/lib/utils/cache-helpers';
@@ -389,33 +389,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         // ✅ PREFETCH DATA: Pre-populate TanStack Query cache for future navigation
         // This ensures data is available if user refreshes or navigates away and back
         prepopulateQueryCache(threadId, session);
-
-        // =========================================================================
-        // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
-        // =========================================================================
-        //
-        // WHY: Next.js App Router with `dynamic = 'force-dynamic'` ALWAYS shows
-        // loading.tsx during server render. Prefetching only works for static routes.
-        // For dynamic routes, prefetch only caches down to the loading.js boundary.
-        //
-        // SOLUTION: Don't trigger server navigation at all!
-        // - URL is already `/chat/[slug]` from history.replaceState (Step 1)
-        // - Overview screen already renders thread content when !showInitialUI
-        // - All data (messages, moderator, etc.) is in Zustand store
-        // - User sees seamless transition with NO loading skeleton
-        //
-        // BEHAVIOR:
-        // - User stays on ChatOverviewScreen (which shows thread content)
-        // - URL is correct for sharing/bookmarking
-        // - On refresh/hard navigation, they get proper ChatThreadScreen from server
-        // - Browser back button works correctly
-        //
-        // ❌ REMOVED: router.push() - triggers server render and loading.tsx
-        // ✅ KEPT: history.replaceState (Step 1) - already updated URL
-        //
-        // The overview screen continues to function as the thread view.
-        // When user refreshes, they'll get the full ChatThreadScreen with
-        // server-rendered data and all thread features (actions, changelog, etc.)
       }
     }
   }, [

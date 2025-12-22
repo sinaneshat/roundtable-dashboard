@@ -103,63 +103,19 @@ export type PreSearchQueryState = z.infer<typeof PreSearchQueryStateSchema>;
 // ============================================================================
 // Pre-search streaming event schemas
 // ============================================================================
-
-export const PreSearchStartEventSchema = z.object({
-  type: z.literal('pre_search_start'),
-  userQuery: z.string(),
-});
-
-export const PreSearchQueryEventSchema = z.object({
-  type: z.literal('pre_search_query'),
-  index: z.number().int().nonnegative(),
-  total: z.number().int().positive(),
-  query: z.string(),
-  rationale: z.string(),
-  searchDepth: WebSearchDepthSchema,
-});
-
-export const PreSearchResultEventSchema = z.object({
-  type: z.literal('pre_search_result'),
-  index: z.number().int().nonnegative(),
-  result: z.object({
-    results: z
-      .array(
-        z.object({
-          title: z.string(),
-          url: z.string().url(),
-          content: z.string(),
-        }),
-      )
-      .optional(),
-    responseTime: z.number().optional(),
-  }),
-});
-
-export const PreSearchCompleteEventSchema = z.object({
-  type: z.literal('pre_search_complete'),
-});
-
-export const PreSearchErrorEventSchema = z.object({
-  type: z.literal('pre_search_error'),
-  message: z.string(),
-});
-
-export const PreSearchStreamEventSchema = z.union([
-  PreSearchStartEventSchema,
-  PreSearchQueryEventSchema,
-  PreSearchResultEventSchema,
-  PreSearchCompleteEventSchema,
-  PreSearchErrorEventSchema,
-]);
-
-export type PreSearchStartEvent = z.infer<typeof PreSearchStartEventSchema>;
-export type PreSearchQueryEvent = z.infer<typeof PreSearchQueryEventSchema>;
-export type PreSearchResultEvent = z.infer<typeof PreSearchResultEventSchema>;
-export type PreSearchCompleteEvent = z.infer<
-  typeof PreSearchCompleteEventSchema
->;
-export type PreSearchErrorEvent = z.infer<typeof PreSearchErrorEventSchema>;
-export type PreSearchStreamEvent = z.infer<typeof PreSearchStreamEventSchema>;
+// REMOVED: Duplicate PreSearch event schemas moved to authoritative location
+// SINGLE SOURCE OF TRUTH: /src/api/routes/chat/schema.ts (lines 1388-1564)
+// - PreSearchStartEventSchema
+// - PreSearchQueryEventSchema
+// - PreSearchResultEventSchema
+// - PreSearchCompleteEventSchema
+// - PreSearchDoneEventSchema
+// - PreSearchFailedEventSchema
+// - PreSearchAnswerChunkEventSchema
+// - PreSearchAnswerCompleteEventSchema
+// - PreSearchAnswerErrorEventSchema
+// - PreSearchSSEEventSchema (discriminated union)
+// All event schemas have OpenAPI decorators and `event` + `data` wrapper structure
 
 // ============================================================================
 // Helper Functions

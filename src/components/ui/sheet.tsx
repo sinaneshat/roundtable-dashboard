@@ -50,7 +50,7 @@ const sheetVariants = cva(
   },
 );
 
-type SheetContentProps = {} & ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>;
+type SheetContentProps = ComponentPropsWithoutRef<typeof SheetPrimitive.Content> & VariantProps<typeof sheetVariants>;
 
 function SheetContent({ ref, side = 'end', className, children, ...props }: SheetContentProps & { ref?: RefObject<ElementRef<typeof SheetPrimitive.Content> | null> }) {
   const t = useTranslations('actions');

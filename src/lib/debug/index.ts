@@ -20,12 +20,19 @@ export {
   traceState,
 } from './conversation-tracer';
 
+// Type-safe window augmentation for debug utilities
+declare global {
+  // eslint-disable-next-line ts/consistent-type-definitions
+  interface Window {
+    __printTimeline?: () => Promise<void>;
+    __exportTimeline?: () => Promise<string>;
+    __getTimeline?: () => Promise<unknown>;
+  }
+}
+
 // Expose to window for debugging
 if (typeof window !== 'undefined') {
-  // @ts-expect-error - debug utilities on window
   window.__printTimeline = () => import('./conversation-tracer').then(m => m.printTimelineSummary());
-  // @ts-expect-error - debug utilities on window
   window.__exportTimeline = () => import('./conversation-tracer').then(m => m.exportTimeline());
-  // @ts-expect-error - debug utilities on window
   window.__getTimeline = () => import('./conversation-tracer').then(m => m.getTimeline());
 }

@@ -54,10 +54,15 @@ function NavigationHeaderComponent({
   const t = useTranslations();
 
   // ✅ ZUSTAND PATTERN: Thread title comes from store, not context
-  const storeThreadTitle = useChatStore(s => s.thread?.title ?? null);
-  const showInitialUI = useChatStore(s => s.showInitialUI);
-  const createdThreadId = useChatStore(s => s.createdThreadId);
-  const thread = useChatStore(s => s.thread);
+  // ✅ OPTIMIZATION: Batch all selectors with useShallow to prevent multiple re-renders
+  const { storeThreadTitle, showInitialUI, createdThreadId, thread } = useChatStore(
+    useShallow(s => ({
+      storeThreadTitle: s.thread?.title ?? null,
+      showInitialUI: s.showInitialUI,
+      createdThreadId: s.createdThreadId,
+      thread: s.thread,
+    })),
+  );
   const context = useThreadHeaderOptional();
 
   // Detect active thread from store (created from overview, URL still /chat)

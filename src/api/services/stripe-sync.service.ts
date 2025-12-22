@@ -21,10 +21,17 @@ import type { StripeSubscriptionStatus } from '@/api/core/enums';
 import { StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
-import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { getDbAsync } from '@/db';
 import { CustomerCacheTags, getUserSubscriptionCacheTags } from '@/db/cache/cache-tags';
-import { hasBillingCycleAnchor, hasPeriodTimestamps, isObject, isStripePaymentMethod, safeParse } from '@/lib/utils/type-guards';
+import {
+  hasBillingCycleAnchor,
+  hasPeriodTimestamps,
+  isObject,
+  isStringRecord,
+  isStripePaymentMethod,
+  safeParse,
+} from '@/lib/utils/type-guards';
 
 /**
  * Calculate period end date based on start date and interval
@@ -320,8 +327,8 @@ export async function syncStripeDataFromStripe(
     endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
     trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
     trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-    // ✅ TYPE GUARD: Validate metadata is Record<string, string> or null
-    metadata: isObject(subscription.metadata) ? subscription.metadata as Record<string, string> : null,
+    // ✅ TYPE GUARD: Validate metadata is Record<string, string> or null using proper type guard
+    metadata: isStringRecord(subscription.metadata) ? subscription.metadata : null,
     createdAt: new Date(subscription.created * 1000),
     updatedAt: new Date(),
   }).onConflictDoUpdate({
@@ -338,8 +345,8 @@ export async function syncStripeDataFromStripe(
       endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
       trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
       trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-      // ✅ TYPE GUARD: Validate metadata is Record<string, string> or null
-      metadata: isObject(subscription.metadata) ? subscription.metadata as Record<string, string> : null,
+      // ✅ TYPE GUARD: Validate metadata is Record<string, string> or null using proper type guard
+      metadata: isStringRecord(subscription.metadata) ? subscription.metadata : null,
       updatedAt: new Date(),
     },
   });

@@ -150,6 +150,25 @@
 }
 
 /* ============================================================================
+ * Scroll Anchoring
+ * Preserves scroll position when content above viewport changes height
+ * Critical for chat streaming - prevents scroll jumps as messages expand
+ * ============================================================================ */
+html {
+  overflow-anchor: auto;
+}
+
+/* Anchor point for virtualized content - browser uses this to maintain position */
+[data-virtualized-timeline] {
+  overflow-anchor: none;
+}
+
+/* Individual virtual items should anchor */
+[data-virtualized-timeline] > div {
+  overflow-anchor: auto;
+}
+
+/* ============================================================================
  * Collapsible/Accordion Animations
  * Smooth height transitions for collapsible content using CSS grid technique
  * ============================================================================ */

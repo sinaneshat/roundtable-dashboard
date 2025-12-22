@@ -44,7 +44,6 @@ import {
   completePreSearchStreamBuffer,
   createLivePreSearchResumeStream,
   failPreSearchStreamBuffer,
-  generatePreSearchStreamId,
   getActivePreSearchStreamId,
   getPreSearchStreamChunks,
   initializePreSearchStreamBuffer,
@@ -60,6 +59,7 @@ import {
   streamSearchQuery,
 } from '@/api/services/web-search.service';
 import type { ApiEnv } from '@/api/types';
+import { generatePreSearchStreamId } from '@/api/types/streaming';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
@@ -553,7 +553,14 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             // Validate generation succeeded
             if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
-              throw new Error('Query generation failed - no queries produced');
+              throw createError.internal(
+                'Query generation failed - no queries produced',
+                {
+                  errorType: 'external_service',
+                  service: 'openrouter',
+                  operation: 'stream_query_generation',
+                },
+              );
             }
           } catch {
           // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed completely)
@@ -562,7 +569,14 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
               // Validate generation succeeded
               if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
-                throw new Error('Non-streaming query generation failed - no queries produced');
+                throw createError.internal(
+                  'Non-streaming query generation failed - no queries produced',
+                  {
+                    errorType: 'external_service',
+                    service: 'openrouter',
+                    operation: 'non_stream_query_generation',
+                  },
+                );
               }
 
               // Send start event for non-streaming result
@@ -646,7 +660,14 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         // Type guard
         if (!multiQueryResult) {
-          throw new Error('Failed to generate search queries');
+          throw createError.internal(
+            'Failed to generate search queries',
+            {
+              errorType: 'external_service',
+              service: 'openrouter',
+              operation: 'query_generation',
+            },
+          );
         }
 
         const rawGeneratedQueries = multiQueryResult.queries;

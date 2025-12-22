@@ -8,6 +8,7 @@ import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useBoolean } from '@/hooks/utils';
 import { getDisplayParticipantIndex } from '@/lib/schemas/participant-schemas';
+import { cn } from '@/lib/ui/cn';
 
 type MessageErrorDetailsProps = {
   metadata: DbMessageMetadata | null | undefined;
@@ -64,7 +65,7 @@ export function MessageErrorDetails({
   };
 
   return (
-    <div className={`text-sm text-destructive/90 ${className || ''}`}>
+    <div className={cn('text-sm text-destructive/90', className)}>
       <div className="flex items-start gap-2">
         <AlertCircle className="size-4 mt-0.5 flex-shrink-0" />
         <div className="flex-1">

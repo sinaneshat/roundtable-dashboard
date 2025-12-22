@@ -94,7 +94,6 @@ export function NavUser({ initialSession }: NavUserProps) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      console.error('[NavUser] Failed to create customer portal session:', error);
       showApiErrorToast('Portal Error', error);
     }
   };
@@ -110,7 +109,6 @@ export function NavUser({ initialSession }: NavUserProps) {
         showCancelDialog.onFalse();
       }
     } catch (error) {
-      console.error('[NavUser] Failed to cancel subscription:', error);
       showApiErrorToast('Cancellation Failed', error);
     }
   };

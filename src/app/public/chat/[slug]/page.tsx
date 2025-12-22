@@ -2,7 +2,7 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 import { permanentRedirect, redirect } from 'next/navigation';
 
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, ResourceUnavailableReasons } from '@/api/core/enums';
 import { BRAND } from '@/constants';
 import { PublicChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
@@ -154,13 +154,13 @@ export default async function PublicChatThreadPage({
 
     if (statusCode === 410) {
       // HTTP 410 Gone - Thread existed but is no longer available
-      if (reason === 'deleted') {
+      if (reason === ResourceUnavailableReasons.DELETED) {
         message = 'This conversation was deleted by its owner. Create your own to get started!';
         action = 'create';
-      } else if (reason === 'archived') {
+      } else if (reason === ResourceUnavailableReasons.ARCHIVED) {
         message = 'This conversation has been archived and is no longer publicly available.';
         action = 'signin';
-      } else if (reason === 'private') {
+      } else if (reason === ResourceUnavailableReasons.PRIVATE) {
         message = 'This conversation is now private. Sign in if you own it, or create your own!';
         action = 'signin';
       }

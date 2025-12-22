@@ -38,7 +38,9 @@ function createApiHandler() {
       }
     } catch (error) {
       console.error('[API Route] Cloudflare context unavailable, using fallback:', error);
-      // Fallback for environments where Cloudflare context isn't available (local Next.js dev)
+      // Local dev fallback: process.env contains environment variables but lacks Cloudflare-specific
+      // bindings (R2, D1, KV, DurableObjects). Double cast required since ProcessEnv doesn't overlap
+      // with CloudflareEnv. At runtime, the API code handles missing bindings gracefully.
       env = process.env as unknown as CloudflareEnv;
 
       // Create waitUntil that tracks promises for background tasks

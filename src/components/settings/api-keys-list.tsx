@@ -70,7 +70,6 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
       await deleteMutation.mutateAsync({ param: { keyId: deleteKeyId } });
       // Success is obvious from the item disappearing - no toast needed
     } catch (error) {
-      console.error('[ApiKeysList] Failed to delete API key:', error);
       showApiErrorToast(t('apiKeys.list.deleteFailed'), error);
     } finally {
       setDeleteKeyId(null);

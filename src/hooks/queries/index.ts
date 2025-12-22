@@ -2,7 +2,6 @@
  * Query Hooks - Centralized Exports
  *
  * Single import point for all TanStack Query hooks
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  */
 
 // ============================================================================
@@ -28,11 +27,15 @@ export {
 // Chat message queries (protected)
 export { useThreadMessagesQuery } from './chat/messages';
 
+// Chat pre-search queries (protected)
+export { useThreadPreSearchesQuery } from './chat/pre-search';
+
 // Chat thread queries (protected)
 export {
   usePublicThreadQuery,
   useThreadBySlugQuery,
   useThreadQuery,
+  useThreadSlugStatusQuery,
   useThreadsQuery,
 } from './chat/threads';
 
@@ -41,6 +44,15 @@ export { useModelsQuery } from './models';
 
 // Product queries (public)
 export { useProductQuery, useProductsQuery } from './products';
+
+// Project queries (protected)
+export {
+  useProjectAttachmentsQuery,
+  useProjectContextQuery,
+  useProjectMemoriesQuery,
+  useProjectQuery,
+  useProjectsQuery,
+} from './projects';
 
 // Subscription queries (protected)
 export {

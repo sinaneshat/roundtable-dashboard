@@ -98,6 +98,10 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
   const lastStreamSyncRef = useRef<number>(0);
   const STREAM_SYNC_THROTTLE_MS = 250; // Increased from 150ms for better batching
 
+  // ✅ RACE FIX: Track previous streaming state to detect transitions
+  // When streaming ends (true → false), we must bypass throttle for final sync
+  const prevStreamingRef = useRef<boolean>(false);
+
   // Track hydration to prevent duplicate hydration attempts
   const hasHydratedRef = useRef<string | null>(null);
 
@@ -174,9 +178,16 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     prevChatMessagesLengthRef.current = currentMsgCount;
     prevLastMessageTextLengthRef.current = currentTextLength;
 
+    // ✅ RACE FIX: Detect streaming end transition (true → false)
+    // When streaming ends, we MUST bypass throttle for final sync
+    // This ensures UI has the final state before moderator triggers
+    const streamingJustEnded = prevStreamingRef.current && !chatIsStreaming;
+    prevStreamingRef.current = chatIsStreaming;
+
     // ✅ OPTIMIZATION: Early return during streaming if throttled
     // This prevents expensive processing on every chunk
-    if (chatIsStreaming) {
+    // BUT: Never throttle when streaming just ended - we need final sync
+    if (chatIsStreaming && !streamingJustEnded) {
       const now = Date.now();
       if (now - lastStreamSyncRef.current < STREAM_SYNC_THROTTLE_MS) {
         // Still throttled - skip this update entirely
@@ -596,8 +607,30 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           // Otherwise, use new (default behavior for updates)
 
           if (keepExisting) {
+            // ✅ DEBUG: Log when existing content is preserved over new content
+            // eslint-disable-next-line no-console
+            console.log('[SYNC-KEEP]', JSON.stringify({
+              id: msg.id,
+              existLen: existingContentLength,
+              newLen: newContentLength,
+              existComplete: existingIsComplete,
+              newComplete: newIsComplete,
+            }));
             continue; // Skip this message, keep existing
           }
+        }
+        // ✅ DEBUG: Log when message content is updated
+        if (existing) {
+          const existingTextPart = existing.parts?.find(p => p.type === 'text' && 'text' in p);
+          const newTextPart = msg.parts?.find(p => p.type === 'text' && 'text' in p);
+          const existingText = existingTextPart && 'text' in existingTextPart ? String(existingTextPart.text || '').slice(0, 30) : '';
+          const newText = newTextPart && 'text' in newTextPart ? String(newTextPart.text || '').slice(0, 30) : '';
+          // eslint-disable-next-line no-console
+          console.log('[SYNC-REPLACE]', JSON.stringify({
+            id: msg.id,
+            from: existingText,
+            to: newText,
+          }));
         }
         messageDedupeMap.set(msg.id, msg);
       }

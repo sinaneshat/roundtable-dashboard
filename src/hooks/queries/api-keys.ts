@@ -9,7 +9,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getApiKeyService,
   listApiKeysService,
@@ -24,13 +26,16 @@ import {
  * Only fetches when explicitly enabled (e.g., when modal is open)
  */
 export function useApiKeysQuery(enabled = true) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
   return useQuery({
     queryKey: queryKeys.apiKeys.list(),
     queryFn: () => listApiKeysService(),
-    staleTime: 1000 * 60 * 5, // 5 minutes - API keys don't change frequently
+    staleTime: STALE_TIMES.apiKeys, // 5 minutes - API keys don't change frequently
     refetchOnMount: true, // Refetch when component mounts to ensure fresh data
     refetchOnWindowFocus: false, // Don't refetch on window focus
-    enabled, // Only fetch when enabled (e.g., modal is open)
+    enabled: isAuthenticated && enabled, // Only fetch when authenticated and enabled
     retry: false,
     throwOnError: false,
   });
@@ -40,11 +45,14 @@ export function useApiKeysQuery(enabled = true) {
  * Query hook for fetching a specific API key by ID
  */
 export function useApiKeyQuery(keyId: string) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
   return useQuery({
     queryKey: queryKeys.apiKeys.detail(keyId),
     queryFn: () => getApiKeyService({ param: { keyId } }),
-    enabled: !!keyId,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    enabled: isAuthenticated && !!keyId,
+    staleTime: STALE_TIMES.apiKeys, // 5 minutes
     refetchOnWindowFocus: false,
     retry: false,
     throwOnError: false,

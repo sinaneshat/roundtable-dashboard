@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { DataPart } from '@/lib/schemas/data-part-schema';
+import { cn } from '@/lib/ui/cn';
 
 type CustomDataPartProps = {
   part: DataPart;
@@ -13,7 +14,7 @@ export function CustomDataPart({ part, className }: CustomDataPartProps) {
     : part.type;
   const displayType = customType.charAt(0).toUpperCase() + customType.slice(1);
   return (
-    <Card className={`border-blue-500/20 bg-blue-500/5 ${className || ''}`}>
+    <Card className={cn('border-blue-500/20 bg-blue-500/5', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <span className="text-blue-500" aria-label="Custom Data">

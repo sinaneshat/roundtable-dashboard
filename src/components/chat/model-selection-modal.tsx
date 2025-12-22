@@ -22,8 +22,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCreateCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useCreateCustomRoleMutation } from '@/hooks/mutations';
+import { useUsageStatsQuery } from '@/hooks/queries';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -291,7 +291,6 @@ export function ModelSelectionModal({
         handleRoleSelect(result.data.customRole.name, result.data.customRole.id);
       }
     } catch (error) {
-      console.error('[ModelSelectionModal] Failed to create custom role:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to create custom role');
       toastManager.error('Failed to create role', errorMessage);
     }
@@ -594,7 +593,7 @@ export function ModelSelectionModal({
                                     className="cursor-pointer"
                                     onClick={() => {
                                       setSearchQuery('');
-                                      searchInputRef.current?.focus();
+                                      searchInputRef.current?.focus({ preventScroll: true });
                                     }}
                                   />
                                 )

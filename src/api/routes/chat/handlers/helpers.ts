@@ -1,6 +1,7 @@
 import type { UIMessage } from 'ai';
 import { TypeValidationError, validateUIMessages } from 'ai';
 
+import { createError } from '@/api/common/error-handling';
 import type { ChatMessage } from '@/db/validation';
 
 /**
@@ -84,16 +85,24 @@ export async function chatMessagesToUIMessages(
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
     if (TypeValidationError.isInstance(error)) {
       // Re-throw with more context for debugging
-      throw new Error(
-        `Database message validation failed: ${error.message}\n`
-        + `This usually means messages in the database have invalid structure.\n`
+      throw createError.internal(
+        `Database message validation failed: ${error.message}. `
+        + `This usually means messages in the database have invalid structure. `
         + `Check the logs above for the problematic messages.`,
+        {
+          errorType: 'validation',
+          field: 'messages',
+        },
       );
     }
 
     // Re-throw non-validation errors
-    throw new Error(
+    throw createError.internal(
       `Invalid message format from database: ${error instanceof Error ? error.message : 'Unknown validation error'}`,
+      {
+        errorType: 'validation',
+        field: 'messages',
+      },
     );
   }
 }

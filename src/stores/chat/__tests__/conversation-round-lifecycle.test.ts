@@ -467,41 +467,7 @@ describe('pre-Search Phase', () => {
 // ROUND MODERATOR PHASE TESTS
 // ============================================================================
 
-describe('round Moderator Phase', () => {
-  describe.todo('moderator Trigger Conditions - removed in refactor but tests preserved for documentation', () => {
-    it('moderator triggered after all participants complete', () => {
-      const round = createCompleteRound(0, 3, {
-        participantFinishReasons: [FinishReasons.STOP, FinishReasons.STOP, FinishReasons.STOP],
-      });
-      const participantCount = 3;
-      const assistantMessages = getAssistantMessages(round);
-
-      const allComplete = assistantMessages.every(msg =>
-        msg.metadata.finishReason === FinishReasons.STOP || msg.metadata.finishReason === FinishReasons.LENGTH)
-      && assistantMessages.length === participantCount;
-
-      expect(allComplete).toBe(true);
-    });
-
-    it('moderator NOT triggered when participants incomplete', () => {
-      const round = createCompleteRound(0, 2, {
-        participantFinishReasons: [FinishReasons.STOP, FinishReasons.UNKNOWN],
-      });
-      const assistantMessages = getAssistantMessages(round);
-
-      const allComplete = assistantMessages.every(msg =>
-        msg.metadata.finishReason === FinishReasons.STOP || msg.metadata.finishReason === FinishReasons.LENGTH);
-
-      expect(allComplete).toBe(false);
-    });
-  });
-
-  describe.todo('moderator Per Round - removed functionality, tests preserved for documentation', () => {
-    it.todo('each round can have its own moderator - moderator feature removed from codebase');
-
-    it.todo('finds correct moderator for round - moderator feature removed from codebase');
-  });
-});
+// Moderator functionality has been integrated into messages with isModerator metadata
 
 // ============================================================================
 // MULTI-ROUND CONVERSATION TESTS

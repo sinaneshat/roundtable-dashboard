@@ -287,15 +287,7 @@ describe('stream Message Arrival Patterns', () => {
       expect(phase2.current.find(item => item.type === 'messages')).toBeDefined();
     });
   });
-
-  describe.todo('moderator Creation and Updates - moderator functionality integrated into messages with isModerator metadata');
 });
-
-describe.todo('complete Round Flow Simulation - test needs rewrite for moderator messages with isModerator metadata instead of separate moderator entries');
-
-describe.todo('resumption Flow Simulation - test needs rewrite for moderator messages with isModerator metadata instead of separate moderator entries');
-
-describe.todo('error Recovery Scenarios - test needs rewrite for moderator messages with isModerator metadata instead of separate moderator entries');
 
 // ============================================================================
 // TIMELINE ORDERING EDGE CASES

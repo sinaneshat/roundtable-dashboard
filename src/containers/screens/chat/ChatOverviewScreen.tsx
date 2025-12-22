@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ChatModeSchema, MessageStatuses } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses, UploadStatuses } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
@@ -182,9 +182,9 @@ export default function ChatOverviewScreen() {
     }
 
     if (persistedModelIds.length > 0) {
-      const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
+      const validIds = persistedModelIds.filter((id: string) => accessibleModelIds.includes(id));
       if (validIds.length > 0) {
-        return validIds.map((modelId, index) => ({
+        return validIds.map((modelId: string, index: number) => ({
           id: modelId,
           modelId,
           role: '',
@@ -287,7 +287,7 @@ export default function ChatOverviewScreen() {
       let fullOrder: string[];
       if (persistedModelOrder.length > 0) {
         const availableIds = new Set(allEnabledModels.map(m => m.id));
-        const validPersistedOrder = persistedModelOrder.filter(id => availableIds.has(id));
+        const validPersistedOrder = persistedModelOrder.filter((id: string) => availableIds.has(id));
         const newModelIds = allEnabledModels
           .filter(m => !validPersistedOrder.includes(m.id))
           .map(m => m.id);
@@ -466,7 +466,7 @@ export default function ChatOverviewScreen() {
         try {
           const attachmentIds = chatAttachments.getUploadIds();
           const attachmentInfos = chatAttachments.attachments
-            .filter(att => att.status === 'completed' && att.uploadId)
+            .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
             .map(att => ({
               uploadId: att.uploadId!,
               filename: att.file.name,
@@ -491,7 +491,7 @@ export default function ChatOverviewScreen() {
         try {
           const attachmentIds = chatAttachments.getUploadIds();
           const attachmentInfos = chatAttachments.attachments
-            .filter(att => att.status === 'completed' && att.uploadId)
+            .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
             .map(att => ({
               uploadId: att.uploadId!,
               filename: att.file.name,

@@ -25,15 +25,13 @@ import {
   StreamStatusSchema,
 } from '@/api/core/enums';
 import {
-  ChatParticipantSchema,
   ChatThreadSchema,
   StoredPreSearchSchema,
 } from '@/api/routes/chat/schema';
-import type { FilePreview } from '@/hooks/utils/use-file-preview';
-import type { UploadItem } from '@/hooks/utils/use-file-upload';
+import { PendingAttachmentSchema } from '@/hooks/utils/use-chat-attachments';
 // ✅ Use ExtendedFilePartSchema to include uploadId for backend fallback loading
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
-import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
+import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 
 import type {
   AddAttachments,
@@ -498,13 +496,7 @@ export const AnimationSliceSchema = z.intersection(AnimationStateSchema, Animati
 // ============================================================================
 // ATTACHMENTS SLICE SCHEMAS
 // ============================================================================
-
-export const PendingAttachmentSchema = z.object({
-  id: z.string(),
-  file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
-  uploadItem: z.custom<UploadItem>().optional(),
-  preview: z.custom<FilePreview>().optional(),
-});
+// PendingAttachmentSchema imported from @/hooks/utils/use-chat-attachments (single source of truth)
 
 export const AttachmentsStateSchema = z.object({
   pendingAttachments: z.array(PendingAttachmentSchema),
@@ -641,7 +633,6 @@ export type AnimationState = z.infer<typeof AnimationStateSchema>;
 export type AnimationActions = z.infer<typeof AnimationActionsSchema>;
 export type AnimationSlice = z.infer<typeof AnimationSliceSchema>;
 
-export type PendingAttachment = z.infer<typeof PendingAttachmentSchema>;
 export type AttachmentsState = z.infer<typeof AttachmentsStateSchema>;
 export type AttachmentsActions = z.infer<typeof AttachmentsActionsSchema>;
 export type AttachmentsSlice = z.infer<typeof AttachmentsSliceSchema>;

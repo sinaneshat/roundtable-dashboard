@@ -2,6 +2,7 @@
 import { useTranslations } from 'next-intl';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { Streamdown } from 'streamdown';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { MessageStatus } from '@/api/core/enums';
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
@@ -20,7 +21,6 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-// StreamingCursor removed - typing effect disabled per user request
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
@@ -128,15 +128,17 @@ export const ModelMessageCard = memo(({
 
   const isError = status === MessageStatuses.FAILED;
 
-  // eslint-disable-next-line no-console
-  console.log('[CARD]', JSON.stringify({ idx: participantIndex, shim: showShimmer ? 1 : 0, p: renderableParts.length, st: status.slice(0, 4) }));
-
   // ✅ FIX: isStreaming requires PARTICIPANT streaming active AND parts streaming
   const isStreaming = hasActualStreamingParts;
 
   // Animation tracking for sequential participant streaming
-  const registerAnimation = useChatStore(s => s.registerAnimation);
-  const completeAnimation = useChatStore(s => s.completeAnimation);
+  // ✅ OPTIMIZATION: Batch action selectors with useShallow to prevent multiple re-renders
+  const { registerAnimation, completeAnimation } = useChatStore(
+    useShallow(s => ({
+      registerAnimation: s.registerAnimation,
+      completeAnimation: s.completeAnimation,
+    })),
+  );
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(status);
 
@@ -184,7 +186,7 @@ export const ModelMessageCard = memo(({
   const requiredTierName = model?.required_tier_name;
 
   return (
-    <div className={`space-y-1 ${className || ''}`}>
+    <div className={cn('space-y-1', className)}>
       <Message from="assistant">
         <MessageContent variant="flat" className={hasError ? 'text-destructive' : undefined}>
           <>
@@ -245,10 +247,7 @@ export const ModelMessageCard = memo(({
                   renderableParts.length > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >
-                <StreamingMessageContent
-                  isStreaming={isStreaming}
-                  layoutId={messageId ? `msg-content-${messageId}` : undefined}
-                >
+                <StreamingMessageContent>
                   {renderableParts.length > 0 && (
                     maxContentHeight
                       ? (
@@ -301,7 +300,6 @@ export const ModelMessageCard = memo(({
                 isStreaming={isStreaming}
                 className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
               />
-              {/* ✅ REMOVED: StreamingCursor typing effect per user request */}
             </div>
           );
         }
@@ -314,7 +312,6 @@ export const ModelMessageCard = memo(({
             >
               {part.text}
             </Streamdown>
-            {/* ✅ REMOVED: StreamingCursor typing effect per user request */}
           </div>
         );
       }

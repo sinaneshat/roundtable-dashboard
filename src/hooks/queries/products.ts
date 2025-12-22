@@ -2,7 +2,6 @@
  * Product Query Hooks
  *
  * TanStack Query hooks for Stripe products
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  */
 
 'use client';
@@ -10,6 +9,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getProductService,
   getProductsService,
@@ -19,13 +19,13 @@ import {
  * Hook to fetch all products with pricing plans
  * Public endpoint - no authentication required
  *
- * Stale time: 2 hours (products change infrequently)
+ * Stale time: 1 hour (products rarely change)
  */
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
     queryFn: () => getProductsService(),
-    staleTime: 2 * 60 * 60 * 1000, // 2 hours
+    staleTime: STALE_TIMES.products, // 1 hour - products rarely change
     retry: false,
     throwOnError: false,
   });
@@ -41,7 +41,7 @@ export function useProductQuery(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),
     queryFn: () => getProductService({ param: { id: productId } }),
-    staleTime: 2 * 60 * 60 * 1000, // 2 hours
+    staleTime: STALE_TIMES.products, // 1 hour
     enabled: !!productId, // Only fetch when productId is available
     retry: false,
     throwOnError: false,

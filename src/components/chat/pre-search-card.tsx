@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { MessageStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -46,17 +47,15 @@ export function PreSearchCard({
   const queryClient = useQueryClient();
 
   // Store actions (moved from child to parent callbacks)
-  const updatePreSearchStatus = useChatStore(s => s.updatePreSearchStatus);
-  const updatePreSearchData = useChatStore(s => s.updatePreSearchData);
-
-  // ✅ PROGRESSIVE UI FIX: Removed providerTriggered check
-  // PreSearchStream now always handles its own stream for progressive UI updates
-  // The store's hasPreSearchBeenTriggered is used internally by PreSearchStream
-  // for deduplication, not passed as a prop
-
-  // ✅ ANIMATION COORDINATION: Track animation lifecycle (pattern from ModelMessageCard)
-  const registerAnimation = useChatStore(s => s.registerAnimation);
-  const completeAnimation = useChatStore(s => s.completeAnimation);
+  // ✅ OPTIMIZATION: Batch action selectors with useShallow to prevent multiple re-renders
+  const { updatePreSearchStatus, updatePreSearchData, registerAnimation, completeAnimation } = useChatStore(
+    useShallow(s => ({
+      updatePreSearchStatus: s.updatePreSearchStatus,
+      updatePreSearchData: s.updatePreSearchData,
+      registerAnimation: s.registerAnimation,
+      completeAnimation: s.completeAnimation,
+    })),
+  );
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(preSearch.status);
 

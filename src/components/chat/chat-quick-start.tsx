@@ -9,8 +9,7 @@ import {
   MIN_MODELS_REQUIRED,
 } from '@/api/services/product-logic.service';
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import { useModelsQuery } from '@/hooks/queries/models';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
 

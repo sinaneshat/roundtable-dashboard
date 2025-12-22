@@ -22,7 +22,7 @@ import { useChatStore } from '@/components/providers/chat-store-provider';
 import {
   useCreateThreadMutation,
   useUpdateThreadMutation,
-} from '@/hooks/mutations/chat-mutations';
+} from '@/hooks/mutations';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast, showApiWarningToast } from '@/lib/toast';

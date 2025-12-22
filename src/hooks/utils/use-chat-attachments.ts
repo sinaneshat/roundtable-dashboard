@@ -15,7 +15,7 @@
 import { useCallback, useMemo } from 'react';
 import { z } from 'zod';
 
-import { UploadStatusSchema } from '@/api/core/enums';
+import { UploadStatuses, UploadStatusSchema } from '@/api/core/enums';
 
 import { FilePreviewSchema } from './use-file-preview';
 import { UploadItemSchema, useFileUpload } from './use-file-upload';
@@ -153,13 +153,13 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
   const allUploaded = useMemo(() => {
     if (items.length === 0)
       return true;
-    return items.every(item => item.status === 'completed');
+    return items.every(item => item.status === UploadStatuses.COMPLETED);
   }, [items]);
 
   // Get upload IDs for completed uploads (to send with message)
   const getUploadIds = useCallback((): string[] => {
     return items
-      .filter(item => item.status === 'completed' && item.uploadId)
+      .filter(item => item.status === UploadStatuses.COMPLETED && item.uploadId)
       .map(item => item.uploadId!);
   }, [items]);
 

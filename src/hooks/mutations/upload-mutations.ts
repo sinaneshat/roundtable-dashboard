@@ -13,7 +13,6 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
-import type { listAttachmentsService } from '@/services/api';
 import {
   abortMultipartUploadService,
   completeMultipartUploadService,
@@ -101,15 +100,21 @@ export function useUpdateAttachmentMutation() {
       if (response.success && response.data) {
         const updatedAttachment = response.data;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof listAttachmentsService>>>(
+        queryClient.setQueryData(
           queryKeys.uploads.list(),
-          (oldData: Awaited<ReturnType<typeof listAttachmentsService>> | undefined) => {
-            if (!oldData?.success || !oldData.data?.items) {
+          (oldData: unknown) => {
+            if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+              return oldData;
+            }
+            if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
+              return oldData;
+            }
+            if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
               return oldData;
             }
 
-            const updatedItems = oldData.data.items.map((item: typeof updatedAttachment) =>
-              item.id === updatedAttachment.id ? updatedAttachment : item,
+            const updatedItems = oldData.data.items.map(
+              item => (typeof item === 'object' && item && 'id' in item && item.id === updatedAttachment.id) ? updatedAttachment : item,
             );
 
             return {
@@ -170,15 +175,21 @@ export function useDeleteAttachmentMutation() {
       const previousAttachments = queryClient.getQueryData(queryKeys.uploads.list());
 
       // Optimistically remove from list
-      queryClient.setQueryData<Awaited<ReturnType<typeof listAttachmentsService>>>(
+      queryClient.setQueryData(
         queryKeys.uploads.list(),
-        (oldData: Awaited<ReturnType<typeof listAttachmentsService>> | undefined) => {
-          if (!oldData?.success || !oldData.data?.items) {
+        (oldData: unknown) => {
+          if (!oldData || typeof oldData !== 'object' || !('success' in oldData) || !oldData.success) {
+            return oldData;
+          }
+          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object') {
+            return oldData;
+          }
+          if (!('items' in oldData.data) || !Array.isArray(oldData.data.items)) {
             return oldData;
           }
 
           const filteredItems = oldData.data.items.filter(
-            (item: { id: string }) => item.id !== attachmentId,
+            item => !(typeof item === 'object' && item && 'id' in item && item.id === attachmentId),
           );
 
           return {

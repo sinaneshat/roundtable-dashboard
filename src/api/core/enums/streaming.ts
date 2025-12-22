@@ -10,7 +10,11 @@ import { z } from '@hono/zod-openapi';
 // GENERIC OPERATION STATUS
 // ============================================================================
 
-export const OperationStatusSchema = z.enum(['idle', 'pending', 'active', 'streaming', 'complete', 'failed']).openapi({
+export const OPERATION_STATUSES = ['idle', 'pending', 'active', 'streaming', 'complete', 'failed'] as const;
+
+export const DEFAULT_OPERATION_STATUS: OperationStatus = 'idle';
+
+export const OperationStatusSchema = z.enum(OPERATION_STATUSES).openapi({
   description: 'Generic async operation lifecycle status',
   example: 'streaming',
 });
@@ -30,13 +34,31 @@ export const OperationStatuses = {
 // STREAMING EVENT TYPE
 // ============================================================================
 
-export type StreamingEventType = 'start' | 'chunk' | 'complete' | 'failed';
+export const STREAMING_EVENT_TYPES = ['start', 'chunk', 'complete', 'failed'] as const;
+
+export const StreamingEventTypeSchema = z.enum(STREAMING_EVENT_TYPES).openapi({
+  description: 'Streaming event lifecycle type',
+  example: 'chunk',
+});
+
+export type StreamingEventType = z.infer<typeof StreamingEventTypeSchema>;
+
+export const StreamingEventTypes = {
+  START: 'start' as const,
+  CHUNK: 'chunk' as const,
+  COMPLETE: 'complete' as const,
+  FAILED: 'failed' as const,
+} as const;
 
 // ============================================================================
 // STREAM BUFFER STATUS (Resumable Streams)
 // ============================================================================
 
-export const StreamStatusSchema = z.enum(['pending', 'initializing', 'streaming', 'completing', 'active', 'completed', 'failed', 'expired', 'timeout']).openapi({
+export const STREAM_STATUSES = ['pending', 'initializing', 'streaming', 'completing', 'active', 'completed', 'failed', 'expired', 'timeout'] as const;
+
+export const DEFAULT_STREAM_STATUS: StreamStatus = 'pending';
+
+export const StreamStatusSchema = z.enum(STREAM_STATUSES).openapi({
   description: 'Stream buffer status for resumable AI SDK streams',
   example: 'streaming',
 });
@@ -59,7 +81,11 @@ export const StreamStatuses = {
 // PARTICIPANT STREAM STATUS (Round-Level Stream Tracking)
 // ============================================================================
 
-export const ParticipantStreamStatusSchema = z.enum(['active', 'completed', 'failed']).openapi({
+export const PARTICIPANT_STREAM_STATUSES = ['active', 'completed', 'failed'] as const;
+
+export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'active';
+
+export const ParticipantStreamStatusSchema = z.enum(PARTICIPANT_STREAM_STATUSES).openapi({
   description: 'Individual participant stream status within a round',
   example: 'active',
 });
@@ -76,9 +102,11 @@ export const ParticipantStreamStatuses = {
 // FLOW STATE (Chat conversation flow lifecycle)
 // ============================================================================
 
-export const DEFAULT_FLOW_STATE = 'idle' as const;
+export const FLOW_STATES = ['idle', 'creating_thread', 'streaming_participants', 'creating_moderator', 'streaming_moderator', 'completing', 'navigating', 'complete'] as const;
 
-export const FlowStateSchema = z.enum(['idle', 'creating_thread', 'streaming_participants', 'creating_moderator', 'streaming_moderator', 'completing', 'navigating', 'complete']).openapi({
+export const DEFAULT_FLOW_STATE: FlowState = 'idle';
+
+export const FlowStateSchema = z.enum(FLOW_STATES).openapi({
   description: 'Chat conversation flow lifecycle state',
   example: 'streaming_participants',
 });
@@ -119,7 +147,7 @@ export const ChainOfThoughtStepStatuses = {
 // PENDING MESSAGE VALIDATION REASON
 // ============================================================================
 
-export const PendingMessageValidationReasonSchema = z.enum([
+export const PENDING_MESSAGE_VALIDATION_REASONS = [
   'public screen mode',
   'no pending message or expected participants',
   'already sent',
@@ -128,7 +156,9 @@ export const PendingMessageValidationReasonSchema = z.enum([
   'waiting for changelog',
   'waiting for pre-search creation',
   'waiting for pre-search',
-]).openapi({
+] as const;
+
+export const PendingMessageValidationReasonSchema = z.enum(PENDING_MESSAGE_VALIDATION_REASONS).openapi({
   description: 'Reason why pending message cannot be sent',
   example: 'waiting for pre-search',
 });
@@ -161,7 +191,11 @@ export const PendingMessageValidationReasons = {
  *
  * Used by ThreadStreamResumptionState to determine where to resume.
  */
-export const RoundPhaseSchema = z.enum(['idle', 'pre_search', 'participants', 'moderator', 'complete']).openapi({
+export const ROUND_PHASES = ['idle', 'pre_search', 'participants', 'moderator', 'complete'] as const;
+
+export const DEFAULT_ROUND_PHASE: RoundPhase = 'idle';
+
+export const RoundPhaseSchema = z.enum(ROUND_PHASES).openapi({
   description: 'Current phase of a conversation round for stream resumption',
   example: 'participants',
 });

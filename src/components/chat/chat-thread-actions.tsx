@@ -21,7 +21,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations/chat-mutations';
+import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations';
 import { useMediaQuery } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 

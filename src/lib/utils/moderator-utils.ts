@@ -107,11 +107,11 @@ export function normalizeModeratorData<T>(data: T): T {
     return data;
   }
 
-  // Deep clone to avoid mutation
-  const normalized: Record<string, unknown> = JSON.parse(JSON.stringify(data));
+  // Deep clone to avoid mutation - preserve original type structure
+  const normalized = JSON.parse(JSON.stringify(data)) as T;
 
   // Ensure metrics are clamped to 0-100 range if present
-  if (isObject(normalized.metrics)) {
+  if (isObject(normalized) && 'metrics' in normalized && isObject(normalized.metrics)) {
     const metrics = normalized.metrics;
     const clamp = (value: unknown): number | undefined => {
       if (typeof value !== 'number')
@@ -129,7 +129,7 @@ export function normalizeModeratorData<T>(data: T): T {
       metrics.clarity = clamp(metrics.clarity);
   }
 
-  return normalized as T;
+  return normalized;
 }
 
 // ============================================================================

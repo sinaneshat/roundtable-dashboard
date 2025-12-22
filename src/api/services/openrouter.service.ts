@@ -209,38 +209,6 @@ class OpenRouterService {
     }
   }
 
-  /**
-   * ❌ REMOVED: streamText() and streamUIMessages() methods
-   *
-   * RATIONALE: These methods are redundant. For streaming operations, handlers should:
-   * 1. Get the client with `openRouterService.getClient()`
-   * 2. Use AI SDK's `streamText()` directly for full control
-   * 3. Use `toUIMessageStreamResponse()` for proper SSE streaming
-   *
-   * This gives handlers complete control over:
-   * - Abort signals (timeout + client disconnect)
-   * - Stream transformations (smoothStream, etc.)
-   * - Callbacks (onFinish, onError, onChunk)
-   * - Message metadata
-   *
-   * OFFICIAL AI SDK PATTERN: Direct usage of streamText() from 'ai' package
-   * See: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
-   *
-   * Example (from handler.ts:1341-1557):
-   * ```typescript
-   * const client = openRouterService.getClient();
-   * const result = streamText({
-   *   model: client.chat(modelId),
-   *   messages: convertToModelMessages(uiMessages),
-   *   system: systemPrompt,
-   *   temperature: 0.7,
-   *   experimental_transform: smoothStream(),
-   *   abortSignal: combinedSignal,
-   * });
-   * return result.toUIMessageStreamResponse({ onFinish, onError });
-   * ```
-   */
-
   // ============================================================================
   // Helper Methods
   // ============================================================================

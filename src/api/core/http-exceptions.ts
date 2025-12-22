@@ -18,7 +18,7 @@ import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import type { ErrorCode, ErrorSeverity } from '@/api/common/error-handling';
+import type { ApiErrorSeverity, ErrorCode } from '@/api/common/error-handling';
 import { ERROR_CODES, ERROR_SEVERITY } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 
@@ -124,7 +124,7 @@ function isContentfulStatusCode(status: number): status is ContentfulStatusCode 
 export type HTTPExceptionFactoryOptions = {
   message: string;
   code?: ErrorCode;
-  severity?: ErrorSeverity;
+  severity?: ApiErrorSeverity;
   context?: ErrorContext;
   correlationId?: string;
   cause?: unknown;
@@ -136,7 +136,7 @@ export type HTTPExceptionFactoryOptions = {
  */
 export class EnhancedHTTPException extends HTTPException {
   public readonly errorCode?: ErrorCode;
-  public readonly severity?: ErrorSeverity;
+  public readonly severity?: ApiErrorSeverity;
   public readonly context?: ErrorContext;
   public readonly correlationId?: string;
   public readonly details?: Record<string, unknown>;
@@ -401,7 +401,7 @@ export class HTTPExceptionFactory {
       [HttpStatusCodes.SERVICE_UNAVAILABLE]: ERROR_CODES.SERVICE_UNAVAILABLE,
     };
 
-    const severityMap: Record<number, ErrorSeverity> = {
+    const severityMap: Record<number, ApiErrorSeverity> = {
       [HttpStatusCodes.BAD_REQUEST]: ERROR_SEVERITY.LOW,
       [HttpStatusCodes.UNAUTHORIZED]: ERROR_SEVERITY.MEDIUM,
       [HttpStatusCodes.FORBIDDEN]: ERROR_SEVERITY.MEDIUM,

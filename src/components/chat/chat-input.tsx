@@ -244,7 +244,7 @@ export const ChatInput = memo(({
   // Focus textarea after DOM renders and paints
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
-      return afterPaint(() => textareaRef.current?.focus());
+      return afterPaint(() => textareaRef.current?.focus({ preventScroll: true }));
     }
     return undefined;
   }, [autoFocus]);

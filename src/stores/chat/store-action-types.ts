@@ -44,12 +44,13 @@ import type {
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
+import type { PendingAttachment } from '@/hooks/utils/use-chat-attachments';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
-import type { PendingAttachment, StreamResumptionState } from './store-schemas';
+import type { StreamResumptionState } from './store-schemas';
 
 // ============================================================================
 // FORM ACTIONS
@@ -403,9 +404,6 @@ export type ClearAnimations = () => void;
 // ============================================================================
 // ATTACHMENTS ACTIONS (File upload management)
 // ============================================================================
-
-// ✅ PendingAttachment type is defined via Zod in store-schemas.ts (single source of truth)
-// Use: import { type PendingAttachment } from './store-schemas'
 
 /**
  * Add files to pending attachments

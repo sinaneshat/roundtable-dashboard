@@ -214,18 +214,18 @@ export function memoizeParticipantComparison<T extends (...args: unknown[]) => b
  * const round = getRound(messages);
  * ```
  */
-export function memoizeRoundCalculation<T>(
-  fn: (messages: unknown[]) => T,
-): (messages: unknown[]) => T {
-  const cache = new WeakMap<unknown[], T>();
+export function memoizeRoundCalculation<TMessage, TResult>(
+  fn: (messages: readonly TMessage[]) => TResult,
+): (messages: readonly TMessage[]) => TResult {
+  const cache = new WeakMap<object, TResult>();
 
-  return (messages: unknown[]): T => {
-    if (cache.has(messages)) {
-      return cache.get(messages)!;
+  return (messages: readonly TMessage[]): TResult => {
+    if (cache.has(messages as object)) {
+      return cache.get(messages as object)!;
     }
 
     const result = fn(messages);
-    cache.set(messages, result);
+    cache.set(messages as object, result);
     return result;
   };
 }
@@ -243,18 +243,18 @@ export function memoizeRoundCalculation<T>(
  * });
  * ```
  */
-export function memoizeModeratorCheck<T>(
-  fn: (moderators: unknown[]) => T,
-): (moderators: unknown[]) => T {
-  const cache = new WeakMap<unknown[], T>();
+export function memoizeModeratorCheck<TModerator, TResult>(
+  fn: (moderators: readonly TModerator[]) => TResult,
+): (moderators: readonly TModerator[]) => TResult {
+  const cache = new WeakMap<object, TResult>();
 
-  return (moderators: unknown[]): T => {
-    if (cache.has(moderators)) {
-      return cache.get(moderators)!;
+  return (moderators: readonly TModerator[]): TResult => {
+    if (cache.has(moderators as object)) {
+      return cache.get(moderators as object)!;
     }
 
     const result = fn(moderators);
-    cache.set(moderators, result);
+    cache.set(moderators as object, result);
     return result;
   };
 }

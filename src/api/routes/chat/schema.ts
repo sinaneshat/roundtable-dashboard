@@ -10,7 +10,6 @@ import {
   ParticipantStreamStatusSchema,
   PreSearchQueryStatusSchema,
   RoundPhaseSchema,
-  SearchResultStatusSchema,
   UIMessageRoleSchema,
   WebSearchAnswerModeSchema,
   WebSearchComplexitySchema,
@@ -25,7 +24,9 @@ import {
   CoreSchemas,
   createApiResponseSchema,
   createCursorPaginatedResponseSchema,
+  ThreadIdParamSchema,
 } from '@/api/core/schemas';
+import { StreamStateSchema } from '@/api/types/streaming';
 import { STRING_LIMITS } from '@/constants/validation';
 import {
   DbChangelogDataSchema,
@@ -47,7 +48,22 @@ import {
   chatThreadSelectSchema,
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
+import {
+  ChatParticipantSchema,
+  ParticipantConfigInputSchema,
+} from '@/lib/schemas/participant-schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
+
+// ============================================================================
+// RE-EXPORTS - Single source of truth maintained, re-exported for convenience
+// ============================================================================
+export { ChatParticipantSchema, ParticipantConfigInputSchema };
+
+// ============================================================================
+// CHAT-SPECIFIC PATH PARAMETER SCHEMAS
+// ============================================================================
+// ✅ ThreadIdParamSchema imported from @/api/core/schemas (single source of truth)
+export { ThreadIdParamSchema };
 
 export const MessageContentSchema = z.string()
   .trim()
@@ -127,12 +143,6 @@ const StreamParticipantSchema = BaseParticipantSchema.pick({
   priority: true,
   isEnabled: true,
 });
-
-export const ChatParticipantSchema = chatParticipantSelectSchema
-  .extend({
-    settings: DbParticipantSettingsSchema.nullable().optional(),
-  })
-  .openapi('ChatParticipant');
 
 const ChatMessageSchema = chatMessageSelectSchema
   .extend({
@@ -512,35 +522,6 @@ export type MultiQueryGeneration = z.infer<typeof MultiQueryGenerationSchema>;
 // ============================================================================
 // SERVICE LAYER SCHEMAS (Moved from services - Single Source of Truth)
 // ============================================================================
-
-/**
- * Participant configuration input schema
- * Used by participant-config.service.ts for change detection
- */
-export const ParticipantConfigInputSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Participant ID (temp ID for new participants)',
-    example: 'participant_temp_1',
-  }),
-  modelId: CoreSchemas.id().openapi({
-    description: 'Model ID',
-    example: 'anthropic/claude-3.5-sonnet',
-  }),
-  role: z.string().nullable().optional().openapi({
-    description: 'Optional role name',
-  }),
-  customRoleId: CoreSchemas.id().nullable().optional().openapi({
-    description: 'Optional custom role ID',
-  }),
-  priority: z.number().int().min(0).openapi({
-    description: 'Display priority',
-  }),
-  isEnabled: z.boolean().optional().default(true).openapi({
-    description: 'Whether participant is enabled',
-  }),
-}).openapi('ParticipantConfigInput');
-
-export type ParticipantConfigInput = z.infer<typeof ParticipantConfigInputSchema>;
 
 /**
  * Search context options schema
@@ -1059,37 +1040,16 @@ export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 // ============================================================================
 // STREAM PARAM SCHEMAS
 // ============================================================================
-
-/**
- * Thread ID param schema for stream endpoints
- */
-export const ThreadIdParamSchema = z.object({
-  threadId: z.string().openapi({
-    param: { name: 'threadId', in: 'path' },
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-}).openapi('ThreadIdParam');
+// ThreadIdParamSchema imported from @/api/core/schemas (single source of truth)
 
 // ============================================================================
 // RESUMABLE STREAM SCHEMAS
 // ============================================================================
 
 /**
- * Stream status response schema
- * Used for checking if participant stream is active/completed for resumption
+ * Stream state schema for checking participant stream status
+ * ✅ SINGLE SOURCE OF TRUTH: Imported from @/api/types/streaming
  */
-export const StreamStateSchema = z.object({
-  threadId: z.string(),
-  roundNumber: RoundNumberSchema,
-  participantIndex: RoundNumberSchema,
-  status: ParticipantStreamStatusSchema,
-  messageId: z.string().nullable(),
-  createdAt: z.string().datetime(),
-  completedAt: z.string().datetime().nullable(),
-  errorMessage: z.string().nullable(),
-}).openapi('StreamState');
-
 export type StreamState = z.infer<typeof StreamStateSchema>;
 
 export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
@@ -1397,6 +1357,13 @@ export type PreSearchQuery = z.infer<typeof PreSearchQuerySchema>;
 // Server-Sent Event type definitions for pre-search streaming
 // Frontend: Import these types for EventSource handlers
 
+// ============================================================================
+// PRE-SEARCH SSE EVENT SCHEMAS
+// ============================================================================
+// Server-Sent Event type definitions for pre-search streaming
+// Frontend: Import these types for EventSource handlers
+// NOTE: These use 'event' discriminator (SSE event names), distinct from PreSearchStreamEvent in message-metadata (uses 'type')
+
 /**
  * Base event data with timestamp
  */
@@ -1455,7 +1422,7 @@ export const PreSearchResultEventSchema = z.object({
     resultCount: z.number(),
     responseTime: z.number(),
     index: z.number(),
-    status: SearchResultStatusSchema.optional(),
+    status: z.enum(['pending', 'success', 'failed']).optional(),
     error: z.string().optional(),
   }),
 }).openapi('PreSearchResultEvent');

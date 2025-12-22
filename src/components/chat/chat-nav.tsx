@@ -31,6 +31,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
+import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
@@ -68,7 +69,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       id: thread.id,
       title: thread.title,
       slug: thread.slug,
-      previousSlug: thread.previousSlug ?? null, // ✅ BACKWARDS COMPATIBLE: Include original slug
+      previousSlug: thread.previousSlug ?? null,
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
       messages: [],
@@ -335,7 +336,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               href="/chat/pricing"
               className="group/upgrade group-data-[collapsible=icon]:hidden flex items-center gap-3 rounded-xl bg-accent px-3 py-2.5 transition-colors duration-200 hover:bg-accent/80"
             >
-              <div className={`flex size-8 shrink-0 items-center justify-center rounded-full ${isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground'}`}>
+              <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full', isPaidUser ? 'bg-success text-success-foreground' : 'bg-primary text-primary-foreground')}>
                 <Sparkles className="size-4" />
               </div>
               <div className="flex flex-1 flex-col min-w-0">

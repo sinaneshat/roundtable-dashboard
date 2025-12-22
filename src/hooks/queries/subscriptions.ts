@@ -2,7 +2,6 @@
  * Subscription Query Hooks
  *
  * TanStack Query hooks for Stripe subscriptions
- * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
  *
  * IMPORTANT: staleTime values MUST match server-side prefetch values
  * See: docs/react-query-ssr-patterns.md

@@ -4,6 +4,7 @@ import { Search, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, use, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { useShallow } from 'zustand/react/shallow';
 
 import { MessageStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -66,9 +67,14 @@ function PreSearchStreamComponent({
   // When PreSearchStream decides to execute, it MUST mark the store so provider knows
   // Without this, both PreSearchStream and provider can race to execute simultaneously
   // 🚨 ATOMIC: Use tryMarkPreSearchTriggered for atomic check-and-mark to prevent race conditions
-  const tryMarkPreSearchTriggered = useChatStore(s => s.tryMarkPreSearchTriggered);
-  const markPreSearchTriggered = useChatStore(s => s.markPreSearchTriggered);
-  const clearPreSearchTracking = useChatStore(s => s.clearPreSearchTracking);
+  // ✅ OPTIMIZATION: Batch action selectors with useShallow to prevent multiple re-renders
+  const { tryMarkPreSearchTriggered, markPreSearchTriggered, clearPreSearchTracking } = useChatStore(
+    useShallow(s => ({
+      tryMarkPreSearchTriggered: s.tryMarkPreSearchTriggered,
+      markPreSearchTriggered: s.markPreSearchTriggered,
+      clearPreSearchTracking: s.clearPreSearchTracking,
+    })),
+  );
 
   // Local streaming state
   const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
@@ -112,60 +118,12 @@ function PreSearchStreamComponent({
   const isAutoRetryingOnFalseRef = useRef(isAutoRetrying.onFalse);
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
 
-  // ✅ CRITICAL FIX: Do NOT abort fetch on unmount
-  // Following the moderator streaming pattern - let the fetch complete in the background
-  // Aborting on unmount causes "Malformed JSON in request body" errors because:
-  // 1. Component unmounts quickly after starting fetch
-  // 2. Abort happens after HTTP headers sent but before body completes
-  // 3. Server receives partial/empty body → 400 error
-  //
-  // Instead, we let the fetch complete naturally:
-  // - The callback refs (onStreamCompleteRef) allow callbacks to fire even after unmount
-  // - Store deduplication (triggeredPreSearchRounds) prevents duplicate fetches
-  // - The store updates will still happen via the ref callbacks
   useEffect(() => {
     return () => {
-      // ✅ REMOVED: abortControllerRef.current?.abort()
-      // Do NOT abort - let the request complete in background
-      // The ref callbacks will handle completion even after unmount
     };
-  }, []); // Empty deps = only runs on mount/unmount
+  }, []);
 
-  // ✅ REMOVED: useEffect syncs for callback refs (now using direct assignment above)
-
-  // Custom SSE handler for backend's custom event format (POST with fetch)
-  // ✅ RESUMABLE STREAMS: Now also triggers for STREAMING status to attempt resumption
   useEffect(() => {
-    // ✅ PROGRESSIVE UI FIX: Removed providerTriggered early return
-    // Previously, when provider handled the stream (rounds 1+), this component would skip
-    // its own stream handling and rely on store subscriptions for updates.
-    // This caused progressive updates to not show because:
-    // 1. Provider calls updatePartialPreSearchData in store
-    // 2. React 18 batches the subscription re-renders
-    // 3. User only sees final state, not progressive updates
-    //
-    // Now the component ALWAYS tries to execute the stream:
-    // - If provider already started: API returns 202/409, component falls back to polling
-    // - Polling uses flushSync for immediate UI updates
-    // - This ensures progressive updates regardless of who triggered the stream
-
-    // ✅ PROGRESSIVE UI FIX: REMOVED early return for hasPreSearchBeenTriggered
-    // Previously this returned early if provider had already marked the round.
-    // This caused progressive updates to NOT show because:
-    // 1. Provider in usePendingMessage marks triggered first
-    // 2. PreSearchStream returns early, never makes own request
-    // 3. Provider uses store updates (batched) instead of flushSync
-    // 4. User only sees final state, not progressive updates
-    //
-    // Now: Component ALWAYS attempts to make the stream request.
-    // - If no stream exists: Creates new stream with progressive flushSync updates
-    // - If stream already active: API returns 202, falls back to polling with flushSync
-    // - Deduplication happens at API level, not here
-
-    // ✅ RESUMABLE STREAMS: Trigger for both PENDING and STREAMING status
-    // PENDING: Start new stream
-    // STREAMING: Attempt to resume from KV buffer (backend handles this automatically)
-    // COMPLETE/FAILED: No action needed
     if (preSearch.status !== MessageStatuses.PENDING && preSearch.status !== MessageStatuses.STREAMING) {
       return;
     }
@@ -199,12 +157,6 @@ function PreSearchStreamComponent({
       try {
         // ✅ FIX: Guard against undefined userQuery (malformed JSON error)
         if (!preSearch.userQuery || typeof preSearch.userQuery !== 'string') {
-          console.error('[PreSearchStream] userQuery is missing or invalid:', {
-            id: preSearch.id,
-            roundNumber: preSearch.roundNumber,
-            userQuery: preSearch.userQuery,
-            preSearch,
-          });
           throw new Error('userQuery is required but was not provided');
         }
 
@@ -223,7 +175,6 @@ function PreSearchStreamComponent({
         // 200: Normal stream or resumed stream
         // 202: Stream is active but no buffer yet - RETRY POST (like analyze component)
         //      BUT if data.status is 'complete', the pre-search finished during our retries!
-        // 409: Conflict (legacy - should use 202 now)
         if (response.status === 202) {
           // Parse response body to check status and get retry delay
           let retryDelayMs = DEFAULT_RETRY_DELAY_MS;
@@ -271,8 +222,6 @@ function PreSearchStreamComponent({
           });
 
           if (postRetryCount <= MAX_POST_RETRIES) {
-            // Debug log removed - only console.error allowed by ESLint config
-
             // Wait and retry the POST request (like analyze component)
             // eslint-disable-next-line react-web-api/no-leaked-timeout -- Promise resolves when timeout fires; no cleanup needed for awaited delays
             await new Promise(resolve => setTimeout(resolve, retryDelayMs));
@@ -285,10 +234,6 @@ function PreSearchStreamComponent({
           }
 
           // Max retries exceeded - fall back to LIST polling
-          console.error('[PreSearchStream] Max POST retries exceeded, falling back to LIST polling', {
-            attempts: postRetryCount,
-            preSearchId: preSearch.id,
-          });
           is409Conflict.onTrue();
           return;
         }
@@ -497,8 +442,7 @@ function PreSearchStreamComponent({
             clearPreSearchTracking(preSearch.roundNumber);
 
             // Retry by calling startStream again
-            startStream().catch((error) => {
-              console.error('[PreSearchStream] Retry attempt failed:', error);
+            startStream().catch(() => {
               // Retry failed, error state will be handled by next catch
             });
           }, RETRY_INTERVAL_MS);
@@ -512,22 +456,10 @@ function PreSearchStreamComponent({
       }
     };
 
-    startStream().catch((error) => {
-      console.error('[PreSearchStream] Initial stream start failed:', error);
+    startStream().catch(() => {
       // Stream failed, error state already handled
     });
 
-    // ✅ CRITICAL FIX: NO cleanup here - abort is handled by the separate unmount effect
-    // Previously, the cleanup ran on EVERY dependency change (not just unmount), which:
-    // 1. Aborted the running fetch
-    // 2. Then the effect re-ran and returned early (due to deduplication)
-    // 3. Result: fetch aborted, no new fetch started → stuck at PENDING
-    // Now: abort only happens on true unmount via the empty-deps effect above
-    // ✅ FIX: Removed preSearch.status from dependencies to prevent effect re-run when backend updates status
-    // The effect should only run once per unique search (id + roundNumber)
-    // Status changes (pending→streaming→completed) should NOT re-trigger the effect
-    // ✅ FIX: Added forceRetryCount to re-trigger effect when stuck stream detection fires
-    // ✅ FIX: Removed providerTriggered - component now always attempts stream for progressive UI
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery, store, tryMarkPreSearchTriggered, clearPreSearchTracking, forceRetryCount]);
 
@@ -569,7 +501,6 @@ function PreSearchStreamComponent({
         const result = await getThreadPreSearchesService({ param: { id: threadId } });
 
         if (!result.data?.items) {
-          console.error('[PreSearchStream] Invalid API response: missing items');
           // Continue polling on validation error
           if (isMounted) {
             timeoutId = setTimeout(poll, 2000);
@@ -614,13 +545,6 @@ function PreSearchStreamComponent({
             // After 30 seconds, the original stream is definitely gone - restart
             const elapsedMs = Date.now() - pollingStartTime;
             if (elapsedMs > POLLING_TIMEOUT_MS) {
-              console.error('[PreSearchStream] Polling timeout - stream appears stuck, will retry', {
-                preSearchId: preSearch.id,
-                status: current.status,
-                elapsedMs,
-                timeoutMs: POLLING_TIMEOUT_MS,
-              });
-
               // ✅ ZUSTAND PATTERN: Use store to clear tracking for fresh POST request
               clearPreSearchTracking(preSearch.roundNumber);
 
@@ -652,9 +576,8 @@ function PreSearchStreamComponent({
           }
           // Continue polling for STREAMING or PENDING
         }
-      } catch (err) {
+      } catch {
         // Silent failure on polling error, retry next interval
-        console.error('[PreSearchStream] Polling failed:', err);
       }
 
       if (isMounted) {
@@ -671,11 +594,6 @@ function PreSearchStreamComponent({
       isAutoRetryingOnFalseRef.current(); // Clear auto-retry state on cleanup
     };
   }, [is409Conflict.value, threadId, preSearch.id, preSearch.roundNumber, clearPreSearchTracking]);
-
-  // ✅ REMOVED: Separate STREAMING polling effect is no longer needed
-  // The main SSE effect now handles STREAMING status via stream resumption
-  // Backend returns resumed stream (200 with X-Resumed-From-Buffer header) or 202 (poll)
-  // 202 triggers the 409 conflict polling mechanism above
 
   // ✅ ZUSTAND PATTERN: Mark completed/failed pre-searches to prevent re-triggering
   // ✅ FIX: Wrap in useEffect to avoid setState during render (React 19 strict mode)

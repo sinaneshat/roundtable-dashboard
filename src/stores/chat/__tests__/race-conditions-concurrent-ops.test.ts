@@ -322,8 +322,6 @@ describe('pre-Search vs Participant Coordination', () => {
 // ============================================================================
 
 describe('moderator Deduplication', () => {
-  describe.todo('roundNumber Based Deduplication - moderator functionality integrated into messages');
-
   describe('createdModeratorRounds Tracking', () => {
     it('tracks rounds where moderator was created', () => {
       const store = createChatStore();
@@ -1204,6 +1202,4 @@ describe('round Boundary Integrity', () => {
       expect(store.getState().isStreaming).toBe(false);
     });
   });
-
-  describe.todo('moderator and PreSearch Round Matching - moderator functionality integrated into messages with isModerator metadata');
 });
