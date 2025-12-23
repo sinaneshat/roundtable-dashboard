@@ -55,4 +55,4 @@ export {
   PreferencesStoreProvider,
   useModelPreferencesHydrated,
   useModelPreferencesStore,
-} from '@/components/providers/preferences-store-provider';
+} from '@/components/providers';

@@ -35,7 +35,7 @@
  * ```
  */
 
-import { getApiErrorDetails } from '@/lib/utils/error-handling';
+import { getApiErrorDetails } from '@/lib/utils';
 
 import { toastManager } from './toast-manager';
 
@@ -98,12 +98,9 @@ export function showApiErrorToast(
   // If we have validation errors, format them nicely
   if (errorDetails.validationErrors && errorDetails.validationErrors.length > 0) {
     if (errorDetails.validationErrors.length === 1) {
-      // Single validation error - show directly
       const firstError = errorDetails.validationErrors[0];
       description = firstError?.message || description;
     } else {
-    // Intentionally empty
-      // Multiple validation errors - show as list
       const validationMessages = errorDetails.validationErrors
         .map(err => `• ${err.field}: ${err.message}`)
         .join('\n');

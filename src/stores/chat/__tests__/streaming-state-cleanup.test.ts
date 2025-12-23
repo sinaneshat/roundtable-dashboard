@@ -29,7 +29,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
-import { createTestModeratorMessage } from '@/lib/testing/helpers';
+import { createTestModeratorMessage } from '@/lib/testing';
 
 import { createChatStore } from '../store';
 

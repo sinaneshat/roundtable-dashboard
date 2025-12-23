@@ -15,11 +15,13 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/components/chat/round-summary/moderator-constants';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { MessagePartTypes } from '@/api/core/enums';
+import { useChatStore } from '@/components/providers';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
 import { queryKeys } from '@/lib/data/query-keys';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { chatMessagesToUIMessages } from '@/lib/utils';
 import { getThreadMessagesService } from '@/services/api';
 
 /** Throttle interval for UI updates (matches AI SDK batching behavior) */
@@ -46,13 +48,28 @@ type UseModeratorStreamOptions = {
  */
 export function useModeratorStream({ threadId, enabled = true }: UseModeratorStreamOptions) {
   const queryClient = useQueryClient();
-  const participants = useChatStore(s => s.participants);
-  const messages = useChatStore(s => s.messages);
-  const setMessages = useChatStore(s => s.setMessages);
-  const setIsModeratorStreaming = useChatStore(s => s.setIsModeratorStreaming);
-  const hasModeratorStreamBeenTriggered = useChatStore(s => s.hasModeratorStreamBeenTriggered);
-  const markModeratorStreamTriggered = useChatStore(s => s.markModeratorStreamTriggered);
-  const completeStreaming = useChatStore(s => s.completeStreaming);
+
+  // ✅ ZUSTAND v5 BEST PRACTICE: Batch all store subscriptions with useShallow
+  // Prevents 7 individual subscriptions that can trigger cascading re-renders
+  const {
+    participants,
+    messages,
+    setMessages,
+    setIsModeratorStreaming,
+    hasModeratorStreamBeenTriggered,
+    markModeratorStreamTriggered,
+    completeStreaming,
+  } = useChatStore(
+    useShallow(s => ({
+      participants: s.participants,
+      messages: s.messages,
+      setMessages: s.setMessages,
+      setIsModeratorStreaming: s.setIsModeratorStreaming,
+      hasModeratorStreamBeenTriggered: s.hasModeratorStreamBeenTriggered,
+      markModeratorStreamTriggered: s.markModeratorStreamTriggered,
+      completeStreaming: s.completeStreaming,
+    })),
+  );
 
   const [state, setState] = useState<ModeratorStreamState>({
     isStreaming: false,
@@ -121,7 +138,7 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
           msg.id === moderatorId
             ? {
                 ...msg,
-                parts: [{ type: 'text' as const, text: '' }],
+                parts: [{ type: MessagePartTypes.TEXT, text: '' }],
               }
             : msg,
         );
@@ -180,7 +197,7 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
               msg.id === moderatorId
                 ? {
                     ...msg,
-                    parts: [{ type: 'text' as const, text: textToSet }],
+                    parts: [{ type: MessagePartTypes.TEXT, text: textToSet }],
                   }
                 : msg,
             ),

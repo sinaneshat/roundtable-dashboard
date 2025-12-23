@@ -58,8 +58,7 @@ import {
   getUrlFromPart,
   isFilePart,
 } from '@/lib/schemas/message-schemas';
-import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { filterNonEmptyMessages, getRoundNumber } from '@/lib/utils';
 
 import { chatMessagesToUIMessages } from '../routes/chat/handlers/helpers';
 
@@ -909,10 +908,24 @@ export async function prepareValidatedMessages(
     const existingParts = Array.isArray(newMessage.parts)
       ? newMessage.parts
       : [];
+
+    // Helper to extract URL from parts (custom extension to AI SDK - file parts with URL property)
+    function extractUrlFromFilePart(part: unknown): string | null {
+      if (
+        typeof part === 'object'
+        && part !== null
+        && 'type' in part
+        && part.type === 'file'
+        && 'url' in part
+        && typeof part.url === 'string'
+      ) {
+        return part.url;
+      }
+      return null;
+    }
+
     const httpUrlFileParts = existingParts.filter((part) => {
-      if (part.type !== 'file' || !('url' in part))
-        return false;
-      const url = part.url as string;
+      const url = extractUrlFromFilePart(part);
       return (
         url
         && (url.startsWith('http://') || url.startsWith('https://'))
@@ -923,9 +936,11 @@ export async function prepareValidatedMessages(
     if (httpUrlFileParts.length > 0) {
       const uploadIdsFromUrls = httpUrlFileParts
         .map((part) => {
-          const url = ('url' in part ? part.url : '') as string;
+          const url = extractUrlFromFilePart(part);
+          if (!url)
+            return null;
           const match = url.match(/\/uploads\/([A-Z0-9]+)\//i);
-          return match?.[1];
+          return match?.[1] ?? null;
         })
         .filter((id): id is string => id !== null && id !== undefined);
 
@@ -1085,6 +1100,21 @@ export async function prepareValidatedMessages(
 
   if (db) {
     try {
+      // Helper to extract URL from parts (reused from above)
+      function extractUrlFromFilePart(part: unknown): string | null {
+        if (
+          typeof part === 'object'
+          && part !== null
+          && 'type' in part
+          && part.type === 'file'
+          && 'url' in part
+          && typeof part.url === 'string'
+        ) {
+          return part.url;
+        }
+        return null;
+      }
+
       const messageIdsToCheck = previousMessages
         .filter((msg) => {
           if (msg.role === MessageRoles.USER) {
@@ -1094,9 +1124,7 @@ export async function prepareValidatedMessages(
           if (!Array.isArray(msg.parts))
             return false;
           return msg.parts.some((part) => {
-            if (part.type !== 'file' || !('url' in part))
-              return false;
-            const url = part.url as string;
+            const url = extractUrlFromFilePart(part);
             return (
               url
               && !url.startsWith('data:')
@@ -1119,10 +1147,9 @@ export async function prepareValidatedMessages(
               Array.isArray(m.parts) && m.parts.some(p => p.type === 'file'),
             filePartUrls: Array.isArray(m.parts)
               ? m.parts
-                  .filter(p => p.type === 'file')
-                  .map(p =>
-                    'url' in p ? (p.url as string).substring(0, 50) : 'no-url',
-                  )
+                  .map(extractUrlFromFilePart)
+                  .filter((url): url is string => url !== null)
+                  .map(url => url.substring(0, 50))
               : [],
           })),
       });
@@ -1294,8 +1321,10 @@ export async function prepareValidatedMessages(
             && part.data instanceof Uint8Array
             && 'mimeType' in part
           ) {
-            const filename
-              = 'filename' in part ? (part.filename as string) : undefined;
+            // Type guard for parts with filename property
+            const filename = ('filename' in part && typeof part.filename === 'string')
+              ? part.filename
+              : undefined;
             const key
               = filename || `file_${part.mimeType}_${fileDataFromHistory.size}`;
             fileDataFromHistory.set(key, {

@@ -16,8 +16,7 @@
 
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
-import { getParticipantId, getParticipantIndex } from '@/lib/utils/metadata';
-import { buildParticipantMessageMaps, getParticipantMessageFromMaps } from '@/lib/utils/participant-message-lookup';
+import { buildParticipantMessageMaps, getParticipantId, getParticipantIndex, getParticipantMessageFromMaps } from '@/lib/utils';
 import type { ChatStore } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

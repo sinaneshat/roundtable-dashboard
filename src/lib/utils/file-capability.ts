@@ -94,6 +94,18 @@ export function isModelCompatibleWithFiles(
   return true;
 }
 
+// ============================================================================
+// INCOMPATIBILITY REASON ENUM (Simplified - internal use only)
+// ============================================================================
+
+// CONSTANT OBJECT - For usage in code
+export const IncompatibilityReasons = {
+  NO_VISION: 'noVision' as const,
+} as const;
+
+// TYPESCRIPT TYPE - Inferred from constant object
+export type IncompatibilityReason = typeof IncompatibilityReasons[keyof typeof IncompatibilityReasons];
+
 /**
  * Get the reason why a model is incompatible with files
  *
@@ -104,9 +116,9 @@ export function isModelCompatibleWithFiles(
 export function getIncompatibilityReason(
   modelCapabilities: ModelFileCapabilities,
   files: FileForCapabilityCheck[],
-): string | null {
+): IncompatibilityReason | null {
   if (filesRequireVision(files) && !modelCapabilities.vision) {
-    return 'noVision';
+    return IncompatibilityReasons.NO_VISION;
   }
   return null;
 }
@@ -170,13 +182,14 @@ export function threadHasVisionRequiredFiles(
     if (!msg.parts)
       return false;
     return msg.parts.some((part) => {
+      // Type guard: check if part is a file part with mediaType
       if (typeof part !== 'object' || part === null)
         return false;
       if (!('type' in part) || part.type !== 'file')
         return false;
-      if (!('mediaType' in part))
+      if (!('mediaType' in part) || typeof part.mediaType !== 'string')
         return false;
-      return isVisionRequiredMimeType(part.mediaType as string);
+      return isVisionRequiredMimeType(part.mediaType);
     });
   });
 }

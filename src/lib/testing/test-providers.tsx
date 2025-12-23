@@ -14,7 +14,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
 
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
-import { ChatStoreProvider } from '@/components/providers/chat-store-provider';
+import { ChatStoreProvider } from '@/components/providers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import testMessages from '@/i18n/locales/en/common.json';
 

@@ -30,7 +30,7 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
-import { hasStateChanged, mergeServerClientState } from '@/lib/utils/state-merge';
+import { hasStateChanged, mergeServerClientState } from '@/lib/utils';
 import type { ChatStore } from '@/stores/chat/store-schemas';
 
 /**

@@ -22,9 +22,9 @@ import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionSt
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { chatMessagesToUIMessages } from '@/lib/utils';
 import {
   useChatFormActions,
   useScreenInitialization,
@@ -104,22 +104,26 @@ export default function ChatThreadScreen({
   // STORE STATE
   // ============================================================================
 
-  const { isStreaming, isModeratorStreaming, pendingMessage } = useChatStore(
+  // ✅ ZUSTAND v5: Batch all store selectors with useShallow
+  const {
+    isStreaming,
+    isModeratorStreaming,
+    pendingMessage,
+    selectedMode,
+    inputValue,
+    selectedParticipants,
+    prefillStreamResumptionState,
+  } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
       isModeratorStreaming: s.isModeratorStreaming,
       pendingMessage: s.pendingMessage,
+      selectedMode: s.selectedMode,
+      inputValue: s.inputValue,
+      selectedParticipants: s.selectedParticipants,
+      prefillStreamResumptionState: s.prefillStreamResumptionState,
     })),
   );
-
-  const selectedMode = useChatStore(s => s.selectedMode);
-  const inputValue = useChatStore(s => s.inputValue);
-  const selectedParticipants = useChatStore(s => s.selectedParticipants);
-
-  // ✅ RESUMABLE STREAMS: Pre-fill store with server-side resumption state
-  // This runs FIRST (before other effects) to ensure store has correct state
-  // before AI SDK resume and incomplete-round-resumption hooks run
-  const prefillStreamResumptionState = useChatStore(s => s.prefillStreamResumptionState);
 
   useEffect(() => {
     if (streamResumptionState && thread?.id) {
@@ -143,10 +147,13 @@ export default function ChatThreadScreen({
 
   const formActions = useChatFormActions();
 
-  // ✅ FIX: Select individual values instead of nested object to avoid infinite loop
-  // useShallow only does shallow comparison - nested objects create new references each time
-  const isRegenerating = useChatStore(s => s.isRegenerating);
-  const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
+  // ✅ ZUSTAND v5: Batch regeneration state selectors with useShallow
+  const { isRegenerating, regeneratingRoundNumber } = useChatStore(
+    useShallow(s => ({
+      isRegenerating: s.isRegenerating,
+      regeneratingRoundNumber: s.regeneratingRoundNumber,
+    })),
+  );
 
   // ✅ TEXT STREAMING: isModeratorStreaming flag tracks moderator streaming
   useScreenInitialization({
@@ -214,6 +221,7 @@ export default function ChatThreadScreen({
         mode="thread"
         onSubmit={handlePromptSubmit}
         chatAttachments={chatAttachments}
+        threadId={thread.id}
       />
 
       <ChatDeleteDialog

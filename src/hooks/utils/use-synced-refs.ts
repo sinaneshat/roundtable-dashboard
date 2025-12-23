@@ -70,12 +70,15 @@ export function useSyncedRefs<T extends RefValues>(
 ): { [K in keyof T]: React.MutableRefObject<T[K]> } {
   // Create stable refs object - only initialize once
   const refs = useMemo(() => {
-    const result: Partial<{ [K in keyof T]: React.MutableRefObject<T[K]> }> = {};
+    const result: { [K in keyof T]?: React.MutableRefObject<T[K]> } = {};
     for (const key in values) {
       if (Object.prototype.hasOwnProperty.call(values, key)) {
-        result[key as keyof T] = { current: values[key] } as React.MutableRefObject<T[keyof T]>;
+        // ✅ TYPE-SAFE: No force casting - typed properly via mapped type
+        const typedKey = key as keyof T;
+        result[typedKey] = { current: values[typedKey] };
       }
     }
+    // Type assertion is safe here - we've initialized all keys from values
     return result as { [K in keyof T]: React.MutableRefObject<T[K]> };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only create once

@@ -152,12 +152,11 @@ export const invalidationPatterns = {
 
   // Subscription operations
   // IMPORTANT: Always invalidate usage queries with subscriptions since quotas are tied to subscription tier
-  // IMPORTANT: Always invalidate models query since model access is tier-based
   subscriptions: [
     queryKeys.subscriptions.lists(),
     queryKeys.subscriptions.current(),
     queryKeys.usage.all,
-    queryKeys.models.all, // ✅ FIX: Invalidate models when subscription changes (tier-based access)
+    queryKeys.models.all,
   ],
 
   subscriptionDetail: (subscriptionId: string) => [
@@ -165,15 +164,14 @@ export const invalidationPatterns = {
     queryKeys.subscriptions.lists(),
     queryKeys.subscriptions.current(),
     queryKeys.usage.all,
-    queryKeys.models.all, // ✅ FIX: Invalidate models when subscription changes (tier-based access)
+    queryKeys.models.all,
   ],
 
-  // After checkout - invalidate everything billing related including usage/quotas/models
   afterCheckout: [
     queryKeys.subscriptions.all,
     queryKeys.products.all,
     queryKeys.usage.all,
-    queryKeys.models.all, // ✅ FIX: Invalidate models after checkout (tier-based access)
+    queryKeys.models.all,
   ],
 
   // Usage operations - invalidate after chat operations

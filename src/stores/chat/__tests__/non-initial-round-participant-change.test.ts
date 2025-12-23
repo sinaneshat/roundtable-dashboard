@@ -26,7 +26,7 @@ import {
   detectParticipantChanges,
   participantConfigToOptimistic,
   prepareParticipantUpdate,
-} from '@/lib/utils/participant';
+} from '@/lib/utils';
 
 import { createChatStore } from '../store';
 

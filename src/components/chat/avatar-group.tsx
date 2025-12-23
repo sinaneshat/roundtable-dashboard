@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
-import { getProviderIcon } from '@/lib/utils/ai-display';
+import { getProviderIcon } from '@/lib/utils';
 
 type AvatarGroupProps = {
   participants: ParticipantConfig[];

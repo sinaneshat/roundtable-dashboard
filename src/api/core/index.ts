@@ -38,6 +38,12 @@ import {
 } from './validation';
 
 // ============================================================================
+// AI MODELS
+// ============================================================================
+
+export { AIModels } from './ai-models';
+
+// ============================================================================
 // APP FACTORY
 // ============================================================================
 
@@ -121,6 +127,25 @@ export {
 // ============================================================================
 
 export {
+  createMutationRouteResponses,
+  createProtectedRouteResponses,
+  createPublicRouteResponses,
+  type MutationRouteResponses,
+  type ProtectedRouteResponses,
+  type PublicRouteResponses,
+  StandardApiResponses,
+  type StandardApiResponseType,
+} from './response-schemas';
+
+// ============================================================================
+// HANDLERS
+// ============================================================================
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
+export {
   accepted,
   authenticationError,
   authorizationError,
@@ -153,11 +178,7 @@ export {
 } from './responses';
 
 // ============================================================================
-// HANDLERS
-// ============================================================================
-
-// ============================================================================
-// ERROR HANDLING
+// RESPONSE SCHEMAS
 // ============================================================================
 
 export {
@@ -195,6 +216,10 @@ export {
   SSEStreamMetadataSchema,
   type TextStreamMetadata,
   TextStreamMetadataSchema,
+  // Thread-specific path parameters
+  ThreadIdParamSchema,
+  ThreadRoundParamSchema,
+  ThreadSlugParamSchema,
 } from './schemas';
 
 // ============================================================================

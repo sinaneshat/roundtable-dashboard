@@ -28,12 +28,12 @@ import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import {
+  createParticipantMetadata,
   hasCitations,
+  isObject,
   parseCitations,
   toDbCitations,
-} from '@/lib/utils/citation-parser';
-import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
-import { isObject } from '@/lib/utils/type-guards';
+} from '@/lib/utils';
 
 // ============================================================================
 // Type Definitions

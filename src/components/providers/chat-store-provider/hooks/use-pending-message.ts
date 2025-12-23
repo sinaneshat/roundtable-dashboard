@@ -12,8 +12,7 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
-import { getEnabledParticipantModelIds } from '@/lib/utils/participant';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { getCurrentRoundNumber, getEnabledParticipantModelIds } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getEffectiveWebSearchEnabled } from '@/stores/chat';
 

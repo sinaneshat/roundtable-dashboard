@@ -15,9 +15,9 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { FeedbackType } from '@/api/core/enums';
 import type { RoundFeedbackData } from '@/api/routes/chat/schema';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { useSetRoundFeedbackMutation } from '@/hooks/mutations';
-import { useMemoizedReturn } from '@/lib/utils/memo-utils';
+import { useMemoizedReturn } from '@/lib/utils';
 
 export type UseFeedbackActionsOptions = {
   threadId: string;

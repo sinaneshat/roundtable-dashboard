@@ -24,7 +24,7 @@ import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
 import { messageHasError } from '@/lib/schemas/message-metadata';
-import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils/metadata';
+import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
@@ -118,7 +118,12 @@ export function ThreadTimeline({
   isModeratorStreaming = false,
   demoMode = false,
 }: ThreadTimelineProps) {
+  // ✅ SCROLL FIX: Track active streaming for virtualizer and measurement
+  // This prevents scroll jumps and viewport shifts during content generation
+  const isActivelyStreaming = isStreaming || isModeratorStreaming;
+
   // TanStack Virtual hook - official pattern
+  // ✅ SCROLL FIX: Pass isStreaming to stabilize totalSize during streaming
   const {
     virtualItems,
     totalSize,
@@ -130,11 +135,11 @@ export function ThreadTimeline({
     overscan: 5, // Official docs recommend 5
     paddingEnd: 200, // Space for sticky chat input
     isDataReady,
+    isStreaming: isActivelyStreaming, // Prevents container height changes during streaming
   });
 
   // ✅ SCROLL FIX: During active streaming, skip measurement to prevent scroll jumps
   // When streaming ends, remeasurement will occur naturally on next scroll
-  const isActivelyStreaming = isStreaming || isModeratorStreaming;
   const stableMeasureElement = isActivelyStreaming ? undefined : measureElement;
 
   // ✅ ANIMATION: Track items already animated to prevent re-animation on scroll

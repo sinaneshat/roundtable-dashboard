@@ -35,7 +35,7 @@ import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ChatMode } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 

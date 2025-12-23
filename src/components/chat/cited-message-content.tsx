@@ -18,7 +18,7 @@ import { Streamdown } from 'streamdown';
 
 import type { DbCitation } from '@/db/schemas/chat-metadata';
 import { cn } from '@/lib/ui/cn';
-import { parseCitations } from '@/lib/utils/citation-parser';
+import { parseCitations } from '@/lib/utils';
 
 import {
   InlineCitation,

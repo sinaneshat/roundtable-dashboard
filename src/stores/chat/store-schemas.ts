@@ -28,7 +28,7 @@ import {
   ChatThreadSchema,
   StoredPreSearchSchema,
 } from '@/api/routes/chat/schema';
-import { PendingAttachmentSchema } from '@/hooks/utils/use-chat-attachments';
+import { PendingAttachmentSchema } from '@/hooks/utils';
 // ✅ Use ExtendedFilePartSchema to include uploadId for backend fallback loading
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';

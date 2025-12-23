@@ -16,7 +16,9 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { CreateApiKeyRequestSchema } from '@/api/routes/api-keys/schema';
-import { FormProvider, RHFSelect, RHFTextField } from '@/components/forms';
+import FormProvider from '@/components/forms/form-provider';
+import RHFSelect from '@/components/forms/rhf-select';
+import RHFTextField from '@/components/forms/rhf-text-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

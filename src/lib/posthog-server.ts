@@ -92,25 +92,35 @@ export function getDistinctIdFromCookie(cookieHeader: string | null): string {
   const cookieName = `ph_${apiKey}_posthog`;
 
   try {
-    // Parse cookies manually
-    const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+    // Parse cookies manually into map
+    const cookies = cookieHeader.split(';').reduce<Map<string, string>>((acc, cookie) => {
       const [key, value] = cookie.trim().split('=');
       if (key && value) {
-        acc[key] = value;
+        acc.set(key, value);
       }
       return acc;
-    }, {} as Record<string, string>);
+    }, new Map<string, string>());
 
-    const cookieValue = cookies[cookieName];
+    const cookieValue = cookies.get(cookieName);
     if (!cookieValue) {
       return 'anonymous';
     }
 
-    // Decode the cookie value
+    // Decode and parse cookie value with runtime validation
     const decodedValue = decodeURIComponent(cookieValue);
-    const parsed = JSON.parse(decodedValue);
+    const parsed: unknown = JSON.parse(decodedValue);
 
-    return parsed.distinct_id || 'anonymous';
+    // Type guard: validate PostHog cookie structure
+    if (
+      parsed !== null
+      && typeof parsed === 'object'
+      && 'distinct_id' in parsed
+      && typeof parsed.distinct_id === 'string'
+    ) {
+      return parsed.distinct_id;
+    }
+
+    return 'anonymous';
   } catch (error) {
     console.error('Failed to get PostHog distinct ID from cookie:', error);
     return 'anonymous';

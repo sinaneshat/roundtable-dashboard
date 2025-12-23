@@ -3,8 +3,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/permissions';
-import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
-import { IdParamSchema } from '@/api/core/schemas';
+import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
 import { validateModelAccess, validateTierLimits } from '@/api/services/participant-validation.service';
 import {
   logParticipantAdded,

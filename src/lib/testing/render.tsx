@@ -5,28 +5,29 @@
  */
 
 import type { RenderHookOptions, RenderOptions } from '@testing-library/react';
-import { render, renderHook as rtlRenderHook } from '@testing-library/react';
+import {
+  render as rtlRender,
+  renderHook as rtlRenderHook,
+} from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 import { TestProviders } from './test-providers';
 
 type CustomRenderOptions = Omit<RenderOptions, 'wrapper'>;
 
-function customRender(ui: ReactElement, options?: CustomRenderOptions) {
-  return render(ui, {
+export function render(ui: ReactElement, options?: CustomRenderOptions) {
+  return rtlRender(ui, {
     wrapper: ({ children }) => <TestProviders>{children}</TestProviders>,
     ...options,
   });
 }
 
-function customRenderHook<Result, Props>(
-  render: (initialProps: Props) => Result,
+export function renderHook<Result, Props>(
+  renderFn: (initialProps: Props) => Result,
   options?: Omit<RenderHookOptions<Props>, 'wrapper'>,
 ) {
-  return rtlRenderHook(render, {
+  return rtlRenderHook(renderFn, {
     wrapper: ({ children }) => <TestProviders>{children}</TestProviders>,
     ...options,
   });
 }
-
-export { customRender as render, customRenderHook as renderHook };

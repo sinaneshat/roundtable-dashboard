@@ -14,8 +14,7 @@ import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
-import { devLog } from '@/lib/utils/dev-logger';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { devLog, getRoundNumber } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 import type { ChatHook } from '../types';
@@ -545,6 +544,11 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       // ✅ RESUMPTION FIX: Prefer MORE COMPLETE content over less complete
       // When prefetch has complete content and resume has partial, keep prefetch
       // When resume has more content than prefetch (continuation), use resume
+      //
+      // ✅ CRITICAL FIX: Prevent moderator content from leaking into participant messages
+      // Bug pattern: After page refresh, AI SDK reprocesses messages and content from
+      // moderator messages can leak into participant message slots, or participant
+      // content can get concatenated (e.g., "Hi\n" becomes "Hi\nHi")
       const messageDedupeMap = new Map<string, typeof mergedMessages[0]>();
       for (const msg of mergedMessages) {
         const existing = messageDedupeMap.get(msg.id);
@@ -563,6 +567,41 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             return len;
           }, 0) || 0;
 
+          // ✅ CRITICAL FIX: Detect and reject content type mismatch
+          // If existing is a participant message and new has moderator-style content, reject
+          // Moderator content starts with "###" or contains "council"
+          const existingText = existing.parts?.find(p => p.type === 'text' && 'text' in p && typeof p.text === 'string');
+          const newText = msg.parts?.find(p => p.type === 'text' && 'text' in p && typeof p.text === 'string');
+          const existingTextContent = existingText && 'text' in existingText ? String(existingText.text || '') : '';
+          const newTextContent = newText && 'text' in newText ? String(newText.text || '') : '';
+
+          const existingIsModerator = existing.metadata && typeof existing.metadata === 'object'
+            && 'isModerator' in existing.metadata && existing.metadata.isModerator === true;
+          const newIsModerator = msg.metadata && typeof msg.metadata === 'object'
+            && 'isModerator' in msg.metadata && msg.metadata.isModerator === true;
+          const existingIsParticipant = existing.id.includes('_p') && !existing.id.includes('_moderator');
+
+          // ✅ CRITICAL FIX: If ID indicates participant but content looks like moderator, reject the new content
+          // This prevents moderator content from leaking into participant messages
+          const newLooksLikeModerator = newTextContent.startsWith('###') || newTextContent.toLowerCase().includes('council concluded');
+          if (existingIsParticipant && !existingIsModerator && newLooksLikeModerator && existingContentLength > 0) {
+            continue; // Keep existing participant content
+          }
+
+          // ✅ CRITICAL FIX: Detect content concatenation/duplication
+          // If new content appears to be existing content + something else, reject
+          // This prevents the "Hi\n" → "Hi\nHi" bug
+          if (existingContentLength > 0 && newContentLength > existingContentLength) {
+            const existingNormalized = existingTextContent.trim();
+            const newNormalized = newTextContent.trim();
+            // Check if new content contains existing content repeated or concatenated
+            const existingAppearsMultipleTimes = newNormalized.includes(existingNormalized + existingNormalized)
+              || (newNormalized.startsWith(existingNormalized) && newNormalized.endsWith(existingNormalized) && newNormalized !== existingNormalized);
+            if (existingAppearsMultipleTimes) {
+              continue; // Keep existing, reject duplicated content
+            }
+          }
+
           // Check finish reason - completed messages are more authoritative
           const existingFinishReason = existing.metadata && typeof existing.metadata === 'object' && 'finishReason' in existing.metadata
             ? existing.metadata.finishReason
@@ -576,14 +615,24 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
           // ✅ RACE CONDITION FIX: Explicit moderator protection
           // Moderator messages with content must NEVER be overwritten by empty placeholders
-          const existingIsModerator = existing.metadata && typeof existing.metadata === 'object'
-            && 'isModerator' in existing.metadata && existing.metadata.isModerator === true;
-          const newIsModerator = msg.metadata && typeof msg.metadata === 'object'
-            && 'isModerator' in msg.metadata && msg.metadata.isModerator === true;
-
           if (existingIsModerator && newIsModerator && existingContentLength > 0 && newContentLength === 0) {
             // Existing moderator has content, new is empty placeholder - ALWAYS keep existing
             continue;
+          }
+
+          // ✅ CRITICAL FIX: If participant message has valid content and is complete, protect it
+          // This prevents any replacement of completed participant messages after refresh
+          if (existingIsParticipant && existingIsComplete && existingContentLength > 0) {
+            // Existing participant is complete with content - only allow replacement if:
+            // 1. New is also complete AND
+            // 2. New has the same or more content AND
+            // 3. New content starts with existing content (continuation, not replacement)
+            const isValidContinuation = newIsComplete
+              && newContentLength >= existingContentLength
+              && newTextContent.startsWith(existingTextContent);
+            if (!isValidContinuation) {
+              continue; // Protect existing complete message
+            }
           }
 
           // Determine which message to keep
@@ -607,30 +656,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           // Otherwise, use new (default behavior for updates)
 
           if (keepExisting) {
-            // ✅ DEBUG: Log when existing content is preserved over new content
-            // eslint-disable-next-line no-console
-            console.log('[SYNC-KEEP]', JSON.stringify({
-              id: msg.id,
-              existLen: existingContentLength,
-              newLen: newContentLength,
-              existComplete: existingIsComplete,
-              newComplete: newIsComplete,
-            }));
             continue; // Skip this message, keep existing
           }
-        }
-        // ✅ DEBUG: Log when message content is updated
-        if (existing) {
-          const existingTextPart = existing.parts?.find(p => p.type === 'text' && 'text' in p);
-          const newTextPart = msg.parts?.find(p => p.type === 'text' && 'text' in p);
-          const existingText = existingTextPart && 'text' in existingTextPart ? String(existingTextPart.text || '').slice(0, 30) : '';
-          const newText = newTextPart && 'text' in newTextPart ? String(newTextPart.text || '').slice(0, 30) : '';
-          // eslint-disable-next-line no-console
-          console.log('[SYNC-REPLACE]', JSON.stringify({
-            id: msg.id,
-            from: existingText,
-            to: newText,
-          }));
         }
         messageDedupeMap.set(msg.id, msg);
       }

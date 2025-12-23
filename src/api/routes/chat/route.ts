@@ -1,13 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { CursorPaginationQuerySchema } from '@/api/core';
-import {
-  createMutationRouteResponses,
-  createProtectedRouteResponses,
-  createPublicRouteResponses,
-} from '@/api/core/response-schemas';
-import { ApiErrorResponseSchema, createApiResponseSchema, IdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
+import { ApiErrorResponseSchema, createApiResponseSchema, createMutationRouteResponses, createProtectedRouteResponses, createPublicRouteResponses, CursorPaginationQuerySchema, IdParamSchema, ThreadIdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core';
 
 import {
   AddParticipantRequestSchema,
@@ -30,7 +24,6 @@ import {
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
   ThreadDetailResponseSchema,
-  ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
   ThreadSlugStatusResponseSchema,

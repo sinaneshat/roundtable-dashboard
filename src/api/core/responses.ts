@@ -29,9 +29,9 @@ import type {
   ResponseMetadata,
   SSEStreamMetadata,
   TextStreamMetadata,
+  ValidationError,
 } from './schemas';
 import { ApiErrorResponseSchema, createApiResponseSchema, createPaginatedResponseSchema } from './schemas';
-import type { ValidationError } from './validation';
 
 // ============================================================================
 // RESPONSE UTILITIES

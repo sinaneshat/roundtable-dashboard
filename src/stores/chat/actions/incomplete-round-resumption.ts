@@ -39,10 +39,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { FinishReasons, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
-import { useChatStore } from '@/components/providers/chat-store-provider';
-import { getAssistantMetadata, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
-import { getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantModelIds } from '@/lib/utils/participant';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { useChatStore } from '@/components/providers';
+import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -56,13 +54,12 @@ import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/p
 // ============================================================================
 // DEBUG: Debounced logger for resumption debugging
 // ============================================================================
+// ✅ TYPE-SAFE: Removed unused Record<string, unknown> parameter
 const debugLogTimers: Record<string, NodeJS.Timeout> = {};
-function debugLog(key: string, data: Record<string, unknown>, debounceMs = 500) {
+function debugLog(key: string, _data?: unknown, debounceMs = 500) {
   // eslint-disable-next-line antfu/if-newline
   if (debugLogTimers[key]) clearTimeout(debugLogTimers[key]);
-  debugLogTimers[key] = setTimeout(() => {
-    // Intentionally empty - debug logging removed
-  }, debounceMs);
+  debugLogTimers[key] = setTimeout(() => {}, debounceMs);
 }
 
 // ============================================================================

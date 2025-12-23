@@ -13,8 +13,8 @@
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
-import type { MessagePartsAnalysis } from '@/lib/utils/message-status';
-import { getMessageParts } from '@/lib/utils/message-status';
+import type { MessagePartsAnalysis } from '@/lib/utils';
+import { getMessageParts } from '@/lib/utils';
 
 /**
  * Hook options

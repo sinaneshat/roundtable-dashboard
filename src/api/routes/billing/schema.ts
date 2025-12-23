@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
+// ✅ IMPORT FIX: Import directly from source files instead of barrel
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 import {

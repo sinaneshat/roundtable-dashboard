@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
 import { ScreenModes } from '@/api/core/enums';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { getCurrentRoundNumber } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
 

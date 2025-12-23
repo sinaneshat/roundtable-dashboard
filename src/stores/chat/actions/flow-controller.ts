@@ -25,13 +25,11 @@ import { startTransition, useCallback, useEffect, useMemo, useState } from 'reac
 import { useShallow } from 'zustand/react/shallow';
 
 import { ScreenModes } from '@/api/core/enums';
-import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
+import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { useThreadSlugStatusQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { createEmptyListCache, createPrefetchMeta } from '@/lib/utils/cache-helpers';
-import { toISOString, toISOStringOrNull } from '@/lib/utils/date-transforms';
-import { getCreatedAt } from '@/lib/utils/metadata';
+import { createEmptyListCache, createPrefetchMeta, getCreatedAt, toISOString, toISOStringOrNull } from '@/lib/utils';
 
 import { getModeratorMessageForRound } from '../utils/participant-completion-gate';
 import { validateInfiniteQueryCache } from './types';

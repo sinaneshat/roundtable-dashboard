@@ -21,7 +21,7 @@
 import type { ErrorCategory } from '@/api/core/enums';
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
-import { isObject } from '@/lib/utils/type-guards';
+import { isObject } from '@/lib/utils';
 
 // ============================================================================
 // TYPE DEFINITIONS

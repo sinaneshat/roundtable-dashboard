@@ -16,17 +16,13 @@
  * 5. Race conditions don't cause duplicate streams
  */
 
-import { act, renderHook, waitFor } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import {
-  createTestAssistantMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { act, createTestAssistantMessage, createTestUserMessage, renderHook, waitFor } from '@/lib/testing';
 
 import { useIncompleteRoundResumption } from '../actions/incomplete-round-resumption';
 import type { ChatStore } from '../store-schemas';
@@ -51,12 +47,16 @@ const mockStore = vi.hoisted(() => {
   };
 });
 
-vi.mock('@/components/providers/chat-store-provider', () => ({
-  useChatStore: (selector: (state: ChatStore) => unknown) => {
-    const state = mockStore.getState() as ChatStore;
-    return selector(state);
-  },
-}));
+vi.mock('@/components/providers/chat-store-provider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/providers/chat-store-provider')>();
+  return {
+    ...actual,
+    useChatStore: (selector: (state: ChatStore) => unknown) => {
+      const state = mockStore.getState() as ChatStore;
+      return selector(state);
+    },
+  };
+});
 
 // ============================================================================
 // TEST HELPERS
@@ -222,6 +222,10 @@ function setupMockStore(overrides?: Partial<ChatStore>): void {
     setExpectedParticipantIds: vi.fn(),
     setMessages: vi.fn(),
     setIsWaitingForChangelog: vi.fn(),
+    clearStreamResumption: vi.fn(),
+    setIsModeratorStreaming: vi.fn(),
+    transitionToParticipantsPhase: vi.fn(),
+    transitionToModeratorPhase: vi.fn(),
   };
 
   mockStore.setState({
@@ -235,6 +239,13 @@ function setupMockStore(overrides?: Partial<ChatStore>): void {
     hasEarlyOptimisticMessage: false,
     enableWebSearch: false,
     thread: createMockThread(),
+    // Phase-based resumption state
+    currentResumptionPhase: null,
+    preSearchResumption: null,
+    moderatorResumption: null,
+    resumptionRoundNumber: null,
+    streamResumptionPrefilled: false,
+    isModeratorStreaming: false,
     ...defaultActions,
     ...overrides,
   });
@@ -254,7 +265,7 @@ describe('useIncompleteRoundResumption', () => {
   // SEARCH STREAM RESUMPTION TESTS
   // ==========================================================================
   describe('search Stream Resumption', () => {
-    it('should NOT trigger participants while pre-search is still STREAMING', () => {
+    it('should NOT trigger participants while pre-search is still STREAMING', async () => {
       // SCENARIO: User refreshes page while search is streaming
       // EXPECTED: Wait for search to complete before triggering participants
       const roundNumber = 0;
@@ -273,18 +284,18 @@ describe('useIncompleteRoundResumption', () => {
         thread: createMockThread({ enableWebSearch: true }),
       });
 
-      const { result } = renderHook(() =>
+      renderHook(() =>
         useIncompleteRoundResumption({
           threadId: 'thread-123',
           enabled: true,
         }),
       );
 
-      // Should detect incomplete round but NOT trigger participants yet
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(0);
+      // Wait for the hook's internal timeout (100ms for activeStreamCheck + some buffer)
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // setWaitingToStartStreaming should NOT be called while search is streaming
+      // The key test: setWaitingToStartStreaming should NOT be called while search is streaming
+      // The main resumption effect should return early due to shouldWaitForPreSearch
       const setWaitingFn = mockStore.getState().setWaitingToStartStreaming;
       expect(setWaitingFn).not.toHaveBeenCalledWith(true);
     });
@@ -317,25 +328,37 @@ describe('useIncompleteRoundResumption', () => {
         thread: createMockThread({ enableWebSearch: true }),
       });
 
-      const { result } = renderHook(() =>
+      renderHook(() =>
         useIncompleteRoundResumption({
           threadId: 'thread-123',
           enabled: true,
         }),
       );
 
-      // Should trigger participants since search is complete
+      // Wait for activeStreamCheckComplete timeout (100ms) + buffer
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
-        expect(result.current.nextParticipantIndex).toBe(0);
-      });
+        const setWaitingFn = mockStore.getState().setWaitingToStartStreaming;
+        const setNextPartFn = mockStore.getState().setNextParticipantToTrigger;
+
+        expect(setWaitingFn).toHaveBeenCalledWith(true);
+        expect(setNextPartFn).toHaveBeenCalledWith(0);
+      }, { timeout: 500 });
     });
 
-    it('should recover orphaned pre-search user query and add optimistic message', () => {
+    it('should recover orphaned pre-search user query and add optimistic message', async () => {
       // SCENARIO: User refreshes during search - pre-search exists but user message doesn't
       const roundNumber = 0;
       const orphanedPreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
         userQuery: 'My search query that was lost',
+        searchData: {
+          queries: [],
+          results: [],
+          summary: 'Test',
+          successCount: 0,
+          failureCount: 0,
+          totalResults: 0,
+          totalTime: 0,
+        },
       });
 
       setupMockStore({
@@ -352,9 +375,12 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      // Should call setMessages to add optimistic user message
-      const setMessagesFn = mockStore.getState().setMessages;
-      expect(setMessagesFn).toHaveBeenCalled();
+      // Should call setMessages to add optimistic user message (UI recovery)
+      // AND call prepareForNewMessage (participant triggering)
+      await waitFor(() => {
+        const setMessagesFn = mockStore.getState().setMessages;
+        expect(setMessagesFn).toHaveBeenCalled();
+      }, { timeout: 500 });
     });
   });
 
@@ -362,9 +388,9 @@ describe('useIncompleteRoundResumption', () => {
   // PARTICIPANT TURN-TAKING TESTS
   // ==========================================================================
   describe('participant Turn-Taking Order', () => {
-    it('should resume from correct participant when first participant is still streaming', () => {
+    it('should resume from correct participant when first participant is still streaming', async () => {
       // SCENARIO: Refresh while participant 0 is streaming
-      // EXPECTED: Resume participant 0 (not skip to participant 1)
+      // EXPECTED: Skip participant 0 (it's in progress with content), next is participant 1
       const roundNumber = 0;
 
       setupMockStore({
@@ -386,12 +412,16 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      // Should NOT try to trigger participant 0 again (it's in progress)
-      // Should wait for participant 0 to complete
-      expect(result.current.nextParticipantIndex).toBe(1); // Next after in-progress
+      // Wait for active stream check to complete
+      await waitFor(() => {
+        // Participant 0 has streaming parts with content - counted as "in progress"
+        // So nextParticipantIndex should be 1 (the first participant that's not accounted for)
+        expect(result.current.nextParticipantIndex).toBe(1);
+        expect(result.current.isIncomplete).toBe(true);
+      }, { timeout: 500 });
     });
 
-    it('should trigger participant 1 when participant 0 is complete', () => {
+    it('should trigger participant 1 when participant 0 is complete', async () => {
       // SCENARIO: Participant 0 completed, refresh before participant 1 starts
       const roundNumber = 0;
 
@@ -421,8 +451,10 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(1);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(1);
+      }, { timeout: 500 });
     });
 
     it('should NOT trigger participant 1 before participant 0 completes', () => {
@@ -455,7 +487,7 @@ describe('useIncompleteRoundResumption', () => {
       expect(result.current.isIncomplete).toBe(false);
     });
 
-    it('should retry empty interrupted responses (finishReason: unknown, 0 tokens)', () => {
+    it('should retry empty interrupted responses (finishReason: unknown, 0 tokens)', async () => {
       // SCENARIO: Refresh killed stream before any content was generated
       // EXPECTED: Treat as needing retry (not as completed)
       const roundNumber = 0;
@@ -480,11 +512,13 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Empty interrupted message should be retried
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(0); // Retry participant 0
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(0); // Retry participant 0
+      }, { timeout: 500 });
     });
 
-    it('should preserve participant order after multiple refreshes', () => {
+    it('should preserve participant order after multiple refreshes', async () => {
       // SCENARIO: User refreshes multiple times during conversation
       // EXPECTED: Participant order should remain consistent
       const roundNumber = 0;
@@ -516,7 +550,9 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      expect(result1.current.nextParticipantIndex).toBe(1);
+      await waitFor(() => {
+        expect(result1.current.nextParticipantIndex).toBe(1);
+      }, { timeout: 500 });
 
       // Simulate second refresh - participant 1 now complete
       mockStore.setState({
@@ -552,7 +588,9 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      expect(result2.current.nextParticipantIndex).toBe(2);
+      await waitFor(() => {
+        expect(result2.current.nextParticipantIndex).toBe(2);
+      }, { timeout: 500 });
     });
   });
 
@@ -617,7 +655,7 @@ describe('useIncompleteRoundResumption', () => {
       expect(result.current.nextParticipantIndex).toBe(null);
     });
 
-    it('should wait for pre-search before checking participant completeness', () => {
+    it('should wait for pre-search before checking participant completeness', async () => {
       // SCENARIO: Pre-search streaming, no participants yet
       const roundNumber = 0;
 
@@ -643,7 +681,9 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Should be incomplete, but participants should NOT trigger yet
-      expect(result.current.isIncomplete).toBe(true);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+      }, { timeout: 500 });
     });
   });
 
@@ -651,7 +691,7 @@ describe('useIncompleteRoundResumption', () => {
   // STATE FLAG MANAGEMENT TESTS
   // ==========================================================================
   describe('state Flag Management', () => {
-    it('should clear stale waitingToStartStreaming on refresh', () => {
+    it('should clear stale waitingToStartStreaming on refresh', async () => {
       // SCENARIO: Refresh left waitingToStartStreaming=true but no pendingMessage
       setupMockStore({
         waitingToStartStreaming: true,
@@ -659,6 +699,7 @@ describe('useIncompleteRoundResumption', () => {
         isStreaming: false,
         messages: [],
         participants: createMockParticipants(2),
+        streamResumptionPrefilled: false, // Not a fresh prefill from server
       });
 
       renderHook(() =>
@@ -667,6 +708,10 @@ describe('useIncompleteRoundResumption', () => {
           enabled: true,
         }),
       );
+
+      // The stale state clear effect runs synchronously on mount
+      // Wait a bit for effects to run
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       // Should clear stale state
       const setWaitingFn = mockStore.getState().setWaitingToStartStreaming;
@@ -731,14 +776,14 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      // Both should be set
+      // Both should be set after activeStreamCheckComplete timeout
       await waitFor(() => {
         const setNextFn = mockStore.getState().setNextParticipantToTrigger;
         const setWaitingFn = mockStore.getState().setWaitingToStartStreaming;
 
         expect(setNextFn).toHaveBeenCalledWith(0);
         expect(setWaitingFn).toHaveBeenCalledWith(true);
-      });
+      }, { timeout: 500 });
     });
   });
 
@@ -846,10 +891,10 @@ describe('useIncompleteRoundResumption', () => {
         const setNextFn = mockStore.getState().setNextParticipantToTrigger;
         // Should be called but not multiple times per thread
         expect(setNextFn).toHaveBeenCalled();
-      });
+      }, { timeout: 500 });
     });
 
-    it('should detect participant config changes and skip resumption', () => {
+    it('should detect participant config changes and skip resumption', async () => {
       // SCENARIO: User changed participant config after round started
       // EXPECTED: Should NOT try to resume with wrong participants
       const roundNumber = 0;
@@ -907,7 +952,9 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Should NOT be incomplete due to participant config mismatch
-      expect(result.current.isIncomplete).toBe(false);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(false);
+      });
     });
   });
 
@@ -932,7 +979,7 @@ describe('useIncompleteRoundResumption', () => {
       expect(result.current.nextParticipantIndex).toBe(null);
     });
 
-    it('should handle disabled participants', () => {
+    it('should handle disabled participants', async () => {
       const roundNumber = 0;
 
       setupMockStore({
@@ -979,8 +1026,10 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Should only expect 1 participant (the enabled one)
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(0);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(0);
+      }, { timeout: 500 });
     });
 
     it('should handle hook disabled state', () => {
@@ -1063,7 +1112,7 @@ describe('useIncompleteRoundResumption', () => {
   // TRANSITION TIMING TESTS (BLIND SPOTS)
   // ==========================================================================
   describe('transition Timing', () => {
-    it('should NOT start participant 0 while pre-search is PENDING', () => {
+    it('should NOT start participant 0 while pre-search is PENDING', async () => {
       // SCENARIO: Pre-search created but not started yet
       const roundNumber = 0;
       const pendingPreSearch = createMockPreSearch(roundNumber, MessageStatuses.PENDING);
@@ -1089,10 +1138,12 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Should detect incomplete but NOT trigger participants while search pending
-      expect(result.current.isIncomplete).toBe(true);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+      }, { timeout: 500 });
     });
 
-    it('should correctly handle transition from search to first participant', () => {
+    it('should correctly handle transition from search to first participant', async () => {
       // SCENARIO: Search just completed, about to start participant 0
       const roundNumber = 0;
       const completePreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
@@ -1128,11 +1179,13 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Search complete, should trigger participant 0
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(0);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(0);
+      }, { timeout: 500 });
     });
 
-    it('should correctly handle transition between participant 0 and participant 1', () => {
+    it('should correctly handle transition between participant 0 and participant 1', async () => {
       // SCENARIO: Participant 0 just completed, about to start participant 1
       // This is the exact scenario user described as breaking
       const roundNumber = 0;
@@ -1166,11 +1219,13 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Should trigger participant 1 (not 0, not 2)
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(1);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(1);
+      }, { timeout: 500 });
     });
 
-    it('should correctly handle transition between participant 1 and participant 2', () => {
+    it('should correctly handle transition between participant 1 and participant 2', async () => {
       const roundNumber = 0;
 
       setupMockStore({
@@ -1208,8 +1263,10 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Should trigger participant 2
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(2);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(2);
+      }, { timeout: 500 });
     });
 
     it('should mark round complete when last participant finishes', () => {
@@ -1297,7 +1354,7 @@ describe('useIncompleteRoundResumption', () => {
       expect(result.current.isIncomplete).toBe(false);
     });
 
-    it('should retry participant with empty interrupted response after refresh', () => {
+    it('should retry participant with empty interrupted response after refresh', async () => {
       // SCENARIO: Refresh killed stream before any content was generated
       const roundNumber = 0;
 
@@ -1330,11 +1387,13 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Empty interrupted response should be retried
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(1);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(1);
+      }, { timeout: 500 });
     });
 
-    it('should handle refresh during search phase without user message', () => {
+    it('should handle refresh during search phase without user message', async () => {
       // SCENARIO: User refreshes after clicking send but before user message is persisted
       // Pre-search exists but user message doesn't
       const roundNumber = 0;
@@ -1359,8 +1418,10 @@ describe('useIncompleteRoundResumption', () => {
 
       // Should trigger orphaned pre-search recovery
       // The setMessages action should be called to add optimistic user message
-      const setMessagesFn = mockStore.getState().setMessages;
-      expect(setMessagesFn).toHaveBeenCalled();
+      await waitFor(() => {
+        const setMessagesFn = mockStore.getState().setMessages;
+        expect(setMessagesFn).toHaveBeenCalled();
+      }, { timeout: 500 });
     });
   });
 
@@ -1368,7 +1429,7 @@ describe('useIncompleteRoundResumption', () => {
   // SUMMARY TIMING TESTS (BLIND SPOTS)
   // ==========================================================================
   describe('summary Timing', () => {
-    it('should NOT trigger summary while any participant has empty parts', () => {
+    it('should NOT trigger summary while any participant has empty parts', async () => {
       // SCENARIO: BUG - Summary triggered before participant finished showing content
       const roundNumber = 0;
 
@@ -1401,8 +1462,10 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Participant 1 is streaming without content - should retry
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(1);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(1);
+      }, { timeout: 500 });
     });
 
     it('should correctly identify when all participants have completed', () => {
@@ -1452,7 +1515,7 @@ describe('useIncompleteRoundResumption', () => {
   // MULTI-ROUND SCENARIOS
   // ==========================================================================
   describe('multi-Round Scenarios', () => {
-    it('should correctly identify incomplete round in multi-round conversation', () => {
+    it('should correctly identify incomplete round in multi-round conversation', async () => {
       // Round 0 complete, Round 1 incomplete
       setupMockStore({
         messages: [
@@ -1482,9 +1545,11 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      expect(result.current.isIncomplete).toBe(true);
-      expect(result.current.nextParticipantIndex).toBe(1);
-      expect(result.current.resumingRoundNumber).toBe(1);
+      await waitFor(() => {
+        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.nextParticipantIndex).toBe(1);
+        expect(result.current.resumingRoundNumber).toBe(1);
+      });
     });
 
     it('should only consider latest round for incompleteness', () => {

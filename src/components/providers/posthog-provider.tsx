@@ -41,7 +41,6 @@ const PostHogProviderInternal = dynamic(
     import('posthog-js').then((posthogModule) => {
       const posthog = posthogModule.default;
 
-      // Import PHProvider
       return import('posthog-js/react').then((reactModule) => {
         const PHProvider = reactModule.PostHogProvider;
 

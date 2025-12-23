@@ -367,6 +367,19 @@ function isArrayBuffer(value: unknown): value is ArrayBuffer {
   return false;
 }
 
+/**
+ * Type guard for ReadableStream
+ * ✅ TYPE-SAFE: Replaces `as ReadableStream` casting
+ */
+function isReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
+  return (
+    value != null
+    && typeof value === 'object'
+    && 'getReader' in value
+    && typeof value.getReader === 'function'
+  );
+}
+
 async function putFileLocal(
   key: string,
   data: ArrayBuffer | ReadableStream | string | Uint8Array,
@@ -391,10 +404,10 @@ async function putFileLocal(
       buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
     } else if (typeof data === 'string') {
       buffer = Buffer.from(data);
-    } else if (typeof (data as ReadableStream).getReader === 'function') {
-      // ReadableStream
+    } else if (isReadableStream(data)) {
+      // ✅ TYPE-SAFE: Use type guard instead of force casting
       const chunks: Uint8Array[] = [];
-      const reader = (data as ReadableStream<Uint8Array>).getReader();
+      const reader = data.getReader();
       while (true) {
         const { done, value } = await reader.read();
         if (done)
@@ -530,10 +543,11 @@ async function getFileLocal(
     }
 
     // Convert Uint8Array to ArrayBuffer
-    const arrayBuffer = fileBuffer.buffer.slice(
-      fileBuffer.byteOffset,
-      fileBuffer.byteOffset + fileBuffer.byteLength,
-    ) as ArrayBuffer;
+    // ✅ TYPE-SAFE: Proper conversion handling both buffer types
+    // Create a new ArrayBuffer to ensure proper type (not SharedArrayBuffer)
+    const arrayBuffer = new ArrayBuffer(fileBuffer.byteLength);
+    const view = new Uint8Array(arrayBuffer);
+    view.set(fileBuffer);
 
     return { data: arrayBuffer, metadata };
   } catch {

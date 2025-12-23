@@ -21,8 +21,7 @@ import { describe, expect, it } from 'vitest';
 import { ChatModes, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { getParticipantIndex, isModeratorMessage } from '@/lib/utils/metadata';
-import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
+import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 

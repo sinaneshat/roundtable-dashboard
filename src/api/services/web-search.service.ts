@@ -34,14 +34,14 @@ import {
 } from 'ai';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
-import { AIModels } from '@/api/core/ai-models';
+import { AIModels } from '@/api/core';
 import type {
   WebSearchComplexity,
   WebSearchRawContentFormat,
   WebSearchTimeRange,
   WebSearchTopic,
 } from '@/api/core/enums';
-import { UIMessageRoles, WebSearchRawContentFormats } from '@/api/core/enums';
+import { UIMessageRoles, WebSearchAnswerModes, WebSearchRawContentFormats } from '@/api/core/enums';
 import type {
   WebSearchParameters,
   WebSearchResult,
@@ -1190,10 +1190,10 @@ export function streamAnswerSummary(
 
     // Build context from search results
     const context = results
-      .slice(0, mode === 'advanced' ? 10 : 5)
+      .slice(0, mode === WebSearchAnswerModes.ADVANCED ? 10 : 5)
       .map((r, i) => {
         const content = r.fullContent || r.content;
-        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === 'advanced' ? 1500 : 800)}`;
+        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchAnswerModes.ADVANCED ? 1500 : 800)}`;
       })
       .join('\n\n---\n\n');
 
@@ -1204,7 +1204,7 @@ export function streamAnswerSummary(
     return streamText({
       model: client.chat(AIModels.WEB_SEARCH),
       system: systemPrompt,
-      prompt: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === 'advanced' ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+      prompt: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
       temperature: 0.5,
       // Note: maxTokens controlled by model config, not streamText params
     });
@@ -1255,10 +1255,10 @@ async function generateAnswerSummary(
 
     // Build context from search results
     const context = results
-      .slice(0, mode === 'advanced' ? 10 : 5)
+      .slice(0, mode === WebSearchAnswerModes.ADVANCED ? 10 : 5)
       .map((r, i) => {
         const content = r.fullContent || r.content;
-        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === 'advanced' ? 1500 : 800)}`;
+        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchAnswerModes.ADVANCED ? 1500 : 800)}`;
       })
       .join('\n\n---\n\n');
 
@@ -1274,13 +1274,13 @@ async function generateAnswerSummary(
           parts: [
             {
               type: 'text',
-              text: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === 'advanced' ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+              text: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
             },
           ],
         },
       ],
       system: systemPrompt,
-      maxTokens: mode === 'advanced' ? 500 : 200,
+      maxTokens: mode === WebSearchAnswerModes.ADVANCED ? 500 : 200,
       temperature: 0.5,
     });
 

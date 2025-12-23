@@ -18,7 +18,7 @@ import type { ChatMode } from '@/api/core/enums';
 import { MessageRoles } from '@/api/core/enums';
 import { getModelCapabilities } from '@/api/services/model-capabilities.service';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import {
   useCreateThreadMutation,
   useUpdateThreadMutation,
@@ -26,14 +26,7 @@ import {
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast, showApiWarningToast } from '@/lib/toast';
-import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
-import { devLog } from '@/lib/utils/dev-logger';
-import { isVisionRequiredMimeType } from '@/lib/utils/file-capability';
-import { useMemoizedReturn } from '@/lib/utils/memo-utils';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { getRoundNumber } from '@/lib/utils/metadata';
-import { chatParticipantsToConfig, getParticipantModelIds, prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
-import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
+import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, devLog, getParticipantModelIds, getRoundNumber, isVisionRequiredMimeType, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';

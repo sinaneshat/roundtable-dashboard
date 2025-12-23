@@ -22,9 +22,8 @@ import {
   MessageStatuses,
   ScreenModes,
 } from '@/api/core/enums';
-import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
-import { getAssistantMetadata, getRoundNumber } from '@/lib/utils/metadata';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { useChatStore, useChatStoreApi } from '@/components/providers';
+import { getAssistantMetadata, getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -54,15 +53,31 @@ export type FlowContext = {
   screenMode: ScreenMode | null;
 };
 
+// ============================================================================
+// FLOW ACTION TYPE ENUM (Simplified - internal use only)
+// ============================================================================
+
+// CONSTANT OBJECT - For usage in code
+const FlowActionTypes = {
+  CREATE_THREAD: 'CREATE_THREAD' as const,
+  START_PARTICIPANT_STREAMING: 'START_PARTICIPANT_STREAMING' as const,
+  CREATE_MODERATOR: 'CREATE_MODERATOR' as const,
+  START_MODERATOR_STREAMING: 'START_MODERATOR_STREAMING' as const,
+  INVALIDATE_CACHE: 'INVALIDATE_CACHE' as const,
+  NAVIGATE: 'NAVIGATE' as const,
+  COMPLETE_FLOW: 'COMPLETE_FLOW' as const,
+  RESET: 'RESET' as const,
+} as const;
+
 export type FlowAction
-  = | { type: 'CREATE_THREAD' }
-    | { type: 'START_PARTICIPANT_STREAMING' }
-    | { type: 'CREATE_MODERATOR' }
-    | { type: 'START_MODERATOR_STREAMING' }
-    | { type: 'INVALIDATE_CACHE' }
-    | { type: 'NAVIGATE'; slug: string }
-    | { type: 'COMPLETE_FLOW' }
-    | { type: 'RESET' };
+  = | { type: typeof FlowActionTypes.CREATE_THREAD }
+    | { type: typeof FlowActionTypes.START_PARTICIPANT_STREAMING }
+    | { type: typeof FlowActionTypes.CREATE_MODERATOR }
+    | { type: typeof FlowActionTypes.START_MODERATOR_STREAMING }
+    | { type: typeof FlowActionTypes.INVALIDATE_CACHE }
+    | { type: typeof FlowActionTypes.NAVIGATE; slug: string }
+    | { type: typeof FlowActionTypes.COMPLETE_FLOW }
+    | { type: typeof FlowActionTypes.RESET };
 
 function determineFlowState(context: FlowContext): FlowState {
   if (context.hasNavigated) {
@@ -141,7 +156,7 @@ function getNextAction(
     && prevState !== FlowStates.CREATING_MODERATOR
     && context.threadId
   ) {
-    return { type: 'CREATE_MODERATOR' };
+    return { type: FlowActionTypes.CREATE_MODERATOR };
   }
 
   if (
@@ -150,7 +165,7 @@ function getNextAction(
     && context.threadSlug
     && !context.hasNavigated
   ) {
-    return { type: 'INVALIDATE_CACHE' };
+    return { type: FlowActionTypes.INVALIDATE_CACHE };
   }
 
   if (
@@ -161,7 +176,7 @@ function getNextAction(
     if (prevState === FlowStates.STREAMING_MODERATOR) {
       return null;
     }
-    return { type: 'NAVIGATE', slug: context.threadSlug };
+    return { type: FlowActionTypes.NAVIGATE, slug: context.threadSlug };
   }
 
   return null;
@@ -407,7 +422,7 @@ export function useFlowStateMachine(
 
     if (action) {
       switch (action.type) {
-        case 'CREATE_MODERATOR': {
+        case FlowActionTypes.CREATE_MODERATOR: {
           // ✅ TEXT STREAMING: Mark moderator as ready to create
           // The actual moderator streaming is triggered by useModeratorTrigger hook
           const { threadId, currentRound } = context;
@@ -454,7 +469,7 @@ export function useFlowStateMachine(
           break;
         }
 
-        case 'INVALIDATE_CACHE': {
+        case FlowActionTypes.INVALIDATE_CACHE: {
           // ✅ TEXT STREAMING: Moderator messages are now regular messages in chatMessage table
           // Displayed inline via ChatMessageList, no separate cache to invalidate
 
@@ -483,7 +498,7 @@ export function useFlowStateMachine(
           break;
         }
 
-        case 'NAVIGATE': {
+        case FlowActionTypes.NAVIGATE: {
           // =========================================================================
           // ✅ CRITICAL FIX: NO SERVER NAVIGATION - Eliminates loading.tsx skeleton
           // =========================================================================

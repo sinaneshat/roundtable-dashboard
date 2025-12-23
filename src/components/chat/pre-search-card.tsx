@@ -13,7 +13,7 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { FadeIn } from '@/components/ui/motion';
 import { queryKeys } from '@/lib/data/query-keys';

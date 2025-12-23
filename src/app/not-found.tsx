@@ -1,6 +1,5 @@
-import { NotFoundScreen } from '@/containers/screens/general';
+import NotFoundScreen from '@/containers/screens/general/NotFoundScreen';
 
-// Force dynamic rendering to prevent static generation issues
 export const dynamic = 'force-dynamic';
 
 export default function NotFound() {

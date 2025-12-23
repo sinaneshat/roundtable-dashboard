@@ -19,7 +19,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/components/chat/round-summary/moderator-constants';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
 
 import { createChatStore } from '../store';
 

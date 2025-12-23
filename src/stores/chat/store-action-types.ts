@@ -44,9 +44,7 @@ import type {
   StoredPreSearch,
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import type { PendingAttachment } from '@/hooks/utils/use-chat-attachments';
-import type { FilePreview } from '@/hooks/utils/use-file-preview';
-import type { UploadItem } from '@/hooks/utils/use-file-upload';
+import type { FilePreview, PendingAttachment, UploadItem } from '@/hooks/utils';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 

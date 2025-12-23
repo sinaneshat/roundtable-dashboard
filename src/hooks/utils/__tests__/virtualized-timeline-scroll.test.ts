@@ -12,9 +12,10 @@
  * 7. scrollMargin is calculated correctly
  */
 
-import { act, renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { act, renderHook } from '@/lib/testing';
 
 import type { TimelineItem } from '../useThreadTimeline';
 import { useVirtualizedTimeline } from '../useVirtualizedTimeline';

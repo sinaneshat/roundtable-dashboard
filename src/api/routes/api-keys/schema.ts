@@ -7,6 +7,8 @@
 
 import { z } from '@hono/zod-openapi';
 
+// ✅ IMPORT FIX: Import directly from source files instead of barrel to prevent
+// server-only code (handlers.ts → @/db) from leaking into client bundles.
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import {
   apiKeyInsertSchema,

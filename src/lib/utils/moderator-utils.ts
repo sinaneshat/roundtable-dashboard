@@ -107,8 +107,9 @@ export function normalizeModeratorData<T>(data: T): T {
     return data;
   }
 
-  // Deep clone to avoid mutation - preserve original type structure
-  const normalized = JSON.parse(JSON.stringify(data)) as T;
+  // Deep clone to avoid mutation - JSON round-trip preserves structure
+  // Type is preserved because we're cloning the exact same object structure
+  const normalized: T = JSON.parse(JSON.stringify(data));
 
   // Ensure metrics are clamped to 0-100 range if present
   if (isObject(normalized) && 'metrics' in normalized && isObject(normalized.metrics)) {

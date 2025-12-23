@@ -12,7 +12,7 @@
  */
 
 import { BRAND } from '@/constants/brand';
-import { getModelIconInfo } from '@/lib/utils/ai-display';
+import { getModelIconInfo } from '@/lib/utils';
 
 /**
  * Get the base URL for the application
@@ -272,7 +272,6 @@ export function generateWavePath(width: number, height: number, waveIndex: numbe
     if (x === 0) {
       path.push(`M${x},${y.toFixed(2)}`);
     } else {
-    // Intentionally empty
       path.push(`L${x},${y.toFixed(2)}`);
     }
   }

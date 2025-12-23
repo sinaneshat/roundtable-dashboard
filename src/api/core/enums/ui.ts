@@ -170,3 +170,184 @@ export const ErrorSeverities = {
   WARNING: 'warning' as const,
   INFO: 'info' as const,
 } as const;
+
+// ============================================================================
+// IMAGE STATE (for SmartImage component)
+// ============================================================================
+
+export const IMAGE_STATES = ['loading', 'loaded', 'error'] as const;
+
+export const DEFAULT_IMAGE_STATE: ImageState = 'loading';
+
+export const ImageStateSchema = z.enum(IMAGE_STATES).openapi({
+  description: 'Image loading state',
+  example: 'loading',
+});
+
+export type ImageState = z.infer<typeof ImageStateSchema>;
+
+export const ImageStates = {
+  LOADING: 'loading' as const,
+  LOADED: 'loaded' as const,
+  ERROR: 'error' as const,
+} as const;
+
+// ============================================================================
+// MARKDOWN PRESET (for Markdown component)
+// ============================================================================
+
+export const MARKDOWN_PRESETS = ['default', 'compact', 'web-content'] as const;
+
+export const DEFAULT_MARKDOWN_PRESET: MarkdownPreset = 'default';
+
+export const MarkdownPresetSchema = z.enum(MARKDOWN_PRESETS).openapi({
+  description: 'Markdown rendering preset',
+  example: 'default',
+});
+
+export type MarkdownPreset = z.infer<typeof MarkdownPresetSchema>;
+
+export const MarkdownPresets = {
+  DEFAULT: 'default' as const,
+  COMPACT: 'compact' as const,
+  WEB_CONTENT: 'web-content' as const,
+} as const;
+
+// ============================================================================
+// CONFIRMATION DIALOG VARIANT
+// ============================================================================
+
+export const CONFIRMATION_DIALOG_VARIANTS = ['default', 'destructive', 'warning'] as const;
+
+export const DEFAULT_CONFIRMATION_DIALOG_VARIANT: ConfirmationDialogVariant = 'default';
+
+export const ConfirmationDialogVariantSchema = z.enum(CONFIRMATION_DIALOG_VARIANTS).openapi({
+  description: 'Confirmation dialog visual variant',
+  example: 'destructive',
+});
+
+export type ConfirmationDialogVariant = z.infer<typeof ConfirmationDialogVariantSchema>;
+
+export const ConfirmationDialogVariants = {
+  DEFAULT: 'default' as const,
+  DESTRUCTIVE: 'destructive' as const,
+  WARNING: 'warning' as const,
+} as const;
+
+// ============================================================================
+// ERROR CONTEXT (for Error Boundary)
+// ============================================================================
+
+export const ERROR_CONTEXTS = ['chat', 'message-list', 'configuration', 'pre-search', 'general'] as const;
+
+export const DEFAULT_ERROR_CONTEXT: ErrorContext = 'general';
+
+export const ErrorContextSchema = z.enum(ERROR_CONTEXTS).openapi({
+  description: 'Error boundary context',
+  example: 'chat',
+});
+
+export type ErrorContext = z.infer<typeof ErrorContextSchema>;
+
+export const ErrorContexts = {
+  CHAT: 'chat' as const,
+  MESSAGE_LIST: 'message-list' as const,
+  CONFIGURATION: 'configuration' as const,
+  PRE_SEARCH: 'pre-search' as const,
+  GENERAL: 'general' as const,
+} as const;
+
+// ============================================================================
+// ICON TYPE (for attachment preview)
+// ============================================================================
+
+export const ICON_TYPES = ['image', 'code', 'text', 'file'] as const;
+
+export const DEFAULT_ICON_TYPE: IconType = 'file';
+
+export const IconTypeSchema = z.enum(ICON_TYPES).openapi({
+  description: 'Attachment icon type',
+  example: 'image',
+});
+
+export type IconType = z.infer<typeof IconTypeSchema>;
+
+export const IconTypes = {
+  IMAGE: 'image' as const,
+  CODE: 'code' as const,
+  TEXT: 'text' as const,
+  FILE: 'file' as const,
+} as const;
+
+// ============================================================================
+// BORDER GRADIENT DIRECTION
+// ============================================================================
+
+export const BORDER_GRADIENT_DIRECTIONS = ['TOP', 'LEFT', 'BOTTOM', 'RIGHT'] as const;
+
+export const BorderGradientDirectionSchema = z.enum(BORDER_GRADIENT_DIRECTIONS).openapi({
+  description: 'Border gradient animation direction',
+  example: 'TOP',
+});
+
+export type BorderGradientDirection = z.infer<typeof BorderGradientDirectionSchema>;
+
+export const BorderGradientDirections = {
+  TOP: 'TOP' as const,
+  LEFT: 'LEFT' as const,
+  BOTTOM: 'BOTTOM' as const,
+  RIGHT: 'RIGHT' as const,
+} as const;
+
+// ============================================================================
+// LABELS (UI Display)
+// ============================================================================
+
+export const COMPONENT_SIZE_LABELS: Record<ComponentSize, string> = {
+  [ComponentSizes.SM]: 'Small',
+  [ComponentSizes.MD]: 'Medium',
+  [ComponentSizes.LG]: 'Large',
+  [ComponentSizes.XL]: 'Extra Large',
+  [ComponentSizes.ICON]: 'Icon',
+  [ComponentSizes.DEFAULT]: 'Default',
+} as const;
+
+export const IMAGE_STATE_LABELS: Record<ImageState, string> = {
+  [ImageStates.LOADING]: 'Loading',
+  [ImageStates.LOADED]: 'Loaded',
+  [ImageStates.ERROR]: 'Error',
+} as const;
+
+export const MARKDOWN_PRESET_LABELS: Record<MarkdownPreset, string> = {
+  [MarkdownPresets.DEFAULT]: 'Default',
+  [MarkdownPresets.COMPACT]: 'Compact',
+  [MarkdownPresets.WEB_CONTENT]: 'Web Content',
+} as const;
+
+// ============================================================================
+// VALIDATION HELPERS
+// ============================================================================
+
+export function isValidComponentSize(value: unknown): value is ComponentSize {
+  return typeof value === 'string' && COMPONENT_SIZES.includes(value as ComponentSize);
+}
+
+export function isValidImageState(value: unknown): value is ImageState {
+  return typeof value === 'string' && IMAGE_STATES.includes(value as ImageState);
+}
+
+export function isValidMarkdownPreset(value: unknown): value is MarkdownPreset {
+  return typeof value === 'string' && MARKDOWN_PRESETS.includes(value as MarkdownPreset);
+}
+
+export function isValidConfirmationDialogVariant(value: unknown): value is ConfirmationDialogVariant {
+  return typeof value === 'string' && CONFIRMATION_DIALOG_VARIANTS.includes(value as ConfirmationDialogVariant);
+}
+
+export function isValidErrorContext(value: unknown): value is ErrorContext {
+  return typeof value === 'string' && ERROR_CONTEXTS.includes(value as ErrorContext);
+}
+
+export function isValidIconType(value: unknown): value is IconType {
+  return typeof value === 'string' && ICON_TYPES.includes(value as IconType);
+}

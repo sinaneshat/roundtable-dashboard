@@ -16,7 +16,7 @@ import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
-import { createTestUserMessage } from '@/lib/testing/helpers';
+import { createTestUserMessage } from '@/lib/testing';
 
 import { createChatStore } from '../store';
 

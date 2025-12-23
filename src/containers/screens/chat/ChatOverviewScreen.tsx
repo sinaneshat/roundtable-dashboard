@@ -17,7 +17,7 @@ import { ConversationModeModal } from '@/components/chat/conversation-mode-modal
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider';
+import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
@@ -37,7 +37,7 @@ import {
   getIncompatibleModelIds,
   isVisionRequiredMimeType,
   threadHasVisionRequiredFiles,
-} from '@/lib/utils/file-capability';
+} from '@/lib/utils';
 import {
   useChatFormActions,
   useOverviewActions,
@@ -103,20 +103,30 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const { inputValue, selectedMode, selectedParticipants, enableWebSearch } = useChatStore(
+  // ✅ ZUSTAND v5: Consolidate all form and action selectors into single batch
+  const {
+    inputValue,
+    selectedMode,
+    selectedParticipants,
+    enableWebSearch,
+    preSearches,
+    messages,
+    setInputValue,
+    setSelectedMode,
+    setSelectedParticipants,
+    addParticipant,
+    removeParticipant,
+    updateParticipant,
+    setEnableWebSearch,
+    resetToOverview,
+  } = useChatStore(
     useShallow(s => ({
       inputValue: s.inputValue,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
       enableWebSearch: s.enableWebSearch,
-    })),
-  );
-
-  const preSearches = useChatStore(s => s.preSearches);
-  const messages = useChatStore(s => s.messages);
-
-  const { setInputValue, setSelectedMode, setSelectedParticipants, addParticipant, removeParticipant, updateParticipant, setEnableWebSearch } = useChatStore(
-    useShallow(s => ({
+      preSearches: s.preSearches,
+      messages: s.messages,
       setInputValue: s.setInputValue,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
@@ -124,9 +134,9 @@ export default function ChatOverviewScreen() {
       removeParticipant: s.removeParticipant,
       updateParticipant: s.updateParticipant,
       setEnableWebSearch: s.setEnableWebSearch,
+      resetToOverview: s.resetToOverview,
     })),
   );
-  const resetToOverview = useChatStore(s => s.resetToOverview);
 
   const storeApi = useChatStoreApi();
 
@@ -819,6 +829,7 @@ export default function ChatOverviewScreen() {
               mode="overview"
               onSubmit={handlePromptSubmit}
               chatAttachments={chatAttachments}
+              threadId={currentThread?.id || createdThreadId || undefined}
             />
           )}
 

@@ -3,10 +3,11 @@
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
 import { MessageRoles, RoundPhases } from '@/api/core/enums';
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/components/chat/round-summary/moderator-constants';
-import { getMessageMetadata, getRoundNumber } from '@/lib/utils/metadata';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { getMessageMetadata, getRoundNumber } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {
@@ -51,13 +52,16 @@ function parseAiSdkStreamLine(line: string): string | null {
 }
 
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
-  const thread = useStore(store, s => s.thread);
-  const createdThreadId = useStore(store, s => s.createdThreadId);
+  // ✅ PERFORMANCE FIX: Batch thread ID subscriptions
+  const { threadId, createdThreadId } = useStore(store, useShallow(s => ({
+    threadId: s.thread?.id,
+    createdThreadId: s.createdThreadId,
+  })));
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const triggeringRoundRef = useRef<number | null>(null);
 
-  const effectiveThreadId = thread?.id || createdThreadId || '';
+  const effectiveThreadId = threadId || createdThreadId || '';
 
   const triggerModerator = useCallback(async (
     roundNumber: number,
@@ -65,21 +69,14 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   ) => {
     const state = store.getState();
 
-    // eslint-disable-next-line no-console
-    console.log('[MOD]', JSON.stringify({ ev: 'start', rnd: roundNumber, msgs: participantMessageIds.length }));
-
     if (!effectiveThreadId) {
-      // eslint-disable-next-line no-console
-      console.log('[MOD]', JSON.stringify({ ev: 'err', rnd: roundNumber, reason: 'noThread' }));
-      state.completeModeratorStream();
+      state.completeStreaming();
       return;
     }
 
     const moderatorId = `${effectiveThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
-      // eslint-disable-next-line no-console
-      console.log('[MOD]', JSON.stringify({ ev: 'skip', rnd: roundNumber, reason: 'triggered' }));
-      state.completeModeratorStream();
+      state.completeStreaming();
       return;
     }
 
@@ -221,19 +218,8 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       const finalText = accumulatedText;
       const moderatorMessageId = `${effectiveThreadId}_r${roundNumber}_moderator`;
 
-      // eslint-disable-next-line no-console
-      console.log('[MOD]', JSON.stringify({ ev: 'done', rnd: roundNumber, len: finalText.length }));
-
       if (finalText.length > 0) {
         store.getState().setMessages((currentMessages) => {
-          // ✅ DEBUG: Log all message IDs to detect if wrong message gets updated
-          // eslint-disable-next-line no-console
-          console.log('[MOD-UPDATE]', JSON.stringify({
-            targetId: moderatorMessageId,
-            allIds: currentMessages.map(m => m.id),
-            textPreview: finalText.slice(0, 40),
-          }));
-
           const hasExistingPlaceholder = currentMessages.some(msg => msg.id === moderatorMessageId);
 
           if (hasExistingPlaceholder) {
@@ -270,10 +256,10 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
-      // eslint-disable-next-line no-console
-      console.log('[MOD]', JSON.stringify({ ev: 'err', rnd: roundNumber, msg: String(error).slice(0, 50) }));
+      // Error is silent - moderator failure is non-critical
     } finally {
-      store.getState().completeModeratorStream();
+      // ✅ FIX: Only call completeStreaming() - it already includes MODERATOR_STATE_RESET
+      // Previously calling both caused a duplicate state update and unnecessary re-renders
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;
@@ -288,11 +274,21 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     };
   }, []);
 
-  const isModeratorStreaming = useStore(store, s => s.isModeratorStreaming);
-  const currentResumptionPhase = useStore(store, s => s.currentResumptionPhase);
-  const resumptionRoundNumber = useStore(store, s => s.resumptionRoundNumber);
-  const messages = useStore(store, s => s.messages);
-  const participants = useStore(store, s => s.participants);
+  // ✅ PERFORMANCE FIX: Batch store subscriptions with useShallow to prevent cascading re-renders
+  // Previously 5 separate subscriptions caused 5 potential re-render cycles
+  const {
+    isModeratorStreaming,
+    currentResumptionPhase,
+    resumptionRoundNumber,
+    messages,
+    participants,
+  } = useStore(store, useShallow(s => ({
+    isModeratorStreaming: s.isModeratorStreaming,
+    currentResumptionPhase: s.currentResumptionPhase,
+    resumptionRoundNumber: s.resumptionRoundNumber,
+    messages: s.messages,
+    participants: s.participants,
+  })));
   const resumptionTriggerAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -346,9 +342,6 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     if (participantMessageIds.length < participants.length) {
       return;
     }
-
-    // eslint-disable-next-line no-console
-    console.log('[MOD]', JSON.stringify({ ev: 'resumption_trigger', rnd: resumptionRoundNumber, msgs: participantMessageIds.length }));
 
     resumptionTriggerAttemptedRef.current = triggerKey;
 

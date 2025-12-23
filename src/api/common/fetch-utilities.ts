@@ -8,8 +8,8 @@
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
-import type { EnhancedHTTPException } from '@/api/core/http-exceptions';
-import { HTTPExceptionFactory } from '@/api/core/http-exceptions';
+import type { EnhancedHTTPException } from '@/api/core';
+import { HTTPExceptionFactory } from '@/api/core';
 
 // CloudflareEnv is globally available from cloudflare-env.d.ts
 import { createError } from './error-handling';

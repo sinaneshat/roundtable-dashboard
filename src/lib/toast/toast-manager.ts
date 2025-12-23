@@ -70,7 +70,6 @@ function processToastQueue(): void {
       processToastQueue();
     }, 100);
   } else {
-    // Intentionally empty
     isProcessingQueue = false;
   }
 }
@@ -119,6 +118,21 @@ function showToastInternal(options: ToastOptions): void {
       )
     : undefined;
 
+  /**
+   * Type assertion helper for ToastAction elements
+   *
+   * React.createElement returns FunctionComponentElement but ToastActionElement expects ReactElement<typeof ToastAction>.
+   * These types are compatible at runtime but don't overlap in TypeScript's type system.
+   *
+   * This assertion is safe because:
+   * 1. We construct the element with ToastAction component and correct props
+   * 2. Runtime structure matches ToastActionElement expectations
+   * 3. No additional runtime validation needed - constructor guarantees shape
+   */
+  const toActionElement = (element: React.ReactElement | undefined): ToastActionElement | undefined => {
+    return element as ToastActionElement | undefined;
+  };
+
   const toastConfig: Parameters<typeof baseToast>[0] = {
     title,
     description,
@@ -126,11 +140,7 @@ function showToastInternal(options: ToastOptions): void {
       ? ToastVariants.DEFAULT
       : variant,
     duration,
-    // Double cast is necessary: React.createElement returns FunctionComponentElement<ToastActionProps>
-    // but ToastActionElement is defined as ReactElement<typeof ToastAction>. These types don't overlap
-    // (FunctionComponentElement props don't include 'displayName' from typeof ToastAction), but at
-    // runtime they're compatible. TypeScript requires the 'unknown' intermediate step for non-overlapping casts.
-    action: actionElement as unknown as ToastActionElement,
+    action: toActionElement(actionElement),
   };
 
   // Show the toast
@@ -158,7 +168,6 @@ export function toast(options: ToastOptions): string {
   if (activeToasts.size >= maxConcurrentToasts) {
     toastQueue.push(options);
   } else {
-    // Intentionally empty
     showToastInternal(options);
   }
 
@@ -428,17 +437,13 @@ export const toastManager = {
   },
 };
 
-// Export additional utilities
-// (createProgressToast is already exported above)
 export default toastManager;
 
-// ✅ MEMORY LEAK FIX: Make queue processing stoppable
-// Original code had setInterval that NEVER gets cleared - major memory leak
 let queueProcessingInterval: NodeJS.Timeout | null = null;
 
 function startQueueProcessing() {
   if (queueProcessingInterval) {
-    return; // Already running
+    return;
   }
   queueProcessingInterval = setInterval(processToastQueue, 500);
 }
@@ -450,15 +455,9 @@ function stopQueueProcessing() {
   }
 }
 
-// Auto-process queue when module loads (can be stopped if needed)
 if (typeof window !== 'undefined') {
   startQueueProcessing();
-
-  // ✅ MEMORY LEAK FIX: Cleanup on page unload (browser navigating away)
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', stopQueueProcessing);
-  }
+  window.addEventListener('beforeunload', stopQueueProcessing);
 }
 
-// Export stop function for testing/cleanup
 export { startQueueProcessing, stopQueueProcessing };

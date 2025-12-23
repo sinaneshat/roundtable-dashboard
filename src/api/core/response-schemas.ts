@@ -10,7 +10,7 @@
  *
  * @example Basic usage in route files
  * ```typescript
- * import { StandardApiResponses } from '@/api/core/response-schemas';
+ * import { StandardApiResponses } from '@/api/core';
  *
  * export const myRoute = createRoute({
  *   // ... route config
@@ -32,7 +32,7 @@
  *
  * @example Using helper functions
  * ```typescript
- * import { createProtectedRouteResponses } from '@/api/core/response-schemas';
+ * import { createProtectedRouteResponses } from '@/api/core';
  *
  * export const myProtectedRoute = createRoute({
  *   // ... route config

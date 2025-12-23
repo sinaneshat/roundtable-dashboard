@@ -23,7 +23,7 @@ import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 
 import { getPostHogClient } from '@/lib/posthog-server';
-import { isObject, isToolCall } from '@/lib/utils/type-guards';
+import { isObject, isToolCall } from '@/lib/utils';
 
 // ============================================================================
 // TYPE DEFINITIONS (Using AI SDK Types)

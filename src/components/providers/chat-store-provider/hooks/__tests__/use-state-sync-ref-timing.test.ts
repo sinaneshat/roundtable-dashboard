@@ -9,9 +9,10 @@
  * Solution: Use useLayoutEffect instead of useEffect for ref synchronization
  */
 
-import { act, renderHook } from '@testing-library/react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+
+import { act, renderHook } from '@/lib/testing';
 
 /**
  * Test that useLayoutEffect runs before useEffect

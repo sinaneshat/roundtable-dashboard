@@ -23,7 +23,7 @@ import type {
 } from '@/api/routes/chat/schema';
 import { DbPreSearchDataSchema, isPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getRoundNumber } from '@/lib/utils';
 
 import { filterDbToPreSearchMessages } from './message-type-guards';
 

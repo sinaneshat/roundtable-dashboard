@@ -13,8 +13,7 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
 import { showApiErrorToast } from '@/lib/toast';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { getPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils/web-search-utils';
+import { getCurrentRoundNumber, getPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseStuckStreamDetectionParams = {

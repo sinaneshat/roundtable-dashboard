@@ -2,7 +2,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { createError } from '@/api/common/error-handling';
-import { createHandler, Responses } from '@/api/core';
+import { createHandler, Responses, ThreadIdParamSchema } from '@/api/core';
 import type { MessageStatus, RoundPhase } from '@/api/core/enums';
 import { MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
 import { getActivePreSearchStreamId, getPreSearchStreamChunks, getPreSearchStreamMetadata } from '@/api/services/pre-search-stream-buffer.service';
@@ -21,7 +21,6 @@ import type {
   PreSearchPhaseStatus,
   ThreadStreamResumptionState,
 } from '../schema';
-import { ThreadIdParamSchema } from '../schema';
 
 export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRoute, ApiEnv> = createHandler(
   {

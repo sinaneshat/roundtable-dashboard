@@ -9,7 +9,6 @@
  * - Metadata integrity across operations
  */
 
-import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -17,11 +16,8 @@ import {
   MessageRoles,
 } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import {
-  createTestAssistantMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { useThreadTimeline } from '@/hooks/utils';
+import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 
 import { createChatStore } from '../store';
 

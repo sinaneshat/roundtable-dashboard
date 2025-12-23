@@ -143,7 +143,9 @@ export const AuthActions = {
 // VALIDATION TYPE
 // ============================================================================
 
-export const ValidationTypeSchema = z.enum(['body', 'query', 'params', 'headers']).openapi({
+export const VALIDATION_TYPES = ['body', 'query', 'params', 'headers'] as const;
+
+export const ValidationTypeSchema = z.enum(VALIDATION_TYPES).openapi({
   description: 'Request validation context type',
   example: 'body',
 });
@@ -161,7 +163,7 @@ export const ValidationTypes = {
 // ERROR CATEGORY (UI Error Classification)
 // ============================================================================
 
-export const ErrorCategorySchema = z.enum([
+export const ERROR_CATEGORIES = [
   'model_not_found',
   'content_filter',
   'rate_limit',
@@ -175,7 +177,9 @@ export const ErrorCategorySchema = z.enum([
   'provider_rate_limit',
   'provider_network',
   'model_content_filter',
-]).openapi({
+] as const;
+
+export const ErrorCategorySchema = z.enum(ERROR_CATEGORIES).openapi({
   description: 'Error category for UI display and handling',
   example: 'provider_error',
 });

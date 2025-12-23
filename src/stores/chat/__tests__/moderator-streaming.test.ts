@@ -27,14 +27,14 @@ import type { DeepPartial } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import type { ModeratorPayload } from '@/api/routes/chat/schema';
-import type { TestModeratorMetrics } from '@/lib/testing/chat-test-factories';
+import type { TestModeratorMetrics } from '@/lib/testing';
 import {
   createMockModeratorMetrics,
   createMockModeratorPayload,
   createPartialModeratorPayload,
-} from '@/lib/testing/chat-test-factories';
-import { createTestModeratorMessage } from '@/lib/testing/helpers';
-import { hasModeratorData } from '@/lib/utils/moderator-utils';
+  createTestModeratorMessage,
+} from '@/lib/testing';
+import { hasModeratorData } from '@/lib/utils';
 
 // ============================================================================
 // TEST HELPERS - Simulate progressive streaming states

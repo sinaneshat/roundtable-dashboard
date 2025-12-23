@@ -33,8 +33,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
-import { isObject } from '@/lib/utils/type-guards';
+import { filterNonEmptyMessages, isObject } from '@/lib/utils';
 
 import { chatMessagesToUIMessages } from '../chat/handlers/helpers';
 import type {

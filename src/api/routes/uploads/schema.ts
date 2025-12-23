@@ -7,8 +7,9 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { CursorPaginationQuerySchema } from '@/api/core';
 import { ChatAttachmentStatusSchema } from '@/api/core/enums';
+// ✅ IMPORT FIX: Import directly from source files instead of barrel
+import { CursorPaginationQuerySchema } from '@/api/core/pagination';
 import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/api/core/schemas';
 import { uploadSelectSchema } from '@/db/validation/upload';
 

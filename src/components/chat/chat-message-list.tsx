@@ -13,7 +13,6 @@ import type { MessageAttachment } from '@/components/chat/message-attachment-pre
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/components/chat/round-summary/moderator-constants';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@/components/ui/motion';
@@ -22,21 +21,12 @@ import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { useModelLookup } from '@/hooks/utils';
+import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
-import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { getMessageStatus } from '@/lib/utils/message-status';
-import { getMessageMetadata, getModeratorMetadata, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage } from '@/lib/utils/metadata';
-import { getEnabledParticipants } from '@/lib/utils/participant';
-import {
-  allParticipantsHaveVisibleContent,
-  buildParticipantMessageMaps,
-  getParticipantMessageFromMaps,
-  participantHasVisibleContent,
-} from '@/lib/utils/participant-message-lookup';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
+import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoleBadgeStyle, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, participantHasVisibleContent } from '@/lib/utils';
 
 const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];

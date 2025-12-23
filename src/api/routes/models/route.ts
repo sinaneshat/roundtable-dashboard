@@ -8,7 +8,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { createPublicRouteResponses } from '@/api/core/response-schemas';
+import { createPublicRouteResponses } from '@/api/core';
 
 import { ListModelsResponseSchema } from './schema';
 

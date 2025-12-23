@@ -27,7 +27,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ChatMode, ScreenMode } from '@/api/core/enums';
 import { ScreenModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { usePreSearchOrchestrator } from './pre-search-orchestrator';

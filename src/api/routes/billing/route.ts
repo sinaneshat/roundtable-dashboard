@@ -5,9 +5,9 @@ import {
   createMutationRouteResponses,
   createProtectedRouteResponses,
   createPublicRouteResponses,
+  IdParamSchema,
   StandardApiResponses,
-} from '@/api/core/response-schemas';
-import { IdParamSchema } from '@/api/core/schemas';
+} from '@/api/core';
 
 import {
   CancelSubscriptionRequestSchema,

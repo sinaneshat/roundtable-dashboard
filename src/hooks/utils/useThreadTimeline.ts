@@ -3,8 +3,7 @@ import { useMemo } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
-import { getParticipantIndex, isModeratorMessage } from '@/lib/utils/metadata';
-import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
+import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
 
 /**
  * Changelog type that accepts both Date (from DB) and string (from API JSON)

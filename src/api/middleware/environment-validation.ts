@@ -184,10 +184,11 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
   }
 
   // Validate boolean environment variables
-  const booleanVars = ['OPEN_NEXT_DEBUG', 'NEXT_PUBLIC_MAINTENANCE'];
+  const booleanVars = ['OPEN_NEXT_DEBUG', 'NEXT_PUBLIC_MAINTENANCE'] as const;
 
   for (const varName of booleanVars) {
-    if (env[varName as keyof CloudflareEnv] && !['true', 'false'].includes(env[varName as keyof CloudflareEnv] as string)) {
+    const value = env[varName];
+    if (value !== undefined && typeof value === 'string' && !['true', 'false'].includes(value)) {
       warnings.push(`${varName} should be 'true' or 'false'`);
     }
   }

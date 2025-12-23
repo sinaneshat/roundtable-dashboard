@@ -5,7 +5,7 @@ import { cva } from 'class-variance-authority';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/ui/cn';
-import { extractModelName, getModelIconInfo } from '@/lib/utils/ai-display';
+import { extractModelName, getModelIconInfo } from '@/lib/utils';
 
 /**
  * ModelBadge Component

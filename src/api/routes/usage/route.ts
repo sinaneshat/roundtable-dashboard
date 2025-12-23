@@ -1,7 +1,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { createProtectedRouteResponses } from '@/api/core/response-schemas';
+import { createProtectedRouteResponses } from '@/api/core';
 
 import {
   UsageStatsResponseSchema,

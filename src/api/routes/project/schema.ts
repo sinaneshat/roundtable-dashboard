@@ -1,16 +1,13 @@
 import { z } from '@hono/zod-openapi';
 
-import { CursorPaginationQuerySchema } from '@/api/core';
 import {
   ProjectColorSchema,
   ProjectIndexStatusSchema,
   ProjectMemorySourceSchema,
 } from '@/api/core/enums';
-import {
-  CoreSchemas,
-  createApiResponseSchema,
-  createCursorPaginatedResponseSchema,
-} from '@/api/core/schemas';
+// ✅ IMPORT FIX: Import directly from source files instead of barrel
+import { CursorPaginationQuerySchema } from '@/api/core/pagination';
+import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/api/core/schemas';
 import {
   chatProjectSelectSchema,
   chatProjectUpdateSchema,

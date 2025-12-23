@@ -12,6 +12,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { shouldRetryMutation } from '@/hooks/utils/mutation-retry';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   abortMultipartUploadService,
@@ -133,15 +134,7 @@ export function useUpdateAttachmentMutation() {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    retry: (failureCount, error: unknown) => {
-      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
-        ? error.status
-        : null;
-      if (status !== null && status >= 400 && status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: shouldRetryMutation,
     throwOnError: false,
   });
 }
@@ -228,15 +221,7 @@ export function useDeleteAttachmentMutation() {
         refetchType: 'active',
       });
     },
-    retry: (failureCount, error: unknown) => {
-      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
-        ? error.status
-        : null;
-      if (status !== null && status >= 400 && status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: shouldRetryMutation,
     throwOnError: false,
   });
 }

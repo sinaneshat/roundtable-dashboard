@@ -2,7 +2,7 @@
 import { usePathname } from 'next/navigation';
 import { useShallow } from 'zustand/react/shallow';
 
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 
 import { MinimalHeader, NavigationHeader } from './chat-header';
 

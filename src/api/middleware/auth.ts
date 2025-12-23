@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
-import { mapStatusCode } from '@/api/core/http-exceptions';
+import { mapStatusCode } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import type { sessionSelectSchema, userSelectSchema } from '@/db/validation/auth';
 import { auth } from '@/lib/auth/server';

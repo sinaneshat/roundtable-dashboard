@@ -9,15 +9,10 @@
  */
 
 import { QueryClient } from '@tanstack/react-query';
-import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MODERATOR_PARTICIPANT_INDEX } from '@/components/chat/round-summary/moderator-constants';
-import {
-  createMockMessagesListResponse,
-  createMockParticipant,
-  createMockThread,
-} from '@/lib/testing/api-mocks';
+import { MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { act, createMockMessagesListResponse, createMockParticipant, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 
 // ============================================================================

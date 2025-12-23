@@ -7,6 +7,7 @@
  * Pattern: Utilities here, domain logic in stores
  */
 
+export { shouldRetryMutation } from './mutation-retry';
 export { useAutoResizeTextarea } from './use-auto-resize-textarea';
 export { useBoolean } from './use-boolean';
 export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';

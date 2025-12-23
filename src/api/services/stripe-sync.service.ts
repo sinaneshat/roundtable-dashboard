@@ -18,7 +18,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus } from '@/api/core/enums';
-import { StripeSubscriptionStatusSchema } from '@/api/core/enums';
+import { BillingIntervals, StripeSubscriptionStatusSchema } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import * as tables from '@/db';
@@ -31,7 +31,7 @@ import {
   isStringRecord,
   isStripePaymentMethod,
   safeParse,
-} from '@/lib/utils/type-guards';
+} from '@/lib/utils';
 
 /**
  * Calculate period end date based on start date and interval
@@ -39,19 +39,19 @@ import {
  */
 function calculatePeriodEnd(
   startTimestamp: number,
-  interval: 'month' | 'year' | 'week' | 'day' = 'month',
+  interval: 'month' | 'year' | 'week' | 'day' = BillingIntervals.MONTH,
   intervalCount: number = 1,
 ): number {
   const startDate = new Date(startTimestamp * 1000);
   const endDate = new Date(startDate);
 
-  if (interval === 'month') {
+  if (interval === BillingIntervals.MONTH) {
     endDate.setMonth(endDate.getMonth() + intervalCount);
-  } else if (interval === 'year') {
+  } else if (interval === BillingIntervals.YEAR) {
     endDate.setFullYear(endDate.getFullYear() + intervalCount);
-  } else if (interval === 'week') {
+  } else if (interval === BillingIntervals.WEEK) {
     endDate.setDate(endDate.getDate() + (7 * intervalCount));
-  } else if (interval === 'day') {
+  } else if (interval === BillingIntervals.DAY) {
     endDate.setDate(endDate.getDate() + intervalCount);
   }
 

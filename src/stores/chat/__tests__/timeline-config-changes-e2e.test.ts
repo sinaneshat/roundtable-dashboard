@@ -11,7 +11,6 @@
  * Tests simulate API responses and verify store updates + timeline integrity.
  */
 
-import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -22,12 +21,8 @@ import {
 } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import {
-  createMockStoredPreSearch,
-  createTestAssistantMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { useThreadTimeline } from '@/hooks/utils';
+import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

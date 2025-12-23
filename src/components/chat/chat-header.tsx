@@ -7,7 +7,7 @@ import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Logo } from '@/components/logo';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import {
   Breadcrumb,
   BreadcrumbItem,

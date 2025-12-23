@@ -20,11 +20,11 @@
 
 'use client';
 
-import type { ApiResponse } from '@/api/core/schemas';
+import type { ApiResponse } from '@/api/core';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { useThreadPreSearchesQuery } from '@/hooks/queries';
-import { transformPreSearches } from '@/lib/utils/date-transforms';
+import { transformPreSearches } from '@/lib/utils';
 
 import { getStatusPriority, PRE_SEARCH_COMPARE_KEYS } from '../store-constants';
 import { createOrchestrator } from './orchestrator-factory';

@@ -17,7 +17,7 @@ import { MessageSources } from '@/components/chat/message-sources';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import { streamdownComponents } from '@/components/markdown/streamdown-components';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -26,8 +26,7 @@ import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
-import { hasCitations } from '@/lib/utils/citation-parser';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
+import { getRoleBadgeStyle, hasCitations } from '@/lib/utils';
 
 /**
  * ✅ MODEL NORMALIZATION: Filter non-renderable reasoning parts
@@ -104,8 +103,15 @@ export const ModelMessageCard = memo(({
   const t = useTranslations('chat.participant');
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
-  // ✅ FIX: Subscribe to PARTICIPANT streaming state (NOT moderator)
-  const globalIsStreaming = useChatStore(s => s.isStreaming);
+  // ✅ PERFORMANCE FIX: Batch all store subscriptions into single useShallow call
+  // Previously 2 separate useChatStore calls caused 2 re-render cycles
+  const { globalIsStreaming, registerAnimation, completeAnimation } = useChatStore(
+    useShallow(s => ({
+      globalIsStreaming: s.isStreaming,
+      registerAnimation: s.registerAnimation,
+      completeAnimation: s.completeAnimation,
+    })),
+  );
 
   // Check if parts have streaming state (only trust when PARTICIPANTS actively streaming)
   const hasActualStreamingParts = globalIsStreaming && parts.some(
@@ -130,15 +136,6 @@ export const ModelMessageCard = memo(({
 
   // ✅ FIX: isStreaming requires PARTICIPANT streaming active AND parts streaming
   const isStreaming = hasActualStreamingParts;
-
-  // Animation tracking for sequential participant streaming
-  // ✅ OPTIMIZATION: Batch action selectors with useShallow to prevent multiple re-renders
-  const { registerAnimation, completeAnimation } = useChatStore(
-    useShallow(s => ({
-      registerAnimation: s.registerAnimation,
-      completeAnimation: s.completeAnimation,
-    })),
-  );
   const hasRegisteredRef = useRef(false);
   const prevStatusRef = useRef(status);
 
@@ -227,7 +224,8 @@ export const ModelMessageCard = memo(({
             {/* ✅ FLASH FIX v3: CSS Grid overlay + shimmer stays until content arrives
                 Previous bug: shimmer hid when status=STREAMING before parts arrived
                 Now shimmer stays visible until renderableParts.length > 0 */}
-            <div className="grid" style={{ gridTemplateColumns: '1fr' }}>
+            {/* ✅ SCROLL FIX: data-message-content enables CSS scroll anchoring */}
+            <div className="grid" style={{ gridTemplateColumns: '1fr' }} data-message-content>
               {/* Shimmer - stays visible until content actually arrives */}
               <div
                 style={{ gridArea: '1/1' }}

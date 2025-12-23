@@ -14,9 +14,12 @@ import { z } from 'zod';
 
 import type { FilePreviewType } from '@/api/core/enums';
 import {
+  CODE_MIMES,
   FilePreviewTypeSchema,
   getFileTypeLabelFromMime,
+  IMAGE_MIMES,
   MIME_TYPE_CATEGORIES,
+  TEXT_MIMES,
 } from '@/api/core/enums';
 
 // ============================================================================
@@ -86,16 +89,16 @@ function generatePreviewId(): string {
  * Determine preview type from MIME type
  */
 function getPreviewType(mimeType: string): FilePreviewType {
-  if ((MIME_TYPE_CATEGORIES.image as readonly string[]).includes(mimeType)) {
+  if (IMAGE_MIMES.includes(mimeType)) {
     return 'image';
   }
   if (mimeType === 'application/pdf') {
     return 'pdf';
   }
-  if ((MIME_TYPE_CATEGORIES.text as readonly string[]).includes(mimeType)) {
+  if (TEXT_MIMES.includes(mimeType)) {
     return 'text';
   }
-  if ((MIME_TYPE_CATEGORIES.code as readonly string[]).includes(mimeType)) {
+  if (CODE_MIMES.includes(mimeType)) {
     return 'code';
   }
   if (MIME_TYPE_CATEGORIES.document.some(t => mimeType.includes(t))) {

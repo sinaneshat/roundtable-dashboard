@@ -89,25 +89,3 @@ export {
   getNumberFromMetadata,
   parseErrorObject,
 } from './type-utils';
-
-// ============================================================================
-// RE-EXPORTS FROM CORE (for convenience)
-// ============================================================================
-
-// Pagination utilities from @/api/core/pagination
-export {
-  applyCursorPagination,
-  applyPagePagination,
-  buildCursorWhere,
-  buildCursorWhereWithFilters,
-  calculatePageMetadata,
-  createTimestampCursor,
-  type CursorDirection,
-  type CursorFieldConfig,
-  type CursorPaginationMetadata,
-  getCursorOrderBy,
-  type PagePaginationMetadata,
-  type PagePaginationParams,
-  validatePageParams,
-  withPagination,
-} from '@/api/core/pagination';

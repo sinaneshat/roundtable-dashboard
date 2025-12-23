@@ -67,7 +67,7 @@
  */
 
 import type { UIMessage } from 'ai';
-import { castDraft, current, enableMapSet } from 'immer';
+import { castDraft, enableMapSet } from 'immer';
 import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -77,15 +77,10 @@ import type { ChatMode, ScreenMode } from '@/api/core/enums';
 import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
-import type { FilePreview } from '@/hooks/utils/use-file-preview';
-import type { UploadItem } from '@/hooks/utils/use-file-upload';
+import type { FilePreview, UploadItem } from '@/hooks/utils';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { getRoundNumber } from '@/lib/utils/metadata';
-import { getEnabledSortedParticipants, sortByPriority } from '@/lib/utils/participant';
-import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
-import { isObject } from '@/lib/utils/type-guards';
-import { shouldPreSearchTimeout } from '@/lib/utils/web-search-utils';
+import { getEnabledSortedParticipants, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import {
@@ -391,6 +386,10 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
 
       const existingIsComplete = isObject(existingMsg.metadata) && 'finishReason' in existingMsg.metadata;
       const newIsComplete = isObject(newMsg.metadata) && 'finishReason' in newMsg.metadata;
+
+      // Note: Moderator content leak protection and duplication detection are handled
+      // in use-message-sync.ts during sync operations (page refresh, resumption).
+      // Store merging should allow normal streaming updates to proceed without blocking.
 
       if (existingHasContent && !newHasContent) {
         return {
@@ -1096,9 +1095,12 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
   // ✅ Uses ExtendedFilePart from message-schemas.ts (single source of truth for file parts with uploadId)
   prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) =>
     set((draft) => {
-      // ✅ Immer: Use current() with explicit type to avoid deep type inference
-      const currentMessages = current(draft.messages) as UIMessage[];
-      const nextRoundNumber = calculateNextRoundNumber(currentMessages);
+      // ✅ TYPE-SAFE: Use helper to avoid deep type inference issues
+      // Extract message count for round calculation without full type inference
+      const messageCount = draft.messages.length;
+      const lastMessage = messageCount > 0 ? draft.messages[messageCount - 1] : null;
+      const lastRoundNum = lastMessage ? getRoundNumber(lastMessage.metadata) : null;
+      const nextRoundNumber = lastRoundNum !== null ? lastRoundNum + 1 : 0;
 
       const isOnThreadScreen = draft.screenMode === ScreenModes.THREAD;
       const hasExistingOptimisticMessage = draft.hasEarlyOptimisticMessage;
@@ -1110,10 +1112,17 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // - Duplicate calls for same round: streamingRoundNumber is set, check against it
       // - New round after completing previous: new streamingRoundNumber, checks for that round
       const targetRound = draft.streamingRoundNumber ?? nextRoundNumber;
-      const hasOptimisticForTargetRound = currentMessages.some(
-        m => m.role === MessageRoles.USER
-          && (m.metadata as { roundNumber?: number })?.roundNumber === targetRound
-          && (m.metadata as { isOptimistic?: boolean })?.isOptimistic === true,
+      const hasOptimisticForTargetRound = draft.messages.some(
+        (m) => {
+          // ✅ TYPE-SAFE: Use type-safe metadata extraction instead of casting
+          if (m.role !== MessageRoles.USER)
+            return false;
+          const roundNumber = getRoundNumber(m.metadata);
+          const isOptimistic = m.metadata && typeof m.metadata === 'object' && 'isOptimistic' in m.metadata
+            ? m.metadata.isOptimistic
+            : false;
+          return roundNumber === targetRound && isOptimistic === true;
+        },
       );
 
       draft.waitingToStartStreaming = false;
@@ -1316,13 +1325,6 @@ export function createChatStore() {
       },
     ),
   );
-
-  // ============================================================================
-  // Store Subscriptions (Removed)
-  // ============================================================================
-  // Moderator triggering, streaming orchestration, and message sending moved to
-  // AI SDK v5 onComplete callbacks in chat-store-provider.tsx:79-198
-  // This provides direct access to fresh chat hook state and eliminates stale closures.
 
   return store;
 }

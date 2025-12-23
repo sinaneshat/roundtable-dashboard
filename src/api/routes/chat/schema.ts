@@ -19,13 +19,11 @@ import {
   WebSearchTimeRangeSchema,
   WebSearchTopicSchema,
 } from '@/api/core/enums';
+// ✅ IMPORT FIX: Import directly from source files instead of barrel to prevent
+// server-only code (handlers.ts → @/db) from leaking into client bundles.
+// The @/api/core barrel exports handlers.ts which imports better-sqlite3.
 import { CursorPaginationQuerySchema } from '@/api/core/pagination';
-import {
-  CoreSchemas,
-  createApiResponseSchema,
-  createCursorPaginatedResponseSchema,
-  ThreadIdParamSchema,
-} from '@/api/core/schemas';
+import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/api/core/schemas';
 import { StreamStateSchema } from '@/api/types/streaming';
 import { STRING_LIMITS } from '@/constants/validation';
 import {
@@ -48,22 +46,15 @@ import {
   chatThreadSelectSchema,
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
-import {
-  ChatParticipantSchema,
-  ParticipantConfigInputSchema,
-} from '@/lib/schemas/participant-schemas';
+import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
-// RE-EXPORTS - Single source of truth maintained, re-exported for convenience
+// ❌ NO RE-EXPORTS - Import from canonical sources
 // ============================================================================
-export { ChatParticipantSchema, ParticipantConfigInputSchema };
-
+// ChatParticipantSchema, ParticipantConfigInputSchema → from '@/lib/schemas/participant-schemas'
+// ThreadIdParamSchema → from '@/api/core/schemas'
 // ============================================================================
-// CHAT-SPECIFIC PATH PARAMETER SCHEMAS
-// ============================================================================
-// ✅ ThreadIdParamSchema imported from @/api/core/schemas (single source of truth)
-export { ThreadIdParamSchema };
 
 export const MessageContentSchema = z.string()
   .trim()

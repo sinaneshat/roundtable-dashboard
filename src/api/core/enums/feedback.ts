@@ -28,7 +28,9 @@ export const FeedbackTypes = {
 // ROUND FEEDBACK VALUE (includes 'none' for clearing feedback)
 // ============================================================================
 
-export const RoundFeedbackValueSchema = z.enum(['like', 'dislike', 'none']).openapi({
+export const ROUND_FEEDBACK_VALUES = ['like', 'dislike', 'none'] as const;
+
+export const RoundFeedbackValueSchema = z.enum(ROUND_FEEDBACK_VALUES).openapi({
   description: 'User feedback value for a round (none clears feedback)',
   example: 'like',
 });

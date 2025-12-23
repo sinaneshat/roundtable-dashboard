@@ -12,9 +12,9 @@ import {
   createTimestampCursor,
   CursorPaginationQuerySchema,
   getCursorOrderBy,
+  IdParamSchema,
   Responses,
 } from '@/api/core';
-import { IdParamSchema } from '@/api/core/schemas';
 import {
   enforceCustomRoleQuota,
   incrementCustomRoleUsage,

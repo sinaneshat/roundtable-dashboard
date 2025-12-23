@@ -12,7 +12,7 @@ import type { MutableRefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { devLog } from '@/lib/utils/dev-logger';
+import { devLog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getEffectiveWebSearchEnabled } from '@/stores/chat';
 

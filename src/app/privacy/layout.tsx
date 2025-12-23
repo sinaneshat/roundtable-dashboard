@@ -1,6 +1,6 @@
 import type React from 'react';
 
-import { AuthLayout } from '@/components/layouts';
+import AuthLayout from '@/components/layouts/auth-layout';
 
 type PrivacyLayoutProps = {
   children: React.ReactNode;

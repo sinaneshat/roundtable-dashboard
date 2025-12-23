@@ -25,7 +25,7 @@ import {
 import { useModelsQuery } from '@/hooks/queries';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
-import { getProviderIcon } from '@/lib/utils/ai-display';
+import { getProviderIcon } from '@/lib/utils';
 
 // No conversion needed - changeType IS the action
 function getChangeAction(changeType: ChatThreadChangelogFlexible['changeType']): ChangelogType {

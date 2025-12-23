@@ -1,11 +1,8 @@
 /**
- * Chat Messages Service - Message Operations API
+ * Chat Messages Service - Streaming Chat Operations
  *
  * 100% type-safe RPC service for chat message operations
  * All types automatically inferred from backend Hono routes
- *
- * NOTE: All chat messages use streaming for better UX
- * The old sendMessage endpoint has been removed in favor of streamChat
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';

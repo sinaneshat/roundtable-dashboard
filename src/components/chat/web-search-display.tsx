@@ -22,7 +22,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AccordionEntrance } from '@/components/ui/motion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
-import { safeExtractDomain } from '@/lib/utils/web-search-utils';
+import { safeExtractDomain } from '@/lib/utils';
 
 /**
  * Determine current streaming stage based on available data

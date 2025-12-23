@@ -21,8 +21,9 @@
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { z } from 'zod';
 
-// Import our unified type-safe error context and schema
-import type { ErrorContext } from '@/api/core';
+import type { ErrorContext } from '@/api/core/schemas';
+// Import directly from source to avoid circular dependency
+// (error-handling.ts → @/api/core → errors.ts → error-handling.ts)
 import { ErrorContextSchema } from '@/api/core/schemas';
 
 // ============================================================================

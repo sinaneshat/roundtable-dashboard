@@ -22,7 +22,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessagePartTypes } from '@/api/core/enums';
-import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing/helpers';
+import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 
 // Track store update frequency
 type StoreUpdateTracker = {

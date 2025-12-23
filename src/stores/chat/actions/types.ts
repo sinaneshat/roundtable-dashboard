@@ -224,12 +224,20 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
   if (!threadData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       // 🔍 DEBUG LOG 2: Thread detail validation failure - check message structure
-      const rawData = response.data.data as { messages?: unknown[]; participants?: unknown[] };
+      // ✅ TYPE-SAFE: Validate debug data structure before accessing properties
+      const debugDataSchema = z.object({
+        messages: z.array(z.record(z.string(), z.unknown())).optional(),
+        participants: z.array(z.object({ id: z.string().optional() }).passthrough()).optional(),
+      }).passthrough();
+
+      const debugData = debugDataSchema.safeParse(response.data.data);
+      const rawData = debugData.success ? debugData.data : undefined;
+
       console.error('[DEBUG-2] validateThreadDetailPayloadCache failed:', {
         messageCount: rawData?.messages?.length,
-        firstMessageKeys: rawData?.messages?.[0] ? Object.keys(rawData.messages[0] as object) : [],
+        firstMessageKeys: rawData?.messages?.[0] ? Object.keys(rawData.messages[0]) : [],
         participantCount: rawData?.participants?.length,
-        firstParticipantId: (rawData?.participants?.[0] as { id?: string })?.id,
+        firstParticipantId: rawData?.participants?.[0]?.id,
         errorIssues: threadData.error.issues.slice(0, 5),
       });
     }
@@ -284,9 +292,18 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
   if (!queryData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       // 🔍 DEBUG LOG 1: Infinite query validation failure
+      // ✅ TYPE-SAFE: Validate debug data structure before accessing properties
+      const debugDataSchema = z.object({
+        pageParams: z.array(z.unknown()).optional(),
+        pages: z.array(z.unknown()).optional(),
+      }).passthrough();
+
+      const debugData = debugDataSchema.safeParse(data);
+      const rawData = debugData.success ? debugData.data : undefined;
+
       console.error('[DEBUG-1] validateInfiniteQueryCache failed:', {
-        pageParams: (data as { pageParams?: unknown })?.pageParams,
-        pagesCount: Array.isArray((data as { pages?: unknown[] })?.pages) ? (data as { pages: unknown[] }).pages.length : 0,
+        pageParams: rawData?.pageParams,
+        pagesCount: Array.isArray(rawData?.pages) ? rawData.pages.length : 0,
         error: queryData.error.issues.slice(0, 3),
       });
     }

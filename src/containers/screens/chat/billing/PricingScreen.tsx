@@ -16,7 +16,7 @@ import {
   useSwitchSubscriptionMutation,
 } from '@/hooks';
 import { toastManager } from '@/lib/toast';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { getApiErrorMessage } from '@/lib/utils';
 
 export default function PricingScreen() {
   const t = useTranslations();

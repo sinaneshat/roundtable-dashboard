@@ -11,7 +11,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import {
   createMutationRouteResponses,
   createProtectedRouteResponses,
-} from '@/api/core/response-schemas';
+} from '@/api/core';
 
 import {
   ApiKeyIdParamSchema,

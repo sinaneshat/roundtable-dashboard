@@ -1,10 +1,10 @@
-import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StoreApi } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { act } from '@/lib/testing';
 
 type MockChatStoreState = {
   waitingToStartStreaming: boolean;

@@ -6,7 +6,7 @@
 
 import React, { useRef } from 'react';
 
-import { ChatStoreContext } from '@/components/providers/chat-store-provider';
+import { ChatStoreContext } from '@/components/providers';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

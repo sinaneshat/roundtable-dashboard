@@ -19,14 +19,13 @@
  * SINGLE SOURCE OF TRUTH: Thread state for all configuration decisions
  */
 
-import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
-import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
-import { getParticipantModelIds } from '@/lib/utils/participant';
+import { useThreadTimeline } from '@/hooks/utils';
+import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
+import { getParticipantModelIds } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 

@@ -14,10 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
-import { getAssistantMetadata, getParticipantIndex, getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
-import { deduplicateParticipants, getEnabledParticipants } from '@/lib/utils/participant';
-import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, mergeParticipantMetadata } from '@/lib/utils';
 
 import { useSyncedRefs } from './use-synced-refs';
 
@@ -785,20 +782,6 @@ export function useMultiParticipantChat(
      * AI SDK v5 Pattern: Trust the SDK's built-in deduplication
      */
     onFinish: async (data) => {
-      // ✅ DEBUG: Log onFinish data to trace content corruption
-      // eslint-disable-next-line no-console
-      console.log('[FINISH]', JSON.stringify({
-        msgId: data.message?.id,
-        textLen: data.message?.parts?.find(p => p.type === 'text' && 'text' in p)
-          ? String((data.message.parts.find(p => p.type === 'text' && 'text' in p) as { text: string }).text || '').length
-          : 0,
-        textPreview: data.message?.parts?.find(p => p.type === 'text' && 'text' in p)
-          ? String((data.message.parts.find(p => p.type === 'text' && 'text' in p) as { text: string }).text || '').slice(0, 50)
-          : '',
-        finishReason: data.finishReason,
-        pIdx: currentIndexRef.current,
-      }));
-
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
       const emptyParts = data.message?.parts?.length === 0;
@@ -808,6 +791,17 @@ export function useMultiParticipantChat(
 
       if (notOurMessageId && emptyParts && noFinishReason && noActiveRound && notStreaming) {
         return;
+      }
+
+      // ✅ CRITICAL FIX: Skip moderator messages completely
+      // Moderator messages are handled by useModeratorStream hook, NOT by this participant hook
+      // After page refresh, AI SDK may incorrectly call onFinish for moderator messages
+      // that were loaded from the database. This causes participant state corruption.
+      const isModeratorMessage = data.message?.id?.includes('_moderator');
+      const hasModeratorFlag = data.message?.metadata && typeof data.message.metadata === 'object'
+        && 'isModerator' in data.message.metadata && data.message.metadata.isModerator === true;
+      if (isModeratorMessage || hasModeratorFlag) {
+        return; // Moderator messages handled by useModeratorTrigger
       }
 
       // ✅ RACE CONDITION FIX: Skip if this message ID was already processed
@@ -950,10 +944,6 @@ export function useMultiParticipantChat(
         const idMatch = data.message?.id?.match(/_r(\d+)_p(\d+)/);
         const roundFromId = idMatch ? Number.parseInt(idMatch[1]!) : null;
         const finalRoundNumber = backendRoundNumber ?? roundFromId ?? currentRoundRef.current;
-        // 🔍 DEBUG: Only log when fallback used (potential race condition)
-        if (backendRoundNumber === null && roundFromId === null) {
-          console.error('[ROUND-DEBUG] onFinish used REF FALLBACK', { msgId: data.message?.id?.slice(-15), refRound: currentRoundRef.current, pIdx: currentIndex });
-        }
         const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
 
         // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors

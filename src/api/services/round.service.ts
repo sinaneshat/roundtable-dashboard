@@ -20,7 +20,7 @@ import {
   DEFAULT_ROUND_NUMBER,
   NO_ROUND_SENTINEL,
 } from '@/lib/schemas/round-schemas';
-import { isTextPart } from '@/lib/utils/type-guards';
+import { isTextPart } from '@/lib/utils';
 
 // ============================================================================
 // Type Definitions

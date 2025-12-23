@@ -27,8 +27,7 @@ import type { UIMessage } from 'ai';
 
 import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
-import { isNonEmptyString, isObject } from '@/lib/utils/type-guards';
+import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber, isNonEmptyString, isObject } from '@/lib/utils';
 
 // ============================================================================
 // Types

@@ -42,7 +42,6 @@ export {
 
 // ============================================================================
 // Chat Messages Service Exports
-// All messages use streaming for better UX (sendMessage endpoint removed)
 // ============================================================================
 
 export {

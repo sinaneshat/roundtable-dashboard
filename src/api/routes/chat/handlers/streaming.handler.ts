@@ -100,11 +100,7 @@ import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ExtendedFilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { getRoundNumber } from '@/lib/utils/metadata';
-import {
-  completeStreamingMetadata,
-  createStreamingMetadata,
-} from '@/lib/utils/metadata-builder';
+import { completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 
 import type { streamChatRoute } from '../route';
 import { StreamChatRequestSchema } from '../schema';

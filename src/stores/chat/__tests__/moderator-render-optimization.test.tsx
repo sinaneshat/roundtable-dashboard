@@ -14,7 +14,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { NextIntlClientProvider } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -22,13 +22,9 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
-import { ChatStoreProvider, useChatStore } from '@/components/providers/chat-store-provider';
+import { ChatStoreProvider, useChatStore } from '@/components/providers';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
-import {
-  createTestAssistantMessage,
-  createTestModeratorMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage, screen } from '@/lib/testing';
 
 // Test messages from helpers.ts
 const messages = {
@@ -211,7 +207,7 @@ describe('moderator Render Optimization', () => {
         finishReason: 'stop',
       });
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking
             messages={[userMessage, participant1, participant2]}
@@ -274,7 +270,7 @@ describe('moderator Render Optimization', () => {
         roundNumber: 0,
       });
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking
             messages={[userMessage, participant1, moderatorMessage1]}
@@ -316,7 +312,7 @@ describe('moderator Render Optimization', () => {
         roundNumber: 0,
       });
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} />
         </TestWrapper>,
@@ -355,7 +351,7 @@ describe('moderator Render Optimization', () => {
         roundNumber: 0,
       });
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking messages={[userMessage, moderatorChunk1]} onRender={onRender} />
         </TestWrapper>,
@@ -415,7 +411,7 @@ describe('moderator Render Optimization', () => {
         'The discussion covered multiple topics.',
       ];
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking
             messages={[userMessage]}
@@ -460,7 +456,7 @@ describe('moderator Render Optimization', () => {
         roundNumber: 0,
       });
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking messages={[message1]} onRender={onRender} />
         </TestWrapper>,
@@ -497,7 +493,7 @@ describe('moderator Render Optimization', () => {
         roundNumber: 0,
       });
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} />
         </TestWrapper>,
@@ -556,7 +552,7 @@ describe('moderator Render Optimization', () => {
         }),
       );
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking messages={messages} onRender={onRender} />
         </TestWrapper>,
@@ -614,7 +610,7 @@ describe('moderator Render Optimization', () => {
         );
       }
 
-      render(
+      rtlRender(
         <TestWrapper>
           <TestComponent />
         </TestWrapper>,
@@ -670,7 +666,7 @@ describe('moderator Render Optimization', () => {
         }),
       ];
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking
             messages={[...round0Messages, ...round1Messages]}
@@ -733,7 +729,7 @@ describe('moderator Render Optimization', () => {
         }),
       ];
 
-      const { rerender } = render(
+      const { rerender } = rtlRender(
         <TestWrapper>
           <MessageListWithTracking messages={messages} onRender={onRender} />
         </TestWrapper>,

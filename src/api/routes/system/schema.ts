@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
 import { HealthStatusSchema } from '@/api/core/enums';
+// ✅ IMPORT FIX: Import directly from source files instead of barrel
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 // ============================================================================
 // INTERNAL HANDLER SCHEMAS - Single Source of Truth

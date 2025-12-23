@@ -29,8 +29,7 @@ import { MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
-import { getRoleColors } from '@/lib/utils/role-colors';
+import { getApiErrorMessage, getRoleColors } from '@/lib/utils';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import type { OrderedModel } from './model-item';

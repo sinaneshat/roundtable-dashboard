@@ -13,8 +13,7 @@ import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
-import { transformPreSearches } from '@/lib/utils/date-transforms';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { chatMessagesToUIMessages, transformPreSearches } from '@/lib/utils';
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();

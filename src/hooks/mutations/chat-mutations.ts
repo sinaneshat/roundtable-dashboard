@@ -122,15 +122,15 @@ export function useUpdateThreadMutation() {
       // Cancel any outgoing refetches to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
-      if ('slug' in variables.json && variables.json.slug) {
-        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug as string) });
+      if ('slug' in variables.json && typeof variables.json.slug === 'string') {
+        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug) });
       }
 
       // Snapshot the previous values for rollback
       const previousThread = queryClient.getQueryData(queryKeys.threads.detail(variables.param.id));
       const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
-      const previousBySlug = ('slug' in variables.json && variables.json.slug)
-        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.json.slug as string))
+      const previousBySlug = ('slug' in variables.json && typeof variables.json.slug === 'string')
+        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.json.slug))
         : null;
 
       // Optimistically update thread detail query
@@ -151,7 +151,7 @@ export function useUpdateThreadMutation() {
             data: {
               ...parsedData,
               thread: {
-                ...(parsedData.thread as object),
+                ...parsedData.thread,
                 ...updatePayload.data,
               },
             },
@@ -169,8 +169,10 @@ export function useUpdateThreadMutation() {
           predicate: (query) => {
             // Only update queries that are infinite queries (have 'list' in the key)
             // ['threads', 'list'] or ['threads', 'list', 'search', 'term']
-            const key = query.queryKey as string[];
-            return key.length >= 2 && key[1] === 'list';
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2) {
+              return false;
+            }
+            return query.queryKey[1] === 'list';
           },
         },
         (old: unknown) => {
@@ -231,7 +233,7 @@ export function useUpdateThreadMutation() {
                 data: {
                   ...parsedData,
                   thread: {
-                    ...(parsedData.thread as object),
+                    ...parsedData.thread,
                     ...updatePayload.data,
                   },
                 },
@@ -242,7 +244,12 @@ export function useUpdateThreadMutation() {
       }
 
       // Return context with previous values for rollback
-      return { previousThread, previousThreads, previousBySlug, slug: 'slug' in variables.json ? variables.json.slug as string : null };
+      return {
+        previousThread,
+        previousThreads,
+        previousBySlug,
+        slug: ('slug' in variables.json && typeof variables.json.slug === 'string') ? variables.json.slug : null,
+      };
     },
     onError: (_unusedError, variables, context) => {
       // Rollback on error
@@ -302,8 +309,10 @@ export function useDeleteThreadMutation() {
           predicate: (query) => {
             // Only update queries that are infinite queries (have 'list' in the key)
             // ['threads', 'list'] or ['threads', 'list', 'search', 'term']
-            const key = query.queryKey as string[];
-            return key.length >= 2 && key[1] === 'list';
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2) {
+              return false;
+            }
+            return query.queryKey[1] === 'list';
           },
         },
         (old: unknown) => {
@@ -456,7 +465,7 @@ export function useToggleFavoriteMutation() {
               data: {
                 ...parsedData,
                 thread: {
-                  ...(parsedData.thread as object),
+                  ...parsedData.thread,
                   isFavorite: variables.isFavorite,
                 },
               },
@@ -560,7 +569,7 @@ export function useTogglePublicMutation() {
               data: {
                 ...parsedData,
                 thread: {
-                  ...(parsedData.thread as object),
+                  ...parsedData.thread,
                   isPublic: variables.isPublic,
                 },
               },

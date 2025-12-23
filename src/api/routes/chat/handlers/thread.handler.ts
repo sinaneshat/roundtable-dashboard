@@ -17,11 +17,12 @@ import {
   createHandlerWithBatch,
   createTimestampCursor,
   getCursorOrderBy,
+  IdParamSchema,
   Responses,
+  ThreadSlugParamSchema,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
 import { ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, ThreadStatusSchema } from '@/api/core/enums';
-import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
 import {
@@ -55,7 +56,7 @@ import type {
   ChatCustomRole,
 } from '@/db/validation';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { sortByPriority } from '@/lib/utils/participant';
+import { sortByPriority } from '@/lib/utils';
 
 import type {
   createThreadRoute,

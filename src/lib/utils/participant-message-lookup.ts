@@ -25,7 +25,7 @@ import {
   getModel,
   getParticipantId,
   getParticipantIndex,
-} from '@/lib/utils/metadata';
+} from '@/lib/utils';
 
 // ============================================================================
 // Participant Message Maps Type

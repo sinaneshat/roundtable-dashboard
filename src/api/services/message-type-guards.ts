@@ -21,7 +21,7 @@ import type { ChatMessage } from '@/db/validation';
 import {
   getParticipantMetadata,
   getPreSearchMetadata,
-} from '@/lib/utils/metadata';
+} from '@/lib/utils';
 
 // ============================================================================
 // Type Guards - Database Messages with Zod Validation

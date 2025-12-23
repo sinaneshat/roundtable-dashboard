@@ -9,7 +9,7 @@ import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadTimeline } from '@/hooks/utils';
 import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animations';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { chatMessagesToUIMessages } from '@/lib/utils';
 
 const DEMO_USER = {
   name: 'Sarah Chen',

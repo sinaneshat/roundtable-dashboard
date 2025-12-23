@@ -20,8 +20,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { MessageRoles } from '@/api/core/enums';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
-import { getMessageMetadata, getRoundNumber } from '@/lib/utils/metadata';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { getCurrentRoundNumber, getMessageMetadata, getRoundNumber } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMockMessagesListResponse,
   createMockThreadDetailResponse,
-} from '@/lib/testing/api-mocks';
+} from '@/lib/testing';
 
 // ============================================================================
 // Mock Fetch Setup

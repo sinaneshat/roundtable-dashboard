@@ -9,10 +9,10 @@ import {
   createHandler,
   createTimestampCursor,
   getCursorOrderBy,
+  IdParamSchema,
   Responses,
 } from '@/api/core';
 import { DEFAULT_PROJECT_INDEX_STATUS } from '@/api/core/enums';
-import { IdParamSchema } from '@/api/core/schemas';
 import {
   getAggregatedProjectContext,
 } from '@/api/services/project-context.service';

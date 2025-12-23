@@ -11,7 +11,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { StandardApiResponses } from '@/api/core/response-schemas';
+import { StandardApiResponses } from '@/api/core';
 
 import {
   JsonRpcRequestSchema,

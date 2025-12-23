@@ -21,6 +21,7 @@ import {
   createHandler,
   createTimestampCursor,
   getCursorOrderBy,
+  IdParamSchema,
   Responses,
 } from '@/api/core';
 import {
@@ -28,7 +29,6 @@ import {
   MAX_SINGLE_UPLOAD_SIZE,
   MIN_MULTIPART_PART_SIZE,
 } from '@/api/core/enums';
-import { IdParamSchema } from '@/api/core/schemas';
 import {
   deleteMultipartMetadata,
   storeMultipartMetadata,

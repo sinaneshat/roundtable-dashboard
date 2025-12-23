@@ -17,8 +17,10 @@
  */
 
 import type { UIMessage } from 'ai';
+import type { Metadata } from 'next';
 import { z } from 'zod';
 
+import { BRAND } from '@/constants/brand';
 import type {
   DbAssistantMessageMetadata,
   DbMessageMetadata,
@@ -36,6 +38,7 @@ import {
   isParticipantMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
+import { getBaseUrl } from '@/utils/helpers';
 
 import { isObject } from './type-guards';
 
@@ -541,16 +544,12 @@ export function buildAssistantMetadata(
   // Uses partial schema to allow incremental construction
   const result = AssistantMetadataBuilderSchema.safeParse(metadata);
 
-  if (result.success) {
-    // Zod-validated data - safe to return
-    // The partial schema validates types but allows missing required fields
-    // This is intentional for streaming scenarios where metadata is built incrementally
-    return result.data as DbAssistantMessageMetadata;
-  }
-
-  // Fallback: Return constructed object when validation fails
-  // Builder pattern requires this for incremental construction during streaming
-  return metadata as DbAssistantMessageMetadata;
+  // The partial schema validates types but allows missing required fields for streaming
+  // Type assertion is necessary because:
+  // 1. Runtime: metadata object conforms to DbAssistantMessageMetadata structure
+  // 2. Compile-time: some fields may be optional during incremental construction
+  // 3. Caller responsibility: ensure required fields are provided or handle partial data
+  return (result.success ? result.data : metadata) as DbAssistantMessageMetadata;
 }
 
 /**
@@ -660,10 +659,128 @@ export function enrichMessageWithParticipant(
   // This handles cases where base metadata is partial (e.g., from streaming)
   const builderResult = AssistantMetadataBuilderSchema.safeParse(enrichedMetadata);
 
-  if (builderResult.success) {
-    return builderResult.data as DbMessageMetadata;
-  }
+  // Type assertion is necessary because:
+  // 1. Runtime: enrichment adds all participant fields to the metadata
+  // 2. Compile-time: base metadata may be partial during streaming
+  // 3. Validation: either full or builder schema validates the structure
+  return (builderResult.success ? builderResult.data : enrichedMetadata) as DbMessageMetadata;
+}
 
-  // Last resort: return enriched metadata for incremental construction
-  return enrichedMetadata as DbMessageMetadata;
+// ============================================================================
+// Next.js Page Metadata Utilities
+// ============================================================================
+
+export type CreateMetadataProps = {
+  title?: string;
+  description?: string;
+  image?: string;
+  url?: string;
+  type?: 'website' | 'article';
+  siteName?: string;
+  robots?: string;
+  canonicalUrl?: string;
+  keywords?: string[];
+  author?: string;
+  publishedTime?: string;
+  modifiedTime?: string;
+};
+
+/**
+ * Create Next.js Metadata for pages
+ *
+ * **PURPOSE**: Generate consistent SEO metadata across all pages
+ * **USE CASE**: Used in generateMetadata() functions in page.tsx files
+ *
+ * @param props - Metadata properties
+ * @param props.title - Page title (defaults to brand name)
+ * @param props.description - Page description (defaults to brand description)
+ * @param props.image - OG image path (defaults to /static/og-image.png)
+ * @param props.url - Page URL path (defaults to /)
+ * @param props.type - Page type for OpenGraph (defaults to website)
+ * @param props.siteName - Site name for OpenGraph (defaults to brand name)
+ * @param props.robots - Robots meta directive (defaults to index, follow)
+ * @param props.canonicalUrl - Canonical URL for SEO
+ * @param props.keywords - SEO keywords array
+ * @param props.author - Content author (defaults to brand name)
+ * @param props.publishedTime - ISO timestamp for article publish date
+ * @param props.modifiedTime - ISO timestamp for article modification date
+ * @returns Next.js Metadata object with OpenGraph and Twitter cards
+ *
+ * @example
+ * ```typescript
+ * export async function generateMetadata(): Promise<Metadata> {
+ *   return createMetadata({
+ *     title: 'My Page',
+ *     description: 'Page description',
+ *     url: '/my-page',
+ *     canonicalUrl: '/my-page',
+ *   });
+ * }
+ * ```
+ */
+export function createMetadata({
+  title = BRAND.fullName,
+  description = BRAND.description,
+  image = '/static/og-image.png',
+  url = '/',
+  type = 'website',
+  siteName = BRAND.fullName,
+  robots = 'index, follow',
+  canonicalUrl,
+  keywords = ['AI collaboration', 'dashboard', 'brainstorming', 'multiple models', 'Roundtable'],
+  author = BRAND.name,
+  publishedTime,
+  modifiedTime,
+}: CreateMetadataProps = {}): Metadata {
+  const baseUrl = getBaseUrl();
+  const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+  const fullImage = image.startsWith('http') ? image : `${baseUrl}${image}`;
+
+  const openGraph: Metadata['openGraph'] = {
+    title,
+    description,
+    url: fullUrl,
+    siteName,
+    images: [
+      {
+        url: fullImage,
+        width: 1200,
+        height: 630,
+        alt: title,
+      },
+    ],
+    locale: 'en_US',
+    type,
+    ...(publishedTime && { publishedTime }),
+    ...(modifiedTime && { modifiedTime }),
+  };
+
+  const twitter: Metadata['twitter'] = {
+    card: 'summary_large_image',
+    title,
+    description,
+    images: [fullImage],
+    creator: '@roundtablenow',
+    site: '@roundtablenow',
+  };
+
+  return {
+    title,
+    description,
+    keywords: keywords.join(', '),
+    authors: [{ name: author }],
+    openGraph,
+    twitter,
+    robots,
+    alternates: {
+      canonical: canonicalUrl || fullUrl,
+    },
+    other: {
+      'theme-color': BRAND.colors.primary,
+      'msapplication-TileColor': BRAND.colors.primary,
+      'apple-mobile-web-app-capable': 'yes',
+      'apple-mobile-web-app-status-bar-style': 'default',
+      'format-detection': 'telephone=no',
+    },
+  };
 }

@@ -34,7 +34,7 @@ import {
   createTestUserMessage,
   getStoreState,
 } from '@/lib/testing';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { getCurrentRoundNumber } from '@/lib/utils';
 
 import { createChatStore } from '../store';
 import { getModeratorMessageForRound } from '../utils/participant-completion-gate';

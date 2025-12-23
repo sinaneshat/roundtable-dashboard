@@ -19,11 +19,16 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement;
 };
 
-const _actionTypes = {
-  ADD_TOAST: 'ADD_TOAST',
-  UPDATE_TOAST: 'UPDATE_TOAST',
-  DISMISS_TOAST: 'DISMISS_TOAST',
-  REMOVE_TOAST: 'REMOVE_TOAST',
+// ============================================================================
+// TOAST ACTION TYPE ENUM (Simplified - internal use only)
+// ============================================================================
+
+// CONSTANT OBJECT - For usage in code
+const ToastActionTypes = {
+  ADD_TOAST: 'ADD_TOAST' as const,
+  UPDATE_TOAST: 'UPDATE_TOAST' as const,
+  DISMISS_TOAST: 'DISMISS_TOAST' as const,
+  REMOVE_TOAST: 'REMOVE_TOAST' as const,
 } as const;
 
 let count = 0;
@@ -33,23 +38,21 @@ function genId() {
   return count.toString();
 }
 
-type ActionType = typeof _actionTypes;
-
 type Action
   = | {
-    type: ActionType['ADD_TOAST'];
+    type: typeof ToastActionTypes.ADD_TOAST;
     toast: ToasterToast;
   }
   | {
-    type: ActionType['UPDATE_TOAST'];
+    type: typeof ToastActionTypes.UPDATE_TOAST;
     toast: Partial<ToasterToast>;
   }
   | {
-    type: ActionType['DISMISS_TOAST'];
+    type: typeof ToastActionTypes.DISMISS_TOAST;
     toastId?: ToasterToast['id'];
   }
   | {
-    type: ActionType['REMOVE_TOAST'];
+    type: typeof ToastActionTypes.REMOVE_TOAST;
     toastId?: ToasterToast['id'];
   };
 
@@ -67,7 +70,7 @@ function addToRemoveQueue(toastId: string) {
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId);
     dispatch({
-      type: 'REMOVE_TOAST',
+      type: ToastActionTypes.REMOVE_TOAST,
       toastId,
     });
   }, TOAST_REMOVE_DELAY);
@@ -77,13 +80,13 @@ function addToRemoveQueue(toastId: string) {
 
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'ADD_TOAST':
+    case ToastActionTypes.ADD_TOAST:
       return {
         ...state,
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
       };
 
-    case 'UPDATE_TOAST':
+    case ToastActionTypes.UPDATE_TOAST:
       return {
         ...state,
         toasts: state.toasts.map(t =>
@@ -91,7 +94,7 @@ export function reducer(state: State, action: Action): State {
         ),
       };
 
-    case 'DISMISS_TOAST': {
+    case ToastActionTypes.DISMISS_TOAST: {
       const { toastId } = action;
 
       // ! Side effects ! - This could be extracted into a dismissToast() action,
@@ -117,7 +120,7 @@ export function reducer(state: State, action: Action): State {
         ),
       };
     }
-    case 'REMOVE_TOAST':
+    case ToastActionTypes.REMOVE_TOAST:
       if (action.toastId === undefined) {
         return {
           ...state,
@@ -144,18 +147,18 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, 'id'>;
 
-function toast({ ...props }: Toast) {
+export function toast({ ...props }: Toast) {
   const id = genId();
 
   const update = (props: ToasterToast) =>
     dispatch({
-      type: 'UPDATE_TOAST',
+      type: ToastActionTypes.UPDATE_TOAST,
       toast: { ...props, id },
     });
-  const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id });
+  const dismiss = () => dispatch({ type: ToastActionTypes.DISMISS_TOAST, toastId: id });
 
   dispatch({
-    type: 'ADD_TOAST',
+    type: ToastActionTypes.ADD_TOAST,
     toast: {
       ...props,
       id,
@@ -174,7 +177,7 @@ function toast({ ...props }: Toast) {
   };
 }
 
-function useToast() {
+export function useToast() {
   const [state, setState] = useState<State>(memoryState);
 
   // ✅ REACT 19 FIX: Remove state from dependencies - setState is stable, doesn't change between renders
@@ -191,8 +194,6 @@ function useToast() {
   return {
     ...state,
     toast,
-    dismiss: (toastId?: string) => dispatch({ type: 'DISMISS_TOAST', toastId }),
+    dismiss: (toastId?: string) => dispatch({ type: ToastActionTypes.DISMISS_TOAST, toastId }),
   };
 }
-
-export { toast, useToast };

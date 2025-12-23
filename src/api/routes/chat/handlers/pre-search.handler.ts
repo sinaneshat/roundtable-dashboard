@@ -24,10 +24,8 @@ import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
-import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
-import { AIModels } from '@/api/core/ai-models';
+import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
 import { IMAGE_MIME_TYPES, MessagePartTypes, MessageStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
-import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import { loadAttachmentContent } from '@/api/services/attachment-content.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';

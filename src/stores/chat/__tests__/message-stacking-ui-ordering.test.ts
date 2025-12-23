@@ -28,7 +28,7 @@ import {
   createTestAssistantMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getRoundNumber } from '@/lib/utils';
 
 // ============================================================================
 // TYPE ALIASES

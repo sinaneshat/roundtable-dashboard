@@ -19,8 +19,11 @@ import { z } from 'zod';
 import type { ApiEnv } from '@/api/types';
 
 import { validationError } from './responses';
-import type { ErrorContext } from './schemas';
+import type { ErrorContext, ValidationError } from './schemas';
 import { CoreSchemas, ErrorContextSchema } from './schemas';
+
+// Re-export ValidationError for consumers
+export type { ValidationError } from './schemas';
 
 // ============================================================================
 // VALIDATION RESULT TYPES (Context7 Pattern)
@@ -37,12 +40,6 @@ export type ValidationFailure = {
 };
 
 export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
-
-export type ValidationError = {
-  readonly field: string;
-  readonly message: string;
-  readonly code?: string;
-};
 
 // ============================================================================
 // VALIDATION UTILITIES

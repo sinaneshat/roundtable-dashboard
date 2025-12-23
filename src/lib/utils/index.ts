@@ -28,6 +28,10 @@ export * from './cache-helpers';
 export * from './citation-parser';
 export * from './date-transforms';
 // ============================================================================
+// Development & Debugging
+// ============================================================================
+export * from './dev-logger';
+// ============================================================================
 // Error Handling
 // ============================================================================
 export * from './error-handling';
@@ -57,8 +61,3 @@ export * from './state-merge';
 // ============================================================================
 export * from './type-guards';
 export * from './web-search-utils';
-
-// ============================================================================
-// Development Only (import directly from source)
-// ============================================================================
-// export * from './dev-logger'; // NOT exported - dev-only, import directly

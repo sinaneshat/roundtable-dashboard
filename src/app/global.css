@@ -150,22 +150,24 @@
 }
 
 /* ============================================================================
- * Scroll Anchoring
- * Preserves scroll position when content above viewport changes height
- * Critical for chat streaming - prevents scroll jumps as messages expand
+ * Scroll Anchoring DISABLED for Virtualized Chat Timeline
+ *
+ * ✅ SCROLL FIX: DISABLE ALL overflow-anchor to prevent auto-scrolling
+ * Browser scroll anchoring conflicts with TanStack Virtual and causes
+ * viewport shifts during streaming. We handle scroll manually via:
+ * - ChatScrollButton for user-triggered scroll-to-bottom
+ * - Frozen totalSize during streaming (useVirtualizedTimeline)
+ * - Disabled measureElement during streaming (thread-timeline)
+ *
+ * CRITICAL: Do NOT enable overflow-anchor on any virtualized content
  * ============================================================================ */
-html {
-  overflow-anchor: auto;
-}
 
-/* Anchor point for virtualized content - browser uses this to maintain position */
-[data-virtualized-timeline] {
+/* Disable scroll anchoring globally and for virtualized timeline */
+html,
+[data-virtualized-timeline],
+[data-virtualized-timeline] > div,
+[data-virtualized-timeline] [data-message-content] {
   overflow-anchor: none;
-}
-
-/* Individual virtual items should anchor */
-[data-virtualized-timeline] > div {
-  overflow-anchor: auto;
 }
 
 /* ============================================================================

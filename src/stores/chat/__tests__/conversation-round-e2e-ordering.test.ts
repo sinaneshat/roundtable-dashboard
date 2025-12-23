@@ -16,17 +16,12 @@
  * These tests validate the expected behavior documented in FLOW_DOCUMENTATION.md
  */
 
-import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
-import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import {
-  createTestAssistantMessage,
-  createTestModeratorMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { useThreadTimeline } from '@/hooks/utils';
+import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 
 import { createChatStore } from '../store';
 

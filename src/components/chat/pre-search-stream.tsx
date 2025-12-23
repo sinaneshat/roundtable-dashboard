@@ -11,7 +11,7 @@ import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/sc
 import { PreSearchResponseSchema } from '@/api/routes/chat/schema';
 import { TextShimmer } from '@/components/ai-elements/shimmer';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
-import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
+import { ChatStoreContext, useChatStore } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { AnimatedStreamingItem, AnimatedStreamingList } from '@/components/ui/motion';
 import { Separator } from '@/components/ui/separator';

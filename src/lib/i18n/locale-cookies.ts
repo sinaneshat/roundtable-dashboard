@@ -43,8 +43,13 @@ export async function getUserLocale(): Promise<Locale> {
   const cookieStore = await cookies();
   const localeCookie = cookieStore.get('NEXT_LOCALE');
 
-  if (localeCookie?.value && locales.includes(localeCookie.value as Locale)) {
-    return localeCookie.value as Locale;
+  // Type guard to check if value is a valid Locale
+  const isValidLocale = (value: string): value is Locale => {
+    return (locales as readonly string[]).includes(value);
+  };
+
+  if (localeCookie?.value && isValidLocale(localeCookie.value)) {
+    return localeCookie.value;
   }
 
   // Fallback to default locale

@@ -26,6 +26,13 @@ export type UseVirtualizedTimelineOptions = {
 
   /** Data is ready for rendering (prevents premature render) */
   isDataReady?: boolean;
+
+  /**
+   * Whether content is actively streaming (participants or moderator)
+   * When true, totalSize updates are skipped to prevent scroll jumps
+   * caused by height recalculations during streaming.
+   */
+  isStreaming?: boolean;
 };
 
 /**
@@ -100,6 +107,7 @@ export function useVirtualizedTimeline({
   paddingStart = 0,
   paddingEnd = 0,
   isDataReady = true,
+  isStreaming = false,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // Scroll margin (offset from top of page to list start)
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -118,11 +126,34 @@ export function useVirtualizedTimeline({
   // Track pending RAF to cancel on unmount
   const pendingRafRef = useRef<number | null>(null);
 
+  // ✅ SCROLL FIX: Track streaming state to prevent totalSize updates during streaming
+  // When streaming, we keep totalSize FROZEN at the value BEFORE streaming started
+  // This prevents container height changes that cause viewport shifts
+  const isStreamingRef = useRef(isStreaming);
+
+  // ✅ SCROLL FIX: Capture stable totalSize BEFORE streaming starts
+  // This size is held FROZEN throughout streaming to prevent layout shifts
+  // CRITICAL: Capture size BEFORE new streaming content is added, not after
+  const stableTotalSizeRef = useRef<number | null>(null);
+
+  // ✅ SCROLL FIX: Pre-capture size when streaming starts
+  // CRITICAL: Only CAPTURE during render, NEVER reset here
+  // Reset happens in the RAF callback to avoid race conditions when
+  // participant streaming ends and moderator streaming starts (brief gap)
+  if (isStreaming && stableTotalSizeRef.current === null && virtualizerState.totalSize > 0) {
+    // Streaming active and no size captured yet - capture now
+    stableTotalSizeRef.current = virtualizerState.totalSize;
+  }
+
+  // Update streaming ref for RAF callback
+  isStreamingRef.current = isStreaming;
+
   // Determine if virtualizer should be enabled
   // CRITICAL: Disabled until data is ready to prevent premature calculations
   const shouldEnable = isDataReady && timelineItems.length > 0;
 
   // Sync virtualizer state - called via RAF to avoid flushSync during render
+  // ✅ SCROLL FIX: During streaming, only update virtualItems, NOT totalSize
   const syncVirtualizerState = useCallback((instance: Virtualizer<Window, Element>) => {
     // Cancel any pending RAF
     if (pendingRafRef.current !== null) {
@@ -132,10 +163,33 @@ export function useVirtualizedTimeline({
     // Schedule state update for next frame - outside React's lifecycle
     pendingRafRef.current = requestAnimationFrame(() => {
       pendingRafRef.current = null;
-      setVirtualizerState({
-        virtualItems: instance.getVirtualItems(),
-        totalSize: instance.getTotalSize(),
-      });
+      const newVirtualItems = instance.getVirtualItems();
+      const newTotalSize = instance.getTotalSize();
+
+      // ✅ SCROLL FIX: During streaming, FREEZE totalSize completely
+      // This prevents container height changes that cause scroll position shifts
+      // The stable size was pre-captured during render (before streaming content added)
+      if (isStreamingRef.current && stableTotalSizeRef.current !== null) {
+        // Update virtualItems for rendering but FREEZE totalSize
+        // Container height stays constant - content grows within it
+        setVirtualizerState(() => ({
+          virtualItems: newVirtualItems,
+          totalSize: stableTotalSizeRef.current!, // FROZEN at pre-streaming size
+        }));
+      } else {
+        // ✅ SCROLL FIX: Reset stable size ONLY in RAF callback when NOT streaming
+        // This prevents race conditions when participant streaming ends and
+        // moderator streaming starts (brief gap would incorrectly reset during render)
+        // By resetting here, we ensure streaming is truly finished before clearing
+        if (!isStreamingRef.current && stableTotalSizeRef.current !== null) {
+          stableTotalSizeRef.current = null;
+        }
+        // Not streaming - update normally with actual totalSize
+        setVirtualizerState({
+          virtualItems: newVirtualItems,
+          totalSize: newTotalSize,
+        });
+      }
     });
   }, []);
 
@@ -170,6 +224,13 @@ export function useVirtualizedTimeline({
   // Initialize window virtualizer
   // PATTERN: enabled=false prevents any calculation until data ready
   // onChange callback updates state instead of calling methods during render
+  //
+  // ✅ SCROLL FIX STRATEGY:
+  // 1. shouldAdjustScrollPositionOnItemSizeChange returns false during streaming
+  // 2. Pre-capture totalSize BEFORE streaming starts (during render)
+  // 3. Freeze totalSize during streaming (in syncVirtualizerState)
+  // 4. Disable measureElement during streaming (in thread-timeline.tsx)
+  // 5. Disable CSS overflow-anchor (in global.css)
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
     estimateSize: () => estimateSize,
@@ -180,6 +241,20 @@ export function useVirtualizedTimeline({
     enabled: shouldEnable,
     onChange,
   });
+
+  // ✅ SCROLL FIX: Prevent scroll position adjustments during streaming
+  // This is the TanStack Virtual official way to prevent scroll jumps when items resize
+  // Returns false during streaming to prevent ANY scroll position adjustment
+  // The callback reads from isStreamingRef which is updated synchronously during render
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+    _item,
+    _delta,
+    _instance,
+  ) => {
+    // During streaming, NEVER adjust scroll position
+    // This prevents viewport shifts when streaming content changes height
+    return !isStreamingRef.current;
+  };
 
   // Initial sync of virtualizer state when virtualizer becomes enabled
   // Use requestAnimationFrame to schedule after React's commit phase completes

@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import { AIModels } from '@/api/core/ai-models';
+import { AIModels } from '@/api/core';
 import { MessagePartTypes, UIMessageRoles } from '@/api/core/enums';
 import { TITLE_GENERATION_CONFIG } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';

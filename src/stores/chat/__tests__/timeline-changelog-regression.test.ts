@@ -10,18 +10,14 @@
  * These tests are based on real production state dumps where issues occur.
  */
 
-import { renderHook } from '@testing-library/react';
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
-import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import {
-  createTestAssistantMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { useThreadTimeline } from '@/hooks/utils';
+import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 
 // ============================================================================
 // TEST HELPERS - Mimic production state structure

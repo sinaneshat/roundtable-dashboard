@@ -20,7 +20,7 @@ import type { SubscriptionTier } from '@/api/core/enums';
 import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
-import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
+import { isTransientErrorFromObject } from '@/lib/utils';
 
 /**
  * Human-readable tier names

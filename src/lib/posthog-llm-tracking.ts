@@ -9,7 +9,7 @@
 
 import { ulid } from 'ulid';
 
-import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
+import { isTransientErrorFromObject } from '@/lib/utils';
 
 import { getPostHogClient } from './posthog-server';
 

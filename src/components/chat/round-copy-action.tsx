@@ -9,8 +9,7 @@ import { MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { Action } from '@/components/ai-elements/actions';
 import { toastManager } from '@/lib/toast';
-import { getAssistantMetadata } from '@/lib/utils/metadata';
-import { isTextPart } from '@/lib/utils/type-guards';
+import { getAssistantMetadata, isTextPart } from '@/lib/utils';
 
 type RoundCopyActionProps = {
   messages: UIMessage[];

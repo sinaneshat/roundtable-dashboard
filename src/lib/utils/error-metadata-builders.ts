@@ -23,7 +23,7 @@
  */
 
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
-import { isObject } from '@/lib/utils/type-guards';
+import { isObject } from '@/lib/utils';
 
 // ============================================================================
 // Types

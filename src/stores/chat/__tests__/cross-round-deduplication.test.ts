@@ -28,7 +28,7 @@ import {
   createTestModeratorMessage,
   createTestUserMessage,
 } from '@/lib/testing';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getRoundNumber } from '@/lib/utils';
 
 // ============================================================================
 // DEDUPLICATION SIMULATION

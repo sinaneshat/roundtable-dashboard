@@ -10,7 +10,6 @@
  * - Error recovery scenarios
  */
 
-import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -20,12 +19,8 @@ import {
 } from '@/api/core/enums';
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
-import { useThreadTimeline } from '@/hooks/utils/useThreadTimeline';
-import {
-  createMockStoredPreSearch,
-  createTestAssistantMessage,
-  createTestUserMessage,
-} from '@/lib/testing';
+import { useThreadTimeline } from '@/hooks/utils';
+import { createMockStoredPreSearch, createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';

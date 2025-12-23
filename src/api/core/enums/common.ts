@@ -109,3 +109,36 @@ export const SortDirections = {
   ASC: 'asc' as const,
   DESC: 'desc' as const,
 } as const;
+
+// ============================================================================
+// SORT DIRECTION LABELS (UI Display)
+// ============================================================================
+
+export const SORT_DIRECTION_LABELS: Record<SortDirection, string> = {
+  [SortDirections.ASC]: 'Ascending',
+  [SortDirections.DESC]: 'Descending',
+} as const;
+
+// ============================================================================
+// VALIDATION HELPERS
+// ============================================================================
+
+export function isValidSortDirection(value: unknown): value is SortDirection {
+  return typeof value === 'string' && SORT_DIRECTIONS.includes(value as SortDirection);
+}
+
+export function isValidDatabaseOperation(value: unknown): value is DatabaseOperation {
+  return typeof value === 'string' && DATABASE_OPERATIONS.includes(value as DatabaseOperation);
+}
+
+export function isValidHealthStatus(value: unknown): value is HealthStatus {
+  return typeof value === 'string' && HEALTH_STATUSES.includes(value as HealthStatus);
+}
+
+export function isValidEnvironment(value: unknown): value is Environment {
+  return typeof value === 'string' && ENVIRONMENTS.includes(value as Environment);
+}
+
+export function isValidHttpMethod(value: unknown): value is HttpMethod {
+  return typeof value === 'string' && HTTP_METHODS.includes(value as HttpMethod);
+}

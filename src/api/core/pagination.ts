@@ -465,7 +465,7 @@ export function validatePageParams(
  * @example
  * ```typescript
  * import { asc } from 'drizzle-orm';
- * import { withPagination } from '@/api/core/pagination';
+ * import { withPagination } from '@/api/core';
  *
  * // Recommended: Use Drizzle's $dynamic() pattern
  * const query = db.select().from(users).$dynamic();

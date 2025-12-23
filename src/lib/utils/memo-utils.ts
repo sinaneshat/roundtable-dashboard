@@ -158,7 +158,7 @@ export function memoizeLRU<TArg extends string | number, TResult>(
  *
  * @example
  * ```typescript
- * import { hasParticipantsChanged } from '@/lib/utils/participant';
+ * import { hasParticipantsChanged } from '@/lib/utils';
  *
  * const memoizedComparison = memoizeParticipantComparison(hasParticipantsChanged);
  *
@@ -166,19 +166,22 @@ export function memoizeLRU<TArg extends string | number, TResult>(
  * const changed = memoizedComparison(currentParticipants, selectedParticipants);
  * ```
  */
-export function memoizeParticipantComparison<T extends (...args: unknown[]) => boolean>(
-  fn: T,
-): T {
+export function memoizeParticipantComparison<
+  TArgs extends unknown[],
+  TFn extends (...args: TArgs) => boolean,
+>(
+  fn: TFn,
+): (...args: TArgs) => boolean {
   return memoizeWithKey(
     fn,
-    (...args) => {
+    (...args: TArgs) => {
       // Generate stable key from participant arrays
       return args
         .map((arg) => {
           if (Array.isArray(arg)) {
             return arg
               .map((item: unknown) => {
-                // ✅ TYPE-SAFE: Narrow type with proper type guard
+                // Type-safe: Narrow type with proper type guard
                 if (
                   typeof item === 'object'
                   && item !== null
@@ -197,7 +200,7 @@ export function memoizeParticipantComparison<T extends (...args: unknown[]) => b
         })
         .join('|');
     },
-  ) as T;
+  );
 }
 
 /**
@@ -217,15 +220,16 @@ export function memoizeParticipantComparison<T extends (...args: unknown[]) => b
 export function memoizeRoundCalculation<TMessage, TResult>(
   fn: (messages: readonly TMessage[]) => TResult,
 ): (messages: readonly TMessage[]) => TResult {
-  const cache = new WeakMap<object, TResult>();
+  // WeakMap key must be object type - arrays are objects at runtime
+  const cache = new WeakMap<readonly TMessage[], TResult>();
 
   return (messages: readonly TMessage[]): TResult => {
-    if (cache.has(messages as object)) {
-      return cache.get(messages as object)!;
+    if (cache.has(messages)) {
+      return cache.get(messages)!;
     }
 
     const result = fn(messages);
-    cache.set(messages as object, result);
+    cache.set(messages, result);
     return result;
   };
 }
@@ -246,15 +250,16 @@ export function memoizeRoundCalculation<TMessage, TResult>(
 export function memoizeModeratorCheck<TModerator, TResult>(
   fn: (moderators: readonly TModerator[]) => TResult,
 ): (moderators: readonly TModerator[]) => TResult {
-  const cache = new WeakMap<object, TResult>();
+  // WeakMap key must be object type - arrays are objects at runtime
+  const cache = new WeakMap<readonly TModerator[], TResult>();
 
   return (moderators: readonly TModerator[]): TResult => {
-    if (cache.has(moderators as object)) {
-      return cache.get(moderators as object)!;
+    if (cache.has(moderators)) {
+      return cache.get(moderators)!;
     }
 
     const result = fn(moderators);
-    cache.set(moderators as object, result);
+    cache.set(moderators, result);
     return result;
   };
 }
@@ -294,7 +299,7 @@ export function memoizeModeratorCheck<TModerator, TResult>(
  * }
  * ```
  */
-export function useMemoizedReturn<T extends Record<string, unknown>>(
+export function useMemoizedReturn<T extends object>(
   returnObject: T,
   deps: React.DependencyList,
 ): T {

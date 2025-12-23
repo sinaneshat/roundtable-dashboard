@@ -84,7 +84,7 @@ const CITATION_PATTERN = new RegExp(
  * Type guard to check if a string is a valid citation prefix
  */
 function isValidPrefix(prefix: string): prefix is CitationPrefix {
-  return CITATION_PREFIXES.includes(prefix as CitationPrefix);
+  return (CITATION_PREFIXES as readonly string[]).includes(prefix);
 }
 
 // ============================================================================

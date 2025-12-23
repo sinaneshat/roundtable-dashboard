@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type React from 'react';
 
-import { ChatLayout } from '@/components/layouts';
+import ChatLayout from '@/components/layouts/chat-layout';
 import { BRAND } from '@/constants/brand';
 import { createMetadata } from '@/utils/metadata';
 

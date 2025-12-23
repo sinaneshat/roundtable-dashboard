@@ -21,8 +21,8 @@ import {
   createMockThread as createMockThreadBase,
   createTestAssistantMessage,
   createTestUserMessage,
+  getStoreState,
 } from '@/lib/testing';
-import { getStoreState } from '@/lib/testing/chat-store-helpers';
 
 import { createChatStore } from '../store';
 

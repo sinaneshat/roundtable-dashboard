@@ -1,4 +1,3 @@
-// File: src/app/layout.tsx
 import './global.css';
 
 import { GeistMono } from 'geist/font/mono';
@@ -22,14 +21,21 @@ import { cn } from '@/lib/ui/cn';
 import { parsePreferencesCookie, PREFERENCES_COOKIE_NAME } from '@/stores/preferences';
 import { createMetadata } from '@/utils/metadata';
 
+const VALID_CONTENT_TYPES = ['how-to', 'comparison', 'review', 'guide', 'faq', 'tutorial'] as const;
+type ContentType = (typeof VALID_CONTENT_TYPES)[number];
+
+function isValidContentType(value: string): value is ContentType {
+  return VALID_CONTENT_TYPES.includes(value as ContentType);
+}
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  viewportFit: 'cover', // iOS safe area support
-  themeColor: 'black', // Dark theme only
-  interactiveWidget: 'resizes-content', // Mobile keyboard handling
+  viewportFit: 'cover',
+  themeColor: 'black',
+  interactiveWidget: 'resizes-content',
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -63,27 +69,18 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
   const tAeo = await getTranslations('seo.aeo');
   const tFeatures = await getTranslations('seo.features');
 
-  // Get all messages for client components
   const messages = await getMessages();
-
-  // Static locale configuration (English-only app)
   const locale = 'en';
   const timeZone = 'UTC';
-  // ✅ FIX: Use undefined instead of new Date() to prevent hydration mismatch
-  // Server and client will have different Date() values, causing hydration error
-  // next-intl handles undefined gracefully
   const now = undefined;
-
-  // ✅ FIX: Get base URL once for SEO components to ensure consistency
-  // This prevents hydration mismatch from getBaseUrl() using window.location on client
   const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://app.roundtable.now';
 
-  // ✅ SSR HYDRATION: Parse preferences cookie for instant store hydration
-  // This prevents flash of default state on initial page load
-  // Cookie is read server-side and parsed, then passed to client providers
   const cookieStore = await cookies();
   const preferencesCookie = cookieStore.get(PREFERENCES_COOKIE_NAME);
   const initialPreferences = parsePreferencesCookie(preferencesCookie?.value);
+
+  const contentTypeValue = tAeo('contentType');
+  const contentType = isValidContentType(contentTypeValue) ? contentTypeValue : 'guide';
 
   return (
     <html
@@ -92,11 +89,10 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
       className={cn('dark', GeistSans.variable, GeistMono.variable, spaceGrotesk.variable)}
     >
       <head>
-        {/* 2025 AI Search Optimization - Answer Engine Optimization */}
         <AeoMetaTags
           primaryQuestion={tAeo('primaryQuestion', { brand: BRAND.displayName })}
           primaryAnswer={tAeo('primaryAnswer')}
-          contentType={tAeo('contentType') as 'guide'}
+          contentType={contentType}
           entities={[
             tAeo('relatedQuestions.howItWorks'),
             tAeo('relatedQuestions.benefits'),
@@ -108,11 +104,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
             tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
           ]}
         />
-
-        {/* Core structured data for web application */}
         <StructuredData type="WebApplication" baseUrl={baseUrl} />
-
-        {/* Enhanced SoftwareApplication schema for AI search engines */}
         <SoftwareApplicationSchema
           baseUrl={baseUrl}
           features={[
@@ -126,15 +118,12 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
         />
       </head>
       <body>
-        {/* Production: PWA update detection and prompt */}
         <PWAUpdatePrompt
           messages={messages}
           locale={locale}
           timeZone={timeZone}
           now={now}
         />
-
-        {/* Liquid Glass SVG Filter Definitions (Apple WWDC 2025) */}
         <LiquidGlassFilters />
 
         <AppProviders

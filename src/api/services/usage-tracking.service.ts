@@ -24,7 +24,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus, SubscriptionTier } from '@/api/core/enums';
-import { StripeSubscriptionStatuses } from '@/api/core/enums';
+import { BillingIntervals, StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
@@ -747,7 +747,7 @@ export async function syncUserQuotaFromSubscription(
   const parsedTier = subscriptionTierSchema.safeParse(tierValue);
   const tier = parsedTier.success ? parsedTier.data : undefined;
 
-  const isAnnual = price.interval === 'year';
+  const isAnnual = price.interval === BillingIntervals.YEAR;
 
   if (!tier) {
     return;

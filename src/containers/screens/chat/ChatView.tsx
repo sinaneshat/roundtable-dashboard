@@ -14,7 +14,7 @@ import { ConversationModeModal } from '@/components/chat/conversation-mode-modal
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { useChatStore } from '@/components/providers';
 import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
@@ -27,8 +27,7 @@ import {
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { toastManager } from '@/lib/toast';
-import { getIncompatibleModelIds, isVisionRequiredMimeType } from '@/lib/utils/file-capability';
-import { getModeratorMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils/metadata';
+import { getIncompatibleModelIds, getModeratorMetadata, getRoundNumber, isModeratorMessage, isVisionRequiredMimeType } from '@/lib/utils';
 import {
   useChatFormActions,
   useFeedbackActions,
@@ -45,6 +44,13 @@ export type ChatViewProps = {
   mode: 'overview' | 'thread';
   onSubmit: (e: React.FormEvent) => Promise<void>;
   chatAttachments: UseChatAttachmentsReturn;
+  /**
+   * Thread ID from server props - used for SSR query hydration.
+   * CRITICAL: Pass this from server data to ensure changelog/feedback show on first render.
+   * Without this, queries use store threadId which isn't available until after first render,
+   * causing a cache key mismatch with server-prefetched data.
+   */
+  threadId?: string;
 };
 
 export function ChatView({
@@ -53,6 +59,7 @@ export function ChatView({
   mode,
   onSubmit,
   chatAttachments,
+  threadId: serverThreadId,
 }: ChatViewProps) {
   const t = useTranslations('chat');
 
@@ -64,23 +71,45 @@ export function ChatView({
     attachmentClickRef.current?.();
   }, []);
 
-  const messages = useChatStore(s => s.messages);
-  const isStreaming = useChatStore(s => s.isStreaming);
-  const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
-  const contextParticipants = useChatStore(s => s.participants);
-  const preSearches = useChatStore(s => s.preSearches);
-
-  const { thread, createdThreadId } = useChatStore(
+  // ✅ ZUSTAND v5 BEST PRACTICE: Batch all store subscriptions with useShallow
+  // Prevents cascading re-renders from 18 individual subscriptions
+  // Each individual useChatStore() creates a separate subscription that can trigger re-renders
+  const {
+    messages,
+    isStreaming,
+    currentParticipantIndex,
+    contextParticipants,
+    preSearches,
+    thread,
+    createdThreadId,
+    isModeratorStreaming,
+    streamingRoundNumber,
+    waitingToStartStreaming,
+    isCreatingThread,
+    pendingMessage,
+    hasInitiallyLoaded,
+    preSearchResumption,
+    moderatorResumption,
+    selectedMode,
+    selectedParticipants,
+    inputValue,
+    setInputValue,
+    setSelectedParticipants,
+    removeParticipant,
+    enableWebSearch,
+    modelOrder,
+    setModelOrder,
+    setHasPendingConfigChanges,
+  } = useChatStore(
     useShallow(s => ({
+      messages: s.messages,
+      isStreaming: s.isStreaming,
+      currentParticipantIndex: s.currentParticipantIndex,
+      contextParticipants: s.participants,
+      preSearches: s.preSearches,
       thread: s.thread,
       createdThreadId: s.createdThreadId,
-    })),
-  );
-
-  const isModeratorStreaming = useChatStore(s => s.isModeratorStreaming);
-
-  const { streamingRoundNumber, waitingToStartStreaming, isCreatingThread, pendingMessage, hasInitiallyLoaded, preSearchResumption, moderatorResumption } = useChatStore(
-    useShallow(s => ({
+      isModeratorStreaming: s.isModeratorStreaming,
       streamingRoundNumber: s.streamingRoundNumber,
       waitingToStartStreaming: s.waitingToStartStreaming,
       isCreatingThread: s.isCreatingThread,
@@ -88,21 +117,23 @@ export function ChatView({
       hasInitiallyLoaded: s.hasInitiallyLoaded,
       preSearchResumption: s.preSearchResumption,
       moderatorResumption: s.moderatorResumption,
+      selectedMode: s.selectedMode,
+      selectedParticipants: s.selectedParticipants,
+      inputValue: s.inputValue,
+      setInputValue: s.setInputValue,
+      setSelectedParticipants: s.setSelectedParticipants,
+      removeParticipant: s.removeParticipant,
+      enableWebSearch: s.enableWebSearch,
+      modelOrder: s.modelOrder,
+      setModelOrder: s.setModelOrder,
+      setHasPendingConfigChanges: s.setHasPendingConfigChanges,
     })),
   );
 
-  const selectedMode = useChatStore(s => s.selectedMode);
-  const selectedParticipants = useChatStore(s => s.selectedParticipants);
-  const inputValue = useChatStore(s => s.inputValue);
-  const setInputValue = useChatStore(s => s.setInputValue);
-  const setSelectedParticipants = useChatStore(s => s.setSelectedParticipants);
-  const removeParticipant = useChatStore(s => s.removeParticipant);
-  const enableWebSearch = useChatStore(s => s.enableWebSearch);
-  const modelOrder = useChatStore(s => s.modelOrder);
-  const setModelOrder = useChatStore(s => s.setModelOrder);
-  const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
-
-  const effectiveThreadId = thread?.id || createdThreadId || '';
+  // ✅ SSR HYDRATION FIX: Use server-provided threadId first for query cache key matching.
+  // Server prefetches with thread.id, so we MUST use the same ID on first render.
+  // Store's thread?.id isn't available until after useEffect runs (store initialization).
+  const effectiveThreadId = serverThreadId || thread?.id || createdThreadId || '';
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
   const { data: modelsData } = useModelsQuery();
@@ -208,8 +239,26 @@ export function ChatView({
     preSearches,
   });
 
-  const feedbackByRound = useChatStore(s => s.feedbackByRound);
-  const pendingFeedback = useChatStore(s => s.pendingFeedback);
+  // ✅ ZUSTAND v5: Batch feedback selectors with useShallow
+  const { feedbackByRound, pendingFeedback } = useChatStore(
+    useShallow(s => ({
+      feedbackByRound: s.feedbackByRound,
+      pendingFeedback: s.pendingFeedback,
+    })),
+  );
+
+  // ✅ RENDER OPTIMIZATION: Memoize filtered feedback map to prevent new Map() on every render
+  // ThreadTimeline receives this as a prop - without memoization, creates new reference every render
+  const filteredFeedbackByRound = useMemo(() => {
+    const filtered = new Map<number, FeedbackType>();
+    feedbackByRound.forEach((value, key) => {
+      if (value !== null) {
+        filtered.set(key, value);
+      }
+    });
+    return filtered;
+  }, [feedbackByRound]);
+
   const feedbackActions = useFeedbackActions({ threadId: effectiveThreadId });
 
   const lastLoadedFeedbackRef = useRef<string>('');
@@ -494,10 +543,7 @@ export function ChatView({
                   : null
               }
               streamingRoundNumber={streamingRoundNumber}
-              feedbackByRound={new Map(
-                Array.from(feedbackByRound.entries())
-                  .filter(([, value]) => value !== null) as Array<[number, FeedbackType]>,
-              )}
+              feedbackByRound={filteredFeedbackByRound}
               pendingFeedback={pendingFeedback}
               getFeedbackHandler={feedbackActions.getFeedbackHandler}
               preSearches={preSearches}

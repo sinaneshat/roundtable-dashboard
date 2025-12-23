@@ -1,8 +1,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { StandardApiResponses } from '@/api/core/response-schemas';
-import { IdParamSchema } from '@/api/core/schemas';
+import { IdParamSchema, StandardApiResponses } from '@/api/core';
 
 import {
   AddProjectAttachmentResponseSchema,

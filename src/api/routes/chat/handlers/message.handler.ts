@@ -2,9 +2,8 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { asc, desc, eq } from 'drizzle-orm';
 
 import { verifyThreadOwnership } from '@/api/common/permissions';
-import { createHandler, Responses } from '@/api/core';
+import { createHandler, IdParamSchema, Responses } from '@/api/core';
 import { MessagePartTypes } from '@/api/core/enums';
-import { IdParamSchema } from '@/api/core/schemas';
 import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';

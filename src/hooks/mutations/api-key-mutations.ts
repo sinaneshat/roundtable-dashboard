@@ -9,6 +9,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { shouldRetryMutation } from '@/hooks/utils/mutation-retry';
 import { queryKeys } from '@/lib/data/query-keys';
 import {
   createApiKeyService,
@@ -98,16 +99,7 @@ export function useUpdateApiKeyMutation() {
         refetchType: 'active',
       });
     },
-    retry: (failureCount, error: unknown) => {
-      // Type-safe status extraction
-      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
-        ? error.status
-        : null;
-      if (status !== null && status >= 400 && status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: shouldRetryMutation,
     throwOnError: false,
   });
 }
@@ -185,16 +177,7 @@ export function useDeleteApiKeyMutation() {
         refetchType: 'active',
       });
     },
-    retry: (failureCount, error: unknown) => {
-      // Type-safe status extraction
-      const status = error && typeof error === 'object' && 'status' in error && typeof error.status === 'number'
-        ? error.status
-        : null;
-      if (status !== null && status >= 400 && status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: shouldRetryMutation,
     throwOnError: false,
   });
 }

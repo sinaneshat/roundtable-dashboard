@@ -22,8 +22,7 @@ import {
 } from '@/components/ui/tooltip';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
-import { getProviderIcon } from '@/lib/utils/ai-display';
-import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
+import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
