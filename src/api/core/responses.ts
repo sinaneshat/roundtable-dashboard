@@ -306,7 +306,7 @@ export function authorizationError(
       code: 'AUTHORIZATION_ERROR',
       message,
       context: errorContext,
-      details: { requiredRole, userId: user?.id },
+      details: { detailType: 'role_check', requiredRole, userId: user?.id },
     },
     meta: extractResponseMetadata(c),
   };
@@ -370,7 +370,7 @@ export function rateLimitExceeded(
     error: {
       code: 'RATE_LIMIT_EXCEEDED',
       message: 'Too many requests',
-      details: { limit, windowMs, resetTime },
+      details: { detailType: 'rate_limit', limit, windowMs, resetTime },
     },
     meta: extractResponseMetadata(c),
   };

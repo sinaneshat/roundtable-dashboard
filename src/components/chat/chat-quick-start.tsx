@@ -32,8 +32,8 @@ export function ChatQuickStart({
   className,
 }: ChatQuickStartProps) {
   const { data: usageData } = useUsageStatsQuery();
-  const userTier: SubscriptionTier
-    = usageData?.data?.subscription?.tier ?? 'free';
+  // ✅ CREDITS-ONLY: Map plan type to tier for model access
+  const userTier: SubscriptionTier = usageData?.data?.plan?.type === 'paid' ? 'pro' : 'free';
   const { data: modelsResponse } = useModelsQuery();
 
   const allModels = useMemo(() => {
@@ -123,11 +123,9 @@ export function ChatQuickStart({
       return models;
     };
 
-    // All tiers get at least MIN_MODELS_REQUIRED (3) models for diverse discussions
+    // Credits-only: Just free and pro tier models
     const freeModels = getModelsForTier(MIN_MODELS_REQUIRED);
-    const starterModels = getModelsForTier(MIN_MODELS_REQUIRED);
     const proModels = getModelsForTier(4);
-    const powerModels = getModelsForTier(6);
 
     const freeTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = freeModels;
@@ -194,68 +192,7 @@ export function ChatQuickStart({
 
       return suggestions;
     })();
-    const starterTierSuggestions: QuickStartSuggestion[] = (() => {
-      const models = starterModels;
-      // Always return suggestions, adjust participants based on available models
-      if (models.length === 0)
-        return [];
 
-      const buildParticipants = (roles: string[]) => {
-        return roles
-          .slice(0, models.length)
-          .map((role, idx) => {
-            const modelId = models[idx];
-            if (!modelId)
-              return null;
-            return {
-              id: `p${idx + 1}`,
-              modelId,
-              role,
-              priority: idx,
-              customRoleId: undefined,
-            };
-          })
-          .filter((p): p is NonNullable<typeof p> => p !== null);
-      };
-
-      return [
-        {
-          title:
-            'Should we colonize Mars if it means abandoning Earth\'s problems?',
-          prompt:
-            'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Space Futurist',
-            'Climate Scientist',
-            'Resource Economist',
-          ]),
-        },
-        {
-          title: 'Can we justify eating meat if lab-grown alternatives exist?',
-          prompt:
-            'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
-          mode: ChatModes.ANALYZING,
-          participants: buildParticipants([
-            'Animal Ethicist',
-            'Agronomist',
-            'Cultural Anthropologist',
-          ]),
-        },
-        {
-          title:
-            'Is nuclear energy our climate salvation or a ticking time bomb?',
-          prompt:
-            'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Energy Policy Expert',
-            'Nuclear Physicist',
-            'Environmental Activist',
-          ]),
-        },
-      ];
-    })();
     const proTierSuggestions: QuickStartSuggestion[] = (() => {
       const models = proModels;
       // Always return suggestions, adjust participants based on available models
@@ -320,87 +257,12 @@ export function ChatQuickStart({
         },
       ];
     })();
-    const powerTierSuggestions: QuickStartSuggestion[] = (() => {
-      const models = powerModels;
-      // Always return suggestions, adjust participants based on available models
-      if (models.length === 0)
-        return [];
 
-      const buildParticipants = (roles: string[]) => {
-        return roles
-          .slice(0, models.length)
-          .map((role, idx) => {
-            const modelId = models[idx];
-            if (!modelId)
-              return null;
-            return {
-              id: `p${idx + 1}`,
-              modelId,
-              role,
-              priority: idx,
-              customRoleId: undefined,
-            };
-          })
-          .filter((p): p is NonNullable<typeof p> => p !== null);
-      };
-
-      return [
-        {
-          title:
-            'Should we terraform planets or preserve them as pristine laboratories?',
-          prompt:
-            'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'Planetary Scientist',
-            'Exobiologist',
-            'Space Ethicist',
-            'Space Policy Expert',
-            'Astrogeologist',
-            'Astrobiologist',
-          ]),
-        },
-        {
-          title: 'Is objective morality possible without a higher power?',
-          prompt:
-            'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
-          mode: ChatModes.ANALYZING,
-          participants: buildParticipants([
-            'Moral Philosopher',
-            'Evolutionary Psychologist',
-            'Theologian',
-            'Neuroscientist',
-            'Cognitive Scientist',
-            'Ethics Scholar',
-          ]),
-        },
-        {
-          title:
-            'Should we create conscious AI even if we can\'t guarantee their wellbeing?',
-          prompt:
-            'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
-          mode: ChatModes.DEBATING,
-          participants: buildParticipants([
-            'AI Consciousness Researcher',
-            'Digital Rights Advocate',
-            'Bioethicist',
-            'Philosophy of Mind Expert',
-            'Computational Consciousness Expert',
-            'AI Ethics Researcher',
-          ]),
-        },
-      ];
-    })();
-    let tierSuggestions: QuickStartSuggestion[];
-    if (userTier === SubscriptionTiers.FREE) {
-      tierSuggestions = freeTierSuggestions;
-    } else if (userTier === SubscriptionTiers.STARTER) {
-      tierSuggestions = starterTierSuggestions;
-    } else if (userTier === SubscriptionTiers.PRO) {
-      tierSuggestions = proTierSuggestions;
-    } else {
-      tierSuggestions = powerTierSuggestions;
-    }
+    // Credits-only: Simplified to free/pro tiers
+    // Free users get free tier suggestions, paid users get pro tier suggestions
+    const tierSuggestions: QuickStartSuggestion[] = userTier === SubscriptionTiers.FREE
+      ? freeTierSuggestions
+      : proTierSuggestions;
 
     return tierSuggestions;
   }, [userTier, accessibleModels, selectUniqueProviderModels]);

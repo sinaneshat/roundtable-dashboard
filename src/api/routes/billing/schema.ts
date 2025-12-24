@@ -74,8 +74,8 @@ export const CheckoutRequestSchema = z.object({
     example: 'price_1ABC123',
   }),
   successUrl: CoreSchemas.url().optional().openapi({
-    description: 'URL to redirect to after successful checkout (defaults to /chat/billing/success). Do NOT include session_id parameter - success page will eagerly sync fresh data from Stripe API.',
-    example: 'https://app.example.com/chat/billing/success',
+    description: 'URL to redirect to after successful checkout. Subscriptions default to /chat/billing/subscription-success, credits default to /chat/billing/credits-success. Do NOT include session_id parameter - success page will eagerly sync fresh data from Stripe API.',
+    example: 'https://app.example.com/chat/billing/subscription-success',
   }),
   cancelUrl: CoreSchemas.url().optional().openapi({
     description: 'URL to redirect to if checkout is canceled (defaults to /chat/pricing)',
@@ -276,16 +276,45 @@ const TierChangeSchema = z.object({
   }),
 }).openapi('TierChange');
 
+/**
+ * Credit purchase info for one-time credit pack purchases
+ */
+export const CreditPurchaseInfoSchema = z.object({
+  creditsGranted: z.number().openapi({
+    description: 'Number of credits granted from purchase',
+    example: 10000,
+  }),
+  amountPaid: z.number().openapi({
+    description: 'Amount paid in cents',
+    example: 1000,
+  }),
+  currency: z.string().openapi({
+    description: 'Currency of payment',
+    example: 'usd',
+  }),
+}).openapi('CreditPurchaseInfo');
+
 export const SyncAfterCheckoutPayloadSchema = z.object({
   synced: z.boolean().openapi({
     description: 'Whether sync was successful',
     example: true,
   }),
+  purchaseType: z.enum(['subscription', 'credits', 'none']).openapi({
+    description: 'Type of purchase that was made',
+    example: 'subscription',
+  }),
   subscription: SyncedSubscriptionStateSchema.nullable().openapi({
-    description: 'Synced subscription state',
+    description: 'Synced subscription state (for subscription purchases)',
+  }),
+  creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
+    description: 'Credit purchase info (for one-time credit purchases)',
   }),
   tierChange: TierChangeSchema.openapi({
     description: 'Tier change information for comparison UI',
+  }),
+  creditsBalance: z.number().openapi({
+    description: 'Current credits balance after purchase',
+    example: 10000,
   }),
 }).openapi('SyncAfterCheckoutPayload');
 
@@ -308,9 +337,32 @@ export const WebhookHeadersSchema = z.object({
   }),
 });
 
+// ============================================================================
+// Credits-Only Sync Schema (Theo's separation pattern)
+// ============================================================================
+
+export const SyncCreditsAfterCheckoutPayloadSchema = z.object({
+  synced: z.boolean().openapi({
+    description: 'Whether sync was successful',
+    example: true,
+  }),
+  creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
+    description: 'Credit purchase info (null if no recent purchase found)',
+  }),
+  creditsBalance: z.number().openapi({
+    description: 'Current credits balance after purchase',
+    example: 10000,
+  }),
+}).openapi('SyncCreditsAfterCheckoutPayload');
+
+export const SyncCreditsAfterCheckoutResponseSchema = createApiResponseSchema(
+  SyncCreditsAfterCheckoutPayloadSchema,
+).openapi('SyncCreditsAfterCheckoutResponse');
+
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 
 export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequestSchema>;
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
 export type SyncAfterCheckoutPayload = z.infer<typeof SyncAfterCheckoutPayloadSchema>;
+export type SyncCreditsAfterCheckoutPayload = z.infer<typeof SyncCreditsAfterCheckoutPayloadSchema>;
 export type WebhookHeaders = z.infer<typeof WebhookHeadersSchema>;

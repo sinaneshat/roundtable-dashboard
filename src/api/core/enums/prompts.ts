@@ -11,15 +11,22 @@ import { z } from '@hono/zod-openapi';
 // PLACEHOLDER PREFIX (Prompt Template Computation Modes)
 // ============================================================================
 
-export const DEFAULT_PLACEHOLDER_PREFIX = 'COMPUTE' as const;
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const PLACEHOLDER_PREFIXES = ['FROM_CONTEXT', 'COMPUTE', 'EXTRACT', 'OPTIONAL'] as const;
 
-export const PlaceholderPrefixSchema = z.enum(['FROM_CONTEXT', 'COMPUTE', 'EXTRACT', 'OPTIONAL']).openapi({
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_PLACEHOLDER_PREFIX: PlaceholderPrefix = 'COMPUTE';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const PlaceholderPrefixSchema = z.enum(PLACEHOLDER_PREFIXES).openapi({
   description: 'Type of computation for AI prompt placeholder',
   example: 'COMPUTE',
 });
 
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type PlaceholderPrefix = z.infer<typeof PlaceholderPrefixSchema>;
 
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const PlaceholderPrefixes = {
   /** Value should come from conversation/request context */
   FROM_CONTEXT: 'FROM_CONTEXT' as const,

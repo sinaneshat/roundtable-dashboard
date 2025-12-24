@@ -1,40 +1,12 @@
 'use client';
 
-/**
- * SmartImage Component - Reusable Next.js Image with Built-in Loading States
- *
- * Features:
- * - Skeleton loading state while image loads
- * - Blur placeholder support for static imports
- * - Error fallback with customizable content
- * - Automatic aspect ratio preservation
- * - Works with both local and remote images
- *
- * Usage:
- * ```tsx
- * // Basic usage
- * <SmartImage src="/image.png" alt="Description" width={400} height={300} />
- *
- * // With custom fallback
- * <SmartImage
- *   src={dynamicUrl}
- *   alt="Preview"
- *   fill
- *   fallback={<CustomFallback />}
- * />
- *
- * // With aspect ratio (no width/height needed)
- * <SmartImage src="/image.png" alt="Description" aspectRatio="16/9" />
- * ```
- */
-
 import type { ImageProps } from 'next/image';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import type { ImageState } from '@/api/core/enums';
-import { ImageStates } from '@/api/core/enums';
+import { DEFAULT_IMAGE_STATE, ImageStates } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
 import { Skeleton } from './skeleton';
@@ -72,7 +44,7 @@ export function SmartImage({
   height,
   ...imageProps
 }: SmartImageProps) {
-  const [imageState, setImageState] = useState<ImageState>(ImageStates.LOADING);
+  const [imageState, setImageState] = useState<ImageState>(DEFAULT_IMAGE_STATE);
 
   const handleLoad = () => {
     setImageState(ImageStates.LOADED);
@@ -84,13 +56,9 @@ export function SmartImage({
     onLoadError?.();
   };
 
-  // Determine if we should use fill mode or explicit dimensions
   const useFill = fill || (!width && !height && !!aspectRatio);
 
-  // Container styles based on mode
-  const containerStyles = aspectRatio
-    ? { aspectRatio }
-    : undefined;
+  const containerStyles = aspectRatio ? { aspectRatio } : undefined;
 
   return (
     <div
@@ -101,17 +69,10 @@ export function SmartImage({
       )}
       style={containerStyles}
     >
-      {/* Skeleton loading state */}
       {showSkeleton && imageState === ImageStates.LOADING && (
-        <Skeleton
-          className={cn(
-            'absolute inset-0 rounded-none',
-            aspectRatio && 'w-full h-full'
-          )}
-        />
+        <Skeleton className={cn('absolute inset-0 rounded-none', aspectRatio && 'w-full h-full')} />
       )}
 
-      {/* Error fallback */}
       {imageState === ImageStates.ERROR && (
         fallback || (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/50 text-muted-foreground text-sm">
@@ -120,7 +81,6 @@ export function SmartImage({
         )
       )}
 
-      {/* Next.js Image - Don't render at all on error to prevent browser retry loops */}
       {imageState !== ImageStates.ERROR && (
         <Image
           src={src}
@@ -143,16 +103,9 @@ export function SmartImage({
   );
 }
 
-/**
- * SmartImage with gradient border wrapper
- * Commonly used for preview cards and featured images
- */
 type GradientImageProps = SmartImageProps & {
-  /** Gradient colors - defaults to brand gradient */
   gradient?: string;
-  /** Border thickness in pixels */
   borderWidth?: number;
-  /** Border radius class */
   rounded?: string;
 };
 
@@ -164,8 +117,6 @@ export function GradientImage({
   className,
   ...imageProps
 }: GradientImageProps) {
-  // Calculate inner radius: outer radius minus border width
-  // rounded-xl = 12px, rounded-2xl = 16px, rounded-lg = 8px
   const radiusMap: Record<string, number> = {
     'rounded-xl': 12,
     'rounded-2xl': 16,
@@ -178,12 +129,7 @@ export function GradientImage({
 
   return (
     <div
-      className={cn(
-        'relative bg-linear-to-br',
-        gradient,
-        rounded,
-        containerClassName
-      )}
+      className={cn('relative bg-linear-to-br', gradient, rounded, containerClassName)}
       style={{ padding: `${borderWidth}px` }}
     >
       <SmartImage

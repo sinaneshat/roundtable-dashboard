@@ -3,6 +3,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
@@ -19,22 +21,8 @@ type SidebarLoadingFallbackProps = {
 /**
  * SidebarLoadingFallback
  *
- * Reusable sidebar loading state for Suspense boundaries
- * Used for chat sidebar and navigation areas
- *
- * Features:
- * - Exact structural match with AppSidebar using shadcn Sidebar components
- * - Matches actual spacing: SidebarHeader with menu items, SidebarContent with px-2 py-2
- * - Uses actual Sidebar component (auto-handles width via CSS variables)
- * - Configurable skeleton count
- * - Optional favorites section
- *
- * Usage:
- * ```tsx
- * <Suspense fallback={<SidebarLoadingFallback count={10} />}>
- *   <AppSidebar />
- * </Suspense>
- * ```
+ * Reusable sidebar loading state for Suspense boundaries.
+ * Exact structural match with AppSidebar - same width, spacing, padding.
  */
 export function SidebarLoadingFallback({
   count = 10,
@@ -42,37 +30,90 @@ export function SidebarLoadingFallback({
   className,
 }: SidebarLoadingFallbackProps) {
   return (
-    <Sidebar collapsible="icon" className={className}>
-      {/* ✅ EXACT MATCH: SidebarHeader with SidebarMenu structure */}
+    <Sidebar collapsible="icon" variant="floating" className={className}>
       <SidebarHeader>
-        <SidebarMenu>
-          {/* Brand logo skeleton - matches SidebarMenuItem with size="lg" button */}
-          <SidebarMenuItem>
+        <SidebarMenu className="gap-1">
+          {/* Logo - Expanded (matches SidebarMenuButton size="lg" !h-10) */}
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
+            <div className="flex items-center gap-2.5 px-2 h-10">
+              <Skeleton className="size-7 rounded-lg shrink-0" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </SidebarMenuItem>
+
+          {/* Logo - Collapsed */}
+          <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2 items-center justify-center">
+            <Skeleton className="size-8 rounded-lg" />
+          </SidebarMenuItem>
+
+          {/* New Chat - Expanded */}
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
             <SidebarMenuSkeleton showIcon />
           </SidebarMenuItem>
 
-          {/* New Chat button skeleton */}
-          <SidebarMenuItem>
+          {/* Search - Expanded */}
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
             <SidebarMenuSkeleton showIcon />
+          </SidebarMenuItem>
+
+          {/* New Chat - Collapsed */}
+          <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
+            <div className="flex size-10 items-center justify-center">
+              <Skeleton className="size-4 rounded" />
+            </div>
+          </SidebarMenuItem>
+
+          {/* Search - Collapsed */}
+          <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
+            <div className="flex size-10 items-center justify-center">
+              <Skeleton className="size-4 rounded" />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
-
-        {/* Search bar skeleton - matches the actual search button structure */}
-        <div className="px-2 py-2">
-          <Skeleton className="h-9 w-full rounded-md" />
-        </div>
       </SidebarHeader>
 
-      {/* ✅ EXACT MATCH: SidebarContent with p-0 className */}
-      <SidebarContent className="p-0">
-        <ScrollArea className="h-full w-full">
-          {/* ✅ EXACT MATCH: px-2 py-2 space-y-2 container */}
-          <div className="px-2 py-2 space-y-2">
-            {/* Chat list skeletons */}
-            <ChatSidebarSkeleton count={count} showFavorites={showFavorites} />
+      <SidebarContent className="p-0 w-full min-w-0">
+        <ScrollArea className="w-full h-full">
+          <div className="flex flex-col w-full">
+            <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+              <ChatSidebarSkeleton count={count} showFavorites={showFavorites} />
+            </SidebarGroup>
           </div>
         </ScrollArea>
       </SidebarContent>
+
+      <SidebarFooter className="gap-2">
+        {/* Plan CTA - Expanded */}
+        <div className="group-data-[collapsible=icon]:hidden flex items-center gap-3 rounded-xl bg-accent px-3 py-2.5">
+          <Skeleton className="size-8 rounded-full shrink-0" />
+          <div className="flex flex-1 flex-col gap-1 min-w-0">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+        </div>
+
+        {/* Plan CTA - Collapsed */}
+        <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
+          <SidebarMenuItem>
+            <div className="flex size-10 items-center justify-center">
+              <Skeleton className="size-4 rounded" />
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        {/* NavUser skeleton */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex items-center gap-2 px-2 py-1.5 w-full">
+              <Skeleton className="size-8 rounded-lg shrink-0" />
+              <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+                <Skeleton className="h-4 w-24 mb-1" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }

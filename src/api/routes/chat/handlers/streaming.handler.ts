@@ -38,6 +38,11 @@ import {
   ParticipantStreamStatuses,
   UIMessageRoles,
 } from '@/api/core/enums';
+import {
+  finalizeCredits,
+  releaseReservation,
+  reserveCredits,
+} from '@/api/services/credit.service';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getModelById, needsSmoothStream } from '@/api/services/models-config.service';
 import {
@@ -51,11 +56,7 @@ import {
   trackLLMError,
   trackLLMGeneration,
 } from '@/api/services/posthog-llm-tracking.service';
-import {
-  AI_RETRY_CONFIG,
-  AI_TIMEOUT_CONFIG,
-  getSafeMaxOutputTokens,
-} from '@/api/services/product-logic.service';
+import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, estimateStreamingCredits, getSafeMaxOutputTokens } from '@/api/services/product-logic.service';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import {
@@ -89,9 +90,7 @@ import {
   isCleanupSchedulerAvailable,
 } from '@/api/services/upload-cleanup.service';
 import {
-  enforceMessageQuota,
   getUserTier,
-  incrementMessageUsage,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -450,7 +449,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               );
 
               if (!isDuplicate) {
-                await enforceMessageQuota(user.id);
+                // ✅ CREDIT CHECK: Verify user has credits before processing
+                // Actual deduction happens after AI response in finalizeCredits
+                const minCreditsNeeded = estimateStreamingCredits(1);
+                await reserveCredits(user.id, `user-msg-${lastMessage.id}`, minCreditsNeeded);
 
                 // ✅ FIX: Include file parts in user message for immediate UI display
                 // Without this, attachments don't show until page refresh because:
@@ -526,7 +528,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   },
                   createdAt: new Date(),
                 });
-                await incrementMessageUsage(user.id, 1);
+                // ✅ CREDITS: User message tokens are counted as inputTokens in AI response
 
                 // ✅ Associate attachments with the user message (for relational queries)
                 if (attachmentIds && attachmentIds.length > 0) {
@@ -690,11 +692,30 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // - OpenAI o1: Does NOT stream reasoning (internal) - don't configure reasoning options
       // - DeepSeek R1: Enable reasoning mode
       // - Claude :thinking models: Handled automatically by model ID suffix
+      //
+      // ✅ REASONING EFFORT OPTIMIZATION: Prevent models from exhausting tokens on reasoning
+      // Many reasoning models (GPT-5 nano, gpt-oss-120b, etc.) hit token limits during reasoning
+      // before generating actual text output. Lower effort preserves tokens for response.
+      // Reference: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+      // - minimal = ~10% tokens for reasoning, ~90% for output text
+      // - low = ~20% tokens for reasoning, ~80% for output text
+      // - medium = ~50% tokens for reasoning (too high, causes token exhaustion)
+      // NOTE: o-series models (o1, o3, o4) are reasoning-first and can use higher effort
+      const modelIdLower = participant.modelId.toLowerCase();
+      const isOSeriesModel = /\bo[134]-/.test(modelIdLower); // o1-, o3-, o4-
+      const isNanoOrMiniVariant = modelIdLower.includes('nano') || modelIdLower.includes('mini');
+      // o-series: medium (reasoning is the point), nano/mini: minimal, others: low
+      const reasoningEffort = isOSeriesModel
+        ? 'medium'
+        : isNanoOrMiniVariant
+          ? 'minimal'
+          : 'low';
+
       const providerOptions = supportsReasoningStream
         ? {
             openrouter: {
               reasoning: {
-                effort: 'medium',
+                effort: reasoningEffort,
               },
             },
           }
@@ -991,11 +1012,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
 
       // =========================================================================
-      // ✅ QUOTA DEDUCTION: Enforce and deduct quota BEFORE streaming begins
-      // This ensures user is charged even if connection is lost or stream is aborted
+      // ✅ CREDIT RESERVATION: Reserve credits BEFORE streaming begins
+      // Pre-reserve estimated credits to prevent overdraft during streaming
+      // Actual credits are finalized in onFinish after token count is known
       // =========================================================================
-      await enforceMessageQuota(user.id);
-      await incrementMessageUsage(user.id, 1);
+      const estimatedCredits = estimateStreamingCredits(participants.length);
+      await reserveCredits(user.id, streamMessageId, estimatedCredits);
 
       // =========================================================================
       // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
@@ -1060,6 +1082,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // This includes errors thrown from onFinish (like empty response errors)
         // AI SDK v5 will automatically handle these errors and propagate them to the client
         onError: async ({ error }) => {
+          // ✅ CREDIT RELEASE: Release reserved credits on error
+          // We don't know how many credits were reserved, so we pass estimatedCredits
+          try {
+            await releaseReservation(user.id, streamMessageId, estimatedCredits);
+          } catch (releaseError) {
+            console.error('[StreamText onError] Failed to release credit reservation:', releaseError);
+          }
+
           // ✅ ERROR LOGGING: Log error for debugging
           console.error('[StreamText onError]', {
             errorName: error instanceof Error ? error.name : 'Unknown',
@@ -1121,36 +1151,37 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // Models like DeepSeek R1, gemini-2.5-flash-lite return empty responses
           // This prevents AI SDK internal state corruption that causes "Cannot read properties of undefined (reading 'state')" errors
           const hasText = (finishResult.text?.trim().length || 0) > 0;
+          // ✅ FIX: Don't count [REDACTED]-only reasoning as valid content
+          // When reasoning models (GPT-5 Nano, o3-mini, etc.) exhaust tokens on encrypted reasoning
+          // before outputting text, they produce only [REDACTED] which gets filtered on frontend
+          // Result: empty message card with no visible content
+          // Solution: Treat [REDACTED]-only reasoning as not having meaningful content
+          const reasoningContent = reasoningDeltas.join('').trim();
+          const isOnlyRedactedReasoning = /^\[REDACTED\]$/i.test(reasoningContent);
           const hasReasoning
             = reasoningDeltas.length > 0
-              && reasoningDeltas.join('').trim().length > 0;
+              && reasoningContent.length > 0
+              && !isOnlyRedactedReasoning;
           const hasToolCalls
             = finishResult.toolCalls && finishResult.toolCalls.length > 0;
           const hasContent = hasText || hasReasoning || hasToolCalls;
 
-          // ✅ ROOT CAUSE FIX: Detect empty response REGARDLESS of finishReason
-          // Previous bug: Skipped detection when finishReason='unknown'
-          // But 'unknown' with no content means stream ended abnormally - this IS an error
-          // finishReason='unknown' is NOT "streaming init" - it's a failed completion
+          // ✅ EMPTY RESPONSE HANDLING: Save with error metadata instead of throwing
+          // IMPORTANT: Cannot throw here because stream is already open - throwing causes
+          // ERR_INCOMPLETE_CHUNKED_ENCODING because response is partially sent
+          //
+          // Instead: Save message with error metadata so frontend shows error state
+          // The message will have hasError: true and errorMessage explaining what happened
           //
           // Examples of empty responses in production:
           // - gemini-2.5-flash-lite: finishReason='unknown', 0 tokens, no text
           // - deepseek/deepseek-r1: finishReason='stop', 0 tokens, no text
-          //
-          // Both cases should throw error to prevent AI SDK state corruption
-          if (!hasContent) {
-            // ✅ CRITICAL: Throw error for empty responses to prevent AI SDK state corruption
-            // This ensures the error is properly handled by onError callback in use-multi-participant-chat
-            throw createError.internal(
-              `The model (${participant.modelId}) did not generate a response.`,
-              {
-                errorType: 'external_service',
-                service: 'openrouter',
-                operation: 'stream_text',
-                resourceId: participant.modelId,
-              },
-            );
-          }
+          // - gpt-5-nano with finishReason='length': exhausted tokens on reasoning
+          const emptyResponseError = !hasContent
+            ? (isOnlyRedactedReasoning && finishResult.finishReason === 'length'
+                ? `Model exhausted token limit during reasoning and could not generate a response.`
+                : `Model did not generate a response.`)
+            : null;
 
           // Delegate to message persistence service
           // ✅ CITATIONS: Pass citationSourceMap for resolving [source_id] markers in AI response
@@ -1180,6 +1211,24 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             availableSources,
             // ✅ REASONING DURATION: Pass duration for "Thought for X seconds" display
             reasoningDuration: finalReasoningDuration,
+            // ✅ EMPTY RESPONSE ERROR: Pass error for messages with no renderable content
+            emptyResponseError,
+          });
+
+          // =========================================================================
+          // ✅ CREDIT FINALIZATION: Deduct actual credits based on token usage
+          // Releases reservation and deducts actual credits used
+          // =========================================================================
+          const actualInputTokens = finishResult.usage?.inputTokens ?? 0;
+          const actualOutputTokens = finishResult.usage?.outputTokens ?? 0;
+
+          await finalizeCredits(user.id, streamMessageId, {
+            inputTokens: actualInputTokens,
+            outputTokens: actualOutputTokens,
+            action: 'ai_response',
+            threadId,
+            messageId,
+            modelId: participant.modelId,
           });
 
           // =========================================================================

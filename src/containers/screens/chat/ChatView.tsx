@@ -577,7 +577,7 @@ export function ChatView({
                 status={isInputBlocked ? 'submitted' : 'ready'}
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
-                quotaCheckType={mode === ScreenModes.OVERVIEW ? 'threads' : 'messages'}
+                showCreditAlert={true}
                 onRemoveParticipant={isInputBlocked ? undefined : handleRemoveParticipant}
                 attachments={chatAttachments.attachments}
                 onAddAttachments={chatAttachments.addFiles}

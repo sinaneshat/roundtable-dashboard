@@ -101,23 +101,6 @@ export const PreSearchQueryStateSchema = z.object({
 export type PreSearchQueryState = z.infer<typeof PreSearchQueryStateSchema>;
 
 // ============================================================================
-// Pre-search streaming event schemas
-// ============================================================================
-// REMOVED: Duplicate PreSearch event schemas moved to authoritative location
-// SINGLE SOURCE OF TRUTH: /src/api/routes/chat/schema.ts (lines 1388-1564)
-// - PreSearchStartEventSchema
-// - PreSearchQueryEventSchema
-// - PreSearchResultEventSchema
-// - PreSearchCompleteEventSchema
-// - PreSearchDoneEventSchema
-// - PreSearchFailedEventSchema
-// - PreSearchAnswerChunkEventSchema
-// - PreSearchAnswerCompleteEventSchema
-// - PreSearchAnswerErrorEventSchema
-// - PreSearchSSEEventSchema (discriminated union)
-// All event schemas have OpenAPI decorators and `event` + `data` wrapper structure
-
-// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -126,9 +109,8 @@ export function messageHasError(
     | MessageMetadata
     | import('@/db/schemas/chat-metadata').DbMessageMetadata,
 ): boolean {
-  const narrowedMetadata = metadata as MessageMetadata;
-  if (isAssistantMetadata(narrowedMetadata)) {
-    return narrowedMetadata.hasError === true;
+  if (isAssistantMetadata(metadata)) {
+    return metadata.hasError === true;
   }
   return false;
 }

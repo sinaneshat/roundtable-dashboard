@@ -1,10 +1,3 @@
-/**
- * Chat Store Provider Hooks
- *
- * Internal hooks used by the ChatStoreProvider.
- * These handle specific concerns in isolation for maintainability.
- */
-
 export { useMessageSync } from './use-message-sync';
 export { useModeratorTrigger } from './use-moderator-trigger';
 export { useNavigationCleanup } from './use-navigation-cleanup';

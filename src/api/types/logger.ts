@@ -9,7 +9,7 @@ import { AuthActionSchema, DatabaseOperationSchema, HttpMethodSchema, Validation
 
 /**
  * Flexible log contexts with discriminated union support (Context7 Pattern)
- * Uses passthrough() for additional properties while maintaining core type safety
+ * Uses explicit 'extra' field for additional properties with type safety
  */
 export const LogContextSchema = z.discriminatedUnion('logType', [
   z.object({
@@ -22,7 +22,8 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
     statusCode: z.number().int().optional(),
     duration: z.number().positive().optional(),
     userAgent: z.string().optional(),
-  }).passthrough(),
+    extra: z.record(z.string(), z.unknown()).optional(), // Explicit extension field
+  }),
   z.object({
     logType: z.literal('database'),
     table: z.string().optional(),
@@ -31,7 +32,8 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
     affectedRows: z.number().int().nonnegative().optional(),
     queryId: z.string().optional(),
     connectionPool: z.string().optional(),
-  }).passthrough(),
+    extra: z.record(z.string(), z.unknown()).optional(),
+  }),
   z.object({
     logType: z.literal('auth'),
     userId: z.string(),
@@ -40,7 +42,8 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
     ipAddress: z.string().optional(),
     sessionId: z.string().optional(),
     failureReason: z.string().optional(),
-  }).passthrough(),
+    extra: z.record(z.string(), z.unknown()).optional(),
+  }),
   z.object({
     logType: z.literal('validation'),
     fieldCount: z.number().int().nonnegative(),
@@ -52,7 +55,8 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
       code: z.string().optional(),
     })).optional(),
     validationDuration: z.number().positive().optional(),
-  }).passthrough(),
+    extra: z.record(z.string(), z.unknown()).optional(),
+  }),
   z.object({
     logType: z.literal('performance'),
     duration: z.number().positive(),
@@ -61,7 +65,8 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
     cacheHit: z.boolean().optional(),
     component: z.string().optional(),
     marks: z.record(z.string(), z.number()).optional(),
-  }).passthrough(),
+    extra: z.record(z.string(), z.unknown()).optional(),
+  }),
   z.object({
     logType: z.literal('api'),
     method: HttpMethodSchema,
@@ -70,7 +75,8 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
     duration: z.number().positive().optional(),
     responseSize: z.number().int().nonnegative().optional(),
     requestId: z.string().optional(),
-  }).passthrough(),
+    extra: z.record(z.string(), z.unknown()).optional(),
+  }),
 ]);
 
 // Flexible: Discriminated union with Record fallback for custom logging needs

@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
 import {
+  BooleanStringSchema,
   ProjectColorSchema,
   ProjectIndexStatusSchema,
   ProjectMemorySourceSchema,
@@ -221,7 +222,7 @@ export const ListProjectMemoriesQuerySchema = CursorPaginationQuerySchema.extend
   source: ProjectMemorySourceSchema.optional().openapi({
     description: 'Filter by memory source',
   }),
-  isActive: z.enum(['true', 'false']).optional().openapi({
+  isActive: BooleanStringSchema.optional().openapi({
     description: 'Filter by active status (query param string)',
   }),
 }).openapi('ListProjectMemoriesQuery');

@@ -637,7 +637,16 @@ async function toolGetThread(
     throw createError.unauthorized('Access denied');
   }
 
-  let messages: unknown[] = [];
+  // ✅ TYPE-SAFE: Explicitly type messages instead of unknown[]
+  type ThreadMessage = {
+    id: string;
+    role: string;
+    content: string;
+    roundNumber: number | null;
+    participantId: string | null;
+  };
+
+  let messages: ThreadMessage[] = [];
   if (input.includeMessages !== false) {
     const dbMessages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, input.threadId),
@@ -734,11 +743,11 @@ async function toolSendMessage(
   await db.insert(tables.chatMessage).values({
     id: messageId,
     threadId: input.threadId,
-    role: 'user',
+    role: MessageRoles.USER,
     parts: [{ type: 'text', text: input.content }],
     participantId: null,
     roundNumber,
-    metadata: { role: 'user', roundNumber },
+    metadata: { role: MessageRoles.USER, roundNumber },
     createdAt: new Date(),
   });
 
@@ -1074,14 +1083,15 @@ async function toolUpdateParticipant(
   if (!participant)
     throw createError.notFound('Participant not found');
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
-  if (input.role !== undefined)
-    updates.role = input.role;
-  if (input.priority !== undefined)
-    updates.priority = input.priority;
-  if (input.systemPrompt !== undefined) {
-    updates.settings = { ...participant.settings, systemPrompt: input.systemPrompt };
-  }
+  // ✅ TYPE-SAFE: Build typed update object instead of Record<string, unknown>
+  const updates = {
+    updatedAt: new Date(),
+    ...(input.role !== undefined && { role: input.role }),
+    ...(input.priority !== undefined && { priority: input.priority }),
+    ...(input.systemPrompt !== undefined && {
+      settings: { ...participant.settings, systemPrompt: input.systemPrompt },
+    }),
+  };
 
   await db.update(tables.chatParticipant).set(updates).where(eq(tables.chatParticipant.id, input.participantId));
 
@@ -1280,16 +1290,14 @@ async function toolUpdateProject(
   if (!existing)
     throw createError.notFound(`Project not found: ${input.projectId}`);
 
-  // Build update object
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
-  if (input.name !== undefined)
-    updates.name = input.name;
-  if (input.description !== undefined)
-    updates.description = input.description;
-  if (input.customInstructions !== undefined)
-    updates.customInstructions = input.customInstructions;
-  if (input.settings !== undefined)
-    updates.settings = input.settings;
+  // ✅ TYPE-SAFE: Build typed update object instead of Record<string, unknown>
+  const updates = {
+    updatedAt: new Date(),
+    ...(input.name !== undefined && { name: input.name }),
+    ...(input.description !== undefined && { description: input.description }),
+    ...(input.customInstructions !== undefined && { customInstructions: input.customInstructions }),
+    ...(input.settings !== undefined && { settings: input.settings }),
+  };
 
   const [updated] = await db
     .update(tables.chatProject)

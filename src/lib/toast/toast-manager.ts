@@ -106,41 +106,27 @@ function showToastInternal(options: ToastOptions): void {
   // Mark toast as active
   activeToasts.add(toastId);
 
-  // Enhanced toast configuration
-  const actionElement = action
+  // Enhanced toast configuration - Cast to ToastActionElement for type compatibility
+  // React.createElement returns FunctionComponentElement which is runtime-compatible with ToastActionElement
+  const actionElement: ToastActionElement | undefined = action
     ? React.createElement(
-        ToastAction,
-        {
-          altText: action.label,
-          onClick: action.onClick,
-        },
-        action.label,
-      )
+      ToastAction,
+      {
+        altText: action.label,
+        onClick: action.onClick,
+      },
+      action.label,
+    ) as unknown as ToastActionElement
     : undefined;
 
-  /**
-   * Type assertion helper for ToastAction elements
-   *
-   * React.createElement returns FunctionComponentElement but ToastActionElement expects ReactElement<typeof ToastAction>.
-   * These types are compatible at runtime but don't overlap in TypeScript's type system.
-   *
-   * This assertion is safe because:
-   * 1. We construct the element with ToastAction component and correct props
-   * 2. Runtime structure matches ToastActionElement expectations
-   * 3. No additional runtime validation needed - constructor guarantees shape
-   */
-  const toActionElement = (element: React.ReactElement | undefined): ToastActionElement | undefined => {
-    return element as ToastActionElement | undefined;
-  };
-
-  const toastConfig: Parameters<typeof baseToast>[0] = {
+  const toastConfig = {
     title,
     description,
     variant: variant === ToastVariants.SUCCESS || variant === ToastVariants.WARNING || variant === ToastVariants.INFO || variant === ToastVariants.LOADING
       ? ToastVariants.DEFAULT
       : variant,
     duration,
-    action: toActionElement(actionElement),
+    ...(actionElement && { action: actionElement }),
   };
 
   // Show the toast

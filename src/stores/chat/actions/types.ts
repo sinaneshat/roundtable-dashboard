@@ -34,50 +34,37 @@ export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 // ============================================================================
 
 /**
- * Usage resource stats sub-schema (messages, threads, etc.)
- * ✅ TYPE-SAFE: Proper schema instead of inline object
+ * Credits schema for cache validation
+ * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.credits
  */
-const UsageResourceStatsSchema = z.object({
-  used: z.number(),
-  limit: z.number(),
-  remaining: z.number(),
-  percentage: z.number(),
+const UsageCreditsSchema = z.object({
+  balance: z.number(),
+  available: z.number(),
   status: UsageStatusSchema.optional(),
 });
 
 /**
- * Usage period schema for cache validation
- * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.period
+ * Plan schema for cache validation
+ * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.plan
  */
-const UsagePeriodCacheSchema = z.object({
-  start: z.coerce.date(),
-  end: z.coerce.date(),
-  daysRemaining: z.number(),
-});
-
-/**
- * Usage subscription schema for cache validation
- * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema.subscription
- */
-const UsageSubscriptionCacheSchema = z.object({
-  tier: z.string(),
-  isAnnual: z.boolean(),
-  pendingTierChange: z.string().nullable().optional(),
-  pendingTierIsAnnual: z.boolean().nullable().optional(),
+const UsagePlanSchema = z.object({
+  type: z.string(),
+  name: z.string(),
+  monthlyCredits: z.number(),
+  hasPaymentMethod: z.boolean(),
+  nextRefillAt: z.string().datetime().nullable(),
 });
 
 /**
  * Usage stats data structure schema
- * Validates optimistic cache updates for thread/message counts
+ * Validates optimistic cache updates for credit balance
  *
  * SINGLE SOURCE OF TRUTH for usage stats cache validation in mutations
- * ✅ TYPE-SAFE: Uses proper sub-schemas instead of z.unknown()
+ * ✅ BACKEND-ALIGNED: Matches UsageStatsPayloadSchema (credits + plan)
  */
 export const UsageStatsDataSchema = z.object({
-  messages: UsageResourceStatsSchema,
-  threads: UsageResourceStatsSchema,
-  subscription: UsageSubscriptionCacheSchema,
-  period: UsagePeriodCacheSchema,
+  credits: UsageCreditsSchema,
+  plan: UsagePlanSchema,
 });
 
 export type UsageStatsData = z.infer<typeof UsageStatsDataSchema>;
@@ -224,20 +211,17 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
   if (!threadData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       // 🔍 DEBUG LOG 2: Thread detail validation failure - check message structure
-      // ✅ TYPE-SAFE: Validate debug data structure before accessing properties
-      const debugDataSchema = z.object({
-        messages: z.array(z.record(z.string(), z.unknown())).optional(),
-        participants: z.array(z.object({ id: z.string().optional() }).passthrough()).optional(),
-      }).passthrough();
-
-      const debugData = debugDataSchema.safeParse(response.data.data);
-      const rawData = debugData.success ? debugData.data : undefined;
+      // ✅ TYPE-SAFE: Use lenient record schema for debug inspection only
+      const debugData = z.record(z.string(), z.unknown()).safeParse(response.data.data);
+      const rawData = debugData.success ? debugData.data : {};
+      const messages = Array.isArray(rawData.messages) ? rawData.messages : [];
+      const participants = Array.isArray(rawData.participants) ? rawData.participants : [];
 
       console.error('[DEBUG-2] validateThreadDetailPayloadCache failed:', {
-        messageCount: rawData?.messages?.length,
-        firstMessageKeys: rawData?.messages?.[0] ? Object.keys(rawData.messages[0]) : [],
-        participantCount: rawData?.participants?.length,
-        firstParticipantId: rawData?.participants?.[0]?.id,
+        messageCount: messages.length,
+        firstMessageKeys: messages[0] ? Object.keys(messages[0] as object) : [],
+        participantCount: participants.length,
+        firstParticipantId: (participants[0] as { id?: string } | undefined)?.id,
         errorIssues: threadData.error.issues.slice(0, 5),
       });
     }
@@ -292,18 +276,13 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
   if (!queryData.success) {
     if (process.env.NODE_ENV === Environments.DEVELOPMENT) {
       // 🔍 DEBUG LOG 1: Infinite query validation failure
-      // ✅ TYPE-SAFE: Validate debug data structure before accessing properties
-      const debugDataSchema = z.object({
-        pageParams: z.array(z.unknown()).optional(),
-        pages: z.array(z.unknown()).optional(),
-      }).passthrough();
-
-      const debugData = debugDataSchema.safeParse(data);
-      const rawData = debugData.success ? debugData.data : undefined;
+      // ✅ TYPE-SAFE: Use lenient record schema for debug inspection only
+      const debugData = z.record(z.string(), z.unknown()).safeParse(data);
+      const rawData = debugData.success ? debugData.data : {};
 
       console.error('[DEBUG-1] validateInfiniteQueryCache failed:', {
-        pageParams: rawData?.pageParams,
-        pagesCount: Array.isArray(rawData?.pages) ? rawData.pages.length : 0,
+        pageParams: rawData.pageParams,
+        pagesCount: Array.isArray(rawData.pages) ? (rawData.pages as unknown[]).length : 0,
         error: queryData.error.issues.slice(0, 3),
       });
     }
@@ -355,9 +334,7 @@ export function validateThreadDetailCache(data: unknown): ThreadDetailCacheData 
  */
 export const ThreadDetailResponseCacheSchema = z.object({
   success: z.boolean(),
-  data: z.object({
-    participants: z.array(ChatParticipantCacheCompatSchema),
-  }).passthrough(), // Allow additional properties in data object
+  data: ThreadDetailPayloadCacheSchema, // Use full thread detail schema
 });
 
 /**
@@ -404,13 +381,7 @@ export function validateThreadDetailResponseCache(data: unknown): ThreadDetailRe
 export const ThreadsListCachePageSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    items: z.array(
-      z.object({
-        id: z.string(),
-        isFavorite: z.boolean().optional(),
-        isPublic: z.boolean().optional(),
-      }).passthrough(), // Allow additional properties
-    ),
+    items: z.array(ChatThreadCacheCompatSchema), // Use full thread schema
   }).optional(),
 });
 

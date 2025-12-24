@@ -35,6 +35,7 @@ export {
 export {
   useCreateCheckoutSessionMutation,
   useSyncAfterCheckoutMutation,
+  useSyncCreditsAfterCheckoutMutation,
 } from './checkout';
 
 // Customer Portal mutations (protected) - For payment method management and invoices

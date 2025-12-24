@@ -174,11 +174,32 @@ export function initPreferencesStore(
 }
 
 // ============================================================================
+// COOKIE DATA VALIDATION SCHEMA
+// ============================================================================
+
+/**
+ * Zod schema for validating cookie data structure
+ * Zustand persist wraps state in { state: {...}, version: number }
+ */
+const CookieDataSchema = z.object({
+  state: z.object({
+    selectedModelIds: z.array(z.string()).optional(),
+    modelOrder: z.array(z.string()).optional(),
+    selectedMode: z.string().nullable().optional(),
+    enableWebSearch: z.boolean().optional(),
+  }).optional(),
+  version: z.number().optional(),
+});
+
+// ============================================================================
 // SERVER-SIDE COOKIE PARSER (For SSR Hydration)
 // ============================================================================
 
 /**
  * Parse preferences from raw cookie value (server-side)
+ *
+ * ✅ TYPE-SAFE: Uses Zod validation instead of type assertion
+ * ✅ RUNTIME VALIDATION: Ensures cookie data matches expected structure
  *
  * @example
  * // In Server Component (layout.tsx):
@@ -196,30 +217,25 @@ export function parsePreferencesCookie(
 
   try {
     const decoded = decodeURIComponent(cookieValue);
-    const parsed = JSON.parse(decoded) as {
-      state?: {
-        selectedModelIds?: string[];
-        modelOrder?: string[];
-        selectedMode?: string | null;
-        enableWebSearch?: boolean;
-      };
-    };
+    const parsed = JSON.parse(decoded);
+
+    // ✅ Validate with Zod instead of type assertion
+    const result = CookieDataSchema.safeParse(parsed);
+
+    if (!result.success) {
+      console.error('[parsePreferencesCookie] Invalid cookie structure:', result.error);
+      return null;
+    }
+
+    const { data } = result;
 
     // Zustand persist wraps state in { state: {...}, version: number }
-    if (parsed?.state) {
+    if (data?.state) {
       return {
-        selectedModelIds: Array.isArray(parsed.state.selectedModelIds)
-          ? parsed.state.selectedModelIds
-          : [],
-        modelOrder: Array.isArray(parsed.state.modelOrder)
-          ? parsed.state.modelOrder
-          : [],
-        selectedMode: typeof parsed.state.selectedMode === 'string'
-          ? parsed.state.selectedMode
-          : null,
-        enableWebSearch: typeof parsed.state.enableWebSearch === 'boolean'
-          ? parsed.state.enableWebSearch
-          : false,
+        selectedModelIds: data.state.selectedModelIds ?? [],
+        modelOrder: data.state.modelOrder ?? [],
+        selectedMode: data.state.selectedMode ?? null,
+        enableWebSearch: data.state.enableWebSearch ?? false,
         _hasHydrated: true,
       };
     }

@@ -121,6 +121,12 @@ export const ModelMessageCard = memo(({
   // ✅ MODEL NORMALIZATION: Filter non-renderable reasoning to prevent layout shifts
   const renderableParts = parts.filter(part => !isNonRenderableReasoningPart(part));
 
+  // ✅ REASONING DETECTION: Check if there were reasoning parts that got filtered
+  // Used to show a more informative message for reasoning-only responses
+  const hasFilteredReasoningParts = parts.some(
+    part => part.type === MessagePartTypes.REASONING && isNonRenderableReasoningPart(part),
+  );
+
   // ✅ FLASH FIX: Shimmer must stay visible until content arrives
   // Previous bug: When status changed from PENDING→STREAMING before parts arrived,
   // both shimmer AND content were hidden (opacity 0) causing a flash.
@@ -225,6 +231,7 @@ export const ModelMessageCard = memo(({
                 Previous bug: shimmer hid when status=STREAMING before parts arrived
                 Now shimmer stays visible until renderableParts.length > 0 */}
             {/* ✅ SCROLL FIX: data-message-content enables CSS scroll anchoring */}
+            {/* ✅ AI SDK v5: Handle messages with only non-renderable parts (e.g., [REDACTED] reasoning) */}
             <div className="grid" style={{ gridTemplateColumns: '1fr' }} data-message-content>
               {/* Shimmer - stays visible until content actually arrives */}
               <div
@@ -236,6 +243,18 @@ export const ModelMessageCard = memo(({
               >
                 <TextShimmer>{loadingText ?? t('generating', { model: modelName })}</TextShimmer>
               </div>
+              {/* Empty state - show when completed but no renderable content
+                  This handles models that return only [REDACTED] reasoning with no text */}
+              {!showShimmer && renderableParts.length === 0 && parts.length > 0 && !hasError && (
+                <div
+                  style={{ gridArea: '1/1' }}
+                  className="py-2 text-muted-foreground text-sm italic opacity-100"
+                >
+                  {hasFilteredReasoningParts
+                    ? t('reasoningOnlyResponse', { model: modelName })
+                    : t('emptyResponse', { model: modelName })}
+                </div>
+              )}
               {/* Content - hidden initially, fades in when parts arrive
                   Always render wrapper to prevent mount/unmount flashing */}
               <div

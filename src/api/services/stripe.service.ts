@@ -310,7 +310,8 @@ class StripeService {
   // ============================================================================
 
   /**
-   * Create a checkout session for subscription
+   * Create a checkout session for subscription or one-time payment
+   * Automatically detects mode based on price type
    */
   async createCheckoutSession(params: {
     priceId: string;
@@ -320,11 +321,19 @@ class StripeService {
     cancelUrl: string;
     trialPeriodDays?: number;
     metadata?: Record<string, string>;
+    mode?: 'subscription' | 'payment';
   }): Promise<Stripe.Checkout.Session> {
     const stripe = this.getClient();
 
+    // Auto-detect mode if not provided by fetching price details
+    let checkoutMode: 'subscription' | 'payment' = params.mode || 'subscription';
+    if (!params.mode) {
+      const price = await stripe.prices.retrieve(params.priceId);
+      checkoutMode = price.type === 'recurring' ? 'subscription' : 'payment';
+    }
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      mode: 'subscription',
+      mode: checkoutMode,
       line_items: [
         {
           price: params.priceId,
@@ -343,8 +352,8 @@ class StripeService {
       sessionParams.customer_email = params.customerEmail;
     }
 
-    // Add trial period if specified
-    if (params.trialPeriodDays) {
+    // Add trial period if specified (only for subscriptions)
+    if (params.trialPeriodDays && checkoutMode === 'subscription') {
       sessionParams.subscription_data = {
         trial_period_days: params.trialPeriodDays,
       };

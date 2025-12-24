@@ -220,13 +220,16 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     architecture: { modality: 'text+image+file->text', tokenizer: 'o200k_base', instruct_type: 'chatml' },
     provider: 'openai',
     category: 'general',
-    capabilities: { vision: true, reasoning: false, streaming: true, tools: true },
+    // ✅ GPT-5 NANO HAS MANDATORY REASONING: Model uses encrypted reasoning tokens internally
+    // Reference: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+    // Without reasoning config, model exhausts tokens on hidden reasoning before generating text
+    capabilities: { vision: true, reasoning: true, streaming: true, tools: true },
     pricing_display: { input: '$0.05/1M', output: '$0.40/1M' },
     is_free: false,
     supports_vision: true,
-    is_reasoning_model: false,
+    is_reasoning_model: true,
     supports_temperature: true,
-    supports_reasoning_stream: false,
+    supports_reasoning_stream: true,
   },
   {
     id: 'google/gemini-2.0-flash-001',

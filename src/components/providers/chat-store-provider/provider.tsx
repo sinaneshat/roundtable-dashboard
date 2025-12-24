@@ -1,16 +1,5 @@
 'use client';
 
-/**
- * Chat Store Provider
- *
- * Official Zustand v5 + Next.js pattern:
- * - Vanilla store factory
- * - React Context for distribution
- * - Per-provider store instance
- *
- * Bridges AI SDK hook (useMultiParticipantChat) with Zustand store.
- */
-
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
@@ -43,18 +32,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
   const queryClientRef = useRef(queryClient);
-  // Ref for moderator trigger - set later by useModeratorTrigger hook
   const triggerModeratorRef = useRef<((roundNumber: number, participantMessageIds: string[]) => Promise<void>) | null>(null);
 
-  // Initialize store once per provider
   if (storeRef.current === null) {
     storeRef.current = createChatStore();
   }
 
   const store = storeRef.current;
 
-  // ✅ ZUSTAND v5: Batch store subscriptions with useShallow to prevent cascading re-renders
-  // Instead of 11 separate subscriptions, use a single batched subscription
   const {
     thread,
     participants,
@@ -88,18 +73,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     showApiErrorToast('Chat error', error);
   }, []);
 
-  // ✅ CRITICAL: Helper to wait for store messages to have all parts with state='done'
-  // This ensures UI has fully updated before we trigger moderator
   const waitForStoreSync = useCallback(async (
     sdkMessages: UIMessage[],
     roundNumber: number,
     maxWaitMs = 2000,
   ): Promise<boolean> => {
     const startTime = Date.now();
-    const checkInterval = 50; // Check every 50ms
+    const checkInterval = 50;
 
-    // First, sync the SDK messages directly to the store to bypass throttling
-    // This ensures the store gets the latest state immediately
     const participantMessagesFromSdk = sdkMessages.filter((m) => {
       const meta = getMessageMetadata(m.metadata);
       return (
@@ -111,13 +92,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       );
     });
 
-    // Force update store with SDK messages that have state='done'
     if (participantMessagesFromSdk.length > 0) {
       const currentStoreMessages = store.getState().messages;
       const updatedMessages = currentStoreMessages.map((storeMsg) => {
         const sdkMatch = participantMessagesFromSdk.find(sdk => sdk.id === storeMsg.id);
         if (sdkMatch) {
-          // Use SDK message parts (which should have state='done')
           return {
             ...storeMsg,
             parts: sdkMatch.parts,
@@ -127,7 +106,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return storeMsg;
       });
 
-      // Check if any messages from SDK are missing in store
       const storeMsgIds = new Set(currentStoreMessages.map(m => m.id));
       const missingFromStore = participantMessagesFromSdk.filter(m => !storeMsgIds.has(m.id));
       if (missingFromStore.length > 0) {
@@ -137,11 +115,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       store.getState().setMessages(updatedMessages);
     }
 
-    // Now verify the sync completed
     while (Date.now() - startTime < maxWaitMs) {
       const storeMessages = store.getState().messages;
 
-      // Get participant messages for this round from store
       const participantMessages = storeMessages.filter((m) => {
         if (m.role !== MessageRoles.ASSISTANT)
           return false;
@@ -153,7 +129,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return msgRound === roundNumber && !isModerator;
       });
 
-      // Check if all have state='done' (no streaming parts)
       const allComplete = participantMessages.every((msg) => {
         const hasStreamingParts = msg.parts?.some(
           p => 'state' in p && p.state === 'streaming',
@@ -165,17 +140,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return true;
       }
 
-      // Wait before next check
       await new Promise(resolve => setTimeout(resolve, checkInterval));
     }
 
-    // Timed out - log warning but proceed anyway
-    // eslint-disable-next-line no-console
-    console.warn('[handleComplete] Store sync timed out, proceeding anyway');
+    console.error('[handleComplete] Store sync timed out, proceeding anyway');
     return false;
   }, [store]);
 
-  // onComplete callback for moderator triggering
   const handleComplete = useCallback(async (sdkMessages: UIMessage[]) => {
     const currentState = store.getState();
 
@@ -192,34 +163,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             return;
           }
 
-          // ✅ CRITICAL FIX: Wait for store to sync before proceeding
-          // This ensures UI has fully updated with state='done' for all parts
           await waitForStoreSync(sdkMessages, roundNumber);
-
-          // ✅ RACE FIX: Wait for ALL animations (pre-search, participants) before triggering moderator
-          // This prevents moderator from triggering while pre-search is still animating
           await currentState.waitForAllAnimations();
 
-          // ✅ RACE FIX: After waiting for animations, verify pre-search is complete if enabled
-          // This handles race where pre-search completes but animation just finished
           const latestState = store.getState();
           const webSearchEnabled = latestState.thread?.enableWebSearch || latestState.enableWebSearch;
           if (webSearchEnabled) {
             const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === roundNumber);
             if (preSearchForRound && preSearchForRound.status !== 'complete') {
-              // Pre-search still running, don't trigger moderator yet
-              // The flow state machine will trigger it when pre-search completes
               return;
             }
           }
 
           currentState.markModeratorCreated(roundNumber);
-          // ✅ FIX: Don't call completeStreaming() here - it resets isModeratorStreaming to false
-          // The moderator trigger will manage its own streaming state
-          // completeStreaming() will be called by the moderator trigger when it completes
 
-          // Trigger moderator stream programmatically
-          // Extract participant message IDs from SDK messages for this round
           const participantMessageIds = sdkMessages
             .filter((m) => {
               const meta = getMessageMetadata(m.metadata);
@@ -227,7 +184,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 return false;
 
               return (
-                meta.role === 'assistant'
+                meta.role === MessageRoles.ASSISTANT
                 && 'roundNumber' in meta
                 && meta.roundNumber === roundNumber
                 && !('isModerator' in meta)
@@ -235,23 +192,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             })
             .map(m => m.id);
 
-          // Trigger the moderator stream if we have participant messages
           if (participantMessageIds.length > 0) {
-            // Set moderator streaming state for input blocking
             currentState.setIsModeratorStreaming(true);
             triggerModeratorRef.current?.(roundNumber, participantMessageIds);
           }
-
-          // Moderator messages are stored as chatMessage with isModerator: true metadata
-          // The triggerModerator function handles fetching messages after stream completes
         } catch {
-          // Moderator creation failed
         }
       }
     }
   }, [store, waitForStoreSync]);
 
-  // Initialize AI SDK hook
   const chat = useMultiParticipantChat({
     threadId: effectiveThreadId,
     participants,
@@ -271,20 +221,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     },
   });
 
-  // Chat method refs
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
   const setMessagesRef = useRef(chat.setMessages);
 
-  // Track when thread changes for cleanup
   const prevCreatedThreadIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (createdThreadId !== prevCreatedThreadIdRef.current) {
       prevCreatedThreadIdRef.current = createdThreadId;
     }
   }, [createdThreadId]);
-
-  // State sync (refs, reactive values, callbacks)
 
   useStateSync({
     store,
@@ -296,10 +242,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setMessagesRef,
   });
 
-  // Message sync between AI SDK and store
   const { lastStreamActivityRef } = useMessageSync({ store, chat });
-
-  // Streaming trigger for round 0
 
   useStreamingTrigger({
     store,
@@ -308,17 +251,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     queryClientRef,
   });
 
-  // Round resumption for incomplete rounds
   useRoundResumption({ store, chat });
 
-  // Pre-search resumption after page refresh
   usePreSearchResumption({
     store,
     effectiveThreadId,
     queryClientRef,
   });
-
-  // Pending message sender
 
   usePendingMessage({
     store,
@@ -326,25 +265,18 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     sendMessageRef,
   });
 
-  // Stuck stream detection
   useStuckStreamDetection({
     store,
     lastStreamActivityRef,
   });
-
-  // Navigation cleanup
 
   useNavigationCleanup({
     store,
     prevPathnameRef,
   });
 
-  // Moderator trigger after participants complete
   const { triggerModerator } = useModeratorTrigger({ store });
 
-  // ✅ CRITICAL FIX: Use useLayoutEffect to sync ref BEFORE other effects run
-  // Without this, handleComplete might call triggerModeratorRef.current with null
-  // when it runs before this effect has a chance to update the ref
   useLayoutEffect(() => {
     triggerModeratorRef.current = triggerModerator;
   }, [triggerModerator]);

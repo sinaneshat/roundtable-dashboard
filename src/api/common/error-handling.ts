@@ -234,6 +234,7 @@ class ExternalServiceError extends AppError {
       statusCode: HttpStatusCodes.BAD_GATEWAY,
       severity: ERROR_SEVERITY.HIGH,
       details: {
+        detailType: 'service_error',
         serviceName,
         originalError: originalError?.message,
       },

@@ -22,8 +22,6 @@ import { validationError } from './responses';
 import type { ErrorContext, ValidationError } from './schemas';
 import { CoreSchemas, ErrorContextSchema } from './schemas';
 
-export type { ValidationError } from './schemas';
-
 // ============================================================================
 // VALIDATION RESULT TYPES (Context7 Pattern)
 // ============================================================================
@@ -140,6 +138,18 @@ export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
 }
 
 /**
+ * Filter value schema - type-safe union of allowed filter types
+ */
+const FilterValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]).openapi('FilterValue');
+
+export type FilterValue = z.infer<typeof FilterValueSchema>;
+
+/**
  * Create a search/filter schema with common patterns
  */
 export function createSearchSchema<T extends z.ZodRawShape>(
@@ -162,12 +172,7 @@ export function createSearchSchema<T extends z.ZodRawShape>(
     ...Object.fromEntries(
       searchableFields.map(field => [
         `filter_${String(field)}`,
-        z.union([
-          z.string(),
-          z.number(),
-          z.boolean(),
-          z.null(),
-        ]).optional(),
+        FilterValueSchema.optional(),
       ]),
     ),
   });
@@ -262,21 +267,32 @@ export const documentUploadValidator = createFileUploadValidator(
 // ============================================================================
 
 /**
+ * Conditional value type - the value being validated
+ */
+type ConditionalValue = string | number | boolean | null;
+
+/**
+ * Conditional data schema - ensures object has the condition field
+ */
+const ConditionalDataSchema = z.record(z.string(), FilterValueSchema).openapi('ConditionalData');
+
+export type ConditionalData = z.infer<typeof ConditionalDataSchema>;
+
+/**
  * Create a conditional validator based on another field
+ *
+ * Uses Zod schema validation for maximum type safety
  */
 export function createConditionalValidator<T, K extends string>(
   conditionField: K,
-  conditionValue: unknown,
+  conditionValue: ConditionalValue,
   schema: z.ZodSchema<T>,
   fallbackSchema?: z.ZodSchema<T>,
 ) {
-  // Use discriminated union for conditional validation instead of z.any()
-  return z.record(z.string(), z.unknown()).refine(
+  return ConditionalDataSchema.refine(
     (data) => {
-      if (data && typeof data === 'object' && conditionField in data) {
-        if (data[conditionField] === conditionValue) {
-          return schema.safeParse(data).success;
-        }
+      if (conditionField in data && data[conditionField] === conditionValue) {
+        return schema.safeParse(data).success;
       }
       return fallbackSchema ? fallbackSchema.safeParse(data).success : true;
     },
@@ -324,11 +340,18 @@ export function validateQueryParams<T>(
 }
 
 /**
+ * Path parameters schema - string key-value pairs
+ */
+const _PathParamsSchema = z.record(z.string(), z.string()).openapi('PathParams');
+
+export type PathParams = z.infer<typeof _PathParamsSchema>;
+
+/**
  * Validate path parameters
  */
 export function validatePathParams<T>(
   schema: z.ZodSchema<T>,
-  params: Record<string, string>,
+  params: PathParams,
 ): ValidationResult<T> {
   return validateWithSchema(schema, params);
 }
@@ -352,9 +375,16 @@ export function createValidationErrorContext(
 }
 
 /**
+ * Unknown input schema - accepts any value for initial validation
+ */
+const _UnknownInputSchema = z.unknown().openapi('UnknownInput');
+
+export type UnknownInput = z.infer<typeof _UnknownInputSchema>;
+
+/**
  * Validate against ErrorContextSchema to ensure type safety
  */
-export function validateErrorContext(context: unknown): ValidationResult<ErrorContext> {
+export function validateErrorContext(context: UnknownInput): ValidationResult<ErrorContext> {
   return validateWithSchema(ErrorContextSchema, context);
 }
 
@@ -362,8 +392,18 @@ export function validateErrorContext(context: unknown): ValidationResult<ErrorCo
 // OPENAPI VALIDATION HOOK
 // ============================================================================
 
-export const customValidationHook: Hook<unknown, ApiEnv, string, unknown> = (result, c) => {
+export const customValidationHook: Hook<UnknownInput, ApiEnv, string, UnknownInput> = (result, c) => {
   if (!result.success) {
+    // 🔍 DEBUG: Log validation failures to identify the issue
+    console.error('[VALIDATION-HOOK] Validation failed:', {
+      path: c.req.path,
+      issues: result.error.issues.slice(0, 5).map(i => ({
+        path: i.path.join('.'),
+        message: i.message,
+        code: i.code,
+      })),
+    });
+
     // Transform Zod issues to ValidationError format
     const errors = result.error.issues.map((err: z.ZodIssue) => ({
       field: err.path.join('.') || 'root',
@@ -377,32 +417,3 @@ export const customValidationHook: Hook<unknown, ApiEnv, string, unknown> = (res
   // Validation passed - continue to handler
   return undefined;
 };
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
-// Export all validators as a single object for easy importing
-export const Validators = {
-  ...SecurityValidators,
-  documentUpload: documentUploadValidator,
-} as const;
-
-// Export all validation utilities
-export const ValidationUtils = {
-  createConditionalValidator,
-  createFileUploadValidator,
-  createMultiFormatValidator,
-  createPartialSchema,
-  createPickSchema,
-  createSearchSchema,
-  createUpdateSchema,
-  createValidationErrorContext,
-  createValidator,
-  formatValidationErrors,
-  validateErrorContext,
-  validatePathParams,
-  validateQueryParams,
-  validateRequestBody,
-  validateWithSchema,
-} as const;

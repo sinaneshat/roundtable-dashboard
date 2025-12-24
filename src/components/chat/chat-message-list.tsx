@@ -4,11 +4,10 @@ import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
-import type { MessageStatus, SubscriptionTier } from '@/api/core/enums';
+import type { MessageStatus } from '@/api/core/enums';
 import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import { canAccessModelByPricing, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
@@ -19,7 +18,6 @@ import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@
 import { BRAND } from '@/constants/brand';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
-import { useUsageStatsQuery } from '@/hooks/queries';
 import { useModelLookup } from '@/hooks/utils';
 import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
@@ -286,7 +284,7 @@ function AssistantGroupCard({
   group,
   groupIndex: _groupIndex,
   findModel,
-  userTier,
+  demoMode,
   hideMetadata,
   t,
   keyForMessage,
@@ -295,7 +293,7 @@ function AssistantGroupCard({
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
   findModel: (modelId?: string) => EnhancedModelResponse | undefined;
-  userTier: SubscriptionTier;
+  demoMode: boolean;
   hideMetadata: boolean;
   t: (key: string) => string;
   keyForMessage: (message: UIMessage, index: number) => string;
@@ -331,7 +329,9 @@ function AssistantGroupCard({
             const messageKey = keyForMessage(message, index);
             const metadata = getMessageMetadata(message.metadata);
             const model = findModel(participantInfo.modelId);
-            const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
+            // ✅ Use backend-computed is_accessible_to_user (respects actual tier)
+            // In demo mode, all models are accessible
+            const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
             const safeParts = message.parts || [];
             const hasTextContent = safeParts.some(p => p && p.type === MessagePartTypes.TEXT && p.text?.trim().length > 0);
@@ -459,6 +459,7 @@ function getParticipantInfoForMessage({
   const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
 
   // ✅ SIMPLIFIED: Check for visible content to determine if message has received data
+  // AI SDK v5 Pattern: Reasoning parts count as visible for UI (model-message-card handles rendering)
   const hasVisibleContent = message.parts?.some(
     p =>
       (p.type === MessagePartTypes.TEXT && 'text' in p && (p.text as string)?.trim().length > 0)
@@ -593,11 +594,6 @@ export const ChatMessageList = memo(
     const tParticipant = useTranslations('chat.participant');
     // Consolidated model lookup hook
     const { findModel } = useModelLookup();
-    const { data: usageData } = useUsageStatsQuery();
-    // ✅ TYPE-SAFE: Use Zod validation instead of type casting
-    // In demo mode, use 'power' tier to make all models accessible
-    const tierResult = subscriptionTierSchema.safeParse(usageData?.data?.subscription?.tier);
-    const userTier: SubscriptionTier = demoMode ? 'power' : (tierResult.success ? tierResult.data : 'free');
     const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
@@ -1006,7 +1002,9 @@ export const ChatMessageList = memo(
 
         const metadata = getMessageMetadata(message.metadata);
         const model = findModel(participantInfo.modelId);
-        const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
+        // ✅ Use backend-computed is_accessible_to_user (respects actual tier)
+        // In demo mode, all models are accessible
+        const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
         // ✅ MODERATOR RENDERING: Uses BRAND.logos.main avatar and MODERATOR_NAME
         // Moderator has no role badge (role: null)
@@ -1079,7 +1077,7 @@ export const ChatMessageList = memo(
       }
 
       return groups;
-    }, [messagesWithParticipantInfo, findModel, userTier, userInfo, userAvatarSrc, userAvatarName, allStreamingRoundParticipantsHaveContent, _streamingRoundNumber, isStreaming]);
+    }, [messagesWithParticipantInfo, findModel, demoMode, userInfo, userAvatarSrc, userAvatarName, allStreamingRoundParticipantsHaveContent, _streamingRoundNumber, isStreaming]);
 
     // ✅ UNIFIED RENDERING: Moderator now renders through normal messageGroups path
     // No special placeholder needed - useModeratorStream adds message to messages array during streaming
@@ -1315,7 +1313,9 @@ export const ChatMessageList = memo(
                     >
                       {enabledParticipants.map((participant, participantIdx) => {
                         const model = findModel(participant.modelId);
-                        const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
+                        // ✅ Use backend-computed is_accessible_to_user (respects actual tier)
+                        // In demo mode, all models are accessible
+                        const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
                         // ✅ Use reusable utility for multi-strategy lookup
                         const participantMessage = getParticipantMessageFromMaps(participantMaps, participant, participantIdx);
@@ -1564,7 +1564,7 @@ export const ChatMessageList = memo(
                   group={group}
                   groupIndex={groupIndex}
                   findModel={findModel}
-                  userTier={userTier}
+                  demoMode={demoMode}
                   hideMetadata={hideMetadata}
                   t={t}
                   keyForMessage={keyForMessage}

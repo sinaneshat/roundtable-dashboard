@@ -1,6 +1,6 @@
 'use client';
 
-import { CreditCard, ExternalLink, Loader2 } from 'lucide-react';
+import { CreditCard, ExternalLink, Loader2, TriangleAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -13,11 +13,20 @@ import {
   StripeSubscriptionStatuses,
 } from '@/api/core/enums';
 import type { Product, Subscription } from '@/api/routes/billing/schema';
+import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { FreePricingCard } from '@/components/ui/free-pricing-card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+// Extended tab type to include credits
+type PricingTab = UIBillingInterval | 'credits';
+function isPricingTab(value: string): value is PricingTab {
+  return isUIBillingInterval(value) || value === 'credits';
+}
+
+// ✅ Free product is now dynamic from API - no hardcoded tier
 
 type PricingContentProps = {
   products: Product[];
@@ -31,6 +40,7 @@ type PricingContentProps = {
   onCancel: (subscriptionId: string) => void | Promise<void>;
   onManageBilling: () => void;
   showSubscriptionBanner?: boolean;
+  hasCardConnected?: boolean;
 };
 
 export function PricingContent({
@@ -45,10 +55,11 @@ export function PricingContent({
   onCancel,
   onManageBilling,
   showSubscriptionBanner = false,
+  hasCardConnected = false,
 }: PricingContentProps) {
   const t = useTranslations();
   const router = useRouter();
-  const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>(DEFAULT_UI_BILLING_INTERVAL);
+  const [selectedTab, setSelectedTab] = useState<PricingTab>(DEFAULT_UI_BILLING_INTERVAL);
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -68,10 +79,26 @@ export function PricingContent({
     return !!getSubscriptionForPrice(priceId);
   };
 
+  // ✅ CREDITS: Separate custom credits product from subscription products
+  const customCreditsProduct = products.find(
+    p => p.id === CREDIT_CONFIG.CUSTOM_CREDITS.stripeProductId,
+  );
+  const subscriptionProducts = products.filter(
+    p => p.id !== CREDIT_CONFIG.CUSTOM_CREDITS.stripeProductId,
+  );
+
   const getProductsForInterval = (interval: UIBillingInterval) => {
-    return products
+    return subscriptionProducts
       .map((product) => {
-        const filteredPrices = product.prices?.filter(price => price.interval === interval) || [];
+        // ✅ Include Free product ($0) in all tabs regardless of interval
+        const filteredPrices = product.prices?.filter((price) => {
+          // Free tier ($0) shows in all tabs - always include regardless of interval
+          if (price.unitAmount === 0) {
+            return true;
+          }
+          // Paid tiers filter by interval
+          return price.interval === interval;
+        }) || [];
         return { ...product, prices: filteredPrices };
       })
       .filter(product => product.prices && product.prices.length > 0);
@@ -146,8 +173,8 @@ export function PricingContent({
         )}
 
         <Tabs
-          value={selectedInterval}
-          onValueChange={value => isUIBillingInterval(value) && setSelectedInterval(value)}
+          value={selectedTab}
+          onValueChange={value => isPricingTab(value) && setSelectedTab(value)}
           className="space-y-8"
         >
           <div className="flex justify-center">
@@ -157,6 +184,9 @@ export function PricingContent({
               </TabsTrigger>
               <TabsTrigger value="year">
                 {t('billing.interval.annual')}
+              </TabsTrigger>
+              <TabsTrigger value="credits">
+                {t('billing.interval.credits')}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -195,6 +225,93 @@ export function PricingContent({
               getAnnualSavings={getAnnualSavings}
               t={t}
             />
+          </TabsContent>
+
+          {/* Credits Tab Content */}
+          <TabsContent value="credits" className="mt-0">
+            <div className="w-full max-w-4xl mx-auto space-y-6">
+              {/* Connect card warning using shadcn Alert */}
+              {!hasCardConnected && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Alert className="border-amber-500/30 bg-amber-500/10">
+                    <TriangleAlert className="size-4 text-amber-500" />
+                    <AlertTitle className="text-amber-600 dark:text-amber-400">
+                      {t('billing.credits.connectCardRequired')}
+                    </AlertTitle>
+                    <AlertDescription className="flex items-center justify-between gap-4">
+                      <span>{t('billing.credits.connectCardDescription')}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30"
+                        onClick={() => setSelectedTab('month')}
+                      >
+                        {t('billing.credits.viewPlans')}
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                </motion.div>
+              )}
+
+              {/* Credit packages - responsive grid: 1 col mobile, 2 col sm, 3 col md+ */}
+              {customCreditsProduct && customCreditsProduct.prices && customCreditsProduct.prices.length > 0
+                ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: 0.1 }}
+                      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
+                    >
+                      {customCreditsProduct.prices
+                        .filter(p => !p.interval) // Only one-time prices
+                        .sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0))
+                        .map((price, index) => {
+                          const creditsAmount = CREDIT_CONFIG.CUSTOM_CREDITS.packages[price.id as keyof typeof CREDIT_CONFIG.CUSTOM_CREDITS.packages] ?? 0;
+                          return (
+                            <motion.div
+                              key={price.id}
+                              initial={{ opacity: 0, scale: 0.98 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ duration: 0.3, delay: 0.05 + index * 0.05 }}
+                              className={!hasCardConnected ? 'opacity-50 pointer-events-none' : ''}
+                            >
+                              <PricingCard
+                                name={`${creditsAmount.toLocaleString()} Credits`}
+                                description={t('plans.pricing.custom.features.neverExpires')}
+                                price={{
+                                  amount: price.unitAmount ?? 0,
+                                  currency: price.currency,
+                                }}
+                                features={[
+                                  t('plans.pricing.custom.features.flexibleCredits'),
+                                  t('plans.pricing.custom.features.neverExpires'),
+                                ]}
+                                isProcessingSubscribe={processingPriceId === price.id}
+                                onSubscribe={() => onSubscribe(price.id)}
+                                delay={0.05 + index * 0.05}
+                                isOneTime={true}
+                                creditsAmount={creditsAmount}
+                                disabled={!hasCardConnected}
+                              />
+                            </motion.div>
+                          );
+                        })}
+                    </motion.div>
+                  )
+                : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center py-12"
+                    >
+                      <p className="text-muted-foreground">{t('plans.noCreditsPackages')}</p>
+                    </motion.div>
+                  )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>
@@ -247,56 +364,30 @@ function ProductGrid({
     );
   }
 
-  const freeTierProduct = {
-    id: 'free-tier',
-    name: t('plans.pricing.free.name'),
-    description: t('plans.pricing.free.description'),
-    features: [
-      t('plans.pricing.free.features.messagesPerMonth'),
-      t('plans.pricing.free.features.conversationsPerMonth'),
-      t('plans.pricing.free.features.aiModels'),
-      t('plans.pricing.free.features.basicSupport'),
-    ],
-  };
-
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-1 gap-6 w-full sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3, delay: 0 }}
-        >
-          <FreePricingCard
-            name={freeTierProduct.name}
-            description={freeTierProduct.description}
-            price={{
-              amount: 0,
-              currency: 'usd',
-              interval,
-            }}
-            features={freeTierProduct.features}
-            delay={0}
-          />
-        </motion.div>
-
+    <div className="w-full max-w-4xl mx-auto">
+      {/* ✅ 2-column grid for subscription plans - cards stretch to fill */}
+      <div className="grid grid-cols-1 gap-6 w-full sm:grid-cols-2">
         {products.map((product, index) => {
           const price = product.prices?.[0];
 
-          if (!price || !price.unitAmount) {
+          // ✅ Allow $0 prices (Free tier) - only skip if no price exists
+          if (!price || price.unitAmount === undefined || price.unitAmount === null) {
             return null;
           }
 
           const subscription = getSubscriptionForPrice(price.id);
           const hasSubscription = hasActiveSubscription(price.id);
-          const isMostPopular = products.length === 3 && index === 1;
+          // ✅ Free tier (unitAmount === 0) is never "most popular"
+          const isMostPopular = price.unitAmount > 0 && products.length >= 2 && index === 1;
+          const isFreeProduct = price.unitAmount === 0;
 
           return (
             <motion.div
               key={product.id}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: (index + 1) * 0.1 }}
+              transition={{ duration: 0.3, delay: index * 0.1 }}
             >
               <PricingCard
                 name={product.name}
@@ -317,8 +408,9 @@ function ProductGrid({
                 onSubscribe={() => onSubscribe(price.id)}
                 onCancel={subscription ? () => onCancel(subscription.id) : undefined}
                 onManageBilling={hasSubscription ? onManageBilling : undefined}
-                delay={(index + 1) * 0.1}
+                delay={index * 0.1}
                 annualSavingsPercent={interval === 'year' ? getAnnualSavings(product.id) : undefined}
+                isFreeProduct={isFreeProduct}
               />
             </motion.div>
           );

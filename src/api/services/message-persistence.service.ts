@@ -22,7 +22,6 @@ import {
   MessageRoles,
 } from '@/api/core/enums';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
-import { incrementMessageUsage } from '@/api/services/usage-tracking.service';
 import type { AvailableSource, CitationSourceMap } from '@/api/types/citations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -58,6 +57,8 @@ export type SaveMessageParams = {
   citationSourceMap?: CitationSourceMap;
   availableSources?: AvailableSource[];
   reasoningDuration?: number;
+  /** Error message when response has no renderable content (e.g., only [REDACTED] reasoning) */
+  emptyResponseError?: string | null;
 };
 
 // ============================================================================
@@ -201,11 +202,12 @@ export async function saveStreamedMessage(
     text,
     reasoningDeltas,
     finishResult,
-    userId,
+    userId: _userId, // ✅ CREDITS: Now handled in streaming handler
     db,
     citationSourceMap,
     availableSources,
     reasoningDuration,
+    emptyResponseError,
   } = params;
 
   try {
@@ -243,11 +245,18 @@ export async function saveStreamedMessage(
 
     const parts: MessagePart[] = [];
 
-    if (text) {
+    // ✅ EMPTY RESPONSE ERROR: When model produces no renderable content,
+    // add the error as a text part so something displays in the UI
+    if (emptyResponseError) {
+      parts.push({ type: MessagePartTypes.TEXT, text: emptyResponseError });
+    } else if (text) {
       parts.push({ type: MessagePartTypes.TEXT, text });
     }
 
-    if (reasoningText) {
+    // ✅ FIX: Don't add [REDACTED]-only reasoning to parts (will render as empty)
+    // Only add reasoning if it has actual content beyond [REDACTED]
+    const isRedactedOnlyReasoning = reasoningText && /^\[REDACTED\]$/i.test(reasoningText.trim());
+    if (reasoningText && !isRedactedOnlyReasoning) {
       parts.push({ type: MessagePartTypes.REASONING, text: reasoningText });
     }
 
@@ -328,6 +337,23 @@ export async function saveStreamedMessage(
       }
     }
 
+    // ✅ EMPTY RESPONSE ERROR: Override error metadata when we have an empty response
+    // This ensures the UI shows an error state for messages with no renderable content
+    const finalHasError = errorMetadata.hasError || !!emptyResponseError;
+    const finalErrorType = emptyResponseError
+      ? 'empty_response'
+      : (errorMetadata.errorCategory as
+      | 'rate_limit'
+      | 'context_length'
+      | 'api_error'
+      | 'network'
+      | 'timeout'
+      | 'model_unavailable'
+      | 'empty_response'
+      | 'unknown'
+      | undefined);
+    const finalErrorMessage = emptyResponseError || errorMetadata.errorMessage;
+
     const messageMetadata = createParticipantMetadata({
       roundNumber,
       participantId,
@@ -343,18 +369,9 @@ export async function saveStreamedMessage(
       | 'other'
       | 'unknown',
       usage: usageMetadata,
-      hasError: errorMetadata.hasError,
-      errorType: errorMetadata.errorCategory as
-      | 'rate_limit'
-      | 'context_length'
-      | 'api_error'
-      | 'network'
-      | 'timeout'
-      | 'model_unavailable'
-      | 'empty_response'
-      | 'unknown'
-      | undefined,
-      errorMessage: errorMetadata.errorMessage,
+      hasError: finalHasError,
+      errorType: finalErrorType,
+      errorMessage: finalErrorMessage,
       isTransient: errorMetadata.isTransientError,
       isPartialResponse: errorMetadata.isPartialResponse,
       providerMessage: errorMetadata.providerMessage,
@@ -409,8 +426,7 @@ export async function saveStreamedMessage(
     }
 
     revalidateTag(`thread:${threadId}:messages`, 'max');
-
-    await incrementMessageUsage(userId, 1);
+    // ✅ CREDITS: Message credits handled in streaming handler's finalizeCredits()
   } catch {
     // Non-blocking error - allow round to continue
   }

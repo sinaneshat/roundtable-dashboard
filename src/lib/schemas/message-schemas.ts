@@ -596,6 +596,60 @@ export function hasText(parts: MessagePart[]): boolean {
 }
 
 /**
+ * ✅ UTILITY: Check if text content is renderable (not placeholder/encrypted)
+ *
+ * AI SDK v5 Pattern: Some reasoning models (GPT-5 Nano, o3-mini, etc.) output
+ * encrypted reasoning as `[REDACTED]` which should not be considered renderable content.
+ *
+ * Use this utility to consistently filter out non-renderable text across:
+ * - Backend: streaming.handler.ts (empty response detection)
+ * - Frontend: use-multi-participant-chat.ts (content validation)
+ * - UI: model-message-card.tsx (rendering filter)
+ *
+ * @param text - Text content to check
+ * @returns True if text has renderable content (not empty or [REDACTED])
+ *
+ * @example
+ * if (isRenderableContent('[REDACTED]')) // false - encrypted reasoning
+ * if (isRenderableContent('Hello!')) // true - actual content
+ * if (isRenderableContent('   ')) // false - whitespace only
+ */
+export function isRenderableContent(text: string): boolean {
+  const trimmed = text.trim();
+  // Empty or only [REDACTED] placeholder = not renderable
+  return trimmed.length > 0 && !/^\[REDACTED\]$/i.test(trimmed);
+}
+
+/**
+ * ✅ UTILITY: Check if message parts have renderable content
+ *
+ * Combines hasText/hasReasoning with isRenderableContent check.
+ * Returns true only if there's actual content to display (not just [REDACTED]).
+ *
+ * AI SDK v5 Pattern: Use this for determining if a response was successful
+ * and has content worth displaying to the user.
+ *
+ * @param parts - Array of message parts
+ * @returns True if parts contain actual renderable text or reasoning
+ *
+ * @example
+ * if (hasRenderableContent(message.parts)) {
+ *   // Show message normally
+ * } else {
+ *   // Show error or loading state
+ * }
+ */
+export function hasRenderableContent(parts: MessagePart[]): boolean {
+  return parts.some((part) => {
+    if (part.type !== MessagePartTypes.TEXT && part.type !== MessagePartTypes.REASONING) {
+      // Tool calls and other parts are considered renderable
+      return part.type === MessagePartTypes.TOOL_CALL;
+    }
+    return 'text' in part && typeof part.text === 'string' && isRenderableContent(part.text);
+  });
+}
+
+/**
  * ✅ UTILITY: Create a text message part
  *
  * @param text - Text content

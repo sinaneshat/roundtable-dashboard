@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 
 import { MessageStatuses, ScreenModes } from '@/api/core/enums';
-import { getCurrentRoundNumber, getEnabledParticipantModelIds } from '@/lib/utils';
+import { getCurrentRoundNumber, getEnabledParticipantModelIds, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getEffectiveWebSearchEnabled } from '@/stores/chat';
 
@@ -165,11 +165,11 @@ export function usePendingMessage({
 
         if (result && typeof result.catch === 'function') {
           result.catch((error: Error) => {
-            console.error('[Provider:pendingMessage] sendMessage failed:', error);
+            rlog.stream('end', `sendMessage failed: ${error.message}`);
           });
         }
       } catch (error) {
-        console.error('[Provider:pendingMessage] sendMessage threw error:', error);
+        rlog.stream('end', `sendMessage threw: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
   }, [

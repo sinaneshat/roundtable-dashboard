@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
 import { ScreenModes } from '@/api/core/enums';
-import { getCurrentRoundNumber } from '@/lib/utils';
+import { getCurrentRoundNumber, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
 
@@ -205,6 +205,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = resumptionKey;
+    rlog.trigger('resume', `p${nextParticipantToTrigger} key=${resumptionKey}`);
 
     // Resume from specific participant
     chat.continueFromParticipant(nextParticipantToTrigger, storeParticipants);

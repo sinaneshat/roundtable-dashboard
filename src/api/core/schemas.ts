@@ -448,9 +448,6 @@ export const PaginationQuerySchema = z.object({
   limit: CoreSchemas.limit(),
 }).openapi('PaginationQuery');
 
-// ✅ REMOVED DUPLICATE: CursorPaginationQuerySchema is exported from @/api/core barrel
-// Import from @/api/core instead of @/api/core/schemas
-
 /**
  * Sorting parameters
  */

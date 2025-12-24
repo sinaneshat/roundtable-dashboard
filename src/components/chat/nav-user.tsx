@@ -112,7 +112,8 @@ export function NavUser({ initialSession }: NavUserProps) {
       showApiErrorToast('Cancellation Failed', error);
     }
   };
-  const subscriptionTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
+  // ✅ CREDITS-ONLY: Map plan type to tier for display
+  const subscriptionTier: SubscriptionTier = usageData?.data?.plan?.type === 'paid' ? 'pro' : 'free';
 
   // ✅ HYDRATION FIX: Prevent Radix ID mismatch by only rendering DropdownMenu after mount
   // Radix generates unique IDs that differ between server and client

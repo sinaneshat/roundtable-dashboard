@@ -24,13 +24,14 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus, SubscriptionTier } from '@/api/core/enums';
-import { BillingIntervals, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { BillingIntervals, CreditActions, StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload, UsageStatus } from '../routes/usage/schema';
+import { getUserCreditBalance, upgradeToPaidPlan } from './credit.service';
 import { subscriptionTierSchema, TIER_QUOTAS } from './product-logic.service';
 
 /**
@@ -380,316 +381,113 @@ async function rolloverBillingPeriod(
 }
 
 /**
- * ✅ BUSINESS LOGIC: Compute usage status based on percentage thresholds
- * Single source of truth for warning/critical thresholds
- *
- * @param percentage - Usage percentage (0-100+)
- * @returns 'default' | 'warning' | 'critical'
- */
-function computeUsageStatus(percentage: number): UsageStatus {
-  if (percentage >= 100) {
-    return 'critical'; // At or over limit
-  }
-  if (percentage >= 80) {
-    return 'warning'; // Approaching limit (80%+)
-  }
-  return 'default'; // Normal usage (<80%)
-}
-
-/**
- * Increment thread creation counter
- * Must be called AFTER successfully creating a thread
- * Does NOT decrement when threads are deleted
- *
- * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
- * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
- * Following Drizzle ORM best practices for concurrent updates
- */
-export async function incrementThreadUsage(userId: string): Promise<void> {
-  const db = await getDbAsync();
-
-  // Ensure user record exists first
-  await ensureUserUsageRecord(userId);
-
-  // ✅ ATOMIC: SQL-level increment prevents race conditions
-  // ✅ VERSION: Optimistic locking with version column
-  // Multiple concurrent requests will queue safely at database level
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      threadsCreated: sql`${tables.userChatUsage.threadsCreated} + 1`,
-      version: sql`${tables.userChatUsage.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
-}
-
-/**
- * Increment message creation counter
- * Must be called AFTER successfully creating a message
- * Does NOT decrement when messages are deleted
- *
- * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
- * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
- * Following Drizzle ORM best practices for concurrent updates
- */
-export async function incrementMessageUsage(userId: string, count = 1): Promise<void> {
-  const db = await getDbAsync();
-
-  // Ensure user record exists first
-  await ensureUserUsageRecord(userId);
-
-  // ✅ ATOMIC: SQL-level increment prevents race conditions
-  // ✅ VERSION: Optimistic locking with version column
-  // Multiple concurrent requests will queue safely at database level
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      messagesCreated: sql`${tables.userChatUsage.messagesCreated} + ${count}`,
-      version: sql`${tables.userChatUsage.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
-}
-
-/**
- * Increment custom role creation counter
- * Must be called AFTER successfully creating a custom role
- * Does NOT decrement when custom roles are deleted
- *
- * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
- * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
- * Following Drizzle ORM best practices for concurrent updates
- */
-export async function incrementCustomRoleUsage(userId: string, count = 1): Promise<void> {
-  const db = await getDbAsync();
-
-  // Ensure user record exists first
-  await ensureUserUsageRecord(userId);
-
-  // ✅ ATOMIC: SQL-level increment prevents race conditions
-  // ✅ VERSION: Optimistic locking with version column
-  // Multiple concurrent requests will queue safely at database level
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      customRolesCreated: sql`${tables.userChatUsage.customRolesCreated} + ${count}`,
-      version: sql`${tables.userChatUsage.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
-}
-
-/**
- * Increment analysis generation counter
- * Must be called AFTER successfully generating an analysis
- * Does NOT decrement when analysis is deleted
- *
- * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
- * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
- * Following Drizzle ORM best practices for concurrent updates
- *
- * Note: Analysis is only generated for multi-participant conversations (2+ participants)
- */
-export async function incrementAnalysisUsage(userId: string, count = 1): Promise<void> {
-  const db = await getDbAsync();
-
-  // Ensure user record exists first
-  await ensureUserUsageRecord(userId);
-
-  // ✅ ATOMIC: SQL-level increment prevents race conditions
-  // ✅ VERSION: Optimistic locking with version column
-  // Multiple concurrent requests will queue safely at database level
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      analysisGenerated: sql`${tables.userChatUsage.analysisGenerated} + ${count}`,
-      version: sql`${tables.userChatUsage.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
-}
-
-/**
- * Get comprehensive usage statistics for a user
- * Used for displaying usage in the UI
+ * ✅ CREDITS-ONLY: Simplified usage stats
+ * Users only need to see their credit balance, not detailed quotas
  */
 export async function getUserUsageStats(userId: string): Promise<UsageStatsPayload> {
-  const usage = await ensureUserUsageRecord(userId);
-  const now = new Date();
-
-  // ✅ Get all limits from CODE, not database
-  const quotas = getTierQuotas(usage.subscriptionTier);
-
-  // Ensure usage counters are valid numbers (handle null/undefined from DB)
-  const threadsCreated = usage.threadsCreated ?? 0;
-  const messagesCreated = usage.messagesCreated ?? 0;
-  const customRolesCreated = usage.customRolesCreated ?? 0;
-  const analysisGenerated = usage.analysisGenerated ?? 0;
-
-  const threadsRemaining = Math.max(0, quotas.threadsPerMonth - threadsCreated);
-  const messagesRemaining = Math.max(0, quotas.messagesPerMonth - messagesCreated);
-  const customRolesRemaining = Math.max(0, quotas.customRolesPerMonth - customRolesCreated);
-  const analysisRemaining = Math.max(0, quotas.analysisPerMonth - analysisGenerated);
-
-  const threadsPercentage = quotas.threadsPerMonth > 0
-    ? Math.round((threadsCreated / quotas.threadsPerMonth) * 100)
-    : 0;
-
-  const messagesPercentage = quotas.messagesPerMonth > 0
-    ? Math.round((messagesCreated / quotas.messagesPerMonth) * 100)
-    : 0;
-
-  const customRolesPercentage = quotas.customRolesPerMonth > 0
-    ? Math.round((customRolesCreated / quotas.customRolesPerMonth) * 100)
-    : 0;
-
-  const analysisPercentage = quotas.analysisPerMonth > 0
-    ? Math.round((analysisGenerated / quotas.analysisPerMonth) * 100)
-    : 0;
-
-  // ✅ COMPUTE STATUS: Business logic for warning thresholds (single source of truth)
-  const threadsStatus = computeUsageStatus(threadsPercentage);
-  const messagesStatus = computeUsageStatus(messagesPercentage);
-  const customRolesStatus = computeUsageStatus(customRolesPercentage);
-  const analysisStatus = computeUsageStatus(analysisPercentage);
-
-  // Ensure dates are properly converted (handle both Date objects and timestamps)
-  const periodEnd = usage.currentPeriodEnd instanceof Date
-    ? usage.currentPeriodEnd
-    : new Date(usage.currentPeriodEnd);
-  const periodStart = usage.currentPeriodStart instanceof Date
-    ? usage.currentPeriodStart
-    : new Date(usage.currentPeriodStart);
-
-  const daysRemaining = Math.max(0, Math.ceil(
-    (periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-  ));
-
   return {
-    threads: {
-      used: threadsCreated,
-      limit: quotas.threadsPerMonth,
-      remaining: threadsRemaining,
-      percentage: threadsPercentage,
-      status: threadsStatus, // ✅ NEW: Backend-computed status
-    },
-    messages: {
-      used: messagesCreated,
-      limit: quotas.messagesPerMonth,
-      remaining: messagesRemaining,
-      percentage: messagesPercentage,
-      status: messagesStatus, // ✅ NEW: Backend-computed status
-    },
-    customRoles: {
-      used: customRolesCreated,
-      limit: quotas.customRolesPerMonth,
-      remaining: customRolesRemaining,
-      percentage: customRolesPercentage,
-      status: customRolesStatus, // ✅ NEW: Backend-computed status
-    },
-    analysis: {
-      used: analysisGenerated,
-      limit: quotas.analysisPerMonth,
-      remaining: analysisRemaining,
-      percentage: analysisPercentage,
-      status: analysisStatus, // ✅ NEW: Backend-computed status
-    },
-    period: {
-      start: periodStart,
-      end: periodEnd,
-      daysRemaining,
-    },
-    subscription: {
-      tier: usage.subscriptionTier,
-      isAnnual: usage.isAnnual,
-      pendingTierChange: usage.pendingTierChange || null,
-      pendingTierIsAnnual: usage.pendingTierIsAnnual !== null ? usage.pendingTierIsAnnual : null,
-    },
+    credits: await getCreditStatsForUsage(userId),
+    plan: await getPlanStatsForUsage(userId),
   };
 }
 
 /**
- * Enforce thread quota before creation
- * Throws error if user has exceeded quota
+ * Get credit stats for usage response
  */
-export async function enforceThreadQuota(userId: string): Promise<void> {
-  const stats = await getUserUsageStats(userId);
+async function getCreditStatsForUsage(userId: string) {
+  const creditBalance = await getUserCreditBalance(userId);
 
-  if (stats.threads.remaining === 0) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'chat_thread',
-      userId,
-    };
-    throw createError.badRequest(
-      `Thread creation limit reached. You have used ${stats.threads.used} of ${stats.threads.limit} threads this month. Upgrade your plan for more threads.`,
-      context,
-    );
+  // Determine credit status based on available credits
+  let creditStatus: UsageStatus = 'default';
+
+  if (creditBalance.available <= 0) {
+    creditStatus = 'critical';
+  } else if (creditBalance.available <= 1000) {
+    creditStatus = 'warning'; // Warning when under 1000 credits
   }
+
+  return {
+    balance: creditBalance.balance,
+    available: creditBalance.available,
+    status: creditStatus,
+  };
 }
 
 /**
- * Enforce message quota before creation
- * Throws error if user has exceeded quota
- */
-export async function enforceMessageQuota(userId: string): Promise<void> {
-  const stats = await getUserUsageStats(userId);
-
-  if (stats.messages.remaining === 0) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'chat_message',
-      userId,
-    };
-    throw createError.badRequest(
-      `Message creation limit reached. You have used ${stats.messages.used} of ${stats.messages.limit} messages this month. Upgrade your plan for more messages.`,
-      context,
-    );
-  }
-}
-
-/**
- * Enforce custom role quota before creation
- * Throws error if user has exceeded quota
- */
-export async function enforceCustomRoleQuota(userId: string): Promise<void> {
-  const stats = await getUserUsageStats(userId);
-
-  if (stats.customRoles.remaining === 0) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'chat_custom_role',
-      userId,
-    };
-    throw createError.badRequest(
-      `Custom role creation limit reached. You have used ${stats.customRoles.used} of ${stats.customRoles.limit} custom roles this month. Upgrade your plan for more custom roles.`,
-      context,
-    );
-  }
-}
-
-/**
- * Enforce analysis generation quota before creation
- * Throws error if user has exceeded quota
+ * Get plan stats for usage response
+ * ✅ Includes hasPaymentMethod to indicate if user has connected a card
  *
- * Note: Analysis is only generated for multi-participant conversations (2+ participants)
- * This check should only be called when generating analysis for such conversations
+ * hasPaymentMethod is TRUE if:
+ * 1. User has an active subscription (paid users always have a card)
+ * 2. User has a card_connection transaction (free users who connected card)
+ *
+ * ✅ FIX: Check for active subscriptions DIRECTLY, not just creditBalance.planType
+ * The planType field in userCreditBalance may be out of sync with actual subscription status
  */
-export async function enforceAnalysisQuota(userId: string): Promise<void> {
-  const stats = await getUserUsageStats(userId);
+async function getPlanStatsForUsage(userId: string) {
+  const db = await getDbAsync();
+  const creditBalance = await getUserCreditBalance(userId);
 
-  if (stats.analysis.remaining === 0) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'chat_moderator_analysis',
-      userId,
-    };
-    throw createError.badRequest(
-      `Analysis generation limit reached. You have used ${stats.analysis.used} of ${stats.analysis.limit} analyses this month. Upgrade your plan for more analysis capacity.`,
-      context,
-    );
+  // ✅ FIX: Check for active subscription directly from Stripe tables
+  // This is the source of truth, not the cached planType in userCreditBalance
+  const customerResults = await db
+    .select()
+    .from(tables.stripeCustomer)
+    .where(eq(tables.stripeCustomer.userId, userId))
+    .limit(1);
+
+  const customer = customerResults[0];
+  let hasActiveSubscription = false;
+
+  if (customer) {
+    const subscriptionResults = await db
+      .select()
+      .from(tables.stripeSubscription)
+      .where(
+        and(
+          eq(tables.stripeSubscription.customerId, customer.id),
+          eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
+        ),
+      )
+      .limit(1);
+
+    hasActiveSubscription = subscriptionResults.length > 0;
   }
+
+  // User with active subscription = paid, has payment method
+  if (hasActiveSubscription) {
+    return {
+      type: 'paid' as const,
+      name: 'Pro',
+      monthlyCredits: creditBalance.monthlyCredits,
+      hasPaymentMethod: true,
+      hasActiveSubscription: true,
+      nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+    };
+  }
+
+  // For free users, check if they've connected a card via card_connection transaction
+  const cardConnectionTx = await db
+    .select()
+    .from(tables.creditTransaction)
+    .where(
+      and(
+        eq(tables.creditTransaction.userId, userId),
+        eq(tables.creditTransaction.action, CreditActions.CARD_CONNECTION),
+      ),
+    )
+    .limit(1);
+
+  const hasPaymentMethod = cardConnectionTx.length > 0;
+
+  return {
+    type: 'free' as const,
+    name: 'Free',
+    monthlyCredits: creditBalance.monthlyCredits,
+    hasPaymentMethod,
+    hasActiveSubscription: false,
+    nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+  };
 }
 
 /**
@@ -788,6 +586,9 @@ export async function syncUserQuotaFromSubscription(
   const isDowngrade = newQuotas.threadsPerMonth < oldQuotas.threadsPerMonth
     || newQuotas.messagesPerMonth < oldQuotas.messagesPerMonth;
 
+  // Detect upgrade from free tier to paid tier (starter, pro, power)
+  const isUpgradeFromFree = currentUsage.subscriptionTier === 'free' && tier !== 'free';
+
   // Reset usage counters if new billing period has started
   let resetUsage = {};
   if (isPeriodReset) {
@@ -860,6 +661,12 @@ export async function syncUserQuotaFromSubscription(
     // Intentionally empty
     // No period reset, just update usage
     await usageUpdate;
+  }
+
+  // Grant credits when user upgrades from free tier to a paid tier
+  // This ensures credits are topped up immediately on subscription upgrade
+  if (isUpgradeFromFree) {
+    await upgradeToPaidPlan(userId);
   }
 }
 

@@ -16,6 +16,7 @@
 import { useMemo } from 'react';
 import { Streamdown } from 'streamdown';
 
+import { CitationSegmentTypes } from '@/api/core/enums';
 import type { DbCitation } from '@/db/schemas/chat-metadata';
 import { cn } from '@/lib/ui/cn';
 import { parseCitations } from '@/lib/utils';
@@ -98,9 +99,7 @@ export function CitedMessageContent({
   return (
     <div className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
       {parsedResult.segments.map((segment) => {
-        if (segment.type === 'text') {
-          // Render text segment with Streamdown
-          // Use content hash for key since text segments don't have IDs
+        if (segment.type === CitationSegmentTypes.TEXT) {
           const textKey = `text-${segment.content.slice(0, 20).replace(/\W/g, '')}-${segment.content.length}`;
           return (
             <Streamdown
@@ -112,7 +111,10 @@ export function CitedMessageContent({
           );
         }
 
-        // Render citation segment
+        // Render citation segment (type narrowed to citation)
+        if (segment.type !== CitationSegmentTypes.CITATION) {
+          return null;
+        }
         const { citation } = segment;
         const resolvedCitation = citationMap.get(citation.sourceId);
         // Use citation sourceId + displayNumber for stable key

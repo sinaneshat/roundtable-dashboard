@@ -23,6 +23,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
+import { MessageRoles } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import {
@@ -137,7 +138,7 @@ export default async function Image({
     const { thread, participants = [], messages = [] } = response.data;
 
     // Get first user message preview
-    const firstUserMessage = messages?.find(m => m.role === 'user');
+    const firstUserMessage = messages?.find(m => m.role === MessageRoles.USER);
     const firstUserText = extractTextFromMessage(firstUserMessage);
     const messagePreview = firstUserText
       ? truncateText(firstUserText, 120)

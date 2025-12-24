@@ -72,9 +72,12 @@ function RHFDatePicker({
               <Calendar
                 data-testid={field.name}
                 selected={field?.value ? parseISO(field?.value) : UTCtoUserDate}
-                onSelect={(e: Date) => {
+                onSelect={(selectedDate: Date | undefined) => {
+                  if (!selectedDate) {
+                    return;
+                  }
                   const utcTimestamp = format(
-                    e as Date,
+                    selectedDate,
                     'yyyy-MM-dd\'T\'HH:mm:ss\'Z\'',
                   );
                   if (externalOnChange) {
@@ -84,7 +87,7 @@ function RHFDatePicker({
                     field.onChange(utcTimestamp);
                   }
                 }}
-                disabled={date =>
+                disabled={(date: Date) =>
                   date > new Date() || date < new Date('1900-01-01')}
                 initialFocus
               />

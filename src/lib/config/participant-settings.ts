@@ -70,7 +70,7 @@ export const ParticipantSettingsSchema = z
         example: 'You are a helpful assistant specializing in technical support.',
       }),
   })
-  .passthrough() // Allow additional fields for future extensions
+  .strict() // Reject unknown fields for type safety
   .nullable() // Allow null values
   .optional() // Allow undefined
   .openapi({

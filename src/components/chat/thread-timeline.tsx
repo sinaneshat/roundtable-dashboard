@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Thread Timeline Component
  *
@@ -11,8 +13,6 @@
  * - data-index attribute for measurement
  * - ref={measureElement} for dynamic sizing
  */
-
-'use client';
 
 import { useRef } from 'react';
 
@@ -128,7 +128,7 @@ export function ThreadTimeline({
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
 
   // TanStack Virtual hook - official pattern
-  // ✅ SCROLL FIX: Pass isStreaming to stabilize totalSize during streaming
+  // ✅ SCROLL FIX: Pass isStreaming to allow growth but prevent shrinking
   const {
     virtualItems,
     totalSize,
@@ -140,13 +140,17 @@ export function ThreadTimeline({
     overscan: 5, // Official docs recommend 5
     paddingEnd: 200, // Space for sticky chat input
     isDataReady,
-    isStreaming: isActivelyStreaming, // Prevents container height changes during streaming
+    isStreaming: isActivelyStreaming, // Allows container growth, prevents shrinking during streaming
     getIsStreamingFromStore, // ✅ RACE CONDITION FIX: Bypasses React batching
   });
 
-  // ✅ SCROLL FIX: During active streaming, skip measurement to prevent scroll jumps
-  // When streaming ends, remeasurement will occur naturally on next scroll
-  const stableMeasureElement = isActivelyStreaming ? undefined : measureElement;
+  // ✅ SCROLL FIX: Keep measureElement ENABLED during streaming
+  // The shouldAdjustScrollPositionOnItemSizeChange callback in useVirtualizedTimeline
+  // already prevents scroll jumps by returning false during streaming.
+  // Disabling measurement was too aggressive - it prevented the container from
+  // knowing the true content height, causing users to be unable to scroll to see
+  // new streaming content. Now we measure properly, but prevent scroll adjustments.
+  const stableMeasureElement = measureElement;
 
   // ✅ ANIMATION: Track items already animated to prevent re-animation on scroll
   // Items that existed on initial load should NOT animate (skipInitialAnimation)
@@ -197,7 +201,7 @@ export function ThreadTimeline({
           // Official TanStack Virtual pattern:
           // - key={virtualItem.key}
           // - data-index={virtualItem.index}
-          // - ref={measureElement} (disabled during streaming to prevent scroll jumps)
+          // - ref={measureElement} for dynamic height tracking
           // - position: absolute, top: 0, left: 0
           // - transform: translateY(item.start - scrollMargin)
           <div
@@ -213,7 +217,6 @@ export function ThreadTimeline({
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
-            {/* Changelog items */}
             {item.type === 'changelog' && item.data.length > 0 && (
               <ScrollFadeEntrance
                 index={virtualItem.index}
@@ -234,12 +237,8 @@ export function ThreadTimeline({
               </ScrollFadeEntrance>
             )}
 
-            {/* Pre-search items - slides DOWN from top */}
-            {/* ✅ FIX: Don't use shouldAnimate - let whileInView handle scroll-triggered animation */}
             {item.type === 'pre-search' && (
-              <ScrollFromTop
-                skipAnimation={skipEntranceAnimations}
-              >
+              <ScrollFromTop skipAnimation={skipEntranceAnimations}>
                 <div className="w-full mb-6">
                   <UnifiedErrorBoundary context="pre-search">
                     <PreSearchCard
@@ -255,10 +254,6 @@ export function ThreadTimeline({
               </ScrollFromTop>
             )}
 
-            {/* Message items */}
-            {/* Note: Scroll effect disabled here - ChatMessageList has its own
-                ScrollAwareUserMessage and ScrollAwareParticipant wrappers that
-                handle scroll effects at the individual message level */}
             {item.type === 'messages' && (
               <ScrollFadeEntrance
                 index={virtualItem.index}
@@ -287,24 +282,23 @@ export function ThreadTimeline({
                     />
                   </UnifiedErrorBoundary>
 
-                  {/* Round feedback and copy actions - shown after moderator message completes */}
                   {!isStreaming && !isReadOnly && (() => {
-                    // Find moderator message in this round using type-safe utility
                     const moderatorMessage = item.data.find(msg => isModeratorMessage(msg));
 
-                    // Only show feedback/copy after moderator finishes
-                    if (!moderatorMessage)
+                    if (!moderatorMessage) {
                       return null;
+                    }
+
                     const moderatorMeta = getModeratorMetadata(moderatorMessage.metadata);
-                    if (!moderatorMeta?.finishReason)
+                    if (!moderatorMeta?.finishReason) {
                       return null;
+                    }
 
                     const hasRoundError = item.data.some((msg) => {
                       const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
                       return parseResult.success && messageHasError(parseResult.data);
                     });
 
-                    // Get moderator text for copy action
                     const moderatorText = moderatorMessage.parts
                       ?.filter(part => part.type === 'text')
                       .map(part => (part as { text: string }).text)
@@ -319,15 +313,15 @@ export function ThreadTimeline({
                             roundNumber={item.roundNumber}
                             currentFeedback={feedbackByRound.get(item.roundNumber) ?? null}
                             onFeedbackChange={
-                              !getFeedbackHandler
-                                ? () => {}
-                                : getFeedbackHandler(item.roundNumber)
+                              getFeedbackHandler
+                                ? getFeedbackHandler(item.roundNumber)
+                                : () => {}
                             }
                             disabled={isStreaming}
                             isPending={pendingFeedback?.roundNumber === item.roundNumber}
                             pendingType={
                               pendingFeedback?.roundNumber === item.roundNumber
-                                ? pendingFeedback?.type ?? null
+                                ? pendingFeedback.type ?? null
                                 : null
                             }
                           />

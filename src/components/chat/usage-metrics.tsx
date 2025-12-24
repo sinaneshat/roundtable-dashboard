@@ -1,190 +1,150 @@
 'use client';
 import {
   ArrowUpCircle,
-  BarChart3,
-  Clock,
-  MessageSquare,
-  MessagesSquare,
+  Coins,
+  CreditCard,
+  Gift,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { UsageStatuses, UsageStatusMetadata } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
+/**
+ * ✅ CREDITS-ONLY: Simplified usage display
+ * Shows only credit balance and plan info
+ * Users don't need to see threads/messages/analysis quotas
+ */
 export function UsageMetrics() {
   const t = useTranslations();
   const router = useRouter();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
-  const threadsStatus = usageData?.data?.threads?.status ?? 'default';
-  const messagesStatus = usageData?.data?.messages?.status ?? 'default';
-  const analysisStatus = usageData?.data?.analysis?.status ?? 'default';
-  const isMaxedOut = threadsStatus === 'critical' || messagesStatus === 'critical' || analysisStatus === 'critical';
-  const hasWarning = threadsStatus === 'warning' || messagesStatus === 'warning' || analysisStatus === 'warning' || isMaxedOut;
+
   if (isLoading) {
     return (
       <div className="space-y-2">
         <Skeleton className="h-4 w-full rounded-md" />
-        <Skeleton className="h-16 w-full rounded-md" />
+        <Skeleton className="h-8 w-full rounded-md" />
       </div>
     );
   }
+
   if (isError || !usageData?.success) {
     return null;
   }
-  const usage = usageData.data;
-  const threadsPercentage = usage.threads.percentage;
-  const messagesPercentage = usage.messages.percentage;
-  const analysisPercentage = usage.analysis.percentage;
+
+  const { credits, plan } = usageData.data;
+  const creditsStatus = credits?.status ?? UsageStatuses.DEFAULT;
+  const isLowCredits = creditsStatus === UsageStatuses.CRITICAL || creditsStatus === UsageStatuses.WARNING;
+  const isPaidPlan = plan?.type === 'paid';
+  const hasPaymentMethod = plan?.hasPaymentMethod ?? false;
+
+  // Calculate credit usage percentage
+  const totalCredits = isPaidPlan ? (plan?.monthlyCredits || 1_000_000) : 10_000;
+  const usedPercentage = Math.min(100, Math.round(((totalCredits - credits.available) / totalCredits) * 100));
+
   const handleUpgrade = () => {
     router.push('/chat/pricing');
   };
-  const isPremiumTier = usage.subscription.tier !== 'free';
-  /**
-   * Get progress indicator color based on usage status
-   * Uses theme CSS variables for consistent styling without custom safelists
-   * @see https://github.com/shadcn-ui/ui/discussions/1454
-   */
-  const getProgressIndicatorColor = (status: string): string => {
-    switch (status) {
-      case 'critical':
-        return 'bg-destructive';
-      case 'warning':
-        return 'bg-warning';
-      default:
-        return 'bg-primary';
-    }
-  };
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between mb-2">
+    <div className="space-y-3">
+      {/* Plan Badge */}
+      <div className="flex items-center justify-between">
         <Badge
-          variant={isPremiumTier ? 'default' : 'outline'}
+          variant={isPaidPlan ? 'default' : 'outline'}
           className={cn(
-            'text-[10px] px-1.5 py-0.5 h-4 font-semibold capitalize',
-            isMaxedOut && !isPremiumTier && 'border-destructive/40 text-destructive bg-destructive/10',
+            'text-[10px] px-1.5 py-0.5 h-4 font-semibold',
+            !isPaidPlan && !hasPaymentMethod && 'border-amber-500/40 text-amber-600 bg-amber-500/10',
           )}
         >
-          {t(`subscription.tiers.${usage.subscription.tier}.name`)}
+          {plan?.name || 'Free'}
         </Badge>
-        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
-          <Clock className="size-2.5" />
-          <span className="font-medium">
-            {usage.period.daysRemaining}
-            {' '}
-            {t('usage.daysLeft')}
+        {!hasPaymentMethod && !isPaidPlan && (
+          <div className="flex items-center gap-1 text-[9px] text-amber-600">
+            <CreditCard className="size-2.5" />
+            <span className="font-medium">{t('usage.addCard')}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Credits Balance */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <Coins className="size-3 text-muted-foreground" />
+            <span className="text-xs font-medium">{t('usage.credits')}</span>
+          </div>
+          <span className={cn(
+            'font-mono text-sm font-bold tabular-nums',
+            UsageStatusMetadata[creditsStatus].textColor,
+          )}
+          >
+            {credits.available.toLocaleString()}
           </span>
         </div>
+        <Progress
+          value={usedPercentage}
+          className="h-1.5"
+          indicatorClassName={UsageStatusMetadata[creditsStatus].progressColor}
+          aria-label={`${credits.available.toLocaleString()} ${t('usage.creditsAvailable')}`}
+        />
+        <p className="text-[9px] text-muted-foreground text-right">
+          {credits.available.toLocaleString()}
+          {' '}
+          {t('usage.creditsAvailable')}
+        </p>
       </div>
-      <div className="space-y-1.5">
-        {/* Threads Usage */}
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <MessagesSquare className="size-2.5 text-muted-foreground" />
-              <span className="text-[10px] font-medium">{t('usage.threads')}</span>
-            </div>
-            <span className={cn(
-              'font-mono text-[10px] font-semibold tabular-nums',
-              threadsStatus === 'critical' && 'text-destructive',
-              threadsStatus === 'warning' && 'text-orange-600 dark:text-orange-500',
-            )}
-            >
-              {usage.threads.used.toLocaleString()}
-              /
-              {usage.threads.limit.toLocaleString()}
-            </span>
-          </div>
-          <Progress
-            value={threadsPercentage}
-            className="h-1"
-            indicatorClassName={getProgressIndicatorColor(threadsStatus)}
-            aria-label={`${t('usage.threads')}: ${usage.threads.used} ${t('usage.of')} ${usage.threads.limit} ${t('usage.used')}`}
-          />
-        </div>
 
-        {/* Messages Usage */}
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <MessageSquare className="size-2.5 text-muted-foreground" />
-              <span className="text-[10px] font-medium">{t('usage.messages')}</span>
+      {/* Actions */}
+      {!isPaidPlan && (
+        <div className="space-y-2">
+          {/* Descriptive message for users without payment method */}
+          {!hasPaymentMethod && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+              <Gift className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
+              <p className="text-[10px] leading-tight text-emerald-600 dark:text-emerald-400">
+                {t('usage.cardAlert.sidebarMessage', {
+                  credits: CREDIT_CONFIG.PLANS.free.cardConnectionCredits.toLocaleString(),
+                })}
+              </p>
             </div>
-            <span className={cn(
-              'font-mono text-[10px] font-semibold tabular-nums',
-              messagesStatus === 'critical' && 'text-destructive',
-              messagesStatus === 'warning' && 'text-orange-600 dark:text-orange-500',
-            )}
-            >
-              {usage.messages.used.toLocaleString()}
-              /
-              {usage.messages.limit.toLocaleString()}
-            </span>
-          </div>
-          <Progress
-            value={messagesPercentage}
-            className="h-1"
-            indicatorClassName={getProgressIndicatorColor(messagesStatus)}
-            aria-label={`${t('usage.messages')}: ${usage.messages.used} ${t('usage.of')} ${usage.messages.limit} ${t('usage.used')}`}
-          />
-        </div>
+          )}
 
-        {/* Moderator Usage */}
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <BarChart3 className="size-2.5 text-muted-foreground" />
-              <span className="text-[10px] font-medium">{t('usage.moderator')}</span>
-            </div>
-            <span className={cn(
-              'font-mono text-[10px] font-semibold tabular-nums',
-              analysisStatus === 'critical' && 'text-destructive',
-              analysisStatus === 'warning' && 'text-orange-600 dark:text-orange-500',
+          {/* Glass-style button */}
+          <button
+            type="button"
+            onClick={handleUpgrade}
+            className={cn(
+              'w-full flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-medium',
+              'backdrop-blur-sm transition-all duration-200',
+              hasPaymentMethod
+                ? 'bg-white/5 hover:bg-white/10 active:bg-white/15 text-foreground'
+                : 'bg-emerald-500/20 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30',
+              isLowCredits && hasPaymentMethod && 'bg-amber-500/20 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30',
             )}
-            >
-              {usage.analysis.used.toLocaleString()}
-              /
-              {usage.analysis.limit.toLocaleString()}
-            </span>
-          </div>
-          <Progress
-            value={analysisPercentage}
-            className="h-1"
-            indicatorClassName={getProgressIndicatorColor(analysisStatus)}
-            aria-label={`${t('usage.moderator')}: ${usage.analysis.used} ${t('usage.of')} ${usage.analysis.limit} ${t('usage.used')}`}
-          />
+          >
+            {hasPaymentMethod
+              ? (
+                  <>
+                    <ArrowUpCircle className="size-3" />
+                    {t('usage.upgradeNow')}
+                  </>
+                )
+              : (
+                  <>
+                    <CreditCard className="size-3" />
+                    {t('usage.connectCard')}
+                  </>
+                )}
+          </button>
         </div>
-      </div>
-      {usage.subscription.pendingTierChange && (
-        <div className="mt-2 rounded-md border border-amber-200/50 dark:border-amber-900/20 bg-amber-50/50 dark:bg-amber-950/10 p-1.5">
-          <div className="flex items-center gap-1">
-            <Clock className="size-2.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-[9px] font-medium text-amber-700 dark:text-amber-300">
-              {t('usage.changingTo')}
-              {' '}
-              <span className="font-semibold capitalize">
-                {usage.subscription.pendingTierChange}
-              </span>
-              {' '}
-              {t('usage.onPeriodEnd')}
-            </p>
-          </div>
-        </div>
-      )}
-      {(hasWarning || isMaxedOut) && !isPremiumTier && (
-        <Button
-          variant={isMaxedOut ? 'default' : 'outline'}
-          size="sm"
-          className="w-full h-6 rounded-full gap-1 text-[10px] font-medium mt-2"
-          onClick={handleUpgrade}
-        >
-          <ArrowUpCircle className="size-2.5" />
-          {t('usage.upgradeNow')}
-        </Button>
       )}
     </div>
   );

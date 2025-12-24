@@ -20,33 +20,16 @@ type AppProvidersProps = {
   locale: string;
   messages: AbstractIntlMessages;
   timeZone: string;
-  now?: Date; // ✅ Optional to prevent hydration mismatch
+  now?: Date;
   env: {
     NEXT_PUBLIC_WEBAPP_ENV?: string;
     NEXT_PUBLIC_MAINTENANCE?: string;
     NEXT_PUBLIC_POSTHOG_API_KEY?: string;
     NEXT_PUBLIC_POSTHOG_HOST?: string;
   };
-  /**
-   * SSR HYDRATION: Initial preferences state from server-side cookie parsing
-   * Parsed in root layout using parsePreferencesCookie() for instant hydration
-   * Source: Zustand v5 Next.js guide - pass server state to provider
-   */
   initialPreferences?: ModelPreferencesState | null;
 };
 
-/**
- * AppProviders - Global provider wrapper for the entire application
- *
- * Following the latest next-intl best practices for apps without locale routing:
- * - Single provider component wraps all global providers
- * - QueryClient configuration with sensible defaults
- * - NextIntlClientProvider receives explicit messages, locale, timeZone, and now
- * - Enables static rendering by providing all props explicitly
- *
- * Pattern: src/components/providers/app-providers.tsx
- * Reference: https://next-intl.dev/docs/usage/configuration
- */
 export function AppProviders({
   children,
   locale,
@@ -56,16 +39,13 @@ export function AppProviders({
   env,
   initialPreferences,
 }: AppProvidersProps) {
-  // ✅ DEV MODE: Unregister service workers and clear caches to prevent stale styles
   useEffect(() => {
     if (env.NEXT_PUBLIC_WEBAPP_ENV === 'local' && 'serviceWorker' in navigator) {
-      // Unregister all service workers
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         for (const registration of registrations) {
           registration.unregister();
         }
       });
-      // Clear all caches
       if ('caches' in window) {
         caches.keys().then((names) => {
           for (const name of names) {
@@ -82,13 +62,10 @@ export function AppProviders({
       apiHost={env.NEXT_PUBLIC_POSTHOG_HOST}
       environment={env.NEXT_PUBLIC_WEBAPP_ENV}
     >
-      {/* PostHog pageview tracking for Next.js App Router */}
-      {/* Wrapped in Suspense to prevent blocking static generation (Next.js 15 requirement) */}
       <Suspense fallback={null}>
         <PostHogPageview />
       </Suspense>
       <QueryClientProvider>
-        {/* ✅ ZUSTAND V5 PATTERN: Store providers with SSR hydration */}
         <PreferencesStoreProvider initialState={initialPreferences}>
           <ChatStoreProvider>
             <NuqsAdapter>

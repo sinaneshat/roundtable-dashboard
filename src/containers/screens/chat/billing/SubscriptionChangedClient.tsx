@@ -7,7 +7,7 @@ import { Suspense } from 'react';
 
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema } from '@/api/core/enums';
-import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -145,9 +145,14 @@ function SubscriptionChangedContent() {
   const currentActiveMaxModels = currentActiveTier ? getMaxModelsForTier(currentActiveTier) : newMaxModels;
   const futureMaxModels = futureTier ? getMaxModelsForTier(futureTier) : null;
 
-  const threadsLimit = usageStats?.data?.threads?.limit || 0;
-  const messagesLimit = usageStats?.data?.messages?.limit || 0;
-  const customRolesLimit = usageStats?.data?.customRoles?.limit || 0;
+  // ✅ TIER-BASED: Get monthly credits from tier configuration, not user stats
+  const newMonthlyCredits = getMonthlyCreditsForTier(newTier);
+  const oldMonthlyCredits = oldTier ? getMonthlyCreditsForTier(oldTier) : null;
+  const currentActiveMonthlyCredits = currentActiveTier ? getMonthlyCreditsForTier(currentActiveTier) : newMonthlyCredits;
+  const futureMonthlyCredits = futureTier ? getMonthlyCreditsForTier(futureTier) : null;
+
+  // ✅ CREDITS: Current user balance from usage stats
+  const creditsAvailable = usageStats?.data?.credits?.available || 0;
 
   const effectiveDate = displaySubscription?.currentPeriodEnd
     ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString()
@@ -217,12 +222,20 @@ function SubscriptionChangedContent() {
                           Plan
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-3">
+                      <CardContent className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <p className="text-xs font-medium text-muted-foreground">
                             {t('billing.success.planLimits.concurrentModels')}
                           </p>
                           <p className="text-xl font-bold text-primary">{currentActiveMaxModels}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('billing.success.planLimits.monthlyCredits')}
+                          </p>
+                          <p className="text-xl font-bold text-primary">
+                            {currentActiveMonthlyCredits > 0 ? currentActiveMonthlyCredits.toLocaleString() : t('common.none')}
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -240,12 +253,20 @@ function SubscriptionChangedContent() {
                           Plan
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-3">
+                      <CardContent className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <p className="text-xs font-medium text-muted-foreground">
                             {t('billing.success.planLimits.concurrentModels')}
                           </p>
                           <p className="text-xl font-bold">{futureMaxModels}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('billing.success.planLimits.monthlyCredits')}
+                          </p>
+                          <p className="text-xl font-bold">
+                            {futureMonthlyCredits !== null && futureMonthlyCredits > 0 ? futureMonthlyCredits.toLocaleString() : t('common.none')}
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -267,12 +288,20 @@ function SubscriptionChangedContent() {
                           Plan
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-3">
+                      <CardContent className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <p className="text-xs font-medium text-muted-foreground">
                             {t('billing.success.planLimits.concurrentModels')}
                           </p>
                           <p className="text-xl font-bold">{oldMaxModels}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('billing.success.planLimits.monthlyCredits')}
+                          </p>
+                          <p className="text-xl font-bold">
+                            {oldMonthlyCredits !== null && oldMonthlyCredits > 0 ? oldMonthlyCredits.toLocaleString() : t('common.none')}
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -290,12 +319,20 @@ function SubscriptionChangedContent() {
                           Plan
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-3">
+                      <CardContent className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <p className="text-xs font-medium text-muted-foreground">
                             {t('billing.success.planLimits.concurrentModels')}
                           </p>
                           <p className="text-xl font-bold text-primary">{newMaxModels}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('billing.success.planLimits.monthlyCredits')}
+                          </p>
+                          <p className="text-xl font-bold text-primary">
+                            {newMonthlyCredits > 0 ? newMonthlyCredits.toLocaleString() : t('common.none')}
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -322,27 +359,15 @@ function SubscriptionChangedContent() {
                     <p className="text-2xl font-bold text-primary">{newMaxModels}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">{t('billing.success.planLimits.maxThreads')}</p>
+                    <p className="text-sm font-medium">{t('billing.success.planLimits.creditsAvailable')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {threadsLimit === -1 ? 'Unlimited' : threadsLimit.toLocaleString()}
+                      {creditsAvailable.toLocaleString()}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-medium">{t('billing.success.planLimits.maxMessages')}</p>
+                    <p className="text-sm font-medium">{t('billing.success.planLimits.monthlyCredits')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {messagesLimit === -1 ? 'Unlimited' : messagesLimit.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{t('billing.success.planLimits.maxMemories')}</p>
-                    <p className="text-2xl font-bold text-primary">
-                      0
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{t('billing.success.planLimits.customRoles')}</p>
-                    <p className="text-2xl font-bold text-primary">
-                      {customRolesLimit === -1 ? 'Unlimited' : customRolesLimit.toLocaleString()}
+                      {newMonthlyCredits > 0 ? newMonthlyCredits.toLocaleString() : t('common.none')}
                     </p>
                   </div>
                   <div className="space-y-1">

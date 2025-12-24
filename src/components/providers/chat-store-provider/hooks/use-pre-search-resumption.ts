@@ -49,7 +49,6 @@ export function usePreSearchResumption({
   effectiveThreadId,
   queryClientRef,
 }: UsePreSearchResumptionParams) {
-  // Subscribe to store state
   const storeMessages = useStore(store, s => s.messages);
   const storePreSearches = useStore(store, s => s.preSearches);
   const storeThread = useStore(store, s => s.thread);
@@ -154,7 +153,7 @@ export function usePreSearchResumption({
           }
 
           if (!response.ok) {
-            console.error('[usePreSearchResumption] Pre-search resumption failed:', response.status);
+            rlog.presearch('resume-fail', `status=${response.status}`);
             store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
             store.getState().clearPreSearchActivity(currentRound);
             return;
@@ -178,7 +177,7 @@ export function usePreSearchResumption({
             queryKey: queryKeys.threads.preSearches(threadIdForSearch),
           });
         } catch (error) {
-          console.error('[usePreSearchResumption] Pre-search resumption error:', error);
+          rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
           store.getState().clearPreSearchActivity(currentRound);
           store.getState().clearPreSearchTracking(currentRound);
         }

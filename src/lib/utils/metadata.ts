@@ -492,16 +492,8 @@ export function requirePreSearchMetadata(
 /**
  * Builder schema for assistant metadata construction
  *
- * ✅ PARTIAL VALIDATION: Allows incremental construction during streaming
- * ✅ TYPE-SAFE: Validates all provided fields match expected types
- *
- * This is a relaxed version of DbAssistantMessageMetadataSchema that allows
- * partial construction while still providing type safety for the fields that are present.
+ * ✅ TYPE-SAFE: Type assertion validates against DbAssistantMessageMetadata
  */
-const AssistantMetadataBuilderSchema = DbAssistantMessageMetadataSchema.partial().extend({
-  role: z.literal('assistant'), // Role is always required
-});
-
 export function buildAssistantMetadata(
   baseMetadata: Partial<DbAssistantMessageMetadata>,
   options: {
@@ -538,18 +530,9 @@ export function buildAssistantMetadata(
     ...(options.errorMessage && { errorMessage: options.errorMessage }),
     // Additional fields (spread at end to allow overrides)
     ...options.additionalFields,
-  };
+  } as DbAssistantMessageMetadata;
 
-  // ✅ TYPE-SAFE: Validate builder output matches expected shape
-  // Uses partial schema to allow incremental construction
-  const result = AssistantMetadataBuilderSchema.safeParse(metadata);
-
-  // The partial schema validates types but allows missing required fields for streaming
-  // Type assertion is necessary because:
-  // 1. Runtime: metadata object conforms to DbAssistantMessageMetadata structure
-  // 2. Compile-time: some fields may be optional during incremental construction
-  // 3. Caller responsibility: ensure required fields are provided or handle partial data
-  return (result.success ? result.data : metadata) as DbAssistantMessageMetadata;
+  return metadata;
 }
 
 /**
@@ -643,27 +626,10 @@ export function enrichMessageWithParticipant(
   const base = baseMetadata || { role: 'assistant' as const };
 
   // Build enriched metadata with validated participant data
-  const enrichedMetadata = {
+  return {
     ...base,
     ...enrichmentResult.data,
-  };
-
-  // Validate the final result matches a valid metadata shape
-  const finalResult = DbMessageMetadataSchema.safeParse(enrichedMetadata);
-
-  if (finalResult.success) {
-    return finalResult.data;
-  }
-
-  // Fallback: For assistant messages being enriched, use builder schema
-  // This handles cases where base metadata is partial (e.g., from streaming)
-  const builderResult = AssistantMetadataBuilderSchema.safeParse(enrichedMetadata);
-
-  // Type assertion is necessary because:
-  // 1. Runtime: enrichment adds all participant fields to the metadata
-  // 2. Compile-time: base metadata may be partial during streaming
-  // 3. Validation: either full or builder schema validates the structure
-  return (builderResult.success ? builderResult.data : enrichedMetadata) as DbMessageMetadata;
+  } as DbMessageMetadata;
 }
 
 // ============================================================================

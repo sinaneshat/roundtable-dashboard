@@ -72,9 +72,12 @@ export const ALLOWED_MIME_TYPES = [
   'text/x-typescript',
 ] as const;
 
-export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
+export const AllowedMimeTypeSchema = z.enum(ALLOWED_MIME_TYPES).openapi({
+  description: 'MIME types allowed for file uploads',
+  example: 'image/png',
+});
 
-export const AllowedMimeTypeSchema = z.enum(ALLOWED_MIME_TYPES);
+export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
 
 // ============================================================================
 // IMAGE MIME TYPES

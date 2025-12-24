@@ -17,7 +17,7 @@ import { Form } from '@/components/ui/form';
 import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
-import { getApiErrorDetails } from '@/lib/utils';
+import { getApiErrorDetails } from '@/lib/utils/error-handling';
 
 import { GoogleButton } from './google-button';
 

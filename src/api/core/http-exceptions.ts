@@ -115,11 +115,65 @@ function isContentfulStatusCode(status: number): status is ContentfulStatusCode 
 }
 
 // ============================================================================
+// EXCEPTION DETAILS DISCRIMINATED UNION
+// ============================================================================
+
+/**
+ * Type-safe exception details using discriminated unions
+ * ✅ FIX: Replaces Record<string, unknown> with specific detail types
+ */
+export type ExceptionDetails
+  = {
+    detailType: 'validation';
+    validationErrors: Array<{ field: string; message: string; code?: string }>;
+  }
+  | {
+    detailType: 'batch';
+    currentSize?: number;
+    statementCount?: number;
+    originalError?: string;
+  }
+  | {
+    detailType: 'status_mapping';
+    originalStatus: number;
+    mappedStatus: number;
+  }
+  | {
+    detailType: 'rate_limit';
+    limit: number;
+    windowMs: number;
+    resetTime: string;
+  }
+  | {
+    detailType: 'health_check';
+    missingVars?: string[];
+  }
+  | {
+    detailType: 'role_check';
+    requiredRole: string;
+    userId?: string;
+  }
+  | {
+    detailType: 'fetch_error';
+    operation: string;
+    originalStatus: number;
+    errorDetails?: string;
+    attempts?: number;
+    duration?: number;
+  }
+  | {
+    detailType: 'service_error';
+    serviceName: string;
+    originalError?: string;
+  };
+
+// ============================================================================
 // HTTP EXCEPTION FACTORY
 // ============================================================================
 
 /**
  * Options for creating HTTP exceptions with enhanced type safety
+ * ✅ FIX: Uses discriminated union for details instead of Record<string, unknown>
  */
 export type HTTPExceptionFactoryOptions = {
   message: string;
@@ -128,18 +182,19 @@ export type HTTPExceptionFactoryOptions = {
   context?: ErrorContext;
   correlationId?: string;
   cause?: unknown;
-  details?: Record<string, unknown>;
+  details?: ExceptionDetails;
 };
 
 /**
  * Enhanced HTTP exception with additional metadata
+ * ✅ FIX: Uses discriminated union for details
  */
 export class EnhancedHTTPException extends HTTPException {
   public readonly errorCode?: ErrorCode;
   public readonly severity?: ApiErrorSeverity;
   public readonly context?: ErrorContext;
   public readonly correlationId?: string;
-  public readonly details?: Record<string, unknown>;
+  public readonly details?: ExceptionDetails;
   public readonly timestamp: Date;
 
   constructor(
@@ -219,7 +274,7 @@ export class HTTPExceptionFactory {
     return new EnhancedHTTPException(mapped, {
       ...options,
       details: {
-        ...options.details,
+        detailType: 'status_mapping',
         originalStatus: status,
         mappedStatus: mapped,
       },

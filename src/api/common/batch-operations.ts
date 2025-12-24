@@ -195,33 +195,6 @@ export async function executeBatch<
 }
 
 /**
- * Type guard to check if database supports batch operations
- *
- * Useful for conditional logic when you need to know the execution mode.
- * Most code should use executeBatch() directly - this is for advanced cases.
- *
- * @param db - Database instance to check
- * @returns true if db.batch() is available (Cloudflare D1), false otherwise (local SQLite)
- *
- * @example
- * ```typescript
- * if (supportsBatchOperations(db)) {
- *
- * } else {
-    // Intentionally empty
- *
- * }
- * ```
- */
-export function supportsBatchOperations<TSchema extends Record<string, unknown> = Record<string, unknown>>(
-  db: BatchCapableDatabase<TSchema>,
-): db is BatchCapableDatabase<TSchema> & {
-  batch: (queries: BatchQuery[]) => Promise<unknown[]>;
-} {
-  return 'batch' in db && typeof db.batch === 'function';
-}
-
-/**
  * Validate batch size limits
  *
  * Cloudflare D1 has limits on batch size (typically 100 operations).

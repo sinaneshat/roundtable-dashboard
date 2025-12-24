@@ -22,6 +22,7 @@ import {
   SubscriptionListResponseSchema,
   SwitchSubscriptionRequestSchema,
   SyncAfterCheckoutResponseSchema,
+  SyncCreditsAfterCheckoutResponseSchema,
   WebhookHeadersSchema,
   WebhookResponseSchema,
 } from './schema';
@@ -245,14 +246,40 @@ export const syncAfterCheckoutRoute = createRoute({
   method: 'post',
   path: '/billing/sync-after-checkout',
   tags: ['billing'],
-  summary: 'Sync Stripe data after checkout',
-  description: 'Eagerly sync Stripe subscription data after successful checkout to prevent race conditions with webhooks',
+  summary: 'Sync Stripe subscription data after checkout',
+  description: 'Eagerly sync Stripe subscription data after successful checkout to prevent race conditions with webhooks. For subscriptions only.',
   responses: {
     [HttpStatusCodes.OK]: {
       description: 'Stripe data synced successfully',
       content: {
         'application/json': {
           schema: SyncAfterCheckoutResponseSchema,
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+/**
+ * Sync Credits After Checkout Route
+ *
+ * Theo's "Stay Sane with Stripe" pattern:
+ * Separate endpoint for one-time credit purchases.
+ * Simpler flow than subscriptions - just grant credits and return.
+ */
+export const syncCreditsAfterCheckoutRoute = createRoute({
+  method: 'post',
+  path: '/billing/sync-credits-after-checkout',
+  tags: ['billing'],
+  summary: 'Sync credits after one-time purchase',
+  description: 'Process and grant credits after a one-time credit pack purchase. Separate from subscription flow for simplicity.',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Credits synced successfully',
+      content: {
+        'application/json': {
+          schema: SyncCreditsAfterCheckoutResponseSchema,
         },
       },
     },

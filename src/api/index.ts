@@ -57,6 +57,7 @@ import {
   listSubscriptionsHandler,
   switchSubscriptionHandler,
   syncAfterCheckoutHandler,
+  syncCreditsAfterCheckoutHandler,
 } from './routes/billing/handler';
 import {
   cancelSubscriptionRoute,
@@ -69,6 +70,7 @@ import {
   listSubscriptionsRoute,
   switchSubscriptionRoute,
   syncAfterCheckoutRoute,
+  syncCreditsAfterCheckoutRoute,
 } from './routes/billing/route';
 // Chat routes
 import {
@@ -127,6 +129,17 @@ import {
   updateParticipantRoute,
   updateThreadRoute,
 } from './routes/chat/route';
+// Credits routes
+import {
+  estimateCreditCostHandler,
+  getCreditBalanceHandler,
+  getCreditTransactionsHandler,
+} from './routes/credits/handler';
+import {
+  estimateCreditCostRoute,
+  getCreditBalanceRoute,
+  getCreditTransactionsRoute,
+} from './routes/credits/route';
 // MCP (Model Context Protocol) routes - Consolidated JSON-RPC + REST endpoints
 import {
   callToolHandler,
@@ -402,6 +415,7 @@ app.use('/auth/api-keys', csrfProtection, requireSession);
 app.use('/billing/checkout', csrfProtection, requireSession);
 app.use('/billing/portal', csrfProtection, requireSession);
 app.use('/billing/sync-after-checkout', csrfProtection, requireSession);
+app.use('/billing/sync-credits-after-checkout', csrfProtection, requireSession);
 app.use('/billing/subscriptions', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id', csrfProtection, requireSession);
 app.use('/billing/subscriptions/:id/switch', csrfProtection, requireSession);
@@ -520,7 +534,8 @@ const appRoutes = app
   // Customer Portal (protected)
   .openapi(createCustomerPortalSessionRoute, createCustomerPortalSessionHandler) // Create customer portal session
   // Sync (protected)
-  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler) // Sync Stripe data after checkout
+  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler) // Sync Stripe subscription data after checkout
+  .openapi(syncCreditsAfterCheckoutRoute, syncCreditsAfterCheckoutHandler) // Sync credit purchase after checkout (Theo's pattern: separate from subscriptions)
   // Subscriptions (protected)
   .openapi(listSubscriptionsRoute, listSubscriptionsHandler) // List user subscriptions
   .openapi(getSubscriptionRoute, getSubscriptionHandler) // Get subscription details
@@ -595,6 +610,13 @@ const appRoutes = app
   // Usage Routes - Single source of truth for usage and quota (protected)
   // ============================================================================
   .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler) // Get all usage statistics and quota info
+
+  // ============================================================================
+  // Credits Routes - Credit balance and transaction management (protected)
+  // ============================================================================
+  .openapi(getCreditBalanceRoute, getCreditBalanceHandler) // Get credit balance and plan info
+  .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler) // Get credit transaction history
+  .openapi(estimateCreditCostRoute, estimateCreditCostHandler) // Estimate credit cost for action
 
   // ============================================================================
   // Models Routes - Simplified OpenRouter models endpoint (public)

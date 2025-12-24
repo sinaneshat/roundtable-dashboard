@@ -2,6 +2,8 @@
 
 import { memo, useCallback, useEffect, useRef } from 'react';
 
+import type { GlowingEffectVariant } from '@/api/core/enums';
+import { GlowingEffectVariants } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 import { animate } from 'motion/react';
 
@@ -10,7 +12,7 @@ interface GlowingEffectProps {
   inactiveZone?: number;
   proximity?: number;
   spread?: number;
-  variant?: 'default' | 'white';
+  variant?: GlowingEffectVariant;
   glow?: boolean;
   className?: string;
   disabled?: boolean;
@@ -23,7 +25,7 @@ const GlowingEffect = memo(
     inactiveZone = 0.7,
     proximity = 0,
     spread = 20,
-    variant = 'default',
+    variant = GlowingEffectVariants.DEFAULT,
     glow = false,
     className,
     movementDuration = 2,
@@ -129,7 +131,7 @@ const GlowingEffect = memo(
           className={cn(
             'pointer-events-none absolute -inset-px hidden rounded-[inherit] border opacity-0 transition-opacity',
             glow && 'opacity-100',
-            variant === 'white' && 'border-white',
+            variant === GlowingEffectVariants.WHITE && 'border-white',
             disabled && '!block',
           )}
         />
@@ -144,7 +146,7 @@ const GlowingEffect = memo(
               '--glowingeffect-border-width': `${borderWidth}px`,
               '--repeating-conic-gradient-times': '5',
               '--gradient':
-                variant === 'white'
+                variant === GlowingEffectVariants.WHITE
                   ? `repeating-conic-gradient(
                   from 236.84deg at 50% 50%,
                   var(--black),

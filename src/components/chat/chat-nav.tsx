@@ -57,8 +57,9 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     error,
   } = useThreadsQuery();
   const { data: usageData } = useUsageStatsQuery();
-  const subscriptionTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
-  const isPaidUser = subscriptionTier !== 'free';
+  // ✅ CREDITS-ONLY: Map plan type to tier for display
+  const subscriptionTier: SubscriptionTier = usageData?.data?.plan?.type === 'paid' ? 'pro' : 'free';
+  const isPaidUser = usageData?.data?.plan?.type === 'paid';
   const chats: Chat[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];

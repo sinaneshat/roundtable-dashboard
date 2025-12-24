@@ -4,7 +4,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses, ThreadIdParamSchema } from '@/api/core';
 import type { MessageStatus, RoundPhase } from '@/api/core/enums';
-import { MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
+import { MessageRoles, MessageStatuses, ParticipantStreamStatuses, RoundPhases, StreamStatuses } from '@/api/core/enums';
 import { getActivePreSearchStreamId, getPreSearchStreamChunks, getPreSearchStreamMetadata } from '@/api/services/pre-search-stream-buffer.service';
 import { clearThreadActiveStream, getNextParticipantToStream, getThreadActiveStream, updateParticipantStatus } from '@/api/services/resumable-stream-kv.service';
 import { createLiveParticipantResumeStream, getActiveStreamId, getStreamChunks, getStreamMetadata } from '@/api/services/stream-buffer.service';
@@ -423,7 +423,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         where: and(
           eq(tables.chatMessage.threadId, threadId),
           eq(tables.chatMessage.roundNumber, currentRoundNumber),
-          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
         ),
         columns: { id: true },
       });
@@ -438,7 +438,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       where: and(
         eq(tables.chatMessage.threadId, threadId),
         eq(tables.chatMessage.roundNumber, currentRoundNumber),
-        eq(tables.chatMessage.role, 'assistant'),
+        eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
       ),
       columns: { id: true, metadata: true },
     });

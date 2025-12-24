@@ -15,8 +15,28 @@ import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
 
-import type { ComponentSize, ErrorSeverity, NetworkErrorType } from '@/api/core/enums';
-import { ComponentSizes, ErrorSeverities, NetworkErrorTypes } from '@/api/core/enums';
+import type {
+  ComponentSize,
+  EmptyStateStyle,
+  EmptyStateVariant,
+  ErrorSeverity,
+  ErrorStateVariant,
+  LoadingStateVariant,
+  NetworkErrorType,
+  SpacingVariant,
+  SuccessStateVariant,
+} from '@/api/core/enums';
+import {
+  ComponentSizes,
+  EmptyStateStyles,
+  EmptyStateVariants,
+  ErrorSeverities,
+  ErrorStateVariants,
+  LoadingStateVariants,
+  NetworkErrorTypes,
+  SpacingVariants,
+  SuccessStateVariants,
+} from '@/api/core/enums';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +48,7 @@ import { cn } from '@/lib/ui/cn';
 type LoadingStateProps = {
   title?: string;
   message?: string;
-  variant?: 'inline' | 'centered' | 'card';
+  variant?: LoadingStateVariant;
   className?: string;
   size?: ComponentSize;
 };
@@ -50,7 +70,7 @@ const sizeConfig = {
 export function LoadingState({
   title,
   message,
-  variant = 'centered',
+  variant = LoadingStateVariants.CENTERED,
   className,
   size = ComponentSizes.MD,
 }: LoadingStateProps) {
@@ -59,7 +79,7 @@ export function LoadingState({
   const defaultMessage = message || t('states.loading.please_wait');
   const config = sizeConfig[size as 'sm' | 'md' | 'lg'] || sizeConfig[ComponentSizes.MD];
 
-  if (variant === 'inline') {
+  if (variant === LoadingStateVariants.INLINE) {
     return (
       <div className={cn('flex items-center gap-2', className)}>
         <Spinner className={cn(config.spinner, 'text-muted-foreground')} />
@@ -68,7 +88,7 @@ export function LoadingState({
     );
   }
 
-  if (variant === 'card') {
+  if (variant === LoadingStateVariants.CARD) {
     return (
       <Card className={cn('border-dashed', className)}>
         <CardContent className={cn('flex flex-col items-center justify-center text-center', config.container)}>
@@ -82,7 +102,6 @@ export function LoadingState({
     );
   }
 
-  // centered (default)
   return (
     <PageTransition>
       <FadeIn delay={0.05}>
@@ -108,7 +127,7 @@ type ErrorStateProps = {
   description?: string;
   onRetry?: () => void;
   retryLabel?: string;
-  variant?: 'alert' | 'card' | 'network' | 'boundary';
+  variant?: ErrorStateVariant;
   severity?: ErrorSeverity;
   networkType?: NetworkErrorType;
   className?: string;
@@ -119,7 +138,7 @@ export function ErrorState({
   description,
   onRetry,
   retryLabel,
-  variant = 'card',
+  variant = ErrorStateVariants.CARD,
   severity = ErrorSeverities.FAILED,
   networkType = NetworkErrorTypes.CONNECTION,
   className,
@@ -173,7 +192,7 @@ export function ErrorState({
       iconColor: 'text-primary',
     },
   } as const satisfies Record<ErrorSeverity, { icon: typeof XCircle | typeof AlertTriangle | typeof Info; title: string; description: string; alertVariant: 'destructive' | 'default'; iconColor: string }>;
-  if (variant === 'network') {
+  if (variant === ErrorStateVariants.NETWORK) {
     const config = networkConfig[networkType];
     const Icon = config.icon;
     return (
@@ -204,7 +223,7 @@ export function ErrorState({
       </Alert>
     );
   }
-  if (variant === 'alert') {
+  if (variant === ErrorStateVariants.ALERT) {
     const config = severityConfig[severity];
     const IconComponent = icon || config.icon;
     return (
@@ -226,7 +245,7 @@ export function ErrorState({
       </Alert>
     );
   }
-  if (variant === 'boundary') {
+  if (variant === ErrorStateVariants.BOUNDARY) {
     return (
       <Card className={cn('border-destructive/50', className)}>
         <CardContent className="text-center py-12 space-y-6">
@@ -284,9 +303,9 @@ type EmptyStateProps = {
   title?: string;
   description?: string;
   action?: ReactNode;
-  variant?: 'general' | 'custom';
+  variant?: EmptyStateVariant;
   size?: 'sm' | 'md' | 'lg';
-  style?: 'default' | 'dashed' | 'gradient';
+  style?: EmptyStateStyle;
   className?: string;
   icon?: ReactNode;
 };
@@ -294,26 +313,26 @@ export function EmptyState({
   title,
   description,
   action,
-  variant = 'general',
+  variant = EmptyStateVariants.GENERAL,
   size = 'md',
-  style = 'default',
+  style = EmptyStateStyles.DEFAULT,
   className,
   icon,
 }: EmptyStateProps) {
   const t = useTranslations();
   const emptyStateConfig = {
-    general: {
+    [EmptyStateVariants.GENERAL]: {
       icon: Package,
       title: t('states.empty.default'),
       description: t('states.empty.description'),
     },
-    custom: {
+    [EmptyStateVariants.CUSTOM]: {
       icon: AlertCircle,
       title: t('states.empty.default'),
       description: t('states.empty.description'),
     },
   };
-  const config = emptyStateConfig[variant];
+  const config = emptyStateConfig[variant] || emptyStateConfig[EmptyStateVariants.GENERAL];
   const Icon = icon || config.icon;
   const sizeConfig = {
     sm: {
@@ -339,9 +358,9 @@ export function EmptyState({
     },
   };
   const styleConfig = {
-    default: 'border bg-card',
-    dashed: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
-    gradient: 'border bg-gradient-to-br from-card to-card/50 shadow-lg',
+    [EmptyStateStyles.DEFAULT]: 'border bg-card',
+    [EmptyStateStyles.DASHED]: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
+    [EmptyStateStyles.GRADIENT]: 'border bg-gradient-to-br from-card to-card/50 shadow-lg',
   };
   const sizeSettings = sizeConfig[size];
   return (
@@ -393,17 +412,17 @@ type SuccessStateProps = {
   title: string;
   description?: string;
   action?: ReactNode;
-  variant?: 'alert' | 'card';
+  variant?: SuccessStateVariant;
   className?: string;
 };
 export function SuccessState({
   title,
   description,
   action,
-  variant = 'alert',
+  variant = SuccessStateVariants.ALERT,
   className,
 }: SuccessStateProps) {
-  if (variant === 'card') {
+  if (variant === SuccessStateVariants.CARD) {
     return (
       <Card className={cn('border-chart-3/20 bg-chart-3/10', className)}>
         <CardContent className="text-center py-8 space-y-4">
@@ -450,19 +469,19 @@ export function ChatPage({ children, className }: ChatPageProps) {
 type ChatSectionProps = {
   children: ReactNode;
   delay?: number;
-  spacing?: 'tight' | 'default' | 'loose';
+  spacing?: SpacingVariant;
   className?: string;
 };
 export function ChatSection({
   children,
   delay = 0.05,
-  spacing = 'default',
+  spacing = SpacingVariants.DEFAULT,
   className,
 }: ChatSectionProps) {
   const spacingConfig = {
-    tight: 'space-y-4',
-    default: 'space-y-6',
-    loose: 'space-y-8',
+    [SpacingVariants.TIGHT]: 'space-y-4',
+    [SpacingVariants.DEFAULT]: 'space-y-6',
+    [SpacingVariants.LOOSE]: 'space-y-8',
   };
   return (
     <FadeIn delay={delay} className={cn(spacingConfig[spacing], className)}>

@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContent } from '@/components/pricing/pricing-content';
@@ -14,6 +15,7 @@ import {
   useProductsQuery,
   useSubscriptionsQuery,
   useSwitchSubscriptionMutation,
+  useUsageStatsQuery,
 } from '@/hooks';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
@@ -26,6 +28,12 @@ export default function PricingScreen() {
 
   const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
   const { data: subscriptionsData, isLoading: isLoadingSubscriptions } = useSubscriptionsQuery();
+  const { data: usageStatsData } = useUsageStatsQuery();
+
+  // Check if user has a card connected (has payment method or subscription)
+  const hasCardConnected = usageStatsData?.success
+    ? usageStatsData.data?.plan?.hasPaymentMethod ?? false
+    : false;
 
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
   const cancelMutation = useCancelSubscriptionMutation();
@@ -42,7 +50,11 @@ export default function PricingScreen() {
   const handleSubscribe = async (priceId: string) => {
     setProcessingPriceId(priceId);
     try {
-      if (activeSubscription) {
+      // ✅ CREDIT PURCHASES: One-time credit packs always go through checkout, not subscription switch
+      const isOneTimeCreditPurchase = priceId in CREDIT_CONFIG.CUSTOM_CREDITS.packages;
+
+      if (activeSubscription && !isOneTimeCreditPurchase) {
+        // Subscription switch (upgrade/downgrade between plans)
         const result = await switchMutation.mutateAsync({
           param: { id: activeSubscription.id },
           json: { newPriceId: priceId },
@@ -66,6 +78,7 @@ export default function PricingScreen() {
           }
         }
       } else {
+        // New subscription OR one-time credit purchase - both go through checkout
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
         });
@@ -138,6 +151,7 @@ export default function PricingScreen() {
         onCancel={handleCancel}
         onManageBilling={handleManageBilling}
         showSubscriptionBanner={false}
+        hasCardConnected={hasCardConnected}
       />
     </ChatPage>
   );

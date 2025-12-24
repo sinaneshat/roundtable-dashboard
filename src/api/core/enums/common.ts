@@ -120,6 +120,24 @@ export const SORT_DIRECTION_LABELS: Record<SortDirection, string> = {
 } as const;
 
 // ============================================================================
+// BOOLEAN STRING (Query param boolean values)
+// ============================================================================
+
+export const BOOLEAN_STRINGS = ['true', 'false'] as const;
+
+export const BooleanStringSchema = z.enum(BOOLEAN_STRINGS).openapi({
+  description: 'Boolean value as string (for query parameters)',
+  example: 'true',
+});
+
+export type BooleanString = z.infer<typeof BooleanStringSchema>;
+
+export const BooleanStrings = {
+  TRUE: 'true' as const,
+  FALSE: 'false' as const,
+} as const;
+
+// ============================================================================
 // VALIDATION HELPERS
 // ============================================================================
 
@@ -141,4 +159,8 @@ export function isValidEnvironment(value: unknown): value is Environment {
 
 export function isValidHttpMethod(value: unknown): value is HttpMethod {
   return typeof value === 'string' && HTTP_METHODS.includes(value as HttpMethod);
+}
+
+export function isValidBooleanString(value: unknown): value is BooleanString {
+  return typeof value === 'string' && BOOLEAN_STRINGS.includes(value as BooleanString);
 }

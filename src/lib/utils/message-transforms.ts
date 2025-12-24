@@ -131,18 +131,18 @@ export function isParticipantMessage(
  *
  * This prevents inconsistency where isStreaming=false but message parts have state='streaming'.
  */
-function normalizeMessagePartStates(parts: UIMessage['parts']): UIMessage['parts'] {
+function normalizeMessagePartStates<T extends unknown[]>(parts: T): T {
   if (!parts || parts.length === 0) {
     return parts;
   }
 
   return parts.map((part) => {
     // If part has a 'state' property, normalize 'streaming' to 'done'
-    if ('state' in part && part.state === 'streaming') {
+    if (typeof part === 'object' && part !== null && 'state' in part && part.state === 'streaming') {
       return { ...part, state: 'done' as const };
     }
     return part;
-  });
+  }) as T;
 }
 
 /**
@@ -190,9 +190,10 @@ export function chatMessageToUIMessage(
       : null;
 
   // ✅ STATE CONSISTENCY FIX: Normalize any stale 'streaming' states to 'done'
+  // Cast to UIMessage['parts'] - internal format is compatible with AI SDK at runtime
   const normalizedParts = normalizeMessagePartStates(
-    (message.parts || []) as UIMessage['parts'],
-  );
+    (message.parts || []),
+  ) as UIMessage['parts'];
 
   return {
     id: message.id,
@@ -436,11 +437,19 @@ export function filterToPreSearchMessages(
 /**
  * Filter messages with no meaningful content
  *
- * Removes user messages with only empty text.
- * Keeps assistant messages (may have errors or system info).
+ * AI SDK v5 Pattern: Pass messages through for conversion, filter AFTER convertToModelMessages.
+ * Reference: https://ai-sdk.dev/docs/reference/ai-sdk-ui/convert-to-model-messages
+ *
+ * This function:
+ * - Removes user messages with only empty text
+ * - Keeps all assistant messages (let convertToModelMessages handle the conversion)
+ *
+ * Post-conversion filtering happens in prepareValidatedMessages to remove
+ * any messages that result in empty content after SDK conversion.
  */
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   return messages.filter((message) => {
+    // Keep all assistant messages - post-conversion filtering handles empty content
     if (message.role === MessageRoles.ASSISTANT)
       return true;
 
@@ -784,7 +793,7 @@ export function mergeParticipantMetadata(
         errorMessage,
       }),
     },
-  ) as Extract<DbMessageMetadata, { role: 'assistant' }>;
+  );
 }
 
 // ============================================================================

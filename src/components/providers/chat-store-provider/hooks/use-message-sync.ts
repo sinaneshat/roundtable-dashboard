@@ -1,20 +1,11 @@
 'use client';
 
-/**
- * Message Sync Hook
- *
- * Syncs messages between AI SDK hook and Zustand store.
- * Handles deduplication, race conditions, and streaming updates.
- *
- * ✅ OPTIMIZATION: Uses specific dependencies instead of entire chat object
- * to prevent excessive effect runs during streaming.
- */
-
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
-import { MessageRoles } from '@/api/core/enums';
+import { DevLogMsgEvents, MessageRoles } from '@/api/core/enums';
 import { devLog, getParticipantIndex, getRoundNumber, rlog } from '@/lib/utils';
+import { getMessageMetadata } from '@/lib/utils/metadata';
 import type { ChatStoreApi } from '@/stores/chat';
 
 import type { ChatHook } from '../types';
@@ -41,9 +32,8 @@ function hasLastMessageContentChanged(
 
   const correspondingStoreMsg = storeMessages.find(m => m.id === lastChatMsg.id);
   if (!correspondingStoreMsg)
-    return true; // New message
+    return true;
 
-  // Quick length check first (O(1))
   const chatParts = lastChatMsg.parts;
   const storeParts = correspondingStoreMsg.parts;
 
@@ -52,14 +42,12 @@ function hasLastMessageContentChanged(
   if (chatParts.length !== storeParts.length)
     return true;
 
-  // Compare text content of last text part (most common streaming case)
   for (let i = chatParts.length - 1; i >= 0; i--) {
     const chatPart = chatParts[i];
     const storePart = storeParts[i];
 
     if (chatPart?.type === 'text' && storePart?.type === 'text') {
       if ('text' in chatPart && 'text' in storePart) {
-        // Quick length check before string comparison
         if (chatPart.text.length !== storePart.text.length)
           return true;
         if (chatPart.text !== storePart.text)
@@ -86,22 +74,12 @@ function hasLastMessageContentChanged(
  * because it reads from store.messages, not from the hook's messages.
  */
 export function useMessageSync({ store, chat }: UseMessageSyncParams) {
-  // Track previous messages for change detection
   const prevChatMessagesRef = useRef<UIMessage[]>([]);
   const prevMessageCountRef = useRef<number>(0);
-
-  // Track last stream activity to detect stuck streams
   const lastStreamActivityRef = useRef<number>(Date.now());
-
-  // ✅ OPTIMIZATION: Increased throttle interval to reduce update frequency
   const lastStreamSyncRef = useRef<number>(0);
-  const STREAM_SYNC_THROTTLE_MS = 250; // Increased from 150ms for better batching
-
-  // ✅ RACE FIX: Track previous streaming state to detect transitions
-  // When streaming ends (true → false), we must bypass throttle for final sync
+  const STREAM_SYNC_THROTTLE_MS = 250;
   const prevStreamingRef = useRef<boolean>(false);
-
-  // Track hydration to prevent duplicate hydration attempts
   const hasHydratedRef = useRef<string | null>(null);
 
   // ============================================================================
@@ -126,7 +104,8 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       && hasHydratedRef.current !== currentThreadId
     ) {
       hasHydratedRef.current = currentThreadId;
-      rlog.msg('hydrate', `SDK←store ${currentStoreMessages.length}msgs`);
+      const storeIds = currentStoreMessages.map(m => m.id.replace(/^01[A-Z0-9]+_/, '')).join(',');
+      rlog.msg('hydrate', `SDK←store ${currentStoreMessages.length}msgs ids=[${storeIds}]`);
       chat.setMessages?.(structuredClone(currentStoreMessages));
     }
 
@@ -308,56 +287,40 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       if (state.hasEarlyOptimisticMessage)
         return;
 
-      // Filter out internal messages that shouldn't be in the store
       const filteredMessages = chatMessages.filter((m) => {
-        // ✅ FIX: Filter out pre-search placeholder messages
-        if (m.id?.startsWith('pre-search-')) {
+        if (m.id?.startsWith('pre-search-'))
           return false;
-        }
 
-        // ✅ FIX: Filter out corrupted moderator messages
-        // These are messages where ID has _moderator suffix but metadata has participant fields
-        // This happens when AI SDK incorrectly updates the moderator message during streaming
         if (m.role === MessageRoles.ASSISTANT && m.id?.includes('_moderator')) {
-          const metadata = m.metadata;
-          const hasModeratorFlag = metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true;
-          const hasParticipantMetadata = metadata && typeof metadata === 'object' && 'participantIndex' in metadata && typeof (metadata as { participantIndex?: number }).participantIndex === 'number';
+          const metadata = getMessageMetadata(m.metadata);
+          const hasModeratorFlag = metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+          const hasParticipantMetadata = metadata?.role === 'assistant' && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
 
-          // If ID says moderator but metadata says participant, this is corrupted - filter out
-          if (!hasModeratorFlag && hasParticipantMetadata) {
+          if (!hasModeratorFlag && hasParticipantMetadata)
             return false;
-          }
         }
 
-        // Filter out isParticipantTrigger messages
         if (m.role === MessageRoles.USER) {
-          const metadata = m.metadata;
-          if (metadata && typeof metadata === 'object' && 'isParticipantTrigger' in metadata) {
-            return metadata.isParticipantTrigger !== true;
-          }
+          const metadata = getMessageMetadata(m.metadata);
+          if (metadata?.role === 'user' && metadata.isParticipantTrigger === true)
+            return false;
         }
 
-        // ✅ FIX: Filter out moderator placeholder messages (streaming state only)
-        // Keep moderator messages that have actual content (from DB after stream completes)
-        const metadata = m.metadata;
-        if (metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true) {
-          // During streaming, moderator messages may be placeholders - filter them out
-          // After streaming completes, they should have content from the DB
+        const metadata = getMessageMetadata(m.metadata);
+        if (metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true) {
           const hasParts = m.parts && m.parts.length > 0;
           const hasContent = m.parts?.some(p =>
             (p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.length > 0),
           );
-          // Only keep moderator messages with actual content
           return hasParts && hasContent;
         }
 
         return true;
       });
 
-      // Preserve optimistic messages from store
       const optimisticMessagesFromStore = currentStoreMessages.filter((m) => {
-        const metadata = m.metadata;
-        return metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true;
+        const metadata = getMessageMetadata(m.metadata);
+        return metadata !== undefined && 'isOptimistic' in metadata && metadata.isOptimistic === true;
       });
 
       // ✅ BUG FIX: Preserve messages from store that AI SDK doesn't have
@@ -369,98 +332,69 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       const chatMessageIds = new Set(filteredMessages.map(m => m.id));
 
       const missingMessagesFromStore = currentStoreMessages.filter((m) => {
-        // Skip if already in chat messages
         if (chatMessageIds.has(m.id))
           return false;
-
-        // ✅ FIX: Skip pre-search placeholder messages from store
         if (m.id?.startsWith('pre-search-'))
           return false;
 
-        // Skip optimistic messages (handled separately)
-        const metadata = m.metadata;
-        if (metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic === true)
+        const metadata = getMessageMetadata(m.metadata);
+        if (metadata !== undefined && 'isOptimistic' in metadata && metadata.isOptimistic === true)
           return false;
 
-        // ✅ RACE CONDITION FIX: Always preserve moderator messages with content from store
-        // Previously only preserved during isModeratorStreaming=true, which caused:
-        // 1. Round 0 moderator completes, isModeratorStreaming=false
-        // 2. Round 1 starts, but chatIsStreaming not yet true
-        // 3. Sync runs in this gap, moderator with content gets filtered out
-        // 4. Empty moderator placeholder overwrites content
-        // FIX: Always preserve moderator messages that have content, regardless of streaming state
-        if (metadata && typeof metadata === 'object' && 'isModerator' in metadata && metadata.isModerator === true) {
+        if (metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true) {
           const hasParts = m.parts && m.parts.length > 0;
           const hasContent = m.parts?.some(p =>
             (p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.length > 0),
           );
 
-          // During moderator streaming, preserve ALL moderator messages (including placeholders)
           const isModeratorStreaming = store.getState().isModeratorStreaming;
-          if (isModeratorStreaming) {
+          if (isModeratorStreaming)
             return true;
-          }
-
-          // Always preserve moderator messages WITH content (prevents race condition)
-          if (hasParts && hasContent) {
+          if (hasParts && hasContent)
             return true;
-          }
 
-          // Skip moderator messages without content (placeholders after streaming complete)
           return false;
         }
 
-        // ✅ BUG FIX: Skip isParticipantTrigger messages from store
-        // These are internal trigger messages that should never persist in the store.
-        // Bug: trigger messages could get into store, then get re-added here even
-        // after filteredMessages correctly excludes them from AI SDK messages.
-        if (m.role === MessageRoles.USER && metadata && typeof metadata === 'object' && 'isParticipantTrigger' in metadata) {
-          if (metadata.isParticipantTrigger === true)
-            return false;
+        if (m.role === MessageRoles.USER && metadata?.role === 'user' && metadata.isParticipantTrigger === true) {
+          return false;
         }
 
-        // Keep ALL messages not in AI SDK
         return true;
       });
 
       const mergedMessages = [...missingMessagesFromStore, ...filteredMessages];
 
-      // ✅ BUG FIX: Remove optimistic user messages when real user message exists for same round
-      // Optimistic messages are created by form-actions.ts, real messages come from AI SDK
-      // They have different IDs, so ID-based deduplication doesn't catch them
       const realUserMessageRounds = new Set(
         mergedMessages
-          .filter(m =>
-            m.role === MessageRoles.USER
-            && !(m.metadata && typeof m.metadata === 'object' && 'isOptimistic' in m.metadata && m.metadata.isOptimistic),
-          )
+          .filter((m) => {
+            if (m.role !== MessageRoles.USER)
+              return false;
+            const metadata = getMessageMetadata(m.metadata);
+            return !(metadata !== undefined && 'isOptimistic' in metadata && metadata.isOptimistic === true);
+          })
           .map(m => getRoundNumber(m.metadata))
-          .filter(r => r !== null),
+          .filter((r): r is number => r !== null),
       );
 
-      // Remove optimistic messages that have a real counterpart
-      // ✅ BUG FIX: Mutate mergedMessages in place to avoid creating unused variable
       const filteredIndices: number[] = [];
       for (let i = 0; i < mergedMessages.length; i++) {
-        const m = mergedMessages[i]!;
-        if (m.role !== MessageRoles.USER) {
+        const m = mergedMessages[i];
+        if (!m || m.role !== MessageRoles.USER) {
           filteredIndices.push(i);
           continue;
         }
-        const metadata = m.metadata;
-        const isOptimistic = metadata && typeof metadata === 'object' && 'isOptimistic' in metadata && metadata.isOptimistic;
-        if (!isOptimistic) {
+        const metadata = getMessageMetadata(m.metadata);
+        if (!(metadata !== undefined && 'isOptimistic' in metadata && metadata.isOptimistic === true)) {
           filteredIndices.push(i);
           continue;
         }
         const round = getRoundNumber(metadata);
-        // Keep optimistic only if no real message exists for this round
         if (round === null || !realUserMessageRounds.has(round)) {
           filteredIndices.push(i);
         }
       }
-      // Rebuild mergedMessages array with only kept indices
-      const roundDeduplicatedMsgs = filteredIndices.map(i => mergedMessages[i]!);
+      const roundDeduplicatedMsgs = filteredIndices.map(i => mergedMessages[i]).filter((m): m is UIMessage => m !== undefined);
       mergedMessages.length = 0;
       mergedMessages.push(...roundDeduplicatedMsgs);
 
@@ -470,6 +404,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       // Also applies during moderator streaming to prevent moderator placeholder from being dropped.
       const isModeratorStreaming = state.isModeratorStreaming;
       if ((chatIsStreaming || isModeratorStreaming) && mergedMessages.length < currentStoreMessages.length) {
+        devLog.d('prevent-loss', { merged: mergedMessages.length, store: currentStoreMessages.length, strm: chatIsStreaming, modStrm: isModeratorStreaming });
         // Instead of dropping, ensure all store messages are preserved (except internal messages)
         const mergedIds = new Set(mergedMessages.map(m => m.id));
         for (const storeMsg of currentStoreMessages) {
@@ -494,12 +429,10 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
           return 1;
 
-        // ✅ MODERATOR FIX: Handle negative participantIndex
-        // User messages (undefined pIdx) sort first (-1000)
-        // Regular participants (0, 1, 2...) sort in order
-        // Moderator (-99) sorts LAST (becomes 901 after adjustment)
-        const pIdxA = (a.metadata as { participantIndex?: number })?.participantIndex;
-        const pIdxB = (b.metadata as { participantIndex?: number })?.participantIndex;
+        const metaA = getMessageMetadata(a.metadata);
+        const metaB = getMessageMetadata(b.metadata);
+        const pIdxA = metaA?.role === 'assistant' && 'participantIndex' in metaA ? metaA.participantIndex : undefined;
+        const pIdxB = metaB?.role === 'assistant' && 'participantIndex' in metaB ? metaB.participantIndex : undefined;
         const adjustedIdxA = pIdxA === undefined ? -1000 : (pIdxA < 0 ? 1000 + pIdxA : pIdxA);
         const adjustedIdxB = pIdxB === undefined ? -1000 : (pIdxB < 0 ? 1000 + pIdxB : pIdxB);
         return adjustedIdxA - adjustedIdxB;
@@ -576,17 +509,15 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           const existingTextContent = existingText && 'text' in existingText ? String(existingText.text || '') : '';
           const newTextContent = newText && 'text' in newText ? String(newText.text || '') : '';
 
-          const existingIsModerator = existing.metadata && typeof existing.metadata === 'object'
-            && 'isModerator' in existing.metadata && existing.metadata.isModerator === true;
-          const newIsModerator = msg.metadata && typeof msg.metadata === 'object'
-            && 'isModerator' in msg.metadata && msg.metadata.isModerator === true;
+          const existingMeta = getMessageMetadata(existing.metadata);
+          const newMeta = getMessageMetadata(msg.metadata);
+          const existingIsModerator = existingMeta?.role === 'assistant' && 'isModerator' in existingMeta && existingMeta.isModerator === true;
+          const newIsModerator = newMeta?.role === 'assistant' && 'isModerator' in newMeta && newMeta.isModerator === true;
           const existingIsParticipant = existing.id.includes('_p') && !existing.id.includes('_moderator');
 
-          // ✅ CRITICAL FIX: If ID indicates participant but content looks like moderator, reject the new content
-          // This prevents moderator content from leaking into participant messages
           const newLooksLikeModerator = newTextContent.startsWith('###') || newTextContent.toLowerCase().includes('council concluded');
           if (existingIsParticipant && !existingIsModerator && newLooksLikeModerator && existingContentLength > 0) {
-            continue; // Keep existing participant content
+            continue;
           }
 
           // ✅ CRITICAL FIX: Detect content concatenation/duplication
@@ -603,21 +534,13 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             }
           }
 
-          // Check finish reason - completed messages are more authoritative
-          const existingFinishReason = existing.metadata && typeof existing.metadata === 'object' && 'finishReason' in existing.metadata
-            ? existing.metadata.finishReason
-            : null;
-          const newFinishReason = msg.metadata && typeof msg.metadata === 'object' && 'finishReason' in msg.metadata
-            ? msg.metadata.finishReason
-            : null;
+          const existingFinishReason = existingMeta?.role === 'assistant' ? existingMeta.finishReason : undefined;
+          const newFinishReason = newMeta?.role === 'assistant' ? newMeta.finishReason : undefined;
 
           const existingIsComplete = existingFinishReason === 'stop' || existingFinishReason === 'length';
           const newIsComplete = newFinishReason === 'stop' || newFinishReason === 'length';
 
-          // ✅ RACE CONDITION FIX: Explicit moderator protection
-          // Moderator messages with content must NEVER be overwritten by empty placeholders
           if (existingIsModerator && newIsModerator && existingContentLength > 0 && newContentLength === 0) {
-            // Existing moderator has content, new is empty placeholder - ALWAYS keep existing
             continue;
           }
 
@@ -677,14 +600,13 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           if (msg.role !== MessageRoles.ASSISTANT)
             return true;
 
-          // Check for corrupted moderator: ID has _moderator but metadata lacks isModerator
           const isModeratorId = msg.id.includes('_moderator');
-          const hasModeratorFlag = msg.metadata && typeof msg.metadata === 'object' && 'isModerator' in msg.metadata && msg.metadata.isModerator === true;
-          const hasParticipantMetadata = msg.metadata && typeof msg.metadata === 'object' && 'participantIndex' in msg.metadata && typeof msg.metadata.participantIndex === 'number';
+          const metadata = getMessageMetadata(msg.metadata);
+          const hasModeratorFlag = metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+          const hasParticipantMetadata = metadata?.role === 'assistant' && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number';
 
-          // If ID says moderator but metadata says participant, this is corrupted - filter out
           if (isModeratorId && !hasModeratorFlag && hasParticipantMetadata) {
-            return false; // Remove this corrupted message
+            return false;
           }
 
           return true;
@@ -701,22 +623,20 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           const roundFromId = Number.parseInt(idMatch[1]!, 10);
           const participantIndexFromId = Number.parseInt(idMatch[2]!, 10);
           const roundFromMetadata = getRoundNumber(msg.metadata);
-          const participantIndexFromMetadata = msg.metadata && typeof msg.metadata === 'object' && 'participantIndex' in msg.metadata
-            ? (msg.metadata as { participantIndex?: number }).participantIndex
+          const metadata = getMessageMetadata(msg.metadata);
+          const participantIndexFromMetadata = metadata?.role === 'assistant' && 'participantIndex' in metadata
+            ? metadata.participantIndex
             : null;
 
-          // Check for ANY mismatch
           const roundMismatch = roundFromMetadata !== null && roundFromId !== roundFromMetadata;
           const participantMismatch = participantIndexFromMetadata !== null
-            && participantIndexFromMetadata !== undefined
             && participantIndexFromId !== participantIndexFromMetadata;
 
           if (roundMismatch || participantMismatch) {
-            // Correct metadata to match ID (ID is source of truth from backend)
             return {
               ...msg,
               metadata: {
-                ...(msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}),
+                ...(metadata || {}),
                 roundNumber: roundFromId,
                 participantIndex: participantIndexFromId,
               },
@@ -793,34 +713,28 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         });
 
       if (!isSameMessages) {
-        // ✅ RACE CONDITION FIX: Preserve moderator messages with content from store
-        // The AI SDK only has participant messages, but we add moderator messages separately
-        // We need to merge the AI SDK messages with moderator messages from the store,
-        // ALWAYS preferring the version with content over empty placeholders
-        const moderatorMessagesFromStore = currentStoreMessages.filter(msg =>
-          msg.metadata && typeof msg.metadata === 'object' && 'isModerator' in msg.metadata && msg.metadata.isModerator === true,
-        );
+        const moderatorMessagesFromStore = currentStoreMessages.filter((msg) => {
+          const metadata = getMessageMetadata(msg.metadata);
+          return metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+        });
 
         // Build a map of store moderators by ID for quick lookup
         const storeModeratorMap = new Map(moderatorMessagesFromStore.map(m => [m.id, m]));
 
-        // ✅ RACE CONDITION FIX: Replace empty moderators in dedup with store versions that have content
         const updatedDeduplicatedMessages = deduplicatedMessages.map((msg) => {
-          const isModerator = msg.metadata && typeof msg.metadata === 'object'
-            && 'isModerator' in msg.metadata && msg.metadata.isModerator === true;
+          const metadata = getMessageMetadata(msg.metadata);
+          const isModerator = metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
 
           if (!isModerator)
             return msg;
 
-          // Check if this moderator is empty
           const msgHasContent = msg.parts?.some(p =>
             p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.length > 0,
           ) ?? false;
 
           if (msgHasContent)
-            return msg; // Already has content, keep it
+            return msg;
 
-          // Check if store has a version with content
           const storeVersion = storeModeratorMap.get(msg.id);
           if (!storeVersion)
             return msg;
@@ -829,18 +743,18 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.length > 0,
           ) ?? false;
 
-          if (storeHasContent) {
-            // Store has content, dedup is empty - use store version
+          if (storeHasContent)
             return storeVersion;
-          }
 
           return msg;
         });
 
-        // Get IDs of moderator messages already in updated deduplicatedMessages
         const moderatorIdsInDedup = new Set(
           updatedDeduplicatedMessages
-            .filter(msg => msg.metadata && typeof msg.metadata === 'object' && 'isModerator' in msg.metadata && msg.metadata.isModerator === true)
+            .filter((msg) => {
+              const metadata = getMessageMetadata(msg.metadata);
+              return metadata?.role === 'assistant' && 'isModerator' in metadata && metadata.isModerator === true;
+            })
             .map(msg => msg.id),
         );
 
@@ -850,14 +764,10 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         // Merge: updated messages + preserved moderators
         const mergedMessages = [...updatedDeduplicatedMessages, ...moderatorsToPreserve];
 
-        // ✅ CRITICAL FIX: Sort messages to ensure stable ordering
-        // Order: by round number, then by participantIndex (moderator -99 comes AFTER regular participants)
-        // This prevents message flip-flopping that causes excessive re-renders
         const getMessageSortKey = (msg: UIMessage): string => {
           const round = getRoundNumber(msg.metadata) ?? 0;
-          const pIdx = (msg.metadata as { participantIndex?: number })?.participantIndex;
-          // User messages (no participantIndex) sort first within round
-          // Moderator (-99) sorts after all regular participants
+          const metadata = getMessageMetadata(msg.metadata);
+          const pIdx = metadata?.role === 'assistant' && 'participantIndex' in metadata ? metadata.participantIndex : undefined;
           const adjustedIdx = pIdx === undefined ? -1000 : (pIdx < 0 ? 1000 + pIdx : pIdx);
           return `${String(round).padStart(5, '0')}_${String(adjustedIdx + 1000).padStart(5, '0')}`;
         };
@@ -881,13 +791,14 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
         }
 
         // Debug: Track message sync (debounced)
-        devLog.msg('sync', mergedMessages.length - prevMessageCountRef.current);
+        devLog.msg(DevLogMsgEvents.SYNC, mergedMessages.length - prevMessageCountRef.current);
 
         // Log sync with participant breakdown
         const assistantMsgs = mergedMessages.filter(m => m.role === MessageRoles.ASSISTANT);
         const pIndices = assistantMsgs.map(m => getParticipantIndex(m.metadata)).filter(i => i !== undefined && i !== null);
         const rounds = [...new Set(mergedMessages.map(m => getRoundNumber(m.metadata)).filter(r => r !== null))];
-        rlog.msg('sync', `${mergedMessages.length}msg r=[${rounds.join(',')}] p=[${pIndices.join(',')}]`);
+        const msgIds = mergedMessages.map(m => m.id.replace(/^01[A-Z0-9]+_/, '')).join(',');
+        rlog.msg('sync', `${currentStoreMessages.length}→${mergedMessages.length} ids=[${msgIds}] strm=${chatIsStreaming ? 1 : 0} r=[${rounds.join(',')}] p=[${pIndices.join(',')}]`);
 
         prevMessageCountRef.current = chatMessages.length;
         prevChatMessagesRef.current = chatMessages;
@@ -993,17 +904,10 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             lastStreamSyncRef.current = Date.now();
           }
         } else {
-          // ✅ BUG FIX: Never overwrite moderator content with empty parts
-          // The AI SDK may have stale empty moderator from hydration,
-          // while the store has actual content from moderator streaming.
-          // This prevents round N moderator content from being cleared when round N+1 starts.
-          const storeIsModerator = correspondingStoreMessage.metadata
-            && typeof correspondingStoreMessage.metadata === 'object'
-            && 'isModerator' in correspondingStoreMessage.metadata
-            && correspondingStoreMessage.metadata.isModerator === true;
+          const storeMeta = getMessageMetadata(correspondingStoreMessage.metadata);
+          const storeIsModerator = storeMeta?.role === 'assistant' && 'isModerator' in storeMeta && storeMeta.isModerator === true;
 
           if (storeIsModerator) {
-            // Check if store has content but hook doesn't
             const storeHasContent = correspondingStoreMessage.parts?.some(p =>
               p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.length > 0,
             ) ?? false;
@@ -1012,8 +916,6 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
             ) ?? false;
 
             if (storeHasContent && !hookHasContent) {
-              // Store has content, hook is empty - DO NOT overwrite
-              // Skip this sync to preserve moderator content
               return;
             }
           }

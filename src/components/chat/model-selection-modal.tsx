@@ -193,11 +193,11 @@ export function ModelSelectionModal({
   // Custom role creation mutation
   const createRoleMutation = useCreateCustomRoleMutation();
 
-  // Usage stats for custom role limits
+  // Usage stats for custom role access
   const { data: usageData } = useUsageStatsQuery();
-  const customRoleLimit = usageData?.data?.customRoles?.limit ?? 0;
-  const customRoleRemaining = usageData?.data?.customRoles?.remaining ?? 0;
-  const canCreateCustomRoles = customRoleLimit > 0 && customRoleRemaining > 0;
+  // ✅ CREDITS-ONLY: Paid users can create custom roles, free users need to upgrade
+  const isPaidUser = usageData?.data?.plan?.type === 'paid';
+  const canCreateCustomRoles = isPaidUser;
 
   // Check if filtering is active - disable reorder when filtering to prevent corruption
   const isFiltering = searchQuery.trim().length > 0;
@@ -259,19 +259,12 @@ export function ModelSelectionModal({
     if (!trimmedRole)
       return;
 
-    // Check if user can create custom roles
+    // Check if user can create custom roles (paid users only)
     if (!canCreateCustomRoles) {
-      if (customRoleLimit === 0) {
-        toastManager.error(
-          'Upgrade Required',
-          'Custom roles are not available on your current plan. Upgrade to create custom roles.',
-        );
-      } else {
-        toastManager.error(
-          'Limit Reached',
-          `You've reached your custom role limit (${customRoleLimit} per month). Upgrade your plan for more custom roles.`,
-        );
-      }
+      toastManager.error(
+        'Upgrade Required',
+        'Custom roles are available for paid users only. Upgrade to create custom roles.',
+      );
       return;
     }
 
@@ -293,7 +286,7 @@ export function ModelSelectionModal({
       const errorMessage = getApiErrorMessage(error, 'Failed to create custom role');
       toastManager.error('Failed to create role', errorMessage);
     }
-  }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles, customRoleLimit]);
+  }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles]);
 
   // Handle preset selection - filter out incompatible models before selecting
   const handlePresetSelect = useCallback((result: PresetSelectionResult) => {
@@ -340,14 +333,12 @@ export function ModelSelectionModal({
                     className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-4"
                   >
                     <ArrowLeft className="h-5 w-5" />
-                    <span className="text-sm font-medium">Back</span>
+                    <span className="text-sm font-medium">{t('back')}</span>
                   </button>
                   <DialogTitle className="text-xl">
-                    Set Role for
-                    {' '}
-                    {selectedModelData?.model.name}
+                    {t('setRoleFor', { modelName: selectedModelData?.model.name || '' })}
                   </DialogTitle>
-                  <DialogDescription>Select a role or enter a custom one</DialogDescription>
+                  <DialogDescription>{t('selectOrEnterRole')}</DialogDescription>
                 </>
               )
             : (
@@ -489,7 +480,7 @@ export function ModelSelectionModal({
 
                     {/* Sticky Footer - Custom Role Input */}
                     <div className="shrink-0 py-3">
-                      {!canCreateCustomRoles && customRoleLimit === 0
+                      {!canCreateCustomRoles
                         ? (
                             <div
                               className={cn(
@@ -499,29 +490,28 @@ export function ModelSelectionModal({
                               )}
                             >
                               <AlertCircle className="size-3 shrink-0" />
-                              <span className="flex-1">Custom roles not available on your plan</span>
+                              <span className="flex-1">Custom roles are available for paid users</span>
                               <Button
                                 variant="default"
                                 size="sm"
                                 className="h-6 rounded-full text-[10px] font-medium shrink-0"
                                 onClick={() => router.push('/chat/pricing')}
                               >
-                                Upgrade
+                                {t('upgrade')}
                               </Button>
                             </div>
                           )
                         : (
                             <div className="flex gap-2 w-full">
                               <Input
-                                placeholder={canCreateCustomRoles ? 'Enter custom role name...' : 'Limit reached'}
+                                placeholder={t('customRolePlaceholder')}
                                 value={customRoleInput}
                                 onChange={e => setCustomRoleInput(e.target.value)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && customRoleInput.trim() && canCreateCustomRoles) {
+                                  if (e.key === 'Enter' && customRoleInput.trim()) {
                                     handleCustomRoleCreate();
                                   }
                                 }}
-                                disabled={!canCreateCustomRoles}
                                 className="flex-1 min-w-0 h-8 text-sm"
                               />
                               <Button

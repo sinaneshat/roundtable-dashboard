@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * useTimelineAnimations - Tracks animated items for one-time entrance animations
  *

@@ -193,7 +193,7 @@ export function getModeColor(mode: string): string {
     solving: OG_COLORS.solving,
   };
 
-  return modeColors[mode as keyof typeof modeColors] || OG_COLORS.primary;
+  return modeColors[mode] ?? OG_COLORS.primary;
 }
 
 /**

@@ -270,13 +270,12 @@ export function ShareDialog({
                     <div className="flex flex-col">
                       {SOCIAL_PLATFORMS.map(({ id, name, Component }) => (
                         <Component key={id} url={shareUrl} title={shareTitle} blankTarget>
-                          <button
-                            type="button"
+                          <div
                             className="focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer select-none items-center gap-2 rounded-xl px-2 py-2 text-sm outline-none transition-colors [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
                           >
                             {SOCIAL_ICONS[id]}
                             <span>{name}</span>
-                          </button>
+                          </div>
                         </Component>
                       ))}
                     </div>

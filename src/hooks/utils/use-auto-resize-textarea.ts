@@ -8,10 +8,14 @@ export type UseAutoResizeTextareaOptions = {
   value?: string;
 };
 
+export type UseAutoResizeTextareaReturn = {
+  resize: () => void;
+};
+
 export function useAutoResizeTextarea(
   ref: React.RefObject<HTMLTextAreaElement | null>,
   options: UseAutoResizeTextareaOptions = {},
-) {
+): UseAutoResizeTextareaReturn {
   const {
     minHeight = 80,
     maxHeight = 240,

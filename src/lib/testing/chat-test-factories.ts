@@ -28,11 +28,11 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
 }
 
 export function createMockParticipant(index: number, overrides?: Partial<ChatParticipant>): ChatParticipant {
-  const models = ['gpt-4o', 'claude-3-opus', 'gemini-pro', 'mistral-large'];
+  const models = ['gpt-4o', 'claude-3-opus', 'gemini-pro', 'mistral-large'] as const;
   return createApiMockParticipant({
     id: `participant-${index}`,
     threadId: 'thread-123',
-    modelId: models[index % models.length] as string,
+    modelId: models[index % models.length],
     role: `Role ${index}`,
     priority: index,
     ...overrides,

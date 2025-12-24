@@ -23,7 +23,7 @@ function findLocalDbFile() {
 // This is for build-time usage, so it's acceptable to use process.env
 export default process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local'
   ? defineConfig({
-      schema: './src/db/schema.ts',
+      schema: './src/db/index.ts',
       out: './src/db/migrations',
       dialect: 'sqlite',
       dbCredentials: {
@@ -31,7 +31,7 @@ export default process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local'
       },
     })
   : (defineConfig({
-      schema: './src/db/schema.ts',
+      schema: './src/db/index.ts',
       out: './src/db/migrations',
       driver: 'd1-http',
       dialect: 'sqlite',

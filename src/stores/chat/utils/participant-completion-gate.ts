@@ -30,6 +30,19 @@ import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber, isNonEmptyString, isObject } from '@/lib/utils';
 
 // ============================================================================
+// AI SDK Constants (Third-Party Library Types)
+// ============================================================================
+
+/**
+ * AI SDK message part streaming state constant
+ * From: node_modules/ai/dist/index.d.ts - state?: 'streaming' | 'done'
+ *
+ * This is defined by the AI SDK library and cannot be changed.
+ * We extract it as a constant to follow the enum pattern and prevent typos.
+ */
+const AI_SDK_PART_STATE_STREAMING = 'streaming' as const;
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -75,7 +88,7 @@ export type ParticipantDebugInfo = {
 export function isMessageComplete(message: UIMessage): boolean {
   // Check for streaming parts - if ANY part is streaming, message is not complete
   const hasStreamingParts = message.parts?.some(
-    p => 'state' in p && p.state === 'streaming',
+    p => 'state' in p && p.state === AI_SDK_PART_STATE_STREAMING,
   ) ?? false;
 
   if (hasStreamingParts) {
@@ -168,7 +181,7 @@ export function getParticipantCompletionStatus(
 
     // Check message completion status
     const hasStreamingParts = participantMessage.parts?.some(
-      p => 'state' in p && p.state === 'streaming',
+      p => 'state' in p && p.state === AI_SDK_PART_STATE_STREAMING,
     ) ?? false;
 
     const hasTextContent = participantMessage.parts?.some(
@@ -271,7 +284,7 @@ export function getMessageStreamingStatus(
   message: UIMessage,
 ): typeof MessageStatuses.STREAMING | typeof MessageStatuses.COMPLETE {
   const hasStreamingParts = message.parts?.some(
-    p => 'state' in p && p.state === 'streaming',
+    p => 'state' in p && p.state === AI_SDK_PART_STATE_STREAMING,
   ) ?? false;
 
   return hasStreamingParts ? MessageStatuses.STREAMING : MessageStatuses.COMPLETE;

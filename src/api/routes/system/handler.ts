@@ -102,7 +102,7 @@ function checkEnvironment(c: HealthCheckContext) {
       return {
         status: HealthStatuses.DEGRADED,
         message: `Missing environment variables: ${missingVars.join(', ')}`,
-        details: { missingVars },
+        details: { detailType: 'health_check', missingVars },
       };
     }
 

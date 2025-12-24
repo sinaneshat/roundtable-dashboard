@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import type { ComponentProps, ElementType, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
 import { motion } from 'motion/react';
 
@@ -8,14 +9,13 @@ import type { BorderGradientDirection } from '@/api/core/enums';
 import { BORDER_GRADIENT_DIRECTIONS, BorderGradientDirections } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
-export interface HoverBorderGradientProps extends React.HTMLAttributes<HTMLElement> {
-  children: React.ReactNode;
+export interface HoverBorderGradientProps extends ComponentProps<'button'> {
+  children: ReactNode;
   containerClassName?: string;
   className?: string;
-  as?: React.ElementType;
+  as?: ElementType;
   duration?: number;
   clockwise?: boolean;
-  disabled?: boolean;
 }
 
 export function HoverBorderGradient({
@@ -54,12 +54,12 @@ export function HoverBorderGradient({
   useEffect(() => {
     if (!hovered) {
       const interval = setInterval(() => {
-        setDirection((prevState: BorderGradientDirection) => rotateDirection(prevState));
+        setDirection((prevState) => rotateDirection(prevState));
       }, duration * 1000);
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [hovered, duration, clockwise]);
+  }, [hovered, duration]);
 
   return (
     <Tag

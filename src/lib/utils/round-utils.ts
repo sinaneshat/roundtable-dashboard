@@ -109,8 +109,14 @@ export function getRoundNumberFromMetadata(
   defaultValue = DEFAULT_ROUND_NUMBER,
 ): number {
   // If it's a UIMessage, extract metadata using type-safe utility
-  if (messageOrMetadata && typeof messageOrMetadata === 'object' && 'metadata' in messageOrMetadata) {
-    const roundNumber = getRoundNumber((messageOrMetadata as UIMessage).metadata);
+  if (
+    messageOrMetadata
+    && typeof messageOrMetadata === 'object'
+    && 'metadata' in messageOrMetadata
+    && messageOrMetadata.metadata !== null
+    && typeof messageOrMetadata.metadata === 'object'
+  ) {
+    const roundNumber = getRoundNumber(messageOrMetadata.metadata);
     return roundNumber ?? defaultValue;
   }
   // Otherwise treat it as raw metadata

@@ -15,7 +15,7 @@ interface PricingCardProps {
   price: {
     amount: number;
     currency: string;
-    interval: 'month' | 'year';
+    interval?: 'month' | 'year' | null; // Optional for one-time purchases
     trialDays?: number | null;
   };
   features?: string[] | null;
@@ -31,6 +31,10 @@ interface PricingCardProps {
   delay?: number;
   annualSavingsPercent?: number;
   hasOtherSubscription?: boolean;
+  isFreeProduct?: boolean; // For $0 subscription (add payment method)
+  isOneTime?: boolean; // For one-time credit purchases
+  creditsAmount?: number; // Credits for one-time packages
+  disabled?: boolean; // Disable the card (e.g., when user hasn't connected card)
 }
 
 export function PricingCard({
@@ -50,6 +54,10 @@ export function PricingCard({
   delay = 0,
   annualSavingsPercent,
   hasOtherSubscription = false,
+  isFreeProduct = false,
+  isOneTime = false,
+  creditsAmount,
+  disabled = false,
 }: PricingCardProps) {
   const t = useTranslations('pricing.card');
 
@@ -66,6 +74,12 @@ export function PricingCard({
   const getButtonText = () => {
     if (isCurrentPlan) {
       return t('cancelSubscription');
+    }
+    if (isOneTime) {
+      return t('purchase');
+    }
+    if (isFreeProduct) {
+      return t('connectCard');
     }
     if (hasOtherSubscription) {
       return t('switchPlan');
@@ -126,7 +140,12 @@ export function PricingCard({
           inactiveZone={0.01}
         />
 
-        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
+        <div className={cn(
+          "relative flex h-full flex-col overflow-hidden rounded-xl border bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]",
+          isFreeProduct
+            ? "border-green-500/30 bg-green-500/5"
+            : "border-white/20 dark:border-white/10"
+        )}>
 
           {/* Card Content */}
           <div className="relative flex flex-1 flex-col gap-6">
@@ -155,16 +174,45 @@ export function PricingCard({
               className="space-y-2"
             >
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold tracking-tight">
-                  {price.currency.toUpperCase()}
-                  {' '}
-                  {(price.amount / 100).toFixed(2)}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  /
-                  {price.interval}
-                </span>
+                {isFreeProduct ? (
+                  <span className="text-4xl font-bold tracking-tight">
+                    {t('free')}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-4xl font-bold tracking-tight">
+                      {price.currency.toUpperCase()}
+                      {' '}
+                      {(price.amount / 100).toFixed(2)}
+                    </span>
+                    {price.interval && (
+                      <span className="text-sm text-muted-foreground">
+                        /
+                        {price.interval}
+                      </span>
+                    )}
+                    {isOneTime && (
+                      <span className="text-sm text-muted-foreground">
+                        {t('oneTime')}
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
+
+              {/* Credits Amount for one-time packages */}
+              {creditsAmount && creditsAmount > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: delay + 0.25, duration: 0.3 }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                >
+                  {creditsAmount.toLocaleString()}
+                  {' '}
+                  {t('credits')}
+                </motion.div>
+              )}
 
               {/* Trial Period Badge */}
               {price.trialDays && price.trialDays > 0 && (
@@ -298,16 +346,17 @@ export function PricingCard({
                 as="button"
                 containerClassName={cn(
                   'w-full rounded-4xl',
-                  isActionButtonLoading && 'cursor-not-allowed opacity-50',
+                  (isActionButtonLoading || disabled) && 'cursor-not-allowed opacity-50',
                 )}
                 className={cn(
                   'w-full text-center text-sm font-medium transition-all duration-200',
                   isMostPopular && !isCurrentPlan && 'bg-primary text-primary-foreground',
                   isCurrentPlan && 'bg-destructive/10 text-destructive hover:bg-destructive/20',
-                  !isMostPopular && !isCurrentPlan && 'bg-background text-foreground',
+                  isFreeProduct && !isCurrentPlan && 'bg-green-600 text-white hover:bg-green-700',
+                  !isMostPopular && !isCurrentPlan && !isFreeProduct && 'bg-background text-foreground',
                 )}
                 onClick={handleAction}
-                disabled={isActionButtonLoading}
+                disabled={isActionButtonLoading || disabled}
               >
                 {isActionButtonLoading
                   ? (

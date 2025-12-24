@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+export type UseMediaQueryReturn = boolean;
+
 /**
  * Hook for detecting media query matches
  * Based on shadcn/ui responsive pattern
@@ -13,7 +15,7 @@ import { useEffect, useState } from 'react';
  * const isDesktop = useMediaQuery("(min-width: 768px)")
  * const isMobile = useMediaQuery("(max-width: 767px)")
  */
-export function useMediaQuery(query: string): boolean {
+export function useMediaQuery(query: string): UseMediaQueryReturn {
   // Lazy initialization to avoid setState in useEffect on mount
   const [matches, setMatches] = useState<boolean>(() => {
     if (typeof window === 'undefined')

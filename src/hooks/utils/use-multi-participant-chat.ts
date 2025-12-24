@@ -12,7 +12,7 @@ import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
+import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, mergeParticipantMetadata, rlog } from '@/lib/utils';
 
@@ -26,20 +26,39 @@ import { useSyncedRefs } from './use-synced-refs';
  * ✅ LENIENT VALIDATION: Only validates essential fields for hook operation
  * Database fields (createdAt, updatedAt) are optional to support test fixtures
  */
-const UseMultiParticipantChatOptionsSchema = z
+/**
+ * ✅ TYPE-SAFE: Participant settings schema (inferred from ParticipantConfigSchema)
+ * Matches the settings field from /src/lib/schemas/participant-schemas.ts
+ */
+const ParticipantSettingsValidationSchema = z
   .object({
-    threadId: z.string(), // Allow empty string for initial state
-    participants: z.array(z.object({
-      id: z.string(),
-      modelId: z.string(),
-      isEnabled: z.boolean(),
-      priority: z.number().int().nonnegative(),
-    }).passthrough()), // Allow additional fields (database fields, etc.)
-    messages: z.array(z.custom<UIMessage>()).optional(),
-    mode: z.string().optional(),
-    regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+    temperature: z.number().min(0).max(2).optional(),
+    maxTokens: z.number().int().positive().optional(),
+    systemPrompt: z.string().optional(),
   })
-  .passthrough(); // Allow callbacks to pass through without validation
+  .nullable()
+  .optional();
+
+const UseMultiParticipantChatOptionsSchema = z.object({
+  threadId: z.string(), // Allow empty string for initial state
+  participants: z.array(z.object({
+    id: z.string(),
+    modelId: z.string(),
+    isEnabled: z.boolean(),
+    priority: z.number().int().nonnegative(),
+    // Database fields that may be present
+    threadId: z.string().optional(),
+    customRoleId: z.string().nullable().optional(),
+    role: z.string().nullable().optional(),
+    settings: ParticipantSettingsValidationSchema,
+    createdAt: z.union([z.date(), z.string()]).optional(),
+    updatedAt: z.union([z.date(), z.string()]).optional(),
+  })),
+  messages: z.array(z.custom<UIMessage>()).optional(),
+  mode: z.string().optional(),
+  regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+  // Callbacks are not validated - they pass through via TypeScript types
+});
 
 /**
  * Options for configuring the multi-participant chat hook
@@ -330,6 +349,10 @@ export function useMultiParticipantChat(
   // Track previous threadId for navigation reset (effect defined after hasHydratedRef)
   const prevThreadIdRef = useRef<string>(threadId);
 
+  // ✅ UNMOUNT GUARD: Track component lifecycle to prevent stale sendMessage calls
+  // AI SDK's internal state may be cleared on unmount, causing "Cannot read properties of undefined (reading 'state')"
+  const isMountedRef = useRef<boolean>(true);
+
   /**
    * Trigger the next participant using refs (safe to call from useChat callbacks)
    */
@@ -472,9 +495,17 @@ export function useMultiParticipantChat(
     //
     // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
     if (aiSendMessageRef.current) {
-      const sendMessage = aiSendMessageRef.current;
-
       queueMicrotask(async () => {
+        // ✅ UNMOUNT GUARD: Re-check refs inside microtask to handle race conditions
+        // Component may unmount or AI SDK may reinitialize between scheduling and execution
+        // This prevents "Cannot read properties of undefined (reading 'state')" errors
+        if (!isMountedRef.current || !aiSendMessageRef.current) {
+          isTriggeringRef.current = false;
+          return;
+        }
+
+        const sendMessage = aiSendMessageRef.current;
+
         try {
           await sendMessage({
             text: userText,
@@ -954,11 +985,13 @@ export function useMultiParticipantChat(
         // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
         // ✅ REASONING MODELS: Include REASONING parts (DeepSeek R1, Claude thinking, etc.)
         // AI SDK v5 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
+        // ✅ FIX: Filter out [REDACTED]-only reasoning (GPT-5 Nano, o3-mini encrypted reasoning)
+        // Uses centralized isRenderableContent from message-schemas.ts for consistency
         const textParts = data.message.parts?.filter(
           p => p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING,
         ) || [];
         const hasTextInParts = textParts.some(
-          part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
+          part => 'text' in part && typeof part.text === 'string' && isRenderableContent(part.text),
         );
 
         // ✅ RACE CONDITION FIX: Multiple signals for successful generation
@@ -1213,6 +1246,18 @@ export function useMultiParticipantChat(
     aiSendMessageRef.current = aiSendMessage;
     participantsRef.current = participants;
   }, [messages, aiSendMessage, participants]);
+
+  /**
+   * ✅ UNMOUNT CLEANUP: Set isMountedRef to false when component unmounts
+   * This prevents stale sendMessage calls in queueMicrotask from executing
+   * after the AI SDK's internal state has been cleaned up
+   */
+  useLayoutEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   /**
    * ✅ CRITICAL FIX: Sync external messages ONLY for initial hydration

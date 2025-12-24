@@ -3,77 +3,71 @@
 -- Environment: PRODUCTION (Live Mode)
 -- Stripe Account: acct_1SPXN852vWNZ3v8w
 -- Mode: LIVE MODE
+--
 -- URL: https://app.roundtable.now
---
--- ⚠️ TODO: REPLACE WITH LIVE MODE PRODUCT/PRICE IDs
--- ⚠️ Currently using TEST MODE IDs as placeholder
--- ⚠️ Action Required: Create matching products in Stripe Live Mode and update IDs below
---
--- ✅ STRIPE DATA ONLY: Seeds Stripe products and prices
--- ⚠️ NO BUSINESS LOGIC: All quotas, limits, and features are in product-logic.service.ts
+-- ✅ CREDIT-BASED BILLING: Seeds credit plans and custom credit packages
+-- ⚠️ NO BUSINESS LOGIC: All credit configs are in product-logic.service.ts
 --
 -- This file contains ONLY Stripe catalog data:
--- - Products (what can be purchased)
--- - Prices (how much they cost)
--- - Product metadata (tier name for identification)
+-- - Products (plans and credit packages)
+-- - Prices (subscription and one-time prices)
+-- - Product metadata (planType for identification)
 --
--- Business rules (quotas, model limits, feature flags) live in:
--- src/api/services/product-logic.service.ts
+-- Business rules (credit amounts, action costs, etc.) live in:
+-- src/api/services/product-logic.service.ts (CREDIT_CONFIG)
 --
 -- Usage:
 --   pnpm db:seed:prod
 
 -- ============================================================================
--- STRIPE PRODUCTS (LIVE MODE - TODO: UPDATE WITH LIVE IDs)
+-- STRIPE PRODUCTS - CREDIT-BASED PLANS (LIVE MODE)
 -- ============================================================================
--- Products represent what users can subscribe to
--- metadata.tier links to SUBSCRIPTION_TIERS in product-logic.service.ts
--- ⚠️ IMPORTANT: These are TEST MODE IDs - replace with LIVE MODE product IDs
-
+-- Free Plan: Connect card to get 10K credits, purchase more when needed
 INSERT INTO stripe_product (id, name, description, active, default_price_id, metadata, images, features, created_at, updated_at) VALUES
-('prod_TMldwdM0XtdMdu', 'Starter', 'Budget-friendly AI models with enhanced performance', 1, 'price_1SQ26w52vWNZ3v8wqvfrhWy7', '{"tier":"starter","displayOrder":"2"}', '[]', '["150 messages per month","Up to 5 AI models","30 conversations per month","Advanced AI models","3 custom AI roles","Access to affordable, fast AI models"]', 1762331419000, 1762331434000);
+('prod_Tf8tvljsdhgeaH', 'Free', 'Connect your card to get 10,000 free credits. Purchase credit packs when you need more.', 1, 'price_1Shoc852vWNZ3v8wtrMKFJxe', '{"planType":"free","displayOrder":"1"}', '[]', '["Connect card to get 10K free credits","Purchase credit packs anytime","Limited model selection","Up to 5 threads","Basic support"]', 1766569436000, 1766569436000);
 
+-- Pro Plan: $100/month, 1M credits
 INSERT INTO stripe_product (id, name, description, active, default_price_id, metadata, images, features, created_at, updated_at) VALUES
-('prod_TMletnsnfqVCHe', 'Pro', 'Professional-grade AI models with excellent quality', 1, 'price_1SQ27952vWNZ3v8wLHORFzZw', '{"tier":"pro","displayOrder":"3","badge":"most_popular"}', '[]', '["400 messages per month","Up to 7 AI models","75 conversations per month","Advanced AI models","10 custom AI roles","Thread export","Access to professional-grade AI models"]', 1762331436000, 1762331449000);
+('prod_Tf8t3FTCKcpVDq', 'Pro', '1,000,000 credits per month with automatic renewal. Full access to all AI models.', 1, 'price_1Shoc952vWNZ3v8wCuBiKKIA', '{"planType":"paid","displayOrder":"2","badge":"most_popular"}', '[]', '["1,000,000 credits per month","Automatic monthly renewal","Unlimited AI models","Priority support"]', 1766569436000, 1766569436000);
 
+-- Custom Credits: One-time purchases
 INSERT INTO stripe_product (id, name, description, active, default_price_id, metadata, images, features, created_at, updated_at) VALUES
-('prod_TMleKOrv9NWYiF', 'Power', 'Flagship AI models with maximum capabilities', 1, 'price_1SQ27c52vWNZ3v8w2sJ2bNSC', '{"tier":"power","displayOrder":"4"}', '[]', '["1,800 messages per month","Up to 15 AI models","300 conversations per month","Advanced AI models","50 custom AI roles","Thread export","Access to all available flagship AI models"]', 1762331457000, 1762331470000);
+('prod_Tf8ttpjBZtWGbe', 'Custom Credits', 'Purchase credits in any amount. Credits never expire.', 1, NULL, '{"planType":"custom","displayOrder":"3"}', '[]', '["Purchase any amount","Credits never expire","Volume discounts available"]', 1766569437000, 1766569437000);
 
 -- ============================================================================
--- STRIPE PRICES (LIVE MODE - TODO: UPDATE WITH LIVE IDs)
+-- STRIPE PRICES - SUBSCRIPTION PLANS (LIVE MODE)
 -- ============================================================================
--- Prices define the cost for each product
--- metadata.tier links to SUBSCRIPTION_TIERS in product-logic.service.ts
--- ⚠️ IMPORTANT: These are TEST MODE IDs - replace with LIVE MODE price IDs
-
--- Starter Plan Prices
+-- Free Plan Price: $0/month
 INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
-('price_1SQ26w52vWNZ3v8wqvfrhWy7', 'prod_TMldwdM0XtdMdu', 1, 'usd', 2000, 'recurring', 'month', 1, NULL, '{"tier":"starter","billingPeriod":"monthly"}', 1762331434000, 1762331434000);
+('price_1Shoc852vWNZ3v8wtrMKFJxe', 'prod_Tf8tvljsdhgeaH', 1, 'usd', 0, 'recurring', 'month', 1, NULL, '{"planType":"free"}', 1766569456000, 1766569456000);
 
+-- Pro Plan Price: $100/month
 INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
-('price_1SQ26x52vWNZ3v8wJGIr5AX2', 'prod_TMldwdM0XtdMdu', 1, 'usd', 20000, 'recurring', 'year', 1, NULL, '{"tier":"starter","billingPeriod":"annual","savingsPercent":"17"}', 1762331435000, 1762331435000);
+('price_1Shoc952vWNZ3v8wCuBiKKIA', 'prod_Tf8t3FTCKcpVDq', 1, 'usd', 10000, 'recurring', 'month', 1, NULL, '{"planType":"paid"}', 1766569457000, 1766569457000);
 
--- Pro Plan Prices
+-- Pro Plan Price: $1000/year (~17% savings vs monthly)
 INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
-('price_1SQ27952vWNZ3v8wLHORFzZw', 'prod_TMletnsnfqVCHe', 1, 'usd', 5900, 'recurring', 'month', 1, NULL, '{"tier":"pro","billingPeriod":"monthly"}', 1762331449000, 1762331449000);
-
-INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
-('price_1SQ27B52vWNZ3v8waLL4H9aJ', 'prod_TMletnsnfqVCHe', 1, 'usd', 60000, 'recurring', 'year', 1, NULL, '{"tier":"pro","billingPeriod":"annual","savingsPercent":"15"}', 1762331451000, 1762331451000);
-
--- Power Plan Prices
-INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
-('price_1SQ27c52vWNZ3v8w2sJ2bNSC', 'prod_TMleKOrv9NWYiF', 1, 'usd', 24900, 'recurring', 'month', 1, NULL, '{"tier":"power","billingPeriod":"monthly"}', 1762331470000, 1762331470000);
-
-INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
-('price_1SQ27c52vWNZ3v8wUKoT29SL', 'prod_TMleKOrv9NWYiF', 1, 'usd', 250000, 'recurring', 'year', 1, NULL, '{"tier":"power","billingPeriod":"annual","savingsPercent":"16"}', 1762331470000, 1762331470000);
+('price_1ShqYV52vWNZ3v8wB8G9Cy0X', 'prod_Tf8t3FTCKcpVDq', 1, 'usd', 100000, 'recurring', 'year', 1, NULL, '{"planType":"paid"}', 1766576919000, 1766576919000);
 
 -- ============================================================================
--- MIGRATION STEPS FOR PRODUCTION:
+-- STRIPE PRICES - CUSTOM CREDIT PACKAGES (LIVE MODE)
 -- ============================================================================
--- 1. In Stripe Dashboard (Live Mode), create 3 products matching test mode:
---    - Starter: $20/month, $200/year
---    - Pro: $59/month, $600/year
---    - Power: $249/month, $2,500/year
--- 2. Copy the new Live Mode product IDs and price IDs
--- 3. Replace all IDs in this file with Live Mode IDs
--- 4. Run: pnpm db:seed:prod
+-- $1 = 1,000 credits
+INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
+('price_1Shoc952vWNZ3v8wGVhL81lr', 'prod_Tf8ttpjBZtWGbe', 1, 'usd', 100, 'one_time', NULL, NULL, NULL, '{"credits":"1000"}', 1766569457000, 1766569457000);
+
+-- $10 = 10,000 credits
+INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
+('price_1ShocZ52vWNZ3v8wJ2XEoviR', 'prod_Tf8ttpjBZtWGbe', 1, 'usd', 1000, 'one_time', NULL, NULL, NULL, '{"credits":"10000"}', 1766569483000, 1766569483000);
+
+-- $50 = 50,000 credits
+INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
+('price_1ShocZ52vWNZ3v8waD6wRNGa', 'prod_Tf8ttpjBZtWGbe', 1, 'usd', 5000, 'one_time', NULL, NULL, NULL, '{"credits":"50000"}', 1766569483000, 1766569483000);
+
+-- $100 = 100,000 credits
+INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
+('price_1Shoca52vWNZ3v8wO9HKh4Kq', 'prod_Tf8ttpjBZtWGbe', 1, 'usd', 10000, 'one_time', NULL, NULL, NULL, '{"credits":"100000"}', 1766569484000, 1766569484000);
+
+-- $500 = 500,000 credits
+INSERT INTO stripe_price (id, product_id, active, currency, unit_amount, type, `interval`, interval_count, trial_period_days, metadata, created_at, updated_at) VALUES
+('price_1Shocb52vWNZ3v8w1vlOjP9y', 'prod_Tf8ttpjBZtWGbe', 1, 'usd', 50000, 'one_time', NULL, NULL, NULL, '{"credits":"500000"}', 1766569485000, 1766569485000);

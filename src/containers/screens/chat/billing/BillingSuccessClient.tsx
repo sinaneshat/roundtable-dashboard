@@ -2,16 +2,28 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { startTransition, useEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
-import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
+/**
+ * Billing Success Client - Subscriptions Only
+ *
+ * Theo's "Stay Sane with Stripe" pattern:
+ * This component handles ONLY subscription purchases.
+ * Credit pack purchases use the separate CreditsSuccessClient component.
+ *
+ * Flow:
+ * 1. Sync subscription data from Stripe
+ * 2. Display subscription confirmation
+ * 3. Auto-redirect to chat
+ */
 export function BillingSuccessClient() {
   const router = useRouter();
   const t = useTranslations();
@@ -35,13 +47,19 @@ export function BillingSuccessClient() {
   const currentSubscription = currentSubscriptionQuery.data;
   const usageStats = usageStatsQuery.data;
 
-  const displaySubscription
-    = currentSubscription?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
+  // Extract sync result - use this as source of truth for tier
+  const syncResult = syncMutation.data;
+  const syncedCreditsBalance = syncResult?.data?.creditsBalance;
+  const syncedTier = syncResult?.data?.tierChange?.newTier;
+
+  const displaySubscription = useMemo(() => {
+    return (
+      currentSubscription?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
       ?? currentSubscription?.data?.items?.[0]
       ?? subscriptionData?.data?.items?.[0]
-      ?? null;
-
-  const newTier = syncMutation.data?.data?.tierChange?.newTier ?? 'free';
+      ?? null
+    );
+  }, [currentSubscription, subscriptionData]);
 
   useEffect(() => {
     if (!hasInitiatedSync.current) {
@@ -94,7 +112,7 @@ export function BillingSuccessClient() {
     return (
       <StatusPage
         variant="loading"
-        title={t('billing.success.activatingSubscription')}
+        title={t('billing.success.processingSubscription')}
         description={t('billing.success.confirmingPayment')}
       />
     );
@@ -116,29 +134,31 @@ export function BillingSuccessClient() {
     );
   }
 
-  // ✅ TYPE-SAFE: Use Zod schema validation instead of unsafe casts
-  const tierString = displaySubscription?.price?.productId
-    ? getTierFromProductId(displaySubscription.price.productId)
-    : 'free';
-
-  const derivedTierResult = subscriptionTierSchema.safeParse(tierString);
-  const derivedTier: SubscriptionTier = derivedTierResult.success ? derivedTierResult.data : 'free';
-
-  // newTier comes from sync mutation data, validate it too
-  const newTierResult = subscriptionTierSchema.safeParse(newTier);
-  const currentTier: SubscriptionTier = newTierResult.success ? newTierResult.data : derivedTier;
-  const tierName = SUBSCRIPTION_TIER_NAMES[currentTier];
+  // Subscription data - use sync result tier as source of truth (prevents stale usageStats)
+  // syncedTier comes from sync-after-checkout which has fresh data from Stripe
+  // SubscriptionTier values: 'free' | 'starter' | 'pro' | 'power' - anything not 'free' is paid
+  const isPaidPlan = (syncedTier !== undefined && syncedTier !== 'free') || (syncedTier === undefined && usageStats?.data?.plan?.type === 'paid');
+  const currentTier: SubscriptionTier = isPaidPlan ? 'pro' : 'free';
+  const tierName = isPaidPlan ? 'Pro' : 'Free';
   const maxModels = getMaxModelsForTier(currentTier);
-  const threadsLimit = usageStats?.data?.threads?.limit || 0;
-  const messagesLimit = usageStats?.data?.messages?.limit || 0;
+  const creditsBalance = syncedCreditsBalance ?? usageStats?.data?.credits?.available ?? 0;
+  const monthlyCredits = getMonthlyCreditsForTier(currentTier);
 
-  const formatLimit = (limit: number) => (limit === -1 ? '∞' : limit);
+  const formatCredits = (credits: number) => credits.toLocaleString();
+
+  // Use different title/description for free plan card connection vs pro subscription
+  const successTitle = isPaidPlan
+    ? t('billing.success.title')
+    : t('billing.success.cardConnected.title');
+  const successDescription = isPaidPlan
+    ? t('billing.success.description')
+    : t('billing.success.cardConnected.description');
 
   return (
     <StatusPage
       variant="success"
-      title={t('billing.success.title')}
-      description={t('billing.success.description')}
+      title={successTitle}
+      description={successDescription}
       actions={(
         <StatusPageActions
           primaryLabel={t('billing.success.startChat')}
@@ -151,18 +171,16 @@ export function BillingSuccessClient() {
       {displaySubscription && (
         <PlanOverviewCard
           tierName={tierName}
-          description={t(`subscription.tiers.${currentTier}.description`)}
-          status={displaySubscription.status}
+          description={isPaidPlan ? '1,000,000 credits per month' : '10,000 free credits added to your account'}
+          status={isPaidPlan ? displaySubscription.status : 'Connected'}
           stats={[
             { label: 'Models', value: maxModels },
-            { label: 'Threads', value: formatLimit(threadsLimit) },
-            { label: 'Messages', value: formatLimit(messagesLimit) },
+            { label: 'Credits', value: formatCredits(creditsBalance) },
+            { label: isPaidPlan ? 'Monthly' : 'Bonus', value: isPaidPlan ? formatCredits(monthlyCredits) : 'One-time' },
           ]}
-          activeUntil={
-            displaySubscription.currentPeriodEnd
-              ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString()
-              : undefined
-          }
+          activeUntil={isPaidPlan && displaySubscription.currentPeriodEnd
+            ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString()
+            : undefined}
         />
       )}
 

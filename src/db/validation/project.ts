@@ -28,7 +28,7 @@ export const ProjectSettingsSchema = z.object({
   autoIndexing: z.boolean().optional(),
   maxFileSize: z.number().int().positive().optional(),
   allowedFileTypes: z.array(z.string()).optional(),
-}).passthrough();
+}).strict();
 
 export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>;
 
@@ -41,7 +41,7 @@ export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>;
 export const ProjectMetadataSchema = z.object({
   tags: z.array(z.string()).optional(),
   category: z.string().optional(),
-}).passthrough();
+}).strict();
 
 export type ProjectMetadata = z.infer<typeof ProjectMetadataSchema>;
 
@@ -75,7 +75,7 @@ export const ProjectMemoryMetadataSchema = z.object({
   category: z.string().optional(),
   extractedAt: z.string().optional(),
   modelUsed: z.string().optional(),
-}).passthrough();
+}).strict();
 
 export type ProjectMemoryMetadata = z.infer<typeof ProjectMemoryMetadataSchema>;
 

@@ -16,9 +16,10 @@ import {
   Responses,
 } from '@/api/core';
 import {
-  enforceCustomRoleQuota,
-  incrementCustomRoleUsage,
-} from '@/api/services/usage-tracking.service';
+  deductCreditsForAction,
+  enforceCredits,
+} from '@/api/services/credit.service';
+import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -72,7 +73,17 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
   },
   async (c) => {
     const { user } = c.auth();
-    await enforceCustomRoleQuota(user.id);
+
+    // Block free users from creating custom roles
+    const userTier = await getUserTier(user.id);
+    if (userTier === 'free') {
+      throw createError.unauthorized(
+        'Custom roles are not available on the Free plan. Upgrade to create custom roles.',
+      );
+    }
+
+    // ✅ CREDITS: Enforce credits for custom role creation
+    await enforceCredits(user.id, 1);
     // ✅ TYPE-SAFE: createHandler validates body via validateBody config
     const body = c.validated.body;
     const db = await getDbAsync();
@@ -91,7 +102,8 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
         updatedAt: now,
       })
       .returning();
-    await incrementCustomRoleUsage(user.id);
+    // ✅ CREDITS: Deduct for custom role creation
+    await deductCreditsForAction(user.id, 'customRoleCreation');
     return Responses.ok(c, {
       customRole,
     });

@@ -4,6 +4,7 @@ import { ulid } from 'ulid';
 
 import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
+import { MessageRoles } from '@/api/core/enums';
 import { validateModelAccess, validateTierLimits } from '@/api/services/participant-validation.service';
 import {
   logParticipantAdded,
@@ -66,7 +67,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const existingUserMessages = await db.query.chatMessage.findMany({
       where: and(
         eq(tables.chatMessage.threadId, id),
-        eq(tables.chatMessage.role, 'user'),
+        eq(tables.chatMessage.role, MessageRoles.USER),
       ),
       columns: { roundNumber: true },
       orderBy: desc(tables.chatMessage.roundNumber),
@@ -116,7 +117,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       const existingUserMessages = await db.query.chatMessage.findMany({
         where: and(
           eq(tables.chatMessage.threadId, participant.threadId),
-          eq(tables.chatMessage.role, 'user'),
+          eq(tables.chatMessage.role, MessageRoles.USER),
         ),
         columns: { roundNumber: true },
         orderBy: desc(tables.chatMessage.roundNumber),
@@ -193,7 +194,7 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     const existingUserMessages = await db.query.chatMessage.findMany({
       where: and(
         eq(tables.chatMessage.threadId, participant.threadId),
-        eq(tables.chatMessage.role, 'user'),
+        eq(tables.chatMessage.role, MessageRoles.USER),
       ),
       columns: { roundNumber: true },
       orderBy: desc(tables.chatMessage.roundNumber),

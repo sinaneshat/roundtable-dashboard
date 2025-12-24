@@ -9,7 +9,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { createCheckoutSessionService, syncAfterCheckoutService } from '@/services/api';
+import { createCheckoutSessionService, syncAfterCheckoutService, syncCreditsAfterCheckoutService } from '@/services/api';
 import { listModelsService } from '@/services/api/models';
 
 /**
@@ -87,6 +87,35 @@ export function useSyncAfterCheckoutMutation() {
           refetchType: 'all',
         });
       }
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to sync credits after one-time credit pack purchase
+ * Protected endpoint - requires authentication
+ *
+ * Theo's "Stay Sane with Stripe" pattern:
+ * Separate mutation for one-time purchases (simpler than subscriptions)
+ * Eagerly syncs credit purchase data from Stripe API
+ *
+ * Invalidates usage queries on success to reflect new credit balance
+ */
+export function useSyncCreditsAfterCheckoutMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: syncCreditsAfterCheckoutService,
+    onSuccess: () => {
+      // Invalidate usage queries - credit balance needs refresh
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.usage.all,
+        refetchType: 'all',
+      });
+
+      // No need to invalidate subscriptions or models - credits don't affect those
     },
     retry: false,
     throwOnError: false,

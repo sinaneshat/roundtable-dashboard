@@ -99,14 +99,7 @@ export type CitableContextResult = {
   stats: CitableContextStats;
 };
 
-// ============================================================================
-// AVAILABLE SOURCE TYPES (for UI display)
-// ============================================================================
-
-/**
- * Available source for citation UI (files/context available to AI)
- * Used for displaying "Sources" section even without inline citations
- */
+export type AvailableCitationSourceType = 'github' | 'file';
 export const AvailableSourceSchema = z.object({
   id: z.string(),
   sourceType: CitationSourceTypeSchema,

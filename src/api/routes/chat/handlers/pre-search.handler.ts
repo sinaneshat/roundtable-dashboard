@@ -25,8 +25,12 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
-import { IMAGE_MIME_TYPES, MessagePartTypes, MessageStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { loadAttachmentContent } from '@/api/services/attachment-content.service';
+import {
+  deductCreditsForAction,
+  enforceCredits,
+} from '@/api/services/credit.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import type { PreSearchTrackingContext } from '@/api/services/posthog-llm-tracking.service';
@@ -225,6 +229,10 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // The act of calling this endpoint IS the user's intent to use web search for this round
     // The thread's enableWebSearch is now a default/preference, not a hard restriction
     await verifyThreadOwnership(threadId, user.id, db);
+
+    // ✅ CREDITS: Enforce credits for web search (1 credit minimum for web search)
+    // Actual deduction happens per successful query execution
+    await enforceCredits(user.id, 1);
 
     // ✅ DATABASE-FIRST: Check if record exists, create if not
     // Record may not exist when web search is enabled mid-conversation
@@ -880,6 +888,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 { cacheHit: false },
               ),
             );
+
+            // ✅ CREDITS: Deduct for successful web search query
+            c.executionCtx.waitUntil(
+              deductCreditsForAction(user.id, 'webSearchQuery', { threadId }),
+            );
           } catch (error) {
             const searchDurationOnError = performance.now() - searchStartTime;
 
@@ -1003,7 +1016,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             .values({
               id: preSearchMsgId,
               threadId,
-              role: 'assistant',
+              role: MessageRoles.ASSISTANT,
               parts: [{
                 type: MessagePartTypes.TEXT,
                 text: JSON.stringify({ type: 'web_search_results', ...searchData }),
@@ -1011,7 +1024,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               roundNumber: roundNum,
               // ✅ TYPE-SAFE: Use DbPreSearchMessageMetadata discriminated union
               metadata: {
-                role: 'system' as const,
+                role: UIMessageRoles.SYSTEM,
                 roundNumber: roundNum,
                 isPreSearch: true as const,
                 preSearch: searchData,

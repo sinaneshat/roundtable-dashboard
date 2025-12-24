@@ -17,7 +17,7 @@ import { MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { devLog, extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
+import { devLog, extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, rlog, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
@@ -153,7 +153,7 @@ export function useStreamingTrigger({
               }
 
               if (!response.ok) {
-                console.error('[useStreamingTrigger] Pre-search resumption failed:', response.status);
+                rlog.presearch('resume-fail', `status=${response.status}`);
                 store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(currentRound);
                 return;
@@ -177,7 +177,7 @@ export function useStreamingTrigger({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
             } catch (error) {
-              console.error('[useStreamingTrigger] Pre-search resumption error:', error);
+              rlog.presearch('resume-error', error instanceof Error ? error.message : String(error));
               store.getState().clearPreSearchActivity(currentRound);
               store.getState().clearPreSearchTracking(currentRound);
             }
@@ -231,7 +231,7 @@ export function useStreamingTrigger({
               });
 
               if (!response.ok && response.status !== 409) {
-                console.error('[startRound] Pre-search execution failed:', response.status);
+                rlog.presearch('execute-fail', `status=${response.status}`);
                 store.getState().updatePreSearchStatus(currentRound, MessageStatuses.FAILED);
                 store.getState().clearPreSearchActivity(currentRound);
                 return;
@@ -254,7 +254,7 @@ export function useStreamingTrigger({
                 queryKey: queryKeys.threads.preSearches(threadIdForSearch),
               });
             } catch (error) {
-              console.error('[startRound] Pre-search failed:', error);
+              rlog.presearch('execute-error', error instanceof Error ? error.message : String(error));
               store.getState().clearPreSearchActivity(currentRound);
               store.getState().clearPreSearchTracking(currentRound);
             }

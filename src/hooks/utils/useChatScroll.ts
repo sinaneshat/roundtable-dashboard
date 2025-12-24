@@ -1,3 +1,5 @@
+'use client';
+
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useEffectEvent, useRef } from 'react';
 
@@ -82,11 +84,13 @@ export function useChatScroll({
   }, []);
 
   // Reset when messages become empty (navigation)
+  // resetScrollState is stable (empty deps useCallback) so excluding from deps is safe
   useEffect(() => {
     if (messages.length === 0) {
       resetScrollState();
     }
-  }, [messages.length, resetScrollState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resetScrollState is stable
+  }, [messages.length]);
 
   /**
    * Scroll to bottom using native window.scrollTo

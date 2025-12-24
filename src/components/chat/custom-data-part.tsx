@@ -17,7 +17,7 @@ export function CustomDataPart({ part, className }: CustomDataPartProps) {
     <Card className={cn('border-blue-500/20 bg-blue-500/5', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <span className="text-blue-500" aria-label="Custom Data">
+          <span className="text-blue-500">
             📊
           </span>
           <span className="font-medium text-blue-600 dark:text-blue-400">

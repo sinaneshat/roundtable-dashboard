@@ -23,13 +23,13 @@ import {
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
 import { ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, ThreadStatusSchema } from '@/api/core/enums';
+import {
+  deductCreditsForAction,
+  enforceCredits,
+} from '@/api/services/credit.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
-import {
-  canAccessModelByPricing,
-  getRequiredTierForModel,
-  SUBSCRIPTION_TIER_NAMES,
-} from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, estimateStreamingCredits, getRequiredTierForModel, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
@@ -42,11 +42,7 @@ import {
   isCleanupSchedulerAvailable,
 } from '@/api/services/upload-cleanup.service';
 import {
-  enforceMessageQuota,
-  enforceThreadQuota,
   getUserTier,
-  incrementMessageUsage,
-  incrementThreadUsage,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -128,10 +124,15 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
   },
   async (c, batch) => {
     const { user } = c.auth();
-    await enforceThreadQuota(user.id);
+    // ✅ CREDITS: Check if user has enough credits for thread creation + initial message
+    // This is the PRIMARY gating mechanism - if user passes this check, they have credits
+    // and should be able to create threads. Credits are the real limiting factor.
+    const estimatedCredits = estimateStreamingCredits(1); // Minimum estimate
+    await enforceCredits(user.id, estimatedCredits);
     const body = c.validated.body;
     const db = batch.db;
     const userTier = await getUserTier(user.id);
+
     for (const participant of body.participants) {
       const model = getModelById(participant.modelId);
       if (!model) {
@@ -255,7 +256,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         { errorType: 'validation' },
       );
     }
-    await enforceMessageQuota(user.id);
+    // ✅ CREDITS: Credits already enforced at start of handler (line 134)
     const [firstMessage] = await db
       .insert(tables.chatMessage)
       .values({
@@ -271,8 +272,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         createdAt: now,
       })
       .returning();
-    await incrementMessageUsage(user.id, 1);
-    await incrementThreadUsage(user.id);
+    // ✅ CREDITS: Deduct for thread creation (includes first message)
+    await deductCreditsForAction(user.id, 'threadCreation', { threadId });
     await invalidateThreadCache(db, user.id);
 
     // ✅ Associate attachments with the first user message and add file parts
@@ -519,13 +520,40 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
         );
       }
     }
-    const participants = await db.query.chatParticipant.findMany({
+    const rawParticipants = await db.query.chatParticipant.findMany({
       where: and(
         eq(tables.chatParticipant.threadId, id),
         eq(tables.chatParticipant.isEnabled, true),
       ),
       orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     });
+
+    // ✅ SUBSCRIPTION ACCESS: Enrich participants with model access info
+    // For authenticated users, show which models they can/cannot access
+    // For unauthenticated users (public threads), assume free tier
+    const userTier = user ? await getUserTier(user.id) : 'free' as const;
+
+    const participants = rawParticipants.map((participant) => {
+      const model = getModelById(participant.modelId);
+      if (!model) {
+        return {
+          ...participant,
+          is_accessible_to_user: false,
+          required_tier_name: null,
+        };
+      }
+
+      const requiredTier = getRequiredTierForModel(model);
+      const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
+      const isAccessible = canAccessModelByPricing(userTier, model);
+
+      return {
+        ...participant,
+        is_accessible_to_user: isAccessible,
+        required_tier_name: requiredTierName,
+      };
+    });
+
     // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
     // Pre-search messages are stored in chat_message table for historical reasons,
     // but they're rendered separately using the pre_search table via PreSearchCard.
@@ -563,6 +591,12 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
         ErrorContextBuilders.resourceNotFound('user', thread.userId),
       );
     }
+    // Include user tier config for access control in UI
+    const userTierConfig = {
+      tier: userTier,
+      tier_name: SUBSCRIPTION_TIER_NAMES[userTier],
+    };
+
     return Responses.ok(c, {
       thread,
       participants,
@@ -573,6 +607,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
         name: threadOwner.name,
         image: threadOwner.image,
       },
+      userTierConfig,
     });
   },
 );
@@ -1208,10 +1243,39 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     // Messages contain participant metadata, so they need access to all participant info
     // Filtering by isEnabled caused issues where messages from "disabled" participants
     // wouldn't display properly in the thread view
-    const participants = await db.query.chatParticipant.findMany({
+    const rawParticipants = await db.query.chatParticipant.findMany({
       where: eq(tables.chatParticipant.threadId, thread.id),
       orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     });
+
+    // ✅ SUBSCRIPTION ACCESS: Get user's tier and enrich participants with model access info
+    // This ensures previous conversations respect the user's current subscription plan
+    // Reference: /src/api/routes/models/handler.ts - same pattern used for model listing
+    const userTier = await getUserTier(user.id);
+
+    // Enrich each participant with model access information
+    const participants = rawParticipants.map((participant) => {
+      const model = getModelById(participant.modelId);
+      if (!model) {
+        // Model not found in config - mark as inaccessible
+        return {
+          ...participant,
+          is_accessible_to_user: false,
+          required_tier_name: null,
+        };
+      }
+
+      const requiredTier = getRequiredTierForModel(model);
+      const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
+      const isAccessible = canAccessModelByPricing(userTier, model);
+
+      return {
+        ...participant,
+        is_accessible_to_user: isAccessible,
+        required_tier_name: requiredTierName,
+      };
+    });
+
     // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
     // Pre-search messages are stored in chat_message table for historical reasons,
     // but they're rendered separately using the pre_search table via PreSearchCard.
@@ -1325,6 +1389,13 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       orderBy: [tables.chatPreSearch.roundNumber],
     });
 
+    // ✅ USER TIER CONFIG: Include subscription info for frontend access control
+    // This allows the UI to show upgrade prompts and disable inaccessible models
+    const userTierConfig = {
+      tier: userTier,
+      tier_name: SUBSCRIPTION_TIER_NAMES[userTier],
+    };
+
     return Responses.ok(c, {
       thread,
       participants,
@@ -1335,6 +1406,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         name: user.name,
         image: user.image,
       },
+      userTierConfig,
     });
   },
 );

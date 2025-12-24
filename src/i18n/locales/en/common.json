@@ -220,7 +220,13 @@
     "currentPlan": "Current Plan",
     "interval": {
       "annual": "Annual",
+      "credits": "Credits",
       "monthly": "Monthly"
+    },
+    "credits": {
+      "connectCardRequired": "Connect a card to purchase credits",
+      "connectCardDescription": "Select the Free or Pro plan first to connect your payment method, then you can purchase additional credit packs.",
+      "viewPlans": "View Plans"
     },
     "manageBilling": "Manage Billing",
     "noPlansForInterval": "No plans available for this billing period",
@@ -236,20 +242,37 @@
     },
     "success": {
       "activatingSubscription": "Activating your subscription...",
+      "processingPurchase": "Processing your purchase...",
+      "processingSubscription": "Activating your subscription...",
+      "processingCredits": "Adding credits to your account...",
       "confirmingPayment": "Please wait while we confirm your payment",
       "description": "Your subscription has been activated",
       "autoRedirect": "Redirecting to chat in {seconds} seconds...",
       "startChat": "Start Your Roundtable",
       "title": "Payment Successful!",
       "viewPricing": "View Pricing Plans",
+      "cardConnected": {
+        "title": "Card Connected!",
+        "description": "You've received 10,000 free credits to get started"
+      },
       "planLimits": {
         "concurrentModels": "Concurrent Models",
+        "monthlyCredits": "Monthly Credits",
+        "creditsAvailable": "Credits Available",
         "maxThreads": "Max Threads",
         "maxMessages": "Max Messages",
         "maxMemories": "Max Memories",
         "customRoles": "Custom Roles",
         "status": "Status",
         "activeUntilLabel": "Active until"
+      },
+      "credits": {
+        "title": "Credits Added!",
+        "description": "Your credits have been added to your account",
+        "creditsAdded": "{amount} credits",
+        "amountPaid": "Amount Paid",
+        "currentBalance": "Current Balance",
+        "purchased": "Purchased"
       }
     },
     "failure": {
@@ -263,6 +286,8 @@
       "authFailedDescription": "Your session expired during payment processing. Please sign in and try again.",
       "unknownError": "Unexpected Error",
       "unknownErrorDescription": "An unexpected error occurred while processing your payment. Please try again or contact support if the issue persists.",
+      "noPurchaseFound": "No Purchase Found",
+      "noPurchaseFoundDescription": "We couldn't find a recent credit purchase for your account. If you believe this is an error, please contact support.",
       "technicalDetails": "Technical details",
       "errorCode": "Error code",
       "commonReasons": {
@@ -359,6 +384,7 @@
       "availableModels": "Available Models",
       "premiumModels": "Premium Models",
       "addRole": "Add Role",
+      "clearRole": "Clear role",
       "modal": {
         "title": "Choose, reorder, and assign roles",
         "subtitle": "Manage your AI models and their roles",
@@ -775,6 +801,7 @@
       "streamingPlaceholder": "Waiting for AI response...",
       "placeholderQuotaExceeded": "Message quota reached - upgrade to continue...",
       "placeholderThreadQuotaExceeded": "Thread quota reached - upgrade to create more threads...",
+      "placeholderCreditsExhausted": "Credits exhausted - add credits to continue...",
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation...",
       "voiceInput": "Voice input",
@@ -902,7 +929,9 @@
       "generating": "Thinking...",
       "gatheringThoughts": "Thinking...",
       "waitingForWebResults": "Searching...",
-      "moderatorObserving": "Observing..."
+      "moderatorObserving": "Observing...",
+      "emptyResponse": "No visible response from {model}",
+      "reasoningOnlyResponse": "{model} used reasoning but produced no text output"
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -939,11 +968,24 @@
       "messageLimitReached": "Message limit reached ({current}/{limit})",
       "summaryLimitReached": "Summary limit reached ({current}/{limit})",
       "resetsOn": "Quota resets on {date}."
+    },
+    "credits": {
+      "exhausted": "Credits Exhausted",
+      "exhaustedDescription": "You've used all your available credits.",
+      "lowBalance": "Low Credit Balance",
+      "lowBalanceDescription": "You have {remaining} credits remaining.",
+      "balance": "{balance} credits",
+      "available": "{available} credits available",
+      "reserved": "{reserved} credits reserved",
+      "addCredits": "Add Credits",
+      "buyCredits": "Buy Credits",
+      "monthlyRefill": "Credits refill on {date}"
     }
   },
   "common": {
     "error": "An error occurred",
     "loading": "Loading...",
+    "none": "None",
     "or": "Or",
     "logo": "Logo",
     "more": "More",
@@ -1177,16 +1219,36 @@
   "pending": "Pending",
   "plans": {
     "errorDescription": "There was an error loading subscription plans. Please try again.",
+    "noCreditsPackages": "No credit packages available",
     "pricing": {
       "free": {
-        "description": "Get started with basic features",
+        "description": "Connect your card to get started",
         "features": {
           "aiModels": "Up to 5 AI models",
           "basicSupport": "Basic support",
-          "conversationsPerMonth": "2 conversations per month",
-          "messagesPerMonth": "20 messages per month"
+          "cardCredits": "Connect card to get 10K free credits",
+          "usageBased": "Pay-as-you-go after free credits"
         },
         "name": "Free"
+      },
+      "paid": {
+        "description": "Full access with monthly credits",
+        "features": {
+          "aiModels": "Unlimited AI models",
+          "prioritySupport": "Priority support",
+          "monthlyCredits": "1,000,000 credits/month",
+          "autoRenewal": "Automatic credit renewal"
+        },
+        "name": "Pro"
+      },
+      "custom": {
+        "description": "Buy credits as needed",
+        "features": {
+          "flexibleCredits": "Purchase any amount",
+          "neverExpires": "Credits never expire",
+          "bulkDiscounts": "Volume discounts available"
+        },
+        "name": "Custom Credits"
       }
     }
   },
@@ -1195,12 +1257,18 @@
     "card": {
       "annual": "Annual Plan",
       "cancelSubscription": "Cancel Subscription",
+      "connectCard": "Connect Card",
+      "credits": "credits",
       "currentPlan": "Current Plan",
       "daysFreeTrial": "days free trial",
+      "free": "Free",
+      "getStarted": "Get Started",
       "manageBilling": "Manage Billing",
       "monthly": "Monthly Plan",
       "mostPopular": "Most Popular",
+      "oneTime": "one-time",
       "processing": "Processing...",
+      "purchase": "Purchase",
       "saveAnnually": "Save {percent}% annually",
       "subscribe": "Subscribe",
       "switchPlan": "Switch to This Plan",
@@ -1365,6 +1433,10 @@
   "url": "Url",
   "usage": {
     "active": "Active",
+    "addCard": "Add card",
+    "connectCard": "Connect Card",
+    "credits": "Credits",
+    "creditsAvailable": "credits available",
     "daysLeft": "days left",
     "errorLoading": "Unable to load usage data",
     "messages": "Messages",
@@ -1372,11 +1444,16 @@
     "summary": "Summary",
     "summaryRemaining": "summaries remaining",
     "plan": "Plan",
-    "planUsage": "Plan & Usage",
+    "planUsage": "Credits",
     "threads": "Threads",
     "threadsRemaining": "threads remaining",
     "upgrade": "Upgrade",
     "upgradeNow": "Upgrade Now",
+    "cardAlert": {
+      "description": "Connect your card to get {credits} free credits and start chatting!",
+      "connectCard": "Connect Card",
+      "sidebarMessage": "Get {credits} free credits when you connect your card!"
+    },
     "scheduledChange": "Plan Change Scheduled",
     "changingTo": "Switching to",
     "onPeriodEnd": "at period end",
@@ -1393,7 +1470,9 @@
       "nearLimit": "Getting close to limit"
     },
     "viewDetails": "View usage details",
-    "managePlan": "Manage Plan"
+    "managePlan": "Manage Plan",
+    "available": "available",
+    "moderator": "Analyses"
   },
   "user": {
     "defaultName": "User"

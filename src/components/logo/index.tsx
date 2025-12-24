@@ -1,12 +1,14 @@
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
+import type { LogoSize, LogoVariant } from '@/api/core/enums';
+import { LogoSizeMetadata, LogoSizes, LogoVariants } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
 type Props = {
-  size?: 'sm' | 'md' | 'lg';
-  variant?: 'icon' | 'full';
+  size?: LogoSize;
+  variant?: LogoVariant;
   className?: string;
 };
 
@@ -17,38 +19,17 @@ type Props = {
  * ✅ No state - pure render from props
  * ✅ Single logo variant - no theme switching needed
  * ✅ Server and client render identically - no hydration issues
+ * ✅ Enum-based sizing - type-safe, metadata-driven dimensions
  */
 function Logo(props: Props) {
-  const { size = 'sm', variant = 'icon', className } = props;
+  const { size = LogoSizes.SM, variant = LogoVariants.ICON, className } = props;
   const t = useTranslations('common');
 
-  // ✅ Compute dimensions during render (no useEffect needed)
-  const logoSize = (() => {
-    if (variant === 'icon') {
-      switch (size) {
-        case 'sm':
-          return { width: 40, height: 40 };
-        case 'md':
-          return { width: 60, height: 60 };
-        case 'lg':
-          return { width: 80, height: 80 };
-        default:
-          return { width: 40, height: 40 };
-      }
-    } else {
-    // Intentionally empty
-      switch (size) {
-        case 'sm':
-          return { width: 100, height: 100 };
-        case 'md':
-          return { width: 160, height: 160 };
-        case 'lg':
-          return { width: 240, height: 240 };
-        default:
-          return { width: 100, height: 100 };
-      }
-    }
-  })();
+  // ✅ Get dimensions from metadata (enum-driven, no switch statements)
+  const metadata = LogoSizeMetadata[size];
+  const logoSize = variant === LogoVariants.ICON
+    ? { width: metadata.width, height: metadata.height }
+    : { width: metadata.widthFull, height: metadata.heightFull };
 
   // ✅ Single logo source - works universally on light/dark themes
   const logoSrc = BRAND.logos.main;

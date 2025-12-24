@@ -8,16 +8,20 @@
  */
 
 export { shouldRetryMutation } from './mutation-retry';
+export type { UseAutoResizeTextareaOptions, UseAutoResizeTextareaReturn } from './use-auto-resize-textarea';
 export { useAutoResizeTextarea } from './use-auto-resize-textarea';
+export type { UseBooleanReturn } from './use-boolean';
 export { useBoolean } from './use-boolean';
 export type { PendingAttachment, UseChatAttachmentsReturn } from './use-chat-attachments';
 export { PendingAttachmentSchema, useChatAttachments } from './use-chat-attachments';
 export type { UseCountdownRedirectOptions, UseCountdownRedirectReturn } from './use-countdown-redirect';
 export { useCountdownRedirect } from './use-countdown-redirect';
 export { useCurrentPathname } from './use-current-pathname';
+export type { UseDebouncedValueReturn } from './use-debounced-value';
 export { useDebouncedValue } from './use-debounced-value';
 export type { UseDragDropReturn } from './use-drag-drop';
 export { useDragDrop } from './use-drag-drop';
+export type { UseElapsedTimeReturn } from './use-elapsed-time';
 export { useElapsedTime } from './use-elapsed-time';
 export type { FilePreview, UseFilePreviewOptions, UseFilePreviewReturn } from './use-file-preview';
 export { FilePreviewSchema, getFileIconName, getFileTypeLabel, supportsInlinePreview, useFilePreview, UseFilePreviewOptionsSchema } from './use-file-preview';
@@ -45,9 +49,11 @@ export {
   UseFileValidationOptionsSchema,
 } from './use-file-validation';
 export { useKeyboardAwareScroll } from './use-keyboard-aware-scroll';
+export type { UseMediaQueryReturn } from './use-media-query';
 export { useMediaQuery } from './use-media-query';
 export type { UseMessagePartsOptions } from './use-message-parts';
 export { useMessageParts } from './use-message-parts';
+export type { UseIsMobileReturn } from './use-mobile';
 export { useIsMobile } from './use-mobile';
 export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';

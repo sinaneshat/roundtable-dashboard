@@ -291,6 +291,33 @@ export const StreamPhases = {
   MODERATOR: 'moderator' as const,
 } as const;
 
+// METADATA - Phase information and ordering
+export const StreamPhaseMetadata: Record<StreamPhase, {
+  label: string;
+  order: number;
+  prefix: string;
+  isParallel: boolean;
+}> = {
+  [StreamPhases.PRESEARCH]: {
+    label: 'Pre-Search',
+    order: 0,
+    prefix: 'presearch',
+    isParallel: false,
+  },
+  [StreamPhases.PARTICIPANT]: {
+    label: 'Participant',
+    order: 1,
+    prefix: 'participant',
+    isParallel: true,
+  },
+  [StreamPhases.MODERATOR]: {
+    label: 'Moderator',
+    order: 2,
+    prefix: 'moderator',
+    isParallel: false,
+  },
+} as const;
+
 export function generatePreSearchStreamId(threadId: string, roundNumber: number): string {
   return `${threadId}_r${roundNumber}_${StreamPhases.PRESEARCH}`;
 }

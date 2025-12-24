@@ -1,3 +1,5 @@
+'use client';
+
 import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 

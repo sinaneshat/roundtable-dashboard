@@ -674,10 +674,12 @@ describe('edge Cases', () => {
 
   it('handles message with undefined parts', () => {
     const participants = [createParticipant('p1', 0)];
+    // Edge case: message with no parts property (should not happen in real code)
+    // Using Partial to allow omitting required fields for testing edge cases
     const messages: UIMessage[] = [{
       id: 'msg-1',
       role: MessageRoles.ASSISTANT,
-      parts: undefined as unknown as UIMessage['parts'],
+      // parts intentionally omitted to test edge case handling
       metadata: {
         role: MessageRoles.ASSISTANT,
         roundNumber: 0,
@@ -685,7 +687,7 @@ describe('edge Cases', () => {
         participantIndex: 0,
         model: 'model-0',
       },
-    }];
+    } as UIMessage]; // Type assertion for test - real code would have parts
 
     const status = getParticipantCompletionStatus(messages, participants, 0);
 
@@ -695,10 +697,12 @@ describe('edge Cases', () => {
 
   it('handles message with null parts', () => {
     const participants = [createParticipant('p1', 0)];
-    const messages: UIMessage[] = [{
+    // Edge case: message with explicitly null parts (should not happen in real code)
+    // Real UIMessage schema makes parts optional (undefined) not nullable
+    const messages = [{
       id: 'msg-1',
       role: MessageRoles.ASSISTANT,
-      parts: null as unknown as UIMessage['parts'],
+      parts: null, // Intentionally invalid for edge case testing
       metadata: {
         role: MessageRoles.ASSISTANT,
         roundNumber: 0,
@@ -706,7 +710,7 @@ describe('edge Cases', () => {
         participantIndex: 0,
         model: 'model-0',
       },
-    }];
+    }] as UIMessage[]; // Type assertion for test - real code would not have null parts
 
     const status = getParticipantCompletionStatus(messages, participants, 0);
 

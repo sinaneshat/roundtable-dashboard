@@ -9,6 +9,7 @@ import {
   MessageStatusSchema,
   ParticipantStreamStatusSchema,
   PreSearchQueryStatusSchema,
+  QueryResultStatusSchema,
   RoundPhaseSchema,
   UIMessageRoleSchema,
   WebSearchAnswerModeSchema,
@@ -1321,9 +1322,8 @@ export type PreSearchStreamData = z.infer<typeof PreSearchStreamDataSchema>;
 
 /**
  * Pre-search status and query status schemas
- * ✅ FULLY MIGRATED: Import PreSearchStatusSchema and PreSearchQueryStatusSchema from @/api/core/enums
+ * Import PreSearchStatusSchema and PreSearchQueryStatusSchema from @/api/core/enums
  */
-// Note: PreSearchStatus schemas moved to @/api/core/enums for consistency with other status enums
 
 /**
  * Pre-search query state schema
@@ -1413,7 +1413,7 @@ export const PreSearchResultEventSchema = z.object({
     resultCount: z.number(),
     responseTime: z.number(),
     index: z.number(),
-    status: z.enum(['pending', 'success', 'failed']).optional(),
+    status: QueryResultStatusSchema.optional(),
     error: z.string().optional(),
   }),
 }).openapi('PreSearchResultEvent');

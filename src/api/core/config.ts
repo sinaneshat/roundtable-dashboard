@@ -16,22 +16,9 @@
 
 import { z } from 'zod';
 
-import type { LogLevel } from '@/api/core/enums';
 import { EnvironmentSchema, LOG_LEVELS, LogLevels } from '@/api/core/enums';
 
-// Inline validation utilities to avoid server-side imports on client
-const ValidationUtils = {
-  string: {
-    nonEmpty: () => z.string().min(1),
-    url: () => z.string().url(),
-    email: () => z.string().email(),
-  },
-  environmentValidator: EnvironmentSchema,
-  apiVersionValidator: z.enum(['v1', 'v2']),
-  number: {
-    percentage: () => z.number().min(0).max(100),
-  },
-};
+import type { LogLevel } from './enums';
 
 // ============================================================================
 // ENVIRONMENT VALIDATION SCHEMAS
@@ -41,129 +28,101 @@ const ValidationUtils = {
  * Core application environment schema
  */
 const coreEnvironmentSchema = z.object({
-  // Environment
-  NODE_ENV: ValidationUtils.environmentValidator.default('development'),
-  NEXT_PUBLIC_WEBAPP_ENV: ValidationUtils.environmentValidator.default('development'),
+  NODE_ENV: EnvironmentSchema.default('development'),
+  NEXT_PUBLIC_WEBAPP_ENV: EnvironmentSchema.default('development'),
+  NEXT_PUBLIC_APP_URL: z.string().url(),
+  NEXT_PUBLIC_API_URL: z.string().url().optional(),
+  NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Roundtable Dashboard'),
+  NEXT_PUBLIC_APP_VERSION: z.string().min(1).default('1.0.0'),
+  API_BASE_PATH: z.string().min(1).default('/api'),
+  API_VERSION: z.enum(['v1', 'v2']).default('v1'),
+}).openapi('CoreEnvironmentConfig');
 
-  // Application URLs
-  NEXT_PUBLIC_APP_URL: ValidationUtils.string.url(),
-  NEXT_PUBLIC_API_URL: ValidationUtils.string.url().optional(),
-
-  // Application metadata
-  NEXT_PUBLIC_APP_NAME: ValidationUtils.string.nonEmpty().default('Roundtable Dashboard'),
-  NEXT_PUBLIC_APP_VERSION: ValidationUtils.string.nonEmpty().default('1.0.0'),
-
-  // API Configuration
-  API_BASE_PATH: ValidationUtils.string.nonEmpty().default('/api'),
-  API_VERSION: ValidationUtils.apiVersionValidator.default('v1'),
-});
+export type CoreEnvironmentConfig = z.infer<typeof coreEnvironmentSchema>;
 
 /**
  * Database configuration schema
  */
 const databaseEnvironmentSchema = z.object({
-  // Database configuration (uses D1 bindings, not URL-based)
-  DATABASE_AUTH_TOKEN: ValidationUtils.string.nonEmpty().optional(),
-
-  // Local development database
-  LOCAL_DATABASE_PATH: ValidationUtils.string.nonEmpty().default('./local.db'),
-
-  // Database configuration
+  DATABASE_AUTH_TOKEN: z.string().min(1).optional(),
+  LOCAL_DATABASE_PATH: z.string().min(1).default('./local.db'),
   DATABASE_CONNECTION_LIMIT: z.coerce.number().int().positive().default(10),
-  DATABASE_TIMEOUT: z.coerce.number().int().positive().default(30000), // 30 seconds
-
-  // Migration settings
-  DATABASE_MIGRATION_DIR: ValidationUtils.string.nonEmpty().default('./src/db/migrations'),
+  DATABASE_TIMEOUT: z.coerce.number().int().positive().default(30000),
+  DATABASE_MIGRATION_DIR: z.string().min(1).default('./src/db/migrations'),
   DATABASE_SEED_DATA: z.boolean().default(false),
-});
+}).openapi('DatabaseEnvironmentConfig');
+
+export type DatabaseEnvironmentConfig = z.infer<typeof databaseEnvironmentSchema>;
 
 /**
  * Authentication configuration schema
  */
 const authEnvironmentSchema = z.object({
-  // Better Auth configuration
-  BETTER_AUTH_SECRET: ValidationUtils.string.nonEmpty().optional(),
-  BETTER_AUTH_URL: ValidationUtils.string.url().optional(),
-
-  // Session configuration
-  SESSION_MAX_AGE: z.coerce.number().int().positive().default(30 * 24 * 60 * 60), // 30 days
-  SESSION_COOKIE_NAME: ValidationUtils.string.nonEmpty().default('roundtable-session'),
-
-  // Security settings
-  CSRF_SECRET: ValidationUtils.string.nonEmpty().optional(),
+  BETTER_AUTH_SECRET: z.string().min(1).optional(),
+  BETTER_AUTH_URL: z.string().url().optional(),
+  SESSION_MAX_AGE: z.coerce.number().int().positive().default(30 * 24 * 60 * 60),
+  SESSION_COOKIE_NAME: z.string().min(1).default('roundtable-session'),
+  CSRF_SECRET: z.string().min(1).optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
-  RATE_LIMIT_WINDOW: z.coerce.number().int().positive().default(15 * 60 * 1000), // 15 minutes
-});
+  RATE_LIMIT_WINDOW: z.coerce.number().int().positive().default(15 * 60 * 1000),
+}).openapi('AuthEnvironmentConfig');
+
+export type AuthEnvironmentConfig = z.infer<typeof authEnvironmentSchema>;
 
 /**
  * Email configuration schema
  */
 const emailEnvironmentSchema = z.object({
-  // Email service provider
   EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'ses', 'smtp']).default('resend'),
-
-  // Resend configuration
-  RESEND_API_KEY: ValidationUtils.string.nonEmpty().optional(),
-  RESEND_FROM_EMAIL: ValidationUtils.string.email().optional(),
-
-  // SendGrid configuration
-  SENDGRID_API_KEY: ValidationUtils.string.nonEmpty().optional(),
-  SENDGRID_FROM_EMAIL: ValidationUtils.string.email().optional(),
-
-  // SMTP configuration
-  SMTP_HOST: ValidationUtils.string.nonEmpty().optional(),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_FROM_EMAIL: z.string().email().optional(),
+  SENDGRID_API_KEY: z.string().min(1).optional(),
+  SENDGRID_FROM_EMAIL: z.string().email().optional(),
+  SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_USER: ValidationUtils.string.nonEmpty().optional(),
-  SMTP_PASS: ValidationUtils.string.nonEmpty().optional(),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASS: z.string().min(1).optional(),
   SMTP_SECURE: z.boolean().default(true),
-
-  // Email settings
   EMAIL_ENABLED: z.boolean().default(true),
   EMAIL_QUEUE_ENABLED: z.boolean().default(false),
-});
+}).openapi('EmailEnvironmentConfig');
+
+export type EmailEnvironmentConfig = z.infer<typeof emailEnvironmentSchema>;
 
 /**
  * Storage configuration schema
  */
 const storageEnvironmentSchema = z.object({
-  // Cloudflare R2 configuration
-  R2_ACCOUNT_ID: ValidationUtils.string.nonEmpty().optional(),
-  R2_ACCESS_KEY_ID: ValidationUtils.string.nonEmpty().optional(),
-  R2_SECRET_ACCESS_KEY: ValidationUtils.string.nonEmpty().optional(),
-  R2_BUCKET_NAME: ValidationUtils.string.nonEmpty().optional(),
-  R2_PUBLIC_URL: ValidationUtils.string.url().optional(),
-
-  // File upload limits
-  MAX_FILE_SIZE: z.coerce.number().int().positive().default(10 * 1024 * 1024), // 10MB
-  MAX_IMAGE_SIZE: z.coerce.number().int().positive().default(5 * 1024 * 1024), // 5MB
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET_NAME: z.string().min(1).optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
+  MAX_FILE_SIZE: z.coerce.number().int().positive().default(10 * 1024 * 1024),
+  MAX_IMAGE_SIZE: z.coerce.number().int().positive().default(5 * 1024 * 1024),
   ALLOWED_FILE_TYPES: z.string().default('image/*,application/pdf'),
+  USER_STORAGE_QUOTA: z.coerce.number().int().positive().default(100 * 1024 * 1024),
+}).openapi('StorageEnvironmentConfig');
 
-  // Storage quotas
-  USER_STORAGE_QUOTA: z.coerce.number().int().positive().default(100 * 1024 * 1024), // 100MB
-});
+export type StorageEnvironmentConfig = z.infer<typeof storageEnvironmentSchema>;
 
 /**
  * Monitoring and logging configuration schema
  */
 const monitoringEnvironmentSchema = z.object({
-  // Logging configuration
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'failed']).default('info'),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   LOG_FORMAT: z.enum(['json', 'text']).default('json'),
   LOG_SENSITIVE_DATA: z.boolean().default(false),
-
-  // Analytics
   ANALYTICS_ENABLED: z.boolean().default(true),
-  GOOGLE_ANALYTICS_ID: ValidationUtils.string.nonEmpty().optional(),
-
-  // Error tracking
-  SENTRY_DSN: ValidationUtils.string.url().optional(),
-  SENTRY_ENVIRONMENT: ValidationUtils.environmentValidator.optional(),
-  SENTRY_TRACES_SAMPLE_RATE: ValidationUtils.number.percentage().default(10),
-
-  // Performance monitoring
+  GOOGLE_ANALYTICS_ID: z.string().min(1).optional(),
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ENVIRONMENT: EnvironmentSchema.optional(),
+  SENTRY_TRACES_SAMPLE_RATE: z.number().min(0).max(100).default(10),
   PERFORMANCE_MONITORING: z.boolean().default(false),
-  METRICS_ENDPOINT: ValidationUtils.string.url().optional(),
-});
+  METRICS_ENDPOINT: z.string().url().optional(),
+}).openapi('MonitoringEnvironmentConfig');
+
+export type MonitoringEnvironmentConfig = z.infer<typeof monitoringEnvironmentSchema>;
 
 /**
  * Development and debugging configuration schema
@@ -172,7 +131,6 @@ const developmentEnvironmentSchema = z.object({
   // Development features
   ENABLE_QUERY_LOGGING: z.boolean().default(false),
   ENABLE_DEBUG_MODE: z.boolean().default(false),
-  // Production ready only - mock functionality disabled
 
   // Development tools
   STORYBOOK_ENABLED: z.boolean().default(false),
@@ -181,7 +139,9 @@ const developmentEnvironmentSchema = z.object({
   // Hot reload and development server
   FAST_REFRESH: z.boolean().default(true),
   TURBO_MODE: z.boolean().default(true),
-});
+}).openapi('DevelopmentEnvironmentConfig');
+
+export type DevelopmentEnvironmentConfig = z.infer<typeof developmentEnvironmentSchema>;
 
 // ============================================================================
 // COMPLETE CONFIGURATION SCHEMA
@@ -196,7 +156,8 @@ const completeConfigurationSchema = coreEnvironmentSchema
   .merge(emailEnvironmentSchema)
   .merge(storageEnvironmentSchema)
   .merge(monitoringEnvironmentSchema)
-  .merge(developmentEnvironmentSchema);
+  .merge(developmentEnvironmentSchema)
+  .openapi('CompleteConfigurationSchema');
 
 // ============================================================================
 // CONFIGURATION PARSING AND VALIDATION
@@ -274,7 +235,6 @@ function parseEnvironment() {
     // Development
     ENABLE_QUERY_LOGGING: process.env.ENABLE_QUERY_LOGGING === 'true',
     ENABLE_DEBUG_MODE: process.env.ENABLE_DEBUG_MODE === 'true',
-    // Production ready only - mock functionality disabled
     STORYBOOK_ENABLED: process.env.STORYBOOK_ENABLED === 'true',
     DEVTOOLS_ENABLED: process.env.DEVTOOLS_ENABLED === 'true',
     FAST_REFRESH: process.env.FAST_REFRESH !== 'false',
@@ -336,7 +296,6 @@ export const FEATURE_FLAGS = {
 
   // Development features
   ENABLE_DEBUG_LOGS: false,
-  // All mock functionality removed for production readiness
   ENABLE_PERFORMANCE_MONITORING: false,
 } as const;
 
@@ -422,7 +381,7 @@ export function isPreview(): boolean {
 /**
  * Get the current environment
  */
-export function getEnvironment(): import('@/api/core/enums').Environment {
+export function getEnvironment() {
   return getConfigValue('NEXT_PUBLIC_WEBAPP_ENV');
 }
 

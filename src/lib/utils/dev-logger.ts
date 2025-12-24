@@ -1,27 +1,58 @@
-/* eslint-disable no-console */
-import type { DevLogLevel } from '@/api/core/enums';
-import { DevLogLevels } from '@/api/core/enums';
+import type { DevLogLevel, DevLogModEvent, DevLogMsgEvent, RlogCategory, RlogStreamAction } from '@/api/core/enums';
+import { DevLogLevels, DevLogModEvents, DevLogMsgEvents, RLOG_CATEGORY_STYLES, RlogCategories } from '@/api/core/enums';
 
 type LogEntry = {
   key: string;
   level: DevLogLevel;
   message: string;
-  data?: unknown;
+  data?: string;
   count: number;
   lastTime: number;
 };
 
+type UpdateTracker = {
+  count: number;
+  windowStart: number;
+};
+
+type DebugDataValue = string | number | boolean | null | undefined;
+
+type DebugData = {
+  readonly [K: string]: DebugDataValue;
+};
+
 const DEBOUNCE_MS = 500;
-const logCache = new Map<string, LogEntry>();
-const updateCounts = new Map<string, { count: number; windowStart: number }>();
 const UPDATE_WINDOW_MS = 1000;
 const EXCESSIVE_UPDATE_THRESHOLD = 10;
+
+const logCache = new Map<string, LogEntry>();
+const updateCounts = new Map<string, UpdateTracker>();
+
 const isDev = process.env.NODE_ENV === 'development';
+
+type ConsoleMethod = (message?: unknown, ...optionalParams: unknown[]) => void;
+
+/* eslint-disable no-console */
+function getConsoleMethod(level: DevLogLevel): ConsoleMethod {
+  const consoleMethodMap: Record<DevLogLevel, ConsoleMethod> = {
+    debug: console.debug.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+  };
+  return consoleMethodMap[level];
+}
+
+function logWarning(message: string): void {
+  console.warn(message);
+}
+/* eslint-enable no-console */
+
 function debouncedLog(
   key: string,
   level: DevLogLevel,
   message: string,
-  data?: unknown,
+  data?: string,
 ): void {
   if (!isDev)
     return;
@@ -35,17 +66,21 @@ function debouncedLog(
   }
 
   if (cached && cached.count > 1) {
-    console[cached.level](
-      `[DEV] ${cached.message} (×${cached.count} in ${DEBOUNCE_MS}ms)`,
-      cached.data,
-    );
+    const cachedLogFn = getConsoleMethod(cached.level);
+    const msg = `[DEV] ${cached.message} (×${cached.count} in ${DEBOUNCE_MS}ms)`;
+    if (cached.data) {
+      cachedLogFn(msg, cached.data);
+    } else {
+      cachedLogFn(msg);
+    }
   }
 
-  const logFn = console[level];
+  const logFn = getConsoleMethod(level);
+  const logMsg = `[DEV:${key}] ${message}`;
   if (data !== undefined) {
-    logFn(`[DEV:${key}] ${message}`, data);
+    logFn(logMsg, data);
   } else {
-    logFn(`[DEV:${key}] ${message}`);
+    logFn(logMsg);
   }
 
   logCache.set(key, {
@@ -57,6 +92,7 @@ function debouncedLog(
     lastTime: now,
   });
 }
+
 function trackUpdate(key: string): { count: number; isExcessive: boolean } {
   if (!isDev)
     return { count: 0, isExcessive: false };
@@ -73,68 +109,143 @@ function trackUpdate(key: string): { count: number; isExcessive: boolean } {
   const isExcessive = entry.count > EXCESSIVE_UPDATE_THRESHOLD;
 
   if (isExcessive && entry.count === EXCESSIVE_UPDATE_THRESHOLD + 1) {
-    console.warn(
+    logWarning(
       `[DEV:EXCESSIVE] ${key} updated ${entry.count} times in ${UPDATE_WINDOW_MS}ms`,
     );
   }
 
   return { count: entry.count, isExcessive };
 }
+
+function formatDebugValue(key: string, value: DebugDataValue): string {
+  if (typeof value === 'boolean')
+    return `${key}=${value ? 1 : 0}`;
+  if (typeof value === 'number')
+    return `${key}=${value}`;
+  if (typeof value === 'string')
+    return `${key}=${value.length > 10 ? `${value.slice(0, 10)}…` : value}`;
+  if (value === null || value === undefined)
+    return `${key}=-`;
+  return `${key}=?`;
+}
+
+// ============================================================================
+// RESUMPTION DEBUG LOGGER (rlog)
+// ============================================================================
+
+const rlogDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+const RLOG_DEBOUNCE_MS = 300;
+const rlogLastLogged: Record<string, string> = {};
+let rlogEnabled = false;
+
+function getRlogStyle(category: RlogCategory): string {
+  return RLOG_CATEGORY_STYLES[category];
+}
+
+function rlogLog(category: RlogCategory, key: string, message: string): void {
+  if (!rlogEnabled)
+    return;
+
+  const logKey = `${category}:${key}`;
+  const fullMessage = `[${category}] ${message}`;
+
+  if (rlogLastLogged[logKey] === fullMessage)
+    return;
+
+  if (rlogDebounceTimers[logKey]) {
+    clearTimeout(rlogDebounceTimers[logKey]);
+  }
+
+  rlogDebounceTimers[logKey] = setTimeout(() => {
+    rlogLastLogged[logKey] = fullMessage;
+    // eslint-disable-next-line no-console
+    console.log(`%c${fullMessage}`, getRlogStyle(category));
+  }, RLOG_DEBOUNCE_MS);
+}
+
+function rlogNow(category: RlogCategory, message: string): void {
+  if (!rlogEnabled)
+    return;
+  // eslint-disable-next-line no-console
+  console.log(`%c[${category}] ${message}`, getRlogStyle(category));
+}
+
+export const rlog = {
+  enable: (): void => {
+    rlogEnabled = true;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('rlog', '1');
+    }
+    // eslint-disable-next-line no-console
+    console.log('%c[RLOG] Resumption debug logging enabled', 'color: #4CAF50; font-weight: bold');
+  },
+  disable: (): void => {
+    rlogEnabled = false;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('rlog');
+    }
+  },
+  isEnabled: (): boolean => rlogEnabled,
+  phase: (phase: string, detail: string): void => rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`),
+  resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
+  stream: (action: RlogStreamAction, detail: string): void => rlogNow(RlogCategories.STREAM, `${action}: ${detail}`),
+  msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
+  gate: (check: string, result: string): void => rlogLog(RlogCategories.GATE, check, `${check}: ${result}`),
+  trigger: (action: string, detail: string): void => rlogNow(RlogCategories.TRIGGER, `${action}: ${detail}`),
+  presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
+  moderator: (action: string, detail: string): void => rlogNow(RlogCategories.MOD, `${action}: ${detail}`),
+  state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
+};
+
+// ============================================================================
+// DEV LOG
+// ============================================================================
+
 export const devLog = {
-  d: (tag: string, data: Record<string, unknown>) => {
+  d: (tag: string, data: DebugData): void => {
     const key = `d:${tag}`;
     const { isExcessive } = trackUpdate(key);
     if (isExcessive)
       return;
 
     const pairs = Object.entries(data)
-      .map(([k, v]) => {
-        if (typeof v === 'boolean')
-          return `${k}=${v ? 1 : 0}`;
-        if (typeof v === 'number')
-          return `${k}=${v}`;
-        if (typeof v === 'string')
-          return `${k}=${v.length > 10 ? `${v.slice(0, 10)}…` : v}`;
-        if (v === null || v === undefined)
-          return `${k}=-`;
-        return `${k}=?`;
-      })
+      .map(([k, v]) => formatDebugValue(k, v))
       .join(' ');
 
     debouncedLog(key, DevLogLevels.DEBUG, pairs);
   },
 
-  mod: (event: 'start' | 'text' | 'done' | 'add' | 'err', data?: Record<string, unknown>) => {
+  mod: (event: DevLogModEvent, data?: DebugData): void => {
     const key = `mod:${event}`;
-    if (event === 'text') {
+    if (event === DevLogModEvents.TEXT) {
       trackUpdate(key);
       return;
     }
     const pairs = data
-      ? Object.entries(data).map(([k, v]) => `${k}=${v}`).join(' ')
+      ? Object.entries(data).map(([k, v]) => formatDebugValue(k, v)).join(' ')
       : '';
     debouncedLog(key, DevLogLevels.INFO, pairs);
   },
 
-  msg: (event: 'sync' | 'flash', delta: number, extra?: string) => {
+  msg: (event: DevLogMsgEvent, delta: number, extra?: string): void => {
     const key = `msg:${event}`;
     const { isExcessive } = trackUpdate(key);
     if (isExcessive)
       return;
-    if (delta === 0 && event === 'sync')
+    if (delta === 0 && event === DevLogMsgEvents.SYNC)
       return;
     debouncedLog(key, DevLogLevels.DEBUG, `Δ${delta}${extra ? ` ${extra}` : ''}`);
   },
 
-  render: (component: string) => {
+  render: (component: string): void => {
     const key = `r:${component}`;
     const { count, isExcessive } = trackUpdate(key);
     if (isExcessive && count % 10 === 0) {
-      console.warn(`[!R] ${component} ×${count}/s`);
+      logWarning(`[!R] ${component} ×${count}/s`);
     }
   },
 
-  reset: () => {
+  reset: (): void => {
     logCache.clear();
     updateCounts.clear();
   },

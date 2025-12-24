@@ -50,7 +50,7 @@ function RHFTextarea({
               data-testid={field.name}
               placeholder={placeholder}
               className="resize-none"
-              onChange={(e) => {
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                 field.onChange(e.target.value);
                 if (externalOnChange) {
                   externalOnChange(e);

@@ -88,6 +88,25 @@ export const SearchResultStatuses = {
 } as const;
 
 // ============================================================================
+// QUERY RESULT STATUS (Individual query execution status)
+// ============================================================================
+
+export const QUERY_RESULT_STATUSES = ['pending', 'success', 'failed'] as const;
+
+export const QueryResultStatusSchema = z.enum(QUERY_RESULT_STATUSES).openapi({
+  description: 'Status of an individual search query result',
+  example: 'success',
+});
+
+export type QueryResultStatus = z.infer<typeof QueryResultStatusSchema>;
+
+export const QueryResultStatuses = {
+  PENDING: 'pending' as const,
+  SUCCESS: 'success' as const,
+  FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
 // PRE-SEARCH SSE EVENT NAMES
 // ============================================================================
 

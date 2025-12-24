@@ -11,31 +11,6 @@ type PostHogProviderProps = {
   environment?: string;
 };
 
-/**
- * PostHog Analytics Provider with Lazy Loading
- *
- * Self-contained provider that handles dynamic loading internally.
- * PostHog initialization is deferred until after initial page render.
- *
- * Disabled in local environment, enabled in preview and production.
- *
- * Performance Strategy:
- * - Dynamic import handled internally (not in parent)
- * - Client-only loading with ssr: false
- * - Initialization deferred to not block render
- * - No impact on initial page load or Core Web Vitals
- *
- * Pattern: src/components/providers/posthog-provider.tsx
- * Reference: https://posthog.com/docs/libraries/next-js
- *
- * @param props - Component props
- * @param props.children - Child components to wrap
- * @param props.apiKey - PostHog project API key (from NEXT_PUBLIC_POSTHOG_API_KEY)
- * @param props.apiHost - PostHog API host (from NEXT_PUBLIC_POSTHOG_HOST)
- * @param props.environment - Current environment (from NEXT_PUBLIC_WEBAPP_ENV)
- */
-
-// ✅ DYNAMIC IMPORT: Lazy load PostHog libs only when needed
 const PostHogProviderInternal = dynamic(
   () =>
     import('posthog-js').then((posthogModule) => {
@@ -44,7 +19,6 @@ const PostHogProviderInternal = dynamic(
       return import('posthog-js/react').then((reactModule) => {
         const PHProvider = reactModule.PostHogProvider;
 
-        // Return component that uses both
         return {
           default: function PostHogInternal({
             children,
@@ -97,7 +71,6 @@ const PostHogProviderInternal = dynamic(
 );
 
 export default function PostHogProvider(props: PostHogProviderProps) {
-  // In local, skip PostHog entirely
   if (props.environment === 'local' || !props.apiKey || !props.apiHost) {
     return <>{props.children}</>;
   }

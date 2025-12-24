@@ -1,0 +1,29 @@
+import type { Metadata } from 'next';
+
+import { BRAND } from '@/constants/brand';
+import { CreditsSuccessClient } from '@/containers/screens/chat/billing/CreditsSuccessClient';
+import { createMetadata } from '@/utils/metadata';
+
+export const metadata: Metadata = createMetadata({
+  title: `Credits Added - ${BRAND.fullName}`,
+  description: 'Your credits have been added to your account.',
+  url: '/chat/billing/credits-success',
+  robots: 'noindex, nofollow', // Transient page - don't index
+});
+
+/**
+ * Credits Purchase Success Page
+ *
+ * Separate from subscription success following Theo's "Stay Sane with Stripe" pattern.
+ * One-time credit purchases have simpler flow than subscriptions.
+ *
+ * Flow:
+ * 1. User completes Stripe checkout for credit pack
+ * 2. Stripe redirects to this page (/chat/billing/credits-success)
+ * 3. Client syncs and grants credits
+ * 4. Shows credits added confirmation
+ * 5. Auto-redirects to chat
+ */
+export default function CreditsSuccessPage() {
+  return <CreditsSuccessClient />;
+}

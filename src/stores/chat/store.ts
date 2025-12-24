@@ -825,7 +825,7 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
         const newResolvers = new Map(current.animationResolvers);
         newResolvers.set(participantIndex, resolve);
         return { animationResolvers: newResolvers };
-      }, false, 'animation/waitForAnimation');
+      }, false, 'animation/waitForAnimationPromise');
     });
   },
 

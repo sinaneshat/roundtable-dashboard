@@ -16,7 +16,7 @@ export function createTestChatStore(initialState: PartialChatState = {}): ChatSt
   const store = createChatStore();
 
   if (Object.keys(initialState).length > 0) {
-    store.setState(initialState as Partial<ReturnType<ChatStoreApi['getState']>>);
+    store.setState(initialState);
   }
 
   return store;

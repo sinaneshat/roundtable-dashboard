@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
 
+import { CardConnectionAlert } from '@/components/chat/card-connection-alert';
 import {
   ChatInputAttachments,
   ChatInputDropzoneOverlay,
@@ -51,8 +52,8 @@ type ChatInputProps = {
   enableSpeech?: boolean;
   minHeight?: number;
   maxHeight?: number;
-  // Quota alert extension
-  quotaCheckType?: 'threads' | 'messages';
+  // ✅ CREDITS-ONLY: Show credit alert when credits depleted
+  showCreditAlert?: boolean;
   // File attachment props
   attachments?: PendingAttachment[];
   onAddAttachments?: (files: File[]) => void;
@@ -88,8 +89,8 @@ export const ChatInput = memo(({
   enableSpeech = true,
   minHeight = 72, // ~3 lines of text
   maxHeight = 200, // Scroll after ~8 lines
-  // Quota alert extension
-  quotaCheckType,
+  // ✅ CREDITS-ONLY: Show credit alert when credits depleted
+  showCreditAlert = false,
   // File attachment props
   attachments = EMPTY_ATTACHMENTS,
   onAddAttachments,
@@ -105,37 +106,36 @@ export const ChatInput = memo(({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== 'ready';
 
-  // Check if quota is exceeded (from quota alert extension)
-  const { data: statsData } = useUsageStatsQuery();
+  // Check if credits are exhausted or card connection needed
+  const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
+
+  // ✅ NEW USERS: Check if user needs to connect card (free plan, no payment method)
+  const needsCardConnection = useMemo(() => {
+    if (!statsData?.success || !statsData.data) {
+      return false;
+    }
+    const { plan } = statsData.data;
+    // Free plan users without payment method need to connect card first
+    return plan?.type !== 'paid' && !plan?.hasPaymentMethod;
+  }, [statsData]);
+
+  // ✅ CREDITS-ONLY: Quota exceeded ONLY for users who have payment method but 0 credits
+  // Users without payment method show card connection alert instead (not quota exceeded)
   const isQuotaExceeded = useMemo(() => {
-    // Type guard: ensure statsData has the expected shape
-    // Uses API response structure: { success: true, data: { threads, messages, ... } }
-    if (
-      !quotaCheckType
-      || !statsData
-      || typeof statsData !== 'object'
-      || !('success' in statsData)
-      || !statsData.success
-      || !('data' in statsData)
-      || !statsData.data
-    ) {
+    if (!statsData?.success || !statsData.data) {
       return false;
     }
 
-    // Access data through properly narrowed type guards
-    // The API response data shape is validated by type guards above
-    const { data } = statsData;
-
-    if (quotaCheckType === 'threads' && 'threads' in data && typeof data.threads === 'object' && data.threads !== null) {
-      return data.threads.remaining === 0;
+    // Don't show quota exceeded for users who need to connect card
+    // They'll see the card connection alert instead
+    const { plan, credits } = statsData.data;
+    if (plan?.type !== 'paid' && !plan?.hasPaymentMethod) {
+      return false;
     }
 
-    if (quotaCheckType === 'messages' && 'messages' in data && typeof data.messages === 'object' && data.messages !== null) {
-      return data.messages.remaining === 0;
-    }
-
-    return false;
-  }, [quotaCheckType, statsData]);
+    // User has payment method - check if credits are exhausted
+    return credits.available <= 0;
+  }, [statsData]);
 
   // ✅ FIX: Split disabled states - textarea/mic always enabled during streaming
   // User can always type to prepare next message, even while AI is responding
@@ -143,14 +143,17 @@ export const ChatInput = memo(({
   // isInputDisabled: Controls textarea - only disabled for explicit disable or quota exceeded
   // isMicDisabled: Controls microphone - same as input, always available for voice input
   // isSubmitDisabled: Controls submit button - disabled during streaming, submitting, quota exceeded, uploading, or over limit
+  // Note: needsCardConnection disables submit but NOT typing (let users explore the interface)
   const isInputDisabled = disabled || isQuotaExceeded;
   const isMicDisabled = disabled || isQuotaExceeded;
 
   // Character limit validation - aligned with backend MessageContentSchema
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
 
-  // ✅ SUBMIT DISABLE: Include isSubmitting to disable during API calls
-  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting;
+  // ✅ SUBMIT DISABLE: Include isSubmitting and needsCardConnection to disable during API calls
+  // Users without payment method can type but not submit until they connect their card
+  // Also block while stats are loading to prevent race condition (submit before credit check)
+  const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || needsCardConnection || isUploading || isOverLimit || isSubmitting || isLoadingStats;
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
 
   // File attachment handlers
@@ -303,8 +306,10 @@ export const ChatInput = memo(({
           'bg-card',
           'shadow-lg',
           'transition-all duration-200',
-          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
+          isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && !needsCardConnection && 'cursor-not-allowed',
           (isOverLimit || showNoModelsError || isQuotaExceeded) && 'border-destructive',
+          // ✅ AMBER BORDER: Show for users who need to connect their card (takes precedence over other states)
+          needsCardConnection && !isOverLimit && !showNoModelsError && 'border-amber-500/50',
           className,
         )}
         {...(enableAttachments ? dragHandlers : {})}
@@ -313,8 +318,11 @@ export const ChatInput = memo(({
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-          {/* Quota Alert Extension - appears at top when quota exceeded */}
-          {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
+          {/* Credit Alert Extension - appears at top when credits depleted */}
+          {showCreditAlert && <QuotaAlertExtension />}
+
+          {/* Card Connection Alert - appears at top for new users without payment method */}
+          {needsCardConnection && <CardConnectionAlert />}
 
           {/* No models selected alert - appears at top when no participants */}
           {showNoModelsError && (

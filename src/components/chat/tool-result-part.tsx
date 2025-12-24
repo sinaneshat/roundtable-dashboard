@@ -1,4 +1,5 @@
 'use client';
+import { ComponentVariants } from '@/api/core/enums';
 import { WebSearchResultSchema } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -14,7 +15,7 @@ type ToolResultPartProps = {
 
 export function ToolResultPart({ part, className }: ToolResultPartProps) {
   const isError = part.isError ?? false;
-  const statusColor = isError ? 'destructive' : 'success';
+  const statusColor = isError ? ComponentVariants.DESTRUCTIVE : ComponentVariants.SUCCESS;
   const bgColor = isError ? 'bg-destructive/5' : 'bg-green-500/5';
   const borderColor = isError ? 'border-destructive/20' : 'border-green-500/20';
   const statusText = isError ? 'Error' : 'Success';

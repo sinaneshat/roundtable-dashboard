@@ -35,11 +35,11 @@ function RHFRadioGroup({
           <FormControl>
             <RadioGroup
               data-testid={field.name}
-              onValueChange={(e) => {
+              onValueChange={(value: string) => {
                 if (externalOnChange) {
-                  return externalOnChange?.({ target: { value: e } });
+                  return externalOnChange?.({ target: { value } });
                 }
-                return field.onChange(e);
+                return field.onChange(value);
               }}
               required={required}
               defaultValue={

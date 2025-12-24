@@ -27,46 +27,47 @@ import { ErrorCategorySchema, UIMessageErrorTypeSchema } from '@/api/core/enums'
  * NOTE: Schema is lenient to accept various backend error formats.
  * Backend's structureAIProviderError returns additional fields that we passthrough.
  */
-export const ErrorMetadataSchema = z
-  .object({
-    // Core error identification
-    errorName: z.string().optional(),
-    errorType: z.string().optional(),
-    errorCategory: ErrorCategorySchema.optional(),
-    errorMessage: z.string().optional(),
+export const ErrorMetadataSchema = z.object({
+  // Core error identification
+  errorName: z.string().optional(),
+  errorType: z.string().optional(),
+  errorCategory: ErrorCategorySchema.optional(),
+  errorMessage: z.string().optional(),
 
-    // HTTP details
-    statusCode: z.number().int().min(100).max(599).optional(),
+  // HTTP details
+  statusCode: z.number().int().min(100).max(599).optional(),
 
-    // Raw error messages (for debugging)
-    rawErrorMessage: z.string().optional(),
-    providerMessage: z.string().optional(),
+  // Raw error messages (for debugging)
+  rawErrorMessage: z.string().optional(),
+  providerMessage: z.string().optional(),
 
-    // OpenRouter-specific fields
-    openRouterError: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
-      .optional(),
-    openRouterCode: z.union([z.string(), z.number()]).optional(),
-    openRouterType: z.string().optional(),
-    openRouterMetadata: z.record(z.string(), z.unknown()).optional(),
+  // OpenRouter-specific fields
+  openRouterError: z
+    .union([z.string(), z.record(z.string(), z.unknown())])
+    .optional(),
+  openRouterCode: z.union([z.string(), z.number()]).optional(),
+  openRouterType: z.string().optional(),
+  openRouterMetadata: z.record(z.string(), z.unknown()).optional(),
 
-    // Response details (for debugging)
-    responseBody: z.string().optional(),
-    requestId: z.string().optional(),
-    traceId: z.string().optional(),
+  // Response details (for debugging)
+  responseBody: z.string().optional(),
+  requestId: z.string().optional(),
+  traceId: z.string().optional(),
 
-    // Retry behavior
-    isTransient: z.boolean().optional(),
-    shouldRetry: z.boolean().optional(),
-    retryAfter: z.number().optional(),
+  // Retry behavior
+  isTransient: z.boolean().optional(),
+  shouldRetry: z.boolean().optional(),
+  retryAfter: z.number().optional(),
 
-    // Participant context
-    modelId: z.string().optional(),
-    participantId: z.string().optional(),
-    participantRole: z.string().nullable().optional(),
-    roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
-  })
-  .passthrough(); // ✅ Allow additional fields from backend
+  // Participant context
+  modelId: z.string().optional(),
+  participantId: z.string().optional(),
+  participantRole: z.string().nullable().optional(),
+  roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+
+  // ✅ Explicit catch-all for external API fields (replaces passthrough)
+  additionalProviderFields: z.record(z.string(), z.unknown()).optional(),
+});
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
 

@@ -31,11 +31,11 @@ function RHFCheckbox({
             <Checkbox
               required={required}
               data-testid={field.name}
-              onCheckedChange={(e) => {
+              onCheckedChange={(checked: boolean | 'indeterminate') => {
                 if (externalOnChange) {
-                  return externalOnChange?.({ target: { value: e } });
+                  return externalOnChange?.({ target: { value: checked } });
                 }
-                return field.onChange(e);
+                return field.onChange(checked);
               }}
               checked={field.value !== undefined ? field.value : externalValue}
             />

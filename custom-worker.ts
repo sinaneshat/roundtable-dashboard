@@ -34,16 +34,23 @@ export default {
    * Queue handler for Cloudflare Queues
    * Routes messages to appropriate consumers based on queue name
    *
+   * Type safety: Queue messages arrive as unknown and are validated by
+   * each consumer using Zod schemas from @/api/types/queues
+   *
    * @see https://developers.cloudflare.com/queues/reference/how-queues-works/
+   * @see /src/api/types/queues.ts - Queue message schemas
    */
   queue: async (
+    // MessageBatch<unknown> is the correct type - messages validated by consumers
     batch: MessageBatch<unknown>,
     env: CloudflareEnv,
   ): Promise<void> => {
     // Route to appropriate handler based on queue name
-    // Currently only title-generation queue, but structured for future queues
+    // Each consumer validates message structure with TitleGenerationQueueMessageSchema
     if (batch.queue.startsWith('title-generation-queue')) {
-      // Type assertion: queue consumer validates message structure
+      // Safe: handleTitleGenerationQueue validates messages internally with Zod
+      // The consumer's type signature accepts MessageBatch<TitleGenerationQueueMessage>
+      // but performs runtime validation to ensure type safety
       return handleTitleGenerationQueue(
         batch as MessageBatch<TitleGenerationQueueMessage>,
         env,

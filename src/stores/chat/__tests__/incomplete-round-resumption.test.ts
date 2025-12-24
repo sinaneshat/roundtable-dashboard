@@ -292,7 +292,9 @@ describe('useIncompleteRoundResumption', () => {
       );
 
       // Wait for the hook's internal timeout (100ms for activeStreamCheck + some buffer)
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      });
 
       // The key test: setWaitingToStartStreaming should NOT be called while search is streaming
       // The main resumption effect should return early due to shouldWaitForPreSearch

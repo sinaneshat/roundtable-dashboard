@@ -445,6 +445,15 @@ export function validatePageParams(
 // ============================================================================
 
 /**
+ * Drizzle query builder type with pagination methods
+ */
+type DrizzleQueryBuilder<T> = {
+  limit: (limit: number) => T;
+  offset: (offset: number) => T;
+  orderBy: (...columns: (AnyColumn | SQL)[]) => T;
+};
+
+/**
  * Drizzle's official $dynamic() pattern for reusable pagination
  *
  * This helper follows Drizzle ORM's recommended approach using .$dynamic()
@@ -475,7 +484,7 @@ export function validatePageParams(
  * @see https://orm.drizzle.team/docs/guides/limit-offset-pagination
  * @see https://orm.drizzle.team/docs/dynamic-query-building
  */
-export function withPagination<T extends { limit: (limit: number) => T; offset: (offset: number) => T; orderBy: (...columns: (AnyColumn | SQL)[]) => T }>(
+export function withPagination<T extends DrizzleQueryBuilder<T>>(
   qb: T,
   orderByColumn: AnyColumn | SQL,
   page = 1,

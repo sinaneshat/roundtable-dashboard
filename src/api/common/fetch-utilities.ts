@@ -403,6 +403,7 @@ export function createHTTPExceptionFromFetchResult(
     message,
     correlationId: result.response?.headers.get('x-correlation-id') || undefined,
     details: {
+      detailType: 'fetch_error',
       operation,
       originalStatus: status,
       errorDetails: result.error,

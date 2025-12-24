@@ -142,3 +142,133 @@ export const UsageStatuses = {
   WARNING: 'warning' as const,
   CRITICAL: 'critical' as const,
 } as const;
+
+export const UsageStatusMetadata: Record<UsageStatus, {
+  label: string;
+  color: string;
+  textColor: string;
+  progressColor: string;
+  threshold: number;
+}> = {
+  [UsageStatuses.DEFAULT]: {
+    label: 'Normal',
+    color: 'bg-primary',
+    textColor: 'text-foreground',
+    progressColor: 'bg-primary',
+    threshold: 0.5,
+  },
+  [UsageStatuses.WARNING]: {
+    label: 'Low Credits',
+    color: 'bg-warning',
+    textColor: 'text-orange-600 dark:text-orange-500',
+    progressColor: 'bg-warning',
+    threshold: 0.2,
+  },
+  [UsageStatuses.CRITICAL]: {
+    label: 'Critical',
+    color: 'bg-destructive',
+    textColor: 'text-destructive',
+    progressColor: 'bg-destructive',
+    threshold: 0.1,
+  },
+} as const;
+
+export function getUsageStatusFromPercentage(remaining: number, total: number): UsageStatus {
+  const percentage = total > 0 ? remaining / total : 1;
+
+  if (percentage <= UsageStatusMetadata[UsageStatuses.CRITICAL].threshold) {
+    return UsageStatuses.CRITICAL;
+  }
+  if (percentage <= UsageStatusMetadata[UsageStatuses.WARNING].threshold) {
+    return UsageStatuses.WARNING;
+  }
+  return UsageStatuses.DEFAULT;
+}
+
+// ============================================================================
+// PLAN TYPE (Credit-based system - replaces tiers)
+// ============================================================================
+
+export const PLAN_TYPES = ['free', 'paid'] as const;
+
+export const DEFAULT_PLAN_TYPE: PlanType = 'free';
+
+export const PlanTypeSchema = z.enum(PLAN_TYPES).openapi({
+  description: 'User plan type: free (10K signup credits) or paid ($100/month, 1M credits)',
+  example: 'free',
+});
+
+export type PlanType = z.infer<typeof PlanTypeSchema>;
+
+export const PlanTypes = {
+  FREE: 'free' as const,
+  PAID: 'paid' as const,
+} as const;
+
+// ============================================================================
+// CREDIT TRANSACTION TYPE
+// ============================================================================
+
+export const CREDIT_TRANSACTION_TYPES = [
+  'credit_grant',
+  'monthly_refill',
+  'purchase',
+  'deduction',
+  'reservation',
+  'release',
+  'adjustment',
+] as const;
+
+export const CreditTransactionTypeSchema = z.enum(CREDIT_TRANSACTION_TYPES).openapi({
+  description: 'Type of credit transaction in the ledger',
+  example: 'deduction',
+});
+
+export type CreditTransactionType = z.infer<typeof CreditTransactionTypeSchema>;
+
+export const CreditTransactionTypes = {
+  CREDIT_GRANT: 'credit_grant' as const,
+  MONTHLY_REFILL: 'monthly_refill' as const,
+  PURCHASE: 'purchase' as const,
+  DEDUCTION: 'deduction' as const,
+  RESERVATION: 'reservation' as const,
+  RELEASE: 'release' as const,
+  ADJUSTMENT: 'adjustment' as const,
+} as const;
+
+// ============================================================================
+// CREDIT ACTION TYPE
+// ============================================================================
+
+export const CREDIT_ACTIONS = [
+  'user_message',
+  'ai_response',
+  'web_search',
+  'file_reading',
+  'thread_creation',
+  'analysis_generation',
+  'signup_bonus',
+  'monthly_renewal',
+  'credit_purchase',
+  'card_connection',
+] as const;
+
+export const CreditActionSchema = z.enum(CREDIT_ACTIONS).openapi({
+  description: 'Action that triggered a credit transaction',
+  example: 'ai_response',
+});
+
+export type CreditAction = z.infer<typeof CreditActionSchema>;
+
+export const CreditActions = {
+  USER_MESSAGE: 'user_message' as const,
+  AI_RESPONSE: 'ai_response' as const,
+  WEB_SEARCH: 'web_search' as const,
+  FILE_READING: 'file_reading' as const,
+  THREAD_CREATION: 'thread_creation' as const,
+  ANALYSIS_GENERATION: 'analysis_generation' as const,
+  SIGNUP_BONUS: 'signup_bonus' as const,
+  MONTHLY_RENEWAL: 'monthly_renewal' as const,
+  CREDIT_PURCHASE: 'credit_purchase' as const,
+  CARD_CONNECTION: 'card_connection' as const,
+} as const;

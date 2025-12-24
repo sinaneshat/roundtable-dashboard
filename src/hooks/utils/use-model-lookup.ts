@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Model Lookup Utility Hook
  *

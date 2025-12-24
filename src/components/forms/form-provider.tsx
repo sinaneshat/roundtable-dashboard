@@ -4,7 +4,7 @@ import { FormProvider as Form } from 'react-hook-form';
 
 type Props<
   TFieldValues extends FieldValues = FieldValues,
-  TContext = unknown,
+  TContext = object,
   TTransformedValues = TFieldValues,
 > = {
   children: ReactNode;
@@ -14,8 +14,8 @@ type Props<
 
 function FormProvider<
   TFieldValues extends FieldValues = FieldValues,
-  TContext = unknown,
-  TTransformedValues = undefined,
+  TContext = object,
+  TTransformedValues = TFieldValues,
 >({
   children,
   onSubmit,

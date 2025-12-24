@@ -1396,6 +1396,27 @@ export async function prepareValidatedMessages(
 
   modelMessages = injectFileDataIntoModelMessages(modelMessages, fileDataMap);
 
+  // ✅ AI SDK v5 PATTERN: Filter out ALL messages with empty content arrays
+  // convertToModelMessages() filters out reasoning/step-start parts from UIMessage
+  // This can result in assistant messages with empty content (e.g., reasoning-only responses)
+  // Reference: https://ai-sdk.dev/docs/reference/ai-sdk-ui/convert-to-model-messages
+  //
+  // Providers like Gemini will reject requests with empty content, so we filter here.
+  modelMessages = modelMessages.filter((msg) => {
+    if (!Array.isArray(msg.content)) {
+      return true;
+    }
+    if (msg.content.length === 0) {
+      logger?.info('Filtering out message with empty content after SDK conversion', {
+        logType: 'validation',
+        operationName: 'prepareValidatedMessages',
+        role: msg.role,
+      });
+      return false;
+    }
+    return true;
+  });
+
   if (fileDataMap.size > 0) {
     logger?.debug('Injected file data into model messages', {
       logType: 'operation',

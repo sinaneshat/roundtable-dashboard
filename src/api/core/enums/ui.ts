@@ -300,6 +300,252 @@ export const BorderGradientDirections = {
 } as const;
 
 // ============================================================================
+// LOGO SIZE
+// ============================================================================
+
+export const LOGO_SIZES = ['sm', 'md', 'lg'] as const;
+
+export const DEFAULT_LOGO_SIZE: LogoSize = 'sm';
+
+export const LogoSizeSchema = z.enum(LOGO_SIZES).openapi({
+  description: 'Logo component size variant',
+  example: 'md',
+});
+
+export type LogoSize = z.infer<typeof LogoSizeSchema>;
+
+export const LogoSizes = {
+  SM: 'sm' as const,
+  MD: 'md' as const,
+  LG: 'lg' as const,
+} as const;
+
+export const LogoSizeMetadata: Record<LogoSize, { width: number; height: number; widthFull: number; heightFull: number }> = {
+  [LogoSizes.SM]: {
+    width: 40,
+    height: 40,
+    widthFull: 100,
+    heightFull: 100,
+  },
+  [LogoSizes.MD]: {
+    width: 60,
+    height: 60,
+    widthFull: 160,
+    heightFull: 160,
+  },
+  [LogoSizes.LG]: {
+    width: 80,
+    height: 80,
+    widthFull: 240,
+    heightFull: 240,
+  },
+} as const;
+
+// ============================================================================
+// LOGO VARIANT
+// ============================================================================
+
+export const LOGO_VARIANTS = ['icon', 'full'] as const;
+
+export const DEFAULT_LOGO_VARIANT: LogoVariant = 'icon';
+
+export const LogoVariantSchema = z.enum(LOGO_VARIANTS).openapi({
+  description: 'Logo display variant (icon only or full logo)',
+  example: 'icon',
+});
+
+export type LogoVariant = z.infer<typeof LogoVariantSchema>;
+
+export const LogoVariants = {
+  ICON: 'icon' as const,
+  FULL: 'full' as const,
+} as const;
+
+// ============================================================================
+// LOADING STATE VARIANT
+// ============================================================================
+
+export const LOADING_STATE_VARIANTS = ['inline', 'centered', 'card'] as const;
+
+export const DEFAULT_LOADING_STATE_VARIANT: LoadingStateVariant = 'centered';
+
+export const LoadingStateVariantSchema = z.enum(LOADING_STATE_VARIANTS).openapi({
+  description: 'Loading state display variant',
+  example: 'centered',
+});
+
+export type LoadingStateVariant = z.infer<typeof LoadingStateVariantSchema>;
+
+export const LoadingStateVariants = {
+  INLINE: 'inline' as const,
+  CENTERED: 'centered' as const,
+  CARD: 'card' as const,
+} as const;
+
+// ============================================================================
+// ERROR STATE VARIANT
+// ============================================================================
+
+export const ERROR_STATE_VARIANTS = ['alert', 'card', 'network', 'boundary'] as const;
+
+export const DEFAULT_ERROR_STATE_VARIANT: ErrorStateVariant = 'card';
+
+export const ErrorStateVariantSchema = z.enum(ERROR_STATE_VARIANTS).openapi({
+  description: 'Error state display variant',
+  example: 'card',
+});
+
+export type ErrorStateVariant = z.infer<typeof ErrorStateVariantSchema>;
+
+export const ErrorStateVariants = {
+  ALERT: 'alert' as const,
+  CARD: 'card' as const,
+  NETWORK: 'network' as const,
+  BOUNDARY: 'boundary' as const,
+} as const;
+
+// ============================================================================
+// EMPTY STATE VARIANT
+// ============================================================================
+
+export const EMPTY_STATE_VARIANTS = ['general', 'custom'] as const;
+
+export const DEFAULT_EMPTY_STATE_VARIANT: EmptyStateVariant = 'general';
+
+export const EmptyStateVariantSchema = z.enum(EMPTY_STATE_VARIANTS).openapi({
+  description: 'Empty state display variant',
+  example: 'general',
+});
+
+export type EmptyStateVariant = z.infer<typeof EmptyStateVariantSchema>;
+
+export const EmptyStateVariants = {
+  GENERAL: 'general' as const,
+  CUSTOM: 'custom' as const,
+} as const;
+
+// ============================================================================
+// SUCCESS STATE VARIANT
+// ============================================================================
+
+export const SUCCESS_STATE_VARIANTS = ['alert', 'card'] as const;
+
+export const DEFAULT_SUCCESS_STATE_VARIANT: SuccessStateVariant = 'alert';
+
+export const SuccessStateVariantSchema = z.enum(SUCCESS_STATE_VARIANTS).openapi({
+  description: 'Success state display variant',
+  example: 'alert',
+});
+
+export type SuccessStateVariant = z.infer<typeof SuccessStateVariantSchema>;
+
+export const SuccessStateVariants = {
+  ALERT: 'alert' as const,
+  CARD: 'card' as const,
+} as const;
+
+// ============================================================================
+// GLOWING EFFECT VARIANT
+// ============================================================================
+
+export const GLOWING_EFFECT_VARIANTS = ['default', 'white'] as const;
+
+export const DEFAULT_GLOWING_EFFECT_VARIANT: GlowingEffectVariant = 'default';
+
+export const GlowingEffectVariantSchema = z.enum(GLOWING_EFFECT_VARIANTS).openapi({
+  description: 'Glowing effect color variant',
+  example: 'default',
+});
+
+export type GlowingEffectVariant = z.infer<typeof GlowingEffectVariantSchema>;
+
+export const GlowingEffectVariants = {
+  DEFAULT: 'default' as const,
+  WHITE: 'white' as const,
+} as const;
+
+// ============================================================================
+// CITATION SEGMENT TYPE
+// ============================================================================
+
+export const CITATION_SEGMENT_TYPES = ['text', 'citation'] as const;
+
+export const CitationSegmentTypeSchema = z.enum(CITATION_SEGMENT_TYPES).openapi({
+  description: 'Citation segment type',
+  example: 'text',
+});
+
+export type CitationSegmentType = z.infer<typeof CitationSegmentTypeSchema>;
+
+export const CitationSegmentTypes = {
+  TEXT: 'text' as const,
+  CITATION: 'citation' as const,
+} as const;
+
+// ============================================================================
+// SPACING VARIANT
+// ============================================================================
+
+export const SPACING_VARIANTS = ['tight', 'default', 'loose'] as const;
+
+export const DEFAULT_SPACING_VARIANT: SpacingVariant = 'default';
+
+export const SpacingVariantSchema = z.enum(SPACING_VARIANTS).openapi({
+  description: 'Spacing variant for layout components',
+  example: 'default',
+});
+
+export type SpacingVariant = z.infer<typeof SpacingVariantSchema>;
+
+export const SpacingVariants = {
+  TIGHT: 'tight' as const,
+  DEFAULT: 'default' as const,
+  LOOSE: 'loose' as const,
+} as const;
+
+// ============================================================================
+// EMPTY STATE STYLE
+// ============================================================================
+
+export const EMPTY_STATE_STYLES = ['default', 'dashed', 'gradient'] as const;
+
+export const DEFAULT_EMPTY_STATE_STYLE: EmptyStateStyle = 'default';
+
+export const EmptyStateStyleSchema = z.enum(EMPTY_STATE_STYLES).openapi({
+  description: 'Empty state card styling',
+  example: 'default',
+});
+
+export type EmptyStateStyle = z.infer<typeof EmptyStateStyleSchema>;
+
+export const EmptyStateStyles = {
+  DEFAULT: 'default' as const,
+  DASHED: 'dashed' as const,
+  GRADIENT: 'gradient' as const,
+} as const;
+
+// ============================================================================
+// SCROLL BUTTON VARIANT
+// ============================================================================
+
+export const SCROLL_BUTTON_VARIANTS = ['floating', 'header', 'input'] as const;
+
+export const DEFAULT_SCROLL_BUTTON_VARIANT: ScrollButtonVariant = 'floating';
+
+export const ScrollButtonVariantSchema = z.enum(SCROLL_BUTTON_VARIANTS).openapi({
+  description: 'Scroll button placement variant',
+  example: 'floating',
+});
+
+export type ScrollButtonVariant = z.infer<typeof ScrollButtonVariantSchema>;
+
+export const ScrollButtonVariants = {
+  FLOATING: 'floating' as const,
+  HEADER: 'header' as const,
+  INPUT: 'input' as const,
+} as const;
+
+// ============================================================================
 // LABELS (UI Display)
 // ============================================================================
 

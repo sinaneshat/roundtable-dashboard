@@ -165,7 +165,7 @@ export function ModelItem({
                             _onClearRole();
                           }}
                           className="shrink-0 p-0.5 rounded-full hover:bg-white/10 transition-colors"
-                          aria-label="Clear role"
+                          aria-label={tModels('clearRole')}
                         >
                           <X className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground" />
                         </button>
@@ -200,7 +200,7 @@ export function ModelItem({
               href="/chat/pricing"
               className="shrink-0 p-1 sm:p-1.5 rounded-full touch-manipulation"
               onClick={e => e.stopPropagation()}
-              aria-label="Upgrade to unlock this model"
+              aria-label={tModels('upgradeToUnlock')}
             >
               <Lock className="size-4 sm:size-5 text-amber-400" />
             </Link>

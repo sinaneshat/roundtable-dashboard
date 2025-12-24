@@ -111,7 +111,7 @@ export const MAX_MODEL_PRICING_BY_TIER: Record<
   SubscriptionTier,
   number | null
 > = {
-  free: 0.35, // Up to $0.35/M tokens - 7 models (diverse budget models)
+  free: 0.10, // Up to $0.10/M tokens - cheapest models only (budget tier)
   starter: 1.0, // Up to $1.00/M tokens - 9 models (+Grok 4.1, Haiku)
   pro: 3.5, // Up to $3.50/M tokens - 13 models (+GPT-4o, Sonnet, flagships) ← MAIN UPSELL
   power: null, // Unlimited - 15 models (+GPT-5, Opus)
@@ -129,7 +129,7 @@ export const MIN_MODELS_REQUIRED = 3;
  * Tiered limits to encourage upgrades for more models
  */
 export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number> = {
-  free: 4,
+  free: 3, // Limited concurrent models for free tier
   starter: 6,
   pro: 8,
   power: 12,
@@ -179,6 +179,183 @@ export const TIER_QUOTAS: Record<
     analysisPerMonth: 1000, // High analysis limit for power users
   },
 };
+
+// ============================================================================
+// CREDIT-BASED BILLING CONFIGURATION (NEW SYSTEM)
+// ============================================================================
+
+/**
+ * Credit Configuration - SINGLE SOURCE OF TRUTH for credit-based billing
+ *
+ * Two plans:
+ * - Free: 10K credits on signup (one-time)
+ * - Paid: $100/month with 1M credits auto-renewed
+ *
+ * Credit conversion: 1 credit = 1000 tokens
+ * All actions are priced in tokens, then converted to credits
+ */
+export const CREDIT_CONFIG = {
+  /**
+   * Conversion ratio: 1 credit = X tokens
+   * Using 1000 for human-readable credit amounts
+   * e.g., 5000 tokens = 5 credits
+   */
+  TOKENS_PER_CREDIT: 1000,
+
+  /**
+   * Plan configurations
+   * Stripe IDs reference products in test mode
+   */
+  PLANS: {
+    free: {
+      signupCredits: 0, // NO credits on signup - must connect card first
+      cardConnectionCredits: 10_000, // Credits given when user connects card to free plan
+      monthlyCredits: 0, // No monthly renewal
+      priceInCents: 0,
+      payAsYouGoEnabled: false, // NO auto-charge - users must purchase credit packs
+      stripeProductId: 'prod_Tf8tvljsdhgeaH',
+      stripePriceId: 'price_1Shoc852vWNZ3v8wtrMKFJxe',
+    },
+    paid: {
+      signupCredits: 0, // No signup bonus (subscription provides credits)
+      monthlyCredits: 1_000_000, // 1M credits/month
+      priceInCents: 10000, // $100/month
+      annualPriceInCents: 100000, // $1000/year (~17% savings)
+      payAsYouGoEnabled: true, // Can buy extra credits
+      stripeProductId: 'prod_Tf8t3FTCKcpVDq',
+      stripePriceId: 'price_1Shoc952vWNZ3v8wCuBiKKIA', // Monthly
+      stripeAnnualPriceId: 'price_1ShqYV52vWNZ3v8wB8G9Cy0X', // Annual
+    },
+  },
+
+  /**
+   * Custom credits product for one-time purchases
+   * Users can buy preset amounts or custom quantities
+   */
+  CUSTOM_CREDITS: {
+    stripeProductId: 'prod_Tf8ttpjBZtWGbe',
+    // Preset credit packages (priceId -> credits)
+    packages: {
+      price_1Shoc952vWNZ3v8wGVhL81lr: 1_000, // $1 = 1K credits
+      price_1ShocZ52vWNZ3v8wJ2XEoviR: 10_000, // $10 = 10K credits
+      price_1ShocZ52vWNZ3v8waD6wRNGa: 50_000, // $50 = 50K credits
+      price_1Shoca52vWNZ3v8wO9HKh4Kq: 100_000, // $100 = 100K credits
+      price_1Shocb52vWNZ3v8w1vlOjP9y: 500_000, // $500 = 500K credits
+    },
+    // Conversion: $1 = 1,000 credits
+    creditsPerDollar: 1000,
+  },
+
+  /**
+   * Action costs in tokens (will be converted to credits)
+   * These are flat costs for non-AI actions
+   */
+  ACTION_COSTS: {
+    threadCreation: 100, // Creating a new thread
+    webSearchQuery: 500, // Per web search query
+    fileReading: 100, // Per file processed
+    analysisGeneration: 2000, // Moderator analysis per round
+    customRoleCreation: 50, // Creating a custom role template
+  },
+
+  /**
+   * Reservation multiplier for pre-authorizing credits before streaming
+   * Reserve 150% of estimated cost to prevent overdraft
+   */
+  RESERVATION_MULTIPLIER: 1.5,
+
+  /**
+   * Minimum credits required to start a streaming operation
+   * Prevents starting operations that will immediately fail
+   */
+  MIN_CREDITS_FOR_STREAMING: 10,
+
+  /**
+   * Default estimated tokens per AI response (for pre-reservation)
+   * Conservative estimate to prevent overdraft
+   */
+  DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE: 2000,
+} as const;
+
+/**
+ * Plan type for credit-based billing
+ */
+export type CreditPlanType = keyof typeof CREDIT_CONFIG.PLANS;
+
+/**
+ * Human-readable plan names
+ */
+export const PLAN_NAMES: Record<CreditPlanType, string> = {
+  free: 'Free',
+  paid: 'Pro',
+} as const;
+
+// ============================================================================
+// CREDIT UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Convert tokens to credits
+ * Rounds up to ensure we always charge enough
+ */
+export function tokensToCredits(tokens: number): number {
+  return Math.ceil(tokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
+}
+
+/**
+ * Convert credits to tokens
+ */
+export function creditsToTokens(credits: number): number {
+  return credits * CREDIT_CONFIG.TOKENS_PER_CREDIT;
+}
+
+/**
+ * Calculate credits for a given action
+ */
+export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_COSTS): number {
+  const tokens = CREDIT_CONFIG.ACTION_COSTS[action];
+  return tokensToCredits(tokens);
+}
+
+/**
+ * Estimate credits needed for AI streaming
+ * Used for pre-reservation before actual token count is known
+ *
+ * @param participantCount Number of AI participants that will respond
+ * @param estimatedInputTokens Estimated input tokens (context + message)
+ * @returns Estimated credits to reserve
+ */
+export function estimateStreamingCredits(
+  participantCount: number,
+  estimatedInputTokens: number = 500,
+): number {
+  // Estimate: input tokens + (estimated output per participant * participant count)
+  const estimatedOutputTokens = CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
+  const totalTokens = estimatedInputTokens + estimatedOutputTokens;
+
+  // Apply reservation multiplier for safety margin
+  const reservedTokens = Math.ceil(totalTokens * CREDIT_CONFIG.RESERVATION_MULTIPLIER);
+
+  return tokensToCredits(reservedTokens);
+}
+
+/**
+ * Calculate actual credits used for an AI response
+ *
+ * @param inputTokens Actual input tokens used
+ * @param outputTokens Actual output tokens generated
+ * @returns Credits to deduct
+ */
+export function calculateActualCredits(inputTokens: number, outputTokens: number): number {
+  return tokensToCredits(inputTokens + outputTokens);
+}
+
+/**
+ * Get plan configuration by plan type
+ */
+export function getPlanConfig(planType: CreditPlanType) {
+  return CREDIT_CONFIG.PLANS[planType];
+}
 
 // ============================================================================
 // TIER UTILITY FUNCTIONS
@@ -258,6 +435,24 @@ export function getMaxModelsForTier(tier: SubscriptionTier): number {
 }
 
 /**
+ * Get the monthly credits included with a given tier
+ * Maps subscription tiers to CREDIT_CONFIG plan values
+ */
+export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
+  switch (tier) {
+    case 'free':
+      return CREDIT_CONFIG.PLANS.free.monthlyCredits;
+    case 'pro':
+    case 'starter':
+    case 'power':
+      // All paid tiers use the 'paid' plan config (1M credits/month)
+      return CREDIT_CONFIG.PLANS.paid.monthlyCredits;
+    default:
+      return 0;
+  }
+}
+
+/**
  * Get the subscription tier from a product ID
  *
  * ✅ FIX: Case-insensitive matching and correct tier detection order
@@ -276,6 +471,16 @@ export function getMaxModelsForTier(tier: SubscriptionTier): number {
  * 3. Avoid "prod_" and "prod-" prefixes: Use word boundaries
  */
 export function getTierFromProductId(productId: string): SubscriptionTier {
+  // ✅ DIRECT PRODUCT ID MATCHING - Check actual Stripe product IDs first
+  // This is the most reliable way to determine tier from product ID
+  if (productId === CREDIT_CONFIG.PLANS.free.stripeProductId) {
+    return 'free';
+  }
+  if (productId === CREDIT_CONFIG.PLANS.paid.stripeProductId) {
+    return 'pro'; // 'paid' plan in CREDIT_CONFIG maps to 'pro' tier
+  }
+
+  // ✅ FALLBACK: Pattern matching for legacy or differently-named products
   const normalized = productId.toLowerCase();
 
   // Check in order of specificity

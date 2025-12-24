@@ -28,11 +28,12 @@ export function toCreateThreadRequest(
     title: 'New Chat',
     mode: data.mode,
     enableWebSearch: data.enableWebSearch ?? false,
-    participants: data.participants.map((p, index) => ({
+    // ✅ FIX: CreateParticipantSchema omits id, priority, isEnabled
+    // Priority is determined by array order on backend
+    participants: data.participants.map(p => ({
       modelId: p.modelId,
       role: p.role || undefined,
       customRoleId: p.customRoleId,
-      priority: p.priority ?? index,
       temperature: p.settings?.temperature,
       maxTokens: p.settings?.maxTokens,
       systemPrompt: p.settings?.systemPrompt,

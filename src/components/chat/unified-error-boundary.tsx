@@ -41,8 +41,24 @@ type ErrorFallbackProps = {
 };
 
 // ============================================================================
-// Default Error Fallback Component (moved before class to avoid use-before-define)
+// Default Error Fallback Component
 // ============================================================================
+
+function getContextMessage(context: ErrorBoundaryContext): string {
+  switch (context) {
+    case ErrorBoundaryContexts.CHAT:
+      return 'The chat encountered an error. Your conversation is safe and you can continue after refreshing.';
+    case ErrorBoundaryContexts.MESSAGE_LIST:
+      return 'There was an error displaying messages. The messages are saved and will appear after refreshing.';
+    case ErrorBoundaryContexts.CONFIGURATION:
+      return 'Configuration changes could not be applied. Please try again.';
+    case ErrorBoundaryContexts.PRE_SEARCH:
+      return 'Web search results could not be loaded. Please try again.';
+    case ErrorBoundaryContexts.GENERAL:
+    default:
+      return 'Something went wrong. Please refresh the page to continue.';
+  }
+}
 
 const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   error,
@@ -50,21 +66,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   context,
   onReset,
 }) => {
-  // Context-specific messages
-  const getContextMessage = () => {
-    switch (context) {
-      case ErrorBoundaryContexts.CHAT:
-        return 'The chat encountered an error. Your conversation is safe and you can continue after refreshing.';
-      case ErrorBoundaryContexts.MESSAGE_LIST:
-        return 'There was an error displaying messages. The messages are saved and will appear after refreshing.';
-      case ErrorBoundaryContexts.CONFIGURATION:
-        return 'Configuration changes could not be applied. Please try again.';
-      case ErrorBoundaryContexts.PRE_SEARCH:
-        return 'Web search results could not be loaded. Please try again.';
-      default:
-        return 'Something went wrong. Please refresh the page to continue.';
-    }
-  };
+  const contextMessage = getContextMessage(context);
 
   return (
     <Card className="mx-auto max-w-2xl p-8">
@@ -75,10 +77,9 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
 
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold">Oops! Something went wrong</h2>
-          <p className="text-muted-foreground">{getContextMessage()}</p>
+          <p className="text-muted-foreground">{contextMessage}</p>
         </div>
 
-        {/* Show error details in development */}
         {process.env.NODE_ENV === 'development' && error && (
           <details className="w-full rounded-lg bg-muted/50 p-4 text-left">
             <summary className="cursor-pointer font-medium">
@@ -169,10 +170,7 @@ export class UnifiedErrorBoundary extends Component<
   }
 
   trackError = (error: Error, errorInfo: ErrorInfo) => {
-    // Send to error tracking service
-    // This would integrate with your monitoring solution
-    // Placeholder for future error tracking integration
-    void {
+    const errorData = {
       message: error.message,
       stack: error.stack,
       context: this.state.context,
@@ -180,8 +178,7 @@ export class UnifiedErrorBoundary extends Component<
       timestamp: new Date().toISOString(),
     };
 
-    // In production, send to actual monitoring service
-    // Example: sendToMonitoringService(_errorData);
+    void errorData;
   };
 
   handleReset = () => {

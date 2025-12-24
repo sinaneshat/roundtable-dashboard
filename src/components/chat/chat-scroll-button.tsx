@@ -1,23 +1,26 @@
 'use client';
+
 import { ArrowDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
+import type { ScrollButtonVariant } from '@/api/core/enums';
+import { ScrollButtonVariants } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
 type ChatScrollButtonProps = {
-  variant?: 'floating' | 'header' | 'input';
+  variant?: ScrollButtonVariant;
   className?: string;
 };
 
 export function ChatScrollButton({
-  variant = 'floating',
+  variant = ScrollButtonVariants.FLOATING,
   className,
 }: ChatScrollButtonProps) {
+  const t = useTranslations('chat');
   const [showButton, setShowButton] = useState(false);
   const rafRef = useRef<number | null>(null);
-
-  // ✅ REACT 19: useEffectEvent for scroll position check - stable handler
 
   const onCheckScrollPosition = useEffectEvent(() => {
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
@@ -68,7 +71,7 @@ export function ChatScrollButton({
   if (!showButton)
     return null;
 
-  if (variant === 'input') {
+  if (variant === ScrollButtonVariants.INPUT) {
     return (
       <div className="flex justify-center mb-2">
         <Button
@@ -83,7 +86,7 @@ export function ChatScrollButton({
             className,
           )}
           onClick={scrollToBottom}
-          aria-label="Scroll to bottom"
+          aria-label={t('scrollToBottom')}
         >
           <ArrowDown className="size-4" />
         </Button>
@@ -91,7 +94,7 @@ export function ChatScrollButton({
     );
   }
 
-  if (variant === 'header') {
+  if (variant === ScrollButtonVariants.HEADER) {
     return (
       <Button
         variant="ghost"
@@ -103,7 +106,7 @@ export function ChatScrollButton({
           className,
         )}
         onClick={scrollToBottom}
-        aria-label="Scroll to bottom"
+        aria-label={t('scrollToBottom')}
       >
         <ArrowDown className="size-4" />
       </Button>
@@ -125,7 +128,7 @@ export function ChatScrollButton({
         className,
       )}
       onClick={scrollToBottom}
-      aria-label="Scroll to bottom"
+      aria-label={t('scrollToBottom')}
     >
       <ArrowDown className="size-5" />
     </Button>

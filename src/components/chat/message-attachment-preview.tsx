@@ -1,5 +1,4 @@
 'use client';
-/* eslint-disable simple-import-sort/imports -- Circular fix conflict with antfu config */
 
 /**
  * Message Attachment Preview Component
@@ -16,8 +15,10 @@
  * - Automatic signed URL fetching for invalid URLs
  */
 
+/* eslint-disable simple-import-sort/imports -- Circular fix conflict in ESLint config */
 import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { z } from 'zod';
 
 import type { IconType } from '@/api/core/enums';
 import { IconTypes } from '@/api/core/enums';
@@ -26,58 +27,69 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useDownloadUrlQuery } from '@/hooks/queries';
 import { getFileIconName, getFileTypeLabel } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
+/* eslint-enable simple-import-sort/imports */
 
-export type MessageAttachment = {
-  url: string;
-  filename?: string;
-  mediaType?: string;
-  /** Upload ID for fetching signed URL if url is invalid (blob/empty) */
-  uploadId?: string;
-};
+// ============================================================================
+// TYPE-SAFE SCHEMA DEFINITIONS
+// ============================================================================
+
+/**
+ * Message attachment schema with Zod validation
+ * Single source of truth for attachment type safety
+ */
+export const MessageAttachmentSchema = z.object({
+  url: z.string(),
+  filename: z.string().optional(),
+  mediaType: z.string().optional(),
+  uploadId: z.string().optional(),
+});
+
+export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>;
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 /**
  * Check if a URL is valid for display (not blob, not empty)
  * Blob URLs are temporary and tied to browser session
  */
 function isValidDisplayUrl(url: string | undefined): boolean {
-  if (!url || url === '')
-    return false;
-  if (url.startsWith('blob:'))
-    return false;
-  return true;
+  return Boolean(url && url !== '' && !url.startsWith('blob:'));
 }
-
-/**
- * Check if a URL is a data URL (base64 encoded)
- */
-function isDataUrl(url: string | undefined): boolean {
-  return url?.startsWith('data:') ?? false;
-}
-
-type MessageAttachmentPreviewProps = {
-  attachments: MessageAttachment[];
-  messageId: string;
-};
 
 /**
  * Map centralized icon name to component icon type
  * Uses single source of truth from @/hooks/utils/use-file-preview
  */
 function getIconType(mimeType?: string): IconType {
-  if (!mimeType)
+  if (!mimeType) {
     return IconTypes.FILE;
-  const iconName = getFileIconName(mimeType);
-  switch (iconName) {
-    case 'image':
-      return IconTypes.IMAGE;
-    case 'file-code':
-      return IconTypes.CODE;
-    case 'file-text':
-      return IconTypes.TEXT;
-    default:
-      return IconTypes.FILE;
   }
+
+  const iconName = getFileIconName(mimeType);
+
+  if (iconName === 'image') {
+    return IconTypes.IMAGE;
+  }
+  if (iconName === 'file-code') {
+    return IconTypes.CODE;
+  }
+  if (iconName === 'file-text') {
+    return IconTypes.TEXT;
+  }
+
+  return IconTypes.FILE;
 }
+
+// ============================================================================
+// ATTACHMENT PREVIEW COMPONENT
+// ============================================================================
+
+type MessageAttachmentPreviewProps = {
+  attachments: MessageAttachment[];
+  messageId: string;
+};
 
 /**
  * Single attachment thumbnail with signed URL fetching
@@ -91,28 +103,22 @@ function AttachmentThumbnail({
 }) {
   const t = useTranslations('chat.attachments');
   const { url: originalUrl, filename, mediaType, uploadId } = attachment;
-  const isImage = mediaType?.startsWith('image/');
+  const isImage = Boolean(mediaType?.startsWith('image/'));
   const iconType = getIconType(mediaType);
-  const displayName = filename || t('defaultName');
+  const displayName = filename ?? t('defaultName');
 
-  // Determine if we need to fetch a signed URL
-  const needsFetch = !isValidDisplayUrl(originalUrl) && !isDataUrl(originalUrl) && !!uploadId;
+  const needsFetch = !isValidDisplayUrl(originalUrl) && Boolean(uploadId);
 
-  // ✅ TYPE-SAFE: Use query hook instead of direct service call
   const { data: downloadUrlResult, isLoading, isError: fetchError } = useDownloadUrlQuery(
-    uploadId || '',
+    uploadId ?? '',
     needsFetch,
   );
 
-  // Extract resolved URL from query result
   const resolvedUrl = downloadUrlResult?.data?.url ?? null;
-
-  // Determine the best URL to use
-  const effectiveUrl = resolvedUrl || originalUrl;
-  const hasValidUrl = isValidDisplayUrl(effectiveUrl) || isDataUrl(effectiveUrl);
+  const effectiveUrl = resolvedUrl ?? originalUrl;
+  const hasValidUrl = isValidDisplayUrl(effectiveUrl);
   const canShowImage = isImage && hasValidUrl;
 
-  // For invalid URLs without uploadId, don't make it a download link
   const WrapperComponent = hasValidUrl ? 'a' : 'div';
   const wrapperProps = hasValidUrl
     ? {
@@ -123,18 +129,15 @@ function AttachmentThumbnail({
       }
     : {};
 
-  // Determine tooltip status message
-  const getStatusMessage = () => {
-    if (isLoading)
+  const statusMessage = (() => {
+    if (isLoading) {
       return t('loadingPreview');
-    if (fetchError)
+    }
+    if (fetchError || !hasValidUrl) {
       return t('previewUnavailable');
-    if (!hasValidUrl)
-      return t('previewUnavailable');
+    }
     return null;
-  };
-
-  const statusMessage = getStatusMessage();
+  })();
 
   return (
     <Tooltip delayDuration={200}>
@@ -150,7 +153,6 @@ function AttachmentThumbnail({
             'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
             !hasValidUrl && !isLoading && 'cursor-default opacity-70',
           )}
-          // Query auto-fetches when enabled; no manual trigger needed
         >
           {isLoading
             ? (
@@ -176,21 +178,22 @@ function AttachmentThumbnail({
                 )
               : (
                   <div className="size-full flex items-center justify-center">
-                    {iconType === 'image' && <ImageIcon className="size-5 text-muted-foreground" />}
-                    {iconType === 'code' && <FileCode className="size-5 text-muted-foreground" />}
-                    {iconType === 'text' && <FileText className="size-5 text-muted-foreground" />}
-                    {iconType === 'file' && <FileIcon className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.IMAGE && <ImageIcon className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.CODE && <FileCode className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.TEXT && <FileText className="size-5 text-muted-foreground" />}
+                    {iconType === IconTypes.FILE && <FileIcon className="size-5 text-muted-foreground" />}
                   </div>
                 )}
 
-          {/* Hover overlay */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
         </WrapperComponent>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-[200px]">
         <div className="space-y-1">
           <p className="text-xs font-medium break-all">{displayName}</p>
-          <p className="text-xs text-muted-foreground">{mediaType ? getFileTypeLabel(mediaType) : t('defaultFileType')}</p>
+          <p className="text-xs text-muted-foreground">
+            {mediaType ? getFileTypeLabel(mediaType) : t('defaultFileType')}
+          </p>
           {statusMessage && (
             <p className={cn(
               'text-xs',
@@ -214,8 +217,9 @@ export function MessageAttachmentPreview({
   attachments,
   messageId,
 }: MessageAttachmentPreviewProps) {
-  if (!attachments || attachments.length === 0)
+  if (!attachments?.length) {
     return null;
+  }
 
   return (
     <TooltipProvider>

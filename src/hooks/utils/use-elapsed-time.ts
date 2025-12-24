@@ -1,4 +1,11 @@
+'use client';
+
 import { useCallback, useRef, useSyncExternalStore } from 'react';
+
+export type UseElapsedTimeReturn = {
+  elapsedSeconds: number;
+  finalDuration: number | undefined;
+};
 
 /**
  * Custom hook to track elapsed time during an active state
@@ -17,7 +24,7 @@ import { useCallback, useRef, useSyncExternalStore } from 'react';
  * // finalDuration is set when isStreaming transitions from true to false
  * ```
  */
-export function useElapsedTime(isActive: boolean, intervalMs = 1000) {
+export function useElapsedTime(isActive: boolean, intervalMs = 1000): UseElapsedTimeReturn {
   const startTimeRef = useRef<number | null>(null);
   const finalDurationRef = useRef<number | undefined>(undefined);
   const subscribersRef = useRef(new Set<() => void>());

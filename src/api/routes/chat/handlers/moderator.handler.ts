@@ -20,6 +20,10 @@ import { getErrorMessage, getErrorName } from '@/api/common/error-types';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/api/core';
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import {
+  deductCreditsForAction,
+  enforceCredits,
+} from '@/api/services/credit.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import { extractModeratorModelName } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -34,10 +38,6 @@ import {
   failStreamBuffer,
   initializeStreamBuffer,
 } from '@/api/services/stream-buffer.service';
-import {
-  enforceAnalysisQuota,
-  incrementAnalysisUsage,
-} from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -346,7 +346,7 @@ function generateModeratorSummary(
 
   // Build initial moderator metadata (streaming state)
   const streamMetadata: DbModeratorMessageMetadata = {
-    role: 'assistant',
+    role: MessageRoles.ASSISTANT,
     isModerator: true,
     roundNumber,
     model: moderatorModelId,
@@ -752,9 +752,9 @@ export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, Api
       })
       .sort((a, b) => a.participantIndex - b.participantIndex);
 
-    // Enforce quota
-    await enforceAnalysisQuota(user.id);
-    await incrementAnalysisUsage(user.id);
+    // ✅ CREDITS: Enforce and deduct credits for analysis generation
+    await enforceCredits(user.id, 2); // Analysis requires ~2 credits
+    await deductCreditsForAction(user.id, 'analysisGeneration', { threadId });
 
     // Initialize stream buffer for resumption
     await initializeStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);

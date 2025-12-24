@@ -174,7 +174,7 @@ export function messageHasVisibleContent(message: UIMessage | undefined): boolea
 
   return message.parts.some(
     part =>
-      (part.type === MessagePartTypes.TEXT && 'text' in part && (part.text as string)?.trim().length > 0)
+      (part.type === MessagePartTypes.TEXT && 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0)
       || part.type === MessagePartTypes.TOOL_CALL
       || part.type === MessagePartTypes.REASONING,
   );

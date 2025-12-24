@@ -3,6 +3,69 @@ import type { NextRequest } from 'next/server';
 
 import api from '@/api';
 
+/**
+ * Creates a local development CloudflareEnv from process.env
+ * Only includes environment variables, not Cloudflare bindings
+ *
+ * Type safety: In local dev, process.env provides string env vars but lacks
+ * Cloudflare-specific bindings (R2, D1, KV, DurableObjects). The API code
+ * handles missing bindings gracefully with runtime checks.
+ *
+ * This function is only used as a fallback when getCloudflareContext() fails,
+ * which happens in local development without proper Cloudflare simulation.
+ *
+ * LIMITATION: Cannot avoid type assertion here due to structural incompatibility
+ * between NodeJS.ProcessEnv and CloudflareEnv. The spread copies all env vars,
+ * but TypeScript cannot verify all required CloudflareEnv properties exist at
+ * compile time. The API handles missing properties with runtime validation.
+ */
+function createLocalDevEnv(processEnv: NodeJS.ProcessEnv): CloudflareEnv {
+  // Type assertion is necessary here:
+  // - processEnv contains required env vars (NEXT_PUBLIC_*, AUTH_*, etc.)
+  // - Cloudflare bindings are intentionally undefined for local dev
+  // - API code validates required env vars at runtime via environment-validation middleware
+  // - Missing bindings are handled gracefully in getDbAsync(), getKvAsync(), etc.
+  const localEnv = {
+    ...processEnv,
+    // Cloudflare bindings are undefined in local dev - API handles gracefully
+    DB: undefined,
+    KV: undefined,
+    UPLOADS_R2_BUCKET: undefined,
+    NEXT_INC_CACHE_R2_BUCKET: undefined,
+    TITLE_GENERATION_QUEUE: undefined,
+    UPLOAD_CLEANUP_SCHEDULER: undefined,
+  };
+
+  // Double type assertion (via unknown) is required because NodeJS.ProcessEnv
+  // and CloudflareEnv are structurally incompatible types. This is the only case
+  // in the codebase where this pattern is acceptable because:
+  // 1. We're bridging Node.js and Cloudflare runtime environments
+  // 2. The API validates env vars at runtime (environment-validation middleware)
+  // 3. Missing bindings are handled gracefully (getDbAsync(), getKvAsync(), etc.)
+  //
+  // This follows TypeScript's documented pattern for intentional incompatible casts.
+  // @see https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#type-assertions
+  return localEnv as unknown as CloudflareEnv;
+}
+
+/**
+ * Creates a local development ExecutionContext
+ * Tracks background promises for local testing
+ */
+function createLocalDevExecutionContext(
+  pendingPromises: Promise<unknown>[],
+): ExecutionContext {
+  return {
+    waitUntil: (promise: Promise<unknown>) => {
+      pendingPromises.push(promise);
+    },
+    passThroughOnException: () => {
+      // No-op in local dev
+    },
+    props: {} as Record<string, unknown>,
+  } as ExecutionContext;
+}
+
 // Factory function that creates a Next.js API route handler
 function createApiHandler() {
   return async function (req: NextRequest) {
@@ -39,20 +102,14 @@ function createApiHandler() {
     } catch (error) {
       console.error('[API Route] Cloudflare context unavailable, using fallback:', error);
       // Local dev fallback: process.env contains environment variables but lacks Cloudflare-specific
-      // bindings (R2, D1, KV, DurableObjects). Double cast required since ProcessEnv doesn't overlap
-      // with CloudflareEnv. At runtime, the API code handles missing bindings gracefully.
-      env = process.env as unknown as CloudflareEnv;
+      // bindings (R2, D1, KV, DurableObjects). The API code handles missing bindings gracefully.
+      // We create a partial CloudflareEnv from process.env for local development.
+      env = createLocalDevEnv(process.env);
 
       // Create waitUntil that tracks promises for background tasks
       const pendingPromises: Promise<unknown>[] = [];
 
-      executionCtx = {
-        waitUntil: (promise: Promise<unknown>) => {
-          pendingPromises.push(promise);
-        },
-        passThroughOnException: () => {},
-        props: {} as unknown,
-      } as ExecutionContext;
+      executionCtx = createLocalDevExecutionContext(pendingPromises);
     }
 
     // All requests go to the main API (now includes docs)

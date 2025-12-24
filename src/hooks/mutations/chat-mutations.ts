@@ -32,7 +32,6 @@ import {
   validateThreadDetailPayloadCache,
   validateThreadDetailResponseCache,
   validateThreadsListPages,
-  validateUsageStatsCache,
 } from '@/stores/chat';
 
 // ============================================================================
@@ -58,31 +57,8 @@ export function useCreateThreadMutation() {
       // Snapshot the previous value for rollback
       const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
 
-      // Optimistically update thread count
-      queryClient.setQueryData(
-        queryKeys.usage.stats(),
-        (oldData: unknown) => {
-          const usageData = validateUsageStatsCache(oldData);
-          if (!usageData)
-            return oldData;
-
-          // ✅ OPTIMISTIC UPDATE: Only increment 'used' count
-          // Backend will recompute remaining, percentage, and status on next fetch
-          return {
-            success: true,
-            data: {
-              ...usageData,
-              threads: {
-                ...usageData.threads,
-                used: usageData.threads.used + 1,
-                // Keep existing values - backend will provide correct values on refetch
-                remaining: usageData.threads.remaining,
-                percentage: usageData.threads.percentage,
-              },
-            },
-          };
-        },
-      );
+      // Note: Credits-based system - no thread count tracking needed
+      // Credits are deducted on the backend during message streaming, not thread creation
 
       // Return context with previous value for rollback
       return { previousUsage };
@@ -341,32 +317,8 @@ export function useDeleteThreadMutation() {
         },
       );
 
-      // Optimistically update usage stats - decrement thread count
-      queryClient.setQueryData(
-        queryKeys.usage.stats(),
-        (oldData: unknown) => {
-          const usageData = validateUsageStatsCache(oldData);
-          if (!usageData)
-            return oldData;
-
-          return {
-            success: true,
-            data: {
-              ...usageData,
-              threads: {
-                ...usageData.threads,
-                used: Math.max(0, usageData.threads.used - 1), // Prevent negative
-                remaining: usageData.threads.remaining + 1,
-                // Recalculate percentage
-                percentage:
-                  usageData.threads.limit > 0
-                    ? Math.round(((usageData.threads.used - 1) / usageData.threads.limit) * 100)
-                    : 0,
-              },
-            },
-          };
-        },
-      );
+      // Note: Credits-based system - no thread count tracking needed
+      // Thread deletion doesn't affect credit balance
 
       // Return context with previous values for rollback
       return { previousThreads, previousUsage };
@@ -682,7 +634,7 @@ export function useAddParticipantMutation() {
         (old: unknown) => {
           // ✅ TYPE-SAFE: Use Zod validation instead of manual type guards
           const cache = validateThreadDetailResponseCache(old);
-          if (!cache)
+          if (!cache || !cache.data.participants)
             return old;
 
           // Replace temporary participant with real server data
@@ -690,7 +642,7 @@ export function useAddParticipantMutation() {
             ...cache,
             data: {
               ...cache.data,
-              participants: cache.data.participants.map(p =>
+              participants: cache.data.participants.map((p: { id: string }) =>
                 p.id.startsWith('temp-')
                   ? (data.success && data.data ? data.data : p)
                   : p,

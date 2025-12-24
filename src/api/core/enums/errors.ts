@@ -83,7 +83,10 @@ export const AUTH_FAILURE_REASONS = [
   'session_expired',
 ] as const;
 
-export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS);
+export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS).openapi({
+  description: 'Reason for authentication failure',
+  example: 'session_expired',
+});
 
 export type AuthFailureReason = z.infer<typeof AuthFailureReasonSchema>;
 
@@ -245,7 +248,9 @@ export const UIMessageErrorTypes = {
 // AI HISTORY STATUS (Operation Result Status)
 // ============================================================================
 
-export const AIHistoryStatusSchema = z.enum(['aborted', 'success', 'failed']).openapi({
+export const AI_HISTORY_STATUSES = ['aborted', 'success', 'failed'] as const;
+
+export const AIHistoryStatusSchema = z.enum(AI_HISTORY_STATUSES).openapi({
   description: 'AI operation result status',
   example: 'success',
 });

@@ -1,55 +1,18 @@
-/**
- * Unified Markdown Components
- *
- * Single source of truth for markdown rendering across the application.
- * Typography matches AI SDK AI Elements Response component exactly:
- * - text-base (16px) body text
- * - leading-7 (28px / 1.75 line-height)
- * - Proper semantic heading hierarchy
- * - Generous spacing between elements
- *
- * Features:
- * - Shiki syntax highlighting for code blocks
- * - Copy-to-clipboard buttons on code blocks
- * - Proper dark/light theme support
- * - Clean table styling with borders
- *
- * @see https://ai-sdk.dev/elements/overview
- * @see https://www.aisdkagents.com/docs/ai/ai-elements
- *
- * @module components/markdown
- */
-
 import { ExternalLink } from 'lucide-react';
+import type { ComponentProps } from 'react';
 import type { Components } from 'react-markdown';
 
 import type { MarkdownPreset } from '@/api/core/enums';
-import { MarkdownPresets } from '@/api/core/enums';
+import { DEFAULT_MARKDOWN_PRESET, MarkdownPresets } from '@/api/core/enums';
 import { MarkdownCode, MarkdownPre } from '@/components/markdown/markdown-code-block';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * Markdown components for AI-generated and web content
- * Following AI SDK AI Elements patterns for consistent text rendering
- *
- * Typography specs (matching AI SDK AI Elements):
- * - Body: text-base (16px), leading-7 (28px line-height = 1.75)
- * - H1: text-2xl (24px), font-semibold, tracking-tight
- * - H2: text-xl (20px), font-semibold
- * - H3: text-lg (18px), font-semibold
- * - H4: text-base (16px), font-semibold
- * - Code: text-sm (14px), font-mono with Shiki syntax highlighting
- *
- * @param preset - Component style preset
- * @returns React Markdown components configuration
- */
-export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPresets.DEFAULT): Partial<Components> {
+export function createMarkdownComponents(preset: MarkdownPreset = DEFAULT_MARKDOWN_PRESET): Partial<Components> {
   const isCompact = preset === MarkdownPresets.COMPACT;
   const isWebContent = preset === MarkdownPresets.WEB_CONTENT;
 
   return {
-    // Links - always open in new tab with security attributes
-    a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode }) => (
+    a: ({ href, children, ...props }: ComponentProps<'a'>) => (
       <a
         href={href}
         target="_blank"
@@ -66,8 +29,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </a>
     ),
 
-    // Paragraphs - AI Elements: text-base leading-7 mb-4
-    p: ({ children }: { children?: React.ReactNode }) => (
+    p: ({ children }: ComponentProps<'p'>) => (
       <p
         className={cn(
           'last:mb-0',
@@ -82,8 +44,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </p>
     ),
 
-    // Unordered lists - AI Elements: proper nesting, mb-4
-    ul: ({ children }: { children?: React.ReactNode }) => (
+    ul: ({ children }: ComponentProps<'ul'>) => (
       <ul
         className={cn(
           'list-disc last:mb-0 [&_ul]:mt-2 [&_ul]:mb-0',
@@ -98,8 +59,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </ul>
     ),
 
-    // Ordered lists - AI Elements: proper nesting, mb-4
-    ol: ({ children }: { children?: React.ReactNode }) => (
+    ol: ({ children }: ComponentProps<'ol'>) => (
       <ol
         className={cn(
           'list-decimal last:mb-0 [&_ol]:mt-2 [&_ol]:mb-0',
@@ -114,8 +74,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </ol>
     ),
 
-    // List items - AI Elements: text-base leading-7
-    li: ({ children }: { children?: React.ReactNode }) => (
+    li: ({ children }: ComponentProps<'li'>) => (
       <li
         className={cn(
           isCompact
@@ -129,14 +88,10 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </li>
     ),
 
-    // Code blocks and inline code - Shiki syntax highlighting with copy button
     code: MarkdownCode as Components['code'],
-
-    // Preformatted text / code blocks with syntax highlighting
     pre: MarkdownPre as Components['pre'],
 
-    // Blockquotes - AI Elements: left border, italic, proper spacing
-    blockquote: ({ children }: { children?: React.ReactNode }) => (
+    blockquote: ({ children }: ComponentProps<'blockquote'>) => (
       <blockquote
         className={cn(
           'border-l-4 border-border pl-4 py-1 my-4',
@@ -147,19 +102,15 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </blockquote>
     ),
 
-    // Bold/strong text
-    strong: ({ children }: { children?: React.ReactNode }) => (
+    strong: ({ children }: ComponentProps<'strong'>) => (
       <strong className="font-semibold">{children}</strong>
     ),
 
-    // Emphasis/italic
-    em: ({ children }: { children?: React.ReactNode }) => (
+    em: ({ children }: ComponentProps<'em'>) => (
       <em className="italic">{children}</em>
     ),
 
-    // Headings - AI Elements semantic sizing with proper margins
-    // H1: text-2xl (24px), font-semibold, tracking-tight
-    h1: ({ children }: { children?: React.ReactNode }) => (
+    h1: ({ children }: ComponentProps<'h1'>) => (
       <h1
         className={cn(
           'font-semibold first:mt-0',
@@ -174,8 +125,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </h1>
     ),
 
-    // H2: text-xl (20px), font-semibold
-    h2: ({ children }: { children?: React.ReactNode }) => (
+    h2: ({ children }: ComponentProps<'h2'>) => (
       <h2
         className={cn(
           'font-semibold first:mt-0',
@@ -190,8 +140,7 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </h2>
     ),
 
-    // H3: text-lg (18px), font-semibold
-    h3: ({ children }: { children?: React.ReactNode }) => (
+    h3: ({ children }: ComponentProps<'h3'>) => (
       <h3
         className={cn(
           'font-semibold first:mt-0',
@@ -206,25 +155,21 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </h3>
     ),
 
-    // H4: text-base (16px), font-semibold
-    h4: ({ children }: { children?: React.ReactNode }) => (
+    h4: ({ children }: ComponentProps<'h4'>) => (
       <h4 className="text-base font-semibold mt-6 mb-2 first:mt-0">{children}</h4>
     ),
 
-    // H5: text-base, font-medium
-    h5: ({ children }: { children?: React.ReactNode }) => (
+    h5: ({ children }: ComponentProps<'h5'>) => (
       <h5 className="text-base font-medium mt-4 mb-2 first:mt-0">{children}</h5>
     ),
 
-    // H6: text-sm, font-medium, muted
-    h6: ({ children }: { children?: React.ReactNode }) => (
+    h6: ({ children }: ComponentProps<'h6'>) => (
       <h6 className="text-sm font-medium mt-4 mb-2 first:mt-0 text-muted-foreground">
         {children}
       </h6>
     ),
 
-    // Tables - AI Elements: clean, readable tables with borders
-    table: ({ children }: { children?: React.ReactNode }) => (
+    table: ({ children }: ComponentProps<'table'>) => (
       <div className="overflow-x-auto my-6 rounded-2xl border border-border">
         <table className="min-w-full border-collapse text-sm">
           {children}
@@ -232,19 +177,19 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </div>
     ),
 
-    thead: ({ children }: { children?: React.ReactNode }) => (
+    thead: ({ children }: ComponentProps<'thead'>) => (
       <thead className="bg-muted/60">{children}</thead>
     ),
 
-    tbody: ({ children }: { children?: React.ReactNode }) => (
+    tbody: ({ children }: ComponentProps<'tbody'>) => (
       <tbody className="divide-y divide-border bg-background">{children}</tbody>
     ),
 
-    tr: ({ children }: { children?: React.ReactNode }) => (
+    tr: ({ children }: ComponentProps<'tr'>) => (
       <tr className="transition-colors hover:bg-muted/30">{children}</tr>
     ),
 
-    th: ({ children }: { children?: React.ReactNode }) => (
+    th: ({ children }: ComponentProps<'th'>) => (
       <th className={cn(
         'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider',
         'text-muted-foreground border-b border-border',
@@ -254,15 +199,14 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
       </th>
     ),
 
-    td: ({ children }: { children?: React.ReactNode }) => (
+    td: ({ children }: ComponentProps<'td'>) => (
       <td className="px-4 py-3 text-sm text-foreground">{children}</td>
     ),
 
     // Horizontal rule
     hr: () => <hr className="my-6 border-border" />,
 
-    // Images
-    img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) => (
+    img: ({ src, alt, ...props }: ComponentProps<'img'>) => (
       // eslint-disable-next-line next/no-img-element -- markdown images don't benefit from next/image optimization
       <img
         src={src}
@@ -276,20 +220,6 @@ export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPreset
   };
 }
 
-/**
- * Default markdown components
- * Use for AI responses and general content
- */
-export const defaultMarkdownComponents = createMarkdownComponents('default');
-
-/**
- * Compact markdown components
- * Use for inline summaries and previews
- */
-export const compactMarkdownComponents = createMarkdownComponents('compact');
-
-/**
- * Web content markdown components
- * Use for web search results and scraped content
- */
-export const webContentMarkdownComponents = createMarkdownComponents('web-content');
+export const defaultMarkdownComponents = createMarkdownComponents(MarkdownPresets.DEFAULT);
+export const compactMarkdownComponents = createMarkdownComponents(MarkdownPresets.COMPACT);
+export const webContentMarkdownComponents = createMarkdownComponents(MarkdownPresets.WEB_CONTENT);

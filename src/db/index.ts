@@ -12,6 +12,7 @@ import { CloudflareKVCache } from './cache/cloudflare-kv-cache';
 import * as auth from './tables/auth';
 import * as billing from './tables/billing';
 import * as chat from './tables/chat';
+import * as credits from './tables/credits';
 import * as project from './tables/project';
 import * as upload from './tables/upload';
 import * as usage from './tables/usage';
@@ -21,6 +22,7 @@ const schema = {
   ...auth,
   ...billing,
   ...chat,
+  ...credits,
   ...project,
   ...upload,
   ...usage,
@@ -292,6 +294,7 @@ export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-typ
 export * from './tables/auth';
 export * from './tables/billing';
 export * from './tables/chat';
+export * from './tables/credits';
 export * from './tables/project';
 export * from './tables/upload';
 export * from './tables/usage';

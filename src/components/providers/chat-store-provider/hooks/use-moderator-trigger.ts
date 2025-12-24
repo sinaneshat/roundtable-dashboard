@@ -3,11 +3,11 @@
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
-import { useShallow } from 'zustand/react/shallow';
 
 import { MessageRoles, RoundPhases } from '@/api/core/enums';
 import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
-import { getMessageMetadata, getRoundNumber, rlog } from '@/lib/utils';
+import { getRoundNumber, rlog } from '@/lib/utils';
+import { isObject } from '@/lib/utils/type-guards';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {
@@ -52,11 +52,8 @@ function parseAiSdkStreamLine(line: string): string | null {
 }
 
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
-  // ✅ PERFORMANCE FIX: Batch thread ID subscriptions
-  const { threadId, createdThreadId } = useStore(store, useShallow(s => ({
-    threadId: s.thread?.id,
-    createdThreadId: s.createdThreadId,
-  })));
+  const threadId = useStore(store, s => s.thread?.id);
+  const createdThreadId = useStore(store, s => s.createdThreadId);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const triggeringRoundRef = useRef<number | null>(null);
@@ -281,21 +278,11 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     };
   }, []);
 
-  // ✅ PERFORMANCE FIX: Batch store subscriptions with useShallow to prevent cascading re-renders
-  // Previously 5 separate subscriptions caused 5 potential re-render cycles
-  const {
-    isModeratorStreaming,
-    currentResumptionPhase,
-    resumptionRoundNumber,
-    messages,
-    participants,
-  } = useStore(store, useShallow(s => ({
-    isModeratorStreaming: s.isModeratorStreaming,
-    currentResumptionPhase: s.currentResumptionPhase,
-    resumptionRoundNumber: s.resumptionRoundNumber,
-    messages: s.messages,
-    participants: s.participants,
-  })));
+  const isModeratorStreaming = useStore(store, s => s.isModeratorStreaming);
+  const currentResumptionPhase = useStore(store, s => s.currentResumptionPhase);
+  const resumptionRoundNumber = useStore(store, s => s.resumptionRoundNumber);
+  const messages = useStore(store, s => s.messages);
+  const participants = useStore(store, s => s.participants);
   const resumptionTriggerAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -317,12 +304,9 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     }
 
     const moderatorExists = messages.some((m) => {
-      const metadata = getMessageMetadata(m.metadata);
-      const isModerator = metadata && 'isModerator' in metadata && metadata.isModerator === true;
-      return (
-        isModerator
-        && getRoundNumber(m.metadata) === resumptionRoundNumber
-      );
+      if (!isObject(m.metadata))
+        return false;
+      return m.metadata.isModerator === true && getRoundNumber(m.metadata) === resumptionRoundNumber;
     });
 
     if (moderatorExists) {
@@ -334,15 +318,13 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
     const participantMessageIds = messages
       .filter((m) => {
-        const metadata = getMessageMetadata(m.metadata);
-        if (!metadata)
+        if (m.role !== MessageRoles.ASSISTANT)
           return false;
-        const isModerator = 'isModerator' in metadata && metadata.isModerator === true;
-        return (
-          m.role === 'assistant'
-          && getRoundNumber(m.metadata) === resumptionRoundNumber
-          && !isModerator
-        );
+        if (!isObject(m.metadata))
+          return false;
+        if (m.metadata.isModerator === true)
+          return false;
+        return getRoundNumber(m.metadata) === resumptionRoundNumber;
       })
       .map(m => m.id);
 

@@ -1,23 +1,3 @@
-/**
- * Streamdown Components Configuration
- *
- * Custom React components for Streamdown markdown rendering.
- * Typography matches AI SDK AI Elements Response component exactly:
- * - text-base (16px) body text
- * - leading-7 (28px / 1.75 line-height)
- * - Proper semantic heading hierarchy
- * - Generous spacing between elements
- *
- * Features:
- * - Shiki syntax highlighting for code blocks
- * - Copy-to-clipboard buttons on code blocks
- * - Proper dark/light theme support
- * - Clean table styling with borders
- *
- * @see https://ai-sdk.dev/elements/overview
- * @see https://www.aisdkagents.com/docs/ai/ai-elements
- */
-
 import { ExternalLink } from 'lucide-react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
@@ -31,26 +11,13 @@ type BaseProps = {
 
 type LinkProps = BaseProps & ComponentPropsWithoutRef<'a'>;
 
-/**
- * AI Elements-aligned Streamdown component overrides
- *
- * Typography specs (matching AI SDK AI Elements):
- * - Body: text-base (16px), leading-7 (28px line-height = 1.75)
- * - H1: text-2xl (24px), font-semibold, tracking-tight
- * - H2: text-xl (20px), font-semibold
- * - H3: text-lg (18px), font-semibold
- * - H4: text-base (16px), font-semibold
- * - Code: text-sm (14px), font-mono
- */
 export const streamdownComponents = {
-  // Paragraphs - AI Elements: text-base leading-7 mb-4
   p: ({ children, className }: BaseProps) => (
     <p className={cn('text-base leading-7 mb-4 last:mb-0', className)}>
       {children}
     </p>
   ),
 
-  // Links - open externally with indicator
   a: ({ href, children, className, ...props }: LinkProps) => (
     <a
       href={href}
@@ -69,43 +36,36 @@ export const streamdownComponents = {
     </a>
   ),
 
-  // Unordered lists - AI Elements: proper nesting, mb-4
   ul: ({ children, className }: BaseProps) => (
     <ul className={cn('list-disc pl-6 mb-4 last:mb-0 space-y-2 [&_ul]:mt-2 [&_ul]:mb-0', className)}>
       {children}
     </ul>
   ),
 
-  // Ordered lists - AI Elements: proper nesting, mb-4
   ol: ({ children, className }: BaseProps) => (
     <ol className={cn('list-decimal pl-6 mb-4 last:mb-0 space-y-2 [&_ol]:mt-2 [&_ol]:mb-0', className)}>
       {children}
     </ol>
   ),
 
-  // List items - AI Elements: text-base leading-7
   li: ({ children, className }: BaseProps) => (
     <li className={cn('text-base leading-7', className)}>
       {children}
     </li>
   ),
 
-  // Headings - AI Elements semantic sizing with proper margins
-  // H1: text-2xl (24px), font-semibold, tracking-tight
   h1: ({ children, className }: BaseProps) => (
     <h1 className={cn('text-2xl font-semibold tracking-tight mt-8 mb-4 first:mt-0', className)}>
       {children}
     </h1>
   ),
 
-  // H2: text-xl (20px), font-semibold
   h2: ({ children, className }: BaseProps) => (
     <h2 className={cn('text-xl font-semibold mt-8 mb-4 first:mt-0', className)}>
       {children}
     </h2>
   ),
 
-  // H3: text-lg (18px), font-semibold
   h3: ({ children, className }: BaseProps) => (
     <h3 className={cn('text-lg font-semibold mt-6 mb-3 first:mt-0', className)}>
       {children}
@@ -133,14 +93,9 @@ export const streamdownComponents = {
     </h6>
   ),
 
-  // Code - inline and block variants with Shiki syntax highlighting
-  // AI Elements: text-sm for code, with proper backgrounds and copy buttons
   code: MarkdownCode,
-
-  // Preformatted text / code blocks with syntax highlighting
   pre: MarkdownPre,
 
-  // Blockquotes - AI Elements: left border, italic, proper spacing
   blockquote: ({ children, className }: BaseProps) => (
     <blockquote
       className={cn(
@@ -153,22 +108,18 @@ export const streamdownComponents = {
     </blockquote>
   ),
 
-  // Strong/bold
   strong: ({ children, className }: BaseProps) => (
     <strong className={cn('font-semibold', className)}>{children}</strong>
   ),
 
-  // Emphasis/italic
   em: ({ children, className }: BaseProps) => (
     <em className={cn('italic', className)}>{children}</em>
   ),
 
-  // Horizontal rule
   hr: ({ className }: { className?: string }) => (
     <hr className={cn('my-6 border-border', className)} />
   ),
 
-  // Tables - AI Elements: clean, readable tables with borders
   table: ({ children, className }: BaseProps) => (
     <div className={cn('overflow-x-auto my-6 rounded-2xl border border-border', className)}>
       <table className="min-w-full border-collapse text-sm">
@@ -218,10 +169,6 @@ export const streamdownComponents = {
   ),
 };
 
-/**
- * Compact variant for smaller UI contexts (previews, summaries)
- * Scales down proportionally from the main components
- */
 export const streamdownCompactComponents = {
   ...streamdownComponents,
   p: ({ children, className }: BaseProps) => (
