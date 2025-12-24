@@ -762,7 +762,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // ✅ BACKGROUND STREAMING: Only use timeout signal, NOT HTTP abort signal
         // This allows AI generation to continue even if client disconnects
         // Chunks are buffered to KV via consumeSseStream for resumption
-        // Reference: plan.md Phase 1.1 - Stream Resumption Architecture
         abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
         // ✅ AI SDK V5 TELEMETRY: Enable experimental telemetry for OpenTelemetry integration
         // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/telemetry

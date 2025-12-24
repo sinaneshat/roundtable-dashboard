@@ -14,7 +14,7 @@ import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
 import { MessageRoles } from '@/api/core/enums';
-import { devLog, getRoundNumber } from '@/lib/utils';
+import { devLog, getParticipantIndex, getRoundNumber, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 import type { ChatHook } from '../types';
@@ -126,6 +126,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       && hasHydratedRef.current !== currentThreadId
     ) {
       hasHydratedRef.current = currentThreadId;
+      rlog.msg('hydrate', `SDK←store ${currentStoreMessages.length}msgs`);
       chat.setMessages?.(structuredClone(currentStoreMessages));
     }
 
@@ -881,6 +882,12 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
 
         // Debug: Track message sync (debounced)
         devLog.msg('sync', mergedMessages.length - prevMessageCountRef.current);
+
+        // Log sync with participant breakdown
+        const assistantMsgs = mergedMessages.filter(m => m.role === MessageRoles.ASSISTANT);
+        const pIndices = assistantMsgs.map(m => getParticipantIndex(m.metadata)).filter(i => i !== undefined && i !== null);
+        const rounds = [...new Set(mergedMessages.map(m => getRoundNumber(m.metadata)).filter(r => r !== null))];
+        rlog.msg('sync', `${mergedMessages.length}msg r=[${rounds.join(',')}] p=[${pIndices.join(',')}]`);
 
         prevMessageCountRef.current = chatMessages.length;
         prevChatMessagesRef.current = chatMessages;

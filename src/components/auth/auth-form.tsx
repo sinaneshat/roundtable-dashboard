@@ -9,6 +9,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { AuthStep } from '@/api/core/enums';
+import { AuthSteps } from '@/api/core/enums';
 import RHFTextField from '@/components/forms/rhf-text-field';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
@@ -18,9 +20,6 @@ import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
 import { getApiErrorDetails } from '@/lib/utils';
 
 import { GoogleButton } from './google-button';
-
-// Steps: 'method' -> 'email' -> 'sent'
-type AuthStep = 'method' | 'email' | 'sent';
 
 const magicLinkSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -32,7 +31,7 @@ function AuthFormContent() {
   const t = useTranslations();
   const searchParams = useSearchParams();
   const isLoading = useBoolean(false);
-  const [step, setStep] = useState<AuthStep>('method');
+  const [step, setStep] = useState<AuthStep>(AuthSteps.METHOD);
   const [sentEmail, setSentEmail] = useState('');
 
   // Handle toast messages from URL params
@@ -75,7 +74,7 @@ function AuthFormContent() {
         errorCallbackURL: '/auth/error',
       });
       setSentEmail(data.email);
-      setStep('sent');
+      setStep(AuthSteps.SENT);
     } catch (error) {
       const errorDetails = getApiErrorDetails(error);
       form.setError('email', {
@@ -88,7 +87,7 @@ function AuthFormContent() {
   };
 
   const goBack = () => {
-    setStep('method');
+    setStep(AuthSteps.METHOD);
     form.reset();
   };
 
@@ -96,7 +95,7 @@ function AuthFormContent() {
     <div className="w-full">
       <AnimatePresence mode="wait" initial={false}>
         {/* Step 1: Method Selection - pt-10 compensates for email step's extra height */}
-        {step === 'method' && (
+        {step === AuthSteps.METHOD && (
           <motion.div
             key="method"
             initial={{ opacity: 0 }}
@@ -110,7 +109,7 @@ function AuthFormContent() {
               variant="outline"
               size="lg"
               className="w-full h-12"
-              onClick={() => setStep('email')}
+              onClick={() => setStep(AuthSteps.EMAIL)}
             >
               {t('auth.continueWithEmail')}
             </Button>
@@ -118,7 +117,7 @@ function AuthFormContent() {
         )}
 
         {/* Step 2: Email Input - pb-5 matches method step total height (152px) */}
-        {step === 'email' && (
+        {step === AuthSteps.EMAIL && (
           <motion.div
             key="email"
             initial={{ opacity: 0 }}
@@ -167,7 +166,7 @@ function AuthFormContent() {
         )}
 
         {/* Step 3: Email Sent Success - pt-3 aligns height with other steps */}
-        {step === 'sent' && (
+        {step === AuthSteps.SENT && (
           <motion.div
             key="sent"
             initial={{ opacity: 0 }}

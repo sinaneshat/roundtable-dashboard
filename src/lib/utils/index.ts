@@ -31,12 +31,18 @@ export * from './date-transforms';
 // Development & Debugging
 // ============================================================================
 export * from './dev-logger';
+
 // ============================================================================
 // Error Handling
 // ============================================================================
 export * from './error-handling';
 export * from './error-metadata-builders';
+
+// ============================================================================
+// File Utilities
+// ============================================================================
 export * from './file-capability';
+
 // ============================================================================
 // Performance
 // ============================================================================
@@ -48,6 +54,10 @@ export * from './metadata-builder';
 export * from './moderator-utils';
 export * from './participant';
 export * from './participant-message-lookup';
+// ============================================================================
+// Resumption Debug (Development)
+// ============================================================================
+export * from './resumption-debug';
 export * from './role-colors';
 export * from './round-utils';
 

@@ -14,7 +14,7 @@ import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, mergeParticipantMetadata } from '@/lib/utils';
+import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, mergeParticipantMetadata, rlog } from '@/lib/utils';
 
 import { useSyncedRefs } from './use-synced-refs';
 
@@ -389,6 +389,8 @@ export function useMultiParticipantChat(
       // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
       isStreamingRef.current = false;
 
+      rlog.phase('PARTS→MOD', `r${currentRoundRef.current} all ${totalParticipants} done`);
+
       // eslint-disable-next-line react-dom/no-flush-sync -- Required for moderator trigger synchronization
       flushSync(() => {
         setIsExplicitlyStreaming(false);
@@ -420,6 +422,8 @@ export function useMultiParticipantChat(
     // The prepareSendMessagesRequest reads from currentIndexRef.current
     // so we must update it synchronously before calling aiSendMessage
     currentIndexRef.current = nextIndex;
+
+    rlog.trigger('NEXT-P', `r${currentRoundRef.current} p${nextIndex}/${totalParticipants}`);
 
     // CRITICAL FIX: Use flushSync to ensure participant index update is committed BEFORE triggering next participant
     // Without flushSync, React batches this state update and may re-render with the new index
@@ -1188,6 +1192,7 @@ export function useMultiParticipantChat(
       // allowing multiple streams to start concurrently (race condition)
       // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
       // Single RAF only waits for next paint, but React might batch updates across frames
+      rlog.stream('end', `r${currentRoundRef.current} p${currentIndex} fin=${data.finishReason}`);
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       triggerNextParticipantWithRefs();
     },

@@ -25,6 +25,7 @@ import type { AnyColumn, SQL } from 'drizzle-orm';
 import { and, asc, desc, gt, lt } from 'drizzle-orm';
 import { z } from 'zod';
 
+import type { SortDirection } from '@/api/core/enums';
 import { API } from '@/constants/application';
 
 // ============================================================================
@@ -81,12 +82,6 @@ export const OffsetPaginationQuerySchema = z.object({
 // ============================================================================
 
 /**
- * Cursor Pagination Direction
- * Determines whether we're paginating forward or backward
- */
-export type CursorDirection = 'forward' | 'backward';
-
-/**
  * Cursor Field Configuration
  * Defines which field to use as cursor and its sort direction
  */
@@ -94,7 +89,7 @@ export type CursorFieldConfig = {
   /** Field name to use as cursor (e.g., 'createdAt', 'id') */
   field: string;
   /** Sort direction for the cursor field */
-  direction: 'asc' | 'desc';
+  direction: SortDirection;
 };
 
 /**

@@ -23,13 +23,10 @@
 import { ExternalLink } from 'lucide-react';
 import type { Components } from 'react-markdown';
 
+import type { MarkdownPreset } from '@/api/core/enums';
+import { MarkdownPresets } from '@/api/core/enums';
 import { MarkdownCode, MarkdownPre } from '@/components/markdown/markdown-code-block';
 import { cn } from '@/lib/ui/cn';
-
-/**
- * Markdown component configuration presets
- */
-export type MarkdownPreset = 'default' | 'compact' | 'web-content';
 
 /**
  * Markdown components for AI-generated and web content
@@ -46,9 +43,9 @@ export type MarkdownPreset = 'default' | 'compact' | 'web-content';
  * @param preset - Component style preset
  * @returns React Markdown components configuration
  */
-export function createMarkdownComponents(preset: MarkdownPreset = 'default'): Partial<Components> {
-  const isCompact = preset === 'compact';
-  const isWebContent = preset === 'web-content';
+export function createMarkdownComponents(preset: MarkdownPreset = MarkdownPresets.DEFAULT): Partial<Components> {
+  const isCompact = preset === MarkdownPresets.COMPACT;
+  const isWebContent = preset === MarkdownPresets.WEB_CONTENT;
 
   return {
     // Links - always open in new tab with security attributes

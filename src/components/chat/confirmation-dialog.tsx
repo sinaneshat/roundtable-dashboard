@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 
+import type { ConfirmationDialogVariant } from '@/api/core/enums';
+import { ConfirmationDialogVariants } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,8 +14,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/ui/cn';
-
-export type ConfirmationDialogVariant = 'default' | 'destructive' | 'warning';
 
 type ConfirmationDialogProps = {
   open: boolean;
@@ -39,9 +39,9 @@ type ConfirmationDialogProps = {
 };
 
 const variantStyles: Record<ConfirmationDialogVariant, string> = {
-  default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-  destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-  warning: 'bg-amber-600 text-white hover:bg-amber-700',
+  [ConfirmationDialogVariants.DEFAULT]: 'bg-primary text-primary-foreground hover:bg-primary/90',
+  [ConfirmationDialogVariants.DESTRUCTIVE]: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+  [ConfirmationDialogVariants.WARNING]: 'bg-amber-600 text-white hover:bg-amber-700',
 };
 
 export function ConfirmationDialog({

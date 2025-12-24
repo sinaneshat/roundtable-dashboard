@@ -14,7 +14,7 @@ import { ConversationModeModal } from '@/components/chat/conversation-mode-modal
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { useChatStore } from '@/components/providers';
+import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
@@ -129,6 +129,15 @@ export function ChatView({
       setHasPendingConfigChanges: s.setHasPendingConfigChanges,
     })),
   );
+
+  // ✅ RACE CONDITION FIX: Get store API to read streaming state directly
+  // This bypasses React's batching to get the latest value immediately
+  // Used by virtualizer to prevent scroll jumps during moderator streaming transitions
+  const storeApi = useChatStoreApi();
+  const getIsStreamingFromStore = useCallback(() => {
+    const state = storeApi.getState();
+    return state.isStreaming || state.isModeratorStreaming;
+  }, [storeApi]);
 
   // ✅ SSR HYDRATION FIX: Use server-provided threadId first for query cache key matching.
   // Server prefetches with thread.id, so we MUST use the same ID on first render.
@@ -550,6 +559,7 @@ export function ChatView({
               isDataReady={isStoreReady}
               completedRoundNumbers={completedRoundNumbers}
               isModeratorStreaming={isModeratorStreaming}
+              getIsStreamingFromStore={getIsStreamingFromStore}
             />
           </div>
 

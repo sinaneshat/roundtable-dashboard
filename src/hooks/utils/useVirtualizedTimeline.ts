@@ -33,6 +33,13 @@ export type UseVirtualizedTimelineOptions = {
    * caused by height recalculations during streaming.
    */
   isStreaming?: boolean;
+
+  /**
+   * Optional getter function to read streaming state directly from store
+   * This bypasses React's batching and gets the latest value immediately.
+   * Used to prevent race conditions where props are stale but store is updated.
+   */
+  getIsStreamingFromStore?: () => boolean;
 };
 
 /**
@@ -108,6 +115,7 @@ export function useVirtualizedTimeline({
   paddingEnd = 0,
   isDataReady = true,
   isStreaming = false,
+  getIsStreamingFromStore,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // Scroll margin (offset from top of page to list start)
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -166,22 +174,39 @@ export function useVirtualizedTimeline({
       const newVirtualItems = instance.getVirtualItems();
       const newTotalSize = instance.getTotalSize();
 
+      // ✅ RACE CONDITION FIX: Check BOTH the ref AND the store directly
+      // The ref might be stale if React hasn't re-rendered yet after store update.
+      // By also checking the store, we catch cases where:
+      // 1. setIsModeratorStreaming(true) was called
+      // 2. But React hasn't re-rendered yet to update isStreamingRef
+      // 3. And the virtualizer's onChange fires in between
+      const isCurrentlyStreaming = isStreamingRef.current
+        || (getIsStreamingFromStore ? getIsStreamingFromStore() : false);
+
       // ✅ SCROLL FIX: During streaming, FREEZE totalSize completely
       // This prevents container height changes that cause scroll position shifts
       // The stable size was pre-captured during render (before streaming content added)
-      if (isStreamingRef.current && stableTotalSizeRef.current !== null) {
+      if (isCurrentlyStreaming && stableTotalSizeRef.current !== null) {
         // Update virtualItems for rendering but FREEZE totalSize
         // Container height stays constant - content grows within it
         setVirtualizerState(() => ({
           virtualItems: newVirtualItems,
           totalSize: stableTotalSizeRef.current!, // FROZEN at pre-streaming size
         }));
+      } else if (isCurrentlyStreaming && stableTotalSizeRef.current === null) {
+        // ✅ RACE CONDITION FIX: Streaming just started but we haven't captured size yet
+        // Capture the CURRENT size as the stable size and freeze it
+        stableTotalSizeRef.current = newTotalSize;
+        setVirtualizerState(() => ({
+          virtualItems: newVirtualItems,
+          totalSize: newTotalSize, // Use current size as frozen size
+        }));
       } else {
         // ✅ SCROLL FIX: Reset stable size ONLY in RAF callback when NOT streaming
         // This prevents race conditions when participant streaming ends and
         // moderator streaming starts (brief gap would incorrectly reset during render)
         // By resetting here, we ensure streaming is truly finished before clearing
-        if (!isStreamingRef.current && stableTotalSizeRef.current !== null) {
+        if (!isCurrentlyStreaming && stableTotalSizeRef.current !== null) {
           stableTotalSizeRef.current = null;
         }
         // Not streaming - update normally with actual totalSize
@@ -191,7 +216,7 @@ export function useVirtualizedTimeline({
         });
       }
     });
-  }, []);
+  }, [getIsStreamingFromStore]);
 
   // Stable onChange callback using useMemo to prevent virtualizer recreation
   const onChange = useMemo(() => (instance: Virtualizer<Window, Element>) => {
@@ -243,17 +268,38 @@ export function useVirtualizedTimeline({
   });
 
   // ✅ SCROLL FIX: Prevent scroll position adjustments during streaming
-  // This is the TanStack Virtual official way to prevent scroll jumps when items resize
-  // Returns false during streaming to prevent ANY scroll position adjustment
-  // The callback reads from isStreamingRef which is updated synchronously during render
+  // Pattern from TanStack Virtual maintainers (GitHub Discussion #730):
+  // https://github.com/TanStack/virtual/discussions/730
+  //
+  // The maintainer-recommended pattern:
+  // - Only adjust scroll when item is ABOVE current scroll position
+  // - Only adjust when user is scrolling BACKWARD (upward)
+  // - This allows forward streaming without scroll jumps
+  //
+  // Combined with streaming check for extra safety during AI message generation
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
-    _item,
+    item,
     _delta,
-    _instance,
+    instance,
   ) => {
+    // ✅ RACE CONDITION FIX: Check BOTH the ref AND the store directly
+    // Same as syncVirtualizerState - the ref might be stale
+    const isCurrentlyStreaming = isStreamingRef.current
+      || (getIsStreamingFromStore ? getIsStreamingFromStore() : false);
+
     // During streaming, NEVER adjust scroll position
     // This prevents viewport shifts when streaming content changes height
-    return !isStreamingRef.current;
+    if (isCurrentlyStreaming) {
+      return false;
+    }
+
+    // Maintainer pattern: Only adjust for items above scroll position
+    // when scrolling backward (reading history). This prevents jumps
+    // when new content is added at the bottom during forward scroll.
+    const isItemAboveViewport = item.start < (instance.scrollOffset ?? 0);
+    const isScrollingBackward = instance.scrollDirection === 'backward';
+
+    return isItemAboveViewport && isScrollingBackward;
   };
 
   // Initial sync of virtualizer state when virtualizer becomes enabled

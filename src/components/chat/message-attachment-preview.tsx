@@ -19,6 +19,8 @@
 import { FileCode, File as FileIcon, FileText, ImageIcon, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { IconType } from '@/api/core/enums';
+import { IconTypes } from '@/api/core/enums';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDownloadUrlQuery } from '@/hooks/queries';
@@ -61,21 +63,19 @@ type MessageAttachmentPreviewProps = {
  * Map centralized icon name to component icon type
  * Uses single source of truth from @/hooks/utils/use-file-preview
  */
-type IconType = 'image' | 'code' | 'text' | 'file';
-
 function getIconType(mimeType?: string): IconType {
   if (!mimeType)
-    return 'file';
+    return IconTypes.FILE;
   const iconName = getFileIconName(mimeType);
   switch (iconName) {
     case 'image':
-      return 'image';
+      return IconTypes.IMAGE;
     case 'file-code':
-      return 'code';
+      return IconTypes.CODE;
     case 'file-text':
-      return 'text';
+      return IconTypes.TEXT;
     default:
-      return 'file';
+      return IconTypes.FILE;
   }
 }
 

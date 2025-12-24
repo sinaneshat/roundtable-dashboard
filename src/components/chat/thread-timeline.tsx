@@ -89,6 +89,10 @@ type ThreadTimelineProps = {
 
   // Demo mode - forces all models to be accessible (hides tier badges)
   demoMode?: boolean;
+
+  // ✅ RACE CONDITION FIX: Getter to read streaming state directly from store
+  // Bypasses React batching to get latest value immediately
+  getIsStreamingFromStore?: () => boolean;
 };
 
 // Stable empty set to prevent render loops
@@ -117,6 +121,7 @@ export function ThreadTimeline({
   completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
   isModeratorStreaming = false,
   demoMode = false,
+  getIsStreamingFromStore,
 }: ThreadTimelineProps) {
   // ✅ SCROLL FIX: Track active streaming for virtualizer and measurement
   // This prevents scroll jumps and viewport shifts during content generation
@@ -136,6 +141,7 @@ export function ThreadTimeline({
     paddingEnd: 200, // Space for sticky chat input
     isDataReady,
     isStreaming: isActivelyStreaming, // Prevents container height changes during streaming
+    getIsStreamingFromStore, // ✅ RACE CONDITION FIX: Bypasses React batching
   });
 
   // ✅ SCROLL FIX: During active streaming, skip measurement to prevent scroll jumps

@@ -10,6 +10,8 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 
+import type { ErrorBoundaryContext } from '@/api/core/enums';
+import { ErrorBoundaryContexts } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
@@ -17,11 +19,9 @@ import { Card } from '@/components/ui/card';
 // Types
 // ============================================================================
 
-type ErrorContext = 'chat' | 'message-list' | 'configuration' | 'pre-search' | 'general';
-
 type UnifiedErrorBoundaryProps = {
   children: ReactNode;
-  context?: ErrorContext;
+  context?: ErrorBoundaryContext;
   onReset?: () => void;
   fallbackComponent?: React.ComponentType<ErrorFallbackProps>;
 };
@@ -30,13 +30,13 @@ type UnifiedErrorBoundaryState = {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
-  context: ErrorContext;
+  context: ErrorBoundaryContext;
 };
 
 type ErrorFallbackProps = {
   error: Error | null;
   errorInfo: ErrorInfo | null;
-  context: ErrorContext;
+  context: ErrorBoundaryContext;
   onReset: () => void;
 };
 
@@ -53,13 +53,13 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   // Context-specific messages
   const getContextMessage = () => {
     switch (context) {
-      case 'chat':
+      case ErrorBoundaryContexts.CHAT:
         return 'The chat encountered an error. Your conversation is safe and you can continue after refreshing.';
-      case 'message-list':
+      case ErrorBoundaryContexts.MESSAGE_LIST:
         return 'There was an error displaying messages. The messages are saved and will appear after refreshing.';
-      case 'configuration':
+      case ErrorBoundaryContexts.CONFIGURATION:
         return 'Configuration changes could not be applied. Please try again.';
-      case 'pre-search':
+      case ErrorBoundaryContexts.PRE_SEARCH:
         return 'Web search results could not be loaded. Please try again.';
       default:
         return 'Something went wrong. Please refresh the page to continue.';
@@ -142,7 +142,7 @@ export class UnifiedErrorBoundary extends Component<
       hasError: false,
       error: null,
       errorInfo: null,
-      context: props.context || 'general',
+      context: props.context || ErrorBoundaryContexts.GENERAL,
     };
   }
 

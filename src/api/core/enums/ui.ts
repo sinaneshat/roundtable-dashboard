@@ -235,21 +235,21 @@ export const ConfirmationDialogVariants = {
 } as const;
 
 // ============================================================================
-// ERROR CONTEXT (for Error Boundary)
+// ERROR BOUNDARY CONTEXT (for Error Boundary components)
 // ============================================================================
 
-export const ERROR_CONTEXTS = ['chat', 'message-list', 'configuration', 'pre-search', 'general'] as const;
+export const ERROR_BOUNDARY_CONTEXTS = ['chat', 'message-list', 'configuration', 'pre-search', 'general'] as const;
 
-export const DEFAULT_ERROR_CONTEXT: ErrorContext = 'general';
+export const DEFAULT_ERROR_BOUNDARY_CONTEXT: ErrorBoundaryContext = 'general';
 
-export const ErrorContextSchema = z.enum(ERROR_CONTEXTS).openapi({
+export const ErrorBoundaryContextSchema = z.enum(ERROR_BOUNDARY_CONTEXTS).openapi({
   description: 'Error boundary context',
   example: 'chat',
 });
 
-export type ErrorContext = z.infer<typeof ErrorContextSchema>;
+export type ErrorBoundaryContext = z.infer<typeof ErrorBoundaryContextSchema>;
 
-export const ErrorContexts = {
+export const ErrorBoundaryContexts = {
   CHAT: 'chat' as const,
   MESSAGE_LIST: 'message-list' as const,
   CONFIGURATION: 'configuration' as const,
@@ -344,8 +344,8 @@ export function isValidConfirmationDialogVariant(value: unknown): value is Confi
   return typeof value === 'string' && CONFIRMATION_DIALOG_VARIANTS.includes(value as ConfirmationDialogVariant);
 }
 
-export function isValidErrorContext(value: unknown): value is ErrorContext {
-  return typeof value === 'string' && ERROR_CONTEXTS.includes(value as ErrorContext);
+export function isValidErrorBoundaryContext(value: unknown): value is ErrorBoundaryContext {
+  return typeof value === 'string' && ERROR_BOUNDARY_CONTEXTS.includes(value as ErrorBoundaryContext);
 }
 
 export function isValidIconType(value: unknown): value is IconType {

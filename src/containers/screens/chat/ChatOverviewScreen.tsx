@@ -17,7 +17,11 @@ import { ConversationModeModal } from '@/components/chat/conversation-mode-modal
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { useChatStore, useChatStoreApi } from '@/components/providers';
+import {
+  useChatStore,
+  useChatStoreApi,
+  useModelPreferencesStore,
+} from '@/components/providers';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
@@ -43,7 +47,6 @@ import {
   useOverviewActions,
   useScreenInitialization,
 } from '@/stores/chat';
-import { useModelPreferencesStore } from '@/stores/preferences';
 
 import { ChatView } from './ChatView';
 

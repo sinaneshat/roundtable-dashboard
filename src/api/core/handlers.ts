@@ -22,11 +22,12 @@ import type { z } from 'zod';
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import type { ErrorCode } from '@/api/common/error-handling';
 import { AppError } from '@/api/common/error-handling';
-import type { ApiEnv, AuthenticatedContext, AuthMode } from '@/api/types';
+import type { ApiEnv, AuthenticatedContext } from '@/api/types';
 // Database access should be handled by individual handlers
 import { getDbAsync } from '@/db';
 import { auth } from '@/lib/auth/server';
 
+import type { AuthMode } from './enums';
 import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
 import {

@@ -26,7 +26,6 @@ export type { UseFlowControllerOptions } from './actions/flow-controller';
 export { useFlowController } from './actions/flow-controller';
 export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './actions/flow-loading';
 export { useFlowLoading } from './actions/flow-loading';
-export type { FlowAction, FlowContext, UseFlowOrchestratorOptions, UseFlowOrchestratorReturn } from './actions/flow-state-machine';
 export { useFlowStateMachine } from './actions/flow-state-machine';
 export type { AttachmentInfo, UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';

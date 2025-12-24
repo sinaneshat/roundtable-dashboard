@@ -27,7 +27,7 @@ import { useStore } from 'zustand';
 import { MessageRoles, MessageStatuses } from '@/api/core/enums';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
+import { getCurrentRoundNumber, getRoundNumber, rlog } from '@/lib/utils';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { readPreSearchStreamData } from '@/stores/chat';
@@ -92,11 +92,13 @@ export function usePreSearchResumption({
 
     // Only handle STREAMING status that needs resumption
     if (currentRoundPreSearch.status !== MessageStatuses.STREAMING) {
+      rlog.presearch('skip', `r${currentRound} status=${currentRoundPreSearch.status}`);
       return;
     }
 
     // Prevent duplicate resumption attempts for same round
     if (attemptedResumptionRef.current.has(currentRound)) {
+      rlog.presearch('skip', `r${currentRound} already attempted`);
       return;
     }
 
@@ -105,11 +107,13 @@ export function usePreSearchResumption({
     const didMark = currentState.tryMarkPreSearchTriggered(currentRound);
     if (!didMark) {
       // Already triggered locally, stream should be running
+      rlog.presearch('skip', `r${currentRound} already marked`);
       return;
     }
 
     // ✅ RESUMPTION: Pre-search is streaming but not tracked locally = page refresh scenario
     // Mark as attempted
+    rlog.presearch('RESUME', `r${currentRound} resuming stream`);
     attemptedResumptionRef.current.add(currentRound);
 
     // Get user query

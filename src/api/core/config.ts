@@ -16,7 +16,8 @@
 
 import { z } from 'zod';
 
-import { EnvironmentSchema } from '@/api/core/enums';
+import type { LogLevel } from '@/api/core/enums';
+import { EnvironmentSchema, LOG_LEVELS, LogLevels } from '@/api/core/enums';
 
 // Inline validation utilities to avoid server-side imports on client
 const ValidationUtils = {
@@ -438,38 +439,33 @@ export function isNonProduction(): boolean {
 // ============================================================================
 
 /**
- * Log levels in priority order
- */
-export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
-
-/**
  * Logging configuration by environment
  * Automatically adjusts verbosity based on deployment environment
  */
 export const LOGGING_CONFIG = {
   local: {
     enabled: true,
-    levels: ['DEBUG', 'INFO', 'WARN', 'ERROR'] as LogLevel[],
+    levels: [...LOG_LEVELS],
     prettyPrint: true,
     includeStack: true,
   },
   development: {
     enabled: true,
-    levels: ['DEBUG', 'INFO', 'WARN', 'ERROR'] as LogLevel[],
+    levels: [...LOG_LEVELS],
     prettyPrint: true,
     includeStack: true,
   },
   preview: {
     enabled: true,
-    levels: ['INFO', 'WARN', 'ERROR'] as LogLevel[],
+    levels: [LogLevels.INFO, LogLevels.WARN, LogLevels.ERROR],
     prettyPrint: false,
     includeStack: true,
   },
   production: {
     enabled: true,
-    levels: ['ERROR'] as LogLevel[], // Only critical errors
+    levels: [LogLevels.ERROR],
     prettyPrint: false,
-    includeStack: false, // No stack traces in production
+    includeStack: false,
   },
   test: {
     enabled: false,
@@ -493,7 +489,7 @@ export function getLoggingConfig() {
  */
 export function shouldLog(level: LogLevel): boolean {
   const config = getLoggingConfig();
-  return config.enabled && config.levels.includes(level);
+  return config.enabled && (config.levels as readonly LogLevel[]).includes(level);
 }
 
 // ============================================================================

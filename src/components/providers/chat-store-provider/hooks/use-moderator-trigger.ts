@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { MessageRoles, RoundPhases } from '@/api/core/enums';
 import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
-import { getMessageMetadata, getRoundNumber } from '@/lib/utils';
+import { getMessageMetadata, getRoundNumber, rlog } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {
@@ -70,20 +70,24 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     const state = store.getState();
 
     if (!effectiveThreadId) {
+      rlog.moderator('skip', 'no threadId');
       state.completeStreaming();
       return;
     }
 
     const moderatorId = `${effectiveThreadId}_r${roundNumber}_moderator`;
     if (state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
+      rlog.moderator('skip', `r${roundNumber} already triggered`);
       state.completeStreaming();
       return;
     }
 
     if (triggeringRoundRef.current !== null) {
+      rlog.moderator('skip', `r${roundNumber} trigger in progress`);
       return;
     }
 
+    rlog.moderator('TRIGGER', `r${roundNumber} pMsgs=${participantMessageIds.length}`);
     state.markModeratorStreamTriggered(moderatorId, roundNumber);
     triggeringRoundRef.current = roundNumber;
 
@@ -254,12 +258,15 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
+        rlog.moderator('abort', `r${roundNumber}`);
         return;
       }
+      rlog.moderator('error', `r${roundNumber}`);
       // Error is silent - moderator failure is non-critical
     } finally {
       // ✅ FIX: Only call completeStreaming() - it already includes MODERATOR_STATE_RESET
       // Previously calling both caused a duplicate state update and unnecessary re-renders
+      rlog.phase('MOD→DONE', `r${roundNumber} complete`);
       store.getState().completeStreaming();
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;

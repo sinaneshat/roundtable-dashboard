@@ -33,11 +33,11 @@ import Image from 'next/image';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
+import type { ImageState } from '@/api/core/enums';
+import { ImageStates } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
 import { Skeleton } from './skeleton';
-
-type ImageState = 'loading' | 'loaded' | 'error';
 
 type SmartImageProps = Omit<ImageProps, 'onLoad' | 'onError'> & {
   /** Custom fallback content when image fails to load */
@@ -72,15 +72,15 @@ export function SmartImage({
   height,
   ...imageProps
 }: SmartImageProps) {
-  const [imageState, setImageState] = useState<ImageState>('loading');
+  const [imageState, setImageState] = useState<ImageState>(ImageStates.LOADING);
 
   const handleLoad = () => {
-    setImageState('loaded');
+    setImageState(ImageStates.LOADED);
     onLoadSuccess?.();
   };
 
   const handleError = () => {
-    setImageState('error');
+    setImageState(ImageStates.ERROR);
     onLoadError?.();
   };
 
@@ -102,7 +102,7 @@ export function SmartImage({
       style={containerStyles}
     >
       {/* Skeleton loading state */}
-      {showSkeleton && imageState === 'loading' && (
+      {showSkeleton && imageState === ImageStates.LOADING && (
         <Skeleton
           className={cn(
             'absolute inset-0 rounded-none',
@@ -112,7 +112,7 @@ export function SmartImage({
       )}
 
       {/* Error fallback */}
-      {imageState === 'error' && (
+      {imageState === ImageStates.ERROR && (
         fallback || (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/50 text-muted-foreground text-sm">
             {fallbackText}
@@ -121,7 +121,7 @@ export function SmartImage({
       )}
 
       {/* Next.js Image - Don't render at all on error to prevent browser retry loops */}
-      {imageState !== 'error' && (
+      {imageState !== ImageStates.ERROR && (
         <Image
           src={src}
           alt={alt}
@@ -130,8 +130,8 @@ export function SmartImage({
           height={!useFill ? height : undefined}
           className={cn(
             'object-cover transition-opacity duration-300',
-            imageState === 'loading' && 'opacity-0',
-            imageState === 'loaded' && 'opacity-100',
+            imageState === ImageStates.LOADING && 'opacity-0',
+            imageState === ImageStates.LOADED && 'opacity-100',
             className
           )}
           onLoad={handleLoad}

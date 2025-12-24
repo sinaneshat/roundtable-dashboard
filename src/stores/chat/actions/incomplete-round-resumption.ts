@@ -40,7 +40,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { FinishReasons, MessageRoles, MessageStatuses, RoundPhases } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
-import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber } from '@/lib/utils';
+import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, rlog } from '@/lib/utils';
 
 import {
   getMessageStreamingStatus,
@@ -50,17 +50,6 @@ import {
 } from '../utils/participant-completion-gate';
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
 import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/pre-search-execution';
-
-// ============================================================================
-// DEBUG: Debounced logger for resumption debugging
-// ============================================================================
-// ✅ TYPE-SAFE: Removed unused Record<string, unknown> parameter
-const debugLogTimers: Record<string, NodeJS.Timeout> = {};
-function debugLog(key: string, _data?: unknown, debounceMs = 500) {
-  // eslint-disable-next-line antfu/if-newline
-  if (debugLogTimers[key]) clearTimeout(debugLogTimers[key]);
-  debugLogTimers[key] = setTimeout(() => {}, debounceMs);
-}
 
 // ============================================================================
 // AI SDK RESUME PATTERN - NO SEPARATE /resume CALL NEEDED
@@ -528,17 +517,6 @@ export function useIncompleteRoundResumption(
       && accountedParticipants < enabledParticipants.length
       && !participantsChangedSinceRound;
 
-  // DEBUG: Log isIncomplete calculation
-  debugLog('INCOMPLETE', {
-    isIncomplete,
-    responded: respondedParticipantIndices.size,
-    inProgress: inProgressParticipantIndices.size,
-    total: enabledParticipants.length,
-    round: currentRoundNumber,
-    streaming: isStreaming,
-    waiting: waitingToStartStreaming,
-  });
-
   // Find the first missing participant index
   // ✅ AI SDK RESUME FIX: Skip BOTH responded AND in-progress participants
   // In-progress participants have partial content from AI SDK resume - accept as-is
@@ -831,18 +809,9 @@ export function useIncompleteRoundResumption(
 
   // Effect to trigger resumption
   useEffect(() => {
-    // DEBUG: Log effect state (debounced)
-    debugLog('EFFECT', {
-      streaming: isStreaming,
-      waiting: waitingToStartStreaming,
-      incomplete: isIncomplete,
-      nextP: nextParticipantIndex,
-      round: currentRoundNumber,
-      ref: resumptionAttemptedRef.current,
-    });
-
     // Skip if not enabled or already streaming
     if (!enabled || isStreaming || waitingToStartStreaming) {
+      rlog.resume('skip', `en=${enabled} strm=${isStreaming} wait=${waitingToStartStreaming}`);
       return;
     }
 
@@ -987,12 +956,7 @@ export function useIncompleteRoundResumption(
     // Mark as attempted to prevent duplicate triggers for this specific participant
     resumptionAttemptedRef.current = resumptionKey;
 
-    // DEBUG: Log when resumption triggers participant
-    debugLog('TRIGGER', {
-      round: currentRoundNumber,
-      nextP: effectiveNextParticipant,
-      key: resumptionKey,
-    });
+    rlog.trigger('RESUME', `r${currentRoundNumber} p${effectiveNextParticipant} responded=${respondedParticipantIndices.size} inProg=${inProgressParticipantIndices.size}`);
 
     // Set up store state for resumption
     // The provider's effect watching nextParticipantToTrigger will trigger the participant
@@ -1057,10 +1021,6 @@ export function useIncompleteRoundResumption(
         // Trigger failed - waitingToStartStreaming was cleared but streaming never started
         // Clear resumptionAttemptedRef to allow retry
         if (resumptionAttemptedRef.current !== null) {
-          debugLog('RETRY_ALLOWED', {
-            reason: 'trigger_failed',
-            clearedKey: resumptionAttemptedRef.current,
-          });
           resumptionAttemptedRef.current = null;
         }
       }
@@ -1089,6 +1049,7 @@ export function useIncompleteRoundResumption(
   useEffect(() => {
     // Only run if we have a pre-search phase to resume
     if (currentResumptionPhase !== RoundPhases.PRE_SEARCH || !streamResumptionPrefilled) {
+      rlog.presearch('skip', `phase=${currentResumptionPhase} prefilled=${streamResumptionPrefilled}`);
       return;
     }
 
@@ -1113,12 +1074,16 @@ export function useIncompleteRoundResumption(
       // Mark as attempted
       preSearchPhaseResumptionAttemptedRef.current = resumptionKey;
 
+      const status = preSearchComplete ? 'complete' : preSearchFailed ? 'failed' : prefilledComplete ? 'pf-complete' : 'pf-failed';
+      rlog.phase('PRESRCH→PARTS', `r${resumptionRoundNumber} ${status}`);
+
       // ✅ PHASE TRANSITION FIX: Clear pre-search state and transition to participants phase
       // This prevents stale preSearchResumption.status: 'streaming' when pre-search is complete
       actions.transitionToParticipantsPhase();
 
       // Set up for participant triggering
       if ((preSearchComplete || prefilledComplete) && resumptionRoundNumber !== null) {
+        rlog.trigger('PRESRCH-DONE', `r${resumptionRoundNumber} trigger p0`);
         actions.setStreamingRoundNumber(resumptionRoundNumber);
         actions.setNextParticipantToTrigger(0);
         actions.setWaitingToStartStreaming(true);
@@ -1151,6 +1116,7 @@ export function useIncompleteRoundResumption(
   useEffect(() => {
     // Only run if we have a moderator phase to resume
     if (currentResumptionPhase !== RoundPhases.MODERATOR || !streamResumptionPrefilled) {
+      rlog.moderator('skip', `phase=${currentResumptionPhase} prefilled=${streamResumptionPrefilled}`);
       return;
     }
 
@@ -1181,7 +1147,6 @@ export function useIncompleteRoundResumption(
     // 1. Last participant just started (message created but no streaming parts yet)
     // 2. Message sync race (parts not updated yet)
     if (isStreaming) {
-      debugLog('MODERATOR_BLOCKED', { reason: 'isStreaming=true' });
       return;
     }
 
@@ -1196,6 +1161,8 @@ export function useIncompleteRoundResumption(
       participants,
       resumptionRoundNumber,
     );
+
+    rlog.gate('MOD-GATE', `r${resumptionRoundNumber} ${completionStatus.completedCount}/${completionStatus.expectedCount} strm=${completionStatus.streamingCount}`);
 
     if (!completionStatus.allComplete) {
       // Participants still streaming - don't trigger moderator yet

@@ -56,6 +56,84 @@ export { createOpenApiApp } from './app';
 export { APP_CONFIG, FEATURE_FLAGS, STREAMING_CONFIG } from './config';
 
 // ============================================================================
+// ENUMS
+// ============================================================================
+
+export {
+  AUTH_MODES,
+  AUTH_STEPS,
+  // Auth Mode
+  type AuthMode,
+  AuthModes,
+  AuthModeSchema,
+  // Auth Step
+  type AuthStep,
+  AuthSteps,
+  AuthStepSchema,
+  BORDER_GRADIENT_DIRECTIONS,
+  // Border Gradient Direction (was HoverDirection)
+  type BorderGradientDirection,
+  BorderGradientDirections,
+  BorderGradientDirectionSchema,
+  CONFIRMATION_DIALOG_VARIANTS,
+  // Confirmation Dialog Variant (was ConfirmationVariant)
+  type ConfirmationDialogVariant,
+  ConfirmationDialogVariants,
+  ConfirmationDialogVariantSchema,
+  CURSOR_DIRECTIONS,
+  // Cursor Direction
+  type CursorDirection,
+  CursorDirections,
+  CursorDirectionSchema,
+  DEFAULT_AUTH_MODE,
+  DEFAULT_AUTH_STEP,
+  DEFAULT_CONFIRMATION_DIALOG_VARIANT,
+  DEFAULT_CURSOR_DIRECTION,
+  DEFAULT_DEV_LOG_LEVEL,
+  DEFAULT_ERROR_BOUNDARY_CONTEXT,
+  DEFAULT_ICON_TYPE,
+  DEFAULT_IMAGE_STATE,
+  DEFAULT_LOG_LEVEL,
+  DEFAULT_MARKDOWN_PRESET,
+  DEFAULT_SORT_DIRECTION,
+  DEV_LOG_LEVELS,
+  // Dev Log Level
+  type DevLogLevel,
+  DevLogLevels,
+  DevLogLevelSchema,
+  ERROR_BOUNDARY_CONTEXTS,
+  // Error Boundary Context (UI component, distinct from ErrorContext in schemas.ts)
+  type ErrorBoundaryContext,
+  ErrorBoundaryContexts,
+  ErrorBoundaryContextSchema,
+  ICON_TYPES,
+  // Icon Type (was AttachmentIconType)
+  type IconType,
+  IconTypes,
+  IconTypeSchema,
+  IMAGE_STATES,
+  // Image State
+  type ImageState,
+  ImageStates,
+  ImageStateSchema,
+  LOG_LEVELS,
+  // Log Level
+  type LogLevel,
+  LogLevels,
+  LogLevelSchema,
+  MARKDOWN_PRESETS,
+  // Markdown Preset
+  type MarkdownPreset,
+  MarkdownPresets,
+  MarkdownPresetSchema,
+  SORT_DIRECTIONS,
+  // Sort Direction
+  type SortDirection,
+  SortDirections,
+  SortDirectionSchema,
+} from './enums';
+
+// ============================================================================
 // ERRORS (API layer only - import @/api/common/* utilities directly)
 // ============================================================================
 
@@ -105,7 +183,6 @@ export {
   buildCursorWhereWithFilters,
   calculatePageMetadata,
   createTimestampCursor,
-  type CursorDirection,
   type CursorFieldConfig,
   type CursorPaginationMetadata,
   type CursorPaginationQuery,
@@ -192,6 +269,7 @@ export {
   createCursorPaginatedResponseSchema,
   createPaginatedResponseSchema,
   type CursorPaginatedResponse,
+  // Error context schema (API error handling, distinct from ErrorBoundaryContext in enums)
   type ErrorContext,
   ErrorContextSchema,
   // Health check schemas (ZOD-FIRST)

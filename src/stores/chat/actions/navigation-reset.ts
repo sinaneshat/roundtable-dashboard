@@ -26,9 +26,8 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { useChatStore } from '@/components/providers';
+import { useChatStore, useModelPreferencesStore } from '@/components/providers';
 import { queryKeys } from '@/lib/data/query-keys';
-import { useModelPreferencesStore } from '@/stores/preferences';
 
 /**
  * Hook that provides a callback to reset store when navigating to new chat

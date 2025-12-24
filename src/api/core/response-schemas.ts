@@ -6,8 +6,6 @@
  * This file provides reusable OpenAPI response definitions for common HTTP status codes.
  * Used across all route files to maintain consistency and reduce duplication.
  *
- * @see /REFACTORING_PLAN.md - Phase 1, Task 1.1
- *
  * @example Basic usage in route files
  * ```typescript
  * import { StandardApiResponses } from '@/api/core';

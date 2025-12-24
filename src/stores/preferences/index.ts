@@ -48,11 +48,6 @@ export {
 } from './store';
 
 // ============================================================================
-// PROVIDER + HOOKS (Official Pattern)
+// PROVIDER + HOOKS
 // ============================================================================
-
-export {
-  PreferencesStoreProvider,
-  useModelPreferencesHydrated,
-  useModelPreferencesStore,
-} from '@/components/providers';
+// Import from @/components/providers directly - single source of truth

@@ -22,7 +22,6 @@ import { validationError } from './responses';
 import type { ErrorContext, ValidationError } from './schemas';
 import { CoreSchemas, ErrorContextSchema } from './schemas';
 
-// Re-export ValidationError for consumers
 export type { ValidationError } from './schemas';
 
 // ============================================================================

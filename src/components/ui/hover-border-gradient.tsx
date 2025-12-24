@@ -4,9 +4,9 @@ import React, { useEffect, useState } from 'react';
 
 import { motion } from 'motion/react';
 
+import type { BorderGradientDirection } from '@/api/core/enums';
+import { BORDER_GRADIENT_DIRECTIONS, BorderGradientDirections } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
-
-type Direction = 'TOP' | 'LEFT' | 'BOTTOM' | 'RIGHT';
 
 export interface HoverBorderGradientProps extends React.HTMLAttributes<HTMLElement> {
   children: React.ReactNode;
@@ -28,23 +28,23 @@ export function HoverBorderGradient({
   ...props
 }: HoverBorderGradientProps) {
   const [hovered, setHovered] = useState<boolean>(false);
-  const [direction, setDirection] = useState<Direction>('TOP');
+  const [direction, setDirection] = useState<BorderGradientDirection>(BorderGradientDirections.TOP);
 
-  const rotateDirection = (currentDirection: Direction): Direction => {
-    const directions: Direction[] = ['TOP', 'LEFT', 'BOTTOM', 'RIGHT'];
+  const rotateDirection = (currentDirection: BorderGradientDirection): BorderGradientDirection => {
+    const directions = [...BORDER_GRADIENT_DIRECTIONS];
     const currentIndex = directions.indexOf(currentDirection);
     const nextIndex = clockwise
       ? (currentIndex - 1 + directions.length) % directions.length
       : (currentIndex + 1) % directions.length;
-    return directions[nextIndex] as Direction;
+    return directions[nextIndex]!;
   };
 
-  const movingMap: Record<Direction, string> = {
-    TOP: 'radial-gradient(20.7% 50% at 50% 0%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
-    LEFT: 'radial-gradient(16.6% 43.1% at 0% 50%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
-    BOTTOM:
+  const movingMap: Record<BorderGradientDirection, string> = {
+    [BorderGradientDirections.TOP]: 'radial-gradient(20.7% 50% at 50% 0%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
+    [BorderGradientDirections.LEFT]: 'radial-gradient(16.6% 43.1% at 0% 50%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
+    [BorderGradientDirections.BOTTOM]:
       'radial-gradient(20.7% 50% at 50% 100%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
-    RIGHT:
+    [BorderGradientDirections.RIGHT]:
       'radial-gradient(16.2% 41.199999999999996% at 100% 50%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
   };
 
@@ -54,12 +54,12 @@ export function HoverBorderGradient({
   useEffect(() => {
     if (!hovered) {
       const interval = setInterval(() => {
-        setDirection(prevState => rotateDirection(prevState));
+        setDirection((prevState: BorderGradientDirection) => rotateDirection(prevState));
       }, duration * 1000);
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [hovered, duration]);
+  }, [hovered, duration, clockwise]);
 
   return (
     <Tag
@@ -94,7 +94,7 @@ export function HoverBorderGradient({
         initial={{ background: movingMap[direction] }}
         animate={{
           background: hovered
-            ? [movingMap[direction], highlight]
+            ? [movingMap[direction] as string, highlight]
             : movingMap[direction],
         }}
         transition={{ ease: 'linear', duration: duration ?? 1 }}

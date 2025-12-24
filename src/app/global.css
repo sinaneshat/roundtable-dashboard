@@ -121,7 +121,13 @@
     @apply border-border outline-ring/50;
   }
   html {
-    scroll-behavior: smooth;
+    /* ⚠️ SCROLL FIX: Use 'auto' instead of 'smooth' for virtualized content
+     * smooth scroll-behavior conflicts with TanStack Virtual's scroll position
+     * calculations and can cause unexpected jumps during dynamic content updates.
+     * Smooth scrolling is applied manually via scrollTo({ behavior: 'smooth' })
+     * only when explicitly needed (e.g., ChatScrollButton).
+     */
+    scroll-behavior: auto;
   }
   body {
     @apply bg-background text-foreground;
@@ -168,6 +174,25 @@ html,
 [data-virtualized-timeline] > div,
 [data-virtualized-timeline] [data-message-content] {
   overflow-anchor: none;
+}
+
+/* ✅ PERFORMANCE: CSS Containment for virtualized content
+ * From TanStack Virtual official examples (Context7 docs)
+ * contain: strict tells the browser this element's layout/paint is independent
+ * This significantly improves rendering performance for large lists
+ * Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/contain
+ */
+[data-virtualized-timeline] {
+  contain: strict;
+}
+
+/* Virtual items use content-visibility for additional performance
+ * content-visibility: auto skips rendering of off-screen content
+ * Combined with contain-intrinsic-size to prevent layout shift
+ */
+[data-virtualized-timeline] > div > div {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px; /* Match estimateSize default */
 }
 
 /* ============================================================================
