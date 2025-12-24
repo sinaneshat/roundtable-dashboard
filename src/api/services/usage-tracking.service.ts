@@ -416,20 +416,24 @@ async function getCreditStatsForUsage(userId: string) {
 /**
  * Get plan stats for usage response
  * ✅ Includes hasPaymentMethod to indicate if user has connected a card
+ * ✅ Uses userChatUsage.subscriptionTier as source of truth (honors grace period)
+ * ✅ Includes pendingTierChange info for UI to show grace period message
  *
  * hasPaymentMethod is TRUE if:
  * 1. User has an active subscription (paid users always have a card)
  * 2. User has a card_connection transaction (free users who connected card)
- *
- * ✅ FIX: Check for active subscriptions DIRECTLY, not just creditBalance.planType
- * The planType field in userCreditBalance may be out of sync with actual subscription status
  */
 async function getPlanStatsForUsage(userId: string) {
   const db = await getDbAsync();
   const creditBalance = await getUserCreditBalance(userId);
 
-  // ✅ FIX: Check for active subscription directly from Stripe tables
-  // This is the source of truth, not the cached planType in userCreditBalance
+  // ✅ SOURCE OF TRUTH: Use userChatUsage.subscriptionTier (honors grace period)
+  // This correctly maintains 'pro' tier during downgrade grace period
+  const usageRecord = await ensureUserUsageRecord(userId);
+  const currentTier = usageRecord.subscriptionTier;
+  const isPaidTier = currentTier !== 'free';
+
+  // Check for active subscription in Stripe (for hasActiveSubscription flag)
   const customerResults = await db
     .select()
     .from(tables.stripeCustomer)
@@ -454,15 +458,24 @@ async function getPlanStatsForUsage(userId: string) {
     hasActiveSubscription = subscriptionResults.length > 0;
   }
 
-  // User with active subscription = paid, has payment method
-  if (hasActiveSubscription) {
+  // Build pending tier change info for UI grace period display
+  const pendingChange = usageRecord.pendingTierChange
+    ? {
+        pendingTier: usageRecord.pendingTierChange,
+        effectiveDate: usageRecord.currentPeriodEnd.toISOString(),
+      }
+    : null;
+
+  // User on paid tier (including during grace period)
+  if (isPaidTier) {
     return {
       type: 'paid' as const,
-      name: 'Pro',
+      name: currentTier === 'pro' ? 'Pro' : currentTier.charAt(0).toUpperCase() + currentTier.slice(1),
       monthlyCredits: creditBalance.monthlyCredits,
       hasPaymentMethod: true,
-      hasActiveSubscription: true,
+      hasActiveSubscription,
       nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+      pendingChange,
     };
   }
 
@@ -487,6 +500,7 @@ async function getPlanStatsForUsage(userId: string) {
     hasPaymentMethod,
     hasActiveSubscription: false,
     nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+    pendingChange: null,
   };
 }
 

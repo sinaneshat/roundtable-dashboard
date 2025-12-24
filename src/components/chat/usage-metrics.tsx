@@ -44,6 +44,7 @@ export function UsageMetrics() {
   const isLowCredits = creditsStatus === UsageStatuses.CRITICAL || creditsStatus === UsageStatuses.WARNING;
   const isPaidPlan = plan?.type === 'paid';
   const hasPaymentMethod = plan?.hasPaymentMethod ?? false;
+  const pendingChange = plan?.pendingChange;
 
   // Calculate credit usage percentage
   const totalCredits = isPaidPlan ? (plan?.monthlyCredits || 1_000_000) : 10_000;
@@ -73,6 +74,23 @@ export function UsageMetrics() {
           </div>
         )}
       </div>
+
+      {/* Grace Period Notice - shown when there's a pending tier change */}
+      {pendingChange && (
+        <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <p className="text-[10px] leading-tight text-blue-600 dark:text-blue-400">
+            {t('usage.gracePeriod', {
+              currentPlan: plan?.name || 'Pro',
+              newPlan: pendingChange.pendingTier.charAt(0).toUpperCase() + pendingChange.pendingTier.slice(1),
+              date: new Date(pendingChange.effectiveDate).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              }),
+            })}
+          </p>
+        </div>
+      )}
 
       {/* Credits Balance */}
       <div className="space-y-1">

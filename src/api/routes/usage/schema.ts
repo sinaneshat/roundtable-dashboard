@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import { PLAN_TYPES, UsageStatusSchema } from '@/api/core/enums';
+import { PLAN_TYPES, SUBSCRIPTION_TIERS, UsageStatusSchema } from '@/api/core/enums';
 import { createApiResponseSchema } from '@/api/core/schemas';
 
 // ============================================================================
@@ -52,6 +52,19 @@ export const UsageStatsPayloadSchema = z.object({
     }),
     nextRefillAt: z.string().datetime().nullable().openapi({
       description: 'Next monthly refill date (null for free plan)',
+      example: null,
+    }),
+    pendingChange: z.object({
+      pendingTier: z.enum(SUBSCRIPTION_TIERS).openapi({
+        description: 'Tier that will take effect at period end',
+        example: 'free',
+      }),
+      effectiveDate: z.string().datetime().openapi({
+        description: 'Date when the tier change takes effect',
+        example: '2025-01-15T00:00:00.000Z',
+      }),
+    }).nullable().openapi({
+      description: 'Pending tier change (grace period info) - null if no pending change',
       example: null,
     }),
   }).openapi({

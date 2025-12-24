@@ -4,6 +4,10 @@
  * Cloudflare Queue consumer for async AI title generation.
  * Uses existing title-generator.service.ts - no duplicate logic.
  *
+ * IMPORTANT: Uses dynamic imports to prevent AI SDK from being bundled
+ * at worker startup. The AI SDK is only loaded when processing messages.
+ * This prevents "Script startup exceeded memory limits" deployment errors.
+ *
  * Following established patterns from:
  * - src/api/services/title-generator.service.ts (service layer usage)
  * - docs/backend-patterns.md (Drizzle ORM patterns)
@@ -14,11 +18,10 @@
 
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 
-import {
-  generateTitleFromMessage,
-  updateThreadTitleAndSlug,
-} from '@/api/services/title-generator.service';
 import type { TitleGenerationQueueMessage } from '@/api/types/queues';
+
+// IMPORTANT: No static imports of title-generator.service here!
+// Use dynamic imports in processMessage() to lazy-load the AI SDK
 
 // ============================================================================
 // CONFIGURATION
@@ -37,12 +40,20 @@ const BASE_RETRY_DELAY_SECONDS = 60;
 /**
  * Process a single title generation message
  * Uses existing service functions - no duplicate logic
+ *
+ * IMPORTANT: Uses dynamic import() to lazy-load the AI SDK.
+ * This prevents the 2-3MB AI SDK from being bundled at worker startup.
  */
 async function processMessage(
   message: TitleGenerationQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
   const { threadId, firstMessage } = message;
+
+  // Dynamic import to lazy-load AI SDK (prevents startup memory overflow)
+  const { generateTitleFromMessage, updateThreadTitleAndSlug } = await import(
+    '@/api/services/title-generator.service',
+  );
 
   // Use existing service functions
   const title = await generateTitleFromMessage(firstMessage, env);

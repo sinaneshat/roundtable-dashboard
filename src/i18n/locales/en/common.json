@@ -1458,6 +1458,7 @@
     "changingTo": "Switching to",
     "onPeriodEnd": "at period end",
     "keepAccessUntil": "Keep current access until",
+    "gracePeriod": "You're on {currentPlan} until {date}. After that, you'll switch to {newPlan}.",
     "remaining": "left",
     "of": "of",
     "used": "used",
