@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Briefcase, GraduationCap, Hammer, Lightbulb, MessageSquare, Search, Sparkles, Target, TrendingUp, Users, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Search, X } from 'lucide-react';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -8,6 +8,8 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
+import { PREDEFINED_ROLE_TEMPLATES } from '@/api/core/enums';
+import type { ModelSelectionTab } from '@/api/core/enums/ui';
 import { DEFAULT_MODEL_SELECTION_TAB, ModelSelectionTabs } from '@/api/core/enums/ui';
 import { createRoleSystemPrompt } from '@/api/services/prompts.service';
 import { Button } from '@/components/ui/button';
@@ -65,56 +67,6 @@ type CustomRole = NonNullable<
  * />
  * ```
  */
-
-// Predefined roles with icons - colors assigned dynamically via getRoleColors()
-// NOTE: These are not enum constants - they're default role templates that users can customize
-const PREDEFINED_ROLES = [
-  {
-    name: 'The Ideator',
-    icon: Lightbulb,
-    description: 'Generate creative ideas and innovative solutions',
-  },
-  {
-    name: 'Devil\'s Advocate',
-    icon: MessageSquare,
-    description: 'Challenge assumptions and identify potential issues',
-  },
-  {
-    name: 'Builder',
-    icon: Hammer,
-    description: 'Focus on practical implementation and execution',
-  },
-  {
-    name: 'Practical Evaluator',
-    icon: Target,
-    description: 'Assess feasibility and real-world applicability',
-  },
-  {
-    name: 'Visionary Thinker',
-    icon: Sparkles,
-    description: 'Think big picture and long-term strategy',
-  },
-  {
-    name: 'Domain Expert',
-    icon: GraduationCap,
-    description: 'Provide deep domain-specific knowledge',
-  },
-  {
-    name: 'User Advocate',
-    icon: Users,
-    description: 'Champion user needs and experience',
-  },
-  {
-    name: 'Implementation Strategist',
-    icon: Briefcase,
-    description: 'Plan execution strategy and implementation',
-  },
-  {
-    name: 'The Data Analyst',
-    icon: TrendingUp,
-    description: 'Analyze data and provide insights',
-  },
-] as const;
 
 export type ModelSelectionModalProps = {
   /** Controls dialog open/close state */
@@ -358,6 +310,14 @@ export function ModelSelectionModal({
     }
   }, [selectedPresetId]);
 
+  // Handle customize preset - apply preset and switch to Build Custom tab
+  const handleCustomizePreset = useCallback((result: PresetSelectionResult) => {
+    if (onPresetSelect) {
+      onPresetSelect(result.preset);
+    }
+    setActiveTab(ModelSelectionTabs.CUSTOM);
+  }, [onPresetSelect]);
+
   // Get all models for preset cards
   const allModels = useMemo(() => {
     return orderedModels.map(om => om.model);
@@ -390,7 +350,7 @@ export function ModelSelectionModal({
   }, [selectedPreset, onPresetSelect]);
 
   // Handle tab changes - apply preset when switching to custom tab
-  const handleTabChange = useCallback((tab: typeof DEFAULT_MODEL_SELECTION_TAB) => {
+  const handleTabChange = useCallback((tab: ModelSelectionTab) => {
     // If switching from presets to custom with a preset selected, mark for application
     if (activeTab === ModelSelectionTabs.PRESETS && tab === ModelSelectionTabs.CUSTOM && selectedPresetId) {
       shouldApplyPresetRef.current = true;
@@ -445,7 +405,7 @@ export function ModelSelectionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn('!max-w-3xl !w-[calc(100vw-2.5rem)] gap-0', className)}
+        className={cn('!max-w-4xl !w-[calc(100vw-2.5rem)] gap-0', className)}
       >
         <DialogHeader>
           {selectedModelForRole
@@ -490,7 +450,7 @@ export function ModelSelectionModal({
                     <ScrollArea className="h-[420px]">
                       <div className="flex flex-col">
                         {/* Predefined roles */}
-                        {PREDEFINED_ROLES.map((role) => {
+                        {PREDEFINED_ROLE_TEMPLATES.map((role) => {
                           const Icon = role.icon;
                           // Check both participant role and pending role
                           const currentRole = selectedModelData?.participant?.role
@@ -665,7 +625,7 @@ export function ModelSelectionModal({
                   >
                     <Tabs
                       value={activeTab}
-                      onValueChange={v => handleTabChange(v as typeof DEFAULT_MODEL_SELECTION_TAB)}
+                      onValueChange={v => handleTabChange(v as ModelSelectionTab)}
                       className="w-full"
                     >
                       <TabsList className="grid w-full grid-cols-2 mb-4">
@@ -678,9 +638,9 @@ export function ModelSelectionModal({
                       </TabsList>
 
                       {/* Presets Tab Content */}
-                      <TabsContent value={ModelSelectionTabs.PRESETS} className="mt-0 h-[480px] flex flex-col">
+                      <TabsContent value={ModelSelectionTabs.PRESETS} className="mt-0 h-[520px] flex flex-col">
                         <ScrollArea className="flex-1 -mr-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-fr pr-3 pb-4">
+                          <div className="grid grid-cols-2 gap-3 pr-3 pb-4">
                             {MODEL_PRESETS.map(preset => (
                               <ModelPresetCard
                                 key={preset.id}
@@ -690,6 +650,7 @@ export function ModelSelectionModal({
                                 onSelect={handlePresetCardClick}
                                 isSelected={selectedPresetId === preset.id}
                                 incompatibleModelIds={incompatibleModelIds}
+                                onCustomize={handleCustomizePreset}
                               />
                             ))}
                           </div>
@@ -698,7 +659,7 @@ export function ModelSelectionModal({
                       </TabsContent>
 
                       {/* Build Custom Tab Content */}
-                      <TabsContent value={ModelSelectionTabs.CUSTOM} className="mt-0 h-[480px] flex flex-col">
+                      <TabsContent value={ModelSelectionTabs.CUSTOM} className="mt-0 h-[520px] flex flex-col">
                         {/* Search Input */}
                         <div className="shrink-0 mb-4">
                           <Input

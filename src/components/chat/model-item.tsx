@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { getShortRoleName } from '@/api/core/enums';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -23,19 +24,11 @@ import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
 
-/**
- * Pending role for models not yet selected
- * Allows role assignment independently of selection state
- */
 type PendingRole = {
   role: string;
   customRoleId?: string;
 };
 
-/**
- * ModelItem component props
- * Uses centralized OrderedModel type from schemas
- */
 export type ModelItemProps = {
   orderedModel: OrderedModel;
   onToggle: () => void;
@@ -67,11 +60,8 @@ export function ModelItem({
   const isAccessible = model.is_accessible_to_user ?? isSelected;
   const isDisabledDueToTier = !isSelected && !isAccessible;
   const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels;
-  // Disable selection if model can't handle uploaded files (e.g., no vision for images/PDFs)
   const isDisabledDueToFileIncompatibility = !isSelected && isIncompatibleWithFiles;
-  // Show warning badge for ANY incompatible model (selected or not)
   const showFileIncompatibilityWarning = isIncompatibleWithFiles;
-  // Allow deselecting all - validation shown elsewhere
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
   const itemContent = (
@@ -99,7 +89,6 @@ export function ModelItem({
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
             <span className="text-xs sm:text-sm font-semibold truncate min-w-0">{model.name}</span>
 
-            {/* Tier/Limit/Incompatibility badges - show immediately after name */}
             {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
               <Badge variant="secondary" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                 {model.required_tier_name || model.required_tier}
@@ -124,16 +113,13 @@ export function ModelItem({
               </Tooltip>
             )}
 
-            {/* Role badges or Add Role button - always visible */}
             {!isDisabledDueToTier && (() => {
-              // Use participant role if selected, otherwise use pending role
               const displayRole = participant?.role ?? pendingRole?.role;
 
               return (
                 <div
                   className="shrink-0 flex items-center gap-0.5 sm:gap-1"
                   onClick={e => e.stopPropagation()}
-                  // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
                   onPointerDownCapture={e => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -146,10 +132,10 @@ export function ModelItem({
                     ? (
                         <Badge
                           className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1"
-                          style={getRoleBadgeStyle(displayRole)}
+                          style={getRoleBadgeStyle(getShortRoleName(displayRole))}
                           onClick={() => onOpenRolePanel?.()}
                         >
-                          {displayRole}
+                          {getShortRoleName(displayRole)}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -186,7 +172,6 @@ export function ModelItem({
         </div>
       </div>
 
-      {/* Show lock icon for inaccessible models, toggle switch for accessible */}
       {isDisabledDueToTier
         ? (
             <Link
@@ -205,7 +190,6 @@ export function ModelItem({
               disabled={isDisabled}
               className="shrink-0 scale-90 sm:scale-100"
               onClick={e => e.stopPropagation()}
-              // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
               onPointerDownCapture={e => e.stopPropagation()}
             />
           )}
@@ -226,10 +210,8 @@ export function ModelItem({
           'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
           'transition-[background-color,backdrop-filter,box-shadow] duration-150',
           isDisabled && 'opacity-50 cursor-not-allowed',
-          // Hover styles (when not dragging)
           !isDisabled && !isDragging && 'hover:bg-white/[0.08] hover:backdrop-blur-md',
-          // Drag styles - applied via state to persist during layout changes
-          isDragging && 'bg-white/[0.1] backdrop-blur-xl shadow-[0px_8px_24px_rgba(0,0,0,0.4)] scale-[1.02] cursor-grabbing',
+          isDragging && 'bg-white/[0.1] backdrop-blur-xl shadow-[0px_8px_24px_rgba(0,0,0,0.4)] cursor-grabbing',
         )}
         onDragStart={() => setIsDragging(true)}
         onDragEnd={() => setIsDragging(false)}

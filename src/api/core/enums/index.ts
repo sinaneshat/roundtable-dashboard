@@ -397,6 +397,23 @@ export {
   PlaceholderPrefixSchema,
 } from './prompts';
 
+// Role enums and mappings
+export {
+  DEFAULT_SHORT_ROLE_NAME,
+  getPredefinedRoleTemplate,
+  getRoleCategoryMetadata,
+  getShortRoleName,
+  isPredefinedRole,
+  PREDEFINED_ROLE_TEMPLATES,
+  type PredefinedRoleTemplate,
+  ROLE_CATEGORY_METADATA,
+  ROLE_NAME_MAPPINGS,
+  SHORT_ROLE_NAMES,
+  type ShortRoleName,
+  ShortRoleNames,
+  ShortRoleNameSchema,
+} from './roles';
+
 // Streaming and flow state enums
 export {
   CHAIN_OF_THOUGHT_STEP_STATUSES,

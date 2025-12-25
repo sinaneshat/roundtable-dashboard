@@ -1,17 +1,3 @@
-/**
- * Model Presets Configuration
- *
- * Conversation-focused presets that auto-assign:
- * - Specific models with roles
- * - Conversation mode (analyzing, brainstorming, debating, solving)
- * - Web search setting
- *
- * Design principles:
- * - Presets describe conversation TYPE, not model capabilities
- * - Roles are behavioral, not brand-based
- * - Each preset explicitly sets mode and search
- */
-
 import type { LucideIcon } from 'lucide-react';
 import {
   Brain,
@@ -34,7 +20,6 @@ import { toastManager } from '@/lib/toast';
 // Preset Types (Zod-first pattern)
 // ============================================================================
 
-/** Explicit model-role pairing for presets */
 export const PresetModelRoleSchema = z.object({
   modelId: z.string().min(1),
   role: z.string().min(1),
@@ -42,25 +27,25 @@ export const PresetModelRoleSchema = z.object({
 
 export type PresetModelRole = z.infer<typeof PresetModelRoleSchema>;
 
-export type ModelPreset = {
-  id: string;
-  name: string;
-  description: string;
-  icon: LucideIcon;
-  requiredTier: SubscriptionTier;
-  order: number;
-  /** Conversation mode - required */
-  mode: ChatMode;
-  /** Web search enabled: true, false, or 'conditional' (default ON, user can toggle) */
-  searchEnabled: boolean | 'conditional';
-  /** Explicit model-role pairs */
-  modelRoles: PresetModelRole[];
-};
+export const ModelPresetSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  icon: z.custom<LucideIcon>(),
+  requiredTier: z.string() as z.ZodType<SubscriptionTier>,
+  order: z.number().int().nonnegative(),
+  mode: z.string() as z.ZodType<ChatMode>,
+  searchEnabled: z.union([z.boolean(), z.literal('conditional')]),
+  modelRoles: z.array(PresetModelRoleSchema),
+});
 
-/** Selection result includes preset with model-role mappings */
-export type PresetSelectionResult = {
-  preset: ModelPreset;
-};
+export type ModelPreset = z.infer<typeof ModelPresetSchema>;
+
+export const PresetSelectionResultSchema = z.object({
+  preset: ModelPresetSchema,
+});
+
+export type PresetSelectionResult = z.infer<typeof PresetSelectionResultSchema>;
 
 // ============================================================================
 // Preset Configurations
@@ -80,9 +65,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     mode: 'analyzing',
     searchEnabled: false,
     modelRoles: [
-      { modelId: 'openai/gpt-5-nano', role: 'Framer' },
+      { modelId: 'google/gemini-2.5-flash', role: 'Structured Reasoner' },
+      { modelId: 'deepseek/deepseek-r1-0528', role: 'Deep Reasoner' },
       { modelId: 'google/gemini-2.0-flash-001', role: 'Alternative Lens' },
-      { modelId: 'openai/gpt-4o-mini', role: 'Nuancer' },
     ],
   },
 
@@ -116,7 +101,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     modelRoles: [
       { modelId: 'anthropic/claude-sonnet-4', role: 'Ideator' },
       { modelId: 'google/gemini-3-flash-preview', role: 'Lateral Thinker' },
-      { modelId: 'openai/gpt-5-mini', role: 'Grounding Voice' },
+      { modelId: 'openai/gpt-5-mini', role: 'Synthesizer' },
     ],
   },
 
@@ -151,7 +136,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     modelRoles: [
       { modelId: 'openai/gpt-5.1', role: 'Proposer' },
       { modelId: 'anthropic/claude-sonnet-4.5', role: 'Skeptic' },
-      { modelId: 'google/gemini-2.5-pro', role: 'Mediator' },
+      { modelId: 'google/gemini-2.5-pro', role: 'Trade-Off Analyst' },
     ],
   },
   {
@@ -166,7 +151,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
     modelRoles: [
       { modelId: 'openai/o1', role: 'Deep Reasoner' },
       { modelId: 'anthropic/claude-opus-4', role: 'Systems Thinker' },
-      { modelId: 'deepseek/deepseek-r1-0528', role: 'Secondary Theorist' },
+      { modelId: 'deepseek/deepseek-r1-0528', role: 'Alternative Lens' },
     ],
   },
   {
@@ -174,14 +159,14 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Research & Evidence Review',
     description: 'Fact-finding with source comparison and synthesis',
     icon: FileSearch,
-    requiredTier: 'power',
+    requiredTier: 'pro',
     order: 7,
     mode: 'analyzing',
     searchEnabled: true,
     modelRoles: [
       { modelId: 'openai/gpt-4.1', role: 'Evidence Gatherer' },
       { modelId: 'google/gemini-2.5-pro', role: 'Cross-Checker' },
-      { modelId: 'anthropic/claude-opus-4', role: 'Synthesizer' },
+      { modelId: 'anthropic/claude-sonnet-4.5', role: 'Synthesizer' },
     ],
   },
   {
@@ -205,18 +190,21 @@ export const MODEL_PRESETS: ModelPreset[] = [
 // 5-Part Enum Pattern for Model Preset IDs
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Derived from data (source of truth)
+// 1️⃣ ARRAY CONSTANT - Derived from data
 export const MODEL_PRESET_IDS = MODEL_PRESETS.map(p => p.id) as readonly string[];
 
-// 2️⃣ ZOD SCHEMA - Runtime validation
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_MODEL_PRESET_ID = 'quick-perspectives' as const;
+
+// 3️⃣ ZOD SCHEMA - Runtime validation
 export const ModelPresetIdSchema = z.enum(
   MODEL_PRESET_IDS as unknown as readonly [string, ...string[]],
 );
 
-// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type ModelPresetId = z.infer<typeof ModelPresetIdSchema>;
 
-// 4️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const ModelPresetIds = {
   QUICK_PERSPECTIVES: 'quick-perspectives' as const,
   BALANCED_DISCUSSION: 'balanced-discussion' as const,
@@ -236,7 +224,13 @@ export function getPresetById(id: ModelPresetId): ModelPreset | undefined {
   return MODEL_PRESETS.find(p => p.id === id);
 }
 
-export function getPresetsForTier(userTier: SubscriptionTier): ModelPreset[] {
+export const PresetWithLockStatusSchema = ModelPresetSchema.extend({
+  isLocked: z.boolean(),
+});
+
+export type PresetWithLockStatus = z.infer<typeof PresetWithLockStatusSchema>;
+
+export function getPresetsForTier(userTier: SubscriptionTier): PresetWithLockStatus[] {
   const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
 
   return MODEL_PRESETS.map((preset) => {
@@ -257,9 +251,6 @@ export function canAccessPreset(
   return userTierIndex >= requiredIndex;
 }
 
-/**
- * Get model IDs for a preset
- */
 export function getModelIdsForPreset(preset: ModelPreset): string[] {
   return preset.modelRoles.map(mr => mr.modelId);
 }
@@ -286,10 +277,6 @@ export const ToastNamespaces = {
 // 5️⃣ DEFAULT VALUE
 export const DEFAULT_TOAST_NAMESPACE: ToastNamespace = 'chat.models';
 
-/**
- * Result of preset participant filtering
- * Uses ParticipantConfigSchema for type-safe participant structure
- */
 export const PresetFilterResultSchema = z.object({
   participants: z.array(ParticipantConfigSchema),
   success: z.boolean(),
@@ -297,45 +284,7 @@ export const PresetFilterResultSchema = z.object({
 
 export type PresetFilterResult = z.infer<typeof PresetFilterResultSchema>;
 
-/** Translation function type for filterPresetParticipants */
 type TranslationFn = (key: string, values?: { count: number }) => string;
-
-/**
- * Filter preset participants based on incompatible model IDs
- *
- * Handles three cases:
- * 1. All models compatible → Returns participants with success: true
- * 2. Some models incompatible → Shows warning toast, returns compatible participants with success: true
- * 3. All models incompatible → Shows error toast, returns empty array with success: false
- *
- * Uses ToastNamespaces constant object for type-safe namespace selection.
- *
- * @param preset - Model preset to filter
- * @param incompatibleModelIds - Set of incompatible model IDs
- * @param t - Translation function from useTranslations hook
- * @param toastNamespace - Translation namespace, defaults to DEFAULT_TOAST_NAMESPACE
- * @returns PresetFilterResult with filtered participants and success status
- *
- * @example
- * ```typescript
- * import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
- * import { useTranslations } from 'next-intl';
- *
- * const t = useTranslations();
- * const result = filterPresetParticipants(
- *   preset,
- *   incompatibleModelIds,
- *   t,
- *   ToastNamespaces.CHAT_MODELS
- * );
- *
- * if (!result.success) {
- *   return; // All models incompatible, error toast shown
- * }
- *
- * setSelectedParticipants(result.participants);
- * ```
- */
 export function filterPresetParticipants(
   preset: ModelPreset,
   incompatibleModelIds: Set<string>,

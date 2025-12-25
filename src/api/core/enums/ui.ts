@@ -64,6 +64,8 @@ export const ComponentSizes = {
 
 export const TEXT_ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
 
+export const DEFAULT_TEXT_ALIGNMENT: TextAlignment = 'left';
+
 export const TextAlignmentSchema = z.enum(TEXT_ALIGNMENTS).openapi({
   description: 'Text alignment direction',
   example: 'left',
@@ -83,6 +85,8 @@ export const TextAlignments = {
 // ============================================================================
 
 export const TOAST_VARIANTS = ['default', 'destructive', 'success', 'warning', 'info', 'loading'] as const;
+
+export const DEFAULT_TOAST_VARIANT: ToastVariant = 'default';
 
 export const ToastVariantSchema = z.enum(TOAST_VARIANTS).openapi({
   description: 'Toast notification variant',
@@ -106,6 +110,8 @@ export const ToastVariants = {
 
 export const REASONING_STATES = ['idle', 'thinking', 'complete'] as const;
 
+export const DEFAULT_REASONING_STATE: ReasoningState = 'idle';
+
 export const ReasoningStateSchema = z.enum(REASONING_STATES).openapi({
   description: 'Reasoning animation state',
   example: 'thinking',
@@ -120,10 +126,12 @@ export const ReasoningStates = {
 } as const;
 
 // ============================================================================
-// STATUS VARIANT (for StatusPage component)
+// STATUS VARIANT
 // ============================================================================
 
 export const STATUS_VARIANTS = ['loading', 'success', 'error'] as const;
+
+export const DEFAULT_STATUS_VARIANT: StatusVariant = 'loading';
 
 export const StatusVariantSchema = z.enum(STATUS_VARIANTS).openapi({
   description: 'Status page variant',
@@ -139,10 +147,12 @@ export const StatusVariants = {
 } as const;
 
 // ============================================================================
-// NETWORK ERROR TYPE (for ErrorState component)
+// NETWORK ERROR TYPE
 // ============================================================================
 
 export const NETWORK_ERROR_TYPES = ['offline', 'timeout', 'connection'] as const;
+
+export const DEFAULT_NETWORK_ERROR_TYPE: NetworkErrorType = 'offline';
 
 export const NetworkErrorTypeSchema = z.enum(NETWORK_ERROR_TYPES).openapi({
   description: 'Network error type',
@@ -158,10 +168,12 @@ export const NetworkErrorTypes = {
 } as const;
 
 // ============================================================================
-// ERROR SEVERITY (for ErrorState component)
+// ERROR SEVERITY
 // ============================================================================
 
 export const ERROR_SEVERITIES = ['failed', 'warning', 'info'] as const;
+
+export const DEFAULT_ERROR_SEVERITY: ErrorSeverity = 'failed';
 
 export const ErrorSeveritySchema = z.enum(ERROR_SEVERITIES).openapi({
   description: 'Error severity level',
@@ -289,6 +301,8 @@ export const IconTypes = {
 // ============================================================================
 
 export const BORDER_GRADIENT_DIRECTIONS = ['TOP', 'LEFT', 'BOTTOM', 'RIGHT'] as const;
+
+export const DEFAULT_BORDER_GRADIENT_DIRECTION: BorderGradientDirection = 'TOP';
 
 export const BorderGradientDirectionSchema = z.enum(BORDER_GRADIENT_DIRECTIONS).openapi({
   description: 'Border gradient animation direction',
@@ -475,6 +489,8 @@ export const GlowingEffectVariants = {
 
 export const CITATION_SEGMENT_TYPES = ['text', 'citation'] as const;
 
+export const DEFAULT_CITATION_SEGMENT_TYPE: CitationSegmentType = 'text';
+
 export const CitationSegmentTypeSchema = z.enum(CITATION_SEGMENT_TYPES).openapi({
   description: 'Citation segment type',
   example: 'text',
@@ -644,8 +660,36 @@ export const MODEL_SELECTION_TAB_LABELS: Record<ModelSelectionTab, string> = {
 // VALIDATION HELPERS
 // ============================================================================
 
+export function isValidComponentVariant(value: unknown): value is ComponentVariant {
+  return typeof value === 'string' && COMPONENT_VARIANTS.includes(value as ComponentVariant);
+}
+
 export function isValidComponentSize(value: unknown): value is ComponentSize {
   return typeof value === 'string' && COMPONENT_SIZES.includes(value as ComponentSize);
+}
+
+export function isValidTextAlignment(value: unknown): value is TextAlignment {
+  return typeof value === 'string' && TEXT_ALIGNMENTS.includes(value as TextAlignment);
+}
+
+export function isValidToastVariant(value: unknown): value is ToastVariant {
+  return typeof value === 'string' && TOAST_VARIANTS.includes(value as ToastVariant);
+}
+
+export function isValidReasoningState(value: unknown): value is ReasoningState {
+  return typeof value === 'string' && REASONING_STATES.includes(value as ReasoningState);
+}
+
+export function isValidStatusVariant(value: unknown): value is StatusVariant {
+  return typeof value === 'string' && STATUS_VARIANTS.includes(value as StatusVariant);
+}
+
+export function isValidNetworkErrorType(value: unknown): value is NetworkErrorType {
+  return typeof value === 'string' && NETWORK_ERROR_TYPES.includes(value as NetworkErrorType);
+}
+
+export function isValidErrorSeverity(value: unknown): value is ErrorSeverity {
+  return typeof value === 'string' && ERROR_SEVERITIES.includes(value as ErrorSeverity);
 }
 
 export function isValidImageState(value: unknown): value is ImageState {
@@ -666,6 +710,54 @@ export function isValidErrorBoundaryContext(value: unknown): value is ErrorBound
 
 export function isValidIconType(value: unknown): value is IconType {
   return typeof value === 'string' && ICON_TYPES.includes(value as IconType);
+}
+
+export function isValidBorderGradientDirection(value: unknown): value is BorderGradientDirection {
+  return typeof value === 'string' && BORDER_GRADIENT_DIRECTIONS.includes(value as BorderGradientDirection);
+}
+
+export function isValidLogoSize(value: unknown): value is LogoSize {
+  return typeof value === 'string' && LOGO_SIZES.includes(value as LogoSize);
+}
+
+export function isValidLogoVariant(value: unknown): value is LogoVariant {
+  return typeof value === 'string' && LOGO_VARIANTS.includes(value as LogoVariant);
+}
+
+export function isValidLoadingStateVariant(value: unknown): value is LoadingStateVariant {
+  return typeof value === 'string' && LOADING_STATE_VARIANTS.includes(value as LoadingStateVariant);
+}
+
+export function isValidErrorStateVariant(value: unknown): value is ErrorStateVariant {
+  return typeof value === 'string' && ERROR_STATE_VARIANTS.includes(value as ErrorStateVariant);
+}
+
+export function isValidEmptyStateVariant(value: unknown): value is EmptyStateVariant {
+  return typeof value === 'string' && EMPTY_STATE_VARIANTS.includes(value as EmptyStateVariant);
+}
+
+export function isValidSuccessStateVariant(value: unknown): value is SuccessStateVariant {
+  return typeof value === 'string' && SUCCESS_STATE_VARIANTS.includes(value as SuccessStateVariant);
+}
+
+export function isValidGlowingEffectVariant(value: unknown): value is GlowingEffectVariant {
+  return typeof value === 'string' && GLOWING_EFFECT_VARIANTS.includes(value as GlowingEffectVariant);
+}
+
+export function isValidCitationSegmentType(value: unknown): value is CitationSegmentType {
+  return typeof value === 'string' && CITATION_SEGMENT_TYPES.includes(value as CitationSegmentType);
+}
+
+export function isValidSpacingVariant(value: unknown): value is SpacingVariant {
+  return typeof value === 'string' && SPACING_VARIANTS.includes(value as SpacingVariant);
+}
+
+export function isValidEmptyStateStyle(value: unknown): value is EmptyStateStyle {
+  return typeof value === 'string' && EMPTY_STATE_STYLES.includes(value as EmptyStateStyle);
+}
+
+export function isValidScrollButtonVariant(value: unknown): value is ScrollButtonVariant {
+  return typeof value === 'string' && SCROLL_BUTTON_VARIANTS.includes(value as ScrollButtonVariant);
 }
 
 export function isValidAvatarSize(value: unknown): value is AvatarSize {
