@@ -25,6 +25,7 @@ import {
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
+import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
 import { isFilePart } from '@/lib/schemas/message-schemas';
 import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, getModeratorMetadata, getRoundNumber, isModeratorMessage, isVisionRequiredMimeType } from '@/lib/utils';
@@ -471,40 +472,40 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
-  // Preset selection - replaces all selected models with preset's model-role configs
   const handlePresetSelect = useCallback((preset: ModelPreset) => {
-    // Convert preset modelRoles to participant configs with roles
-    const newParticipants = preset.modelRoles.map((mr, index) => ({
-      id: mr.modelId,
-      modelId: mr.modelId,
-      role: mr.role,
-      priority: index,
-    }));
+    const result = filterPresetParticipants(
+      preset,
+      incompatibleModelIdsRef.current,
+      t,
+      ToastNamespaces.MODELS,
+    );
 
-    if (mode === ScreenModes.THREAD) {
-      threadActions.handleParticipantsChange(newParticipants);
-    } else {
-      setSelectedParticipants(newParticipants);
+    if (!result.success) {
+      return;
     }
 
-    const modelIds = newParticipants.map(p => p.modelId);
+    if (mode === ScreenModes.THREAD) {
+      threadActions.handleParticipantsChange(result.participants);
+    } else {
+      setSelectedParticipants(result.participants);
+    }
+
+    const modelIds = result.participants.map(p => p.modelId);
     setModelOrder(modelIds);
 
-    // Apply preset mode (required field)
     if (mode === ScreenModes.THREAD) {
       threadActions.handleModeChange(preset.mode);
     } else {
       formActions.handleModeChange(preset.mode);
     }
 
-    // Apply preset web search setting
     const searchEnabled = preset.searchEnabled === 'conditional' ? true : preset.searchEnabled;
     if (mode === ScreenModes.THREAD) {
       threadActions.handleWebSearchToggle(searchEnabled);
     } else {
       formActions.handleWebSearchToggle(searchEnabled);
     }
-  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder]);
+  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder, t]);
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
     removeParticipant(participantId);

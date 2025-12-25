@@ -35,6 +35,7 @@ import {
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
+import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
@@ -585,37 +586,31 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled);
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  // Preset selection - replaces all selected models with preset's model-role configs
   const handlePresetSelect = useCallback((preset: ModelPreset) => {
-    // Convert preset modelRoles to participant configs with roles
-    const newParticipants: ParticipantConfig[] = preset.modelRoles.map((mr, index) => ({
-      id: mr.modelId,
-      modelId: mr.modelId,
-      role: mr.role,
-      priority: index,
-    }));
+    const result = filterPresetParticipants(
+      preset,
+      incompatibleModelIdsRef.current,
+      t,
+      ToastNamespaces.CHAT_MODELS,
+    );
 
-    setSelectedParticipants(newParticipants);
-    const modelIds = newParticipants.map(p => p.modelId);
+    if (!result.success) {
+      return;
+    }
+
+    setSelectedParticipants(result.participants);
+    const modelIds = result.participants.map(p => p.modelId);
     setPersistedModelIds(modelIds);
     setModelOrder(modelIds);
     setPersistedModelOrder(modelIds);
 
-    // Apply preset mode (required field)
     setSelectedMode(preset.mode);
     setPersistedMode(preset.mode);
 
-    // Apply preset web search setting
-    if (preset.searchEnabled === true || preset.searchEnabled === false) {
-      setEnableWebSearch(preset.searchEnabled);
-      setPersistedWebSearch(preset.searchEnabled);
-    }
-    // 'conditional' means default ON, user can toggle
-    if (preset.searchEnabled === 'conditional') {
-      setEnableWebSearch(true);
-      setPersistedWebSearch(true);
-    }
-  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch]);
+    const searchEnabled = preset.searchEnabled === 'conditional' ? true : preset.searchEnabled;
+    setEnableWebSearch(searchEnabled);
+    setPersistedWebSearch(searchEnabled);
+  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch, t]);
 
   const chatInputToolbar = useMemo(() => (
     <ChatInputToolbarMenu

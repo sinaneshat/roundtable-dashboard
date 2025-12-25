@@ -27,6 +27,8 @@ import { z } from 'zod';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
+import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
+import { toastManager } from '@/lib/toast';
 
 // ============================================================================
 // Preset Types (Zod-first pattern)
@@ -260,4 +262,123 @@ export function canAccessPreset(
  */
 export function getModelIdsForPreset(preset: ModelPreset): string[] {
   return preset.modelRoles.map(mr => mr.modelId);
+}
+
+// ============================================================================
+// Preset Participant Filtering (Incompatibility Handling)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for toast namespace values
+export const TOAST_NAMESPACES = ['chat.models', 'models'] as const;
+
+// 2️⃣ ZOD SCHEMA - Runtime validation
+export const ToastNamespaceSchema = z.enum(TOAST_NAMESPACES);
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type ToastNamespace = z.infer<typeof ToastNamespaceSchema>;
+
+// 4️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const ToastNamespaces = {
+  CHAT_MODELS: 'chat.models' as const,
+  MODELS: 'models' as const,
+} as const;
+
+// 5️⃣ DEFAULT VALUE
+export const DEFAULT_TOAST_NAMESPACE: ToastNamespace = 'chat.models';
+
+/**
+ * Result of preset participant filtering
+ * Uses ParticipantConfigSchema for type-safe participant structure
+ */
+export const PresetFilterResultSchema = z.object({
+  participants: z.array(ParticipantConfigSchema),
+  success: z.boolean(),
+});
+
+export type PresetFilterResult = z.infer<typeof PresetFilterResultSchema>;
+
+/** Translation function type for filterPresetParticipants */
+type TranslationFn = (key: string, values?: { count: number }) => string;
+
+/**
+ * Filter preset participants based on incompatible model IDs
+ *
+ * Handles three cases:
+ * 1. All models compatible → Returns participants with success: true
+ * 2. Some models incompatible → Shows warning toast, returns compatible participants with success: true
+ * 3. All models incompatible → Shows error toast, returns empty array with success: false
+ *
+ * Uses ToastNamespaces constant object for type-safe namespace selection.
+ *
+ * @param preset - Model preset to filter
+ * @param incompatibleModelIds - Set of incompatible model IDs
+ * @param t - Translation function from useTranslations hook
+ * @param toastNamespace - Translation namespace, defaults to DEFAULT_TOAST_NAMESPACE
+ * @returns PresetFilterResult with filtered participants and success status
+ *
+ * @example
+ * ```typescript
+ * import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
+ * import { useTranslations } from 'next-intl';
+ *
+ * const t = useTranslations();
+ * const result = filterPresetParticipants(
+ *   preset,
+ *   incompatibleModelIds,
+ *   t,
+ *   ToastNamespaces.CHAT_MODELS
+ * );
+ *
+ * if (!result.success) {
+ *   return; // All models incompatible, error toast shown
+ * }
+ *
+ * setSelectedParticipants(result.participants);
+ * ```
+ */
+export function filterPresetParticipants(
+  preset: ModelPreset,
+  incompatibleModelIds: Set<string>,
+  t: TranslationFn,
+  toastNamespace: ToastNamespace = DEFAULT_TOAST_NAMESPACE,
+): PresetFilterResult {
+  const presetModelIds = preset.modelRoles.map(mr => mr.modelId);
+
+  const compatibleModelIds = incompatibleModelIds.size > 0
+    ? presetModelIds.filter(id => !incompatibleModelIds.has(id))
+    : presetModelIds;
+
+  const filteredCount = presetModelIds.length - compatibleModelIds.length;
+
+  if (filteredCount > 0 && compatibleModelIds.length > 0) {
+    toastManager.warning(
+      t(`${toastNamespace}.presetModelsExcluded`),
+      t(`${toastNamespace}.presetModelsExcludedDescription`, { count: filteredCount }),
+    );
+  }
+
+  if (compatibleModelIds.length === 0) {
+    toastManager.error(
+      t(`${toastNamespace}.presetIncompatible`),
+      t(`${toastNamespace}.presetIncompatibleDescription`),
+    );
+    return {
+      participants: [],
+      success: false,
+    };
+  }
+
+  const participants = preset.modelRoles
+    .filter(mr => compatibleModelIds.includes(mr.modelId))
+    .map((mr, index) => ({
+      id: mr.modelId,
+      modelId: mr.modelId,
+      role: mr.role,
+      priority: index,
+    }));
+
+  return {
+    participants,
+    success: true,
+  };
 }
