@@ -1,5 +1,6 @@
 'use client';
 
+import type { ChatStatus } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -8,7 +9,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatModeSchema, MessageStatuses, UploadStatuses } from '@/api/core/enums';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
@@ -172,7 +172,7 @@ export default function ChatOverviewScreen() {
   ) ?? [];
 
   const userTierConfig = modelsData?.data?.user_tier_config || {
-    tier: 'free' as const,
+    tier: 'free',
     tier_name: 'Free',
     max_models: 2,
     can_upgrade: true,
@@ -585,32 +585,13 @@ export default function ChatOverviewScreen() {
     setPersistedWebSearch(enabled);
   }, [setEnableWebSearch, setPersistedWebSearch]);
 
-  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    const latestIncompatible = incompatibleModelIdsRef.current;
-    const compatibleModels = latestIncompatible.size > 0
-      ? models.filter(m => !latestIncompatible.has(m.id))
-      : models;
-
-    const filteredCount = models.length - compatibleModels.length;
-    if (filteredCount > 0 && compatibleModels.length > 0) {
-      toastManager.warning(
-        t('chat.models.presetModelsExcluded'),
-        t('chat.models.presetModelsExcludedDescription', { count: filteredCount }),
-      );
-    }
-
-    if (compatibleModels.length === 0) {
-      toastManager.error(
-        t('chat.models.presetIncompatible'),
-        t('chat.models.presetIncompatibleDescription'),
-      );
-      return;
-    }
-
-    const newParticipants: ParticipantConfig[] = compatibleModels.map((model, index) => ({
-      id: model.id,
-      modelId: model.id,
-      role: '',
+  // Preset selection - replaces all selected models with preset's model-role configs
+  const handlePresetSelect = useCallback((preset: ModelPreset) => {
+    // Convert preset modelRoles to participant configs with roles
+    const newParticipants: ParticipantConfig[] = preset.modelRoles.map((mr, index) => ({
+      id: mr.modelId,
+      modelId: mr.modelId,
+      role: mr.role,
       priority: index,
     }));
 
@@ -620,16 +601,21 @@ export default function ChatOverviewScreen() {
     setModelOrder(modelIds);
     setPersistedModelOrder(modelIds);
 
-    if (preset.recommendedMode) {
-      setSelectedMode(preset.recommendedMode);
-      setPersistedMode(preset.recommendedMode);
-    }
+    // Apply preset mode (required field)
+    setSelectedMode(preset.mode);
+    setPersistedMode(preset.mode);
 
-    if (preset.recommendWebSearch !== undefined) {
-      setEnableWebSearch(preset.recommendWebSearch);
-      setPersistedWebSearch(preset.recommendWebSearch);
+    // Apply preset web search setting
+    if (preset.searchEnabled === true || preset.searchEnabled === false) {
+      setEnableWebSearch(preset.searchEnabled);
+      setPersistedWebSearch(preset.searchEnabled);
     }
-  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch, t]);
+    // 'conditional' means default ON, user can toggle
+    if (preset.searchEnabled === 'conditional') {
+      setEnableWebSearch(true);
+      setPersistedWebSearch(true);
+    }
+  }, [setSelectedParticipants, setPersistedModelIds, setModelOrder, setPersistedModelOrder, setSelectedMode, setPersistedMode, setEnableWebSearch, setPersistedWebSearch]);
 
   const chatInputToolbar = useMemo(() => (
     <ChatInputToolbarMenu
@@ -658,24 +644,27 @@ export default function ChatOverviewScreen() {
     isInitialUIInputBlocked,
   ]);
 
-  const sharedChatInputProps = useMemo(() => ({
-    value: inputValue,
-    onChange: setInputValue,
-    onSubmit: handlePromptSubmit,
-    status: isInitialUIInputBlocked ? 'submitted' as const : 'ready' as const,
-    placeholder: t('chat.input.placeholder'),
-    participants: selectedParticipants,
-    quotaCheckType: 'threads' as const,
-    onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
-    attachments: chatAttachments.attachments,
-    onAddAttachments: chatAttachments.addFiles,
-    onRemoveAttachment: chatAttachments.removeAttachment,
-    enableAttachments: !isInitialUIInputBlocked,
-    attachmentClickRef,
-    toolbar: chatInputToolbar,
-    isSubmitting: formActions.isSubmitting,
-    isUploading: chatAttachments.isUploading,
-  }), [
+  const sharedChatInputProps = useMemo(() => {
+    const status: ChatStatus = isInitialUIInputBlocked ? 'submitted' : 'ready';
+    return {
+      value: inputValue,
+      onChange: setInputValue,
+      onSubmit: handlePromptSubmit,
+      status,
+      placeholder: t('chat.input.placeholder'),
+      participants: selectedParticipants,
+      quotaCheckType: 'threads' as const,
+      onRemoveParticipant: isInitialUIInputBlocked ? undefined : removeParticipant,
+      attachments: chatAttachments.attachments,
+      onAddAttachments: chatAttachments.addFiles,
+      onRemoveAttachment: chatAttachments.removeAttachment,
+      enableAttachments: !isInitialUIInputBlocked,
+      attachmentClickRef,
+      toolbar: chatInputToolbar,
+      isSubmitting: formActions.isSubmitting,
+      isUploading: chatAttachments.isUploading,
+    };
+  }, [
     inputValue,
     setInputValue,
     handlePromptSubmit,
@@ -862,7 +851,6 @@ export default function ChatOverviewScreen() {
         onOpenChange={modelModal.setValue}
         orderedModels={orderedModels}
         onReorder={handleReorderModels}
-        allParticipants={selectedParticipants}
         customRoles={customRoles}
         onToggle={handleToggleModel}
         onRoleChange={handleRoleChange}

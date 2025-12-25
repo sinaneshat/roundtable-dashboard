@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import type { OrderedModel } from '@/components/chat/model-item';
+import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 export type UseOrderedModelsOptions = {

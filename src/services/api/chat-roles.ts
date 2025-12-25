@@ -11,6 +11,9 @@ import { parseResponse } from 'hono/client';
 import type { ApiClientType } from '@/api/client';
 import { createApiClient } from '@/api/client';
 
+// Re-export ChatCustomRole from single source of truth
+export type { ChatCustomRole } from '@/api/routes/chat/schema';
+
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================

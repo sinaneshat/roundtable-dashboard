@@ -24,13 +24,23 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
-      } satisfies Partial<Record<ComponentVariant, string>>,
+        white:
+          "bg-white text-black shadow-xs hover:bg-white/90",
+        success:
+          "bg-emerald-600 text-white shadow-xs hover:bg-emerald-600/90 focus-visible:ring-emerald-600/20 dark:focus-visible:ring-emerald-600/40",
+        warning:
+          "bg-amber-600 text-white shadow-xs hover:bg-amber-600/90 focus-visible:ring-amber-600/20 dark:focus-visible:ring-amber-600/40",
+        glass:
+          "bg-white/10 backdrop-blur-md border border-white/20 shadow-xs hover:bg-white/20",
+      } satisfies Record<ComponentVariant, string>,
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
         sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
+        md: "h-9 px-4 has-[>svg]:px-3",
         lg: "h-11 px-6 has-[>svg]:px-4",
+        xl: "h-12 px-8 has-[>svg]:px-5",
         icon: "size-9",
-      } satisfies Partial<Record<ComponentSize, string>>,
+      } satisfies Record<ComponentSize, string>,
     },
     defaultVariants: {
       variant: "default",

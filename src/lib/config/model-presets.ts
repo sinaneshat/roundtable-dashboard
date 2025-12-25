@@ -1,337 +1,230 @@
 /**
  * Model Presets Configuration
  *
- * Pre-configured model combinations for different use cases.
- * Presets are dynamically populated based on available models and user tier.
+ * Conversation-focused presets that auto-assign:
+ * - Specific models with roles
+ * - Conversation mode (analyzing, brainstorming, debating, solving)
+ * - Web search setting
+ *
+ * Design principles:
+ * - Presets describe conversation TYPE, not model capabilities
+ * - Roles are behavioral, not brand-based
+ * - Each preset explicitly sets mode and search
  */
 
 import type { LucideIcon } from 'lucide-react';
 import {
   Brain,
-  Code,
-  Crown,
-  Eye,
   FileSearch,
-  Globe,
   Lightbulb,
+  MessagesSquare,
   Scale,
-  ScrollText,
-  Zap,
+  ShieldAlert,
+  Swords,
+  Wrench,
 } from 'lucide-react';
+import { z } from 'zod';
 
 import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
 import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
-import {
-  canAccessModelByPricing,
-  getRequiredTierForModel,
-} from '@/api/services/product-logic.service';
 
 // ============================================================================
-// Preset Types
+// Preset Types (Zod-first pattern)
 // ============================================================================
 
-export type ModelPresetId
-  = | 'balanced'
-    | 'creative'
-    | 'budget'
-    | 'technical'
-    | 'deep-thinkers'
-    | 'premium'
-    | 'file-research'
-    | 'vision-experts'
-    | 'long-context'
-    | 'web-research';
+/** Explicit model-role pairing for presets */
+export const PresetModelRoleSchema = z.object({
+  modelId: z.string().min(1),
+  role: z.string().min(1),
+});
+
+export type PresetModelRole = z.infer<typeof PresetModelRoleSchema>;
 
 export type ModelPreset = {
-  id: ModelPresetId;
+  id: string;
   name: string;
   description: string;
   icon: LucideIcon;
   requiredTier: SubscriptionTier;
   order: number;
-  selectModels: (
-    models: BaseModelResponse[],
-    userTier: SubscriptionTier,
-  ) => BaseModelResponse[];
-  maxModels: number;
-  recommendedMode?: ChatMode;
-  recommendWebSearch?: boolean;
-  requiresVision?: boolean;
+  /** Conversation mode - required */
+  mode: ChatMode;
+  /** Web search enabled: true, false, or 'conditional' (default ON, user can toggle) */
+  searchEnabled: boolean | 'conditional';
+  /** Explicit model-role pairs */
+  modelRoles: PresetModelRole[];
 };
 
-// ============================================================================
-// Helper Functions for Model Selection
-// ============================================================================
-
-function getAccessibleModels(
-  models: BaseModelResponse[],
-  userTier: SubscriptionTier,
-): BaseModelResponse[] {
-  return models.filter(m => canAccessModelByPricing(userTier, m));
-}
-
-function getCheapestModels(
-  models: BaseModelResponse[],
-  count: number,
-): BaseModelResponse[] {
-  return [...models]
-    .sort((a, b) => {
-      const priceA = Number.parseFloat(a.pricing.prompt) * 1_000_000;
-      const priceB = Number.parseFloat(b.pricing.prompt) * 1_000_000;
-      return priceA - priceB;
-    })
-    .slice(0, count);
-}
-
-function getModelsWithCapabilities(
-  models: BaseModelResponse[],
-  capabilities: Array<'reasoning' | 'vision' | 'tools'>,
-): BaseModelResponse[] {
-  return models.filter((m) => {
-    return capabilities.every((cap) => {
-      if (cap === 'reasoning')
-        return m.capabilities.reasoning;
-      if (cap === 'vision')
-        return m.capabilities.vision;
-      if (cap === 'tools')
-        return m.capabilities.tools;
-      return false;
-    });
-  });
-}
-
-function getHighContextModels(
-  models: BaseModelResponse[],
-  minContext: number = 100000,
-): BaseModelResponse[] {
-  return models
-    .filter(m => m.context_length >= minContext)
-    .sort((a, b) => b.context_length - a.context_length);
-}
-
-function getVisionModels(models: BaseModelResponse[]): BaseModelResponse[] {
-  return models.filter(m => m.capabilities.vision);
-}
-
-function getPremiumModels(
-  models: BaseModelResponse[],
-  count: number,
-): BaseModelResponse[] {
-  return [...models]
-    .sort((a, b) => {
-      const priceA = Number.parseFloat(a.pricing.prompt) * 1_000_000;
-      const priceB = Number.parseFloat(b.pricing.prompt) * 1_000_000;
-      return priceB - priceA;
-    })
-    .slice(0, count);
-}
-
-function diversifyByProvider(
-  models: BaseModelResponse[],
-  maxPerProvider: number = 2,
-): BaseModelResponse[] {
-  const result: BaseModelResponse[] = [];
-  const providerCounts = new Map<string, number>();
-
-  for (const model of models) {
-    const count = providerCounts.get(model.provider) || 0;
-    if (count < maxPerProvider) {
-      result.push(model);
-      providerCounts.set(model.provider, count + 1);
-    }
-  }
-
-  return result;
-}
+/** Selection result includes preset with model-role mappings */
+export type PresetSelectionResult = {
+  preset: ModelPreset;
+};
 
 // ============================================================================
 // Preset Configurations
 // ============================================================================
 
 export const MODEL_PRESETS: ModelPreset[] = [
+  // ============================================================================
+  // FREE TIER
+  // ============================================================================
   {
-    id: 'balanced',
-    name: 'Balanced Panel',
-    description: 'Well-rounded thinking with balanced creativity and reasoning',
-    icon: Scale,
+    id: 'quick-perspectives',
+    name: 'Quick Perspectives',
+    description: 'Fast framing and contrasting viewpoints for early exploration',
+    icon: MessagesSquare,
     requiredTier: 'free',
     order: 1,
-    maxModels: 3,
-    recommendedMode: 'debating',
-    recommendWebSearch: false,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const diverse = diversifyByProvider(accessible, 1);
-      const withReasoning = diverse.filter(m => m.capabilities.reasoning);
-      const withoutReasoning = diverse.filter(m => !m.capabilities.reasoning);
-      return [...withReasoning, ...withoutReasoning].slice(0, 3);
-    },
+    mode: 'analyzing',
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: 'openai/gpt-5-nano', role: 'Framer' },
+      { modelId: 'google/gemini-2.0-flash-001', role: 'Alternative Lens' },
+      { modelId: 'openai/gpt-4o-mini', role: 'Nuancer' },
+    ],
   },
+
+  // ============================================================================
+  // PRO TIER
+  // ============================================================================
   {
-    id: 'creative',
-    name: 'Creative Workshop',
-    description: 'Fast ideas, creative concepts, expressive writing',
-    icon: Lightbulb,
-    requiredTier: 'free',
+    id: 'balanced-discussion',
+    name: 'Balanced Discussion',
+    description: 'Well-rounded conversation with reasoning and alternative framing',
+    icon: Scale,
+    requiredTier: 'pro',
     order: 2,
-    maxModels: 3,
-    recommendedMode: 'brainstorming',
-    recommendWebSearch: false,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const sorted = [...accessible].sort(
-        (a, b) => a.context_length - b.context_length,
-      );
-      return diversifyByProvider(sorted, 1).slice(0, 3);
-    },
+    mode: 'analyzing',
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: 'openai/gpt-5.1', role: 'Structured Reasoner' },
+      { modelId: 'anthropic/claude-sonnet-4.5', role: 'Assumption Challenger' },
+      { modelId: 'google/gemini-3-pro-preview', role: 'Alternative Framer' },
+    ],
   },
   {
-    id: 'budget',
-    name: 'Budget Panel',
-    description: 'Fast and inexpensive brainstorming',
-    icon: Zap,
-    requiredTier: 'free',
+    id: 'creative-exploration',
+    name: 'Creative Exploration',
+    description: 'Ideation and conceptual exploration with grounded creativity',
+    icon: Lightbulb,
+    requiredTier: 'pro',
     order: 3,
-    maxModels: 3,
-    recommendedMode: 'brainstorming',
-    recommendWebSearch: false,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const cheapest = getCheapestModels(accessible, 10);
-      return diversifyByProvider(cheapest, 1).slice(0, 3);
-    },
+    mode: 'brainstorming',
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: 'anthropic/claude-sonnet-4', role: 'Ideator' },
+      { modelId: 'google/gemini-3-flash-preview', role: 'Lateral Thinker' },
+      { modelId: 'openai/gpt-5-mini', role: 'Grounding Voice' },
+    ],
   },
+
+  // ============================================================================
+  // POWER TIER
+  // ============================================================================
   {
-    id: 'technical',
-    name: 'Technical Team',
-    description: 'Strong coding, analysis, and truth-seeking voices',
-    icon: Code,
-    requiredTier: 'starter',
-    order: 4,
-    maxModels: 4,
-    recommendedMode: 'solving',
-    recommendWebSearch: false,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const withTools = getModelsWithCapabilities(accessible, ['tools']);
-      const diverse = diversifyByProvider(
-        withTools.length >= 4 ? withTools : accessible,
-        1,
-      );
-      return diverse.slice(0, 4);
-    },
-  },
-  {
-    id: 'web-research',
-    name: 'Web Researchers',
-    description: 'Research team with web search enabled for current info',
-    icon: Globe,
-    requiredTier: 'starter',
-    order: 5,
-    maxModels: 3,
-    recommendedMode: 'analyzing',
-    recommendWebSearch: true,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const withReasoning = getModelsWithCapabilities(accessible, ['reasoning']);
-      const sorted = withReasoning.length >= 3
-        ? withReasoning
-        : accessible;
-      return diversifyByProvider(sorted, 1).slice(0, 3);
-    },
-  },
-  {
-    id: 'deep-thinkers',
-    name: 'Deep Thinkers',
-    description: 'Maximum reasoning depth for complex problems',
-    icon: Brain,
-    requiredTier: 'pro',
-    order: 6,
-    maxModels: 4,
-    recommendedMode: 'analyzing',
-    recommendWebSearch: false,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const withReasoning = getModelsWithCapabilities(accessible, ['reasoning']);
-      const highContext = getHighContextModels(
-        withReasoning.length >= 4 ? withReasoning : accessible,
-        64000,
-      );
-      return diversifyByProvider(highContext, 1).slice(0, 4);
-    },
-  },
-  {
-    id: 'file-research',
-    name: 'File Analysts',
-    description: 'Vision-capable models for analyzing images, PDFs, documents',
-    icon: FileSearch,
-    requiredTier: 'pro',
-    order: 7,
-    maxModels: 4,
-    recommendedMode: 'analyzing',
-    recommendWebSearch: false,
-    requiresVision: true,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const visionModels = getVisionModels(accessible);
-      const sorted = [...visionModels].sort(
-        (a, b) => b.context_length - a.context_length,
-      );
-      return diversifyByProvider(sorted, 1).slice(0, 4);
-    },
-  },
-  {
-    id: 'vision-experts',
-    name: 'Vision Experts',
-    description: 'Top multimodal models for image understanding and analysis',
-    icon: Eye,
-    requiredTier: 'pro',
-    order: 8,
-    maxModels: 4,
-    recommendedMode: 'analyzing',
-    recommendWebSearch: false,
-    requiresVision: true,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const visionModels = getVisionModels(accessible);
-      const premium = getPremiumModels(visionModels, 8);
-      return diversifyByProvider(premium, 1).slice(0, 4);
-    },
-  },
-  {
-    id: 'long-context',
-    name: 'Long Context Team',
-    description: 'Models with 500K+ context for analyzing large documents',
-    icon: ScrollText,
-    requiredTier: 'pro',
-    order: 9,
-    maxModels: 4,
-    recommendedMode: 'analyzing',
-    recommendWebSearch: false,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const highContext = getHighContextModels(accessible, 500000);
-      return diversifyByProvider(highContext, 1).slice(0, 4);
-    },
-  },
-  {
-    id: 'premium',
-    name: 'Premium Think Tank',
-    description: 'High-power strategic and analytical thinking',
-    icon: Crown,
+    id: 'critical-debate',
+    name: 'Critical Debate',
+    description: 'Stress-testing ideas with real disagreement and trade-offs',
+    icon: Swords,
     requiredTier: 'power',
-    order: 10,
-    maxModels: 5,
-    recommendedMode: 'debating',
-    recommendWebSearch: true,
-    selectModels: (models, userTier) => {
-      const accessible = getAccessibleModels(models, userTier);
-      const premium = getPremiumModels(accessible, 10);
-      return diversifyByProvider(premium, 1).slice(0, 5);
-    },
+    order: 4,
+    mode: 'debating',
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: 'openai/o3', role: 'Position Advocate' },
+      { modelId: 'anthropic/claude-opus-4.5', role: 'Assumption Critic' },
+      { modelId: 'x-ai/grok-4', role: 'Contrarian' },
+      { modelId: 'google/gemini-2.5-pro', role: 'Trade-off Clarifier' },
+    ],
+  },
+  {
+    id: 'devils-advocate',
+    name: 'Devil\'s Advocate Panel',
+    description: 'Challenge decisions with opposing viewpoints to stress-test your thinking',
+    icon: ShieldAlert,
+    requiredTier: 'pro',
+    order: 5,
+    mode: 'debating',
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: 'openai/gpt-5.1', role: 'Proposer' },
+      { modelId: 'anthropic/claude-sonnet-4.5', role: 'Skeptic' },
+      { modelId: 'google/gemini-2.5-pro', role: 'Mediator' },
+    ],
+  },
+  {
+    id: 'deep-analysis',
+    name: 'Deep Analysis',
+    description: 'Maximum reasoning depth for complex, ambiguous problems',
+    icon: Brain,
+    requiredTier: 'power',
+    order: 6,
+    mode: 'analyzing',
+    searchEnabled: false,
+    modelRoles: [
+      { modelId: 'openai/o1', role: 'Deep Reasoner' },
+      { modelId: 'anthropic/claude-opus-4', role: 'Systems Thinker' },
+      { modelId: 'deepseek/deepseek-r1-0528', role: 'Secondary Theorist' },
+    ],
+  },
+  {
+    id: 'research-evidence',
+    name: 'Research & Evidence Review',
+    description: 'Fact-finding with source comparison and synthesis',
+    icon: FileSearch,
+    requiredTier: 'power',
+    order: 7,
+    mode: 'analyzing',
+    searchEnabled: true,
+    modelRoles: [
+      { modelId: 'openai/gpt-4.1', role: 'Evidence Gatherer' },
+      { modelId: 'google/gemini-2.5-pro', role: 'Cross-Checker' },
+      { modelId: 'anthropic/claude-opus-4', role: 'Synthesizer' },
+    ],
+  },
+  {
+    id: 'technical-review',
+    name: 'Technical Review',
+    description: 'Architecture, correctness, and implementation trade-offs',
+    icon: Wrench,
+    requiredTier: 'power',
+    order: 8,
+    mode: 'solving',
+    searchEnabled: 'conditional',
+    modelRoles: [
+      { modelId: 'anthropic/claude-opus-4.5', role: 'Implementer' },
+      { modelId: 'anthropic/claude-sonnet-4', role: 'Correctness Reviewer' },
+      { modelId: 'google/gemini-2.5-flash', role: 'Trade-Off Analyst' },
+    ],
   },
 ];
+
+// ============================================================================
+// 5-Part Enum Pattern for Model Preset IDs
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Derived from data (source of truth)
+export const MODEL_PRESET_IDS = MODEL_PRESETS.map(p => p.id) as readonly string[];
+
+// 2️⃣ ZOD SCHEMA - Runtime validation
+export const ModelPresetIdSchema = z.enum(
+  MODEL_PRESET_IDS as unknown as readonly [string, ...string[]],
+);
+
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type ModelPresetId = z.infer<typeof ModelPresetIdSchema>;
+
+// 4️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const ModelPresetIds = {
+  QUICK_PERSPECTIVES: 'quick-perspectives' as const,
+  BALANCED_DISCUSSION: 'balanced-discussion' as const,
+  CREATIVE_EXPLORATION: 'creative-exploration' as const,
+  CRITICAL_DEBATE: 'critical-debate' as const,
+  DEVILS_ADVOCATE: 'devils-advocate' as const,
+  DEEP_ANALYSIS: 'deep-analysis' as const,
+  RESEARCH_EVIDENCE: 'research-evidence' as const,
+  TECHNICAL_REVIEW: 'technical-review' as const,
+} as const;
 
 // ============================================================================
 // Utility Functions
@@ -362,30 +255,9 @@ export function canAccessPreset(
   return userTierIndex >= requiredIndex;
 }
 
-export function getModelsForPreset(
-  preset: ModelPreset,
-  allModels: BaseModelResponse[],
-  userTier: SubscriptionTier,
-): BaseModelResponse[] {
-  return preset.selectModels(allModels, userTier);
-}
-
-export function getPresetMinimumTier(
-  preset: ModelPreset,
-  allModels: BaseModelResponse[],
-): SubscriptionTier {
-  let highestTier = preset.requiredTier;
-  const highestTierIndex = SUBSCRIPTION_TIERS.indexOf(highestTier);
-
-  const presetModels = preset.selectModels(allModels, 'power');
-
-  for (const model of presetModels) {
-    const modelTier = getRequiredTierForModel(model);
-    const modelTierIndex = SUBSCRIPTION_TIERS.indexOf(modelTier);
-    if (modelTierIndex > highestTierIndex) {
-      highestTier = modelTier;
-    }
-  }
-
-  return highestTier;
+/**
+ * Get model IDs for a preset
+ */
+export function getModelIdsForPreset(preset: ModelPreset): string[] {
+  return preset.modelRoles.map(mr => mr.modelId);
 }

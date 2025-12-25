@@ -4,9 +4,8 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import { ChatModeSchema, MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
+import type { ChatMode, FeedbackType, ScreenMode } from '@/api/core/enums';
+import { ChatModeSchema, MessageStatuses, ScreenModes, SubscriptionTiers } from '@/api/core/enums';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
@@ -26,6 +25,7 @@ import {
 } from '@/hooks/utils';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
+import { isFilePart } from '@/lib/schemas/message-schemas';
 import { toastManager } from '@/lib/toast';
 import { getIncompatibleModelIds, getModeratorMetadata, getRoundNumber, isModeratorMessage, isVisionRequiredMimeType } from '@/lib/utils';
 import {
@@ -41,7 +41,7 @@ export type ChatViewProps = {
     image: string | null;
   };
   slug?: string;
-  mode: 'overview' | 'thread';
+  mode: ScreenMode;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   chatAttachments: UseChatAttachmentsReturn;
   /**
@@ -171,7 +171,7 @@ export function ChatView({
   );
 
   const userTierConfig = modelsData?.data?.user_tier_config || {
-    tier: 'free' as const,
+    tier: SubscriptionTiers.FREE,
     tier_name: 'Free',
     max_models: 2,
     can_upgrade: true,
@@ -218,9 +218,9 @@ export function ChatView({
       if (!msg.parts)
         return false;
       return msg.parts.some((part) => {
-        if (part.type !== 'file' || !('mediaType' in part))
+        if (!isFilePart(part))
           return false;
-        return isVisionRequiredMimeType(part.mediaType as string);
+        return isVisionRequiredMimeType(part.mediaType);
       });
     });
 
@@ -471,32 +471,13 @@ export function ChatView({
     }
   }, [selectedParticipants, mode, threadActions, setSelectedParticipants]);
 
-  const handlePresetSelect = useCallback((models: BaseModelResponse[], preset: ModelPreset) => {
-    const latestIncompatible = incompatibleModelIdsRef.current;
-    const compatibleModels = latestIncompatible.size > 0
-      ? models.filter(m => !latestIncompatible.has(m.id))
-      : models;
-
-    const filteredCount = models.length - compatibleModels.length;
-    if (filteredCount > 0 && compatibleModels.length > 0) {
-      toastManager.warning(
-        t('models.presetModelsExcluded'),
-        t('models.presetModelsExcludedDescription', { count: filteredCount }),
-      );
-    }
-
-    if (compatibleModels.length === 0) {
-      toastManager.error(
-        t('models.presetIncompatible'),
-        t('models.presetIncompatibleDescription'),
-      );
-      return;
-    }
-
-    const newParticipants = compatibleModels.map((model, index) => ({
-      id: model.id,
-      modelId: model.id,
-      role: '',
+  // Preset selection - replaces all selected models with preset's model-role configs
+  const handlePresetSelect = useCallback((preset: ModelPreset) => {
+    // Convert preset modelRoles to participant configs with roles
+    const newParticipants = preset.modelRoles.map((mr, index) => ({
+      id: mr.modelId,
+      modelId: mr.modelId,
+      role: mr.role,
       priority: index,
     }));
 
@@ -509,22 +490,21 @@ export function ChatView({
     const modelIds = newParticipants.map(p => p.modelId);
     setModelOrder(modelIds);
 
-    if (preset.recommendedMode) {
-      if (mode === ScreenModes.THREAD) {
-        threadActions.handleModeChange(preset.recommendedMode);
-      } else {
-        formActions.handleModeChange(preset.recommendedMode);
-      }
+    // Apply preset mode (required field)
+    if (mode === ScreenModes.THREAD) {
+      threadActions.handleModeChange(preset.mode);
+    } else {
+      formActions.handleModeChange(preset.mode);
     }
 
-    if (preset.recommendWebSearch !== undefined) {
-      if (mode === ScreenModes.THREAD) {
-        threadActions.handleWebSearchToggle(preset.recommendWebSearch);
-      } else {
-        formActions.handleWebSearchToggle(preset.recommendWebSearch);
-      }
+    // Apply preset web search setting
+    const searchEnabled = preset.searchEnabled === 'conditional' ? true : preset.searchEnabled;
+    if (mode === ScreenModes.THREAD) {
+      threadActions.handleWebSearchToggle(searchEnabled);
+    } else {
+      formActions.handleWebSearchToggle(searchEnabled);
     }
-  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder, t]);
+  }, [mode, threadActions, formActions, setSelectedParticipants, setModelOrder]);
 
   const handleRemoveParticipant = useCallback((participantId: string) => {
     removeParticipant(participantId);
@@ -621,7 +601,6 @@ export function ChatView({
         onOpenChange={isModelModalOpen.setValue}
         orderedModels={orderedModels}
         onReorder={handleModelReorder}
-        allParticipants={selectedParticipants}
         customRoles={customRoles}
         onToggle={handleModelToggle}
         onRoleChange={handleModelRoleChange}

@@ -376,6 +376,7 @@
       "topModels": "Top AI Models",
       "model": "model",
       "upgradeToUnlock": "Upgrade to unlock these models",
+      "upgradeToTier": "Upgrade to {tier}",
       "minimumRequired": {
         "title": "Model Required",
         "description": "Select at least {count} model to continue"
@@ -390,7 +391,12 @@
         "subtitle": "Manage your AI models and their roles",
         "searchPlaceholder": "Search AI models...",
         "premium": "Premium",
-        "locked": "Locked"
+        "locked": "Locked",
+        "upgrade": "Upgrade",
+        "back": "Back",
+        "setRoleFor": "Set role for {modelName}",
+        "selectOrEnterRole": "Select a predefined role or create a custom one",
+        "customRolePlaceholder": "Enter custom role name..."
       },
       "presets": {
         "title": "Presets"

@@ -9,9 +9,8 @@ import {
 import { Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/core/enums';
-import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -20,55 +19,49 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
-import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
-type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
-export type OrderedModel = {
-  model: EnhancedModelResponse;
-  participant: ParticipantConfig | null;
-  order: number;
+/**
+ * Pending role for models not yet selected
+ * Allows role assignment independently of selection state
+ */
+type PendingRole = {
+  role: string;
+  customRoleId?: string;
 };
+
+/**
+ * ModelItem component props
+ * Uses centralized OrderedModel type from schemas
+ */
 export type ModelItemProps = {
   orderedModel: OrderedModel;
-  allParticipants: ParticipantConfig[];
-  customRoles: CustomRole[];
   onToggle: () => void;
-  onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
   selectedCount: number;
   maxModels: number;
   enableDrag?: boolean;
-  userTierInfo?: {
-    tier_name: string;
-    max_models: number;
-    current_tier: SubscriptionTier;
-    can_upgrade: boolean;
-  };
-  /** Callback to open role assignment panel for this model */
   onOpenRolePanel?: () => void;
-  /** Whether model is incompatible with current file attachments (e.g., no vision for images/PDFs) */
   isIncompatibleWithFiles?: boolean;
+  pendingRole?: PendingRole;
 };
 
 export function ModelItem({
   orderedModel,
-  allParticipants: _allParticipants,
-  customRoles: _customRoles,
   onToggle,
-  onRoleChange: _onRoleChange,
-  onClearRole: _onClearRole,
+  onClearRole,
   selectedCount,
   maxModels,
   enableDrag = true,
-  userTierInfo: _userTierInfo,
   onOpenRolePanel,
   isIncompatibleWithFiles = false,
+  pendingRole,
 }: ModelItemProps) {
   const tModels = useTranslations('chat.models');
   const dragControls = useDragControls();
+  const [isDragging, setIsDragging] = useState(false);
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
   const isAccessible = model.is_accessible_to_user ?? isSelected;
@@ -131,61 +124,61 @@ export function ModelItem({
               </Tooltip>
             )}
 
-            {/* Role badges or Add Role button - always rendered to prevent layout shift */}
-            {!isDisabledDueToTier && (
-              <div
-                className={cn(
-                  'shrink-0 flex items-center gap-0.5 sm:gap-1',
-                  !isSelected && 'invisible',
-                )}
-                onClick={e => e.stopPropagation()}
-                // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
-                onPointerDownCapture={e => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                  }
-                }}
-                role="presentation"
-              >
-                {participant?.role
-                  ? (
-                      <div className="inline-flex items-center gap-0.5 sm:gap-1">
+            {/* Role badges or Add Role button - always visible */}
+            {!isDisabledDueToTier && (() => {
+              // Use participant role if selected, otherwise use pending role
+              const displayRole = participant?.role ?? pendingRole?.role;
+
+              return (
+                <div
+                  className="shrink-0 flex items-center gap-0.5 sm:gap-1"
+                  onClick={e => e.stopPropagation()}
+                  // ✅ MOTION FIX: Stop pointer events to prevent Reorder.Item onTap from firing
+                  onPointerDownCapture={e => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                    }
+                  }}
+                  role="presentation"
+                >
+                  {displayRole
+                    ? (
                         <Badge
-                          className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full"
-                          style={getRoleBadgeStyle(participant.role)}
+                          className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1"
+                          style={getRoleBadgeStyle(displayRole)}
                           onClick={() => onOpenRolePanel?.()}
                         >
-                          {participant.role}
+                          {displayRole}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onClearRole();
+                            }}
+                            className="shrink-0 p-0.5 rounded-full hover:bg-black/20 transition-colors"
+                            aria-label="Clear role"
+                          >
+                            <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                          </button>
                         </Badge>
+                      )
+                    : (
                         <button
                           type="button"
+                          className="inline-flex items-center gap-0.5 sm:gap-1 h-4 sm:h-5 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
-                            _onClearRole();
+                            onOpenRolePanel?.();
                           }}
-                          className="shrink-0 p-0.5 rounded-full hover:bg-white/10 transition-colors"
-                          aria-label={tModels('clearRole')}
                         >
-                          <X className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground" />
+                          <Plus className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+                          {tModels('addRole')}
                         </button>
-                      </div>
-                    )
-                  : (
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-0.5 sm:gap-1 h-5 sm:h-6 px-1.5 sm:px-2.5 rounded-full text-[9px] sm:text-[11px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenRolePanel?.();
-                        }}
-                      >
-                        <Plus className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5" />
-                        {tModels('addRole')}
-                      </button>
-                    )}
-              </div>
-            )}
+                      )}
+                </div>
+              );
+            })()}
           </div>
           <div className="text-[10px] sm:text-xs text-muted-foreground truncate w-full min-w-0">
             {model.description}
@@ -228,25 +221,18 @@ export function ModelItem({
         dragElastic={0}
         dragMomentum={false}
         layout
-        style={{ position: 'relative' }}
+        style={{ position: 'relative', borderRadius: '0.75rem' }}
         className={cn(
           'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
+          'transition-[background-color,backdrop-filter,box-shadow] duration-150',
           isDisabled && 'opacity-50 cursor-not-allowed',
+          // Hover styles (when not dragging)
+          !isDisabled && !isDragging && 'hover:bg-white/[0.08] hover:backdrop-blur-md',
+          // Drag styles - applied via state to persist during layout changes
+          isDragging && 'bg-white/[0.1] backdrop-blur-xl shadow-[0px_8px_24px_rgba(0,0,0,0.4)] scale-[1.02] cursor-grabbing',
         )}
-        whileHover={
-          !isDisabled
-            ? {
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                borderColor: 'rgba(255, 255, 255, 0.12)',
-              }
-            : undefined
-        }
-        whileDrag={{
-          scale: 1.02,
-          boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.4)',
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
-          cursor: 'grabbing',
-        }}
+        onDragStart={() => setIsDragging(true)}
+        onDragEnd={() => setIsDragging(false)}
         transition={{ duration: 0.15 }}
         onClick={isDisabled ? undefined : onToggle}
       >

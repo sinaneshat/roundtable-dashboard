@@ -10,7 +10,9 @@ import { z } from '@hono/zod-openapi';
 // COMPONENT VARIANT
 // ============================================================================
 
-export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'success', 'warning', 'glass'] as const;
+export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'white', 'success', 'warning', 'glass'] as const;
+
+export const DEFAULT_COMPONENT_VARIANT: ComponentVariant = 'default';
 
 export const ComponentVariantSchema = z.enum(COMPONENT_VARIANTS).openapi({
   description: 'UI component visual variant',
@@ -26,6 +28,7 @@ export const ComponentVariants = {
   SECONDARY: 'secondary' as const,
   GHOST: 'ghost' as const,
   LINK: 'link' as const,
+  WHITE: 'white' as const,
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
   GLASS: 'glass' as const,
@@ -36,6 +39,8 @@ export const ComponentVariants = {
 // ============================================================================
 
 export const COMPONENT_SIZES = ['sm', 'md', 'lg', 'xl', 'icon', 'default'] as const;
+
+export const DEFAULT_COMPONENT_SIZE: ComponentSize = 'default';
 
 export const ComponentSizeSchema = z.enum(COMPONENT_SIZES).openapi({
   description: 'UI component size',
@@ -546,6 +551,61 @@ export const ScrollButtonVariants = {
 } as const;
 
 // ============================================================================
+// AVATAR SIZE
+// ============================================================================
+
+export const AVATAR_SIZES = ['sm', 'md'] as const;
+
+export const DEFAULT_AVATAR_SIZE: AvatarSize = 'sm';
+
+export const AvatarSizeSchema = z.enum(AVATAR_SIZES).openapi({
+  description: 'Avatar component size',
+  example: 'sm',
+});
+
+export type AvatarSize = z.infer<typeof AvatarSizeSchema>;
+
+export const AvatarSizes = {
+  SM: 'sm' as const,
+  MD: 'md' as const,
+} as const;
+
+export const AvatarSizeMetadata: Record<AvatarSize, { container: string; text: string; overlapOffset: number; gapSize: number }> = {
+  [AvatarSizes.SM]: {
+    container: 'size-6',
+    text: 'text-[10px]',
+    overlapOffset: -8,
+    gapSize: 8,
+  },
+  [AvatarSizes.MD]: {
+    container: 'size-10',
+    text: 'text-xs',
+    overlapOffset: -12,
+    gapSize: 12,
+  },
+} as const;
+
+// ============================================================================
+// MODEL SELECTION TAB
+// ============================================================================
+
+export const MODEL_SELECTION_TABS = ['presets', 'custom'] as const;
+
+export const DEFAULT_MODEL_SELECTION_TAB: ModelSelectionTab = 'presets';
+
+export const ModelSelectionTabSchema = z.enum(MODEL_SELECTION_TABS).openapi({
+  description: 'Model selection modal tab',
+  example: 'presets',
+});
+
+export type ModelSelectionTab = z.infer<typeof ModelSelectionTabSchema>;
+
+export const ModelSelectionTabs = {
+  PRESETS: 'presets' as const,
+  CUSTOM: 'custom' as const,
+} as const;
+
+// ============================================================================
 // LABELS (UI Display)
 // ============================================================================
 
@@ -568,6 +628,16 @@ export const MARKDOWN_PRESET_LABELS: Record<MarkdownPreset, string> = {
   [MarkdownPresets.DEFAULT]: 'Default',
   [MarkdownPresets.COMPACT]: 'Compact',
   [MarkdownPresets.WEB_CONTENT]: 'Web Content',
+} as const;
+
+export const AVATAR_SIZE_LABELS: Record<AvatarSize, string> = {
+  [AvatarSizes.SM]: 'Small',
+  [AvatarSizes.MD]: 'Medium',
+} as const;
+
+export const MODEL_SELECTION_TAB_LABELS: Record<ModelSelectionTab, string> = {
+  [ModelSelectionTabs.PRESETS]: 'Presets',
+  [ModelSelectionTabs.CUSTOM]: 'Build Custom',
 } as const;
 
 // ============================================================================
@@ -596,4 +666,12 @@ export function isValidErrorBoundaryContext(value: unknown): value is ErrorBound
 
 export function isValidIconType(value: unknown): value is IconType {
   return typeof value === 'string' && ICON_TYPES.includes(value as IconType);
+}
+
+export function isValidAvatarSize(value: unknown): value is AvatarSize {
+  return typeof value === 'string' && AVATAR_SIZES.includes(value as AvatarSize);
+}
+
+export function isValidModelSelectionTab(value: unknown): value is ModelSelectionTab {
+  return typeof value === 'string' && MODEL_SELECTION_TABS.includes(value as ModelSelectionTab);
 }

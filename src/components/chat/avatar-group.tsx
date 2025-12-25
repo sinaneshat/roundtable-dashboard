@@ -1,3 +1,5 @@
+import type { AvatarSize } from '@/api/core/enums/ui';
+import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE } from '@/api/core/enums/ui';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
@@ -7,32 +9,29 @@ type AvatarGroupProps = {
   participants: ParticipantConfig[];
   allModels: Array<{ id: string; name: string; provider: string }>;
   maxVisible?: number;
-  size?: 'sm' | 'md';
+  size?: AvatarSize;
   className?: string;
+  /** Whether to show the total count badge (default: true) */
+  showCount?: boolean;
+  /** Whether to overlap avatars (default: true) */
+  overlap?: boolean;
 };
 
 export function AvatarGroup({
   participants,
   allModels,
   maxVisible = 3,
-  size = 'sm',
+  size = DEFAULT_AVATAR_SIZE,
   className,
+  showCount = true,
+  overlap = true,
 }: AvatarGroupProps) {
-  const sizeClasses = {
-    sm: 'size-6',
-    md: 'size-10',
-  };
-
-  const textSizeClasses = {
-    sm: 'text-[10px]',
-    md: 'text-xs',
-  };
+  const sizeMetadata = AvatarSizeMetadata[size];
 
   // Store guarantees participants are sorted by priority - just slice
   const visibleParticipants = participants.slice(0, maxVisible);
 
   const totalCount = participants.length;
-  const overlapOffset = size === 'sm' ? -8 : -12;
 
   return (
     <div className={cn('flex items-center', className)}>
@@ -46,14 +45,15 @@ export function AvatarGroup({
             key={participant.id}
             className="relative"
             style={{
-              zIndex: visibleParticipants.length - index,
-              marginLeft: index === 0 ? '0px' : `${overlapOffset}px`,
+              zIndex: overlap ? visibleParticipants.length - index : undefined,
+              marginLeft: index === 0 ? '0px' : overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`,
             }}
           >
             <Avatar
               className={cn(
-                sizeClasses[size],
-                'relative bg-card border-2 border-card transition-transform hover:scale-110 hover:z-50',
+                sizeMetadata.container,
+                'relative bg-card',
+                overlap && 'border-2 border-card',
               )}
             >
               <AvatarImage
@@ -61,7 +61,7 @@ export function AvatarGroup({
                 alt={model.name}
                 className="object-contain p-0.5 relative z-10"
               />
-              <AvatarFallback className={cn(textSizeClasses[size], 'bg-card font-semibold relative z-10')}>
+              <AvatarFallback className={cn(sizeMetadata.text, 'bg-card font-semibold relative z-10')}>
                 {model.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -69,17 +69,19 @@ export function AvatarGroup({
         );
       })}
       {/* Total count badge */}
-      <div
-        className={cn(
-          sizeClasses[size],
-          'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
-          size === 'sm' ? 'ml-2' : 'ml-3',
-        )}
-      >
-        <span className={cn(textSizeClasses[size], 'tabular-nums')}>
-          {totalCount}
-        </span>
-      </div>
+      {showCount && (
+        <div
+          className={cn(
+            sizeMetadata.container,
+            'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
+            sizeMetadata.gapSize === 8 ? 'ml-2' : 'ml-3',
+          )}
+        >
+          <span className={cn(sizeMetadata.text, 'tabular-nums')}>
+            {totalCount}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
