@@ -1,6 +1,5 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef, useState } from 'react';
 
@@ -78,12 +77,10 @@ export const PresetNameForm = memo(({
         type="submit"
         variant="outline"
         size="sm"
-        disabled={isPending}
+        loading={isPending}
         className="text-xs sm:text-sm shrink-0 px-2 sm:px-3"
       >
-        {isPending
-          ? <Loader2 className="size-3 sm:size-3.5 animate-spin" />
-          : tModels('presets.save')}
+        {tModels('presets.save')}
       </Button>
     </form>
   );

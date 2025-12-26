@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Loader2, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -488,12 +488,32 @@ export function ModelSelectionModal({
   // Get user tier for preset access checks
   const userTier = userTierInfo?.current_tier ?? 'free';
 
-  // Get selected preset for footer display
-  const selectedPreset = useMemo(() => {
+  // Get selected preset for footer display - check both system and user presets
+  const selectedPreset = useMemo((): ModelPreset | null => {
     if (!selectedPresetId)
       return null;
-    return MODEL_PRESETS.find(p => p.id === selectedPresetId) ?? null;
-  }, [selectedPresetId]);
+    // First check system presets
+    const systemPreset = MODEL_PRESETS.find(p => p.id === selectedPresetId);
+    if (systemPreset)
+      return systemPreset;
+    // Then check user presets
+    const userPreset = userPresets.find(p => p.id === selectedPresetId);
+    if (userPreset) {
+      // Convert UserPreset to ModelPreset format
+      return {
+        id: userPreset.id,
+        name: userPreset.name,
+        description: `${userPreset.modelRoles.length} models`,
+        icon: Sparkles,
+        requiredTier: 'free',
+        order: 0,
+        mode: userPreset.mode,
+        searchEnabled: false,
+        modelRoles: userPreset.modelRoles,
+      };
+    }
+    return null;
+  }, [selectedPresetId, userPresets]);
 
   // Get model IDs from selected preset
   const selectedPresetModelIds = useMemo(() => {
@@ -1018,16 +1038,12 @@ export function ModelSelectionModal({
                             variant="outline"
                             size="sm"
                             onClick={handleUpdatePreset}
-                            disabled={updatePresetMutation.isPending}
+                            loading={updatePresetMutation.isPending}
                             className="text-xs sm:text-sm shrink-0"
                           >
-                            {updatePresetMutation.isPending
-                              ? <Loader2 className="size-3 sm:size-3.5 animate-spin" />
-                              : (
-                                  <span className="truncate max-w-[100px] sm:max-w-none">
-                                    {tModels('presets.update')}
-                                  </span>
-                                )}
+                            <span className="truncate max-w-[100px] sm:max-w-none">
+                              {tModels('presets.update')}
+                            </span>
                           </Button>
                           <Button
                             variant="ghost"

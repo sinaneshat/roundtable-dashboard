@@ -1,7 +1,6 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
@@ -73,12 +72,11 @@ export const CustomRoleForm = memo(({
           type="submit"
           variant="white"
           size="sm"
-          disabled={!form.formState.isValid || isPending || disabled}
+          disabled={!form.formState.isValid || disabled}
+          loading={isPending}
           className="h-8 shrink-0"
         >
-          {isPending
-            ? <Loader2 className="size-3.5 animate-spin" />
-            : t('saveRole')}
+          {t('saveRole')}
         </Button>
       </form>
     </Form>
