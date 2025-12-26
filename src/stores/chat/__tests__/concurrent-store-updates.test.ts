@@ -15,8 +15,7 @@
 import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageRoles } from '@/api/core/enums';
-import { MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { MessageRoles, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 

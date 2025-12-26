@@ -5,7 +5,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Streamdown } from 'streamdown';
 
 import type { MessageStatus } from '@/api/core/enums';
-import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, UIMessageRoles } from '@/api/core/enums';
+import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
@@ -19,7 +19,6 @@ import { BRAND } from '@/constants/brand';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useModelLookup } from '@/hooks/utils';
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage, getCachedImageColor, hasColorCached } from '@/lib/ui';

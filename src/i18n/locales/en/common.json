@@ -1,15 +1,4 @@
 {
-  "/auth/sign-in": "/Auth/Sign-In",
-  "/chat": "/chat",
-  "2d": "2d",
-  "@": "@",
-  "@/db": "@/Db",
-  "@/db/tables/auth": "@/Db/Tables/Auth",
-  "@/emails/templates": "@/Emails/Templates",
-  "@/lib/auth/server": "@/Lib/Auth/Server",
-  "@/lib/email/ses-service": "@/Lib/Email/Ses-Service",
-  "NEXT_LOCALE": "NEXT LOCALE",
-  "USD": "USD",
   "accessibility": {
     "accessibility": "Accessibility",
     "disableHighContrast": "DisableHighContrast",
@@ -49,7 +38,6 @@
     "updating": "Updating",
     "toggleSidebar": "Toggle Sidebar"
   },
-  "addToFavorites": "Add To Favorites",
   "apiKeys": {
     "modal": {
       "title": "API Keys",
@@ -332,7 +320,6 @@
   "brand": {
     "logoAlt": "Company Logo"
   },
-  "canvas": "Canvas",
   "chat": {
     "dashboard": {
       "title": "AI Collaboration Dashboard",
@@ -396,10 +383,45 @@
         "back": "Back",
         "setRoleFor": "Set role for {modelName}",
         "selectOrEnterRole": "Select a predefined role or create a custom one",
-        "customRolePlaceholder": "Enter custom role name..."
+        "customRolePlaceholder": "Enter custom role name...",
+        "saveRole": "Save",
+        "upgradeRequired": "Upgrade Required",
+        "customRolesUpgradeMessage": "Custom roles are available for paid users only. Upgrade to create custom roles.",
+        "customRolesPaidOnly": "Custom roles are available for paid users",
+        "failedToCreateRole": "Failed to create role",
+        "roleDeleted": "Role deleted",
+        "roleDeletedMessage": "\"{name}\" has been deleted",
+        "failedToDeleteRole": "Failed to delete role",
+        "noModelsSelected": "No models selected",
+        "selectAtLeastOneModel": "Select at least one model to save as a preset",
+        "selectAtLeastOneModelUpdate": "Select at least one model to update the preset"
       },
       "presets": {
-        "title": "Presets"
+        "title": "Presets",
+        "myPresets": "My Presets",
+        "systemPresets": "Presets",
+        "saveAsPreset": "Save as Preset",
+        "saveAsNew": "Save as New",
+        "updatePreset": "Update \"{name}\"",
+        "namePlaceholder": "Preset name...",
+        "cancel": "Cancel",
+        "save": "Save",
+        "done": "Done",
+        "presetSaved": "Preset saved",
+        "presetSavedMessage": "\"{name}\" has been saved to your presets",
+        "presetUpdated": "Preset updated",
+        "presetUpdatedMessage": "\"{name}\" has been updated",
+        "presetDeleted": "Preset deleted",
+        "presetDeletedMessage": "Your preset has been removed",
+        "failedToSave": "Failed to save preset",
+        "failedToUpdate": "Failed to update preset",
+        "failedToDelete": "Failed to delete preset",
+        "saving": "Saving...",
+        "updating": "Updating...",
+        "rolesRequired": "{count, plural, =1 {1 model needs a role} other {# models need roles}}",
+        "cannotSave": "Cannot save preset",
+        "nameRequired": "Please enter a preset name",
+        "update": "Update"
       },
       "buildCustom": {
         "title": "Build Custom"
@@ -997,27 +1019,6 @@
     "more": "More",
     "statusLabel": "Status: {status}"
   },
-  "componentError": "ComponentError",
-  "componentUnavailable": "ComponentUnavailable",
-  "content-type": "Content-Type",
-  "copyErrorDetails": "CopyErrorDetails",
-  "copyLink": "Copy Link",
-  "currentPlan": "Current Plan",
-  "customRoles": "Custom Roles",
-  "dark": "Dark",
-  "daysFreeTrial": "Days Free Trial",
-  "description": "Description",
-  "development": "Development",
-  "email": "Email",
-  "en-US": "En-US",
-  "error": "Error",
-  "errorDetailsCopied": "ErrorDetailsCopied",
-  "errorDetailsCopyFailed": "ErrorDetailsCopyFailed",
-  "errors": {
-    "generic": "Generic",
-    "streamFailed": "Stream failed",
-    "unknownError": "Unknown error"
-  },
   "forms": {
     "loading": "Loading",
     "noOptionsAvailable": "NoOptionsAvailable",
@@ -1028,11 +1029,6 @@
     "hidePassword": "Hide password",
     "showPassword": "Show password"
   },
-  "goHome": "GoHome",
-  "id": "Id",
-  "image": "Image",
-  "info": "Info",
-  "key": "Key",
   "legal": {
     "trustBadges": {
       "secure": "Secure",
@@ -1123,7 +1119,6 @@
       "title": "Terms of Service"
     }
   },
-  "light": "Light",
   "meta": {
     "signIn": {
       "title": "Sign In",
@@ -1161,9 +1156,6 @@
       }
     }
   },
-  "makePrivate": "Make Private",
-  "makePublic": "Make Public",
-  "manageBilling": "Manage Billing",
   "moderator": {
     "mode": {
       "analyzing": "Analyzing",
@@ -1172,9 +1164,6 @@
       "solving": "Problem Solving"
     }
   },
-  "mostPopular": "Most Popular",
-  "name": "Name",
-  "namespace": "Namespace",
   "navigation": {
     "chat": "Chat",
     "dashboard": "Dashboard",
@@ -1195,20 +1184,6 @@
     "offline": "Offline",
     "timeout": "Timeout"
   },
-  "next": "Next",
-  "next/headers": "Next/Headers",
-  "noResults": "No Results",
-  "noResultsDescription": "No Results Description",
-  "notifications": {
-    "error": {
-      "createFailed": "Failed to create item"
-    },
-    "success": {
-      "createSuccess": "Item created successfully"
-    }
-  },
-  "pageDescription": "PageDescription",
-  "pageTitle": "PageTitle",
   "pages": {
     "notFound": {
       "description": "The page you were looking for could not be found. Please check the URL or try navigating back to the homepage.",
@@ -1216,13 +1191,6 @@
       "title": "Oops, page not found!"
     }
   },
-  "password": {
-    "fair": "Fair Password",
-    "good": "Good Password",
-    "strong": "Strong Password",
-    "weak": "Weak Password"
-  },
-  "pending": "Pending",
   "plans": {
     "errorDescription": "There was an error loading subscription plans. Please try again.",
     "noCreditsPackages": "No credit packages available",
@@ -1258,7 +1226,6 @@
       }
     }
   },
-  "previous": "Previous",
   "pricing": {
     "card": {
       "annual": "Annual Plan",
@@ -1343,17 +1310,6 @@
       "multipleParticipants": "Multiple AI participants per conversation"
     }
   },
-  "products": "Products",
-  "refreshPage": "RefreshPage",
-  "refreshing": "Refreshing",
-  "removeFromFavorites": "Remove From Favorites",
-  "retry": "Retry",
-  "retrying": "Retrying",
-  "sectionDescription": "SectionDescription",
-  "sectionMessage": "SectionMessage",
-  "sectionTitle": "SectionTitle",
-  "sectionUnavailable": "SectionUnavailable",
-  "session": "Session",
   "states": {
     "empty": {
       "default": "No data found",
@@ -1408,7 +1364,6 @@
       }
     }
   },
-  "subscriptions": "Subscriptions",
   "table": {
     "columns": "Columns",
     "dataTable": "Data table",
@@ -1425,7 +1380,6 @@
     "description": "Description",
     "title": "Title"
   },
-  "threads": "Threads",
   "time": {
     "today": "Today",
     "yesterday": "Yesterday",
@@ -1433,10 +1387,6 @@
     "oneWeekAgo": "1 week ago",
     "weeksAgo": "{count} weeks ago"
   },
-  "title": "Title",
-  "token": "Token",
-  "transfer-encoding": "Transfer-encoding",
-  "url": "Url",
   "usage": {
     "active": "Active",
     "addCard": "Add card",
@@ -1484,7 +1434,6 @@
   "user": {
     "defaultName": "User"
   },
-  "value": "Value",
   "webSearch": {
     "images": {
       "title": "Images from Search",

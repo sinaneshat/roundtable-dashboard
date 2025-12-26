@@ -9,8 +9,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { createCheckoutSessionService, syncAfterCheckoutService, syncCreditsAfterCheckoutService } from '@/services/api';
-import { listModelsService } from '@/services/api/models';
+import { createCheckoutSessionService, listModelsService, syncAfterCheckoutService, syncCreditsAfterCheckoutService } from '@/services/api';
 
 /**
  * Hook to create Stripe checkout session

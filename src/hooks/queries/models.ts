@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { listModelsService } from '@/services/api/models';
+import { listModelsService } from '@/services/api';
 
 /**
  * Hook to fetch curated AI models

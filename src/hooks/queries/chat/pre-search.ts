@@ -15,7 +15,7 @@ import { MessageStatuses } from '@/api/core/enums';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
+import { getThreadPreSearchesService } from '@/services/api';
 
 /**
  * Hook to fetch all pre-search results for a thread

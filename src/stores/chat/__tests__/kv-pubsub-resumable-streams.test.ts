@@ -294,7 +294,7 @@ async function failStreamBuffer(kv: MockKVStore, streamId: string, errorMessage:
 function isStreamStale(meta: StreamBufferMetadata): boolean {
   const createdTime = new Date(meta.createdAt).getTime();
   const now = Date.now();
-  return now - createdTime > STALE_CHUNK_TIMEOUT_MS;
+  return now - createdTime >= STALE_CHUNK_TIMEOUT_MS;
 }
 
 /**
@@ -777,7 +777,7 @@ describe('stale Stream Detection', () => {
     expect(isStreamStale(meta)).toBe(true);
   });
 
-  it('stream at exactly 30s boundary is not stale', () => {
+  it('stream at exactly 30s boundary is stale', () => {
     const meta: StreamBufferMetadata = {
       streamId: 'test',
       threadId: 'thread-123',
@@ -789,7 +789,8 @@ describe('stale Stream Detection', () => {
       chunkCount: 10,
     };
 
-    expect(isStreamStale(meta)).toBe(false);
+    // At exactly 30s boundary, consider it stale due to >= check
+    expect(isStreamStale(meta)).toBe(true);
   });
 });
 

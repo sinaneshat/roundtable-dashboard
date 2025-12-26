@@ -342,6 +342,20 @@ CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thr
 CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_thread_round_idx` ON `chat_thread_changelog` (`thread_id`,`round_number`);--> statement-breakpoint
+CREATE TABLE `chat_user_preset` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`name` text NOT NULL,
+	`mode` text DEFAULT 'debating' NOT NULL,
+	`model_roles` text NOT NULL,
+	`metadata` text,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `chat_user_preset_user_idx` ON `chat_user_preset` (`user_id`);--> statement-breakpoint
+CREATE INDEX `chat_user_preset_name_idx` ON `chat_user_preset` (`name`);--> statement-breakpoint
 CREATE TABLE `credit_transaction` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

@@ -17,9 +17,9 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getSubscriptionsService,
   getUserUsageStatsService,
+  listModelsService,
   listThreadsService,
 } from '@/services/api';
-import { listModelsService } from '@/services/api/models';
 
 type ChatLayoutProps = {
   children: React.ReactNode;

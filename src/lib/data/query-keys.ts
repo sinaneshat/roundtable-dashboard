@@ -89,6 +89,18 @@ export const queryKeys = {
     detail: (id: string) => QueryKeyFactory.detail('customRoles', id),
   },
 
+  // User Presets (saved model+role configurations)
+  userPresets: {
+    all: QueryKeyFactory.base('userPresets'),
+    lists: () => [...queryKeys.userPresets.all, 'list'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('userPresets', 'list', cursor)
+        : QueryKeyFactory.list('userPresets'),
+    details: () => [...queryKeys.userPresets.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('userPresets', id),
+  },
+
   // API Keys
   apiKeys: {
     all: QueryKeyFactory.base('apiKeys'),
@@ -214,6 +226,16 @@ export const invalidationPatterns = {
   customRoleDetail: (roleId: string) => [
     queryKeys.customRoles.detail(roleId),
     queryKeys.customRoles.lists(),
+  ],
+
+  // User preset operations
+  userPresets: [
+    queryKeys.userPresets.lists(),
+  ],
+
+  userPresetDetail: (presetId: string) => [
+    queryKeys.userPresets.detail(presetId),
+    queryKeys.userPresets.lists(),
   ],
 
   // API Key operations

@@ -77,9 +77,11 @@ import {
   addParticipantHandler,
   createCustomRoleHandler,
   createThreadHandler,
+  createUserPresetHandler,
   deleteCustomRoleHandler,
   deleteParticipantHandler,
   deleteThreadHandler,
+  deleteUserPresetHandler,
   executePreSearchHandler,
   getCustomRoleHandler,
   getPublicThreadHandler,
@@ -91,8 +93,10 @@ import {
   getThreadPreSearchesHandler,
   getThreadSlugStatusHandler,
   getThreadStreamResumptionStateHandler,
+  getUserPresetHandler,
   listCustomRolesHandler,
   listThreadsHandler,
+  listUserPresetsHandler,
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
   streamChatHandler,
@@ -100,14 +104,17 @@ import {
   updateCustomRoleHandler,
   updateParticipantHandler,
   updateThreadHandler,
+  updateUserPresetHandler,
 } from './routes/chat/handler';
 import {
   addParticipantRoute,
   createCustomRoleRoute,
   createThreadRoute,
+  createUserPresetRoute,
   deleteCustomRoleRoute,
   deleteParticipantRoute,
   deleteThreadRoute,
+  deleteUserPresetRoute,
   executePreSearchRoute,
   getCustomRoleRoute,
   getPublicThreadRoute,
@@ -119,8 +126,10 @@ import {
   getThreadRoute,
   getThreadSlugStatusRoute,
   getThreadStreamResumptionStateRoute,
+  getUserPresetRoute,
   listCustomRolesRoute,
   listThreadsRoute,
+  listUserPresetsRoute,
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
   streamChatRoute,
@@ -128,6 +137,7 @@ import {
   updateCustomRoleRoute,
   updateParticipantRoute,
   updateThreadRoute,
+  updateUserPresetRoute,
 } from './routes/chat/route';
 // Credits routes
 import {
@@ -573,6 +583,12 @@ const appRoutes = app
   .openapi(getCustomRoleRoute, getCustomRoleHandler) // Get custom role details
   .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role template
   .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
+  // User Presets (protected, localStorage-based)
+  .openapi(listUserPresetsRoute, listUserPresetsHandler) // List user presets
+  .openapi(createUserPresetRoute, createUserPresetHandler) // Create user preset
+  .openapi(getUserPresetRoute, getUserPresetHandler) // Get user preset details
+  .openapi(updateUserPresetRoute, updateUserPresetHandler) // Update user preset
+  .openapi(deleteUserPresetRoute, deleteUserPresetHandler) // Delete user preset
   // Pre-search (protected, web search results) - execute auto-creates DB record
   .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
   .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution (auto-creates)

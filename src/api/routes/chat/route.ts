@@ -8,6 +8,7 @@ import {
   ChangelogListResponseSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
+  CreateUserPresetRequestSchema,
   CustomRoleDetailResponseSchema,
   CustomRoleListResponseSchema,
   DeleteThreadResponseSchema,
@@ -31,6 +32,9 @@ import {
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
+  UpdateUserPresetRequestSchema,
+  UserPresetDetailResponseSchema,
+  UserPresetListResponseSchema,
 } from './schema';
 
 export const listThreadsRoute = createRoute({
@@ -634,6 +638,120 @@ export const deleteCustomRoleRoute = createRoute({
   responses: {
     [HttpStatusCodes.OK]: {
       description: 'Custom role deleted successfully',
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            deleted: z.boolean().openapi({ example: true }),
+          })),
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const listUserPresetsRoute = createRoute({
+  method: 'get',
+  path: '/chat/user-presets',
+  tags: ['chat'],
+  summary: 'List user presets with cursor pagination',
+  description: 'Get user-created model presets from localStorage with infinite scroll support',
+  request: {
+    query: CursorPaginationQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User presets retrieved successfully',
+      content: {
+        'application/json': { schema: UserPresetListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const createUserPresetRoute = createRoute({
+  method: 'post',
+  path: '/chat/user-presets',
+  tags: ['chat'],
+  summary: 'Create user preset',
+  description: 'Create a new user preset with model-role pairs and mode',
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: CreateUserPresetRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset created successfully',
+      content: {
+        'application/json': { schema: UserPresetDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const getUserPresetRoute = createRoute({
+  method: 'get',
+  path: '/chat/user-presets/:id',
+  tags: ['chat'],
+  summary: 'Get user preset details',
+  description: 'Get details of a specific user preset',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset retrieved successfully',
+      content: {
+        'application/json': { schema: UserPresetDetailResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const updateUserPresetRoute = createRoute({
+  method: 'patch',
+  path: '/chat/user-presets/:id',
+  tags: ['chat'],
+  summary: 'Update user preset',
+  description: 'Update user preset name, model-role pairs, or mode',
+  request: {
+    params: IdParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: UpdateUserPresetRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset updated successfully',
+      content: {
+        'application/json': { schema: UserPresetDetailResponseSchema },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+export const deleteUserPresetRoute = createRoute({
+  method: 'delete',
+  path: '/chat/user-presets/:id',
+  tags: ['chat'],
+  summary: 'Delete user preset',
+  description: 'Delete a user preset from localStorage',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'User preset deleted successfully',
       content: {
         'application/json': {
           schema: createApiResponseSchema(z.object({

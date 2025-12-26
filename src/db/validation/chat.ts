@@ -18,6 +18,7 @@ import {
   DbMessageMetadataSchema,
   DbParticipantSettingsSchema,
   DbThreadMetadataSchema,
+  DbUserPresetMetadataSchema,
 } from '@/db/schemas/chat-metadata';
 import {
   chatCustomRole,
@@ -27,6 +28,7 @@ import {
   chatRoundFeedback,
   chatThread,
   chatThreadChangelog,
+  chatUserPreset,
 } from '@/db/tables/chat';
 
 import { Refinements } from './refinements';
@@ -141,6 +143,25 @@ export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedbac
 });
 
 /**
+ * User Preset Schemas
+ * User-saved preset configurations for thread creation
+ */
+export const chatUserPresetSelectSchema = createSelectSchema(chatUserPreset).extend({
+  // ✅ TYPE-SAFE: Use strictly typed user preset metadata
+  metadata: DbUserPresetMetadataSchema.nullable().optional(),
+});
+export const chatUserPresetInsertSchema = createInsertSchema(chatUserPreset, {
+  name: Refinements.name(),
+  // modelRoles and mode validated by database schema type
+  // metadata validated by DbUserPresetMetadataSchema
+});
+export const chatUserPresetUpdateSchema = createUpdateSchema(chatUserPreset, {
+  name: Refinements.nameOptional(),
+  // modelRoles and mode validated by database schema type
+  // metadata validated by DbUserPresetMetadataSchema
+});
+
+/**
  * Type exports
  */
 export type ChatThread = z.infer<typeof chatThreadSelectSchema>;
@@ -170,3 +191,7 @@ export type ChatPreSearchUpdate = z.infer<typeof chatPreSearchUpdateSchema>;
 export type ChatRoundFeedback = z.infer<typeof chatRoundFeedbackSelectSchema>;
 export type ChatRoundFeedbackInsert = z.infer<typeof chatRoundFeedbackInsertSchema>;
 export type ChatRoundFeedbackUpdate = z.infer<typeof chatRoundFeedbackUpdateSchema>;
+
+export type ChatUserPreset = z.infer<typeof chatUserPresetSelectSchema>;
+export type ChatUserPresetInsert = z.infer<typeof chatUserPresetInsertSchema>;
+export type ChatUserPresetUpdate = z.infer<typeof chatUserPresetUpdateSchema>;

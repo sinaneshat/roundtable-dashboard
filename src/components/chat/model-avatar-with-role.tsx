@@ -1,6 +1,5 @@
-import { getShortRoleName } from '@/api/core/enums';
-import type { AvatarSize } from '@/api/core/enums/ui';
-import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE } from '@/api/core/enums/ui';
+import type { AvatarSize } from '@/api/core/enums';
+import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE, getShortRoleName } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getProviderIcon } from '@/lib/utils/ai-display';

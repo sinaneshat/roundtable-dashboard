@@ -7,6 +7,38 @@
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
+// MODERATOR CONSTANTS (5-part pattern)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - N/A for single values, use constant directly
+// 2️⃣ DEFAULT VALUE - The main constants
+/** Moderator display name shown in UI */
+export const MODERATOR_NAME = 'Council Moderator';
+
+/** Sentinel value for moderator (not a real participant, sorts last) */
+export const MODERATOR_PARTICIPANT_INDEX = -99;
+
+// 3️⃣ ZOD SCHEMA - For validation when needed
+export const ModeratorNameSchema = z.literal(MODERATOR_NAME).openapi({
+  description: 'Moderator display name',
+  example: MODERATOR_NAME,
+});
+
+export const ModeratorParticipantIndexSchema = z.literal(MODERATOR_PARTICIPANT_INDEX).openapi({
+  description: 'Sentinel value for moderator participant index',
+  example: MODERATOR_PARTICIPANT_INDEX,
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from schema
+export type ModeratorName = z.infer<typeof ModeratorNameSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For programmatic access
+export const ModeratorConstants = {
+  NAME: MODERATOR_NAME,
+  PARTICIPANT_INDEX: MODERATOR_PARTICIPANT_INDEX,
+} as const;
+
+// ============================================================================
 // CHAT MODE
 // ============================================================================
 

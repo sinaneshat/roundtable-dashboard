@@ -20,15 +20,18 @@ export {
   useAddParticipantMutation,
   useCreateCustomRoleMutation,
   useCreateThreadMutation,
+  useCreateUserPresetMutation,
   useDeleteCustomRoleMutation,
   useDeleteParticipantMutation,
   useDeleteThreadMutation,
+  useDeleteUserPresetMutation,
   useSetRoundFeedbackMutation,
   useToggleFavoriteMutation,
   useTogglePublicMutation,
   useUpdateCustomRoleMutation,
   useUpdateParticipantMutation,
   useUpdateThreadMutation,
+  useUpdateUserPresetMutation,
 } from './chat-mutations';
 
 // Checkout mutations (protected)

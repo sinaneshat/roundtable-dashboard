@@ -17,9 +17,8 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessagePartTypes } from '@/api/core/enums';
+import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
 import { queryKeys } from '@/lib/data/query-keys';
 import { chatMessagesToUIMessages } from '@/lib/utils';
 import { getThreadMessagesService } from '@/services/api';

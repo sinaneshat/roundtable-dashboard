@@ -1,16 +1,14 @@
 'use client';
 
-import { AlertCircle, ArrowLeft, Search, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/core/enums';
-import { PREDEFINED_ROLE_TEMPLATES } from '@/api/core/enums';
-import type { ModelSelectionTab } from '@/api/core/enums/ui';
-import { DEFAULT_MODEL_SELECTION_TAB, ModelSelectionTabs } from '@/api/core/enums/ui';
+import type { ModelSelectionTab, SubscriptionTier } from '@/api/core/enums';
+import { ChatModes, DEFAULT_MODEL_SELECTION_TAB, ModelSelectionTabs, PREDEFINED_ROLE_TEMPLATES } from '@/api/core/enums';
 import { createRoleSystemPrompt } from '@/api/services/prompts.service';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,19 +21,29 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PresetCardSkeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCreateCustomRoleMutation } from '@/hooks/mutations';
-import { useUsageStatsQuery } from '@/hooks/queries';
+import {
+  useCreateCustomRoleMutation,
+  useCreateUserPresetMutation,
+  useDeleteCustomRoleMutation,
+  useDeleteUserPresetMutation,
+  useUpdateUserPresetMutation,
+} from '@/hooks/mutations';
+import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { MODEL_PRESETS } from '@/lib/config/model-presets';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { toastManager } from '@/lib/toast';
 import { cn } from '@/lib/ui/cn';
-import { getApiErrorMessage, getRoleColors } from '@/lib/utils';
-import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
+import { getApiErrorMessage } from '@/lib/utils';
+import type { ListCustomRolesResponse } from '@/services/api';
 
+import { CustomRoleForm } from './custom-role-form';
 import { ModelItem } from './model-item';
 import { ModelPresetCard } from './model-preset-card';
+import { PresetNameForm } from './preset-name-form';
+import { RoleColorBadge } from './role-color-badge';
 
 /** Custom role item type - inferred from API response for JSON-safe dates */
 type CustomRole = NonNullable<
@@ -132,7 +140,6 @@ export function ModelSelectionModal({
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Tab state - default to presets to encourage usage
   const [activeTab, setActiveTab] = useState(DEFAULT_MODEL_SELECTION_TAB);
 
   // Selected preset state for presets tab
@@ -143,14 +150,39 @@ export function ModelSelectionModal({
 
   // Role selection state
   const [selectedModelForRole, setSelectedModelForRole] = useState<string | null>(null);
-  const [customRoleInput, setCustomRoleInput] = useState('');
 
   // Pending roles for models that aren't toggled on yet
   // Allows assigning roles independently of selection state
   const [pendingRoles, setPendingRoles] = useState<Record<string, { role: string; customRoleId?: string }>>({});
 
-  // Custom role creation mutation
+  // User presets - fetched from API only when modal is open
+  const {
+    data: userPresetsData,
+    isLoading: isLoadingUserPresets,
+  } = useUserPresetsQuery(open);
+
+  const userPresets = useMemo(() => {
+    if (!userPresetsData?.pages)
+      return [];
+    return userPresetsData.pages.flatMap(page =>
+      page.success && page.data?.items ? page.data.items : [],
+    );
+  }, [userPresetsData]);
+
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  // Edit mode - tracks which user preset is being edited
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  // Track newly created preset for highlight animation
+  const [newlyCreatedPresetId, setNewlyCreatedPresetId] = useState<string | null>(null);
+
+  // Custom role mutations
   const createRoleMutation = useCreateCustomRoleMutation();
+  const deleteRoleMutation = useDeleteCustomRoleMutation();
+
+  // User preset mutations
+  const createPresetMutation = useCreateUserPresetMutation();
+  const updatePresetMutation = useUpdateUserPresetMutation();
+  const deletePresetMutation = useDeleteUserPresetMutation();
 
   // Usage stats for custom role access
   const { data: usageData } = useUsageStatsQuery();
@@ -203,7 +235,6 @@ export function ModelSelectionModal({
 
   const handleBackToModelList = useCallback(() => {
     setSelectedModelForRole(null);
-    setCustomRoleInput('');
   }, []);
 
   const handleRoleSelect = useCallback((roleName: string, customRoleId?: string) => {
@@ -224,16 +255,16 @@ export function ModelSelectionModal({
     }
   }, [selectedModelForRole, orderedModels, onRoleChange, handleBackToModelList]);
 
-  const handleCustomRoleCreate = useCallback(async () => {
-    const trimmedRole = customRoleInput.trim();
+  const handleCustomRoleCreate = useCallback(async (roleName: string) => {
+    const trimmedRole = roleName.trim();
     if (!trimmedRole)
       return;
 
     // Check if user can create custom roles (paid users only)
     if (!canCreateCustomRoles) {
       toastManager.error(
-        'Upgrade Required',
-        'Custom roles are available for paid users only. Upgrade to create custom roles.',
+        t('upgradeRequired'),
+        t('customRolesUpgradeMessage'),
       );
       return;
     }
@@ -253,10 +284,22 @@ export function ModelSelectionModal({
         handleRoleSelect(result.data.customRole.name, result.data.customRole.id);
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, 'Failed to create custom role');
-      toastManager.error('Failed to create role', errorMessage);
+      const errorMessage = getApiErrorMessage(error, t('failedToCreateRole'));
+      toastManager.error(t('failedToCreateRole'), errorMessage);
     }
-  }, [customRoleInput, createRoleMutation, handleRoleSelect, canCreateCustomRoles]);
+  }, [createRoleMutation, handleRoleSelect, canCreateCustomRoles, t]);
+
+  // Handle deleting a custom role
+  const handleDeleteCustomRole = useCallback(async (roleId: string, roleName: string) => {
+    try {
+      await deleteRoleMutation.mutateAsync({ param: { id: roleId } });
+      toastManager.success(t('roleDeleted'), t('roleDeletedMessage', { name: roleName }));
+    } catch (error) {
+      console.error('[ModelSelectionModal] Failed to delete custom role:', error);
+      const errorMessage = getApiErrorMessage(error, t('failedToDeleteRole'));
+      toastManager.error(t('failedToDeleteRole'), errorMessage);
+    }
+  }, [deleteRoleMutation, t]);
 
   // Handle clearing role - either from participant or pendingRoles
   const handleClearRoleInternal = useCallback((modelId: string) => {
@@ -311,12 +354,131 @@ export function ModelSelectionModal({
   }, [selectedPresetId]);
 
   // Handle customize preset - apply preset and switch to Build Custom tab
-  const handleCustomizePreset = useCallback((result: PresetSelectionResult) => {
+  // If user preset, enter edit mode to allow updating
+  const handleCustomizePreset = useCallback((result: PresetSelectionResult, isUserPreset?: boolean) => {
     if (onPresetSelect) {
       onPresetSelect(result.preset);
     }
+    if (isUserPreset) {
+      setEditingPresetId(result.preset.id);
+    } else {
+      setEditingPresetId(null);
+    }
     setActiveTab(ModelSelectionTabs.CUSTOM);
   }, [onPresetSelect]);
+
+  // Handle saving current configuration as a user preset
+  const handleSaveAsPreset = useCallback(async (presetName: string) => {
+    const trimmedName = presetName.trim();
+    if (!trimmedName)
+      return;
+
+    // Get current selected models with their roles
+    const selectedModels = orderedModels.filter(om => om.participant !== null);
+    if (selectedModels.length === 0) {
+      toastManager.error(tModels('presets.cannotSave'), t('selectAtLeastOneModel'));
+      return;
+    }
+
+    // Check if any models are missing roles
+    const modelsWithoutRoles = selectedModels.filter(om => !om.participant?.role?.trim());
+    if (modelsWithoutRoles.length > 0) {
+      toastManager.error(
+        tModels('presets.cannotSave'),
+        tModels('presets.rolesRequired', { count: modelsWithoutRoles.length }),
+      );
+      return;
+    }
+
+    const modelRoles = selectedModels.map(om => ({
+      modelId: om.model.id,
+      role: om.participant?.role ?? '',
+    }));
+
+    try {
+      const result = await createPresetMutation.mutateAsync({
+        json: {
+          name: trimmedName,
+          modelRoles,
+          mode: ChatModes.ANALYZING,
+        },
+      });
+
+      // Reset state
+      setIsSavingPreset(false);
+
+      // Switch to Presets tab and highlight the new preset
+      if (result.success && result.data?.preset?.id) {
+        setNewlyCreatedPresetId(result.data.preset.id);
+        setActiveTab(ModelSelectionTabs.PRESETS);
+        // Clear highlight after animation
+        setTimeout(() => setNewlyCreatedPresetId(null), 2000);
+      }
+
+      toastManager.success(tModels('presets.presetSaved'), tModels('presets.presetSavedMessage', { name: trimmedName }));
+    } catch (error) {
+      const errorMessage = getApiErrorMessage(error, tModels('presets.failedToSave'));
+      toastManager.error(tModels('presets.failedToSave'), errorMessage);
+    }
+  }, [orderedModels, createPresetMutation, tModels, t]);
+
+  // Handle updating an existing user preset
+  const handleUpdatePreset = useCallback(async () => {
+    if (!editingPresetId)
+      return;
+
+    // Get current selected models with their roles
+    const selectedModels = orderedModels.filter(om => om.participant !== null);
+    if (selectedModels.length === 0) {
+      toastManager.error(tModels('presets.cannotSave'), t('selectAtLeastOneModelUpdate'));
+      return;
+    }
+
+    // Check if any models are missing roles
+    const modelsWithoutRoles = selectedModels.filter(om => !om.participant?.role?.trim());
+    if (modelsWithoutRoles.length > 0) {
+      toastManager.error(
+        tModels('presets.cannotSave'),
+        tModels('presets.rolesRequired', { count: modelsWithoutRoles.length }),
+      );
+      return;
+    }
+
+    const modelRoles = selectedModels.map(om => ({
+      modelId: om.model.id,
+      role: om.participant?.role ?? '',
+    }));
+
+    // Find the preset name for the toast
+    const existingPreset = userPresets.find(p => p.id === editingPresetId);
+    const presetName = existingPreset?.name ?? 'Preset';
+
+    try {
+      await updatePresetMutation.mutateAsync({
+        param: { id: editingPresetId },
+        json: { modelRoles },
+      });
+
+      // Clear edit mode
+      setEditingPresetId(null);
+
+      toastManager.success(tModels('presets.presetUpdated'), tModels('presets.presetUpdatedMessage', { name: presetName }));
+    } catch (error) {
+      const errorMessage = getApiErrorMessage(error, tModels('presets.failedToUpdate'));
+      toastManager.error(tModels('presets.failedToUpdate'), errorMessage);
+    }
+  }, [editingPresetId, orderedModels, userPresets, updatePresetMutation, tModels, t]);
+
+  // Handle deleting a user preset
+  const handleDeleteUserPreset = useCallback(async (presetId: string) => {
+    try {
+      await deletePresetMutation.mutateAsync({ param: { id: presetId } });
+      toastManager.success(tModels('presets.presetDeleted'), tModels('presets.presetDeletedMessage'));
+    } catch (error) {
+      const errorMessage = getApiErrorMessage(error, tModels('presets.failedToDelete'));
+      toastManager.error(tModels('presets.failedToDelete'), errorMessage);
+    }
+  }, [deletePresetMutation, tModels]);
 
   // Get all models for preset cards
   const allModels = useMemo(() => {
@@ -339,6 +501,23 @@ export function ModelSelectionModal({
       return [];
     return selectedPreset.modelRoles.map(mr => mr.modelId);
   }, [selectedPreset]);
+
+  // Validate models have roles before allowing save as preset
+  const presetValidation = useMemo(() => {
+    const selectedModels = orderedModels.filter(om => om.participant !== null);
+    const modelsWithoutRoles = selectedModels.filter(om => !om.participant?.role?.trim());
+
+    return {
+      hasSelectedModels: selectedModels.length > 0,
+      modelsWithoutRoles,
+      canSave: selectedModels.length > 0 && modelsWithoutRoles.length === 0,
+      errorMessage: selectedModels.length === 0
+        ? tModels('modal.selectAtLeastOneModel')
+        : modelsWithoutRoles.length > 0
+          ? tModels('presets.rolesRequired', { count: modelsWithoutRoles.length })
+          : null,
+    };
+  }, [orderedModels, tModels]);
 
   // Apply preset when flag is set (triggered by tab change handler)
   useEffect(() => {
@@ -405,7 +584,7 @@ export function ModelSelectionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn('!max-w-4xl !w-[calc(100vw-2.5rem)] gap-0', className)}
+        className={cn('!max-w-4xl w-full gap-0', className)}
       >
         <DialogHeader>
           {selectedModelForRole
@@ -433,7 +612,7 @@ export function ModelSelectionModal({
               )}
         </DialogHeader>
 
-        <DialogBody className="flex flex-col py-0 max-h-[600px] overflow-hidden">
+        <DialogBody className="flex flex-col py-0 max-h-[min(600px,70vh)] overflow-hidden">
           <AnimatePresence mode="wait">
             {/* Role Selection View */}
             {selectedModelForRole
@@ -447,7 +626,7 @@ export function ModelSelectionModal({
                     className="flex flex-col flex-1 min-h-0"
                   >
                     {/* Scrollable role list - NO padding */}
-                    <ScrollArea className="h-[420px]">
+                    <ScrollArea className="h-[min(420px,50vh)]">
                       <div className="flex flex-col">
                         {/* Predefined roles */}
                         {PREDEFINED_ROLE_TEMPLATES.map((role) => {
@@ -456,14 +635,13 @@ export function ModelSelectionModal({
                           const currentRole = selectedModelData?.participant?.role
                             ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
                           const isSelected = currentRole === role.name;
-                          const colors = getRoleColors(role.name);
 
                           return (
                             <button
                               type="button"
                               key={role.name}
                               onClick={() => {
-                                // Toggle: if already selected, clear it
+                              // Toggle: if already selected, clear it
                                 if (isSelected) {
                                   handleClearRoleInternal(selectedModelForRole!);
                                   handleBackToModelList();
@@ -478,14 +656,9 @@ export function ModelSelectionModal({
                               )}
                             >
                               <div className="flex items-center gap-3">
-                                <div
-                                  className="flex size-8 shrink-0 items-center justify-center rounded-full"
-                                  style={{ backgroundColor: colors.bgColor }}
-                                >
-                                  <Icon className="size-4" style={{ color: colors.iconColor }} />
-                                </div>
+                                <RoleColorBadge roleName={role.name} icon={Icon} />
                                 <div className="flex-1 min-w-0">
-                                  <h4 className="text-base font-normal">{role.name}</h4>
+                                  <h4 className="text-base font-normal">{role.category}</h4>
                                 </div>
                                 {isSelected && (
                                   <button
@@ -526,28 +699,28 @@ export function ModelSelectionModal({
                                 }
                               }}
                               className={cn(
-                                'w-full p-3 transition-all text-left rounded-lg',
+                                'group w-full p-3 transition-all text-left rounded-lg',
                                 'hover:bg-white/5 hover:backdrop-blur-sm',
                                 isSelected && 'bg-white/10',
                               )}
                             >
                               <div className="flex items-center gap-3">
-                                {(() => {
-                                  const colors = getRoleColors(role.name);
-                                  return (
-                                    <div
-                                      className="flex size-8 shrink-0 items-center justify-center rounded-full"
-                                      style={{ backgroundColor: colors.bgColor }}
-                                    >
-                                      <span className="font-semibold text-[11px]" style={{ color: colors.iconColor }}>
-                                        {role.name.charAt(0).toUpperCase()}
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
+                                <RoleColorBadge roleName={role.name} />
                                 <div className="flex-1 min-w-0">
-                                  <h4 className="text-base font-normal">{role.name}</h4>
+                                  <h4 className="text-base font-normal truncate">{role.name}</h4>
                                 </div>
+                                {/* Delete button - shows on hover */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCustomRole(role.id, role.name);
+                                  }}
+                                  className="shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
+                                  aria-label="Delete custom role"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </button>
                                 {isSelected && (
                                   <button
                                     type="button"
@@ -580,7 +753,7 @@ export function ModelSelectionModal({
                               )}
                             >
                               <AlertCircle className="size-3 shrink-0" />
-                              <span className="flex-1">Custom roles are available for paid users</span>
+                              <span className="flex-1">{t('customRolesPaidOnly')}</span>
                               <Button
                                 variant="default"
                                 size="sm"
@@ -592,27 +765,10 @@ export function ModelSelectionModal({
                             </div>
                           )
                         : (
-                            <div className="flex gap-2 w-full">
-                              <Input
-                                placeholder={t('customRolePlaceholder')}
-                                value={customRoleInput}
-                                onChange={e => setCustomRoleInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && customRoleInput.trim()) {
-                                    handleCustomRoleCreate();
-                                  }
-                                }}
-                                className="flex-1 min-w-0 h-8 text-sm"
-                              />
-                              <Button
-                                onClick={handleCustomRoleCreate}
-                                disabled={!customRoleInput.trim() || !canCreateCustomRoles}
-                                size="sm"
-                                className="h-8 shrink-0"
-                              >
-                                Save
-                              </Button>
-                            </div>
+                            <CustomRoleForm
+                              onSubmit={handleCustomRoleCreate}
+                              isPending={createRoleMutation.isPending}
+                            />
                           )}
                     </div>
                   </motion.div>
@@ -638,28 +794,113 @@ export function ModelSelectionModal({
                       </TabsList>
 
                       {/* Presets Tab Content */}
-                      <TabsContent value={ModelSelectionTabs.PRESETS} className="mt-0 h-[520px] flex flex-col">
+                      <TabsContent value={ModelSelectionTabs.PRESETS} className="mt-0 h-[min(520px,55vh)] flex flex-col">
                         <ScrollArea className="flex-1 -mr-3">
-                          <div className="grid grid-cols-2 gap-3 pr-3 pb-4">
-                            {MODEL_PRESETS.map(preset => (
-                              <ModelPresetCard
-                                key={preset.id}
-                                preset={preset}
-                                allModels={allModels}
-                                userTier={userTier}
-                                onSelect={handlePresetCardClick}
-                                isSelected={selectedPresetId === preset.id}
-                                incompatibleModelIds={incompatibleModelIds}
-                                onCustomize={handleCustomizePreset}
-                              />
-                            ))}
+                          <div className="pr-3 pb-4 space-y-4">
+                            {/* My Presets Section - Loading State */}
+                            {isLoadingUserPresets && (
+                              <div>
+                                <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                                  {tModels('presets.myPresets')}
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <PresetCardSkeleton />
+                                  <PresetCardSkeleton />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* My Presets Section */}
+                            {!isLoadingUserPresets && userPresets.length > 0 && (
+                              <div>
+                                <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                                  {tModels('presets.myPresets')}
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <AnimatePresence initial={false}>
+                                    {userPresets.map((userPreset) => {
+                                      // Convert UserPreset to ModelPreset-like format for the card
+                                      const presetForCard: ModelPreset = {
+                                        id: userPreset.id,
+                                        name: userPreset.name,
+                                        description: `${userPreset.modelRoles.length} models`,
+                                        icon: Sparkles,
+                                        requiredTier: 'free',
+                                        order: 0,
+                                        mode: userPreset.mode,
+                                        searchEnabled: false,
+                                        modelRoles: userPreset.modelRoles,
+                                      };
+                                      const isNewlyCreated = newlyCreatedPresetId === userPreset.id;
+                                      return (
+                                        <motion.div
+                                          key={userPreset.id}
+                                          initial={isNewlyCreated ? { opacity: 0, scale: 0.9 } : { opacity: 1 }}
+                                          animate={isNewlyCreated
+                                            ? {
+                                                opacity: 1,
+                                                scale: 1,
+                                                boxShadow: ['0 0 0 0 rgba(var(--primary), 0)', '0 0 0 4px rgba(var(--primary), 0.3)', '0 0 0 0 rgba(var(--primary), 0)'],
+                                              }
+                                            : { opacity: 1, scale: 1 }}
+                                          exit={{
+                                            opacity: 0,
+                                            scale: 0.95,
+                                            transition: { duration: 0.15, ease: 'easeOut' },
+                                          }}
+                                          transition={isNewlyCreated
+                                            ? { duration: 0.5, boxShadow: { duration: 1.5, repeat: 1 } }
+                                            : { duration: 0.15 }}
+                                          className={cn(isNewlyCreated && 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-xl')}
+                                        >
+                                          <ModelPresetCard
+                                            preset={presetForCard}
+                                            allModels={allModels}
+                                            userTier={userTier}
+                                            onSelect={handlePresetCardClick}
+                                            isSelected={selectedPresetId === userPreset.id}
+                                            incompatibleModelIds={incompatibleModelIds}
+                                            onCustomize={result => handleCustomizePreset(result, true)}
+                                            isUserPreset
+                                            onDelete={() => handleDeleteUserPreset(userPreset.id)}
+                                          />
+                                        </motion.div>
+                                      );
+                                    })}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* System Presets Section */}
+                            <div>
+                              {(userPresets.length > 0 || isLoadingUserPresets) && (
+                                <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
+                                  {tModels('presets.systemPresets')}
+                                </h4>
+                              )}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {MODEL_PRESETS.map(preset => (
+                                  <ModelPresetCard
+                                    key={preset.id}
+                                    preset={preset}
+                                    allModels={allModels}
+                                    userTier={userTier}
+                                    onSelect={handlePresetCardClick}
+                                    isSelected={selectedPresetId === preset.id}
+                                    incompatibleModelIds={incompatibleModelIds}
+                                    onCustomize={handleCustomizePreset}
+                                  />
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         </ScrollArea>
 
                       </TabsContent>
 
                       {/* Build Custom Tab Content */}
-                      <TabsContent value={ModelSelectionTabs.CUSTOM} className="mt-0 h-[520px] flex flex-col">
+                      <TabsContent value={ModelSelectionTabs.CUSTOM} className="mt-0 h-[min(520px,55vh)] flex flex-col">
                         {/* Search Input */}
                         <div className="shrink-0 mb-4">
                           <Input
@@ -765,14 +1006,83 @@ export function ModelSelectionModal({
         {/* Footer - outside DialogBody for full-width border */}
         {!selectedModelForRole && (
           <div className="-mx-6 -mb-6 border-t border-border">
-            <div className="flex items-center justify-end px-6 py-4">
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4">
+              {/* Left side - Preset actions (Build Custom tab only) */}
+              <div className="flex items-center gap-2 min-w-0">
+                {activeTab === ModelSelectionTabs.CUSTOM && (
+                  editingPresetId
+                    ? (
+                        // Edit mode - show Update and Save as New buttons
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUpdatePreset}
+                            disabled={updatePresetMutation.isPending}
+                            className="text-xs sm:text-sm shrink-0"
+                          >
+                            {updatePresetMutation.isPending
+                              ? <Loader2 className="size-3 sm:size-3.5 animate-spin" />
+                              : (
+                                  <span className="truncate max-w-[100px] sm:max-w-none">
+                                    {tModels('presets.update')}
+                                  </span>
+                                )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (!presetValidation.canSave) {
+                                toastManager.error(tModels('presets.cannotSave'), presetValidation.errorMessage ?? '');
+                                return;
+                              }
+                              setEditingPresetId(null);
+                              setIsSavingPreset(true);
+                            }}
+                            disabled={updatePresetMutation.isPending}
+                            className="text-xs sm:text-sm shrink-0"
+                          >
+                            {tModels('presets.saveAsNew')}
+                          </Button>
+                        </div>
+                      )
+                    : isSavingPreset
+                      ? (
+                          <PresetNameForm
+                            onSubmit={handleSaveAsPreset}
+                            onCancel={() => setIsSavingPreset(false)}
+                            isPending={createPresetMutation.isPending}
+                          />
+                        )
+                      : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (!presetValidation.canSave) {
+                                toastManager.error(tModels('presets.cannotSave'), presetValidation.errorMessage ?? '');
+                                return;
+                              }
+                              setIsSavingPreset(true);
+                            }}
+                            className="text-xs sm:text-sm"
+                          >
+                            {tModels('presets.saveAsPreset')}
+                          </Button>
+                        )
+                )}
+              </div>
+
+              {/* Right side - Main action button */}
               <Button
                 onClick={activeTab === ModelSelectionTabs.PRESETS ? handleApplyPreset : () => onOpenChange(false)}
                 disabled={activeTab === ModelSelectionTabs.PRESETS && !selectedPreset}
                 variant="white"
                 size="sm"
+                className="shrink-0 text-xs sm:text-sm"
               >
-                Save
+                {activeTab === ModelSelectionTabs.PRESETS ? tModels('presets.save') : tModels('presets.done')}
               </Button>
             </div>
           </div>

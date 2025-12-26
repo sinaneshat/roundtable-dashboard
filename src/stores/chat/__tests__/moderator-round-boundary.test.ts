@@ -30,8 +30,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MessageRoles, ScreenModes } from '@/api/core/enums';
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, ScreenModes } from '@/api/core/enums';
 import { createMockParticipant, createMockThread } from '@/lib/testing';
 
 import { createChatStore } from '../store';

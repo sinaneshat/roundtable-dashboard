@@ -16,6 +16,7 @@ import type {
   DbMessageMetadata,
   DbParticipantSettings,
   DbThreadMetadata,
+  DbUserPresetMetadata,
 } from '@/db/schemas/chat-metadata';
 
 import { user } from './auth';
@@ -107,6 +108,39 @@ export const chatCustomRole = sqliteTable('chat_custom_role', {
 }, table => [
   index('chat_custom_role_user_idx').on(table.userId),
   index('chat_custom_role_name_idx').on(table.name),
+]);
+
+/**
+ * User Presets
+ * User-defined preset configurations for chat mode and participant roles
+ * Allows saving and reusing preferred chat configurations
+ */
+export const chatUserPreset = sqliteTable('chat_user_preset', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(), // e.g., "Research Team", "Code Review Squad"
+  mode: text('mode', { enum: CHAT_MODES })
+    .notNull()
+    .default(DEFAULT_CHAT_MODE),
+  // Array of model-role pairs that define the preset configuration
+  modelRoles: text('model_roles', { mode: 'json' }).$type<Array<{
+    modelId: string;
+    role: string;
+  }>>().notNull(),
+  // ✅ TYPE-SAFE: Strictly typed metadata for user presets
+  metadata: text('metadata', { mode: 'json' }).$type<DbUserPresetMetadata>(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+}, table => [
+  index('chat_user_preset_user_idx').on(table.userId),
+  index('chat_user_preset_name_idx').on(table.name),
 ]);
 
 /**
@@ -444,6 +478,13 @@ export const chatCustomRoleRelations = relations(chatCustomRole, ({ one, many })
     references: [user.id],
   }),
   participants: many(chatParticipant), // Participants using this custom role
+}));
+
+export const chatUserPresetRelations = relations(chatUserPreset, ({ one }) => ({
+  user: one(user, {
+    fields: [chatUserPreset.userId],
+    references: [user.id],
+  }),
 }));
 
 export const chatParticipantRelations = relations(chatParticipant, ({ one, many }) => ({

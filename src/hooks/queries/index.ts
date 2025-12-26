@@ -17,11 +17,13 @@ export {
 // Chat changelog queries (protected)
 export { useThreadChangelogQuery } from './chat/changelog';
 
-// Chat custom role and feedback queries (protected)
+// Chat custom role, feedback, and user preset queries (protected)
 export {
   useCustomRoleQuery,
   useCustomRolesQuery,
   useThreadFeedbackQuery,
+  useUserPresetQuery,
+  useUserPresetsQuery,
 } from './chat/feedback-and-roles';
 
 // Chat message queries (protected)

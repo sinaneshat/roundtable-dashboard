@@ -2,9 +2,6 @@
  * Chat Mutation Hooks
  *
  * TanStack Mutation hooks for all chat operations
- * Following patterns from checkout.ts and subscription-management.ts
- *
- * ✅ SINGLE SOURCE OF TRUTH: All cache validation schemas imported from @/stores/chat/actions/types
  */
 
 'use client';
@@ -17,16 +14,18 @@ import {
   addParticipantService,
   createCustomRoleService,
   createThreadService,
+  createUserPresetService,
   deleteCustomRoleService,
   deleteParticipantService,
   deleteThreadService,
+  deleteUserPresetService,
   setRoundFeedbackService,
   updateCustomRoleService,
   updateParticipantService,
   updateThreadService,
+  updateUserPresetService,
 } from '@/services/api';
 import {
-  // Cache validation utilities
   validateInfiniteQueryCache,
   validateThreadDetailCache,
   validateThreadDetailPayloadCache,
@@ -908,6 +907,77 @@ export function useSetRoundFeedbackMutation() {
     onError: () => {
       // Error is handled by throwOnError: false
       // Client state remains unchanged (optimistic update not rolled back)
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+// ============================================================================
+// User Preset Mutations
+// ============================================================================
+
+/**
+ * Hook to create a new user preset
+ * Protected endpoint - requires authentication
+ *
+ * User presets save model+role configurations for quick reuse
+ */
+export function useCreateUserPresetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createUserPresetService,
+    onSuccess: () => {
+      invalidationPatterns.userPresets.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
+    onError: () => {
+      // Error is handled by throwOnError: false
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to update user preset details
+ * Protected endpoint - requires authentication
+ */
+export function useUpdateUserPresetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateUserPresetService,
+    onSuccess: (_data, data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.userPresets.detail(data.param.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.userPresets.lists() });
+    },
+    onError: () => {
+      // Error is handled by throwOnError: false
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to delete a user preset
+ * Protected endpoint - requires authentication
+ */
+export function useDeleteUserPresetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteUserPresetService,
+    onSuccess: () => {
+      invalidationPatterns.userPresets.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, SlidersHorizontal } from 'lucide-react';
+import { Lock, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
@@ -23,6 +23,10 @@ type ModelPresetCardProps = {
   isSelected?: boolean;
   incompatibleModelIds?: Set<string>;
   onCustomize?: (result: PresetSelectionResult) => void;
+  /** Whether this is a user-created preset */
+  isUserPreset?: boolean;
+  /** Callback to delete a user preset */
+  onDelete?: () => void;
 };
 
 export const ModelPresetCard = memo(({
@@ -34,6 +38,8 @@ export const ModelPresetCard = memo(({
   isSelected = false,
   incompatibleModelIds,
   onCustomize,
+  isUserPreset = false,
+  onDelete,
 }: ModelPresetCardProps) => {
   const t = useTranslations('chat.models');
   const router = useRouter();
@@ -104,6 +110,22 @@ export const ModelPresetCard = memo(({
             </button>
           )}
 
+          {/* Delete icon - shows on hover for user presets */}
+          {isUserPreset && onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
+              aria-label="Delete preset"
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </button>
+          )}
+
+          {/* Lock indicator for locked presets */}
           {isLocked && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20">
               <Lock className="size-3 text-amber-400" />

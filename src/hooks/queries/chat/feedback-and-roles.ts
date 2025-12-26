@@ -18,7 +18,9 @@ import { STALE_TIME_PRESETS } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
   getThreadFeedbackService,
+  getUserPresetService,
   listCustomRolesService,
+  listUserPresetsService,
 } from '@/services/api';
 
 // ============================================================================
@@ -127,6 +129,69 @@ export function useCustomRoleQuery(roleId: string, enabled = true) {
     queryFn: () => getCustomRoleService({ param: { id: roleId } }),
     staleTime: 5 * 60 * 1000, // 5 minutes
     enabled: isAuthenticated && !!roleId && enabled, // Only fetch when authenticated and roleId exists
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+// ============================================================================
+// USER PRESETS HOOKS
+// ============================================================================
+
+/**
+ * Hook to fetch user presets with cursor-based infinite scrolling
+ * Uses TanStack Query useInfiniteQuery for seamless pagination
+ * Protected endpoint - requires authentication
+ *
+ * User presets are saved configurations of model+role combinations
+ * that users can quickly apply to new threads.
+ *
+ * @param enabled - Optional flag to control when the query runs (default: true)
+ *
+ * Stale time: 2 minutes (user presets change infrequently)
+ */
+export function useUserPresetsQuery(enabled = true) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useInfiniteQuery({
+    queryKey: queryKeys.userPresets.lists(),
+    queryFn: ({ pageParam }) =>
+      listUserPresetsService({
+        query: { cursor: pageParam },
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => {
+      if (lastPage?.success && lastPage.data?.pagination?.nextCursor) {
+        return lastPage.data.pagination.nextCursor;
+      }
+      return undefined;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: false,
+    enabled: isAuthenticated && enabled,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch a specific user preset by ID
+ * Protected endpoint - requires authentication
+ *
+ * @param presetId - User preset ID
+ * @param enabled - Optional control over whether to fetch (default: true when presetId exists)
+ *
+ * Stale time: 5 minutes (user preset details change very infrequently)
+ */
+export function useUserPresetQuery(presetId: string, enabled = true) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.userPresets.detail(presetId),
+    queryFn: () => getUserPresetService({ param: { id: presetId } }),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: isAuthenticated && !!presetId && enabled,
     retry: false,
     throwOnError: false,
   });

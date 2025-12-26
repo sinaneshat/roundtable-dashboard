@@ -1,32 +1,10 @@
-/**
- * Permission Utilities - Centralized Authorization and Quota Enforcement
- *
- * Single source of truth for permission checking and quota enforcement across handlers.
- * Eliminates duplication of permission logic in individual route handlers.
- *
- * ✅ BENEFITS:
- * - Single source of truth for permission checks
- * - Type-safe with overloaded signatures
- * - Consistent error messages and error contexts
- * - Reduces ~84 lines of duplicate permission code
- * - Centralized quota enforcement logic
- *
- * ❌ DO NOT:
- * - Duplicate permission checks in handlers
- * - Bypass quota enforcement
- * - Create handler-specific permission variations
- *
- * @see /src/api/routes/chat/handlers/helpers.ts - Original verifyThreadOwnership
- * @see /src/api/services/usage-tracking.service.ts - Quota enforcement patterns
- */
-
 import { eq } from 'drizzle-orm';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { ChatCustomRole, ChatParticipant, ChatProject, ChatThread } from '@/db/validation';
+import type { ChatCustomRole, ChatParticipant, ChatProject, ChatThread, ChatUserPreset } from '@/db/validation';
 
 // ============================================================================
 // THREAD OWNERSHIP VERIFICATION
@@ -184,10 +162,7 @@ export async function verifyCustomRoleOwnership(
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<ChatCustomRole> {
   const customRole = await db.query.chatCustomRole.findFirst({
-    where: (fields, { and, eq: eqOp }) => and(
-      eqOp(fields.id, customRoleId),
-      eqOp(fields.userId, userId),
-    ),
+    where: eq(tables.chatCustomRole.id, customRoleId),
   });
 
   if (!customRole) {
@@ -198,6 +173,43 @@ export async function verifyCustomRoleOwnership(
   }
 
   return customRole;
+}
+
+// ============================================================================
+// USER PRESET OWNERSHIP VERIFICATION
+// ============================================================================
+
+/**
+ * Verify user preset ownership
+ *
+ * @throws NotFoundError if user preset doesn't exist
+ * @throws UnauthorizedError if user doesn't own the user preset
+ *
+ * @example
+ * ```ts
+ * const userPreset = await verifyUserPresetOwnership(presetId, userId, db);
+ * ```
+ */
+export async function verifyUserPresetOwnership(
+  userPresetId: string,
+  userId: string,
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+): Promise<ChatUserPreset> {
+  const userPreset = await db.query.chatUserPreset.findFirst({
+    where: (fields, { and, eq: eqOp }) => and(
+      eqOp(fields.id, userPresetId),
+      eqOp(fields.userId, userId),
+    ),
+  });
+
+  if (!userPreset) {
+    throw createError.notFound(
+      'User preset not found',
+      ErrorContextBuilders.resourceNotFound('user_preset', userPresetId),
+    );
+  }
+
+  return userPreset;
 }
 
 // ============================================================================

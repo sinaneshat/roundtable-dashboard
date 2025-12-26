@@ -51,7 +51,7 @@ export {
 } from './chat-messages';
 
 // ============================================================================
-// Products Service Exports
+// Chat Participants Service Exports
 // ============================================================================
 
 export {
@@ -87,7 +87,7 @@ export {
 // No separate /resume service call is needed from the frontend.
 
 // ============================================================================
-// Subscription Management Service Exports (Switch/Cancel)
+// Chat Custom Roles Service Exports
 // ============================================================================
 
 export {
@@ -109,7 +109,7 @@ export {
 } from './chat-roles';
 
 // ============================================================================
-// Subscriptions Service Exports
+// Chat Threads Service Exports
 // ============================================================================
 
 export {
@@ -151,7 +151,7 @@ export {
 } from './chat-threads';
 
 // ============================================================================
-// Usage Service Exports
+// Checkout Service Exports
 // ============================================================================
 
 export {
@@ -167,7 +167,7 @@ export {
 } from './checkout';
 
 // ============================================================================
-// Chat Threads Service Exports
+// Customer Portal Service Exports
 // ============================================================================
 
 export {
@@ -199,7 +199,7 @@ export {
 } from './products';
 
 // ============================================================================
-// Projects Service Exports (Updated for S3/R2 Best Practice)
+// Projects Service Exports
 // ============================================================================
 
 export {
@@ -258,7 +258,7 @@ export {
 } from './projects';
 
 // ============================================================================
-// Chat Custom Roles Service Exports
+// Subscription Management Service Exports
 // ============================================================================
 
 export {
@@ -271,7 +271,7 @@ export {
 } from './subscription-management';
 
 // ============================================================================
-// Projects Service Exports
+// Subscriptions Service Exports
 // ============================================================================
 
 export {
@@ -284,7 +284,7 @@ export {
 } from './subscriptions';
 
 // ============================================================================
-// Usage Service Exports
+// Uploads Service Exports
 // ============================================================================
 
 export {
@@ -331,7 +331,7 @@ export {
 } from './uploads';
 
 // ============================================================================
-// Uploads (File Attachments) Service Exports
+// Usage Service Exports
 // ============================================================================
 
 export {
@@ -341,7 +341,23 @@ export {
 } from './usage';
 
 // ============================================================================
-// Chat Summary Service Exports
+// User Presets Service Exports
 // ============================================================================
-// ✅ CONSOLIDATED: Summary exports now part of chat-threads service
-// GetThreadSummariesRequest/Response/Service exported above from './chat-threads'
+
+export {
+  type CreateUserPresetRequest,
+  type CreateUserPresetResponse,
+  createUserPresetService,
+  type DeleteUserPresetRequest,
+  type DeleteUserPresetResponse,
+  deleteUserPresetService,
+  type GetUserPresetRequest,
+  type GetUserPresetResponse,
+  getUserPresetService,
+  type ListUserPresetsRequest,
+  type ListUserPresetsResponse,
+  listUserPresetsService,
+  type UpdateUserPresetRequest,
+  type UpdateUserPresetResponse,
+  updateUserPresetService,
+} from './user-presets';

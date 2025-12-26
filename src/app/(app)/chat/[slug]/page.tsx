@@ -7,8 +7,7 @@ import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadStreamResumptionStateService } from '@/services/api';
-import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
+import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 export const dynamic = 'force-dynamic';

@@ -1,5 +1,5 @@
-import type { AvatarSize } from '@/api/core/enums/ui';
-import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE } from '@/api/core/enums/ui';
+import type { AvatarSize } from '@/api/core/enums';
+import { AvatarSizeMetadata, DEFAULT_AVATAR_SIZE } from '@/api/core/enums';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';

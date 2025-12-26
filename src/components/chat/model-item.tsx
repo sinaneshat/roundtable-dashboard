@@ -29,6 +29,71 @@ type PendingRole = {
   customRoleId?: string;
 };
 
+type RoleBadgeDisplayProps = {
+  displayRole: string | undefined;
+  onOpenRolePanel?: () => void;
+  onClearRole: () => void;
+  tModels: (key: string) => string;
+};
+
+function RoleBadgeDisplay({
+  displayRole,
+  onOpenRolePanel,
+  onClearRole,
+  tModels,
+}: RoleBadgeDisplayProps) {
+  return (
+    <div
+      className="shrink-0 flex items-center gap-0.5 sm:gap-1"
+      onClick={e => e.stopPropagation()}
+      onPointerDownCapture={e => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation();
+        }
+      }}
+      role="presentation"
+    >
+      {displayRole
+        ? (
+            <Badge
+              className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1 max-w-[100px] sm:max-w-[120px]"
+              style={getRoleBadgeStyle(getShortRoleName(displayRole))}
+              onClick={() => onOpenRolePanel?.()}
+            >
+              <span className="truncate">
+                {getShortRoleName(displayRole)}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearRole();
+                }}
+                className="shrink-0 p-0.5 rounded-full hover:bg-black/20 transition-colors"
+                aria-label="Clear role"
+              >
+                <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+              </button>
+            </Badge>
+          )
+        : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-0.5 sm:gap-1 h-4 sm:h-5 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenRolePanel?.();
+              }}
+            >
+              <Plus className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+              {tModels('addRole')}
+            </button>
+          )}
+    </div>
+  );
+}
+
 export type ModelItemProps = {
   orderedModel: OrderedModel;
   onToggle: () => void;
@@ -113,58 +178,14 @@ export function ModelItem({
               </Tooltip>
             )}
 
-            {!isDisabledDueToTier && (() => {
-              const displayRole = participant?.role ?? pendingRole?.role;
-
-              return (
-                <div
-                  className="shrink-0 flex items-center gap-0.5 sm:gap-1"
-                  onClick={e => e.stopPropagation()}
-                  onPointerDownCapture={e => e.stopPropagation()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation();
-                    }
-                  }}
-                  role="presentation"
-                >
-                  {displayRole
-                    ? (
-                        <Badge
-                          className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1"
-                          style={getRoleBadgeStyle(getShortRoleName(displayRole))}
-                          onClick={() => onOpenRolePanel?.()}
-                        >
-                          {getShortRoleName(displayRole)}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onClearRole();
-                            }}
-                            className="shrink-0 p-0.5 rounded-full hover:bg-black/20 transition-colors"
-                            aria-label="Clear role"
-                          >
-                            <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                          </button>
-                        </Badge>
-                      )
-                    : (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-0.5 sm:gap-1 h-4 sm:h-5 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenRolePanel?.();
-                          }}
-                        >
-                          <Plus className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
-                          {tModels('addRole')}
-                        </button>
-                      )}
-                </div>
-              );
-            })()}
+            {!isDisabledDueToTier && (
+              <RoleBadgeDisplay
+                displayRole={participant?.role ?? pendingRole?.role}
+                onOpenRolePanel={onOpenRolePanel}
+                onClearRole={onClearRole}
+                tModels={tModels}
+              />
+            )}
           </div>
           <div className="text-[10px] sm:text-xs text-muted-foreground truncate w-full min-w-0">
             {model.description}

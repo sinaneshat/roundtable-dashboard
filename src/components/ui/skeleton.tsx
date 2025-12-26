@@ -267,6 +267,39 @@ function ThreadMessagesSkeleton({
 }
 
 /**
+ * Preset card skeleton - matches ModelPresetCard design
+ * Used for loading states in model selection modal
+ */
+function PresetCardSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      className={cn("rounded-2xl border border-border/50 bg-card p-4 space-y-3", className)}
+      {...props}
+    >
+      {/* Header - name and badge */}
+      <div className="flex items-start justify-between gap-2">
+        <Skeleton className="h-5 w-32 bg-white/15" />
+        <Skeleton className="h-5 w-16 rounded-full bg-white/10" />
+      </div>
+      {/* Model avatars row */}
+      <div className="flex items-start gap-4">
+        {Array.from({ length: 3 }, (_, i) => (
+          <div key={i} className="flex flex-col items-center gap-1">
+            <Skeleton className="size-8 rounded-full bg-white/15" />
+            <Skeleton className="h-3 w-10 bg-white/10" />
+          </div>
+        ))}
+      </div>
+      {/* Description */}
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-full bg-white/10" />
+        <Skeleton className="h-3 w-3/4 bg-white/10" />
+      </div>
+    </div>
+  )
+}
+
+/**
  * Quick start cards skeleton - matches ChatQuickStart vertical list
  * Reusable for overview loading page
  */
@@ -367,6 +400,7 @@ export {
   ModeratorCardSkeleton,
   StickyInputSkeleton,
   ThreadMessagesSkeleton,
+  PresetCardSkeleton,
   QuickStartSkeleton,
   ImageWithSkeleton,
 }

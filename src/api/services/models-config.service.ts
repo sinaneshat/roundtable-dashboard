@@ -1,18 +1,5 @@
-/**
- * Models Configuration Service - SINGLE SOURCE OF TRUTH
- *
- * ✅ TOP 15 VERIFIED MODELS from Dec 2025 OpenRouter Rankings:
- * - Exact model IDs verified from openrouter.ai/rankings
- * - 3 models per major provider (xAI, Anthropic, Google, DeepSeek, OpenAI)
- * - Sorted by actual usage/popularity on OpenRouter
- *
- * @see https://openrouter.ai/rankings
- * @see /docs/backend-patterns.md - Service layer patterns
- */
-
 import { z } from '@hono/zod-openapi';
 
-import type { StreamingBehavior } from '@/api/core/enums';
 import {
   ModelCategorySchema,
   PROVIDER_STREAMING_DEFAULTS,
@@ -20,70 +7,40 @@ import {
   StreamingBehaviorSchema,
 } from '@/api/core/enums';
 
-// ============================================================================
-// ZOD-BASED MODEL ENUMS - Verified OpenRouter Model IDs (15 models)
-// ============================================================================
-
-/**
- * ✅ MODEL ID ENUM: Verified from OpenRouter Dec 2025
- * Latest top-tier models from each provider + FREE models for dev
- *
- * @see https://openrouter.ai/models - Source of truth for model IDs
- */
 export const ModelIdEnum = z.enum([
-  // ========================================================================
-  // PAID MODELS - For preview/prod (ordered by price, cheapest first)
-  // ========================================================================
-
-  // --- FREE TIER (≤$0.35/M) - 14 models ---
-  'openai/gpt-oss-120b', // $0.039/M - 131K context, open MoE, ultra-cheap
-  'openai/gpt-5-nano', // $0.05/M - 400K context, ultra-cheap
-  'google/gemini-2.0-flash-001', // $0.10/M - 1M context, ultra-fast
-  'openai/gpt-4.1-nano', // $0.10/M - 1M context, fastest GPT-4.1
-  'openai/gpt-4o-mini', // $0.15/M - 128K context, budget
-  'x-ai/grok-4-fast', // $0.20/M - 2M context, multimodal
-  'x-ai/grok-4.1-fast', // $0.20/M - 2M context, agentic tool calling
-  'x-ai/grok-code-fast-1', // $0.20/M - 256K context, agentic coding
-  'deepseek/deepseek-chat-v3-0324', // $0.20/M - 164K context, fast chat
-  'deepseek/deepseek-r1-0528', // $0.20/M - 164K context, latest R1
-  'deepseek/deepseek-v3.2', // $0.27/M - 164K context, latest V3
-  'google/gemini-2.5-flash', // $0.30/M - 1M context, reasoning
-
-  // --- STARTER TIER (≤$1.50/M) - adds 8 ---
-  'openai/gpt-5-mini', // $0.25/M - 400K context, compact GPT-5
-  'openai/gpt-4.1-mini', // $0.40/M - 1M context, mid-tier GPT-4.1
-  'mistralai/mistral-large-2512', // $0.50/M - 262K context, MoE
-  'google/gemini-3-flash-preview', // $0.50/M - 1M context, fast thinking
-  'anthropic/claude-haiku-4.5', // $1/M - 200K context, latest Haiku
-  'openai/o3-mini', // $1.10/M - 200K context, STEM reasoning
-  'openai/o4-mini', // $1.10/M - 200K context, compact reasoning
-
-  // --- PRO TIER (≤$5.00/M) - adds 10 ---
-  'google/gemini-2.5-pro', // $1.25/M - 1M context, flagship
-  'openai/gpt-5', // $1.25/M - 400K context, frontier reasoning
-  'openai/gpt-5.1', // $1.25/M - 400K context, adaptive reasoning
-  'openai/gpt-5.2', // $1.75/M - 400K context, latest frontier
-  'openai/o3', // $2/M - 200K context, reasoning
-  'openai/gpt-4.1', // $2/M - 1M context, flagship
-  'google/gemini-3-pro-preview', // $2/M - 1M context, Gemini 3 flagship
-  'x-ai/grok-3', // $3/M - 131K context, flagship
-  'x-ai/grok-4', // $3/M - 256K context, latest reasoning
-  'anthropic/claude-sonnet-4', // $3/M - 1M context, flagship
-  'anthropic/claude-sonnet-4.5', // $3/M - 1M context, latest Sonnet
-
-  // --- POWER TIER (unlimited) - adds 3 ---
-  'anthropic/claude-opus-4.5', // $5/M - 200K context, latest Opus
-  'openai/o1', // $15/M - 200K context, PhD-level reasoning
-  'anthropic/claude-opus-4', // $15/M - 200K context, world's best coding
-
-  // ========================================================================
-  // FREE MODELS - DISABLED
-  // ⚠️ Dec 2025: Free models on OpenRouter are unreliable:
-  // - "No endpoints found" errors even for listed models
-  // - Most don't support tool/function calling
-  // - Require specific privacy settings to work
-  // Use cheap paid models (gemini-2.0-flash, gpt-4o-mini) for dev instead
-  // ========================================================================
+  'openai/gpt-oss-120b',
+  'openai/gpt-5-nano',
+  'google/gemini-2.0-flash-001',
+  'openai/gpt-4.1-nano',
+  'openai/gpt-4o-mini',
+  'x-ai/grok-4-fast',
+  'x-ai/grok-4.1-fast',
+  'x-ai/grok-code-fast-1',
+  'deepseek/deepseek-chat-v3-0324',
+  'deepseek/deepseek-r1-0528',
+  'deepseek/deepseek-v3.2',
+  'google/gemini-2.5-flash',
+  'openai/gpt-5-mini',
+  'openai/gpt-4.1-mini',
+  'mistralai/mistral-large-2512',
+  'google/gemini-3-flash-preview',
+  'anthropic/claude-haiku-4.5',
+  'openai/o3-mini',
+  'openai/o4-mini',
+  'google/gemini-2.5-pro',
+  'openai/gpt-5',
+  'openai/gpt-5.1',
+  'openai/gpt-5.2',
+  'openai/o3',
+  'openai/gpt-4.1',
+  'google/gemini-3-pro-preview',
+  'x-ai/grok-3',
+  'x-ai/grok-4',
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-sonnet-4.5',
+  'anthropic/claude-opus-4.5',
+  'openai/o1',
+  'anthropic/claude-opus-4',
 ]);
 
 export type ModelId = z.infer<typeof ModelIdEnum>;
@@ -157,41 +114,16 @@ export const HardcodedModelSchema = z.object({
   is_reasoning_model: z.boolean(),
   supports_temperature: z.boolean(),
   supports_reasoning_stream: z.boolean(),
-  /**
-   * ✅ STREAMING BEHAVIOR: How the model delivers SSE chunks (optional - inferred from provider)
-   * - 'token': Streams token-by-token (OpenAI, Anthropic, Mistral) - no normalization needed
-   * - 'buffered': Buffers server-side (xAI, DeepSeek, Gemini) - needs smoothStream normalization
-   *
-   * If not specified, getModelStreamingBehavior() infers from provider.
-   */
   streaming_behavior: StreamingBehaviorSchema.optional(),
 });
 
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
 
-// ============================================================================
-// HARDCODED MODEL CATALOG - Verified from OpenRouter Dec 2025
-// ============================================================================
-
-/**
- * ✅ PAID MODELS: 20 models for preview/prod (ordered by price, cheapest first)
- *
- * Pricing tiers (input per 1M tokens):
- * - FREE TIER: ≤ $0.35/1M (8 models)
- * - STARTER: ≤ $1.50/1M (10 models)
- * - PRO: ≤ $3.50/1M (17 models)
- * - POWER: Unlimited (20 models)
- *
- * @see https://openrouter.ai/models - Source of truth
- */
 export const HARDCODED_MODELS: readonly HardcodedModel[] = [
-  // ========================================================================
-  // FREE TIER (≤$0.35/M) - 12 models, ordered by price
-  // ========================================================================
   {
     id: 'openai/gpt-oss-120b',
     name: 'GPT-OSS 120B',
-    description: 'Open-weight 117B MoE. Ultra-cheap, high-reasoning.',
+    description: 'Budget-friendly thinker. Good for everyday questions and quick reasoning tasks.',
     context_length: 131072,
     created: 1733097600,
     pricing: { prompt: '0.000000039', completion: '0.00000019' },
@@ -211,7 +143,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5-nano',
     name: 'GPT-5 Nano',
-    description: 'Smallest, fastest GPT-5 variant. Ultra-low latency.',
+    description: 'Lightning-fast responder. Perfect for quick answers and simple tasks.',
     context_length: 400000,
     created: 1723075200,
     pricing: { prompt: '0.00000005', completion: '0.00000040' },
@@ -234,7 +166,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-2.0-flash-001',
     name: 'Gemini 2.0 Flash',
-    description: 'Ultra-fast, ultra-cheap. 1M context multimodal.',
+    description: 'Speed champion. Great for rapid brainstorming and processing images.',
     context_length: 1048576,
     created: 1738540800,
     pricing: { prompt: '0.00000010', completion: '0.00000040' },
@@ -254,7 +186,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4.1-nano',
     name: 'GPT-4.1 Nano',
-    description: 'Fastest, cheapest GPT-4.1. Classification & autocompletion.',
+    description: 'Efficient helper. Ideal for sorting ideas and finishing your sentences.',
     context_length: 1047576,
     created: 1713052800,
     pricing: { prompt: '0.00000010', completion: '0.00000040' },
@@ -274,7 +206,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4o-mini',
     name: 'GPT-4o Mini',
-    description: 'Budget champion. 60% cheaper than GPT-3.5 Turbo.',
+    description: 'Reliable all-rounder. Balanced performance for most everyday tasks.',
     context_length: 128000,
     created: 1715385600,
     pricing: { prompt: '0.00000015', completion: '0.00000060' },
@@ -294,7 +226,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-4-fast',
     name: 'Grok 4 Fast',
-    description: 'xAI multimodal with 2M context. Best cost-efficiency.',
+    description: 'Memory powerhouse. Can remember extremely long conversations.',
     context_length: 2000000,
     created: 1735689600,
     pricing: { prompt: '0.00000020', completion: '0.00000050' },
@@ -314,7 +246,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-4.1-fast',
     name: 'Grok 4.1 Fast',
-    description: 'xAI latest. 2M context, agentic tool calling.',
+    description: 'Smart assistant. Handles long docs and can take actions for you.',
     context_length: 2000000,
     created: 1733097600,
     pricing: { prompt: '0.00000020', completion: '0.00000050' },
@@ -334,7 +266,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-code-fast-1',
     name: 'Grok Code Fast',
-    description: 'xAI agentic coding model. Visible reasoning traces.',
+    description: 'Code specialist. Shows its thinking while solving programming problems.',
     context_length: 256000,
     created: 1740441600,
     pricing: { prompt: '0.00000020', completion: '0.00000150' },
@@ -354,7 +286,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'deepseek/deepseek-chat-v3-0324',
     name: 'DeepSeek Chat V3',
-    description: '685B MoE model. Fast, affordable, great for chat.',
+    description: 'Friendly conversationalist. Natural dialogue at an affordable price.',
     context_length: 163840,
     created: 1742860800,
     pricing: { prompt: '0.00000020', completion: '0.00000088' },
@@ -374,7 +306,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'deepseek/deepseek-r1-0528',
     name: 'DeepSeek R1 0528',
-    description: 'Latest R1. 671B params, open-source reasoning.',
+    description: 'Deep thinker. Takes time to reason through complex problems carefully.',
     context_length: 163840,
     created: 1748390400,
     pricing: { prompt: '0.00000020', completion: '0.00000450' },
@@ -394,7 +326,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'deepseek/deepseek-v3.2',
     name: 'DeepSeek V3.2',
-    description: 'Latest V3 with Sparse Attention. Long-context optimized.',
+    description: 'Context master. Excels at analyzing long documents and conversations.',
     context_length: 163840,
     created: 1733097600,
     pricing: { prompt: '0.00000027', completion: '0.00000040' },
@@ -414,7 +346,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
-    description: '1M context with thinking. Best for coding and math.',
+    description: 'Analytical mind. Strong at math, coding, and technical problems.',
     context_length: 1048576,
     created: 1740441600,
     pricing: { prompt: '0.00000030', completion: '0.00000250' },
@@ -438,7 +370,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5-mini',
     name: 'GPT-5 Mini',
-    description: 'Compact GPT-5. Lighter reasoning, lower latency.',
+    description: 'Smart and snappy. Balanced intelligence with quick responses.',
     context_length: 400000,
     created: 1723075200,
     pricing: { prompt: '0.00000025', completion: '0.00000200' },
@@ -458,7 +390,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4.1-mini',
     name: 'GPT-4.1 Mini',
-    description: 'Mid-tier GPT-4.1. Competitive with GPT-4o at lower cost.',
+    description: 'Capable workhorse. Handles complex tasks without breaking the bank.',
     context_length: 1047576,
     created: 1713052800,
     pricing: { prompt: '0.00000040', completion: '0.00000160' },
@@ -478,7 +410,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'mistralai/mistral-large-2512',
     name: 'Mistral Large 3 2512',
-    description: '675B MoE, 41B active. Apache 2.0 licensed.',
+    description: 'European powerhouse. Great for multilingual and creative writing.',
     context_length: 262144,
     created: 1733097600,
     pricing: { prompt: '0.00000050', completion: '0.00000150' },
@@ -498,7 +430,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-3-flash-preview',
     name: 'Gemini 3 Flash Preview',
-    description: 'High-speed thinking model. Configurable reasoning levels.',
+    description: 'Flexible thinker. Adjusts how deeply it thinks based on your needs.',
     context_length: 1048576,
     created: 1734393600,
     pricing: { prompt: '0.00000050', completion: '0.00000300' },
@@ -518,7 +450,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-haiku-4.5',
     name: 'Claude Haiku 4.5',
-    description: 'Latest Haiku. 73% SWE-bench. Extended thinking.',
+    description: 'Quick but thoughtful. Fast responses with careful reasoning.',
     context_length: 200000,
     created: 1733097600,
     pricing: { prompt: '0.00000100', completion: '0.00000500' },
@@ -538,7 +470,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o3-mini',
     name: 'OpenAI o3-mini',
-    description: 'Cost-efficient STEM reasoning. Adjustable reasoning effort.',
+    description: 'Science whiz. Excellent for math, physics, and technical questions.',
     context_length: 200000,
     created: 1748390400,
     pricing: { prompt: '0.00000110', completion: '0.00000440' },
@@ -558,7 +490,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o4-mini',
     name: 'OpenAI o4-mini',
-    description: 'Compact o-series reasoning. Fast multimodal with vision.',
+    description: 'Visual problem solver. Reasons through images and diagrams.',
     context_length: 200000,
     created: 1748390400,
     pricing: { prompt: '0.00000110', completion: '0.00000440' },
@@ -582,7 +514,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
-    description: 'Google flagship. #1 on LMArena. Top reasoning.',
+    description: 'Top performer. Excels at complex reasoning across all domains.',
     context_length: 1048576,
     created: 1740441600,
     pricing: { prompt: '0.00000125', completion: '0.00001000' },
@@ -602,7 +534,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5',
     name: 'GPT-5',
-    description: 'OpenAI frontier model. Major improvements in reasoning.',
+    description: 'Premium intelligence. Exceptional at nuanced, complex tasks.',
     context_length: 400000,
     created: 1723075200,
     pricing: { prompt: '0.00000125', completion: '0.00001000' },
@@ -622,7 +554,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5.1',
     name: 'GPT-5.1',
-    description: 'GPT-5 with adaptive reasoning. Natural conversational style.',
+    description: 'Natural conversationalist. Thoughtful responses that feel human.',
     context_length: 400000,
     created: 1748390400,
     pricing: { prompt: '0.00000125', completion: '0.00001000' },
@@ -642,7 +574,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-5.2',
     name: 'GPT-5.2',
-    description: 'Latest GPT-5. Enhanced agentic and long-context performance.',
+    description: 'Power user\'s choice. Handles complex projects and long documents.',
     context_length: 400000,
     created: 1733788800,
     pricing: { prompt: '0.00000175', completion: '0.00001400' },
@@ -662,7 +594,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o3',
     name: 'OpenAI o3',
-    description: 'Latest reasoning model. Math, science, coding, visual.',
+    description: 'Ultimate problem solver. Excels at math, science, and coding challenges.',
     context_length: 200000,
     created: 1744761600,
     pricing: { prompt: '0.00000200', completion: '0.00000800' },
@@ -682,7 +614,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/gpt-4.1',
     name: 'GPT-4.1',
-    description: 'OpenAI flagship. 1M context, 54.6% SWE-bench.',
+    description: 'Versatile expert. Strong across writing, analysis, and coding.',
     context_length: 1047576,
     created: 1744675200,
     pricing: { prompt: '0.00000200', completion: '0.00000800' },
@@ -702,7 +634,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'google/gemini-3-pro-preview',
     name: 'Gemini 3 Pro Preview',
-    description: 'Google flagship frontier. 1M context, multimodal.',
+    description: 'Multimedia master. Analyzes text, images, video, and audio together.',
     context_length: 1048576,
     created: 1733097600,
     pricing: { prompt: '0.00000200', completion: '0.00001200' },
@@ -722,7 +654,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-3',
     name: 'Grok 3',
-    description: 'xAI flagship. Deep domain knowledge in finance, healthcare, law.',
+    description: 'Domain specialist. Deep expertise in finance, healthcare, and law.',
     context_length: 131072,
     created: 1736294400,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -742,7 +674,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'x-ai/grok-4',
     name: 'Grok 4',
-    description: 'xAI latest reasoning model. 256K context, parallel tools.',
+    description: 'Advanced reasoner. Tackles tough problems with multiple tools at once.',
     context_length: 256000,
     created: 1752019200,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -762,7 +694,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-sonnet-4',
     name: 'Claude Sonnet 4',
-    description: 'Anthropic flagship. 1M context, best for coding and agents.',
+    description: 'Coding champion. Excels at software development and agentic tasks.',
     context_length: 1000000,
     created: 1747958400,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -782,7 +714,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-sonnet-4.5',
     name: 'Claude Sonnet 4.5',
-    description: 'Latest Sonnet. 1M context, agent-optimized.',
+    description: 'Balanced brilliance. Thoughtful, nuanced, and great at writing.',
     context_length: 1000000,
     created: 1733097600,
     pricing: { prompt: '0.00000300', completion: '0.00001500' },
@@ -806,7 +738,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-opus-4.5',
     name: 'Claude Opus 4.5',
-    description: 'Latest Opus. 80.9% SWE-bench. Advanced reasoning.',
+    description: 'The deep thinker. Best for complex analysis and creative projects.',
     context_length: 200000,
     created: 1733097600,
     pricing: { prompt: '0.00000500', completion: '0.00002500' },
@@ -826,7 +758,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'openai/o1',
     name: 'OpenAI o1',
-    description: 'PhD-level reasoning. Best for STEM, physics, chemistry, biology.',
+    description: 'Maximum reasoning. For the most challenging problems requiring deep thought.',
     context_length: 200000,
     created: 1726099200,
     pricing: { prompt: '0.00001500', completion: '0.00006000' },
@@ -846,7 +778,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   {
     id: 'anthropic/claude-opus-4',
     name: 'Claude Opus 4',
-    description: 'World\'s best coding model. 72.5% SWE-bench, 43.2% Terminal-bench.',
+    description: 'Elite coder. The world\'s top model for software engineering.',
     context_length: 200000,
     created: 1747958400,
     pricing: { prompt: '0.00001500', completion: '0.00007500' },
@@ -896,72 +828,18 @@ export const USER_FACING_MODEL_IDS: readonly ModelId[] = [
  * Get all available models (for internal/system use)
  * Same models available in all environments (local, preview, production)
  */
-export function getAllModels(): readonly HardcodedModel[] {
+export function getAllModels() {
   return HARDCODED_MODELS;
 }
 
-/**
- * Get user-facing models for UI selection
- * Returns curated list of 6 best multimodal models
- */
-export function getUserFacingModels(): readonly HardcodedModel[] {
-  return HARDCODED_MODELS.filter(model =>
-    USER_FACING_MODEL_IDS.includes(model.id),
-  );
-}
-
-export function getModelById(modelId: string): HardcodedModel | undefined {
+export function getModelById(modelId: string) {
   return HARDCODED_MODELS.find(model => model.id === modelId);
 }
 
-export function getModelsByProvider(
-  provider: ModelProvider,
-): readonly HardcodedModel[] {
-  return HARDCODED_MODELS.filter(model => model.provider === provider);
-}
-
-export function getModelsByCategory(
-  category: string,
-): readonly HardcodedModel[] {
-  return HARDCODED_MODELS.filter(model => model.category === category);
-}
-
-export function getAllModelIds(): readonly ModelId[] {
-  return HARDCODED_MODELS.map(model => model.id);
-}
-
-export function isValidModelId(modelId: string): modelId is ModelId {
-  return ModelIdEnum.safeParse(modelId).success;
-}
-
-export function getVisionModels(): readonly HardcodedModel[] {
-  return HARDCODED_MODELS.filter(model => model.supports_vision);
-}
-
-export function getReasoningModels(): readonly HardcodedModel[] {
-  return HARDCODED_MODELS.filter(model => model.is_reasoning_model);
-}
-
-/**
- * Get the cheapest model for system operations (title generation, etc.)
- * Returns Gemini 2.0 Flash ($0.10/M) - cheapest non-reasoning model
- */
-export function getCheapestModel(): HardcodedModel {
-  const cheapModels = HARDCODED_MODELS
-    .filter(m => !m.is_reasoning_model)
-    .sort((a, b) => Number.parseFloat(a.pricing.prompt) - Number.parseFloat(b.pricing.prompt));
-  return cheapModels[0] || HARDCODED_MODELS[0]!;
-}
-
-export function getAllProviders(): readonly ModelProvider[] {
-  return Array.from(new Set(HARDCODED_MODELS.map(model => model.provider)));
-}
-
-export function extractModeratorModelName(modelId: string): string {
+export function extractModeratorModelName(modelId: string) {
   const model = getModelById(modelId);
-  if (model) {
+  if (model)
     return model.name;
-  }
 
   const parts = modelId.split('/');
   const modelPart = parts[parts.length - 1] || modelId;
@@ -985,21 +863,13 @@ export function extractModeratorModelName(modelId: string): string {
  * 1. Model's explicit streaming_behavior (if set)
  * 2. Provider default from PROVIDER_STREAMING_DEFAULTS
  * 3. Fallback to 'token' (safe default - no normalization)
- *
- * @param modelId - The full model ID (e.g., 'x-ai/grok-4-fast', 'openai/gpt-5')
- * @returns StreamingBehavior - 'token' or 'buffered'
  */
-export function getModelStreamingBehavior(modelId: string): StreamingBehavior {
-  // Check for explicit model-level override
+export function getModelStreamingBehavior(modelId: string) {
   const model = getModelById(modelId);
-  if (model?.streaming_behavior) {
+  if (model?.streaming_behavior)
     return model.streaming_behavior;
-  }
 
-  // Extract provider from model ID (format: "provider/model-name")
   const provider = modelId.split('/')[0] || '';
-
-  // Return provider default or fallback to 'token'
   return PROVIDER_STREAMING_DEFAULTS[provider] ?? StreamingBehaviors.TOKEN;
 }
 
@@ -1008,10 +878,7 @@ export function getModelStreamingBehavior(modelId: string): StreamingBehavior {
  *
  * Returns true if the model buffers responses server-side and needs
  * smoothStream to normalize chunk delivery for consistent UI rendering.
- *
- * @param modelId - The full model ID (e.g., 'x-ai/grok-4-fast')
- * @returns boolean - true if model needs smoothStream normalization
  */
-export function needsSmoothStream(modelId: string): boolean {
+export function needsSmoothStream(modelId: string) {
   return getModelStreamingBehavior(modelId) === StreamingBehaviors.BUFFERED;
 }

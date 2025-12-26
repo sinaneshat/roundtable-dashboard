@@ -4,8 +4,7 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { MessageRoles, RoundPhases } from '@/api/core/enums';
-import { MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases } from '@/api/core/enums';
 import { getRoundNumber, rlog } from '@/lib/utils';
 import { isObject } from '@/lib/utils/type-guards';
 import type { ChatStoreApi } from '@/stores/chat';

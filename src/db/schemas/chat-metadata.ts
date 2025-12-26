@@ -340,6 +340,20 @@ export const DbCustomRoleMetadataSchema = z.object({
 export type DbCustomRoleMetadata = z.infer<typeof DbCustomRoleMetadataSchema>;
 
 // ============================================================================
+// USER PRESET METADATA
+// ============================================================================
+
+/**
+ * User Preset Metadata Schema
+ * Additional metadata for user-defined chat presets
+ */
+export const DbUserPresetMetadataSchema = z.object({
+  // Reserved for future extensions (e.g., tags, description, color)
+}).strict(); // ✅ STRICT: No additional properties allowed
+
+export type DbUserPresetMetadata = z.infer<typeof DbUserPresetMetadataSchema>;
+
+// ============================================================================
 // CHANGELOG METADATA - Discriminated Union by Type
 // ============================================================================
 

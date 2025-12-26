@@ -190,31 +190,38 @@ export const MODEL_PRESETS: ModelPreset[] = [
 // 5-Part Enum Pattern for Model Preset IDs
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Derived from data
-export const MODEL_PRESET_IDS = MODEL_PRESETS.map(p => p.id) as readonly string[];
+// 1️⃣ ARRAY CONSTANT - Source of truth for preset IDs
+export const MODEL_PRESET_IDS = [
+  'quick-perspectives',
+  'balanced-discussion',
+  'creative-exploration',
+  'critical-debate',
+  'devils-advocate',
+  'deep-analysis',
+  'research-evidence',
+  'technical-review',
+] as const;
 
-// 2️⃣ DEFAULT VALUE
-export const DEFAULT_MODEL_PRESET_ID = 'quick-perspectives' as const;
+// 2️⃣ ZOD SCHEMA - Runtime validation (no type cast needed)
+export const ModelPresetIdSchema = z.enum(MODEL_PRESET_IDS);
 
-// 3️⃣ ZOD SCHEMA - Runtime validation
-export const ModelPresetIdSchema = z.enum(
-  MODEL_PRESET_IDS as unknown as readonly [string, ...string[]],
-);
-
-// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+// 3️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
 export type ModelPresetId = z.infer<typeof ModelPresetIdSchema>;
+
+// 4️⃣ DEFAULT VALUE
+export const DEFAULT_MODEL_PRESET_ID: ModelPresetId = 'quick-perspectives';
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const ModelPresetIds = {
-  QUICK_PERSPECTIVES: 'quick-perspectives' as const,
-  BALANCED_DISCUSSION: 'balanced-discussion' as const,
-  CREATIVE_EXPLORATION: 'creative-exploration' as const,
-  CRITICAL_DEBATE: 'critical-debate' as const,
-  DEVILS_ADVOCATE: 'devils-advocate' as const,
-  DEEP_ANALYSIS: 'deep-analysis' as const,
-  RESEARCH_EVIDENCE: 'research-evidence' as const,
-  TECHNICAL_REVIEW: 'technical-review' as const,
-} as const;
+  QUICK_PERSPECTIVES: 'quick-perspectives',
+  BALANCED_DISCUSSION: 'balanced-discussion',
+  CREATIVE_EXPLORATION: 'creative-exploration',
+  CRITICAL_DEBATE: 'critical-debate',
+  DEVILS_ADVOCATE: 'devils-advocate',
+  DEEP_ANALYSIS: 'deep-analysis',
+  RESEARCH_EVIDENCE: 'research-evidence',
+  TECHNICAL_REVIEW: 'technical-review',
+} as const satisfies Record<string, ModelPresetId>;
 
 // ============================================================================
 // Utility Functions

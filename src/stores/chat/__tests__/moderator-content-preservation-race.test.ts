@@ -23,8 +23,7 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { MessageRoles } from '@/api/core/enums';
-import { MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { MessageRoles, MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 
 import { createChatStore } from '../store';
 

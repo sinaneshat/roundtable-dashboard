@@ -11,7 +11,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MODERATOR_PARTICIPANT_INDEX } from '@/lib/config/moderator';
+import { MODERATOR_PARTICIPANT_INDEX } from '@/api/core/enums';
 import { act, createMockMessagesListResponse, createMockParticipant, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 

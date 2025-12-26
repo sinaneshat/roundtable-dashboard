@@ -45,3 +45,10 @@ export {
   listThreadsHandler,
   updateThreadHandler,
 } from './handlers/thread.handler';
+export {
+  createUserPresetHandler,
+  deleteUserPresetHandler,
+  getUserPresetHandler,
+  listUserPresetsHandler,
+  updateUserPresetHandler,
+} from './handlers/user-preset.handler';

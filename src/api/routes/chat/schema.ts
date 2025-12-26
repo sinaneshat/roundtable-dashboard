@@ -20,9 +20,6 @@ import {
   WebSearchTimeRangeSchema,
   WebSearchTopicSchema,
 } from '@/api/core/enums';
-// ✅ IMPORT FIX: Import directly from source files instead of barrel to prevent
-// server-only code (handlers.ts → @/db) from leaking into client bundles.
-// The @/api/core barrel exports handlers.ts which imports better-sqlite3.
 import { CursorPaginationQuerySchema } from '@/api/core/pagination';
 import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/api/core/schemas';
 import { StreamStateSchema } from '@/api/types/streaming';
@@ -49,13 +46,6 @@ import {
 } from '@/db/validation/chat';
 import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
-
-// ============================================================================
-// ❌ NO RE-EXPORTS - Import from canonical sources
-// ============================================================================
-// ChatParticipantSchema, ParticipantConfigInputSchema → from '@/lib/schemas/participant-schemas'
-// ThreadIdParamSchema → from '@/api/core/schemas'
-// ============================================================================
 
 export const MessageContentSchema = z.string()
   .trim()
@@ -362,8 +352,6 @@ const UIMessageSchema = z.object({
       type: z.literal('reasoning'),
       text: z.string(),
     }),
-    // ✅ CRITICAL FIX: Support file parts for multi-modal messages
-    // AI SDK v5 sends file attachments as parts with type='file'
     z.object({
       type: z.literal('file'),
       url: z.string(),
@@ -378,7 +366,6 @@ const UIMessageSchema = z.object({
     description: 'Message creation timestamp',
     example: '2025-01-15T10:30:00.000Z',
   }),
-  // ✅ TYPE-SAFE: Use discriminated union schema for strict validation
   metadata: DbMessageMetadataSchema.optional().openapi({
     description: 'Message metadata (discriminated by role: user | assistant | system)',
   }),
@@ -573,21 +560,17 @@ export const PreSearchRequestSchema = z.object({
     example: 'What is the current Bitcoin price?',
   }),
   attachmentIds: z.array(z.string()).optional().openapi({
-    description: 'Optional attachment IDs whose content should be considered in query generation',
+    description: 'Optional attachment IDs for query generation context',
     example: ['upload_123', 'upload_456'],
   }),
   fileContext: z.string().max(10000).optional().openapi({
-    description: 'Optional extracted text content from uploaded files to consider in search query generation',
+    description: 'Optional file text content for query generation context',
     example: 'Contents of the uploaded PDF document...',
   }),
 }).openapi('PreSearchRequest');
 
 export type PreSearchRequest = z.infer<typeof PreSearchRequestSchema>;
 
-/**
- * Pre-search data payload schema
- * ✅ ZOD-FIRST: Matches database searchData JSON column type
- */
 export const PreSearchDataPayloadSchema = z.object({
   queries: z.array(z.object({
     query: z.string(),
@@ -601,7 +584,7 @@ export const PreSearchDataPayloadSchema = z.object({
     answer: z.string().nullable(),
     results: z.array(WebSearchResultItemSchema),
     responseTime: z.number(),
-    index: z.number().optional(), // ✅ Index for matching during progressive streaming
+    index: z.number().optional(),
   })),
   summary: z.string(),
   successCount: z.number(),
@@ -612,10 +595,6 @@ export const PreSearchDataPayloadSchema = z.object({
 
 export type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
 
-/**
- * Partial pre-search result item schema for streaming UI updates
- * ✅ ZOD-FIRST: Minimal result structure for progressive display
- */
 export const PartialPreSearchResultItemSchema = z.object({
   title: z.string(),
   url: z.string(),
@@ -623,11 +602,6 @@ export const PartialPreSearchResultItemSchema = z.object({
   excerpt: z.string().optional(),
 }).openapi('PartialPreSearchResultItem');
 
-/**
- * Partial pre-search data schema for progressive UI updates
- * ✅ ZOD-FIRST: Built incrementally as QUERY and RESULT events arrive
- * ✅ PATTERN: Uses WebSearchDepthSchema for type safety
- */
 export const PartialPreSearchDataSchema = z.object({
   queries: z.array(z.object({
     query: z.string(),
@@ -650,14 +624,9 @@ export const PartialPreSearchDataSchema = z.object({
 
 export type PartialPreSearchData = z.infer<typeof PartialPreSearchDataSchema>;
 
-/**
- * Stored pre-search schema (from database)
- * ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
- */
 export const StoredPreSearchSchema = chatPreSearchSelectSchema
   .extend({
     searchData: PreSearchDataPayloadSchema.nullable().optional(),
-    // Override date fields to accept both string and Date (transform handles conversion)
     createdAt: z.union([z.string(), z.date()]),
     completedAt: z.union([z.string(), z.date()]).nullable(),
   })
@@ -665,18 +634,10 @@ export const StoredPreSearchSchema = chatPreSearchSelectSchema
 
 export type StoredPreSearch = z.infer<typeof StoredPreSearchSchema>;
 
-/**
- * Pre-search response schema (API response wrapper)
- * ✅ CONSISTENT: Uses createApiResponseSchema like summary
- */
 export const PreSearchResponseSchema = createApiResponseSchema(StoredPreSearchSchema).openapi('PreSearchResponse');
 
 export type PreSearchResponse = z.infer<typeof PreSearchResponseSchema>;
 
-/**
- * Pre-search list payload and response schemas
- * ✅ FOLLOWS: RoundSummaryListPayloadSchema pattern
- */
 const PreSearchListPayloadSchema = z.object({
   items: z.array(StoredPreSearchSchema),
   count: z.number().int().nonnegative(),
@@ -685,41 +646,118 @@ const PreSearchListPayloadSchema = z.object({
 export const PreSearchListResponseSchema = createApiResponseSchema(PreSearchListPayloadSchema).openapi('PreSearchListResponse');
 export type PreSearchListResponse = z.infer<typeof PreSearchListResponseSchema>;
 
-// ============================================================================
-// CHAT STREAMING SCHEMAS
-// ============================================================================
+export const UserPresetModelRoleSchema = z.object({
+  modelId: CoreSchemas.id().openapi({
+    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
+    example: 'anthropic/claude-3.5-sonnet',
+  }),
+  role: z.string().min(1).max(100).openapi({
+    description: 'Role name for this model in the preset',
+    example: 'The Ideator',
+  }),
+}).openapi('UserPresetModelRole');
+
+export type UserPresetModelRole = z.infer<typeof UserPresetModelRoleSchema>;
+
+export const UserPresetSchema = z.object({
+  id: CoreSchemas.id().openapi({
+    description: 'Preset ID',
+    example: 'user-preset-1234567890-abc',
+  }),
+  name: z.string().min(1).max(100).openapi({
+    description: 'Preset name',
+    example: 'Product Strategy Team',
+  }),
+  modelRoles: z.array(UserPresetModelRoleSchema).openapi({
+    description: 'Array of model-role pairs in this preset',
+  }),
+  mode: ChatModeSchema.openapi({
+    description: 'Conversation mode for this preset',
+    example: 'brainstorming',
+  }),
+  createdAt: z.number().int().nonnegative().openapi({
+    description: 'Unix timestamp when preset was created',
+    example: 1735132800000,
+  }),
+  updatedAt: z.number().int().nonnegative().openapi({
+    description: 'Unix timestamp when preset was last updated',
+    example: 1735132800000,
+  }),
+}).openapi('UserPreset');
+
+export type UserPreset = z.infer<typeof UserPresetSchema>;
+
+export const CreateUserPresetRequestSchema = z.object({
+  name: z.string().min(1).max(100).openapi({
+    description: 'Preset name',
+    example: 'Product Strategy Team',
+  }),
+  modelRoles: z.array(UserPresetModelRoleSchema).min(1).openapi({
+    description: 'Array of model-role pairs (at least 1 required)',
+  }),
+  mode: ChatModeSchema.openapi({
+    description: 'Conversation mode for this preset',
+    example: 'brainstorming',
+  }),
+}).openapi('CreateUserPresetRequest');
+
+export type CreateUserPresetRequest = z.infer<typeof CreateUserPresetRequestSchema>;
+
+export const UpdateUserPresetRequestSchema = z.object({
+  name: z.string().min(1).max(100).optional().openapi({
+    description: 'Preset name',
+  }),
+  modelRoles: z.array(UserPresetModelRoleSchema).min(1).optional().openapi({
+    description: 'Array of model-role pairs',
+  }),
+  mode: ChatModeSchema.optional().openapi({
+    description: 'Conversation mode',
+  }),
+}).openapi('UpdateUserPresetRequest');
+
+export type UpdateUserPresetRequest = z.infer<typeof UpdateUserPresetRequestSchema>;
+
+const UserPresetDetailPayloadSchema = z.object({
+  preset: UserPresetSchema,
+}).openapi('UserPresetDetailPayload');
+
+export const UserPresetDetailResponseSchema = createApiResponseSchema(UserPresetDetailPayloadSchema).openapi('UserPresetDetailResponse');
+export type UserPresetDetailResponse = z.infer<typeof UserPresetDetailResponseSchema>;
+
+export const UserPresetListResponseSchema = createCursorPaginatedResponseSchema(UserPresetSchema).openapi('UserPresetListResponse');
+export type UserPresetListResponse = z.infer<typeof UserPresetListResponseSchema>;
 
 export const StreamChatRequestSchema = z.object({
   message: UIMessageSchema.openapi({
-    description: 'Last message in AI SDK UIMessage format (send only new message - backend loads history)',
+    description: 'Last message in AI SDK UIMessage format',
   }),
   id: z.string().min(1).openapi({
-    description: 'Thread ID for persistence and participant loading',
+    description: 'Thread ID',
     example: 'thread_abc123',
   }),
   participantIndex: z.number().int().min(0).optional().default(0).openapi({
-    description: 'Index of participant to stream (0-based). Frontend orchestrates multiple participants.',
+    description: 'Participant index (0-based)',
     example: 0,
   }),
   participants: z.array(StreamParticipantSchema)
     .optional()
     .openapi({
-      description: 'Current participant configuration (optional). If provided, used instead of loading from database.',
+      description: 'Participant configuration (optional)',
     }),
   regenerateRound: RoundNumberSchema.optional().openapi({
-    description: 'Round number to regenerate (replace). ✅ 0-BASED: first round is 0. If provided, deletes old messages and summary for that round first.',
+    description: 'Round to regenerate (0-based)',
     example: 0,
   }),
   mode: ChatModeSchema.optional().openapi({
-    description: 'Conversation mode for this thread. If changed, generates changelog entry.',
+    description: 'Conversation mode',
     example: 'brainstorming',
   }),
   enableWebSearch: z.boolean().optional().openapi({
-    description: 'Enable/disable web search for this thread. If changed, generates changelog entry.',
+    description: 'Enable web search',
     example: true,
   }),
   attachmentIds: z.array(z.string()).optional().openapi({
-    description: 'Upload IDs to attach to this message',
+    description: 'Upload IDs',
     example: ['01HXYZ123ABC', '01HXYZ456DEF'],
   }),
 }).openapi('StreamChatRequest');
@@ -729,11 +767,7 @@ const MessagesListPayloadSchema = z.object({
 }).openapi('MessagesListPayload');
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
 export type MessagesListResponse = z.infer<typeof MessagesListResponseSchema>;
-/**
- * CreateCustomRoleRequest schema
- * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
- * (drizzle-zod .pick() loses type information with OpenAPI extensions)
- */
+
 export const CreateCustomRoleRequestSchema = z.object({
   name: z.string().min(1).max(100).openapi({
     description: 'Custom role name',
@@ -750,10 +784,6 @@ export const CreateCustomRoleRequestSchema = z.object({
   }),
 }).openapi('CreateCustomRoleRequest');
 
-/**
- * UpdateCustomRoleRequest schema
- * ✅ TYPE-SAFE: Uses z.object() directly for proper type inference
- */
 export const UpdateCustomRoleRequestSchema = z.object({
   name: z.string().min(1).max(100).optional().openapi({
     description: 'Custom role name',
@@ -781,10 +811,10 @@ export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogList
 export type ChangelogListResponse = z.infer<typeof ChangelogListResponseSchema>;
 export const CreateChangelogParamsSchema = z.object({
   threadId: CoreSchemas.id(),
-  roundNumber: RoundNumberSchema, // ✅ 0-BASED: Allow round 0
+  roundNumber: RoundNumberSchema,
   changeType: ChangelogTypeSchema,
   changeSummary: z.string().min(1).max(500),
-  changeData: DbChangelogDataSchema, // ✅ SINGLE SOURCE OF TRUTH: Use discriminated union
+  changeData: DbChangelogDataSchema,
 }).openapi('CreateChangelogParams');
 export type CreateChangelogParams = z.infer<typeof CreateChangelogParamsSchema>;
 export const ParticipantInfoSchema = chatParticipantSelectSchema
@@ -811,21 +841,11 @@ export const RoundtablePromptConfigSchema = z.object({
 export type RoundtablePromptConfig = z.infer<typeof RoundtablePromptConfigSchema>;
 export const RoundModeratorRequestSchema = z.object({
   participantMessageIds: z.array(CoreSchemas.id()).optional().openapi({
-    description: 'Array of message IDs from participants (optional - backend auto-queries from database if not provided)',
+    description: 'Message IDs from participants (optional)',
     example: ['msg_abc123', 'msg_def456', 'msg_ghi789'],
   }),
 }).openapi('RoundModeratorRequest');
 
-// ============================================================================
-// MODERATOR SCHEMAS (Text Streaming Pattern)
-// ============================================================================
-// Moderator messages stream as text (like participant messages)
-// and are stored in chatMessage table with isModerator metadata
-
-/**
- * Moderator Metrics Schema
- * Includes 4 metrics (engagement, insight, balance, clarity) for rating conversations.
- */
 export const ModeratorMetricsSchema = z.object({
   engagement: z.coerce.number().min(0).max(100).describe('How engaged the participants were (0-100)'),
   insight: z.coerce.number().min(0).max(100).describe('Quality of insights provided (0-100)'),
@@ -833,26 +853,14 @@ export const ModeratorMetricsSchema = z.object({
   clarity: z.coerce.number().min(0).max(100).describe('How clear the communication was (0-100)'),
 }).openapi('ModeratorMetrics');
 
-/**
- * Moderator AI Content Schema
- * Used for object streaming pattern with moderator messages.
- */
 export const ModeratorAIContentSchema = z.object({
   summary: z.string().describe('Comprehensive structured summary in markdown format'),
   metrics: ModeratorMetricsSchema.describe('Ratings for engagement, insight, balance, and clarity (0-100 each)'),
 }).openapi('ModeratorAIContent');
 
-/**
- * Moderator Payload - Alias for ModeratorAIContentSchema
- * Used in component streaming for moderator messages
- */
 export const ModeratorPayloadSchema = ModeratorAIContentSchema;
 export type ModeratorPayload = z.infer<typeof ModeratorPayloadSchema>;
 
-/**
- * Moderator Detail Payload Schema
- * Returned from moderator endpoint with full metadata and metrics.
- */
 export const ModeratorDetailPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
   mode: z.string(),
@@ -863,20 +871,6 @@ export const ModeratorDetailPayloadSchema = z.object({
 
 export const ModeratorResponseSchema = createApiResponseSchema(ModeratorDetailPayloadSchema).openapi('ModeratorResponse');
 
-// ============================================================================
-// CACHE VALIDATION SCHEMAS (Frontend React Query)
-// ============================================================================
-// Flexible schemas for validating React Query cache data
-// Uses z.boolean() for success (cache may have failed responses)
-// Uses .optional() on fields (cache may have partial data)
-
-/**
- * Generic API cache response wrapper
- * Unlike createApiResponseSchema which uses z.literal(true),
- * this accepts z.boolean() since cache may contain failed responses
- *
- * ✅ SINGLE SOURCE OF TRUTH: Used in stores/chat/actions/types.ts
- */
 export function createCacheResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
     success: z.boolean(),
@@ -884,11 +878,6 @@ export function createCacheResponseSchema<T extends z.ZodTypeAny>(dataSchema: T)
   });
 }
 
-/**
- * Flexible ChatThread schema for cache validation
- * Accepts both string and Date for timestamps (API returns strings, optimistic updates may have Dates)
- * Most fields optional since cache may have partial data
- */
 export const ChatThreadCacheSchema = z.object({
   id: z.string(),
   title: z.string().optional(),
@@ -901,7 +890,6 @@ export const ChatThreadCacheSchema = z.object({
   isAiGeneratedTitle: z.boolean().optional(),
   enableWebSearch: z.boolean().optional(),
   metadata: z.unknown().optional(),
-  // Date fields accept both string (from JSON API) and Date (from optimistic updates)
   createdAt: z.union([z.string(), z.date()]).optional(),
   updatedAt: z.union([z.string(), z.date()]).optional(),
   lastMessageAt: z.union([z.string(), z.date()]).nullable().optional(),
@@ -921,11 +909,6 @@ export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
 export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
 export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
-// ============================================================================
-// SIMPLIFIED CHANGELOG DATA SCHEMAS
-// ============================================================================
-// Consolidated from 5 separate schemas to 3 discriminated union types
-// Each changeData includes a 'type' field for discrimination
 
 const BaseChangeDataSchema = z.object({
   type: ChangelogChangeTypeSchema,
@@ -955,12 +938,12 @@ export const ModeChangeDataSchema = BaseChangeDataSchema.extend({
 });
 export type ModeChangeData = z.infer<typeof ModeChangeDataSchema>;
 
-// Discriminated union for all change data types
 export const ChangeDataSchema = z.discriminatedUnion('type', [
   ParticipantChangeDataSchema,
   ParticipantRoleChangeDataSchema,
   ModeChangeDataSchema,
 ]);
+
 export type ChangeData = z.infer<typeof ChangeDataSchema>;
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 export type RoundModeratorRequest = z.infer<typeof RoundModeratorRequestSchema>;
@@ -987,7 +970,7 @@ export const RoundFeedbackParamSchema = z.object({
     example: 'thread_abc123',
   }),
   roundNumber: z.string().openapi({
-    description: 'Round number (✅ 0-BASED: first round is 0)',
+    description: 'Round number (0-based)',
     example: '0',
   }),
 });
@@ -1016,10 +999,6 @@ export const GetThreadFeedbackResponseSchema = createApiResponseSchema(
   z.array(ChatRoundFeedbackSchema),
 ).openapi('GetThreadFeedbackResponse');
 
-/**
- * Round Feedback Data Schema (Store/Client-Specific)
- * Minimal feedback data for store state management
- */
 export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
   .pick({
     roundNumber: true,
@@ -1029,33 +1008,12 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
 
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
-// ============================================================================
-// STREAM PARAM SCHEMAS
-// ============================================================================
-// ThreadIdParamSchema imported from @/api/core/schemas (single source of truth)
-
-// ============================================================================
-// RESUMABLE STREAM SCHEMAS
-// ============================================================================
-
-/**
- * Stream state schema for checking participant stream status
- * ✅ SINGLE SOURCE OF TRUTH: Imported from @/api/types/streaming
- */
 export type StreamState = z.infer<typeof StreamStateSchema>;
 
 export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
 
 export type StreamStatusResponse = z.infer<typeof StreamStatusResponseSchema>;
 
-// ============================================================================
-// UNIFIED RESUMPTION PHASE SCHEMAS
-// ============================================================================
-
-/**
- * Pre-search phase status schema for unified resumption
- * Tracks web search execution status within a round
- */
 export const PreSearchPhaseStatusSchema = z.object({
   enabled: z.boolean().openapi({
     description: 'Whether web search is enabled for this thread',
@@ -1077,10 +1035,6 @@ export const PreSearchPhaseStatusSchema = z.object({
 
 export type PreSearchPhaseStatus = z.infer<typeof PreSearchPhaseStatusSchema>;
 
-/**
- * Participant phase status schema for unified resumption
- * Tracks all participant stream statuses within a round
- */
 export const ParticipantPhaseStatusSchema = z.object({
   hasActiveStream: z.boolean().openapi({
     description: 'Whether there is an active participant stream in KV',
@@ -1114,10 +1068,6 @@ export const ParticipantPhaseStatusSchema = z.object({
 
 export type ParticipantPhaseStatus = z.infer<typeof ParticipantPhaseStatusSchema>;
 
-/**
- * Moderator phase status schema for unified resumption
- * Tracks round moderator message generation status
- */
 export const ModeratorPhaseStatusSchema = z.object({
   status: MessageStatusSchema.nullable().openapi({
     description: 'Moderator status (pending/streaming/complete/failed)',
@@ -1135,73 +1085,46 @@ export const ModeratorPhaseStatusSchema = z.object({
 
 export type ModeratorPhaseStatus = z.infer<typeof ModeratorPhaseStatusSchema>;
 
-/**
- * Thread stream resumption state schema - UNIFIED VERSION
- *
- * Returns comprehensive metadata about ALL active streams for server-side prefetching.
- * Enables unified resumption across pre-search, participants, and moderator phases.
- *
- * ✅ AI SDK v5 PATTERN: Supports resume across all streaming phases
- * ✅ RESUMABLE STREAMS: Enables Zustand pre-fill before React renders
- *
- * Phase detection logic:
- * 1. If preSearch.status is 'pending' or 'streaming' → currentPhase = 'pre_search'
- * 2. If participants.allComplete is false → currentPhase = 'participants'
- * 3. If moderator.status is 'pending' or 'streaming' → currentPhase = 'moderator'
- * 4. Otherwise → currentPhase = 'complete' (or 'idle' if no round started)
- */
 export const ThreadStreamResumptionStateSchema = z.object({
-  // Round identification
   roundNumber: RoundNumberSchema.nullable().openapi({
     description: 'Current round number being processed (0-based)',
     example: 0,
   }),
-
-  // Current phase for resumption logic
   currentPhase: RoundPhaseSchema.openapi({
     description: 'Current phase of the round: idle, pre_search, participants, moderator, or complete',
     example: 'participants',
   }),
-
-  // Pre-search phase status (null if web search not enabled)
   preSearch: PreSearchPhaseStatusSchema.nullable().openapi({
-    description: 'Pre-search phase status (null if web search disabled)',
+    description: 'Pre-search phase status',
   }),
-
-  // Participant streaming phase status
   participants: ParticipantPhaseStatusSchema.openapi({
     description: 'Participant streaming phase status',
   }),
-
-  // Moderator/round summary phase status
   moderator: ModeratorPhaseStatusSchema.nullable().openapi({
-    description: 'Moderator/round summary phase status',
+    description: 'Moderator phase status',
   }),
-
-  // Overall round completion status
   roundComplete: z.boolean().openapi({
     description: 'Whether the entire round is complete (all phases finished)',
     example: false,
   }),
-
   hasActiveStream: z.boolean().openapi({
-    description: 'Whether any stream is active (derived from currentPhase)',
+    description: 'Whether any stream is active',
     example: true,
   }),
   streamId: z.string().nullable().openapi({
-    description: 'Active participant stream ID (use participants.streamId for phase-specific ID)',
+    description: 'Active participant stream ID',
     example: 'thread_abc123_r0_p1',
   }),
   totalParticipants: RoundNumberSchema.nullable().openapi({
-    description: 'Total number of participants (use participants.totalParticipants)',
+    description: 'Total participants',
     example: 3,
   }),
   participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema).nullable().openapi({
-    description: 'Status of each participant (use participants.participantStatuses)',
+    description: 'Participant statuses',
     example: { 0: 'completed', 1: 'active', 2: 'active' },
   }),
   nextParticipantToTrigger: RoundNumberSchema.nullable().openapi({
-    description: 'Index of next participant to trigger (use participants.nextParticipantToTrigger)',
+    description: 'Next participant index',
     example: 2,
   }),
 }).openapi('ThreadStreamResumptionState');
@@ -1214,16 +1137,6 @@ export const ThreadStreamResumptionStateResponseSchema = createApiResponseSchema
 
 export type ThreadStreamResumptionStateResponse = z.infer<typeof ThreadStreamResumptionStateResponseSchema>;
 
-// ============================================================================
-// PRE-SEARCH STREAMING DATA SCHEMAS
-// ============================================================================
-// Following AI SDK v5 pattern for custom data streaming
-// Reference: ai-sdk-v5-crash-course exercises 07.01, 07.02, 99.04, 99.05
-
-/**
- * Pre-search phase start event
- * Sent when initial web search phase begins
- */
 export const PreSearchStartDataSchema = z.object({
   type: z.literal('pre_search_start'),
   timestamp: z.number(),

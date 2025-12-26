@@ -11,9 +11,6 @@ import { parseResponse } from 'hono/client';
 import type { ApiClientType } from '@/api/client';
 import { createApiClient } from '@/api/client';
 
-// Re-export ChatCustomRole from single source of truth
-export type { ChatCustomRole } from '@/api/routes/chat/schema';
-
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
@@ -65,18 +62,12 @@ export type DeleteCustomRoleResponse = InferResponseType<
 /**
  * List user custom role templates with cursor pagination
  * Protected endpoint - requires authentication
- *
- * Following Hono RPC best practices: Always provide an object to $get()
- * even when all query parameters are optional. Use nullish coalescing
- * to ensure type safety.
  */
 export async function listCustomRolesService(args?: ListCustomRolesRequest) {
   const client = await createApiClient();
-  // Internal fallback: if args not provided, create proper empty query object
-  const params: ListCustomRolesRequest = {
-    query: args?.query ?? {},
-  };
-  return parseResponse(client.chat['custom-roles'].$get(params));
+  return parseResponse(
+    client.chat['custom-roles'].$get(args ?? { query: {} }),
+  );
 }
 
 /**
@@ -87,11 +78,7 @@ export async function listCustomRolesService(args?: ListCustomRolesRequest) {
  */
 export async function createCustomRoleService(data: CreateCustomRoleRequest) {
   const client = await createApiClient();
-  // Internal fallback: ensure json property exists
-  const params: CreateCustomRoleRequest = {
-    json: data.json ?? {},
-  };
-  return parseResponse(client.chat['custom-roles'].$post(params));
+  return parseResponse(client.chat['custom-roles'].$post(data));
 }
 
 /**
@@ -102,11 +89,7 @@ export async function createCustomRoleService(data: CreateCustomRoleRequest) {
  */
 export async function getCustomRoleService(data: GetCustomRoleRequest) {
   const client = await createApiClient();
-  // Internal fallback: ensure param exists
-  const params: GetCustomRoleRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.chat['custom-roles'][':id'].$get(params));
+  return parseResponse(client.chat['custom-roles'][':id'].$get(data));
 }
 
 /**
@@ -117,12 +100,7 @@ export async function getCustomRoleService(data: GetCustomRoleRequest) {
  */
 export async function updateCustomRoleService(data: UpdateCustomRoleRequest) {
   const client = await createApiClient();
-  // Internal fallback: ensure param and json exist
-  const params: UpdateCustomRoleRequest = {
-    param: data.param ?? { id: '' },
-    json: data.json ?? {},
-  };
-  return parseResponse(client.chat['custom-roles'][':id'].$patch(params));
+  return parseResponse(client.chat['custom-roles'][':id'].$patch(data));
 }
 
 /**
@@ -133,9 +111,5 @@ export async function updateCustomRoleService(data: UpdateCustomRoleRequest) {
  */
 export async function deleteCustomRoleService(data: DeleteCustomRoleRequest) {
   const client = await createApiClient();
-  // Internal fallback: ensure param exists
-  const params: DeleteCustomRoleRequest = {
-    param: data.param ?? { id: '' },
-  };
-  return parseResponse(client.chat['custom-roles'][':id'].$delete(params));
+  return parseResponse(client.chat['custom-roles'][':id'].$delete(data));
 }
