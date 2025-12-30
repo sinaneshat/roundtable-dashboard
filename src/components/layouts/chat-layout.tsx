@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import type React from 'react';
 import { Suspense } from 'react';
 
+import { requireAuth } from '@/app/auth/actions';
 import { ChatHeaderSwitch } from '@/components/chat/chat-header-switch';
 import { AppSidebar } from '@/components/chat/chat-nav';
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
@@ -10,10 +11,10 @@ import { SidebarLoadingFallback } from '@/components/loading';
 import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { LIMITS } from '@/constants/limits';
-import { auth } from '@/lib/auth/server';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
+import { shouldSkipAuth } from '@/lib/public-routes';
 import {
   getSubscriptionsService,
   listThreadsService,
@@ -34,46 +35,42 @@ type ChatLayoutProps = {
  * Client-side fetching (non-blocking, with loading states):
  * - Usage stats - Fetched on client with skeleton loading
  * - Models list - Fetched on client with skeleton loading
- *
- * This approach prioritizes fast initial page load by only
- * prefetching data essential for navigation. Secondary data
- * loads on client with proper loading states.
  */
 export default async function ChatLayout({ children }: ChatLayoutProps) {
   const queryClient = getQueryClient();
+  const headersList = await headers();
+  const skipAuth = shouldSkipAuth(headersList);
 
-  // ✅ SERVER-SIDE SESSION: Fetch session to prevent hydration mismatch
-  // Better Auth pattern: Server renders with actual user data, client hydrates matching state
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  // For authenticated routes: require auth + prefetch user data
+  let session = null;
+  if (!skipAuth) {
+    // Require auth (redirects to sign-in if not authenticated)
+    session = await requireAuth();
 
-  // Prefetch critical navigation data only - models/stats load on client
-  await Promise.all([
-    // Threads list (infinite query) - Essential for sidebar navigation
-    queryClient.prefetchInfiniteQuery({
-      queryKey: queryKeys.threads.lists(undefined),
-      queryFn: async ({ pageParam }) => {
-        const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
-        const params: { cursor?: string; limit: number } = { limit };
-        if (pageParam)
-          params.cursor = pageParam;
-        return listThreadsService({ query: params });
-      },
-      initialPageParam: undefined as string | undefined,
-      getNextPageParam: lastPage =>
-        lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
-      pages: 1,
-      staleTime: STALE_TIMES.threads,
-    }),
-
-    // Subscriptions - Essential for NavUser billing info
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.subscriptions.list(),
-      queryFn: getSubscriptionsService,
-      staleTime: STALE_TIMES.subscriptions,
-    }),
-  ]);
+    // Prefetch critical navigation data
+    await Promise.all([
+      queryClient.prefetchInfiniteQuery({
+        queryKey: queryKeys.threads.lists(undefined),
+        queryFn: async ({ pageParam }) => {
+          const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
+          const params: { cursor?: string; limit: number } = { limit };
+          if (pageParam)
+            params.cursor = pageParam;
+          return listThreadsService({ query: params });
+        },
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: lastPage =>
+          lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
+        pages: 1,
+        staleTime: STALE_TIMES.threads,
+      }),
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.subscriptions.list(),
+        queryFn: getSubscriptionsService,
+        staleTime: STALE_TIMES.subscriptions,
+      }),
+    ]);
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
