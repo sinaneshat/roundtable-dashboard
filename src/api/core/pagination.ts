@@ -26,6 +26,7 @@ import { and, asc, desc, gt, lt } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { SortDirection } from '@/api/core/enums';
+import { SortDirections } from '@/api/core/enums';
 import { API } from '@/constants/application';
 
 // ============================================================================
@@ -209,14 +210,14 @@ export function applyCursorPagination<T>(
 export function buildCursorWhere(
   cursorColumn: AnyColumn,
   cursor: string | undefined,
-  direction: 'asc' | 'desc',
+  direction: SortDirection,
 ): SQL | undefined {
   if (!cursor) {
     return undefined;
   }
 
   const cursorDate = new Date(cursor);
-  return direction === 'desc' ? lt(cursorColumn, cursorDate) : gt(cursorColumn, cursorDate);
+  return direction === SortDirections.DESC ? lt(cursorColumn, cursorDate) : gt(cursorColumn, cursorDate);
 }
 
 /**
@@ -244,7 +245,7 @@ export function buildCursorWhere(
 export function buildCursorWhereWithFilters(
   cursorColumn: AnyColumn,
   cursor: string | undefined,
-  direction: 'asc' | 'desc',
+  direction: SortDirection,
   additionalFilters: SQL[] = [],
 ): SQL | undefined {
   const cursorWhere = buildCursorWhere(cursorColumn, cursor, direction);
@@ -274,9 +275,9 @@ export function buildCursorWhereWithFilters(
  */
 export function getCursorOrderBy(
   cursorColumn: AnyColumn,
-  direction: 'asc' | 'desc',
+  direction: SortDirection,
 ): SQL {
-  return direction === 'desc' ? desc(cursorColumn) : asc(cursorColumn);
+  return direction === SortDirections.DESC ? desc(cursorColumn) : asc(cursorColumn);
 }
 
 /**

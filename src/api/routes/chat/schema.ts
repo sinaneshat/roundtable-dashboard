@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi';
 
-import type { MessageStatus } from '@/api/core/enums';
 import {
   ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
@@ -476,7 +475,7 @@ export const GeneratedSearchQuerySchema = z.object({
   query: z.string(),
   rationale: z.string(),
   searchDepth: WebSearchDepthSchema,
-  complexity: z.string().optional().transform(val => val?.toLowerCase() as 'basic' | 'moderate' | 'deep' | undefined).pipe(WebSearchComplexitySchema.optional()),
+  complexity: z.string().optional().transform(val => val?.toLowerCase()).pipe(WebSearchComplexitySchema.optional()),
   sourceCount: z.union([z.number(), z.string()]).optional(),
   requiresFullContent: z.boolean().optional(),
   chunksPerSource: z.union([z.number(), z.string()]).optional(),
@@ -858,8 +857,7 @@ export const ModeratorAIContentSchema = z.object({
   metrics: ModeratorMetricsSchema.describe('Ratings for engagement, insight, balance, and clarity (0-100 each)'),
 }).openapi('ModeratorAIContent');
 
-export const ModeratorPayloadSchema = ModeratorAIContentSchema;
-export type ModeratorPayload = z.infer<typeof ModeratorPayloadSchema>;
+export type ModeratorPayload = z.infer<typeof ModeratorAIContentSchema>;
 
 export const ModeratorDetailPayloadSchema = z.object({
   roundNumber: RoundNumberSchema,
@@ -896,6 +894,32 @@ export const ChatThreadCacheSchema = z.object({
 }).openapi('ChatThreadCache');
 
 export type ChatThreadCache = z.infer<typeof ChatThreadCacheSchema>;
+
+/**
+ * ChatSidebarItem - Simplified thread representation for sidebar lists
+ * Used in chat-list.tsx and chat-nav.tsx for efficient sidebar rendering
+ */
+export const ChatSidebarItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  previousSlug: z.string().nullable().optional(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  messages: z.never().array(),
+  isActive: z.boolean().optional(),
+  isFavorite: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+}).openapi('ChatSidebarItem');
+
+export type ChatSidebarItem = z.infer<typeof ChatSidebarItemSchema>;
+
+export const ChatSidebarGroupSchema = z.object({
+  label: z.string(),
+  chats: z.array(ChatSidebarItemSchema),
+}).openapi('ChatSidebarGroup');
+
+export type ChatSidebarGroup = z.infer<typeof ChatSidebarGroupSchema>;
 
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequestSchema>;
@@ -950,19 +974,48 @@ export type RoundModeratorRequest = z.infer<typeof RoundModeratorRequestSchema>;
 export type ModeratorAIContent = z.infer<typeof ModeratorAIContentSchema>;
 export type ModeratorMetrics = z.infer<typeof ModeratorMetricsSchema>;
 
-export type StoredModeratorData = {
-  id: string;
-  threadId: string;
-  roundNumber: number;
-  mode: string;
-  userQuestion: string;
-  status: MessageStatus;
-  moderatorData: { text: string; metrics: ModeratorMetrics } | null;
-  participantMessageIds: string[];
-  errorMessage: string | null;
-  createdAt: Date | string;
-  completedAt: Date | string | null;
-};
+export const StoredModeratorDataSchema = z.object({
+  id: CoreSchemas.id().openapi({
+    description: 'Moderator summary ID',
+    example: '01HXYZ123ABC',
+  }),
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.number().int().min(0).openapi({
+    description: 'Round number (0-indexed)',
+    example: 0,
+  }),
+  mode: z.string().openapi({
+    description: 'Chat mode',
+    example: 'brainstorm',
+  }),
+  userQuestion: z.string().openapi({
+    description: 'User question for this round',
+  }),
+  status: MessageStatusSchema,
+  moderatorData: z.object({
+    text: z.string().describe('Moderator summary text in markdown'),
+    metrics: ModeratorMetricsSchema,
+  }).nullable().openapi({
+    description: 'Moderator AI-generated summary and metrics',
+  }),
+  participantMessageIds: z.array(CoreSchemas.id()).openapi({
+    description: 'Array of participant message IDs in this round',
+  }),
+  errorMessage: z.string().nullable().openapi({
+    description: 'Error message if moderator generation failed',
+  }),
+  createdAt: z.union([z.string(), z.date()]).openapi({
+    description: 'Creation timestamp',
+  }),
+  completedAt: z.union([z.string(), z.date()]).nullable().openapi({
+    description: 'Completion timestamp',
+  }),
+}).openapi('StoredModeratorData');
+
+export type StoredModeratorData = z.infer<typeof StoredModeratorDataSchema>;
 
 export const RoundFeedbackParamSchema = z.object({
   threadId: z.string().openapi({
@@ -1478,14 +1531,23 @@ export function isAnswerErrorEvent(event: PreSearchSSEEvent): event is PreSearch
 }
 
 /**
- * Parse SSE event data with type safety
+ * Parse SSE event data with type safety using Zod validation
+ *
+ * Uses discriminated union schema for runtime validation.
+ * Returns null on parse failure rather than throwing.
  */
 export function parsePreSearchEvent<T extends PreSearchSSEEvent>(
   messageEvent: MessageEvent,
   expectedType: T['event'],
 ): T['data'] | null {
   try {
-    return JSON.parse(messageEvent.data) as T['data'];
+    const parsed: unknown = JSON.parse(messageEvent.data);
+    const result = PreSearchSSEEventSchema.safeParse({ event: expectedType, data: parsed });
+    if (!result.success) {
+      console.error(`Failed to validate ${expectedType} event data:`, result.error.message);
+      return null;
+    }
+    return result.data.data as T['data'];
   } catch {
     console.error(`Failed to parse ${expectedType} event data`);
     return null;

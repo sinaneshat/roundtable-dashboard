@@ -160,11 +160,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   });
 
   useEffect(() => {
-    // SHADCN ScrollArea: Find viewport element (has data-slot="scroll-area-viewport")
     const scrollArea = scrollAreaRef.current;
     if (!scrollArea)
       return;
-    const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement;
+    const viewport = scrollArea.querySelector<HTMLDivElement>('[data-slot="scroll-area-viewport"]');
     if (!viewport)
       return;
     scrollViewportRef.current = viewport;

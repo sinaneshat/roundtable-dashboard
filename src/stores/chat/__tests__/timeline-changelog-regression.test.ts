@@ -454,7 +454,10 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
         ...streamingMessage,
         parts: [{ type: 'text', text: 'Complete response with all content' }],
         metadata: {
-          ...streamingMessage.metadata as Record<string, unknown>,
+          role: 'assistant',
+          roundNumber: streamingMessage.metadata?.roundNumber ?? 0,
+          participantId: streamingMessage.metadata?.participantId as string,
+          participantIndex: streamingMessage.metadata?.participantIndex as number,
           isPartialResponse: false,
           finishReason: 'stop',
         },

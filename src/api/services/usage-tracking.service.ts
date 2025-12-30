@@ -24,7 +24,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { StripeSubscriptionStatus, SubscriptionTier } from '@/api/core/enums';
-import { BillingIntervals, CreditActions, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { BillingIntervals, CreditActions, PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
@@ -32,7 +32,7 @@ import type { UserChatUsage } from '@/db/validation';
 
 import type { UsageStatsPayload, UsageStatus } from '../routes/usage/schema';
 import { getUserCreditBalance, upgradeToPaidPlan } from './credit.service';
-import { subscriptionTierSchema, TIER_QUOTAS } from './product-logic.service';
+import { getTierFromProductId, TIER_QUOTAS } from './product-logic.service';
 
 /**
  * Get tier quotas from code (SINGLE SOURCE OF TRUTH)
@@ -65,7 +65,7 @@ export async function getUserTier(userId: string): Promise<SubscriptionTier> {
       tag: UserCacheTags.tier(userId),
     });
 
-  return usageResults[0]?.subscriptionTier || 'free';
+  return usageResults[0]?.subscriptionTier || SubscriptionTiers.FREE;
 }
 
 /**
@@ -110,7 +110,7 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
           messagesCreated: 0,
           customRolesCreated: 0,
           analysisGenerated: 0,
-          subscriptionTier: 'free',
+          subscriptionTier: SubscriptionTiers.FREE,
           isAnnual: false,
           createdAt: now,
           updatedAt: now,
@@ -338,7 +338,7 @@ async function rolloverBillingPeriod(
     // Downgrade to free tier
     const freeUpdate = db.update(tables.userChatUsage)
       .set({
-        subscriptionTier: 'free',
+        subscriptionTier: SubscriptionTiers.FREE,
         isAnnual: false,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
@@ -431,7 +431,7 @@ async function getPlanStatsForUsage(userId: string) {
   // This correctly maintains 'pro' tier during downgrade grace period
   const usageRecord = await ensureUserUsageRecord(userId);
   const currentTier = usageRecord.subscriptionTier;
-  const isPaidTier = currentTier !== 'free';
+  const isPaidTier = currentTier !== SubscriptionTiers.FREE;
 
   // Check for active subscription in Stripe (for hasActiveSubscription flag)
   const customerResults = await db
@@ -470,7 +470,7 @@ async function getPlanStatsForUsage(userId: string) {
   if (isPaidTier) {
     return {
       type: 'paid' as const,
-      name: currentTier === 'pro' ? 'Pro' : currentTier.charAt(0).toUpperCase() + currentTier.slice(1),
+      name: 'Pro',
       monthlyCredits: creditBalance.monthlyCredits,
       hasPaymentMethod: true,
       hasActiveSubscription,
@@ -494,7 +494,7 @@ async function getPlanStatsForUsage(userId: string) {
   const hasPaymentMethod = cardConnectionTx.length > 0;
 
   return {
-    type: 'free' as const,
+    type: PlanTypes.FREE,
     name: 'Free',
     monthlyCredits: creditBalance.monthlyCredits,
     hasPaymentMethod,
@@ -554,16 +554,12 @@ export async function syncUserQuotaFromSubscription(
     throw createError.notFound(`Price not found: ${priceId}`, context);
   }
 
-  // ✅ TYPE-SAFE: Use Zod schema validation instead of force cast
-  const tierValue = price.metadata?.tier;
-  const parsedTier = subscriptionTierSchema.safeParse(tierValue);
-  const tier = parsedTier.success ? parsedTier.data : undefined;
+  // ✅ UNIFIED TIER DETECTION: Use product ID as primary source (CREDIT_CONFIG is single source of truth)
+  // The getTierFromProductId function maps known Stripe product IDs to subscription tiers
+  // Falls back to pattern matching for other product IDs, defaulting to 'free'
+  const tier = getTierFromProductId(price.productId);
 
   const isAnnual = price.interval === BillingIntervals.YEAR;
-
-  if (!tier) {
-    return;
-  }
 
   // Get current usage record
   const currentUsage = await ensureUserUsageRecord(userId);
@@ -600,8 +596,8 @@ export async function syncUserQuotaFromSubscription(
   const isDowngrade = newQuotas.threadsPerMonth < oldQuotas.threadsPerMonth
     || newQuotas.messagesPerMonth < oldQuotas.messagesPerMonth;
 
-  // Detect upgrade from free tier to paid tier (starter, pro, power)
-  const isUpgradeFromFree = currentUsage.subscriptionTier === 'free' && tier !== 'free';
+  // Detect upgrade from free tier to paid tier (pro)
+  const isUpgradeFromFree = currentUsage.subscriptionTier === SubscriptionTiers.FREE && tier !== SubscriptionTiers.FREE;
 
   // Reset usage counters if new billing period has started
   let resetUsage = {};
@@ -700,9 +696,7 @@ export async function getMaxModels(tier: SubscriptionTier, _isAnnual = false): P
   // For now, return hardcoded defaults until we add maxAiModels to TIER_QUOTAS
   const fallbackMaxModels: Record<SubscriptionTier, number> = {
     free: 5,
-    starter: 5,
     pro: 7,
-    power: 15,
   };
   return fallbackMaxModels[tier];
 }

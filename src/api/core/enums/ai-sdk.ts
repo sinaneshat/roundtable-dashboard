@@ -23,6 +23,8 @@ export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES).openapi({
 
 export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
 
+export const DEFAULT_AI_SDK_STATUS: AiSdkStatus = 'ready';
+
 export const AiSdkStatuses = {
   READY: 'ready' as const,
   SUBMITTED: 'submitted' as const,
@@ -51,6 +53,8 @@ export const FinishReasonSchema = z.enum(FINISH_REASONS).openapi({
 });
 
 export type FinishReason = z.infer<typeof FinishReasonSchema>;
+
+export const DEFAULT_FINISH_REASON: FinishReason = 'stop';
 
 export const FinishReasons = {
   STOP: 'stop' as const,
@@ -85,6 +89,8 @@ export const UIMessageRoleSchema = z.enum(UI_MESSAGE_ROLES).openapi({
 
 export type UIMessageRole = z.infer<typeof UIMessageRoleSchema>;
 
+export const DEFAULT_UI_MESSAGE_ROLE: UIMessageRole = 'user';
+
 export const UIMessageRoles = {
   USER: 'user' as const,
   ASSISTANT: 'assistant' as const,
@@ -103,6 +109,8 @@ export const MessagePartTypeSchema = z.enum(MESSAGE_PART_TYPES).openapi({
 });
 
 export type MessagePartType = z.infer<typeof MessagePartTypeSchema>;
+
+export const DEFAULT_MESSAGE_PART_TYPE: MessagePartType = 'text';
 
 export const MessagePartTypes = {
   TEXT: 'text' as const,
@@ -125,6 +133,8 @@ export const ReasoningPartTypeSchema = z.enum(REASONING_PART_TYPES).openapi({
 });
 
 export type ReasoningPartType = z.infer<typeof ReasoningPartTypeSchema>;
+
+export const DEFAULT_REASONING_PART_TYPE: ReasoningPartType = 'reasoning';
 
 export const ReasoningPartTypes = {
   REASONING: 'reasoning' as const,

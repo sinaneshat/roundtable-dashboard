@@ -11,8 +11,8 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { validateEnvironmentVariables } from '@/api/common/fetch-utilities';
-import type { HealthStatus } from '@/api/core/enums';
-import { HealthStatuses } from '@/api/core/enums';
+import type { DatabaseConnectionStatus, HealthStatus, OAuthStatus } from '@/api/core/enums';
+import { DatabaseConnectionStatuses, HealthStatuses, OAuthStatuses } from '@/api/core/enums';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -22,8 +22,8 @@ export type SafeEnvironmentSummary = {
   NODE_ENV: string;
   LOG_LEVEL: string;
   ENVIRONMENT_VERIFIED: boolean;
-  DATABASE_CONNECTION_STATUS: 'connected' | 'disconnected' | 'pending';
-  OAUTH_STATUS: 'configured' | 'missing' | 'invalid';
+  DATABASE_CONNECTION_STATUS: DatabaseConnectionStatus;
+  OAUTH_STATUS: OAuthStatus;
   TIMESTAMP: string;
 };
 
@@ -326,22 +326,20 @@ export function getEnvironmentHealthStatus(env: CloudflareEnv): {
  */
 export function createEnvironmentSummary(env: CloudflareEnv): SafeEnvironmentSummary {
   // Determine database connection status
-  let databaseStatus: 'connected' | 'disconnected' | 'pending' = 'pending';
+  let databaseStatus: DatabaseConnectionStatus = DatabaseConnectionStatuses.PENDING;
   if (env.DB) {
-    // D1 database binding is available
-    databaseStatus = 'connected';
+    databaseStatus = DatabaseConnectionStatuses.CONNECTED;
   } else {
-    // Intentionally empty
-    databaseStatus = 'disconnected';
+    databaseStatus = DatabaseConnectionStatuses.DISCONNECTED;
   }
 
   // Determine OAuth status
-  let oauthStatus: 'configured' | 'missing' | 'invalid' = 'missing';
+  let oauthStatus: OAuthStatus = OAuthStatuses.MISSING;
   if (env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET) {
     // Basic validation - check if they look like real OAuth credentials
     const hasValidFormat = env.AUTH_GOOGLE_ID.includes('.apps.googleusercontent.com')
       && env.AUTH_GOOGLE_SECRET.startsWith('GOCSPX-');
-    oauthStatus = hasValidFormat ? 'configured' : 'invalid';
+    oauthStatus = hasValidFormat ? OAuthStatuses.CONFIGURED : OAuthStatuses.INVALID;
   }
 
   return {

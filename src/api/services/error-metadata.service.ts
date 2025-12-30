@@ -18,95 +18,73 @@
  * @see /src/lib/schemas/message-metadata.ts - Finish reason schemas
  */
 
+import { z } from 'zod';
+
 import type { ErrorCategory } from '@/api/core/enums';
 import { ErrorCategorySchema, FinishReasonSchema } from '@/api/core/enums';
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isObject } from '@/lib/utils';
 
 // ============================================================================
-// TYPE DEFINITIONS
+// TYPE DEFINITIONS (Zod Schemas - Single Source of Truth)
 // ============================================================================
 
 /**
  * Error metadata structure returned by extraction functions
  * Provides comprehensive error context for storage and display
  */
-export type ErrorMetadata = {
-  /** Whether an error occurred */
-  hasError: boolean;
+export const ErrorMetadataSchema = z.object({
+  hasError: z.boolean().describe('Whether an error occurred'),
+  openRouterError: z.string().optional().describe('Raw OpenRouter/provider error message'),
+  errorCategory: ErrorCategorySchema.optional().describe('Categorized error type for UI handling'),
+  errorMessage: z.string().optional().describe('Human-readable error message for display'),
+  providerMessage: z.string().optional().describe('Detailed provider message for debugging'),
+  isTransientError: z.boolean().describe('Whether error is transient (worth retrying)'),
+  isPartialResponse: z.boolean().describe('Whether partial content was generated despite error'),
+});
 
-  /** Raw OpenRouter/provider error message */
-  openRouterError?: string;
-
-  /** Categorized error type for UI handling */
-  errorCategory?: ErrorCategory;
-
-  /** Human-readable error message for display */
-  errorMessage?: string;
-
-  /** Detailed provider message for debugging */
-  providerMessage?: string;
-
-  /** Whether error is transient (worth retrying) */
-  isTransientError: boolean;
-
-  /** Whether partial content was generated despite error */
-  isPartialResponse: boolean;
-};
+export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
 
 /**
  * Parameters for extractErrorMetadata function
  * Includes all context needed for comprehensive error detection
  */
-export type ExtractErrorMetadataParams = {
-  /** Provider metadata from AI SDK (may contain error details) */
-  providerMetadata: unknown;
+export const ExtractErrorMetadataParamsSchema = z.object({
+  providerMetadata: z.unknown().describe('Provider metadata from AI SDK (may contain error details)'),
+  response: z.unknown().describe('Raw response object from provider'),
+  finishReason: z.string().describe('AI SDK finish reason'),
+  usage: z.object({
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+  }).optional().describe('Token usage statistics'),
+  text: z.string().optional().describe('Generated text content (to detect partial responses)'),
+  reasoning: z.string().optional().describe('Generated reasoning content (for o1/o3 models that output reasoning instead of text)'),
+});
 
-  /** Raw response object from provider */
-  response: unknown;
-
-  /** AI SDK finish reason */
-  finishReason: string;
-
-  /** Token usage statistics */
-  usage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-  };
-
-  /** Generated text content (to detect partial responses) */
-  text?: string;
-
-  /** Generated reasoning content (for o1/o3 models that output reasoning instead of text) */
-  reasoning?: string;
-};
+export type ExtractErrorMetadataParams = z.infer<typeof ExtractErrorMetadataParamsSchema>;
 
 /**
  * Parameters for buildEmptyResponseError function
  * Context for generating detailed empty response error messages
  */
-export type BuildEmptyResponseErrorParams = {
-  /** Number of input tokens */
-  inputTokens: number;
+export const BuildEmptyResponseErrorParamsSchema = z.object({
+  inputTokens: z.number().describe('Number of input tokens'),
+  outputTokens: z.number().describe('Number of output tokens (should be 0 for empty response)'),
+  finishReason: z.string().describe('AI SDK finish reason'),
+});
 
-  /** Number of output tokens (should be 0 for empty response) */
-  outputTokens: number;
-
-  /** AI SDK finish reason */
-  finishReason: string;
-};
+export type BuildEmptyResponseErrorParams = z.infer<typeof BuildEmptyResponseErrorParamsSchema>;
 
 /**
  * Provider error extraction result
  * Contains both raw error and categorization
  */
-export type ProviderErrorResult = {
-  /** Raw error message from provider */
-  rawError?: string;
+export const ProviderErrorResultSchema = z.object({
+  rawError: z.string().optional().describe('Raw error message from provider'),
+  category: ErrorCategorySchema.optional().describe('Categorized error type'),
+});
 
-  /** Categorized error type */
-  category?: ErrorCategory;
-};
+export type ProviderErrorResult = z.infer<typeof ProviderErrorResultSchema>;
 
 // ============================================================================
 // ERROR CATEGORIZATION

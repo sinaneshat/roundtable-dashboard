@@ -37,12 +37,10 @@ export default async function Image() {
     logoBase64 = '';
   }
 
-  // Actual subscription tiers from constants/subscription-tiers.ts
+  // Actual subscription tiers: Free (10K credits) and Pro ($100/month, 1M credits)
   const tiers = [
     { name: t('subscription.tiers.free.name'), desc: t('subscription.tiers.free.description') },
-    { name: t('subscription.tiers.starter.name'), desc: t('subscription.tiers.starter.description') },
     { name: t('subscription.tiers.pro.name'), desc: t('subscription.tiers.pro.description') },
-    { name: t('subscription.tiers.power.name'), desc: t('subscription.tiers.power.description') },
   ];
 
   return new ImageResponse(
@@ -161,8 +159,8 @@ export default async function Image() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 padding: '16px 20px',
-                backgroundColor: index === 2 ? OG_COLORS.primary : OG_COLORS.glassBackground,
-                border: index === 2 ? `2px solid ${OG_COLORS.primary}` : `1px solid ${OG_COLORS.glassBorder}`,
+                backgroundColor: index === 1 ? OG_COLORS.primary : OG_COLORS.glassBackground,
+                border: index === 1 ? `2px solid ${OG_COLORS.primary}` : `1px solid ${OG_COLORS.glassBorder}`,
                 borderRadius: 12,
                 minWidth: 140,
               }}

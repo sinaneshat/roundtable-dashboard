@@ -16,7 +16,6 @@ import { z } from 'zod';
 
 import { ParticipantStreamStatusSchema, StreamStatusSchema } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
-import type { TypedLogger } from '@/api/types/logger';
 
 // ============================================================================
 // CONSTANTS
@@ -25,12 +24,67 @@ import type { TypedLogger } from '@/api/types/logger';
 export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 
 // ============================================================================
+// SSE EVENT TYPE CLASSIFICATION
+// ============================================================================
+
+// AI SDK v5 SSE line prefixes - event types
+// Used to classify chunks for deduplication during stream resumption
+export const SSE_EVENT_TYPES = [
+  'text-delta', // 0: prefix - text content
+  'reasoning-delta', // g: prefix - reasoning/thinking content
+  'finish', // d: prefix - stream finish
+  'error', // 3: prefix - error event
+  'step-finish', // e: prefix - step completion
+  'data', // 2: prefix - tool results, metadata
+  'unknown', // unrecognized prefix
+] as const;
+
+export const SSEEventTypeSchema = z.enum(SSE_EVENT_TYPES);
+export type SSEEventType = z.infer<typeof SSEEventTypeSchema>;
+
+// Map AI SDK line prefixes to event types
+// Keys are string prefixes extracted from SSE data lines
+export const SSE_PREFIX_TO_EVENT = {
+  0: 'text-delta',
+  g: 'reasoning-delta',
+  d: 'finish',
+  3: 'error',
+  e: 'step-finish',
+  2: 'data',
+} as const satisfies Record<string, SSEEventType>;
+
+/**
+ * Parse SSE event type from AI SDK v5 formatted data line
+ * Format: `{prefix}:{json_content}` or `{prefix}:"{string_content}"`
+ */
+export function parseSSEEventType(data: string): SSEEventType {
+  // Skip empty lines or lines without colon
+  if (!data || !data.includes(':')) {
+    return 'unknown';
+  }
+
+  // Extract prefix (everything before first colon)
+  const colonIndex = data.indexOf(':');
+  const prefix = data.substring(0, colonIndex);
+
+  // Check if prefix is a known SSE event prefix
+  if (prefix in SSE_PREFIX_TO_EVENT) {
+    return SSE_PREFIX_TO_EVENT[prefix as keyof typeof SSE_PREFIX_TO_EVENT];
+  }
+
+  return 'unknown';
+}
+
+// ============================================================================
 // STREAM CHUNK TYPES
 // ============================================================================
 
 export const StreamChunkSchema = z.object({
   data: z.string(),
   timestamp: z.number(),
+  // ✅ FIX: Added event type to enable deduplication during stream resumption
+  // Reasoning chunks can be filtered to prevent duplicate thinking tags
+  event: SSEEventTypeSchema.optional(),
 });
 
 export type StreamChunk = z.infer<typeof StreamChunkSchema>;
@@ -82,6 +136,12 @@ export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
 // RESUMABLE STREAM CONTEXT TYPES
 // ============================================================================
 
+export const ResumableStreamContextOptionsSchema = z.object({
+  waitUntil: z.function(),
+  env: z.any(),
+  executionCtx: z.any().optional(),
+}).describe('Options for ResumableStreamContext');
+
 export type ResumableStreamContextOptions = {
   waitUntil: (promise: Promise<unknown>) => void;
   env: ApiEnv['Bindings'];
@@ -114,40 +174,50 @@ export type ResumableStreamContext = {
 // STREAM BUFFER SERVICE TYPES
 // ============================================================================
 
-export type InitializeStreamBufferParams = {
-  streamId: string;
-  threadId: string;
-  roundNumber: number;
-  participantIndex: number;
-  env: ApiEnv['Bindings'];
-  logger?: TypedLogger;
-};
+export const InitializeStreamBufferParamsSchema = z.object({
+  streamId: z.string(),
+  threadId: z.string(),
+  roundNumber: z.number(),
+  participantIndex: z.number(),
+  env: z.any(),
+  logger: z.any().optional(),
+});
 
-export type AppendStreamChunkParams = {
-  streamId: string;
-  chunk: StreamChunk;
-  env: ApiEnv['Bindings'];
-  logger?: TypedLogger;
-};
+export type InitializeStreamBufferParams = z.infer<typeof InitializeStreamBufferParamsSchema>;
 
-export type CompleteStreamBufferParams = {
-  streamId: string;
-  env: ApiEnv['Bindings'];
-  logger?: TypedLogger;
-};
+export const AppendStreamChunkParamsSchema = z.object({
+  streamId: z.string(),
+  chunk: StreamChunkSchema,
+  env: z.any(),
+  logger: z.any().optional(),
+});
 
-export type FailStreamBufferParams = {
-  streamId: string;
-  errorMessage: string;
-  env: ApiEnv['Bindings'];
-  logger?: TypedLogger;
-};
+export type AppendStreamChunkParams = z.infer<typeof AppendStreamChunkParamsSchema>;
 
-export type StreamResumeResult = {
-  chunks: StreamChunk[];
-  metadata: StreamBufferMetadata | null;
-  isComplete: boolean;
-};
+export const CompleteStreamBufferParamsSchema = z.object({
+  streamId: z.string(),
+  env: z.any(),
+  logger: z.any().optional(),
+});
+
+export type CompleteStreamBufferParams = z.infer<typeof CompleteStreamBufferParamsSchema>;
+
+export const FailStreamBufferParamsSchema = z.object({
+  streamId: z.string(),
+  errorMessage: z.string(),
+  env: z.any(),
+  logger: z.any().optional(),
+});
+
+export type FailStreamBufferParams = z.infer<typeof FailStreamBufferParamsSchema>;
+
+export const StreamResumeResultSchema = z.object({
+  chunks: z.array(StreamChunkSchema),
+  metadata: StreamBufferMetadataSchema.nullable(),
+  isComplete: z.boolean(),
+});
+
+export type StreamResumeResult = z.infer<typeof StreamResumeResultSchema>;
 
 // ============================================================================
 // TYPE GUARDS

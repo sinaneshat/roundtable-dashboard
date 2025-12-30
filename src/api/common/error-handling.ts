@@ -21,6 +21,8 @@
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { z } from 'zod';
 
+import type { ApiErrorSeverity } from '@/api/core/enums';
+import { API_ERROR_SEVERITIES, ApiErrorSeverities } from '@/api/core/enums';
 import type { ErrorContext } from '@/api/core/schemas';
 // Import directly from source to avoid circular dependency
 // (error-handling.ts → @/api/core → errors.ts → error-handling.ts)
@@ -86,24 +88,21 @@ export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 export const ERROR_CODES = ErrorCodeSchema.enum;
 
 /**
- * API error severity levels schema - Zod enum for validation
+ * API error severity - re-exported from centralized enums for backwards compatibility
+ * Prefer importing directly from '@/api/core/enums' for new code.
  */
-export const ApiErrorSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
+export { ApiErrorSeverity };
 
 /**
- * Inferred type from Zod schema - replaces hard-coded type
+ * Error severity constant object for easy access
+ * Uses centralized enum pattern from @/api/core/enums
  */
-export type ApiErrorSeverity = z.infer<typeof ApiErrorSeveritySchema>;
+export const ERROR_SEVERITY = ApiErrorSeverities;
 
 /**
- * Error severity constant for easy access (derived from schema)
+ * Local schema reference for this module's use
  */
-export const ERROR_SEVERITY = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical',
-} as const;
+const ApiErrorSeveritySchema = z.enum(API_ERROR_SEVERITIES);
 
 // ============================================================================
 // ERROR CONFIGURATION SCHEMA

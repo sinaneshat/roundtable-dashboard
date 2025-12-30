@@ -25,6 +25,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { FinishReasons, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 
 // Type definitions for the test
 type MessagePart = {
@@ -37,7 +38,7 @@ type UIMessage = {
   id: string;
   role: 'user' | 'assistant';
   parts: MessagePart[];
-  metadata?: Record<string, unknown>;
+  metadata?: DbMessageMetadata;
 };
 
 type PreSearch = {

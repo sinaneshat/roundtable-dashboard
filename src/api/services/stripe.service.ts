@@ -299,7 +299,6 @@ class StripeService {
         cancel_at_period_end: true,
       });
     } else {
-    // Intentionally empty
       // Cancel immediately
       return await stripe.subscriptions.cancel(subscriptionId);
     }

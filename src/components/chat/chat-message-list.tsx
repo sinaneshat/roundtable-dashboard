@@ -112,6 +112,7 @@ const ParticipantHeader = memo(({
   isStreaming = false,
   hasError = false,
 }: ParticipantHeaderProps) => {
+  const t = useTranslations();
   // ✅ REACT 19: Sync initial render from cache, effect only populates cache if needed
   const [colorClass, setColorClass] = useState<string>(() => getCachedImageColor(avatarSrc));
 
@@ -156,9 +157,7 @@ const ParticipantHeader = memo(({
         )}
         {!isAccessible && requiredTierName && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/50 text-muted-foreground border-border/50">
-            {requiredTierName}
-            {' '}
-            required
+            {t('chat.participant.tierRequired', { tier: requiredTierName })}
           </span>
         )}
         {isStreaming && (
@@ -1798,3 +1797,7 @@ export const ChatMessageList = memo(
     return true;
   },
 );
+
+ChatMessageList.displayName = 'ChatMessageList';
+ParticipantHeader.displayName = 'ParticipantHeader';
+ParticipantMessageWrapper.displayName = 'ParticipantMessageWrapper';

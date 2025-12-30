@@ -13,7 +13,7 @@ export const user = sqliteTable('user', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
   role: text('role'),
   banned: integer('banned', { mode: 'boolean' }).default(false),
@@ -29,7 +29,7 @@ export const session = sqliteTable('session', {
     .defaultNow()
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
@@ -61,7 +61,7 @@ export const account = sqliteTable('account', {
     .defaultNow()
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 });
 
@@ -75,7 +75,7 @@ export const verification = sqliteTable('verification', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 });
 
@@ -119,7 +119,7 @@ export const apiKey = sqliteTable('api_key', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 
   // Permissions (stored as JSON string)

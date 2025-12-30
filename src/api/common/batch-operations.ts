@@ -62,6 +62,19 @@ import type { DrizzleD1Database } from 'drizzle-orm/d1';
 type BatchQuery = BatchItem<'sqlite'>;
 
 /**
+ * Runnable query interface - matches Drizzle's internal RunnableQuery
+ *
+ * All Drizzle query builders (insert/update/delete/select) implement this interface.
+ * Used for type-safe sequential execution fallback in local development.
+ *
+ * TYPE NOTE: Drizzle's BatchItem type doesn't expose execute() in public API,
+ * but all query builders implement RunnableQuery internally at runtime.
+ */
+type RunnableQuery = {
+  execute: () => Promise<unknown>;
+};
+
+/**
  * Drizzle database instance that supports batch operations
  *
  * TYPE SAFETY NOTE:
@@ -169,25 +182,34 @@ export async function executeBatch<
   const results: unknown[] = [];
   for (const operation of operations) {
     /**
-     * Type assertion for execute() method call
+     * Type assertion: BatchItem to RunnableQuery
      *
-     * JUSTIFICATION:
-     * - BatchItem<'sqlite'> is internally a RunnableQuery with execute() method
-     * - TypeScript type definition doesn't expose execute() (implementation detail)
-     * - Runtime reality: ALL BatchItem instances have execute() method
-     * - Safe because:
-     *   1. operation comes from validated operations array
-     *   2. execute() is guaranteed on all Drizzle query builders
-     *   3. This fallback only runs in local dev (Better-SQLite3)
-     *   4. Production uses db.batch() path above
+     * STRUCTURAL TYPE MISMATCH (Expected):
+     * - BatchItem<'sqlite'> public type doesn't expose execute() method
+     * - RunnableQuery interface requires execute() method
+     * - TypeScript correctly flags these types as non-overlapping
      *
-     * ALTERNATIVE CONSIDERED: Declaring custom interface would require duplicating Drizzle internals
-     * PATTERN: Documented Drizzle ORM pattern for sequential execution fallback
-     * REFERENCE: Drizzle ORM source code - RunnableQuery interface
+     * WHY THIS IS RUNTIME-SAFE:
+     * 1. ALL Drizzle query builders implement RunnableQuery internally
+     * 2. execute() method exists on every insert/update/delete/select query builder
+     * 3. operation comes from validated operations array (BatchQuery[] = BatchItem<'sqlite'>[])
+     * 4. This fallback only runs in local dev with Better-SQLite3 (not production D1)
+     * 5. Production uses db.batch() path which has proper type support
      *
-     * Using `unknown` intermediary per TypeScript best practices for necessary type assertions
+     * WHY DOUBLE CAST IS REQUIRED:
+     * - Single cast fails: TS2352 "types don't sufficiently overlap"
+     * - Drizzle's public BatchItem type intentionally hides internal RunnableQuery
+     * - Double cast acknowledges we're accessing Drizzle's internal implementation
+     *
+     * ALTERNATIVE REJECTED:
+     * - Extracting Drizzle internals: would break on Drizzle updates
+     * - Changing to db.run(): loses atomicity guarantees
+     * - Skipping type safety: worse than documented assertion
+     *
+     * PATTERN: Standard Drizzle ORM sequential fallback for local dev
+     * REFERENCE: Drizzle ORM source - all builders extend RunnableQuery base class
      */
-    const result = await (operation as unknown as { execute: () => Promise<unknown> }).execute();
+    const result = await (operation as unknown as RunnableQuery).execute();
     results.push(result);
   }
 

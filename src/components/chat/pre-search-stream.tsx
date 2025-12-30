@@ -176,7 +176,6 @@ function PreSearchStreamComponent({
         // 202: Stream is active but no buffer yet - RETRY POST (like analyze component)
         //      BUT if data.status is 'complete', the pre-search finished during our retries!
         if (response.status === 202) {
-          // Parse response body to check status and get retry delay
           let retryDelayMs = DEFAULT_RETRY_DELAY_MS;
           type ResponseData = {
             data?: {
@@ -188,7 +187,8 @@ function PreSearchStreamComponent({
           let responseData: ResponseData | undefined;
 
           try {
-            responseData = await response.json() as ResponseData;
+            const json = await response.json();
+            responseData = json as ResponseData;
             if (responseData?.data?.retryAfterMs) {
               retryDelayMs = responseData.data.retryAfterMs;
             }
@@ -803,3 +803,5 @@ export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextPr
     && prevProps.onStreamStart === nextProps.onStreamStart
   );
 });
+
+PreSearchStream.displayName = 'PreSearchStream';

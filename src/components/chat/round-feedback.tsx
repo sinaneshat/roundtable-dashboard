@@ -117,3 +117,5 @@ export const RoundFeedback = memo(
     );
   },
 );
+
+RoundFeedback.displayName = 'RoundFeedback';

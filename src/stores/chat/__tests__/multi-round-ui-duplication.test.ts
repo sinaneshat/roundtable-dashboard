@@ -22,7 +22,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ChatModes, FinishReasons, MessageRoles, MessageStatuses, ScreenModes } from '@/api/core/enums';
-import type { ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog, StoredPreSearch } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadTimeline } from '@/hooks/utils';
 import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 import { getParticipantModelIds } from '@/lib/utils';
@@ -115,41 +115,6 @@ function createPreSearch(
     createdAt: new Date(),
     completedAt: status === 'complete' ? new Date() : null,
   } as StoredPreSearch;
-}
-
-function _createChangelog(roundNumber: number): ChatThreadChangelog {
-  return {
-    id: `changelog-thread-123-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    previousRoundNumber: roundNumber - 1,
-    changeType: 'participant_change',
-    changeData: { changes: [{ type: 'added', participantId: 'new-participant', modelId: 'new-model' }] },
-    createdAt: new Date(),
-  } as ChatThreadChangelog;
-}
-
-function _createModeratorMsg(
-  roundNumber: number,
-  content = `Moderator R${roundNumber}`,
-): ChatMessage {
-  return createTestAssistantMessage({
-    id: `thread-123_r${roundNumber}_moderator`,
-    content,
-    roundNumber,
-    participantId: undefined,
-    participantIndex: undefined,
-    finishReason: FinishReasons.STOP,
-    metadata: {
-      role: MessageRoles.ASSISTANT,
-      isModerator: true,
-      roundNumber,
-      model: 'gemini-2.0-flash',
-      finishReason: FinishReasons.STOP,
-      usage: null,
-      createdAt: new Date().toISOString(),
-    },
-  });
 }
 
 // ============================================================================

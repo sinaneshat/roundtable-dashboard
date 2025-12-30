@@ -16,11 +16,12 @@
 
 import { and, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
+import { z } from 'zod';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { CreditAction, CreditTransactionType, PlanType } from '@/api/core/enums';
-import { CreditTransactionTypes, PlanTypes, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { CreditActionSchema, CreditTransactionTypes, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { UserCreditBalance } from '@/db/validation';
@@ -33,36 +34,42 @@ import {
 } from './product-logic.service';
 
 // ============================================================================
-// TYPES
+// TYPES (Zod Schemas - Single Source of Truth)
 // ============================================================================
 
-export type CreditBalanceInfo = {
-  balance: number;
-  reserved: number;
-  available: number;
-  planType: PlanType;
-  monthlyCredits: number;
-  nextRefillAt: Date | null;
-  payAsYouGoEnabled: boolean;
-};
+export const CreditBalanceInfoSchema = z.object({
+  balance: z.number(),
+  reserved: z.number(),
+  available: z.number(),
+  planType: PlanTypeSchema,
+  monthlyCredits: z.number(),
+  nextRefillAt: z.date().nullable(),
+  payAsYouGoEnabled: z.boolean(),
+});
 
-export type TokenUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  action: CreditAction;
-  threadId?: string;
-  messageId?: string;
-  modelId?: string;
-};
+export type CreditBalanceInfo = z.infer<typeof CreditBalanceInfoSchema>;
 
-export type CreditDeduction = {
-  action: CreditAction;
-  credits: number;
-  threadId?: string;
-  messageId?: string;
-  description?: string;
-  metadata?: Record<string, unknown>;
-};
+export const TokenUsageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  action: CreditActionSchema,
+  threadId: z.string().optional(),
+  messageId: z.string().optional(),
+  modelId: z.string().optional(),
+});
+
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+
+export const CreditDeductionSchema = z.object({
+  action: CreditActionSchema,
+  credits: z.number(),
+  threadId: z.string().optional(),
+  messageId: z.string().optional(),
+  description: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type CreditDeduction = z.infer<typeof CreditDeductionSchema>;
 
 // ============================================================================
 // BALANCE OPERATIONS
@@ -291,7 +298,7 @@ export async function enforceCredits(userId: string, requiredCredits: number): P
     // User has connected card but exhausted credits
     throw createError.badRequest(
       `Insufficient credits. Required: ${requiredCredits}, Available: ${balance.available}. `
-      + `${balance.planType === 'free' ? 'Upgrade to Pro or ' : ''}Purchase additional credits to continue.`,
+      + `${balance.planType === PlanTypes.FREE ? 'Upgrade to Pro or ' : ''}Purchase additional credits to continue.`,
       context,
     );
   }

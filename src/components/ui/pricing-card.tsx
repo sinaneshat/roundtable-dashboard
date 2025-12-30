@@ -4,6 +4,7 @@ import { Check, CreditCard, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
+import { UIBillingIntervals } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
 import { GlowingEffect } from './glowing-effect';
@@ -242,7 +243,7 @@ export function PricingCard({
               )}
 
               {/* Annual Savings Badge */}
-              {annualSavingsPercent && annualSavingsPercent > 0 && price.interval === 'year' && (
+              {annualSavingsPercent && annualSavingsPercent > 0 && price.interval === UIBillingIntervals.YEAR && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}

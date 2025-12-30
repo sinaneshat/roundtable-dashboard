@@ -55,6 +55,7 @@ export {
   DEFAULT_LOG_LEVEL,
   DEFAULT_MARKDOWN_PRESET,
   DEFAULT_SORT_DIRECTION,
+  DEFAULT_SUBSCRIPTION_TIER,
   DEV_LOG_LEVELS,
   type DevLogLevel,
   DevLogLevels,
@@ -83,6 +84,10 @@ export {
   type SortDirection,
   SortDirections,
   SortDirectionSchema,
+  SUBSCRIPTION_TIERS,
+  type SubscriptionTier,
+  SubscriptionTiers,
+  SubscriptionTierSchema,
 } from './enums';
 export {
   ApiErrors,

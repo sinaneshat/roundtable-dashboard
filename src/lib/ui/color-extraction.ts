@@ -214,15 +214,3 @@ export function getCachedImageColor(imageSrc: string, defaultColor = 'muted-fore
 export function hasColorCached(imageSrc: string): boolean {
   return colorCache.has(imageSrc);
 }
-
-/**
- * Preload and extract color from an image
- * Useful for preloading colors before they're needed
- *
- * @param imageSrc - Image source URL
- */
-export function preloadImageColor(imageSrc: string): void {
-  extractColorFromImage(imageSrc, false).catch(() => {
-    // Silently fail preload attempts
-  });
-}

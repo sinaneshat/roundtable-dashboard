@@ -669,6 +669,7 @@ describe('moderator Edge Cases for Progressive UI Updates', () => {
   describe('type Coercion Edge Cases', () => {
     it('handles string number for metrics', () => {
       // AI might sometimes return string instead of number
+      // ✅ INTENTIONAL TYPE COERCION: Testing that validation rejects string-as-number values
       const partial = {
         metrics: { engagement: '75' as unknown as number },
       };

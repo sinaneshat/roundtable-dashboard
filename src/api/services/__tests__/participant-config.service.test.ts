@@ -10,7 +10,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { ChatParticipant, ParticipantConfigInput } from '@/api/routes/chat/schema';
+import type { ChatParticipant } from '@/api/routes/chat/schema';
+import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
 
 import { categorizeParticipantChanges } from '../participant-config.service';
 

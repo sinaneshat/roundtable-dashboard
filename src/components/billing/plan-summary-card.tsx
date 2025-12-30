@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 type PlanStat = {
@@ -22,6 +24,8 @@ export function PlanOverviewCard({
   stats,
   activeUntil,
 }: PlanOverviewCardProps) {
+  const t = useTranslations('billing.success.planLimits');
+
   return (
     <Card className="w-full">
       <CardHeader className="pb-4">
@@ -48,7 +52,7 @@ export function PlanOverviewCard({
         </div>
         {activeUntil && (
           <p className="text-xs text-muted-foreground pt-2 border-t">
-            Active until
+            {t('activeUntilLabel')}
             {' '}
             {activeUntil}
           </p>

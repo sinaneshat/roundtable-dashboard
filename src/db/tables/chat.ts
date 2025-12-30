@@ -68,7 +68,7 @@ export const chatThread = sqliteTable('chat_thread', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
   lastMessageAt: integer('last_message_at', { mode: 'timestamp_ms' }),
 }, table => [
@@ -103,7 +103,7 @@ export const chatCustomRole = sqliteTable('chat_custom_role', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 }, table => [
   index('chat_custom_role_user_idx').on(table.userId),
@@ -136,7 +136,7 @@ export const chatUserPreset = sqliteTable('chat_user_preset', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 }, table => [
   index('chat_user_preset_user_idx').on(table.userId),
@@ -168,7 +168,7 @@ export const chatParticipant = sqliteTable('chat_participant', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 }, table => [
   // Indexes for query performance
@@ -350,7 +350,7 @@ export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 }, table => [
   // ✅ Unique constraint: one feedback per user per round
@@ -508,10 +508,7 @@ export const chatMessageRelations = relations(chatMessage, ({ one, many }) => ({
     fields: [chatMessage.participantId],
     references: [chatParticipant.id],
   }),
-  // ✅ ATTACHMENTS: Link to uploaded files via junction table
   messageUploads: many(messageUpload),
-  // ✅ REMOVED: parentMessage relation (parentMessageId moved to metadata)
-  // Parent message relationship is now tracked via metadata.parentMessageId
 }));
 
 /**

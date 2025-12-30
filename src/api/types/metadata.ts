@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 
+import { OgTypeSchema, SubscriptionPlanTypeSchema } from '@/api/core/enums';
 import { subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 // ============================================================================
@@ -46,7 +47,7 @@ export const ProductMetadataSchema = BaseMetadataSchema.extend({
  * Tracks subscription lifecycle and billing information
  */
 export const SubscriptionMetadataSchema = BaseMetadataSchema.extend({
-  planType: z.enum(['monthly', 'yearly', 'lifetime']).optional(),
+  planType: SubscriptionPlanTypeSchema.optional(),
   autoRenewal: z.boolean().optional(),
   trialEnd: z.string().datetime().optional(),
   promotionCode: z.string().optional(),
@@ -86,7 +87,7 @@ export const SeoMetadataSchema = z.object({
   description: z.string().max(160),
   keywords: z.array(z.string()),
   ogImage: z.string().url(),
-  ogType: z.enum(['website', 'article', 'product']),
+  ogType: OgTypeSchema,
   canonicalUrl: z.string().url().optional(),
   noindex: z.boolean().optional(),
   publishedTime: z.string().datetime().optional(),

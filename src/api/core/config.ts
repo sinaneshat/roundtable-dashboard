@@ -16,7 +16,15 @@
 
 import { z } from 'zod';
 
-import { EnvironmentSchema, LOG_LEVELS, LogLevels } from '@/api/core/enums';
+import {
+  ApiVersionSchema,
+  DevLogLevelSchema,
+  EmailProviderSchema,
+  EnvironmentSchema,
+  LOG_LEVELS,
+  LogFormatSchema,
+  LogLevels,
+} from '@/api/core/enums';
 
 import type { LogLevel } from './enums';
 
@@ -35,7 +43,7 @@ const coreEnvironmentSchema = z.object({
   NEXT_PUBLIC_APP_NAME: z.string().min(1).default('Roundtable Dashboard'),
   NEXT_PUBLIC_APP_VERSION: z.string().min(1).default('1.0.0'),
   API_BASE_PATH: z.string().min(1).default('/api'),
-  API_VERSION: z.enum(['v1', 'v2']).default('v1'),
+  API_VERSION: ApiVersionSchema.default('v1'),
 }).openapi('CoreEnvironmentConfig');
 
 export type CoreEnvironmentConfig = z.infer<typeof coreEnvironmentSchema>;
@@ -73,7 +81,7 @@ export type AuthEnvironmentConfig = z.infer<typeof authEnvironmentSchema>;
  * Email configuration schema
  */
 const emailEnvironmentSchema = z.object({
-  EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'ses', 'smtp']).default('resend'),
+  EMAIL_PROVIDER: EmailProviderSchema.default('resend'),
   RESEND_API_KEY: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().email().optional(),
   SENDGRID_API_KEY: z.string().min(1).optional(),
@@ -110,8 +118,8 @@ export type StorageEnvironmentConfig = z.infer<typeof storageEnvironmentSchema>;
  * Monitoring and logging configuration schema
  */
 const monitoringEnvironmentSchema = z.object({
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-  LOG_FORMAT: z.enum(['json', 'text']).default('json'),
+  LOG_LEVEL: DevLogLevelSchema.default('info'),
+  LOG_FORMAT: LogFormatSchema.default('json'),
   LOG_SENSITIVE_DATA: z.boolean().default(false),
   ANALYTICS_ENABLED: z.boolean().default(true),
   GOOGLE_ANALYTICS_ID: z.string().min(1).optional(),
@@ -398,10 +406,21 @@ export function isNonProduction(): boolean {
 // ============================================================================
 
 /**
+ * Logging configuration entry type
+ * Ensures type-safe configuration across all environments
+ */
+type LoggingConfigEntry = {
+  enabled: boolean;
+  levels: readonly LogLevel[];
+  prettyPrint: boolean;
+  includeStack: boolean;
+};
+
+/**
  * Logging configuration by environment
  * Automatically adjusts verbosity based on deployment environment
  */
-export const LOGGING_CONFIG = {
+export const LOGGING_CONFIG: Record<z.infer<typeof EnvironmentSchema>, LoggingConfigEntry> = {
   local: {
     enabled: true,
     levels: [...LOG_LEVELS],
@@ -428,11 +447,11 @@ export const LOGGING_CONFIG = {
   },
   test: {
     enabled: false,
-    levels: [] as LogLevel[],
+    levels: [],
     prettyPrint: false,
     includeStack: false,
   },
-} as const;
+};
 
 /**
  * Get current logging configuration based on environment
@@ -448,7 +467,7 @@ export function getLoggingConfig() {
  */
 export function shouldLog(level: LogLevel): boolean {
   const config = getLoggingConfig();
-  return config.enabled && (config.levels as readonly LogLevel[]).includes(level);
+  return config.enabled && config.levels.includes(level);
 }
 
 // ============================================================================

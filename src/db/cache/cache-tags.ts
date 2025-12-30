@@ -44,7 +44,7 @@ export const STATIC_CACHE_TAGS = {
  */
 export const UserCacheTags = {
   /**
-   * User's subscription tier (free/starter/pro/power)
+   * User's subscription tier (free/pro)
    * TTL: 5 minutes
    * @example 'user-tier-80e42802-3507-43c4-88a3-c194909b2e4e'
    */

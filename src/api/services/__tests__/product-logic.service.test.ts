@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
+import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
+
 import {
   CREDIT_CONFIG,
   getMaxModelsForTier,
   getMonthlyCreditsForTier,
   getTierFromProductId,
+  getTierUpgradeMessage,
+  MAX_MODEL_PRICING_BY_TIER,
   MAX_MODELS_BY_TIER,
+  MAX_OUTPUT_TOKENS_BY_TIER,
   SUBSCRIPTION_TIER_NAMES,
+  TIER_CONFIG,
+  TIER_QUOTAS,
 } from '../product-logic.service';
 
 describe('product-logic.service', () => {
@@ -24,16 +31,6 @@ describe('product-logic.service', () => {
     });
 
     describe('pattern-based fallback matching', () => {
-      it('returns "starter" for product IDs containing "starter"', () => {
-        expect(getTierFromProductId('prod_starter_monthly')).toBe('starter');
-        expect(getTierFromProductId('prod_STARTER_annual')).toBe('starter');
-      });
-
-      it('returns "power" for product IDs containing "power"', () => {
-        expect(getTierFromProductId('prod_power_monthly')).toBe('power');
-        expect(getTierFromProductId('prod_POWER_tier')).toBe('power');
-      });
-
       it('returns "pro" for product IDs with "pro" pattern', () => {
         expect(getTierFromProductId('prod_pro_monthly')).toBe('pro');
         expect(getTierFromProductId('my_pro')).toBe('pro');
@@ -51,33 +48,20 @@ describe('product-logic.service', () => {
         expect(getTierFromProductId('random_string')).toBe('free');
       });
     });
-
-    describe('priority order', () => {
-      it('checks "power" before "pro" to avoid false matches', () => {
-        // If a product has both, "power" should win
-        expect(getTierFromProductId('prod_power_pro')).toBe('power');
-      });
-
-      it('checks "starter" first as most specific', () => {
-        expect(getTierFromProductId('prod_starter_power')).toBe('starter');
-      });
-    });
   });
 
   describe('getMaxModelsForTier', () => {
     it('returns correct max models for each tier', () => {
       expect(getMaxModelsForTier('free')).toBe(MAX_MODELS_BY_TIER.free);
-      expect(getMaxModelsForTier('starter')).toBe(MAX_MODELS_BY_TIER.starter);
       expect(getMaxModelsForTier('pro')).toBe(MAX_MODELS_BY_TIER.pro);
-      expect(getMaxModelsForTier('power')).toBe(MAX_MODELS_BY_TIER.power);
     });
 
     it('returns 3 for free tier', () => {
       expect(getMaxModelsForTier('free')).toBe(3);
     });
 
-    it('returns 8 for pro tier', () => {
-      expect(getMaxModelsForTier('pro')).toBe(8);
+    it('returns 12 for pro tier', () => {
+      expect(getMaxModelsForTier('pro')).toBe(12);
     });
   });
 
@@ -91,21 +75,12 @@ describe('product-logic.service', () => {
       expect(getMonthlyCreditsForTier('pro')).toBe(1_000_000);
       expect(getMonthlyCreditsForTier('pro')).toBe(CREDIT_CONFIG.PLANS.paid.monthlyCredits);
     });
-
-    it('returns paid plan credits for all paid tiers', () => {
-      const paidCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
-      expect(getMonthlyCreditsForTier('starter')).toBe(paidCredits);
-      expect(getMonthlyCreditsForTier('pro')).toBe(paidCredits);
-      expect(getMonthlyCreditsForTier('power')).toBe(paidCredits);
-    });
   });
 
   describe('subscription tier names', () => {
     it('has correct names for all tiers', () => {
       expect(SUBSCRIPTION_TIER_NAMES.free).toBe('Free');
-      expect(SUBSCRIPTION_TIER_NAMES.starter).toBe('Starter');
       expect(SUBSCRIPTION_TIER_NAMES.pro).toBe('Pro');
-      expect(SUBSCRIPTION_TIER_NAMES.power).toBe('Power');
     });
   });
 
@@ -125,7 +100,7 @@ describe('product-logic.service', () => {
       const proModels = getMaxModelsForTier(proTier);
       expect(proModels).toBeGreaterThan(freeModels);
       expect(freeModels).toBe(3);
-      expect(proModels).toBe(8);
+      expect(proModels).toBe(12);
 
       // Monthly credits comparison
       const freeCredits = getMonthlyCreditsForTier(freeTier);
@@ -172,9 +147,61 @@ describe('product-logic.service', () => {
       expect(comparison.newPlan).toEqual({
         tier: 'pro',
         name: 'Pro',
-        maxModels: 8,
+        maxModels: 12,
         monthlyCredits: 1_000_000,
       });
+    });
+  });
+
+  describe('tIER_CONFIG - Single Source of Truth', () => {
+    it('has configuration for every tier in SUBSCRIPTION_TIERS', () => {
+      // This test ensures TIER_CONFIG covers all tiers
+      // If you add a tier to SUBSCRIPTION_TIERS but not TIER_CONFIG,
+      // TypeScript will error AND this test will fail
+      for (const tier of SUBSCRIPTION_TIERS) {
+        expect(TIER_CONFIG[tier]).toBeDefined();
+        expect(TIER_CONFIG[tier].name).toBeTruthy();
+        expect(TIER_CONFIG[tier].maxOutputTokens).toBeGreaterThan(0);
+        expect(TIER_CONFIG[tier].maxModels).toBeGreaterThan(0);
+        expect(TIER_CONFIG[tier].quotas).toBeDefined();
+        expect(TIER_CONFIG[tier].upgradeMessage).toBeTruthy();
+        expect(TIER_CONFIG[tier].creditPlanKey).toMatch(/^(free|paid)$/);
+      }
+    });
+
+    it('derived exports match TIER_CONFIG values', () => {
+      // Verify that all derived exports are in sync with TIER_CONFIG
+      for (const tier of SUBSCRIPTION_TIERS) {
+        expect(SUBSCRIPTION_TIER_NAMES[tier]).toBe(TIER_CONFIG[tier].name);
+        expect(MAX_OUTPUT_TOKENS_BY_TIER[tier]).toBe(TIER_CONFIG[tier].maxOutputTokens);
+        expect(MAX_MODEL_PRICING_BY_TIER[tier]).toBe(TIER_CONFIG[tier].maxModelPricing);
+        expect(MAX_MODELS_BY_TIER[tier]).toBe(TIER_CONFIG[tier].maxModels);
+        expect(TIER_QUOTAS[tier]).toEqual(TIER_CONFIG[tier].quotas);
+      }
+    });
+
+    it('getTierUpgradeMessage returns message from TIER_CONFIG', () => {
+      for (const tier of SUBSCRIPTION_TIERS) {
+        expect(getTierUpgradeMessage(tier)).toBe(TIER_CONFIG[tier].upgradeMessage);
+      }
+    });
+
+    it('has exactly 2 tiers (free and pro)', () => {
+      // This test documents the current tier structure
+      // Update this test if you intentionally add/remove tiers
+      expect(SUBSCRIPTION_TIERS).toHaveLength(2);
+      expect(SUBSCRIPTION_TIERS).toContain('free');
+      expect(SUBSCRIPTION_TIERS).toContain('pro');
+    });
+
+    it('pro tier has unlimited model access (null pricing)', () => {
+      expect(TIER_CONFIG.pro.maxModelPricing).toBeNull();
+      expect(MAX_MODEL_PRICING_BY_TIER.pro).toBeNull();
+    });
+
+    it('free tier has limited model access', () => {
+      expect(TIER_CONFIG.free.maxModelPricing).toBe(0.10);
+      expect(MAX_MODEL_PRICING_BY_TIER.free).toBe(0.10);
     });
   });
 });

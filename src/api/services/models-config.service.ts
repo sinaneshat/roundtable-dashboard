@@ -1,7 +1,10 @@
 import { z } from '@hono/zod-openapi';
 
+import type { ModelProvider } from '@/api/core/enums';
 import {
+  MODEL_PROVIDERS,
   ModelCategorySchema,
+  ModelProviderSchema,
   PROVIDER_STREAMING_DEFAULTS,
   StreamingBehaviors,
   StreamingBehaviorSchema,
@@ -45,20 +48,9 @@ export const ModelIdEnum = z.enum([
 
 export type ModelId = z.infer<typeof ModelIdEnum>;
 
-// ============================================================================
-// MODEL PROVIDER ENUM
-// ============================================================================
-
-export const ModelProviderEnum = z.enum([
-  'x-ai',
-  'anthropic',
-  'google',
-  'deepseek',
-  'openai',
-  'mistralai',
-]);
-
-export type ModelProvider = z.infer<typeof ModelProviderEnum>;
+// Re-export ModelProvider types from centralized enums for consumers
+export { MODEL_PROVIDERS, type ModelProvider };
+export { ModelProviderSchema as ModelProviderEnum };
 
 // ============================================================================
 // HARDCODED MODEL SCHEMA
@@ -97,7 +89,7 @@ export const HardcodedModelSchema = z.object({
     })
     .nullable()
     .optional(),
-  provider: ModelProviderEnum,
+  provider: ModelProviderSchema,
   category: ModelCategorySchema,
   capabilities: z.object({
     vision: z.boolean(),
@@ -365,7 +357,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // ========================================================================
-  // STARTER TIER (≤$1.50/M) - adds 8 models
+  // PRO TIER ONLY (>$0.10/M) - Premium models requiring paid subscription
   // ========================================================================
   {
     id: 'openai/gpt-5-mini',
@@ -509,7 +501,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // ========================================================================
-  // PRO TIER (≤$5.00/M) - adds 11 models, ordered by price
+  // PRO TIER - Mid-range premium models (≤$5.00/M)
   // ========================================================================
   {
     id: 'google/gemini-2.5-pro',
@@ -733,7 +725,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // ========================================================================
-  // POWER TIER (unlimited) - adds 4 models
+  // PRO TIER - Flagship premium models (>$5.00/M)
   // ========================================================================
   {
     id: 'anthropic/claude-opus-4.5',

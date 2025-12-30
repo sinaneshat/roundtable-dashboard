@@ -25,8 +25,6 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { ChatModes } from '@/api/core/enums';
-import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import {
   createTestAssistantMessage,
@@ -44,34 +42,6 @@ type TimelineElement = {
   timestamp: Date;
   id: string;
 };
-
-function _createMockThread(): ChatThread {
-  return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    mode: ChatModes.DEBATING,
-    status: 'active',
-    enableWebSearch: true,
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
-  } as ChatThread;
-}
-
-function _createMockParticipant(index: number): ChatParticipant {
-  return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    role: `Role ${index}`,
-    customRoleId: null,
-    isEnabled: true,
-    priority: index,
-    settings: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as ChatParticipant;
-}
 
 function createTimelineElement(
   type: TimelineElement['type'],

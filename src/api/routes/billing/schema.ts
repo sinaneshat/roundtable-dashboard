@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
+import { PurchaseTypeSchema } from '@/api/core/enums';
 // ✅ IMPORT FIX: Import directly from source files instead of barrel
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
@@ -264,7 +265,7 @@ const TierChangeSchema = z.object({
   }),
   newTier: subscriptionTierSchemaOpenAPI.openapi({
     description: 'New subscription tier after sync',
-    example: 'starter',
+    example: 'pro',
   }),
   previousPriceId: z.string().nullable().openapi({
     description: 'Previous Stripe price ID (null for free tier)',
@@ -299,7 +300,7 @@ export const SyncAfterCheckoutPayloadSchema = z.object({
     description: 'Whether sync was successful',
     example: true,
   }),
-  purchaseType: z.enum(['subscription', 'credits', 'none']).openapi({
+  purchaseType: PurchaseTypeSchema.openapi({
     description: 'Type of purchase that was made',
     example: 'subscription',
   }),

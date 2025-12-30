@@ -27,36 +27,12 @@ export const fadeIn: Variants = {
   },
 };
 
-// Faster stagger for lists (like search results)
-export const fastStaggerContainer: Variants = {
-  hidden: { opacity: 1 },
-  visible: {
-    opacity: 1,
-    transition: {
-      when: 'beforeChildren',
-      staggerChildren: 0.08,
-    },
-  },
-};
-
 // Faster fade for list items
 export const fastFadeIn: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: { duration: 0.15 },
-  },
-};
-
-// Medium stagger (for main content sections)
-export const mediumStaggerContainer: Variants = {
-  hidden: { opacity: 1 },
-  visible: {
-    opacity: 1,
-    transition: {
-      when: 'beforeChildren',
-      staggerChildren: 0.15,
-    },
   },
 };
 

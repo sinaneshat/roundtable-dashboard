@@ -3,6 +3,7 @@
  * Prevents duplicate toasts, provides centralized control, and supports advanced features
  */
 
+import type { ReactElement } from 'react';
 import React from 'react';
 
 import type { ToastVariant } from '@/api/core/enums';
@@ -10,6 +11,44 @@ import { ToastVariants } from '@/api/core/enums';
 import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
+
+/**
+ * Type-safe factory for creating ToastActionElement
+ *
+ * TYPE ASSERTION EXPLANATION:
+ * - ToastActionElement = ReactElement<typeof ToastAction>
+ * - React.createElement returns FunctionComponentElement (has props but not displayName)
+ * - TypeScript correctly identifies structural mismatch (missing displayName)
+ *
+ * WHY THIS IS RUNTIME-SAFE:
+ * 1. React.createElement(ToastAction, props, children) creates valid ToastAction element
+ * 2. displayName is only used for debugging/devtools, not runtime behavior
+ * 3. The element is structurally compatible with ToastActionElement at runtime
+ * 4. ToastAction component accepts these exact props
+ * 5. Element works correctly in toast rendering
+ *
+ * WHY DOUBLE CAST IS REQUIRED:
+ * - Single cast fails: TS2352 "types don't sufficiently overlap"
+ * - FunctionComponentElement and ReactElement<typeof Component> have different shapes
+ * - Double cast acknowledges we're bridging React's createElement return type
+ *
+ * ALTERNATIVE REJECTED:
+ * - JSX syntax: requires different file setup, less flexible
+ * - Manual type guards: adds complexity without safety benefit
+ * - Modifying ToastActionElement type: breaks component library contract
+ *
+ * PATTERN: Standard React.createElement type assertion for component elements
+ */
+function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
+  return React.createElement(
+    ToastAction,
+    {
+      altText: label,
+      onClick,
+    },
+    label,
+  ) as unknown as ReactElement<typeof ToastAction>;
+}
 
 // Global toast tracking and management
 const activeToasts = new Set<string>();
@@ -106,17 +145,9 @@ function showToastInternal(options: ToastOptions): void {
   // Mark toast as active
   activeToasts.add(toastId);
 
-  // Enhanced toast configuration - Cast to ToastActionElement for type compatibility
-  // React.createElement returns FunctionComponentElement which is runtime-compatible with ToastActionElement
+  // Create properly typed action element using factory
   const actionElement: ToastActionElement | undefined = action
-    ? React.createElement(
-      ToastAction,
-      {
-        altText: action.label,
-        onClick: action.onClick,
-      },
-      action.label,
-    ) as unknown as ToastActionElement
+    ? createToastActionElement(action.label, action.onClick)
     : undefined;
 
   const toastConfig = {

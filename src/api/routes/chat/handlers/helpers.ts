@@ -37,33 +37,36 @@ export async function chatMessagesToUIMessages(
   dbMessages: ChatMessage[],
 ): Promise<UIMessage[]> {
   // Transform database messages to UIMessage format
-  const messages = dbMessages.map((msg) => {
+  // ✅ TYPE-SAFE: Use UIMessage type directly to avoid type assertion
+  const messages: UIMessage[] = dbMessages.map((msg) => {
     // Ensure parts is an array and properly typed
     const parts = Array.isArray(msg.parts) ? msg.parts : [];
 
     // ✅ AI SDK V5 PATTERN: metadata is optional (metadata?: METADATA)
     // When null/undefined in database, we should omit it entirely
     // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
-    const result: {
-      id: string;
-      role: typeof msg.role;
-      parts: typeof parts;
-      metadata?: unknown;
-      createdAt: Date;
-    } = {
+
+    // ✅ TYPE-SAFE ROLE MAPPING: Convert 'tool' to 'assistant' for UI compatibility
+    // UI SDK only accepts 'user' | 'assistant' | 'system', not 'tool'
+    const uiRole: UIMessage['role'] = msg.role === 'tool' ? 'assistant' : (msg.role as UIMessage['role']);
+
+    const result: UIMessage & { createdAt?: Date } = {
       id: msg.id,
-      role: msg.role,
-      parts,
-      createdAt: msg.createdAt,
+      role: uiRole,
+      parts: parts as UIMessage['parts'],
     };
 
-    // Only include metadata if it exists in the database
-    // Don't pass null - omit the field entirely when missing
+    // Only include metadata and createdAt if they exist in the database
+    // Don't pass null - omit fields entirely when missing
     if (msg.metadata) {
       result.metadata = msg.metadata;
     }
 
-    return result;
+    if (msg.createdAt) {
+      result.createdAt = msg.createdAt;
+    }
+
+    return result as UIMessage;
   });
 
   // ✅ AI SDK V5 VALIDATION: Use official validateUIMessages() instead of custom Zod
@@ -76,7 +79,7 @@ export async function chatMessagesToUIMessages(
   // - Validation happens later in the streaming handler when metadata is present
   try {
     return await validateUIMessages({
-      messages: messages as UIMessage[],
+      messages,
       // Don't validate metadata - allow messages with or without metadata
       // metadataSchema validation requires all messages to have metadata
     });

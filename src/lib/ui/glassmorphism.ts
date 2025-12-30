@@ -50,9 +50,9 @@ export const glassVariants = {
 } as const;
 
 /**
- * Glass hover states
+ * Glass hover states (internal use by glassCard())
  */
-export const glassHoverVariants = {
+const glassHoverVariants = {
   subtle: cn(
     'hover:bg-background/10',
     'hover:border-white/15',
@@ -89,61 +89,6 @@ export function glassCard(variant: keyof typeof glassVariants = 'medium'): strin
 }
 
 /**
- * Liquid Glass card styles - Pure background blur (no color distortion)
- * Applied via inline styles to blur BACKGROUND content only (not the card itself)
- *
- * NOTE: CSS backdrop-filter does not support geometric distortion (warping/displacement).
- * Only blur is available without color manipulation (no hue, saturation changes).
- * Progressive blur levels create depth without altering background colors.
- *
- * Distortion levels (pure blur only):
- * - Subtle: 20px blur (light frosting)
- * - Medium: 30px blur (standard modal glass) - DEFAULT
- * - Strong: 40px blur (heavy frosting)
- */
-export const glassCardStyles = {
-  subtle: {
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-  },
-  medium: {
-    backdropFilter: 'blur(30px)',
-    WebkitBackdropFilter: 'blur(30px)',
-  },
-  strong: {
-    backdropFilter: 'blur(40px)',
-    WebkitBackdropFilter: 'blur(40px)',
-  },
-} as const;
-
-/**
- * Chat input blur - Strong glass effect matching chat input box
- * Use for sticky headers and prominent UI elements
- *
- * Strong blur (no color distortion):
- * - blur(24px): Tailwind backdrop-blur-xl equivalent
- * - Same blur as chat input for consistency
- * - Makes content unreadable while maintaining glass aesthetic
- */
-export const chatInputBlurStyles = {
-  backdropFilter: 'blur(24px)',
-  WebkitBackdropFilter: 'blur(24px)',
-} as const;
-
-/**
- * Heavy glass card styles for sticky headers (scrolling content)
- * Use ONLY where content scrolls past - extreme blur makes text unreadable
- *
- * Maximum blur (no color distortion):
- * - blur(60px): Extreme blur obliterates text behind sticky headers
- * - Pure blur effect preserves colors, only destroys readability
- */
-export const heavyGlassCardStyles = {
-  backdropFilter: 'blur(60px)',
-  WebkitBackdropFilter: 'blur(60px)',
-} as const;
-
-/**
  * Glass overlay for dialogs and modals
  * Following Official Liquid Glass Generator specification
  * Uses "Light Glass" preset (90% transparency, 15px blur, 5% tint)
@@ -156,19 +101,6 @@ export const glassOverlay = cn(
   'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target, overridden by inline styles)
   'bg-black/30', // 30% opacity backdrop
 );
-
-/**
- * Liquid Glass overlay styles - Pure background blur (no color distortion)
- * Applied via inline styles to blur background content only
- *
- * NOTE: CSS backdrop-filter does not support geometric distortion (warping).
- * Only blur is available without color manipulation.
- * Heavy blur creates the illusion of textured glass distortion.
- */
-export const glassOverlayStyles = {
-  backdropFilter: 'blur(25px)',
-  WebkitBackdropFilter: 'blur(25px)',
-} as const;
 
 /**
  * Glass input/form styling
@@ -194,37 +126,6 @@ export const glassBadge = cn(
   'border border-white/30',
   'shadow-md',
 );
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Create custom glass effect with specific opacity
- * @param params - Glass effect configuration
- * @param params.blurAmount - Tailwind blur class (e.g., 'md', 'xl', '2xl')
- * @param params.bgOpacity - Background opacity (0-100)
- * @param params.borderOpacity - Border opacity (0-100)
- * @param params.shadow - Tailwind shadow class
- */
-export function createGlassEffect({
-  blurAmount = 'xl',
-  bgOpacity = 10,
-  borderOpacity = 20,
-  shadow = '2xl',
-}: {
-  blurAmount?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
-  bgOpacity?: number;
-  borderOpacity?: number;
-  shadow?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
-} = {}): string {
-  return cn(
-    `backdrop-blur-${blurAmount}`,
-    `bg-background/${bgOpacity}`,
-    `border-white/${borderOpacity}`,
-    `shadow-${shadow}`,
-  );
-}
 
 // ============================================================================
 // Component-Specific Presets

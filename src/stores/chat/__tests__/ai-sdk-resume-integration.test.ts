@@ -141,10 +141,6 @@ function generatePreSearchStreamId(threadId: string, roundNumber: number): strin
   return `${threadId}_r${roundNumber}_presearch`;
 }
 
-function _generateParticipantStreamId(threadId: string, roundNumber: number, participantIndex: number): string {
-  return `${threadId}_r${roundNumber}_participant_${participantIndex}`;
-}
-
 function generateModeratorStreamId(threadId: string, roundNumber: number): string {
   return `${threadId}_r${roundNumber}_moderator`;
 }

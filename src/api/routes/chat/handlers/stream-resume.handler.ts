@@ -152,7 +152,10 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       }
 
       const isStreamActive = metadata.status === StreamStatuses.ACTIVE;
-      const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env);
+      // ✅ FIX: Add filterReasoningOnReplay to prevent duplicate thinking tags during resume
+      const liveStream = createLiveParticipantResumeStream(streamIdToResume, c.env, {
+        filterReasoningOnReplay: true,
+      });
 
       return Responses.sse(liveStream, {
         streamId: streamIdToResume,
@@ -168,6 +171,8 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       });
     }
 
+    // ✅ FIX: Return resumable stream for moderator phase (was returning just headers)
+    // This enables true stream resumption for moderator like participants
     const moderatorStreamId = await getActiveStreamId(threadId, currentRound, NO_PARTICIPANT_SENTINEL, c.env);
     if (moderatorStreamId) {
       const moderatorMetadata = await getStreamMetadata(moderatorStreamId, c.env);
@@ -180,10 +185,19 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STALE_CHUNK_TIMEOUT_MS;
 
         if (!isStale) {
-          return Responses.noContentWithHeaders({
+          // ✅ FIX: Create resumable stream for moderator instead of just returning headers
+          const isStreamActive = moderatorMetadata.status === StreamStatuses.ACTIVE;
+          const liveStream = createLiveParticipantResumeStream(moderatorStreamId, c.env, {
+            // Filter reasoning chunks to prevent duplicate thinking tags during resume
+            filterReasoningOnReplay: true,
+          });
+
+          return Responses.sse(liveStream, {
+            streamId: moderatorStreamId,
             phase: 'moderator',
             roundNumber: currentRound,
-            streamId: moderatorStreamId,
+            isActive: isStreamActive,
+            resumedFromBuffer: true,
           });
         }
       }

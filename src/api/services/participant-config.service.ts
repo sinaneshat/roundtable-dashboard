@@ -32,8 +32,6 @@ import { validateParticipantUniqueness } from './participant-validation.service'
 // TYPES (imported from schema.ts - no manual definitions)
 // ============================================================================
 
-export type { ParticipantConfigInput };
-
 export type ParticipantChangeResult = {
   insertOps: BatchItem<'sqlite'>[];
   updateOps: BatchItem<'sqlite'>[];

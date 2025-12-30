@@ -27,6 +27,7 @@ import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 import type { StreamBufferMetadata, StreamChunk } from '@/api/types/streaming';
 import {
+  parseSSEEventType,
   parseStreamBufferMetadata,
   parseStreamChunksArray,
   STREAM_BUFFER_TTL_SECONDS,
@@ -142,9 +143,12 @@ export async function appendStreamChunk(
     return;
   }
 
+  // ✅ FIX: Parse SSE event type for deduplication during resumption
+  // Enables filtering reasoning chunks to prevent duplicate thinking tags
   const chunk: StreamChunk = {
     data,
     timestamp: Date.now(),
+    event: parseSSEEventType(data),
   };
 
   const chunksKey = getChunksKey(streamId);
@@ -323,6 +327,7 @@ export async function failStreamBuffer(
         const errorChunk: StreamChunk = {
           data: `3:${JSON.stringify({ error: errorMessage })}`,
           timestamp: Date.now(),
+          event: 'error',
         };
 
         const updatedChunks = [...existingChunks, errorChunk];
@@ -561,6 +566,22 @@ export async function deleteStreamBuffer(
 // ============================================================================
 
 /**
+ * Resume stream options for configuring chunk replay behavior
+ */
+export type ResumeStreamOptions = {
+  /** How often to check for new chunks (default 100ms) */
+  pollIntervalMs?: number;
+  /** Maximum time to poll before giving up (default 5 minutes) */
+  maxPollDurationMs?: number;
+  /** Time to wait without new data before marking stream as stale (default 30 seconds) */
+  noNewDataTimeoutMs?: number;
+  /** Skip reasoning chunks during replay to prevent duplicate thinking tags */
+  filterReasoningOnReplay?: boolean;
+  /** Start from this chunk index (skip chunks already received by client) */
+  startFromChunkIndex?: number;
+};
+
+/**
  * Create a LIVE SSE streaming response that polls KV for new chunks
  *
  * This enables true stream resumption for participant streams:
@@ -574,19 +595,26 @@ export async function deleteStreamBuffer(
  * doesn't work for continuous polling. The start() method now runs the
  * polling loop directly.
  *
+ * ✅ FIX: Added filterReasoningOnReplay to prevent duplicate thinking tags
+ * When resuming a stream, reasoning chunks that were already displayed can be
+ * filtered out to prevent duplicate `<thinking>` tags in the UI.
+ *
  * @param streamId - Stream identifier (format: {threadId}_r{roundNumber}_p{participantIndex})
  * @param env - Cloudflare environment bindings
- * @param pollIntervalMs - How often to check for new chunks (default 100ms)
- * @param maxPollDurationMs - Maximum time to poll before giving up (default 5 minutes)
- * @param noNewDataTimeoutMs - Time to wait without new data before marking stream as stale (default 30 seconds for reasoning models)
+ * @param options - Resume stream configuration options
  */
 export function createLiveParticipantResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
-  pollIntervalMs = 100,
-  maxPollDurationMs = 5 * 60 * 1000,
-  noNewDataTimeoutMs = 30 * 1000,
+  options: ResumeStreamOptions = {},
 ): ReadableStream<Uint8Array> {
+  const {
+    pollIntervalMs = 100,
+    maxPollDurationMs = 5 * 60 * 1000,
+    noNewDataTimeoutMs = 30 * 1000,
+    filterReasoningOnReplay = false,
+    startFromChunkIndex = 0,
+  } = options;
   const encoder = new TextEncoder();
   let isClosed = false;
 
@@ -625,18 +653,30 @@ export function createLiveParticipantResumeStream(
 
   return new ReadableStream({
     async start(controller) {
-      let lastChunkIndex = 0;
+      // ✅ FIX: Start from specified index to skip already-received chunks
+      let lastChunkIndex = startFromChunkIndex;
       const startTime = Date.now();
       let lastNewDataTime = Date.now();
 
+      // Helper to filter reasoning chunks if needed
+      const shouldSendChunk = (chunk: { data: string; event?: string }): boolean => {
+        if (!filterReasoningOnReplay)
+          return true;
+        // Skip reasoning-delta chunks to prevent duplicate thinking tags
+        return chunk.event !== 'reasoning-delta';
+      };
+
       try {
-        // Send initial buffered chunks
+        // Send initial buffered chunks (starting from startFromChunkIndex)
         const initialChunks = await getStreamChunks(streamId, env);
-        if (initialChunks && initialChunks.length > 0) {
-          for (const chunk of initialChunks) {
-            // Chunks are already in SSE format from AI SDK
-            if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
-              return; // Client disconnected
+        if (initialChunks && initialChunks.length > startFromChunkIndex) {
+          for (let i = startFromChunkIndex; i < initialChunks.length; i++) {
+            const chunk = initialChunks[i];
+            if (chunk && shouldSendChunk(chunk)) {
+              // Chunks are already in SSE format from AI SDK
+              if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
+                return; // Client disconnected
+              }
             }
           }
           lastChunkIndex = initialChunks.length;
@@ -672,7 +712,8 @@ export function createLiveParticipantResumeStream(
           if (chunks && chunks.length > lastChunkIndex) {
             for (let i = lastChunkIndex; i < chunks.length; i++) {
               const chunk = chunks[i];
-              if (chunk) {
+              // ✅ FIX: Apply reasoning filter to new chunks during polling
+              if (chunk && shouldSendChunk(chunk)) {
                 if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                   return; // Client disconnected
                 }

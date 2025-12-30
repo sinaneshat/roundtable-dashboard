@@ -20,7 +20,7 @@ export * from './browser-timing';
 // ============================================================================
 // Styling Utilities
 // ============================================================================
-export { cn, flex, flexPatterns, getZIndexClass, grid, gridPatterns } from './cn';
+export { cn, getZIndexClass } from './cn';
 
 // ============================================================================
 // Image & Color

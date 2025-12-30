@@ -16,7 +16,7 @@ import type { Context } from 'hono';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
-import type { DatabaseOperation, HealthStatus } from '@/api/core/enums';
+import type { DatabaseOperation, HealthStatus, PollingStatus } from '@/api/core/enums';
 import { HealthStatuses } from '@/api/core/enums';
 
 import type {
@@ -1013,7 +1013,7 @@ export function jsonRpc<T>(
 export function polling(
   c: Context,
   data: {
-    status: 'pending' | 'streaming' | 'processing';
+    status: PollingStatus;
     resourceId?: string;
     message: string;
     retryAfterMs: number;

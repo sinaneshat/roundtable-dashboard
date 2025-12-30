@@ -209,3 +209,49 @@ export const RoundPhases = {
   MODERATOR: 'moderator' as const,
   COMPLETE: 'complete' as const,
 } as const;
+
+// ============================================================================
+// STREAM PHASE (Active streaming phases for API)
+// ============================================================================
+
+export const STREAM_PHASES = ['presearch', 'participant', 'moderator'] as const;
+
+export const StreamPhaseSchema = z.enum(STREAM_PHASES).openapi({
+  description: 'Current phase of an active stream',
+  example: 'participant',
+});
+
+export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
+
+export const DEFAULT_STREAM_PHASE: StreamPhase = 'participant';
+
+export const StreamPhases = {
+  PRESEARCH: 'presearch' as const,
+  PARTICIPANT: 'participant' as const,
+  MODERATOR: 'moderator' as const,
+} as const;
+
+export function isStreamPhase(value: unknown): value is StreamPhase {
+  return typeof value === 'string' && STREAM_PHASES.includes(value as StreamPhase);
+}
+
+// ============================================================================
+// POLLING STATUS (API Responses)
+// ============================================================================
+
+export const POLLING_STATUSES = ['pending', 'streaming', 'processing'] as const;
+
+export const DEFAULT_POLLING_STATUS: PollingStatus = 'pending';
+
+export const PollingStatusSchema = z.enum(POLLING_STATUSES).openapi({
+  description: 'Status of a polling operation for async API responses',
+  example: 'pending',
+});
+
+export type PollingStatus = z.infer<typeof PollingStatusSchema>;
+
+export const PollingStatuses = {
+  PENDING: 'pending' as const,
+  STREAMING: 'streaming' as const,
+  PROCESSING: 'processing' as const,
+} as const;

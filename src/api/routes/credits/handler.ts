@@ -19,7 +19,7 @@ import type {
   getCreditBalanceRoute,
   getCreditTransactionsRoute,
 } from './route';
-import { CreditTransactionsQuerySchema } from './schema';
+import { CreditEstimateRequestSchema, CreditTransactionsQuerySchema } from './schema';
 
 // ============================================================================
 // Credit Balance Handler
@@ -142,11 +142,12 @@ export const estimateCreditCostHandler: RouteHandler<
 > = createHandler(
   {
     auth: 'session',
+    validateBody: CreditEstimateRequestSchema,
     operationName: 'estimateCreditCost',
   },
   async (c) => {
     const { user } = c.auth();
-    const body = await c.req.json();
+    const body = c.validated.body;
 
     let estimatedCredits = 0;
 

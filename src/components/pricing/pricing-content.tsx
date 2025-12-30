@@ -11,6 +11,7 @@ import {
   DEFAULT_UI_BILLING_INTERVAL,
   isUIBillingInterval,
   StripeSubscriptionStatuses,
+  UIBillingIntervals,
 } from '@/api/core/enums';
 import type { Product, Subscription } from '@/api/routes/billing/schema';
 import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
@@ -193,7 +194,7 @@ export function PricingContent({
 
           <TabsContent value="month" className="mt-0">
             <ProductGrid
-              products={getProductsForInterval('month')}
+              products={getProductsForInterval(UIBillingIntervals.MONTH)}
               interval="month"
               hasActiveSubscription={hasActiveSubscription}
               getSubscriptionForPrice={getSubscriptionForPrice}
@@ -211,7 +212,7 @@ export function PricingContent({
 
           <TabsContent value="year" className="mt-0">
             <ProductGrid
-              products={getProductsForInterval('year')}
+              products={getProductsForInterval(UIBillingIntervals.YEAR)}
               interval="year"
               hasActiveSubscription={hasActiveSubscription}
               getSubscriptionForPrice={getSubscriptionForPrice}
@@ -248,7 +249,7 @@ export function PricingContent({
                         variant="outline"
                         size="sm"
                         className="shrink-0 border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30"
-                        onClick={() => setSelectedTab('month')}
+                        onClick={() => setSelectedTab(UIBillingIntervals.MONTH)}
                       >
                         {t('billing.credits.viewPlans')}
                       </Button>
@@ -409,7 +410,7 @@ function ProductGrid({
                 onCancel={subscription ? () => onCancel(subscription.id) : undefined}
                 onManageBilling={hasSubscription ? onManageBilling : undefined}
                 delay={index * 0.1}
-                annualSavingsPercent={interval === 'year' ? getAnnualSavings(product.id) : undefined}
+                annualSavingsPercent={interval === UIBillingIntervals.YEAR ? getAnnualSavings(product.id) : undefined}
                 isFreeProduct={isFreeProduct}
               />
             </motion.div>

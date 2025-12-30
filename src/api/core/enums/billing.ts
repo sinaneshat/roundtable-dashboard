@@ -19,6 +19,8 @@ export const BillingIntervalSchema = z.enum(BILLING_INTERVALS).openapi({
 
 export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
 
+export const DEFAULT_BILLING_INTERVAL: BillingInterval = 'month';
+
 export const BillingIntervals = {
   MONTH: 'month' as const,
   YEAR: 'year' as const,
@@ -63,6 +65,8 @@ export const SubscriptionChangeTypeSchema = z.enum(SUBSCRIPTION_CHANGE_TYPES).op
 
 export type SubscriptionChangeType = z.infer<typeof SubscriptionChangeTypeSchema>;
 
+export const DEFAULT_SUBSCRIPTION_CHANGE_TYPE: SubscriptionChangeType = 'change';
+
 export const SubscriptionChangeTypes = {
   UPGRADE: 'upgrade' as const,
   DOWNGRADE: 'downgrade' as const,
@@ -91,6 +95,8 @@ export const StripeSubscriptionStatusSchema = z.enum(STRIPE_SUBSCRIPTION_STATUSE
 
 export type StripeSubscriptionStatus = z.infer<typeof StripeSubscriptionStatusSchema>;
 
+export const DEFAULT_STRIPE_SUBSCRIPTION_STATUS: StripeSubscriptionStatus = 'active';
+
 export const StripeSubscriptionStatuses = {
   ACTIVE: 'active' as const,
   TRIALING: 'trialing' as const,
@@ -103,12 +109,23 @@ export const StripeSubscriptionStatuses = {
 } as const;
 
 // ============================================================================
-// SUBSCRIPTION TIER
+// SUBSCRIPTION TIER - SINGLE SOURCE OF TRUTH
+// ============================================================================
+//
+// ⚠️ TYPE-SAFE TIER SYSTEM: Adding/removing tiers will cause TypeScript errors
+// in product-logic.service.ts until all tier-specific configurations are updated.
+//
+// To add a new tier:
+// 1. Add it to SUBSCRIPTION_TIERS array below
+// 2. Add to SubscriptionTiers object below
+// 3. TypeScript will error on TIER_CONFIG in product-logic.service.ts
+// 4. Add the new tier's configuration to TIER_CONFIG
+// 5. All derived exports will automatically update
+//
+// This architecture ensures compile-time enforcement of tier consistency.
 // ============================================================================
 
-export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
-
-export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
+export const SUBSCRIPTION_TIERS = ['free', 'pro'] as const;
 
 export const SubscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS).openapi({
   description: 'Subscription tier for user account',
@@ -117,12 +134,31 @@ export const SubscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS).openapi({
 
 export type SubscriptionTier = z.infer<typeof SubscriptionTierSchema>;
 
+export const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'free';
+
 export const SubscriptionTiers = {
   FREE: 'free' as const,
-  STARTER: 'starter' as const,
   PRO: 'pro' as const,
-  POWER: 'power' as const,
 } as const;
+
+/**
+ * Type utility to ensure exhaustive tier coverage
+ * Use this to guarantee all tiers are handled in switch statements
+ *
+ * @example
+ * ```ts
+ * function handleTier(tier: SubscriptionTier): string {
+ *   switch (tier) {
+ *     case 'free': return 'Free';
+ *     case 'pro': return 'Pro';
+ *     default: return assertNever(tier); // TypeScript error if tier is missed
+ *   }
+ * }
+ * ```
+ */
+export function assertNeverTier(tier: never): never {
+  throw new Error(`Unhandled tier: ${tier}. Update all tier configurations.`);
+}
 
 // ============================================================================
 // USAGE STATUS
@@ -136,6 +172,8 @@ export const UsageStatusSchema = z.enum(USAGE_STATUSES).openapi({
 });
 
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;
+
+export const DEFAULT_USAGE_STATUS: UsageStatus = 'default';
 
 export const UsageStatuses = {
   DEFAULT: 'default' as const,
@@ -226,6 +264,8 @@ export const CreditTransactionTypeSchema = z.enum(CREDIT_TRANSACTION_TYPES).open
 
 export type CreditTransactionType = z.infer<typeof CreditTransactionTypeSchema>;
 
+export const DEFAULT_CREDIT_TRANSACTION_TYPE: CreditTransactionType = 'deduction';
+
 export const CreditTransactionTypes = {
   CREDIT_GRANT: 'credit_grant' as const,
   MONTHLY_REFILL: 'monthly_refill' as const,
@@ -260,6 +300,8 @@ export const CreditActionSchema = z.enum(CREDIT_ACTIONS).openapi({
 
 export type CreditAction = z.infer<typeof CreditActionSchema>;
 
+export const DEFAULT_CREDIT_ACTION: CreditAction = 'ai_response';
+
 export const CreditActions = {
   USER_MESSAGE: 'user_message' as const,
   AI_RESPONSE: 'ai_response' as const,
@@ -272,3 +314,53 @@ export const CreditActions = {
   CREDIT_PURCHASE: 'credit_purchase' as const,
   CARD_CONNECTION: 'card_connection' as const,
 } as const;
+
+// ============================================================================
+// PURCHASE TYPE (checkout result classification)
+// ============================================================================
+
+export const PURCHASE_TYPES = ['subscription', 'credits', 'none'] as const;
+
+export const PurchaseTypeSchema = z.enum(PURCHASE_TYPES).openapi({
+  description: 'Type of purchase made during checkout',
+  example: 'subscription',
+});
+
+export type PurchaseType = z.infer<typeof PurchaseTypeSchema>;
+
+export const DEFAULT_PURCHASE_TYPE: PurchaseType = 'none';
+
+export const PurchaseTypes = {
+  SUBSCRIPTION: 'subscription' as const,
+  CREDITS: 'credits' as const,
+  NONE: 'none' as const,
+} as const;
+
+export function isPurchaseType(value: unknown): value is PurchaseType {
+  return PURCHASE_TYPES.includes(value as PurchaseType);
+}
+
+// ============================================================================
+// SUBSCRIPTION PLAN TYPE (billing cycle for subscriptions)
+// ============================================================================
+
+export const SUBSCRIPTION_PLAN_TYPES = ['monthly', 'yearly', 'lifetime'] as const;
+
+export const SubscriptionPlanTypeSchema = z.enum(SUBSCRIPTION_PLAN_TYPES).openapi({
+  description: 'Subscription plan billing cycle type',
+  example: 'monthly',
+});
+
+export type SubscriptionPlanType = z.infer<typeof SubscriptionPlanTypeSchema>;
+
+export const DEFAULT_SUBSCRIPTION_PLAN_TYPE: SubscriptionPlanType = 'monthly';
+
+export const SubscriptionPlanTypes = {
+  MONTHLY: 'monthly' as const,
+  YEARLY: 'yearly' as const,
+  LIFETIME: 'lifetime' as const,
+} as const;
+
+export function isSubscriptionPlanType(value: unknown): value is SubscriptionPlanType {
+  return SUBSCRIPTION_PLAN_TYPES.includes(value as SubscriptionPlanType);
+}

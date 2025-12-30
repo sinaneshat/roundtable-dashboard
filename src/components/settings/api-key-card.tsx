@@ -109,7 +109,7 @@ export function ApiKeyCard({
               onClick={() => onDelete(apiKey.id)}
               disabled={isDeleting}
               className="size-8 text-muted-foreground hover:text-destructive transition-colors"
-              title={t('apiKeys.list.delete')}
+              aria-label={t('apiKeys.list.delete')}
             >
               {isDeleting
                 ? (

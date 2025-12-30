@@ -208,9 +208,7 @@ export const ModelMessageCard = memo(({
                 )}
                 {!modelIsAccessible && requiredTierName && (
                   <Badge variant="outline" className="text-xs text-muted-foreground">
-                    {requiredTierName}
-                    {' '}
-                    required
+                    {t('tierRequired', { tier: requiredTierName })}
                   </Badge>
                 )}
                 {showStatusIndicator && (
@@ -386,3 +384,5 @@ export const ModelMessageCard = memo(({
     });
   }
 });
+
+ModelMessageCard.displayName = 'ModelMessageCard';

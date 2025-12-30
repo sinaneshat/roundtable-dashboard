@@ -6,7 +6,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
 import type { BillingInterval } from '@/api/core/enums';
-import { BillingIntervals, BillingIntervalSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
+import { BillingIntervals, BillingIntervalSchema, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getUserCreditBalance, grantCardConnectionCredits, grantCredits } from '@/api/services/credit.service';
 import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { stripeService } from '@/api/services/stripe.service';
@@ -639,7 +639,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
       // - Checks if user already received card connection credits (idempotent)
       // - Records transaction with 'card_connection' action for tracking
       // - This enables needsCardConnection() to detect users who haven't connected card yet
-      if (syncedState.status !== 'none' && newTier === 'free') {
+      if (syncedState.status !== 'none' && newTier === SubscriptionTiers.FREE) {
         await grantCardConnectionCredits(user.id);
       }
 

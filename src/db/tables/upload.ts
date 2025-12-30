@@ -63,7 +63,7 @@ export const upload = sqliteTable('upload', {
     .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .$onUpdate(() => new Date())
     .notNull(),
 }, table => [
   // Indexes for efficient queries

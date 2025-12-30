@@ -10,6 +10,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
+import { SubscriptionTiers } from '@/api/core/enums';
 import { getAllModels } from '@/api/services/models-config.service';
 import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
@@ -90,7 +91,9 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ============================================================================
     // ✅ DEFAULT MODEL: First accessible model (cheapest)
     // ============================================================================
-    const defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
+    const accessibleModel = sortedModels.find(m => m.is_accessible_to_user);
+    const firstModel = sortedModels[0];
+    const defaultModelId = accessibleModel?.id ?? firstModel?.id ?? '';
 
     // ============================================================================
     // ✅ USER TIER CONFIG: All limits and metadata for frontend
@@ -98,13 +101,14 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // Computed from product-logic.service.ts - single source of truth
     const maxModels = getMaxModelsForTier(userTier);
     const tierName = getTierName(userTier);
-    const canUpgrade = userTier !== 'power'; // Power tier is the highest
+    const canUpgrade = userTier !== SubscriptionTiers.PRO;
 
     const userTierConfig = {
       tier: userTier,
       tier_name: tierName,
       max_models: maxModels,
       can_upgrade: canUpgrade,
+      upgrade_message: canUpgrade ? 'Upgrade to Pro for unlimited model access' : null,
     };
 
     // ============================================================================

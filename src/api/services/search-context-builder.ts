@@ -28,12 +28,6 @@ import { getRoundNumber } from '@/lib/utils';
 import { filterDbToPreSearchMessages } from './message-type-guards';
 
 // ============================================================================
-// Type Definitions (imported from schema.ts - no manual definitions)
-// ============================================================================
-
-export type { SearchContextOptions, ValidatedPreSearchData };
-
-// ============================================================================
 // Main Context Builder
 // ============================================================================
 

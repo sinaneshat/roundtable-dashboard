@@ -1,6 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
 import { z } from 'zod';
 
+import type { TextInputVariant, WithOptionsVariant } from '@/api/core/enums';
+import { TextInputVariantSchema, WithOptionsVariantSchema } from '@/api/core/enums';
+
 // Zod schemas for form components - maximum reusability
 export const formOptionSchema = z.object({
   label: z.string(), // Display text for the option
@@ -32,31 +35,16 @@ export type GeneralFormProps = {
   className?: string;
 };
 
-// Zod enums for form variants - reusable and type-safe
-export const textInputVariantSchema = z.enum([
-  'text',
-  'checkbox',
-  'date',
-  'switch',
-  'number',
-  'url',
-  'email',
-  'textarea',
-]);
-
-export const withOptionsVariantSchema = z.enum([
-  'radio',
-  'select',
-  'combobox',
-  'trigger_schedule',
-]);
+// Re-export for backwards compatibility - prefer importing from @/api/core/enums
+export const textInputVariantSchema = TextInputVariantSchema;
+export const withOptionsVariantSchema = WithOptionsVariantSchema;
 
 export type TextInputProps = {
-  variant: z.infer<typeof textInputVariantSchema>;
+  variant: TextInputVariant;
 } & GeneralFormProps;
 
 export type WithOptionsProps = {
-  variant: z.infer<typeof withOptionsVariantSchema>;
+  variant: WithOptionsVariant;
   options: FormOptions;
 } & GeneralFormProps;
 

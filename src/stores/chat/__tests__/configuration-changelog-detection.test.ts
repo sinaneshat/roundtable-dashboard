@@ -25,7 +25,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { ChatModes } from '@/api/core/enums';
-import type { ChatThread } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // TEST HELPERS
@@ -68,20 +67,6 @@ function createParticipantConfig(
     isEnabled: true,
     ...overrides,
   };
-}
-
-function _createMockThread(overrides?: Partial<ChatThread>): ChatThread {
-  return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    mode: ChatModes.DEBATING,
-    status: 'active',
-    enableWebSearch: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  } as ChatThread;
 }
 
 /**

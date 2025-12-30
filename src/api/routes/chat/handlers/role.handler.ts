@@ -15,6 +15,7 @@ import {
   IdParamSchema,
   Responses,
 } from '@/api/core';
+import { SubscriptionTiers } from '@/api/core/enums';
 import {
   deductCreditsForAction,
   enforceCredits,
@@ -76,7 +77,7 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
 
     // Block free users from creating custom roles
     const userTier = await getUserTier(user.id);
-    if (userTier === 'free') {
+    if (userTier === SubscriptionTiers.FREE) {
       throw createError.unauthorized(
         'Custom roles are not available on the Free plan. Upgrade to create custom roles.',
       );

@@ -22,8 +22,8 @@ import type { SubscriptionTier } from '@/api/core/enums';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 
-import type { BaseModelResponse } from '../routes/models/schema';
 import { getModelById } from './models-config.service';
+import type { ModelForPricing } from './product-logic.service';
 import {
   canAccessModelByPricing,
   getRequiredTierForModel,
@@ -151,7 +151,7 @@ export async function validateTierLimits(
 export async function validateModelAccess(
   modelId: string,
   userTier: SubscriptionTier,
-): Promise<BaseModelResponse> {
+): Promise<ModelForPricing> {
   // Fetch model details
   const model = getModelById(modelId);
 

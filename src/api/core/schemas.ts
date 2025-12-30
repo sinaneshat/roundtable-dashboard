@@ -25,11 +25,13 @@ import { API } from '@/constants/application';
 
 import {
   AuthFailureReasonSchema,
+  AuthModeSchema,
   DatabaseOperationSchema,
   HealthStatusSchema,
   HttpMethodSchema,
   ResourceUnavailableReasonSchema,
   SortDirectionSchema,
+  StreamPhaseSchema,
 } from './enums';
 
 // ============================================================================
@@ -157,7 +159,7 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
   }),
   z.object({
     logType: z.literal('auth'),
-    mode: z.enum(['session', 'api-key', 'session-optional', 'public']),
+    mode: AuthModeSchema,
     userId: z.string().optional(),
     sessionId: z.string().optional(),
     ipAddress: z.string().optional(),
@@ -652,7 +654,7 @@ export const SSEStreamMetadataSchema = z.object({
     example: 'thread_123_r0_p0',
   }),
   /** Current stream phase (presearch, participant, moderator) */
-  phase: z.enum(['presearch', 'participant', 'moderator']).optional().openapi({
+  phase: StreamPhaseSchema.optional().openapi({
     description: 'Current stream phase',
     example: 'participant',
   }),

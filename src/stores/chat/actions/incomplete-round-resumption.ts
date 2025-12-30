@@ -1198,6 +1198,19 @@ export function useIncompleteRoundResumption(
         actions.setStreamingRoundNumber(resumptionRoundNumber);
         actions.setIsCreatingModerator(true);
       }
+    } else {
+      // ✅ FIX: Moderator was never started but all participants are complete
+      // This happens when user navigates away after all participants finish
+      // but before moderator could be triggered. We need to trigger moderator now.
+      // The use-moderator-trigger hook will handle the actual API call.
+      rlog.moderator('TRIGGER-NEEDED', `r${resumptionRoundNumber} no moderator, all participants complete`);
+      moderatorPhaseResumptionAttemptedRef.current = resumptionKey;
+
+      // Set streaming state to trigger moderator via use-moderator-trigger hook
+      if (resumptionRoundNumber !== null) {
+        actions.setStreamingRoundNumber(resumptionRoundNumber);
+        actions.setIsCreatingModerator(true);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- messages/participants only used for getParticipantCompletionStatus; effect re-runs on phase changes
   }, [
@@ -1210,6 +1223,99 @@ export function useIncompleteRoundResumption(
     isCreatingModerator,
     isStreaming,
     waitingToStartStreaming,
+    actions,
+  ]);
+
+  // ============================================================================
+  // ✅ FIX: MODERATOR TRIGGER WITHOUT PREFILL
+  // ============================================================================
+  // When moderator was never started (user navigated away after all participants
+  // completed), the server doesn't detect moderator phase (no active stream).
+  // This effect triggers moderator when:
+  // 1. All participants are complete
+  // 2. No moderator message exists
+  // 3. Not already streaming or creating moderator
+  // 4. streamResumptionPrefilled is false (server didn't detect incomplete state)
+  //    OR currentResumptionPhase is not MODERATOR (server detected different phase)
+  // ============================================================================
+  const moderatorNoPrefillAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Skip if already creating moderator
+    if (isCreatingModerator) {
+      return;
+    }
+
+    // Skip if streaming
+    if (isStreaming || waitingToStartStreaming) {
+      return;
+    }
+
+    // Skip if no round to check
+    if (currentRoundNumber === null) {
+      return;
+    }
+
+    // Skip if this path is already being handled by the prefilled moderator effect
+    // (when server DID detect moderator phase)
+    if (streamResumptionPrefilled && currentResumptionPhase === RoundPhases.MODERATOR) {
+      return;
+    }
+
+    // Skip if already attempted
+    const attemptKey = `${threadId}_mod_noprefill_r${currentRoundNumber}`;
+    if (moderatorNoPrefillAttemptedRef.current === attemptKey) {
+      return;
+    }
+
+    // Skip if no participants
+    if (enabledParticipants.length === 0) {
+      return;
+    }
+
+    // Check if all participants have completed
+    const completionStatus = getParticipantCompletionStatus(
+      messages,
+      participants,
+      currentRoundNumber,
+    );
+
+    if (!completionStatus.allComplete) {
+      return;
+    }
+
+    // Check if moderator already exists
+    const moderatorMessage = getModeratorMessageForRound(messages, currentRoundNumber);
+    if (moderatorMessage) {
+      // Moderator already exists - check if complete
+      const modStatus = getMessageStreamingStatus(moderatorMessage);
+      if (modStatus === MessageStatuses.COMPLETE) {
+        return;
+      }
+      // Moderator exists but incomplete - let it stream
+      return;
+    }
+
+    // All participants complete, no moderator - trigger moderator!
+    rlog.moderator('TRIGGER-NOPREFILL', `r${currentRoundNumber} all ${completionStatus.completedCount} participants complete, triggering moderator`);
+    moderatorNoPrefillAttemptedRef.current = attemptKey;
+
+    // Set state to trigger moderator via use-moderator-trigger hook
+    actions.setStreamingRoundNumber(currentRoundNumber);
+    actions.setIsCreatingModerator(true);
+    // ✅ FIX: Also set the resumption phase so use-moderator-trigger's effect can run
+    actions.transitionToModeratorPhase();
+  }, [
+    isCreatingModerator,
+    isStreaming,
+    waitingToStartStreaming,
+    currentRoundNumber,
+    threadId,
+    streamResumptionPrefilled,
+    currentResumptionPhase,
+    enabledParticipants,
+    messages,
+    participants,
     actions,
   ]);
 

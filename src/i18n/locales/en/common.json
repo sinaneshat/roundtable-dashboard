@@ -959,7 +959,8 @@
       "waitingForWebResults": "Searching...",
       "moderatorObserving": "Observing...",
       "emptyResponse": "No visible response from {model}",
-      "reasoningOnlyResponse": "{model} used reasoning but produced no text output"
+      "reasoningOnlyResponse": "{model} used reasoning but produced no text output",
+      "tierRequired": "{tier} required"
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -1348,19 +1349,11 @@
     "tiers": {
       "free": {
         "name": "Free",
-        "description": "Basic access to free AI models with limited features"
-      },
-      "starter": {
-        "name": "Starter",
-        "description": "Budget-friendly models with better performance and increased limits"
+        "description": "Connect your card to get 10K free credits"
       },
       "pro": {
         "name": "Pro",
-        "description": "Professional-grade models with excellent quality and advanced features"
-      },
-      "power": {
-        "name": "Power",
-        "description": "Flagship models with maximum capabilities and unlimited access"
+        "description": "1M monthly credits with unlimited AI models and priority support"
       }
     }
   },

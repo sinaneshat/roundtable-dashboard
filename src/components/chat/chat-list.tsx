@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useLayoutEffect, useRef, useState } from 'react';
 
+import type { ChatSidebarGroup, ChatSidebarItem } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { StaggerItem } from '@/components/ui/motion';
 import {
@@ -18,22 +19,17 @@ import {
 import { StickyHeader } from '@/components/ui/sticky-header';
 import { useCurrentPathname } from '@/hooks/utils';
 
-export type Chat = {
-  id: string;
-  title: string;
-  slug: string;
-  previousSlug?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  messages: never[];
-  isActive?: boolean;
-  isFavorite?: boolean;
-  isPublic?: boolean;
-};
-export type ChatGroup = {
-  label: string;
-  chats: Chat[];
-};
+/**
+ * @deprecated Use ChatSidebarItem from @/api/routes/chat/schema instead
+ * Kept for backward compatibility during migration
+ */
+export type Chat = ChatSidebarItem;
+
+/**
+ * @deprecated Use ChatSidebarGroup from @/api/routes/chat/schema instead
+ * Kept for backward compatibility during migration
+ */
+export type ChatGroup = ChatSidebarGroup;
 
 /**
  * Check if a chat is active by comparing pathname against both current slug and previousSlug
@@ -197,11 +193,10 @@ export function ChatList({
       }
       const translationKey = key.replace('chat.', '');
       if (translationKey === 'daysAgo') {
-        return `${value} days ago`;
+        return t('chat.daysAgo', { count: Number.parseInt(value, 10) });
       }
       if (translationKey === 'weeksAgo') {
-        const weeks = Number.parseInt(value, 10);
-        return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+        return t('chat.weeksAgo', { count: Number.parseInt(value, 10) });
       }
     }
     return t(label.replace('chat.', 'chat.'));

@@ -136,7 +136,7 @@ export function BillingSuccessClient() {
 
   // Subscription data - use sync result tier as source of truth (prevents stale usageStats)
   // syncedTier comes from sync-after-checkout which has fresh data from Stripe
-  // SubscriptionTier values: 'free' | 'starter' | 'pro' | 'power' - anything not 'free' is paid
+  // SubscriptionTier values: 'free' | 'pro' - anything not 'free' is paid
   const isPaidPlan = (syncedTier !== undefined && syncedTier !== 'free') || (syncedTier === undefined && usageStats?.data?.plan?.type === 'paid');
   const currentTier: SubscriptionTier = isPaidPlan ? 'pro' : 'free';
   const tierName = isPaidPlan ? 'Pro' : 'Free';

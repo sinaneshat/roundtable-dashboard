@@ -370,10 +370,9 @@ export function isMessagePart(value: unknown): value is MessagePart {
  * }
  */
 export function isMessageStatus(value: unknown): value is MessageStatus {
-  return (
-    typeof value === 'string'
-    && MESSAGE_STATUSES.includes(value as MessageStatus)
-  );
+  if (typeof value !== 'string')
+    return false;
+  return MESSAGE_STATUSES.includes(value as MessageStatus);
 }
 
 /**

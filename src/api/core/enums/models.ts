@@ -19,6 +19,8 @@ export const ModelCategorySchema = z.enum(MODEL_CATEGORIES).openapi({
 
 export type ModelCategory = z.infer<typeof ModelCategorySchema>;
 
+export const DEFAULT_MODEL_CATEGORY: ModelCategory = 'general';
+
 export const ModelCategories = {
   REASONING: 'reasoning' as const,
   GENERAL: 'general' as const,
@@ -62,6 +64,8 @@ export const StreamingBehaviorSchema = z.enum(STREAMING_BEHAVIORS).openapi({
 
 export type StreamingBehavior = z.infer<typeof StreamingBehaviorSchema>;
 
+export const DEFAULT_STREAMING_BEHAVIOR: StreamingBehavior = 'token';
+
 export const StreamingBehaviors = {
   TOKEN: 'token' as const,
   BUFFERED: 'buffered' as const,
@@ -89,9 +93,39 @@ export const JsonModeQualitySchema = z.enum(JSON_MODE_QUALITIES).openapi({
 
 export type JsonModeQuality = z.infer<typeof JsonModeQualitySchema>;
 
+export const DEFAULT_JSON_MODE_QUALITY: JsonModeQuality = 'good';
+
 export const JsonModeQualities = {
   EXCELLENT: 'excellent' as const,
   GOOD: 'good' as const,
   FAIR: 'fair' as const,
   POOR: 'poor' as const,
 } as const;
+
+// ============================================================================
+// MODEL PROVIDER - AI model provider identification
+// ============================================================================
+
+export const MODEL_PROVIDERS = ['x-ai', 'anthropic', 'google', 'deepseek', 'openai', 'mistralai'] as const;
+
+export const ModelProviderSchema = z.enum(MODEL_PROVIDERS).openapi({
+  description: 'AI model provider identifier',
+  example: 'openai',
+});
+
+export type ModelProvider = z.infer<typeof ModelProviderSchema>;
+
+export const DEFAULT_MODEL_PROVIDER: ModelProvider = 'openai';
+
+export const ModelProviders = {
+  X_AI: 'x-ai' as const,
+  ANTHROPIC: 'anthropic' as const,
+  GOOGLE: 'google' as const,
+  DEEPSEEK: 'deepseek' as const,
+  OPENAI: 'openai' as const,
+  MISTRALAI: 'mistralai' as const,
+} as const;
+
+export function isModelProvider(value: unknown): value is ModelProvider {
+  return typeof value === 'string' && MODEL_PROVIDERS.includes(value as ModelProvider);
+}

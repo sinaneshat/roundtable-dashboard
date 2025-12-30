@@ -778,7 +778,7 @@ ${basePrompt}`;
 
 /**
  * Round Moderator JSON structure instruction
- * ✅ CRITICAL: MUST match ModeratorPayloadSchema exactly
+ * ✅ CRITICAL: MUST match ModeratorAIContentSchema exactly
  * ✅ SINGLE SOURCE: Used by moderator.handler.ts for enforcing JSON output structure
  *
  * Since we use mode:'json' (not mode:'json_schema'), the model follows this text example.
@@ -797,7 +797,7 @@ ${basePrompt}`;
  * ✅ SIMPLIFIED FORMAT: Concise moderator with engagement metrics
  * ✅ ALL VALUES ARE PLACEHOLDERS - AI must compute actual values from conversation
  *
- * If you change ModeratorPayloadSchema in schema.ts, TypeScript will error here
+ * If you change ModeratorAIContentSchema in schema.ts, TypeScript will error here
  * until this template is updated to match - preventing silent schema drift.
  */
 export const MODERATOR_JSON_STRUCTURE = {

@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import { z } from 'zod';
 
-import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
-import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
+import type { SubscriptionTier } from '@/api/core/enums';
+import { ChatModes, ChatModeSchema, SUBSCRIPTION_TIERS, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 
@@ -32,9 +32,9 @@ export const ModelPresetSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
   icon: z.custom<LucideIcon>(),
-  requiredTier: z.string() as z.ZodType<SubscriptionTier>,
+  requiredTier: SubscriptionTierSchema,
   order: z.number().int().nonnegative(),
-  mode: z.string() as z.ZodType<ChatMode>,
+  mode: ChatModeSchema,
   searchEnabled: z.union([z.boolean(), z.literal('conditional')]),
   modelRoles: z.array(PresetModelRoleSchema),
 });
@@ -60,9 +60,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Quick Perspectives',
     description: 'Fast framing and contrasting viewpoints for early exploration',
     icon: MessagesSquare,
-    requiredTier: 'free',
+    requiredTier: SubscriptionTiers.FREE,
     order: 1,
-    mode: 'analyzing',
+    mode: ChatModes.ANALYZING,
     searchEnabled: false,
     modelRoles: [
       { modelId: 'google/gemini-2.5-flash', role: 'Structured Reasoner' },
@@ -79,9 +79,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Balanced Discussion',
     description: 'Well-rounded conversation with reasoning and alternative framing',
     icon: Scale,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 2,
-    mode: 'analyzing',
+    mode: ChatModes.ANALYZING,
     searchEnabled: false,
     modelRoles: [
       { modelId: 'openai/gpt-5.1', role: 'Structured Reasoner' },
@@ -94,9 +94,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Creative Exploration',
     description: 'Ideation and conceptual exploration with grounded creativity',
     icon: Lightbulb,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 3,
-    mode: 'brainstorming',
+    mode: ChatModes.BRAINSTORMING,
     searchEnabled: false,
     modelRoles: [
       { modelId: 'anthropic/claude-sonnet-4', role: 'Ideator' },
@@ -106,16 +106,16 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
 
   // ============================================================================
-  // POWER TIER
+  // PRO TIER (Premium presets - Pro is the highest tier)
   // ============================================================================
   {
     id: 'critical-debate',
     name: 'Critical Debate',
     description: 'Stress-testing ideas with real disagreement and trade-offs',
     icon: Swords,
-    requiredTier: 'power',
+    requiredTier: SubscriptionTiers.PRO,
     order: 4,
-    mode: 'debating',
+    mode: ChatModes.DEBATING,
     searchEnabled: false,
     modelRoles: [
       { modelId: 'openai/o3', role: 'Position Advocate' },
@@ -129,9 +129,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Devil\'s Advocate Panel',
     description: 'Challenge decisions with opposing viewpoints to stress-test your thinking',
     icon: ShieldAlert,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 5,
-    mode: 'debating',
+    mode: ChatModes.DEBATING,
     searchEnabled: false,
     modelRoles: [
       { modelId: 'openai/gpt-5.1', role: 'Proposer' },
@@ -144,9 +144,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Deep Analysis',
     description: 'Maximum reasoning depth for complex, ambiguous problems',
     icon: Brain,
-    requiredTier: 'power',
+    requiredTier: SubscriptionTiers.PRO,
     order: 6,
-    mode: 'analyzing',
+    mode: ChatModes.ANALYZING,
     searchEnabled: false,
     modelRoles: [
       { modelId: 'openai/o1', role: 'Deep Reasoner' },
@@ -159,9 +159,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Research & Evidence Review',
     description: 'Fact-finding with source comparison and synthesis',
     icon: FileSearch,
-    requiredTier: 'pro',
+    requiredTier: SubscriptionTiers.PRO,
     order: 7,
-    mode: 'analyzing',
+    mode: ChatModes.ANALYZING,
     searchEnabled: true,
     modelRoles: [
       { modelId: 'openai/gpt-4.1', role: 'Evidence Gatherer' },
@@ -174,9 +174,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
     name: 'Technical Review',
     description: 'Architecture, correctness, and implementation trade-offs',
     icon: Wrench,
-    requiredTier: 'power',
+    requiredTier: SubscriptionTiers.PRO,
     order: 8,
-    mode: 'solving',
+    mode: ChatModes.SOLVING,
     searchEnabled: 'conditional',
     modelRoles: [
       { modelId: 'anthropic/claude-opus-4.5', role: 'Implementer' },
@@ -277,9 +277,9 @@ export type ToastNamespace = z.infer<typeof ToastNamespaceSchema>;
 
 // 4️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const ToastNamespaces = {
-  CHAT_MODELS: 'chat.models' as const,
-  MODELS: 'models' as const,
-} as const;
+  CHAT_MODELS: 'chat.models',
+  MODELS: 'models',
+} as const satisfies Record<string, ToastNamespace>;
 
 // 5️⃣ DEFAULT VALUE
 export const DEFAULT_TOAST_NAMESPACE: ToastNamespace = 'chat.models';

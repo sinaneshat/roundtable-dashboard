@@ -223,14 +223,13 @@ export async function syncStripeDataFromStripe(
   } else {
     // Fallback to billing_cycle_anchor and calculate end date
     const billingCycleAnchor = hasBillingCycleAnchor(subscription) ? subscription.billing_cycle_anchor : undefined;
-    const interval = price.recurring?.interval || 'month';
+    const interval = price.recurring?.interval || BillingIntervals.MONTH;
     const intervalCount = price.recurring?.interval_count || 1;
 
     if (billingCycleAnchor) {
       currentPeriodStart = billingCycleAnchor;
       currentPeriodEnd = calculatePeriodEnd(billingCycleAnchor, interval, intervalCount);
     } else {
-      // Intentionally empty
       // Last resort: use subscription creation date
       currentPeriodStart = subscription.created;
       currentPeriodEnd = calculatePeriodEnd(subscription.created, interval, intervalCount);

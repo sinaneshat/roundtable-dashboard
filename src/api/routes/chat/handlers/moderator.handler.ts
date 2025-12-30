@@ -33,6 +33,11 @@ import {
   trackLLMGeneration,
 } from '@/api/services/posthog-llm-tracking.service';
 import {
+  clearThreadActiveStream,
+  markStreamActive,
+  setThreadActiveStream,
+} from '@/api/services/resumable-stream-kv.service';
+import {
   appendStreamChunk,
   completeStreamBuffer,
   failStreamBuffer,
@@ -403,6 +408,10 @@ function generateModeratorSummary(
           },
         });
 
+        // ✅ RESUMABLE STREAMS: Clear thread active stream now that moderator is complete
+        // This marks the round as fully complete (participants + moderator done)
+        await clearThreadActiveStream(threadId, env);
+
         // Track analytics
         const finishData = {
           text: finishResult.text,
@@ -756,8 +765,22 @@ export const summarizeRoundHandler: RouteHandler<typeof summarizeRoundRoute, Api
     await enforceCredits(user.id, 2); // Analysis requires ~2 credits
     await deductCreditsForAction(user.id, 'analysisGeneration', { threadId });
 
-    // Initialize stream buffer for resumption
+    // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
     await initializeStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
+
+    // ✅ RESUMABLE STREAMS: Mark moderator stream as active in KV for resume detection
+    await markStreamActive(threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
+
+    // ✅ RESUMABLE STREAMS: Set thread-level active stream for AI SDK resume pattern
+    // Uses MODERATOR_PARTICIPANT_INDEX (-1) and totalParticipants=1 (moderator is single stream)
+    await setThreadActiveStream(
+      threadId,
+      messageId,
+      roundNum,
+      MODERATOR_PARTICIPANT_INDEX,
+      1, // Moderator is a single stream (not multi-participant)
+      c.env,
+    );
 
     const { session } = c.auth();
 

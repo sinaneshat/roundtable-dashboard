@@ -54,13 +54,6 @@ function getAssistantMessages(messages: Array<TestUserMessage | TestAssistantMes
 // TEST HELPERS
 // ============================================================================
 
-type SSEEventData = string | number | boolean | null | { [key: string]: string | number | boolean | null | undefined };
-
-type SSEEvent = {
-  event: string;
-  data: SSEEventData;
-};
-
 type JourneyState = {
   screenMode: typeof ScreenModes[keyof typeof ScreenModes];
   threadId: string | null;
@@ -93,87 +86,6 @@ function createInitialJourneyState(): JourneyState {
     preSearches: [],
     participants: [],
   };
-}
-
-/**
- * Creates SSE events for a participant stream
- */
-function _createParticipantSSEEvents(
-  participantIndex: number,
-  roundNumber: number,
-  content: string,
-): SSEEvent[] {
-  return [
-    {
-      event: 'start',
-      data: {
-        messageMetadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber,
-          participantIndex,
-          participantId: `participant-${participantIndex}`,
-          model: 'gpt-4',
-        },
-      },
-    },
-    ...content.split(' ').map(word => ({
-      event: 'text-delta',
-      data: { delta: `${word} ` },
-    })),
-    {
-      event: 'finish',
-      data: {
-        finishReason: 'stop',
-        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      },
-    },
-    {
-      event: 'done',
-      data: {},
-    },
-  ];
-}
-
-/**
- * Creates SSE events for pre-search stream
- */
-function _createPreSearchSSEEvents(_roundNumber: number): SSEEvent[] {
-  return [
-    { event: 'status', data: { status: MessageStatuses.STREAMING } },
-    {
-      event: 'query-generated',
-      data: {
-        query: 'Generated query',
-        rationale: 'Why this query',
-        searchDepth: 'basic',
-        index: 0,
-        total: 1,
-      },
-    },
-    {
-      event: 'search-result',
-      data: {
-        query: 'Generated query',
-        answer: 'Moderator answer',
-        results: [{ title: 'Result 1', url: 'https://example.com', content: 'Content', score: 0.9 }],
-        responseTime: 1000,
-      },
-    },
-    { event: 'moderator-summary', data: { moderatorSummary: 'Pre-search moderator complete' } },
-    { event: 'done', data: { status: MessageStatuses.COMPLETE } },
-  ];
-}
-
-/**
- * Creates SSE events for moderator stream
- */
-function _createModeratorSSEEvents(_roundNumber: number): SSEEvent[] {
-  return [
-    { event: 'status', data: { status: MessageStatuses.STREAMING } },
-    { event: 'moderator-chunk', data: { chunk: 'Discussion moderator' } },
-    { event: 'metrics', data: { engagement: 85, insight: 78, balance: 82, clarity: 90 } },
-    { event: 'done', data: { status: MessageStatuses.COMPLETE } },
-  ];
 }
 
 // ============================================================================
