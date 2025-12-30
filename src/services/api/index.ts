@@ -181,6 +181,7 @@ export {
 // ============================================================================
 
 export {
+  listModelsPublicService,
   type ListModelsResponse,
   listModelsService,
 } from './models';

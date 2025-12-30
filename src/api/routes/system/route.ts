@@ -1,7 +1,13 @@
+/**
+ * System Routes
+ *
+ * Health check and cache management endpoints for system monitoring
+ */
+
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { StandardApiResponses } from '@/api/core';
+import { createPublicRouteResponses } from '@/api/core';
 
 import { ClearCacheResponseSchema, DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
 
@@ -18,8 +24,7 @@ export const healthRoute = createRoute({
         'application/json': { schema: HealthResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -42,8 +47,7 @@ export const detailedHealthRoute = createRoute({
         'application/json': { schema: DetailedHealthResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -60,7 +64,6 @@ export const clearCacheRoute = createRoute({
         'application/json': { schema: ClearCacheResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
-    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+    ...createPublicRouteResponses(),
   },
 });

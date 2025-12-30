@@ -105,7 +105,7 @@ import {
   updateParticipantHandler,
   updateThreadHandler,
   updateUserPresetHandler,
-} from './routes/chat/handler';
+} from './routes/chat';
 import {
   addParticipantRoute,
   createCustomRoleRoute,

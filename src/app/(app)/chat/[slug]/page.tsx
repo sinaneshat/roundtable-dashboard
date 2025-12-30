@@ -6,8 +6,8 @@ import { BRAND } from '@/constants/brand';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import { getThreadBySlugService, getThreadChangelogService, getThreadPreSearchesService, getThreadStreamResumptionStateService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +48,7 @@ export default async function ChatThreadPage({
     permanentRedirect(`/chat/${thread.slug}`);
   }
 
+  // Prefetch chat content only - feedback loads client-side
   await Promise.all([
     queryClient.prefetchQuery({
       queryKey: queryKeys.threads.changelog(thread.id),
@@ -58,11 +59,6 @@ export default async function ChatThreadPage({
       queryKey: queryKeys.threads.preSearches(thread.id),
       queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
       staleTime: STALE_TIMES.preSearch,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.threads.feedback(thread.id),
-      queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
-      staleTime: STALE_TIME_PRESETS.medium,
     }),
   ]);
 

@@ -12,7 +12,8 @@ import {
 import { z } from 'zod';
 
 import type { SubscriptionTier } from '@/api/core/enums';
-import { ChatModes, ChatModeSchema, SUBSCRIPTION_TIERS, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
+import { ChatModes, ChatModeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@/api/core/enums';
+import { canAccessByTier } from '@/api/services/product-logic.service';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
 
@@ -238,24 +239,19 @@ export const PresetWithLockStatusSchema = ModelPresetSchema.extend({
 export type PresetWithLockStatus = z.infer<typeof PresetWithLockStatusSchema>;
 
 export function getPresetsForTier(userTier: SubscriptionTier): PresetWithLockStatus[] {
-  const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
-
-  return MODEL_PRESETS.map((preset) => {
-    const requiredIndex = SUBSCRIPTION_TIERS.indexOf(preset.requiredTier);
-    return {
-      ...preset,
-      isLocked: userTierIndex < requiredIndex,
-    };
-  }).sort((a, b) => a.order - b.order);
+  // ✅ DRY: Use canAccessByTier helper (single source of truth)
+  return MODEL_PRESETS.map(preset => ({
+    ...preset,
+    isLocked: !canAccessByTier(userTier, preset.requiredTier),
+  })).sort((a, b) => a.order - b.order);
 }
 
 export function canAccessPreset(
   preset: ModelPreset,
   userTier: SubscriptionTier,
 ): boolean {
-  const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
-  const requiredIndex = SUBSCRIPTION_TIERS.indexOf(preset.requiredTier);
-  return userTierIndex >= requiredIndex;
+  // ✅ DRY: Use canAccessByTier helper (single source of truth)
+  return canAccessByTier(userTier, preset.requiredTier);
 }
 
 export function getModelIdsForPreset(preset: ModelPreset): string[] {

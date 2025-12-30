@@ -1,6 +1,7 @@
 'use client';
 
 import { Download, FileText, Paperclip } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import type { AvailableSource } from '@/api/types/citations';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +51,8 @@ function formatFileSize(bytes?: number): string {
  * This ensures users always know what files the AI had access to.
  */
 export function MessageSources({ sources, className }: MessageSourcesProps) {
+  const t = useTranslations();
+
   if (!sources || sources.length === 0) {
     return null;
   }
@@ -64,7 +67,9 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
         >
           <Paperclip className="size-3.5" />
           <span>
-            Sources (
+            {t('chat.sources.title')}
+            {' '}
+            (
             {sources.length}
             )
           </span>
@@ -73,7 +78,7 @@ export function MessageSources({ sources, className }: MessageSourcesProps) {
       <CollapsibleContent className="mt-2">
         <div className="flex flex-wrap gap-2">
           {sources.map((source, index) => (
-            <SourceCard key={source.id || index} source={source} index={index + 1} />
+            <SourceCard key={source.id ?? `source-${source.filename ?? source.title ?? ''}-${index}`} source={source} index={index + 1} />
           ))}
         </div>
       </CollapsibleContent>
@@ -91,6 +96,7 @@ type SourceCardProps = {
 };
 
 function SourceCard({ source, index }: SourceCardProps) {
+  const t = useTranslations('actions');
   const fileSize = formatFileSize(source.fileSize);
 
   return (
@@ -132,7 +138,8 @@ function SourceCard({ source, index }: SourceCardProps) {
             href={source.downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            title={`Download ${source.filename || source.title}`}
+            title={t('download')}
+            aria-label={t('download')}
           >
             <Download className="size-3.5" />
           </a>

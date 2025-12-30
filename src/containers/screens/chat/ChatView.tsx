@@ -146,7 +146,7 @@ export function ChatView({
   const effectiveThreadId = serverThreadId || thread?.id || createdThreadId || '';
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
-  const { data: modelsData } = useModelsQuery();
+  const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
 
   const { data: changelogResponse, isFetching: isChangelogFetching } = useThreadChangelogQuery(
@@ -354,6 +354,7 @@ export function ChatView({
     || showLoader
     || isModeratorStreaming
     || Boolean(pendingMessage)
+    || isModelsLoading
     || isResumptionActive
     || formActions.isSubmitting;
 

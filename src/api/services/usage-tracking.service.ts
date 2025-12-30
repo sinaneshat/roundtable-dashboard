@@ -23,14 +23,14 @@ import { ulid } from 'ulid';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import type { StripeSubscriptionStatus, SubscriptionTier } from '@/api/core/enums';
+import type { StripeSubscriptionStatus, SubscriptionTier, UsageStatus } from '@/api/core/enums';
 import { BillingIntervals, CreditActions, PlanTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import type { UserChatUsage } from '@/db/validation';
 
-import type { UsageStatsPayload, UsageStatus } from '../routes/usage/schema';
+import type { UsageStatsPayload } from '../routes/usage/schema';
 import { getUserCreditBalance, upgradeToPaidPlan } from './credit.service';
 import { getTierFromProductId, TIER_QUOTAS } from './product-logic.service';
 

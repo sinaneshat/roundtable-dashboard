@@ -1,3 +1,9 @@
+/**
+ * Billing Routes
+ *
+ * Product catalog, checkout, subscription management, and Stripe webhook endpoints
+ */
+
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
@@ -44,7 +50,6 @@ export const listProductsRoute = createRoute({
         'application/json': { schema: ProductListResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
     ...createPublicRouteResponses(),
   },
 });
@@ -65,7 +70,6 @@ export const getProductRoute = createRoute({
         'application/json': { schema: ProductDetailResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
     ...createPublicRouteResponses(),
   },
 });
@@ -149,7 +153,6 @@ export const listSubscriptionsRoute = createRoute({
         'application/json': { schema: SubscriptionListResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
     ...createProtectedRouteResponses(),
   },
 });
@@ -170,7 +173,6 @@ export const getSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionDetailResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
     ...StandardApiResponses.FORBIDDEN,
     ...createProtectedRouteResponses(),
   },
@@ -316,7 +318,6 @@ export const handleWebhookRoute = createRoute({
         'application/json': { schema: WebhookResponseSchema },
       },
     },
-    ...StandardApiResponses.BAD_REQUEST,
     ...createPublicRouteResponses(),
   },
 });

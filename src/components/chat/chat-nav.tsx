@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
+import type { ChatSidebarItem } from '@/api/routes/chat/schema';
 import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
-import type { Chat } from '@/components/chat/chat-list';
 import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
 import {
   ChatSidebarPaginationSkeleton,
@@ -60,7 +60,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   // ✅ CREDITS-ONLY: Map plan type to tier for display
   const subscriptionTier: SubscriptionTier = usageData?.data?.plan?.type === 'paid' ? 'pro' : 'free';
   const isPaidUser = usageData?.data?.plan?.type === 'paid';
-  const chats: Chat[] = useMemo(() => {
+  const chats: ChatSidebarItem[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
     const threads = threadsData.pages.flatMap(page =>
@@ -271,7 +271,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       chatGroups={[]}
                       favorites={favorites}
                       searchTerm=""
-                      isMobile={isMobile}
                     />
                   </>
                 )}
@@ -319,7 +318,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       chatGroups={chatGroups}
                       favorites={[]}
                       searchTerm=""
-                      isMobile={isMobile}
                     />
                     {isFetchingNextPage && (
                       <SidebarGroup className="group-data-[collapsible=icon]:hidden">

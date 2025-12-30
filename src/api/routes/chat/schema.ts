@@ -1062,7 +1062,7 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
 
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
-export type StreamState = z.infer<typeof StreamStateSchema>;
+// StreamState type is exported from @/api/types/streaming (single source of truth)
 
 export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
 

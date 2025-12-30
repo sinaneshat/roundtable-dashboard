@@ -160,7 +160,7 @@ export default function ChatOverviewScreen() {
     attachmentClickRef.current?.();
   }, []);
 
-  const { data: modelsData } = useModelsQuery();
+  const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
 
   const allEnabledModels = useMemo(
@@ -179,8 +179,13 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  const modelOrder = useChatStore(s => s.modelOrder);
-  const setModelOrder = useChatStore(s => s.setModelOrder);
+  // ✅ ZUSTAND V5: Batch selectors with useShallow to prevent multiple re-renders
+  const { modelOrder, setModelOrder } = useChatStore(
+    useShallow(s => ({
+      modelOrder: s.modelOrder,
+      setModelOrder: s.setModelOrder,
+    })),
+  );
 
   const accessibleModelIds = useMemo(() => {
     if (allEnabledModels.length === 0)
@@ -422,7 +427,7 @@ export default function ChatOverviewScreen() {
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
-  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting;
+  const isInitialUIInputBlocked = isStreaming || isCreatingThread || waitingToStartStreaming || formActions.isSubmitting || isModelsLoading;
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || formActions.isSubmitting;
 
   const lastResetPathRef = useRef<string | null>(null);

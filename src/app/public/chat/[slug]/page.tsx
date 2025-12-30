@@ -77,6 +77,7 @@ export default async function PublicChatThreadPage({
   const queryClient = getQueryClient();
 
   try {
+    // Prefetch thread data only - models load on client with loading state
     await queryClient.prefetchQuery({
       queryKey: queryKeys.threads.public(slug),
       queryFn: () => getPublicThreadService({ param: { slug } }),

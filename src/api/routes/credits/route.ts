@@ -1,3 +1,9 @@
+/**
+ * Credits Routes
+ *
+ * Credit balance, transactions, and cost estimation endpoints
+ */
+
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 

@@ -157,11 +157,7 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
 // ============================================================================
 // DERIVED EXPORTS - Auto-generated from TIER_CONFIG
 // ============================================================================
-// These exports exist for backward compatibility and convenience.
-// They are ALL derived from TIER_CONFIG above - no manual sync needed.
-//
 // ✅ DYNAMIC GENERATION: Uses Object.fromEntries to auto-derive from TIER_CONFIG
-// If you add a new tier to TIER_CONFIG, these exports auto-update.
 // ============================================================================
 
 /**
@@ -574,6 +570,66 @@ export function canAccessModelByPricing(
   const requiredTierIndex = SUBSCRIPTION_TIERS.indexOf(requiredTier);
 
   // User can access if their tier is equal or higher than required
+  return userTierIndex >= requiredTierIndex;
+}
+
+/**
+ * Tier access info added to participants/models
+ * Used for enriching data with user-specific access information
+ */
+export type TierAccessInfo = {
+  is_accessible_to_user: boolean;
+  required_tier_name: string | null;
+};
+
+/**
+ * Enrich a model or participant with tier access information
+ * ✅ DRY: Single source of truth for tier access enrichment
+ * ✅ REUSABLE: Use in handlers instead of duplicating logic
+ *
+ * @param modelId - Model ID to check access for
+ * @param userTier - User's subscription tier
+ * @param getModel - Function to get model by ID (avoid circular deps)
+ * @returns Tier access info object
+ */
+export function enrichWithTierAccess(
+  modelId: string,
+  userTier: SubscriptionTier,
+  getModel: (id: string) => ModelForPricing | undefined,
+): TierAccessInfo {
+  const model = getModel(modelId);
+  if (!model) {
+    return {
+      is_accessible_to_user: false,
+      required_tier_name: null,
+    };
+  }
+
+  const requiredTier = getRequiredTierForModel(model);
+  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
+  const isAccessible = canAccessModelByPricing(userTier, model);
+
+  return {
+    is_accessible_to_user: isAccessible,
+    required_tier_name: requiredTierName,
+  };
+}
+
+/**
+ * Check if user tier meets or exceeds required tier
+ * ✅ DRY: Single source of truth for tier comparison
+ * ✅ REUSABLE: Use for presets, models, and any tier gating
+ *
+ * @param userTier - User's subscription tier
+ * @param requiredTier - Required subscription tier
+ * @returns True if user can access
+ */
+export function canAccessByTier(
+  userTier: SubscriptionTier,
+  requiredTier: SubscriptionTier,
+): boolean {
+  const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
+  const requiredTierIndex = SUBSCRIPTION_TIERS.indexOf(requiredTier);
   return userTierIndex >= requiredTierIndex;
 }
 

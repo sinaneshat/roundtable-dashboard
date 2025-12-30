@@ -20,30 +20,18 @@ import { StickyHeader } from '@/components/ui/sticky-header';
 import { useCurrentPathname } from '@/hooks/utils';
 
 /**
- * @deprecated Use ChatSidebarItem from @/api/routes/chat/schema instead
- * Kept for backward compatibility during migration
- */
-export type Chat = ChatSidebarItem;
-
-/**
- * @deprecated Use ChatSidebarGroup from @/api/routes/chat/schema instead
- * Kept for backward compatibility during migration
- */
-export type ChatGroup = ChatSidebarGroup;
-
-/**
  * Check if a chat is active by comparing pathname against both current slug and previousSlug
  */
-function isChatActive(chat: Chat, pathname: string): boolean {
+function isChatActive(chat: ChatSidebarItem, pathname: string): boolean {
   const currentSlugUrl = `/chat/${chat.slug}`;
   const previousSlugUrl = chat.previousSlug ? `/chat/${chat.previousSlug}` : null;
   return pathname === currentSlugUrl || (previousSlugUrl !== null && pathname === previousSlugUrl);
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- Utility function closely related to ChatList component
-export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
+export function groupChatsByPeriod(chats: ChatSidebarItem[]): ChatSidebarGroup[] {
   const now = Date.now();
-  const groups = new Map<string, Chat[]>();
+  const groups = new Map<string, ChatSidebarItem[]>();
   chats.forEach((chat) => {
     const chatTime = chat.updatedAt?.getTime?.();
     // ✅ FIX: Handle invalid dates gracefully - default to "today" if date is NaN/invalid
@@ -71,14 +59,12 @@ export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
   }));
 }
 type ChatListProps = {
-  chatGroups: ChatGroup[];
-  favorites: Chat[];
+  chatGroups: ChatSidebarGroup[];
+  favorites: ChatSidebarItem[];
   searchTerm: string;
-  /** @deprecated Sidebar close is now handled by chat-nav.tsx via pathname change detection */
-  isMobile?: boolean;
   disableAnimations?: boolean;
 };
-const EMPTY_FAVORITES: Chat[] = [];
+const EMPTY_FAVORITES: ChatSidebarItem[] = [];
 
 function ChatItem({
   chat,
@@ -86,9 +72,9 @@ function ChatItem({
   onDeleteClick,
   disableAnimation,
 }: {
-  chat: Chat;
+  chat: ChatSidebarItem;
   isActive: boolean;
-  onDeleteClick: (chat: Chat) => void;
+  onDeleteClick: (chat: ChatSidebarItem) => void;
   disableAnimation?: boolean;
 }) {
   const t = useTranslations();
@@ -147,7 +133,7 @@ export function ChatList({
   // Unlike usePathname(), this updates when URL changes via History API
   const pathname = useCurrentPathname();
   const t = useTranslations();
-  const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
+  const [chatToDelete, setChatToDelete] = useState<ChatSidebarItem | null>(null);
 
   // ✅ REACT 19: First-mount animation tracking with ref guard
   // Uses ref to prevent duplicate triggers, state for render logic
@@ -165,7 +151,7 @@ export function ChatList({
     }
   }, [disableAnimations]);
 
-  const handleDeleteClick = (chat: Chat) => {
+  const handleDeleteClick = (chat: ChatSidebarItem) => {
     setChatToDelete(chat);
   };
 

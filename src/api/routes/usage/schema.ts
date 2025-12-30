@@ -86,4 +86,4 @@ export const UsageStatsResponseSchema = createApiResponseSchema(
  */
 export type UsageStatsPayload = z.infer<typeof UsageStatsPayloadSchema>;
 
-export type UsageStatus = z.infer<typeof UsageStatusSchema>;
+// UsageStatus type is exported from @/api/core/enums (single source of truth)

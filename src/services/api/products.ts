@@ -3,13 +3,16 @@
  *
  * 100% type-safe RPC service for Stripe product operations
  * All types automatically inferred from backend Hono routes
+ *
+ * NOTE: All product/pricing endpoints are PUBLIC - no auth required.
+ * Uses createPublicApiClient() to avoid cookie access for SSG/ISR compatibility.
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
-import { createApiClient } from '@/api/client';
+import { createPublicApiClient } from '@/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -39,12 +42,10 @@ export type GetProductResponse = InferResponseType<
  * Get all active products with pricing plans
  * Public endpoint - no authentication required
  *
- * Following Hono RPC best practices: Always provide an object to $get()
- * even when all query parameters are optional. Use nullish coalescing
- * to ensure type safety.
+ * Uses createPublicApiClient() for SSG/ISR compatibility (no cookie access).
  */
 export async function getProductsService(args?: GetProductsRequest) {
-  const client = await createApiClient();
+  const client = createPublicApiClient();
   return parseResponse(client.billing.products.$get(args ?? {}));
 }
 
@@ -52,11 +53,10 @@ export async function getProductsService(args?: GetProductsRequest) {
  * Get a specific product by ID with all pricing plans
  * Public endpoint - no authentication required
  *
- * @param data - Request with param.id for product ID
+ * Uses createPublicApiClient() for SSG/ISR compatibility (no cookie access).
  */
 export async function getProductService(data: GetProductRequest) {
-  const client = await createApiClient();
-  // Internal fallback: ensure param exists
+  const client = createPublicApiClient();
   const params: GetProductRequest = {
     param: data.param ?? { id: '' },
   };

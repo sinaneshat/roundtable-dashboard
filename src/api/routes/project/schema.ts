@@ -355,9 +355,9 @@ export const ProjectContextResponseSchema = createApiResponseSchema(
 // TYPE EXPORTS
 // ============================================================================
 
-export type ProjectIndexStatus = z.infer<typeof ProjectIndexStatusSchema>;
-export type ProjectColor = z.infer<typeof ProjectColorSchema>;
-export type ProjectMemorySource = z.infer<typeof ProjectMemorySourceSchema>;
+// ProjectIndexStatus, ProjectColor, ProjectMemorySource types are exported
+// from @/api/core/enums (single source of truth)
+
 export type ListProjectsQuery = z.infer<typeof ListProjectsQuerySchema>;
 export type ListProjectAttachmentsQuery = z.infer<typeof ListProjectAttachmentsQuerySchema>;
 export type ListProjectMemoriesQuery = z.infer<typeof ListProjectMemoriesQuerySchema>;

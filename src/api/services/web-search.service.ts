@@ -36,12 +36,14 @@ import {
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core';
 import type {
+  WebSearchActiveAnswerMode,
   WebSearchComplexity,
+  WebSearchDepth,
   WebSearchRawContentFormat,
   WebSearchTimeRange,
   WebSearchTopic,
 } from '@/api/core/enums';
-import { UIMessageRoles, WebSearchAnswerModes, WebSearchRawContentFormats } from '@/api/core/enums';
+import { DEFAULT_ACTIVE_ANSWER_MODE, UIMessageRoles, WebSearchActiveAnswerModes, WebSearchAnswerModes, WebSearchRawContentFormats } from '@/api/core/enums';
 import type {
   WebSearchParameters,
   WebSearchResult,
@@ -1162,7 +1164,7 @@ async function generateImageDescriptions(
  *
  * @param query - Original search query
  * @param results - Search results to synthesize
- * @param mode - Answer mode: 'basic' or 'advanced'
+ * @param mode - WebSearchActiveAnswerMode (basic or advanced)
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
  * @returns Stream object with textStream for progressive rendering
@@ -1170,7 +1172,7 @@ async function generateImageDescriptions(
 export function streamAnswerSummary(
   query: string,
   results: WebSearchResultItem[],
-  mode: 'basic' | 'advanced',
+  mode: WebSearchActiveAnswerMode,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ) {
@@ -1190,10 +1192,10 @@ export function streamAnswerSummary(
 
     // Build context from search results
     const context = results
-      .slice(0, mode === WebSearchAnswerModes.ADVANCED ? 10 : 5)
+      .slice(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 10 : 5)
       .map((r, i) => {
         const content = r.fullContent || r.content;
-        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchAnswerModes.ADVANCED ? 1500 : 800)}`;
+        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 1500 : 800)}`;
       })
       .join('\n\n---\n\n');
 
@@ -1204,7 +1206,7 @@ export function streamAnswerSummary(
     return streamText({
       model: client.chat(AIModels.WEB_SEARCH),
       system: systemPrompt,
-      prompt: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+      prompt: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchActiveAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
       temperature: 0.5,
       // Note: maxTokens controlled by model config, not streamText params
     });
@@ -1235,7 +1237,7 @@ export function streamAnswerSummary(
  *
  * @param query - Original search query
  * @param results - Search results to synthesize
- * @param mode - Answer mode: 'basic' or 'advanced'
+ * @param mode - WebSearchActiveAnswerMode (basic or advanced)
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger
  * @returns AI-generated answer summary
@@ -1243,7 +1245,7 @@ export function streamAnswerSummary(
 async function generateAnswerSummary(
   query: string,
   results: WebSearchResultItem[],
-  mode: 'basic' | 'advanced',
+  mode: WebSearchActiveAnswerMode,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<string | null> {
@@ -1255,10 +1257,10 @@ async function generateAnswerSummary(
 
     // Build context from search results
     const context = results
-      .slice(0, mode === WebSearchAnswerModes.ADVANCED ? 10 : 5)
+      .slice(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 10 : 5)
       .map((r, i) => {
         const content = r.fullContent || r.content;
-        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchAnswerModes.ADVANCED ? 1500 : 800)}`;
+        return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 1500 : 800)}`;
       })
       .join('\n\n---\n\n');
 
@@ -1274,13 +1276,13 @@ async function generateAnswerSummary(
           parts: [
             {
               type: 'text',
-              text: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+              text: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchActiveAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
             },
           ],
         },
       ],
       system: systemPrompt,
-      maxTokens: mode === WebSearchAnswerModes.ADVANCED ? 500 : 200,
+      maxTokens: mode === WebSearchActiveAnswerModes.ADVANCED ? 500 : 200,
       temperature: 0.5,
     });
 
@@ -1318,7 +1320,7 @@ async function detectSearchParameters(
 ): Promise<{
   topic?: WebSearchTopic;
   timeRange?: WebSearchTimeRange;
-  searchDepth?: 'basic' | 'advanced';
+  searchDepth?: WebSearchDepth;
   reasoning?: string;
 } | null> {
   try {
@@ -1968,14 +1970,14 @@ export async function performWebSearch(
     // Generate answer summary if requested
     let answer: string | null = null;
     if (params.includeAnswer) {
-      const answerMode
+      const answerMode: WebSearchActiveAnswerMode
         = typeof params.includeAnswer === 'boolean'
-          ? 'basic'
-          : params.includeAnswer === 'advanced'
-            ? 'advanced'
-            : params.includeAnswer === 'basic'
-              ? 'basic'
-              : 'basic';
+          ? WebSearchActiveAnswerModes.BASIC
+          : params.includeAnswer === WebSearchAnswerModes.ADVANCED
+            ? WebSearchActiveAnswerModes.ADVANCED
+            : params.includeAnswer === WebSearchAnswerModes.BASIC
+              ? WebSearchActiveAnswerModes.BASIC
+              : DEFAULT_ACTIVE_ANSWER_MODE;
 
       // Always generate answer since we have at least 'basic' mode
       answer = await generateAnswerSummary(

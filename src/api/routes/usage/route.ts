@@ -1,11 +1,15 @@
+/**
+ * Usage Routes
+ *
+ * User usage statistics and quota information endpoints
+ */
+
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createProtectedRouteResponses } from '@/api/core';
 
-import {
-  UsageStatsResponseSchema,
-} from './schema';
+import { UsageStatsResponseSchema } from './schema';
 
 /**
  * ✅ SINGLE SOURCE OF TRUTH - Get user usage statistics

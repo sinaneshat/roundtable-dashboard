@@ -12,7 +12,7 @@ import type { InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
-import { createApiClient } from '@/api/client';
+import { createApiClient, createPublicApiClient } from '@/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -39,5 +39,18 @@ export type ListModelsResponse = InferResponseType<
  */
 export async function listModelsService(options?: { bypassCache?: boolean }) {
   const client = await createApiClient({ bypassCache: options?.bypassCache });
+  return parseResponse(client.models.$get());
+}
+
+/**
+ * Get models for public pages (no authentication required)
+ *
+ * IMPORTANT: Uses createPublicApiClient() instead of createApiClient()
+ * to avoid accessing cookies, which would break ISR/SSG rendering.
+ *
+ * Returns models with FREE tier access defaults (unauthenticated user).
+ */
+export async function listModelsPublicService() {
+  const client = createPublicApiClient();
   return parseResponse(client.models.$get());
 }

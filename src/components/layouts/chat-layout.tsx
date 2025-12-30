@@ -16,8 +16,6 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getSubscriptionsService,
-  getUserUsageStatsService,
-  listModelsService,
   listThreadsService,
 } from '@/services/api';
 
@@ -29,38 +27,17 @@ type ChatLayoutProps = {
  * Chat Layout - Server Component with Optimized Prefetching
  * Provides sidebar navigation and header for all /chat routes
  *
- * PERFORMANCE OPTIMIZATION: Server-side prefetching for critical data
- *
- * Prefetching strategy:
- * ✅ Threads list (infinite query) - First 50 items for sidebar
- * ✅ Usage stats - For usage metrics display
+ * Prefetching strategy (server-side critical data only):
+ * ✅ Threads list - First 50 items for sidebar navigation
  * ✅ Subscriptions - For NavUser billing info
- * ✅ Models list - 100 dynamic models from OpenRouter (24h cache)
  *
- * Why this approach:
- * ✅ Eliminates loading states on initial page load
- * ✅ Data is immediately available when components mount
- * ✅ Proper staleTime prevents unnecessary refetches
- * ✅ Subsequent navigations use cached data (no refetch)
- * ✅ Provides optimal first-load experience
+ * Client-side fetching (non-blocking, with loading states):
+ * - Usage stats - Fetched on client with skeleton loading
+ * - Models list - Fetched on client with skeleton loading
  *
- * Data fetching strategy:
- * - Threads: prefetchInfiniteQuery with 50 items (staleTime: 30s)
- * - Usage: prefetchQuery (staleTime: 1min)
- * - Subscriptions: prefetchQuery (staleTime: 2min)
- * - Models: prefetchQuery (staleTime: Infinity - never refetch)
- *
- * First load experience:
- * - Zero loading states (data pre-hydrated)
- * - Instant sidebar rendering with full data
- * - Model selection dropdowns immediately populated
- * - Quick start cards instantly available with proper models
- * - Subsequent navigations: instant (cached)
- *
- * Pattern from Next.js 15 + TanStack Query best practices:
- * - Server Components prefetch and hydrate critical data
- * - Client Components consume hydrated cache
- * - Layout prefetching provides optimal UX for user dashboards
+ * This approach prioritizes fast initial page load by only
+ * prefetching data essential for navigation. Secondary data
+ * loads on client with proper loading states.
  */
 export default async function ChatLayout({ children }: ChatLayoutProps) {
   const queryClient = getQueryClient();
@@ -71,50 +48,30 @@ export default async function ChatLayout({ children }: ChatLayoutProps) {
     headers: await headers(),
   });
 
-  // Prefetch all critical data in parallel for optimal performance
-  // This eliminates loading states and provides instant data on first load
+  // Prefetch critical navigation data only - models/stats load on client
   await Promise.all([
-    // 1. Prefetch threads list (infinite query) - First load optimized for sidebar
+    // Threads list (infinite query) - Essential for sidebar navigation
     queryClient.prefetchInfiniteQuery({
-      queryKey: queryKeys.threads.lists(undefined), // No search query for initial load
+      queryKey: queryKeys.threads.lists(undefined),
       queryFn: async ({ pageParam }) => {
-        // ✅ Use centralized limits - clean semantic names
-        const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE; // 20 : 50
+        const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
         const params: { cursor?: string; limit: number } = { limit };
         if (pageParam)
           params.cursor = pageParam;
-
         return listThreadsService({ query: params });
       },
       initialPageParam: undefined as string | undefined,
       getNextPageParam: lastPage =>
         lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
-      pages: 1, // Only prefetch first page (50 items sufficient for sidebar)
-      staleTime: STALE_TIMES.threads, // 30 seconds - matches client hook
+      pages: 1,
+      staleTime: STALE_TIMES.threads,
     }),
 
-    // 2. Prefetch usage stats for UsageMetrics component
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.usage.stats(),
-      queryFn: getUserUsageStatsService,
-      staleTime: STALE_TIMES.usage, // 1 minute - matches client hook
-    }),
-
-    // 3. Prefetch subscriptions for NavUser component
+    // Subscriptions - Essential for NavUser billing info
     queryClient.prefetchQuery({
       queryKey: queryKeys.subscriptions.list(),
       queryFn: getSubscriptionsService,
-      staleTime: STALE_TIMES.subscriptions, // 2 minutes - matches client hook
-    }),
-
-    // 4. ✅ Prefetch models list - Top 50 models from OpenRouter
-    // SINGLE SOURCE OF TRUTH: All model data comes from backend
-    // 24h cache on server, Infinity staleTime on client
-    // Ensures model dropdowns, quick start, and participant selection are instantly available
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.models.list(),
-      queryFn: () => listModelsService(),
-      staleTime: STALE_TIMES.models, // Infinity - never refetch (models are cached 24h on server)
+      staleTime: STALE_TIMES.subscriptions,
     }),
   ]);
 

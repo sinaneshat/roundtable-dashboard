@@ -29,7 +29,7 @@ import {
 } from '@/api/services/credit.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { trackThreadCreated } from '@/api/services/posthog-llm-tracking.service';
-import { canAccessModelByPricing, estimateStreamingCredits, getRequiredTierForModel, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, enrichWithTierAccess, estimateStreamingCredits, getRequiredTierForModel, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { generateSignedDownloadPath } from '@/api/services/signed-url.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
@@ -534,26 +534,11 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     // For unauthenticated users (public threads), assume FREE tier
     const userTier = user ? await getUserTier(user.id) : SubscriptionTiers.FREE;
 
-    const participants = rawParticipants.map((participant) => {
-      const model = getModelById(participant.modelId);
-      if (!model) {
-        return {
-          ...participant,
-          is_accessible_to_user: false,
-          required_tier_name: null,
-        };
-      }
-
-      const requiredTier = getRequiredTierForModel(model);
-      const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
-      const isAccessible = canAccessModelByPricing(userTier, model);
-
-      return {
-        ...participant,
-        is_accessible_to_user: isAccessible,
-        required_tier_name: requiredTierName,
-      };
-    });
+    // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
+    const participants = rawParticipants.map(participant => ({
+      ...participant,
+      ...enrichWithTierAccess(participant.modelId, userTier, getModelById),
+    }));
 
     // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
     // Pre-search messages are stored in chat_message table for historical reasons,
@@ -1259,31 +1244,13 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 
     // ✅ SUBSCRIPTION ACCESS: Get user's tier and enrich participants with model access info
     // This ensures previous conversations respect the user's current subscription plan
-    // Reference: /src/api/routes/models/handler.ts - same pattern used for model listing
     const userTier = await getUserTier(user.id);
 
-    // Enrich each participant with model access information
-    const participants = rawParticipants.map((participant) => {
-      const model = getModelById(participant.modelId);
-      if (!model) {
-        // Model not found in config - mark as inaccessible
-        return {
-          ...participant,
-          is_accessible_to_user: false,
-          required_tier_name: null,
-        };
-      }
-
-      const requiredTier = getRequiredTierForModel(model);
-      const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
-      const isAccessible = canAccessModelByPricing(userTier, model);
-
-      return {
-        ...participant,
-        is_accessible_to_user: isAccessible,
-        required_tier_name: requiredTierName,
-      };
-    });
+    // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
+    const participants = rawParticipants.map(participant => ({
+      ...participant,
+      ...enrichWithTierAccess(participant.modelId, userTier, getModelById),
+    }));
 
     // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
     // Pre-search messages are stored in chat_message table for historical reasons,

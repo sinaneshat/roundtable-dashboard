@@ -336,6 +336,26 @@ export const WebSearchAnswerModes = {
 } as const;
 
 // ============================================================================
+// WEB SEARCH ACTIVE ANSWER MODE (excludes 'none')
+// ============================================================================
+
+export const WEB_SEARCH_ACTIVE_ANSWER_MODES = ['basic', 'advanced'] as const;
+
+export const DEFAULT_ACTIVE_ANSWER_MODE: WebSearchActiveAnswerMode = 'basic';
+
+export const WebSearchActiveAnswerModeSchema = z.enum(WEB_SEARCH_ACTIVE_ANSWER_MODES).openapi({
+  description: 'Active LLM-generated answer summary mode (excludes none)',
+  example: 'basic',
+});
+
+export type WebSearchActiveAnswerMode = z.infer<typeof WebSearchActiveAnswerModeSchema>;
+
+export const WebSearchActiveAnswerModes = {
+  BASIC: 'basic' as const,
+  ADVANCED: 'advanced' as const,
+} as const;
+
+// ============================================================================
 // WEB SEARCH STREAMING STAGE
 // ============================================================================
 

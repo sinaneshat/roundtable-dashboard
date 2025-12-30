@@ -32,8 +32,11 @@ import { isObject } from '@/lib/utils';
 /**
  * Error metadata structure returned by extraction functions
  * Provides comprehensive error context for storage and display
+ *
+ * Note: Named differently from @/lib/schemas/error-schemas.ts ErrorMetadataSchema
+ * to avoid collision. This schema is for service-layer error extraction output.
  */
-export const ErrorMetadataSchema = z.object({
+export const ExtractedErrorMetadataSchema = z.object({
   hasError: z.boolean().describe('Whether an error occurred'),
   openRouterError: z.string().optional().describe('Raw OpenRouter/provider error message'),
   errorCategory: ErrorCategorySchema.optional().describe('Categorized error type for UI handling'),
@@ -43,7 +46,7 @@ export const ErrorMetadataSchema = z.object({
   isPartialResponse: z.boolean().describe('Whether partial content was generated despite error'),
 });
 
-export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
+export type ExtractedErrorMetadata = z.infer<typeof ExtractedErrorMetadataSchema>;
 
 /**
  * Parameters for extractErrorMetadata function
@@ -270,7 +273,7 @@ export function extractProviderError(
  */
 export function buildEmptyResponseError(
   params: BuildEmptyResponseErrorParams,
-): ErrorMetadata {
+): ExtractedErrorMetadata {
   const { inputTokens, outputTokens, finishReason } = params;
 
   // Build base statistics for all error messages
@@ -364,7 +367,7 @@ export function buildEmptyResponseError(
  */
 export function extractErrorMetadata(
   params: ExtractErrorMetadataParams,
-): ErrorMetadata {
+): ExtractedErrorMetadata {
   const { providerMetadata, response, finishReason, usage, text, reasoning }
     = params;
 

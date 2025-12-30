@@ -1,6 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { and, desc, eq } from 'drizzle-orm';
 
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses, ThreadIdParamSchema } from '@/api/core';
 import type { MessageStatus, RoundPhase } from '@/api/core/enums';
@@ -43,11 +44,11 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     });
 
     if (!thread) {
-      throw createError.notFound('Thread not found');
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId, user.id));
     }
 
     if (thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to access this thread');
+      throw createError.unauthorized('Not authorized to access this thread', ErrorContextBuilders.authorization('thread', threadId, user.id));
     }
 
     const latestMessage = await db.query.chatMessage.findFirst({
@@ -264,11 +265,11 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     });
 
     if (!thread) {
-      throw createError.notFound('Thread not found');
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId, user.id));
     }
 
     if (thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to access this thread');
+      throw createError.unauthorized('Not authorized to access this thread', ErrorContextBuilders.authorization('thread', threadId, user.id));
     }
 
     const createIdleResponse = (): ThreadStreamResumptionState => ({

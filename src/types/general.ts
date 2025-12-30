@@ -20,11 +20,6 @@ export type FormOption = z.infer<typeof FormOptionSchema>;
 export type FormOptions = z.infer<typeof FormOptionsSchema>;
 export type InitialDefaultValues = z.infer<typeof InitialDefaultValuesSchema>;
 
-// Backwards compatibility exports
-export const formOptionSchema = FormOptionSchema;
-export const formOptionsSchema = FormOptionsSchema;
-export const initialDefaultValuesSchema = InitialDefaultValuesSchema;
-
 // ============================================================================
 // GENERAL FORM PROPS SCHEMA
 // ============================================================================

@@ -707,6 +707,7 @@ export {
 
 // Web search enums
 export {
+  DEFAULT_ACTIVE_ANSWER_MODE,
   DEFAULT_PRE_SEARCH_QUERY_STATE_STATUS,
   DEFAULT_WEB_SEARCH_CONTENT_TYPE,
   MAX_QUERY_COUNTS,
@@ -743,6 +744,7 @@ export {
   SearchResultStatuses,
   SearchResultStatusSchema,
   UNKNOWN_DOMAIN,
+  WEB_SEARCH_ACTIVE_ANSWER_MODES,
   WEB_SEARCH_ANSWER_MODES,
   WEB_SEARCH_COMPLEXITIES,
   WEB_SEARCH_CONTENT_TYPES,
@@ -751,6 +753,9 @@ export {
   WEB_SEARCH_STREAMING_STAGES,
   WEB_SEARCH_TIME_RANGES,
   WEB_SEARCH_TOPICS,
+  type WebSearchActiveAnswerMode,
+  WebSearchActiveAnswerModes,
+  WebSearchActiveAnswerModeSchema,
   type WebSearchAnswerMode,
   WebSearchAnswerModes,
   WebSearchAnswerModeSchema,

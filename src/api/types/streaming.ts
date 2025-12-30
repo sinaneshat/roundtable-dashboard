@@ -14,7 +14,12 @@
 import type { ExecutionContext } from 'hono';
 import { z } from 'zod';
 
-import { ParticipantStreamStatusSchema, StreamStatusSchema } from '@/api/core/enums';
+import type { StreamPhase } from '@/api/core/enums';
+import {
+  ParticipantStreamStatusSchema,
+  StreamPhases,
+  StreamStatusSchema,
+} from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 
 // ============================================================================
@@ -337,23 +342,10 @@ export function isThreadActiveStream(value: unknown): value is ThreadActiveStrea
 // UNIFIED STREAM ID UTILITIES
 // ============================================================================
 
-// 1️⃣ ARRAY CONSTANT - Source of truth for stream phase values
-export const STREAM_PHASES = ['presearch', 'participant', 'moderator'] as const;
+// Stream phase enums (STREAM_PHASES, StreamPhase, StreamPhases, StreamPhaseSchema)
+// are imported from @/api/core/enums - the canonical source of truth
 
-// 3️⃣ ZOD SCHEMA - Runtime validation
-export const StreamPhaseSchema = z.enum(STREAM_PHASES);
-
-// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
-export type StreamPhase = z.infer<typeof StreamPhaseSchema>;
-
-// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
-export const StreamPhases = {
-  PRESEARCH: 'presearch' as const,
-  PARTICIPANT: 'participant' as const,
-  MODERATOR: 'moderator' as const,
-} as const;
-
-// METADATA - Phase information and ordering
+// METADATA - Phase information and ordering (unique to this file)
 export const StreamPhaseMetadata: Record<StreamPhase, {
   label: string;
   order: number;

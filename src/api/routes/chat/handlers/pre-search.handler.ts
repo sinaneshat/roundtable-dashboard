@@ -22,6 +22,7 @@ import { eq } from 'drizzle-orm';
 import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/api/core';
@@ -221,7 +222,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
     const roundNum = Number.parseInt(roundNumber, 10);
     if (Number.isNaN(roundNum) || roundNum < 0) {
-      throw createError.badRequest('Invalid round number');
+      throw createError.badRequest('Invalid round number', ErrorContextBuilders.validation('round_number'));
     }
 
     // Verify thread ownership
@@ -261,7 +262,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         .returning();
 
       if (!newSearch) {
-        throw createError.internal('Failed to create pre-search record');
+        throw createError.internal('Failed to create pre-search record', ErrorContextBuilders.database('insert', 'chatPreSearch'));
       }
       existingSearch = newSearch;
     }

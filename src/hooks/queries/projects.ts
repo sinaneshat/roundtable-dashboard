@@ -11,11 +11,10 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
+import type { ProjectIndexStatus, ProjectMemorySource } from '@/api/core/enums';
 import type {
   ListProjectAttachmentsQuery,
   ListProjectMemoriesQuery,
-  ProjectIndexStatus,
-  ProjectMemorySource,
 } from '@/api/routes/project/schema';
 import { LIMITS } from '@/constants/limits';
 import { useSession } from '@/lib/auth/client';

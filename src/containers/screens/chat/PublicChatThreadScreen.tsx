@@ -190,9 +190,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                           size="lg"
                           className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                         >
-                          <Link href={signUpUrl}>
+                          <Link href={signUpUrl} className="whitespace-nowrap">
                             {tPublic('tryRoundtable')}
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-4 h-4 shrink-0" />
                           </Link>
                         </Button>
                         <Button

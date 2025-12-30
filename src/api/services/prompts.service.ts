@@ -17,8 +17,8 @@
 
 import type { z } from '@hono/zod-openapi';
 
-import type { ChatMode, PlaceholderPrefix, QueryAnalysisResult } from '@/api/core/enums';
-import { ChatModes, PlaceholderPrefixes, QueryAnalysisComplexities, WebSearchDepths } from '@/api/core/enums';
+import type { ChatMode, PlaceholderPrefix, QueryAnalysisResult, WebSearchActiveAnswerMode } from '@/api/core/enums';
+import { ChatModes, PlaceholderPrefixes, QueryAnalysisComplexities, WebSearchActiveAnswerModes, WebSearchDepths } from '@/api/core/enums';
 import type { ModeratorPayload } from '@/api/routes/chat/schema';
 import type { AttachmentCitationInfo } from '@/api/types/citations';
 
@@ -176,11 +176,11 @@ export const ANSWER_SUMMARY_ADVANCED_PROMPT = 'You are an expert research analys
 
 /**
  * Get answer summary prompt based on mode
- * @param mode - 'basic' or 'advanced'
+ * @param mode - WebSearchActiveAnswerMode (basic or advanced)
  * @returns Appropriate system prompt for answer generation
  */
-export function getAnswerSummaryPrompt(mode: 'basic' | 'advanced'): string {
-  return mode === 'advanced' ? ANSWER_SUMMARY_ADVANCED_PROMPT : ANSWER_SUMMARY_BASIC_PROMPT;
+export function getAnswerSummaryPrompt(mode: WebSearchActiveAnswerMode): string {
+  return mode === WebSearchActiveAnswerModes.ADVANCED ? ANSWER_SUMMARY_ADVANCED_PROMPT : ANSWER_SUMMARY_BASIC_PROMPT;
 }
 
 // ============================================================================

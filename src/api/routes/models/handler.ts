@@ -10,13 +10,36 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
+import type { SubscriptionTier } from '@/api/core/enums';
 import { SubscriptionTiers } from '@/api/core/enums';
 import { getAllModels } from '@/api/services/models-config.service';
+import type { ModelForPricing } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 
 import type { listModelsRoute } from './route';
+
+// ============================================================================
+// Helper Functions (DRY pattern)
+// ============================================================================
+
+/**
+ * Enrich model with tier access information
+ * ✅ DRY: Uses product-logic.service helpers for tier calculations
+ */
+function enrichModelWithTierAccess(model: ModelForPricing, userTier: SubscriptionTier) {
+  const requiredTier = getRequiredTierForModel(model);
+  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
+  const isAccessible = canAccessModelByPricing(userTier, model);
+
+  return {
+    ...model,
+    required_tier: requiredTier,
+    required_tier_name: requiredTierName,
+    is_accessible_to_user: isAccessible,
+  };
+}
 
 // ============================================================================
 // Handlers
@@ -58,20 +81,8 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
-    // Uses proven model-pricing logic from product-logic.service.ts
-
-    const modelsWithTierInfo = allModels.map((model) => {
-      const requiredTier = getRequiredTierForModel(model);
-      const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
-      const isAccessible = canAccessModelByPricing(userTier, model);
-
-      return {
-        ...model,
-        required_tier: requiredTier,
-        required_tier_name: requiredTierName,
-        is_accessible_to_user: isAccessible,
-      };
-    });
+    // ✅ DRY: Uses enrichModelWithTierAccess helper
+    const modelsWithTierInfo = allModels.map(model => enrichModelWithTierAccess(model, userTier));
 
     // ============================================================================
     // ✅ ORDERING: Accessible first, then by price (cheapest first)
