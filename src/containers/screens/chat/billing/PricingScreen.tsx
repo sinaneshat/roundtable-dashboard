@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContent } from '@/components/pricing/pricing-content';
@@ -18,6 +17,7 @@ import {
   useSwitchSubscriptionMutation,
   useUsageStatsQuery,
 } from '@/hooks';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 

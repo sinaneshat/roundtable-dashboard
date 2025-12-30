@@ -26,7 +26,7 @@ import { and, asc, desc, gt, lt } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { SortDirection } from '@/api/core/enums';
-import { SortDirections } from '@/api/core/enums';
+import { SortDirections, SortDirectionSchema } from '@/api/core/enums';
 import { API } from '@/constants/application';
 
 // ============================================================================
@@ -83,44 +83,50 @@ export const OffsetPaginationQuerySchema = z.object({
 // ============================================================================
 
 /**
- * Cursor Field Configuration
+ * Cursor Field Configuration schema
  * Defines which field to use as cursor and its sort direction
  */
-export type CursorFieldConfig = {
-  /** Field name to use as cursor (e.g., 'createdAt', 'id') */
-  field: string;
-  /** Sort direction for the cursor field */
-  direction: SortDirection;
-};
+export const CursorFieldConfigSchema = z.object({
+  field: z.string(),
+  direction: SortDirectionSchema,
+});
+
+export type CursorFieldConfig = z.infer<typeof CursorFieldConfigSchema>;
 
 /**
- * Page-based pagination parameters
+ * Page-based pagination parameters schema
  */
-export type PagePaginationParams = {
-  page: number;
-  limit: number;
-};
+export const PagePaginationParamsSchema = z.object({
+  page: z.number().int().positive(),
+  limit: z.number().int().positive(),
+});
+
+export type PagePaginationParams = z.infer<typeof PagePaginationParamsSchema>;
 
 /**
- * Page-based pagination metadata
+ * Page-based pagination metadata schema
  */
-export type PagePaginationMetadata = {
-  page: number;
-  limit: number;
-  total: number;
-  pages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
-};
+export const PagePaginationMetadataSchema = z.object({
+  page: z.number().int().positive(),
+  limit: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+  pages: z.number().int().nonnegative(),
+  hasNext: z.boolean(),
+  hasPrev: z.boolean(),
+});
+
+export type PagePaginationMetadata = z.infer<typeof PagePaginationMetadataSchema>;
 
 /**
- * Cursor-based pagination metadata
+ * Cursor-based pagination metadata schema
  */
-export type CursorPaginationMetadata = {
-  nextCursor: string | null;
-  hasMore: boolean;
-  count: number;
-};
+export const CursorPaginationMetadataSchema = z.object({
+  nextCursor: z.string().nullable(),
+  hasMore: z.boolean(),
+  count: z.number().int().nonnegative(),
+});
+
+export type CursorPaginationMetadata = z.infer<typeof CursorPaginationMetadataSchema>;
 
 // ============================================================================
 // CURSOR-BASED PAGINATION UTILITIES

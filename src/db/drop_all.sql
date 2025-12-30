@@ -26,6 +26,7 @@ DROP TABLE IF EXISTS chat_message;
 DROP TABLE IF EXISTS chat_participant;
 DROP TABLE IF EXISTS chat_pre_search;
 DROP TABLE IF EXISTS chat_thread_changelog;
+DROP TABLE IF EXISTS chat_user_preset;
 DROP TABLE IF EXISTS chat_thread;
 DROP TABLE IF EXISTS chat_custom_role;
 
@@ -41,6 +42,10 @@ DROP TABLE IF EXISTS stripe_customer;
 -- Usage tracking tables
 DROP TABLE IF EXISTS user_chat_usage_history;
 DROP TABLE IF EXISTS user_chat_usage;
+
+-- Credit tables
+DROP TABLE IF EXISTS credit_transaction;
+DROP TABLE IF EXISTS user_credit_balance;
 
 -- Auth-related tables (children first)
 DROP TABLE IF EXISTS api_key;

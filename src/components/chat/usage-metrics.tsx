@@ -9,11 +9,11 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { UsageStatuses, UsageStatusMetadata } from '@/api/core/enums';
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsageStatsQuery } from '@/hooks/queries';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { cn } from '@/lib/ui/cn';
 
 /**

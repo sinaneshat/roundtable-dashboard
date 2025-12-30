@@ -18,9 +18,11 @@ import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import type { ApiErrorSeverity, ErrorCode } from '@/api/common/error-handling';
-import { ERROR_CODES, ERROR_SEVERITY } from '@/api/common/error-handling';
+import type { ErrorCode } from '@/api/common/error-handling';
+import { ERROR_CODES } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
+import type { ApiErrorSeverity } from '@/api/core/enums';
+import { ApiErrorSeverities as ERROR_SEVERITY } from '@/api/core/enums';
 
 // ============================================================================
 // TYPE-SAFE STATUS CODE MAPPING

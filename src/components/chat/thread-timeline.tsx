@@ -24,6 +24,7 @@ import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
 import { messageHasError } from '@/lib/schemas/message-metadata';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
 
 import { ChatMessageList } from './chat-message-list';
@@ -299,10 +300,8 @@ export function ThreadTimeline({
                       return parseResult.success && messageHasError(parseResult.data);
                     });
 
-                    const moderatorText = moderatorMessage.parts
-                      ?.filter(part => part.type === 'text')
-                      .map(part => (part as { text: string }).text)
-                      .join('\n');
+                    // ✅ TYPE-SAFE: Use extractTextFromMessage instead of type cast
+                    const moderatorText = extractTextFromMessage(moderatorMessage);
 
                     return (
                       <Actions className="mt-3 mb-2">

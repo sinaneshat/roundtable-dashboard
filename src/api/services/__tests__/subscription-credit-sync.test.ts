@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { PlanType, StripeSubscriptionStatus } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // ============================================================================
 // MOCK DATA STRUCTURES

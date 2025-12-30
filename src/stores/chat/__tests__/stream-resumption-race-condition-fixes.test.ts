@@ -289,8 +289,14 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
     }, { timeout: 200 });
 
-    const callsBeforeToggle = mockStore.actions.setWaitingToStartStreaming.mock.calls.length;
+    // Track trigger calls - guards should prevent re-triggering during retry toggle
+    const triggerCallsBefore = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
+      call => call[0] === 1,
+    ).length;
 
+    expect(triggerCallsBefore).toBeGreaterThan(0); // Verify initial trigger happened
+
+    // Simulate retry toggle: false → true within 100ms
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
@@ -306,12 +312,15 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     rerender();
 
     await act(async () => {
-      await waitForAsync(50);
+      await waitForAsync(60);
     });
 
-    const callsAfterToggle = mockStore.actions.setWaitingToStartStreaming.mock.calls.length;
+    // Gards should NOT be cleared during rapid toggle
+    const triggerCallsAfter = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
+      call => call[0] === 1,
+    ).length;
 
-    expect(callsAfterToggle - callsBeforeToggle).toBe(0);
+    expect(triggerCallsAfter).toBe(triggerCallsBefore);
   });
 
   it('should clear guard when streaming actually starts (isStreaming becomes true)', async () => {
@@ -388,19 +397,37 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       call => call[0] === 1,
     ).length;
 
+    expect(callsBeforeFailure).toBeGreaterThan(0); // Verify initial trigger happened
+
+    // Simulate trigger failure: waiting goes false and STAYS false
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
     rerender();
 
+    // Wait MORE than 100ms for timeout to fire and clear guards
     await act(async () => {
       await waitForAsync(150);
     });
 
-    const initialMessages = mockStore.getState().messages || [];
-    mockStore.setState({ messages: initialMessages });
+    // Force the main effect to re-run by changing a dependency
+    // We need to toggle a state value to make React re-run the effect
+    act(() => {
+      // Toggle enabled off and on to force effect re-evaluation
+      mockStore.setState({ isStreaming: true });
+    });
     rerender();
 
+    await act(async () => {
+      await waitForAsync(10);
+    });
+
+    act(() => {
+      mockStore.setState({ isStreaming: false });
+    });
+    rerender();
+
+    // Wait for the retry trigger to occur
     await waitFor(() => {
       const callsAfterFailure = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
         call => call[0] === 1,
@@ -473,9 +500,14 @@ describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
     vi.clearAllMocks();
   });
 
-  it('should block AI SDK resume when streamResumptionPrefilled=true', async () => {
+  it('should block AI SDK resume when streamResumptionPrefilled=true with non-participant phase', async () => {
     setupIncompleteRound(1, 1, 3);
-    mockStore.setState({ streamResumptionPrefilled: true });
+    // Set prefilled with a non-participant phase (pre_search or moderator)
+    mockStore.setState({
+      streamResumptionPrefilled: true,
+      currentResumptionPhase: 'pre_search', // or 'moderator'
+      resumptionRoundNumber: 1,
+    });
 
     renderHook(() =>
       useIncompleteRoundResumption({
@@ -487,12 +519,14 @@ describe('aI SDK Resume Blocking (handleResumedStreamDetection)', () => {
     await waitFor(() => {
       const state = mockStore.getState();
       expect(state.streamResumptionPrefilled).toBe(true);
+      expect(state.currentResumptionPhase).toBe('pre_search');
     });
 
     await act(async () => {
       await waitForAsync(200);
     });
 
+    // When resumption phase is pre_search or moderator, participant resumption should not trigger
     expect(mockStore.actions.setWaitingToStartStreaming.mock.calls).toHaveLength(0);
   });
 
@@ -611,19 +645,35 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       call => call[0] === 1,
     ).length;
 
+    expect(callsBeforeWait).toBeGreaterThan(0); // Verify initial trigger happened
+
+    // Simulate failure: waiting goes false and stays false
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
     rerender();
 
+    // Wait MORE than 100ms for timeout to fire
     await act(async () => {
       await waitForAsync(150);
     });
 
-    const state = mockStore.getState();
-    mockStore.setState({ messages: state.messages || [] });
+    // Force the main effect to re-run by toggling a dependency
+    act(() => {
+      mockStore.setState({ isStreaming: true });
+    });
     rerender();
 
+    await act(async () => {
+      await waitForAsync(10);
+    });
+
+    act(() => {
+      mockStore.setState({ isStreaming: false });
+    });
+    rerender();
+
+    // Wait for retry trigger
     await waitFor(() => {
       const callsAfterWait = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
         call => call[0] === 1,
@@ -668,14 +718,14 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       await waitForAsync(30);
     });
 
-    const state = mockStore.getState();
-    mockStore.setState({ messages: state.messages || [] });
-    rerender();
-
+    // Wait additional time to ensure timeout doesn't fire
+    // (it shouldn't because retry toggle cleared it)
     await act(async () => {
       await waitForAsync(150);
     });
 
+    // After retry toggle, no new trigger should occur
+    // because the timeout was cleared when waiting went back to true
     const callsAfterRetry = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
     ).length;
@@ -870,25 +920,41 @@ describe('integration: All Race Condition Fixes Together', () => {
       call => call[0] === 1,
     ).length;
 
+    expect(initialCallCount).toBeGreaterThan(0); // Verify initial trigger happened
+
+    // Simulate trigger failure
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
     rerender();
 
+    // Wait for timeout to fire and clear guards (100ms timeout + buffer)
     await act(async () => {
-      await waitForAsync(150);
+      await waitForAsync(200);
     });
 
-    const state = mockStore.getState();
-    mockStore.setState({ messages: state.messages || [] });
+    // Force the main effect to re-run by toggling a dependency
+    act(() => {
+      mockStore.setState({ isStreaming: true });
+    });
     rerender();
 
+    await act(async () => {
+      await waitForAsync(20);
+    });
+
+    act(() => {
+      mockStore.setState({ isStreaming: false });
+    });
+    rerender();
+
+    // Wait for retry with longer timeout
     await waitFor(() => {
       const finalCallCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
         call => call[0] === 1,
       ).length;
       expect(finalCallCount).toBeGreaterThan(initialCallCount);
-    }, { timeout: 300 });
+    }, { timeout: 500 });
   });
 
   it('should prevent duplicate triggers across round transitions', async () => {

@@ -1123,7 +1123,9 @@ async function toolListModels(
   let models = getAllModels();
 
   if (input.provider) {
-    models = models.filter(m => m.provider.toLowerCase() === input.provider!.toLowerCase());
+    // ✅ TYPE-SAFE: Capture provider in local const for type narrowing in filter callback
+    const providerFilter = input.provider.toLowerCase();
+    models = models.filter(m => m.provider.toLowerCase() === providerFilter);
   }
 
   return mcpResult({

@@ -8,13 +8,13 @@ import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from 
 import type { BillingInterval } from '@/api/core/enums';
 import { BillingIntervals, BillingIntervalSchema, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getUserCreditBalance, grantCardConnectionCredits, grantCredits } from '@/api/services/credit.service';
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { isObject } from '@/lib/utils';
 
 import type {
@@ -1125,26 +1125,35 @@ const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
  * All tracked events have a customer property
  *
  * Theo's Pattern: Type-check customerId is string (throw if not)
+ *
+ * ✅ TYPE-SAFE: Uses isObject type guard instead of type cast
  */
 function extractCustomerId(event: Stripe.Event): string | null {
-  const obj = event.data.object as { customer?: string | { id: string } };
-
-  if (!obj.customer)
+  // ✅ TYPE-SAFE: Use isObject type guard instead of type cast
+  const obj = event.data.object;
+  if (!isObject(obj) || !('customer' in obj)) {
     return null;
+  }
+
+  const customer = obj.customer;
+
+  if (!customer) {
+    return null;
+  }
 
   // Type guard: string customer ID
-  if (typeof obj.customer === 'string') {
-    return obj.customer;
+  if (typeof customer === 'string') {
+    return customer;
   }
 
   // Type guard: expanded customer object with id
-  if (typeof obj.customer === 'object' && typeof obj.customer.id === 'string') {
-    return obj.customer.id;
+  if (isObject(customer) && typeof customer.id === 'string') {
+    return customer.id;
   }
 
   // Throw on invalid type (Theo's requirement: "Type-check customerId is string (throw if not)")
   throw createError.badRequest(
-    `Invalid customer type in webhook event: expected string or object with id, got ${typeof obj.customer}`,
+    `Invalid customer type in webhook event: expected string or object with id, got ${typeof customer}`,
     ErrorContextBuilders.stripe('webhook_processing'),
   );
 }

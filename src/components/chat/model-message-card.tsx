@@ -27,6 +27,7 @@ import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getRoleBadgeStyle, hasCitations } from '@/lib/utils';
+import { hasProperty, isNonEmptyString } from '@/lib/utils/type-guards';
 
 /**
  * ✅ MODEL NORMALIZATION: Filter non-renderable reasoning parts
@@ -53,8 +54,8 @@ function isNonRenderableReasoningPart(part: MessagePart): boolean {
   }
   // Filter reasoning parts with type: 'redacted' (AI SDK native redacted reasoning)
   // This handles Gemini, Claude, and other models that use native redacted reasoning
-  const reasoningType = (part as { reasoningType?: string }).reasoningType;
-  if (reasoningType === 'redacted') {
+  // ✅ TYPE-SAFE: Use type guard instead of type cast
+  if (hasProperty(part, 'reasoningType', isNonEmptyString) && part.reasoningType === 'redacted') {
     return true;
   }
   const text = part.text?.trim() ?? '';

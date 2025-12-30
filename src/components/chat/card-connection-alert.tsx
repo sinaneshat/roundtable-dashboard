@@ -10,9 +10,9 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { Button } from '@/components/ui/button';
 import { useUsageStatsQuery } from '@/hooks/queries';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { cn } from '@/lib/ui/cn';
 
 export function CardConnectionAlert() {

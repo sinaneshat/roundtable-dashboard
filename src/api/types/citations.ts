@@ -63,10 +63,12 @@ export const CitableSourceSchema = z.object({
 export type CitableSource = z.infer<typeof CitableSourceSchema>;
 
 /**
- * Source map for citation resolution
+ * Source map for citation resolution schema
  * Maps source IDs (e.g., mem_abc123) to full source data
  */
-export type CitationSourceMap = Map<string, CitableSource>;
+export const CitationSourceMapSchema = z.custom<Map<string, CitableSource>>();
+
+export type CitationSourceMap = z.infer<typeof CitationSourceMapSchema>;
 
 // ============================================================================
 // CITABLE CONTEXT RESULT TYPES
@@ -88,18 +90,20 @@ export type CitableContextStats = z.infer<typeof CitableContextStatsSchema>;
 /**
  * Result from building citable context
  */
-export type CitableContextResult = {
-  /** Array of citable sources */
-  sources: CitableSource[];
-  /** Map for quick source lookup by ID */
-  sourceMap: CitationSourceMap;
-  /** Formatted prompt section with citation instructions */
-  formattedPrompt: string;
-  /** Stats about available context */
-  stats: CitableContextStats;
-};
+export const CitableContextResultSchema = z.object({
+  sources: z.array(CitableSourceSchema),
+  sourceMap: CitationSourceMapSchema,
+  formattedPrompt: z.string(),
+  stats: CitableContextStatsSchema,
+});
 
-export type AvailableCitationSourceType = 'github' | 'file';
+export type CitableContextResult = z.infer<typeof CitableContextResultSchema>;
+
+// AvailableCitationSourceType uses array constant pattern
+export const AVAILABLE_CITATION_SOURCE_TYPES = ['github', 'file'] as const;
+export const AvailableCitationSourceTypeSchema = z.enum(AVAILABLE_CITATION_SOURCE_TYPES);
+export type AvailableCitationSourceType = z.infer<typeof AvailableCitationSourceTypeSchema>;
+
 export const AvailableSourceSchema = z.object({
   id: z.string(),
   sourceType: CitationSourceTypeSchema,
@@ -151,14 +155,14 @@ export type ThreadAttachmentContextStats = z.infer<typeof ThreadAttachmentContex
 /**
  * Thread attachment context result
  */
-export type ThreadAttachmentContextResult = {
-  attachments: ThreadAttachmentWithContent[];
-  /** Formatted prompt section for system prompt */
-  formattedPrompt: string;
-  /** Citable sources for citation resolution */
-  citableSources: CitableSource[];
-  stats: ThreadAttachmentContextStats;
-};
+export const ThreadAttachmentContextResultSchema = z.object({
+  attachments: z.array(ThreadAttachmentWithContentSchema),
+  formattedPrompt: z.string(),
+  citableSources: z.array(CitableSourceSchema),
+  stats: ThreadAttachmentContextStatsSchema,
+});
+
+export type ThreadAttachmentContextResult = z.infer<typeof ThreadAttachmentContextResultSchema>;
 
 // ============================================================================
 // ATTACHMENT CITATION INFO (for prompts)

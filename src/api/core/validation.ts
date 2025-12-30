@@ -20,22 +20,32 @@ import type { ApiEnv } from '@/api/types';
 
 import { validationError } from './responses';
 import type { ErrorContext, ValidationError } from './schemas';
-import { CoreSchemas, ErrorContextSchema } from './schemas';
+import { CoreSchemas, ErrorContextSchema, ValidationErrorSchema } from './schemas';
 
 // ============================================================================
 // VALIDATION RESULT TYPES (Context7 Pattern)
 // ============================================================================
+
+export function ValidationSuccessSchema<T>(dataSchema: z.ZodSchema<T>) {
+  return z.object({
+    success: z.literal(true),
+    data: dataSchema,
+  });
+}
 
 export type ValidationSuccess<T> = {
   readonly success: true;
   readonly data: T;
 };
 
-export type ValidationFailure = {
-  readonly success: false;
-  readonly errors: ValidationError[];
-};
+export const ValidationFailureSchema = z.object({
+  success: z.literal(false),
+  errors: z.array(ValidationErrorSchema),
+});
 
+export type ValidationFailure = z.infer<typeof ValidationFailureSchema>;
+
+// ValidationResult is a discriminated union with generic data type
 export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
 
 // ============================================================================

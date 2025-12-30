@@ -14,12 +14,12 @@ import {
   UIBillingIntervals,
 } from '@/api/core/enums';
 import type { Product, Subscription } from '@/api/routes/billing/schema';
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // Extended tab type to include credits
 type PricingTab = UIBillingInterval | 'credits';

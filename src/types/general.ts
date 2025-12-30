@@ -48,10 +48,6 @@ export const GeneralFormPropsSchema = z.object({
 
 export type GeneralFormProps = z.infer<typeof GeneralFormPropsSchema>;
 
-// Re-export for backwards compatibility - prefer importing from @/api/core/enums
-export const textInputVariantSchema = TextInputVariantSchema;
-export const withOptionsVariantSchema = WithOptionsVariantSchema;
-
 // ============================================================================
 // INPUT VARIANT SCHEMAS
 // ============================================================================

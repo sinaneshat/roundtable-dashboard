@@ -1,8 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import type { ModelProvider } from '@/api/core/enums';
 import {
-  MODEL_PROVIDERS,
   ModelCategorySchema,
   ModelProviderSchema,
   PROVIDER_STREAMING_DEFAULTS,
@@ -47,10 +45,6 @@ export const ModelIdEnum = z.enum([
 ]);
 
 export type ModelId = z.infer<typeof ModelIdEnum>;
-
-// Re-export ModelProvider types from centralized enums for consumers
-export { MODEL_PROVIDERS, type ModelProvider };
-export { ModelProviderSchema as ModelProviderEnum };
 
 // ============================================================================
 // HARDCODED MODEL SCHEMA

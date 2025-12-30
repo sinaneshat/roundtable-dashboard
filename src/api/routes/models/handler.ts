@@ -47,8 +47,8 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
 
     // ✅ SINGLE SOURCE: Get user's subscription tier from centralized service
     // Cached for 5 minutes per user to reduce database load
-    // Default to 'free' tier for unauthenticated users
-    const userTier = user ? await getUserTier(user.id) : 'free';
+    // Default to FREE tier for unauthenticated users
+    const userTier = user ? await getUserTier(user.id) : SubscriptionTiers.FREE;
 
     // ============================================================================
     // ✅ ALL MODELS: Show all available models for user selection

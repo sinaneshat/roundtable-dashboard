@@ -88,14 +88,9 @@ export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 export const ERROR_CODES = ErrorCodeSchema.enum;
 
 /**
- * API error severity - re-exported from centralized enums for backwards compatibility
- * Prefer importing directly from '@/api/core/enums' for new code.
- */
-export { ApiErrorSeverity };
-
-/**
  * Error severity constant object for easy access
  * Uses centralized enum pattern from @/api/core/enums
+ * For type import: use `import type { ApiErrorSeverity } from '@/api/core/enums'`
  */
 export const ERROR_SEVERITY = ApiErrorSeverities;
 

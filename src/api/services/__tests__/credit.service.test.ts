@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlanType } from '@/api/core/enums';
-import { CREDIT_CONFIG } from '@/api/services/product-logic.service';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // Mock the database module
 vi.mock('@/db', async () => {

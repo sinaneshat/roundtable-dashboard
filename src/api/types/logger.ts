@@ -82,13 +82,15 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
 // Flexible: Discriminated union with Record fallback for custom logging needs
 export type LogContext = z.infer<typeof LogContextSchema> | Record<string, unknown>;
 
-// Logger interface with proper typing
-export type TypedLogger = {
-  debug: (message: string, context?: LogContext) => void;
-  info: (message: string, context?: LogContext) => void;
-  warn: (message: string, context?: LogContext) => void;
-  error: (message: string, contextOrError?: Error | LogContext, context?: LogContext) => void;
-};
+// Logger interface schema with proper typing
+export const TypedLoggerSchema = z.object({
+  debug: z.custom<(message: string, context?: LogContext) => void>(),
+  info: z.custom<(message: string, context?: LogContext) => void>(),
+  warn: z.custom<(message: string, context?: LogContext) => void>(),
+  error: z.custom<(message: string, contextOrError?: Error | LogContext, context?: LogContext) => void>(),
+});
+
+export type TypedLogger = z.infer<typeof TypedLoggerSchema>;
 
 // Validation helper
 export function validateLogContext(context: unknown): LogContext | null {

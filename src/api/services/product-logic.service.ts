@@ -32,16 +32,12 @@
 import { z as zOpenAPI } from '@hono/zod-openapi';
 import { z } from 'zod';
 
-import type { SubscriptionTier } from '@/api/core/enums';
-import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
+import type { ChatMode, SubscriptionTier } from '@/api/core/enums';
+import { ChatModes, SUBSCRIPTION_TIERS, SubscriptionTiers } from '@/api/core/enums';
 import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
 import type { CreditPlanType } from '@/lib/config/credit-config';
-import { CREDIT_CONFIG, PLAN_NAMES } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import { isTransientErrorFromObject } from '@/lib/utils';
-
-// Re-export for backwards compatibility
-export { CREDIT_CONFIG, PLAN_NAMES };
-export type { CreditPlanType };
 
 // ============================================================================
 // MODEL TYPE FOR PRICING LOGIC
@@ -415,10 +411,10 @@ export function getTierFromProductId(productId: string): SubscriptionTier {
   // ✅ DIRECT PRODUCT ID MATCHING - Check actual Stripe product IDs first
   // This is the most reliable way to determine tier from product ID
   if (productId === CREDIT_CONFIG.PLANS.free.stripeProductId) {
-    return 'free';
+    return SubscriptionTiers.FREE;
   }
   if (productId === CREDIT_CONFIG.PLANS.paid.stripeProductId) {
-    return 'pro'; // 'paid' plan in CREDIT_CONFIG maps to 'pro' tier
+    return SubscriptionTiers.PRO; // 'paid' plan in CREDIT_CONFIG maps to 'pro' tier
   }
 
   // ✅ FALLBACK: Pattern matching for differently-named products
@@ -445,11 +441,11 @@ export function getTierFromProductId(productId: string): SubscriptionTier {
     || normalized.endsWith('-pro') // End with hyphen: prod-pro (NOT includes to avoid false matches)
     || /(?:^|[^a-z])pro(?:$|[^a-z])/.test(normalized) // Word boundary match: avoids "product", "professional"
   ) {
-    return 'pro';
+    return SubscriptionTiers.PRO;
   }
 
   // Default to free tier for unknown or invalid product IDs
-  return 'free';
+  return SubscriptionTiers.FREE;
 }
 
 // ============================================================================
@@ -555,13 +551,13 @@ export function getRequiredTierForModel(
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
   // Check free tier threshold
-  const freeLimit = MAX_MODEL_PRICING_BY_TIER.free;
+  const freeLimit = MAX_MODEL_PRICING_BY_TIER[SubscriptionTiers.FREE];
   if (freeLimit !== null && inputPricePerMillion <= freeLimit) {
-    return 'free';
+    return SubscriptionTiers.FREE;
   }
 
   // All other models require pro tier (unlimited access)
-  return 'pro';
+  return SubscriptionTiers.PRO;
 }
 
 /**
@@ -807,25 +803,25 @@ export const DEFAULT_AI_PARAMS = {
  * Import ChatModeId type to properly type this configuration
  */
 export const MODE_SPECIFIC_AI_PARAMS: Record<
-  string,
+  ChatMode,
   { temperature: number; topP: number; maxTokens: number }
 > = {
-  analyzing: {
+  [ChatModes.ANALYZING]: {
     temperature: 0.3,
     topP: 0.7,
     maxTokens: 1024,
   },
-  brainstorming: {
+  [ChatModes.BRAINSTORMING]: {
     temperature: 0.6,
     topP: 0.85,
     maxTokens: 1024,
   },
-  debating: {
+  [ChatModes.DEBATING]: {
     temperature: 0.5,
     topP: 0.8,
     maxTokens: 1024,
   },
-  solving: {
+  [ChatModes.SOLVING]: {
     temperature: 0.4,
     topP: 0.75,
     maxTokens: 1024,
@@ -835,12 +831,13 @@ export const MODE_SPECIFIC_AI_PARAMS: Record<
 /**
  * Get AI parameters for a specific mode
  */
-export function getAIParamsForMode(mode: string): {
+export function getAIParamsForMode(mode: ChatMode): {
   temperature: number;
   topP: number;
   maxTokens: number;
 } {
-  return MODE_SPECIFIC_AI_PARAMS[mode] || DEFAULT_AI_PARAMS;
+  // MODE_SPECIFIC_AI_PARAMS is guaranteed to have all ChatMode keys
+  return MODE_SPECIFIC_AI_PARAMS[mode as keyof typeof MODE_SPECIFIC_AI_PARAMS];
 }
 
 /**
