@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowRight, Lock, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
@@ -98,8 +99,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               {t('chat.public.threadNotFoundDescription')}
             </p>
           </div>
-          <Button variant="default" onClick={() => window.location.href = '/'}>
-            {t('actions.goHome')}
+          <Button asChild variant="default">
+            <Link href="/">{t('actions.goHome')}</Link>
           </Button>
         </div>
       </div>
@@ -119,8 +120,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               {tPublic('privateChatDescription')}
             </p>
           </div>
-          <Button variant="default" onClick={() => window.location.href = '/'}>
-            {tPublic('goHome')}
+          <Button asChild variant="default">
+            <Link href="/">{tPublic('goHome')}</Link>
           </Button>
         </div>
       </div>
@@ -185,20 +186,24 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       </div>
                       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
                         <Button
+                          asChild
                           size="lg"
-                          onClick={() => window.location.href = signUpUrl}
                           className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                         >
-                          {tPublic('tryRoundtable')}
-                          <ArrowRight className="w-4 h-4" />
+                          <Link href={signUpUrl}>
+                            {tPublic('tryRoundtable')}
+                            <ArrowRight className="w-4 h-4" />
+                          </Link>
                         </Button>
                         <Button
+                          asChild
                           variant="outline"
                           size="lg"
-                          onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
                           className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                         >
-                          {tPublic('learnMore')}
+                          <Link href="/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more">
+                            {tPublic('learnMore')}
+                          </Link>
                         </Button>
                       </div>
                     </div>

@@ -973,10 +973,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             results: successfulResults.map((r, idx) => {
               // Find original query index from allResults
               const originalIdx = allResults.findIndex(ar => ar.query === r.query);
+              // ✅ TYPE-SAFE: Capture result in const - type predicate guarantees non-null
+              const searchResult = r.result;
               return {
-                query: r.result!.query,
+                query: searchResult.query,
                 answer: null, // No pre-generated answers - participants synthesize from raw data
-                results: r.result!.results.map((res: WebSearchResult['results'][number]) => ({
+                results: searchResult.results.map((res: WebSearchResult['results'][number]) => ({
                   title: res.title,
                   url: res.url,
                   content: res.content,

@@ -104,7 +104,7 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
         userId,
         balance: planConfig.signupCredits,
         reservedCredits: 0,
-        planType: 'free',
+        planType: PlanTypes.FREE,
         monthlyCredits: planConfig.monthlyCredits,
         payAsYouGoEnabled: planConfig.payAsYouGoEnabled,
         createdAt: now,

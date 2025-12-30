@@ -5,6 +5,7 @@ import { isValidElement } from 'react';
 
 import { CodeBlock, CodeBlockCopyButton, InlineCode } from '@/components/ai-elements/code-block';
 import { cn } from '@/lib/ui/cn';
+import { isObject } from '@/lib/utils/type-guards';
 
 function extractLanguage(className?: string): string {
   if (!className)
@@ -24,9 +25,10 @@ function extractTextContent(children: ReactNode): string {
   }
 
   if (isValidElement(children)) {
-    const elementProps = children.props as { children?: ReactNode };
-    if (elementProps.children !== undefined) {
-      return extractTextContent(elementProps.children);
+    // ✅ TYPE-SAFE: Use isObject to safely access props
+    const elementProps = isObject(children.props) ? children.props : {};
+    if ('children' in elementProps) {
+      return extractTextContent(elementProps.children as ReactNode);
     }
   }
 
@@ -71,12 +73,11 @@ export function MarkdownPre({ children, className, ...props }: MarkdownPreProps)
   }
 
   if (isValidElement(child) && child.type === 'code') {
-    const codeProps = child.props as {
-      className?: string;
-      children?: ReactNode;
-    };
-    const language = extractLanguage(codeProps.className);
-    const code = extractTextContent(codeProps.children).trim();
+    // ✅ TYPE-SAFE: Use isObject to safely access props
+    const codeProps = isObject(child.props) ? child.props : {};
+    const codeClassName = typeof codeProps.className === 'string' ? codeProps.className : undefined;
+    const language = extractLanguage(codeClassName);
+    const code = extractTextContent('children' in codeProps ? (codeProps.children as ReactNode) : undefined).trim();
 
     return (
       <CodeBlock code={code} language={language} showLineNumbers={code.split('\n').length > 3}>

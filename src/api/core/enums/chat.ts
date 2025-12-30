@@ -56,7 +56,7 @@ export const DEFAULT_CHANGELOG_TYPE: ChangelogType = 'added';
 
 export const ChatModeSchema = z.enum(CHAT_MODES).openapi({
   description: 'Conversation mode for roundtable discussions',
-  example: 'brainstorming',
+  example: CHAT_MODES[1], // 'brainstorming'
 });
 
 export type ChatMode = z.infer<typeof ChatModeSchema>;

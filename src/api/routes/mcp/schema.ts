@@ -11,6 +11,7 @@
 import { z } from '@hono/zod-openapi';
 
 import {
+  CHAT_MODES,
   ChatModeSchema,
   DEFAULT_CHAT_MODE,
   ModelCategoryFilterSchema,
@@ -730,7 +731,7 @@ export const MCP_TOOLS: MCPTool[] = [
       properties: {
         title: { type: 'string', description: 'Thread title (1-200 chars)' },
         projectId: { type: 'string', description: 'Optional project ID to link thread for RAG knowledge retrieval' },
-        mode: { type: 'string', enum: ['analyzing', 'brainstorming', 'debating', 'solving'], description: `Chat mode. Default: ${DEFAULT_CHAT_MODE}` },
+        mode: { type: 'string', enum: [...CHAT_MODES], description: `Chat mode. Default: ${DEFAULT_CHAT_MODE}` },
         participants: { type: 'array', description: 'AI model participants (1-10)', items: { type: 'object', properties: { modelId: { type: 'string' }, role: { type: 'string' }, systemPrompt: { type: 'string' }, priority: { type: 'integer' } }, required: ['modelId'] } },
         isPublic: { type: 'boolean', description: 'Make thread publicly accessible' },
       },

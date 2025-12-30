@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { SUBSCRIPTION_TIERS } from '@/api/core/enums';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 import {
-  CREDIT_CONFIG,
   getMaxModelsForTier,
   getMonthlyCreditsForTier,
   getTierFromProductId,

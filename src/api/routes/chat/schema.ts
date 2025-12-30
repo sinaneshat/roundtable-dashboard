@@ -3,6 +3,7 @@ import { z } from '@hono/zod-openapi';
 import {
   ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
+  ChatModes,
   ChatModeSchema,
   DEFAULT_CHAT_MODE,
   MessageStatusSchema,
@@ -194,7 +195,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
     }),
     mode: ChatModeSchema.optional().default(DEFAULT_CHAT_MODE).openapi({
       description: 'Conversation mode',
-      example: 'brainstorming',
+      example: ChatModes.BRAINSTORMING,
     }),
     enableWebSearch: z.boolean().optional().default(false).openapi({
       description: 'Allow participants to browse web for information',
@@ -672,7 +673,7 @@ export const UserPresetSchema = z.object({
   }),
   mode: ChatModeSchema.openapi({
     description: 'Conversation mode for this preset',
-    example: 'brainstorming',
+    example: ChatModes.BRAINSTORMING,
   }),
   createdAt: z.number().int().nonnegative().openapi({
     description: 'Unix timestamp when preset was created',
@@ -696,7 +697,7 @@ export const CreateUserPresetRequestSchema = z.object({
   }),
   mode: ChatModeSchema.openapi({
     description: 'Conversation mode for this preset',
-    example: 'brainstorming',
+    example: ChatModes.BRAINSTORMING,
   }),
 }).openapi('CreateUserPresetRequest');
 
@@ -749,7 +750,7 @@ export const StreamChatRequestSchema = z.object({
   }),
   mode: ChatModeSchema.optional().openapi({
     description: 'Conversation mode',
-    example: 'brainstorming',
+    example: ChatModes.BRAINSTORMING,
   }),
   enableWebSearch: z.boolean().optional().openapi({
     description: 'Enable web search',

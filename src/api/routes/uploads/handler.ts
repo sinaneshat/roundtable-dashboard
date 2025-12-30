@@ -85,6 +85,23 @@ import {
 // ============================================================================
 
 /**
+ * ✅ TYPE-SAFE: Validates R2 bucket is available
+ * Throws a helpful error if R2 is not configured
+ *
+ * @param bucket - The R2 bucket binding from environment
+ * @returns The validated R2 bucket (non-null)
+ */
+function getValidatedR2Bucket(bucket: R2Bucket | undefined): R2Bucket {
+  if (!bucket) {
+    throw createError.badRequest(
+      'R2 bucket not available. Multipart uploads require R2 configuration.',
+      { errorType: 'configuration' },
+    );
+  }
+  return bucket;
+}
+
+/**
  * Generate R2 key for upload
  */
 function generateR2Key(userId: string, uploadId: string, filename: string): string {
@@ -773,7 +790,9 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
     const r2Key = generateR2Key(user.id, uploadId, body.filename);
 
     // Create multipart upload in R2
-    const multipartUpload = await c.env.UPLOADS_R2_BUCKET!.createMultipartUpload(r2Key, {
+    // ✅ TYPE-SAFE: Use validated R2 bucket instead of non-null assertion
+    const r2Bucket = getValidatedR2Bucket(c.env.UPLOADS_R2_BUCKET);
+    const multipartUpload = await r2Bucket.createMultipartUpload(r2Key, {
       httpMetadata: {
         contentType: body.mimeType,
       },
@@ -881,7 +900,9 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
     }
 
     // Resume multipart upload and upload part
-    const multipartUpload = c.env.UPLOADS_R2_BUCKET!.resumeMultipartUpload(
+    // ✅ TYPE-SAFE: Use validated R2 bucket instead of non-null assertion
+    const r2Bucket = getValidatedR2Bucket(c.env.UPLOADS_R2_BUCKET);
+    const multipartUpload = r2Bucket.resumeMultipartUpload(
       uploadMeta.r2Key,
       r2UploadId,
     );
@@ -927,7 +948,9 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
     }
 
     // Resume and complete multipart upload
-    const multipartUpload = c.env.UPLOADS_R2_BUCKET!.resumeMultipartUpload(
+    // ✅ TYPE-SAFE: Use validated R2 bucket instead of non-null assertion
+    const r2Bucket = getValidatedR2Bucket(c.env.UPLOADS_R2_BUCKET);
+    const multipartUpload = r2Bucket.resumeMultipartUpload(
       uploadMeta.r2Key,
       uploadMeta.r2UploadId,
     );
@@ -1037,7 +1060,9 @@ export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUplo
     }
 
     // Abort R2 multipart upload
-    const multipartUpload = c.env.UPLOADS_R2_BUCKET!.resumeMultipartUpload(
+    // ✅ TYPE-SAFE: Use validated R2 bucket instead of non-null assertion
+    const r2Bucket = getValidatedR2Bucket(c.env.UPLOADS_R2_BUCKET);
+    const multipartUpload = r2Bucket.resumeMultipartUpload(
       uploadMeta.r2Key,
       r2UploadId,
     );

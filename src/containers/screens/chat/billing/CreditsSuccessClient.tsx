@@ -102,8 +102,10 @@ export function CreditsSuccessClient() {
     if (!hasInitiatedSync.current) {
       syncMutation.mutate(undefined);
       hasInitiatedSync.current = true;
+      // Prefetch /chat early - user will navigate there after success
+      router.prefetch('/chat');
     }
-  }, [syncMutation]);
+  }, [syncMutation, router]);
 
   useEffect(() => {
     if (isReady || !syncMutation.isSuccess) {

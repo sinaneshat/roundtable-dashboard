@@ -1,6 +1,7 @@
 'use client';
 
 import { WifiOff } from 'lucide-react';
+import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 
@@ -8,12 +9,6 @@ export default function OfflinePage() {
   const handleReload = () => {
     if (typeof window !== 'undefined') {
       window.location.reload();
-    }
-  };
-
-  const handleGoHome = () => {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/';
     }
   };
 
@@ -53,12 +48,12 @@ export default function OfflinePage() {
             Try Again
           </Button>
           <Button
-            onClick={handleGoHome}
+            asChild
             variant="outline"
             className="flex-1"
             size="lg"
           >
-            Go Home
+            <Link href="/">Go Home</Link>
           </Button>
         </div>
 

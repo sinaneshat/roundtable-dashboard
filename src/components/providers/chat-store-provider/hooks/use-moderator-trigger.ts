@@ -4,7 +4,7 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases } from '@/api/core/enums';
+import { MessageRoles, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { getRoundNumber, rlog } from '@/lib/utils';
 import { isObject } from '@/lib/utils/type-guards';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -156,7 +156,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                   msg.id === moderatorId
                     ? {
                         ...msg,
-                        parts: [{ type: 'text' as const, text: textToSet, state: 'streaming' as const }],
+                        parts: [{ type: 'text' as const, text: textToSet, state: TextPartStates.STREAMING }],
                       }
                     : msg,
                 ),
@@ -190,7 +190,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
                       msg.id === moderatorId
                         ? {
                             ...msg,
-                            parts: [{ type: 'text' as const, text: textToSet, state: 'streaming' as const }],
+                            parts: [{ type: 'text' as const, text: textToSet, state: TextPartStates.STREAMING }],
                           }
                         : msg,
                     ),
