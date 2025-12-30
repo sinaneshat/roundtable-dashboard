@@ -22,16 +22,15 @@ import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { CreditAction, CreditTransactionType, PlanType } from '@/api/core/enums';
 import { CreditActionSchema, CreditTransactionTypes, PlanTypes, PlanTypeSchema, StripeSubscriptionStatuses } from '@/api/core/enums';
+import {
+  calculateActualCredits,
+  getActionCreditCost,
+  getPlanConfig,
+} from '@/api/services/product-logic.service';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { UserCreditBalance } from '@/db/validation';
-
-import {
-  calculateActualCredits,
-  CREDIT_CONFIG,
-  getActionCreditCost,
-  getPlanConfig,
-} from './product-logic.service';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // ============================================================================
 // TYPES (Zod Schemas - Single Source of Truth)
@@ -715,11 +714,12 @@ export async function deductCreditsForAction(
   }
 
   // Map action to credit action enum
-  const actionMap: Record<string, CreditAction> = {
+  const actionMap: Record<keyof typeof CREDIT_CONFIG.ACTION_COSTS, CreditAction> = {
     threadCreation: 'thread_creation',
     webSearchQuery: 'web_search',
     fileReading: 'file_reading',
     analysisGeneration: 'analysis_generation',
+    customRoleCreation: 'thread_creation',
   };
 
   // Record deduction transaction
@@ -730,8 +730,8 @@ export async function deductCreditsForAction(
     balanceAfter: result[0].balance,
     creditsUsed: credits,
     threadId: context?.threadId,
-    action: actionMap[action] as CreditAction,
-    description: context?.description || `${action}: ${credits} credits`,
+    action: actionMap[action],
+    description: context?.description || `${String(action)}: ${credits} credits`,
   });
 }
 

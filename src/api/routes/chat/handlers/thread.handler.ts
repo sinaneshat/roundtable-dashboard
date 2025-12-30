@@ -22,7 +22,7 @@ import {
   ThreadSlugParamSchema,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, ThreadStatusSchema } from '@/api/core/enums';
+import { ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, SubscriptionTiers, ThreadStatusSchema } from '@/api/core/enums';
 import {
   deductCreditsForAction,
   enforceCredits,
@@ -531,8 +531,8 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
 
     // ✅ SUBSCRIPTION ACCESS: Enrich participants with model access info
     // For authenticated users, show which models they can/cannot access
-    // For unauthenticated users (public threads), assume free tier
-    const userTier = user ? await getUserTier(user.id) : 'free' as const;
+    // For unauthenticated users (public threads), assume FREE tier
+    const userTier = user ? await getUserTier(user.id) : SubscriptionTiers.FREE;
 
     const participants = rawParticipants.map((participant) => {
       const model = getModelById(participant.modelId);

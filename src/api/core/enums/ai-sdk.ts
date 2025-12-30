@@ -142,3 +142,27 @@ export const ReasoningPartTypes = {
   REDACTED: 'redacted' as const,
   TEXT: 'text' as const,
 } as const;
+
+// ============================================================================
+// TEXT PART STATE (AI SDK v5 streaming state for text/reasoning parts)
+// ============================================================================
+
+export const TEXT_PART_STATES = ['streaming', 'done'] as const;
+
+export const TextPartStateSchema = z.enum(TEXT_PART_STATES).openapi({
+  description: 'AI SDK v5 streaming state for text and reasoning parts',
+  example: 'done',
+});
+
+export type TextPartState = z.infer<typeof TextPartStateSchema>;
+
+export const DEFAULT_TEXT_PART_STATE: TextPartState = 'done';
+
+export const TextPartStates = {
+  STREAMING: 'streaming' as const,
+  DONE: 'done' as const,
+} as const;
+
+export function isTextPartStreaming(state: TextPartState | undefined): boolean {
+  return state === TextPartStates.STREAMING;
+}

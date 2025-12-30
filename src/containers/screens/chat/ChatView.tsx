@@ -412,7 +412,9 @@ export function ChatView({
 
     let updatedParticipants;
     if (orderedModel.participant) {
-      const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
+      // ✅ TYPE-SAFE: Capture participant in local const for type narrowing in filter callback
+      const participantToRemove = orderedModel.participant;
+      const filtered = selectedParticipants.filter(p => p.id !== participantToRemove.id);
       const sortedByVisualOrder = filtered.sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
         const bIdx = modelOrder.indexOf(b.modelId);

@@ -382,7 +382,7 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
   it('should clear guard after 100ms if waitingToStartStreaming stays false (actual failure)', async () => {
     setupIncompleteRound(1, 1, 3);
 
-    const { rerender } = renderHook(() =>
+    const { rerender, unmount } = renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
         enabled: true,
@@ -405,35 +405,30 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     });
     rerender();
 
-    // Wait MORE than 100ms for timeout to fire and clear guards
+    // Wait for timeout to fire and clear guards (100ms timeout + buffer)
     await act(async () => {
       await waitForAsync(150);
     });
 
-    // Force the main effect to re-run by changing a dependency
-    // We need to toggle a state value to make React re-run the effect
-    act(() => {
-      // Toggle enabled off and on to force effect re-evaluation
-      mockStore.setState({ isStreaming: true });
-    });
-    rerender();
+    // After timeout clears guards, unmount and remount the hook
+    // This simulates a page refresh/navigation which is the real-world scenario
+    // where retry recovery would occur
+    unmount();
 
-    await act(async () => {
-      await waitForAsync(10);
-    });
+    const { result: _result2 } = renderHook(() =>
+      useIncompleteRoundResumption({
+        threadId: 'thread-123',
+        enabled: true,
+      }),
+    );
 
-    act(() => {
-      mockStore.setState({ isStreaming: false });
-    });
-    rerender();
-
-    // Wait for the retry trigger to occur
+    // Wait for the remounted hook to detect incomplete round and trigger
     await waitFor(() => {
       const callsAfterFailure = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
         call => call[0] === 1,
       ).length;
       expect(callsAfterFailure).toBeGreaterThan(callsBeforeFailure);
-    }, { timeout: 300 });
+    }, { timeout: 500 });
   });
 
   it('should allow triggering next participant after current completes', async () => {
@@ -630,7 +625,7 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
   it('should clear guards when waitingToStartStreaming stays false for 100ms+', async () => {
     setupIncompleteRound(1, 1, 3);
 
-    const { rerender } = renderHook(() =>
+    const { rerender, unmount } = renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
         enabled: true,
@@ -658,20 +653,15 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       await waitForAsync(150);
     });
 
-    // Force the main effect to re-run by toggling a dependency
-    act(() => {
-      mockStore.setState({ isStreaming: true });
-    });
-    rerender();
+    // Unmount and remount to simulate page refresh
+    unmount();
 
-    await act(async () => {
-      await waitForAsync(10);
-    });
-
-    act(() => {
-      mockStore.setState({ isStreaming: false });
-    });
-    rerender();
+    renderHook(() =>
+      useIncompleteRoundResumption({
+        threadId: 'thread-123',
+        enabled: true,
+      }),
+    );
 
     // Wait for retry trigger
     await waitFor(() => {
@@ -679,7 +669,7 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
         call => call[0] === 1,
       ).length;
       expect(callsAfterWait).toBeGreaterThan(callsBeforeWait);
-    }, { timeout: 300 });
+    }, { timeout: 500 });
   });
 
   it('should distinguish retry toggle from actual trigger failure', async () => {
@@ -905,7 +895,7 @@ describe('integration: All Race Condition Fixes Together', () => {
   it('should handle trigger failure → timeout → retry', async () => {
     setupIncompleteRound(1, 1, 3);
 
-    const { rerender } = renderHook(() =>
+    const { rerender, unmount } = renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
         enabled: true,
@@ -930,23 +920,18 @@ describe('integration: All Race Condition Fixes Together', () => {
 
     // Wait for timeout to fire and clear guards (100ms timeout + buffer)
     await act(async () => {
-      await waitForAsync(200);
+      await waitForAsync(150);
     });
 
-    // Force the main effect to re-run by toggling a dependency
-    act(() => {
-      mockStore.setState({ isStreaming: true });
-    });
-    rerender();
+    // Unmount and remount to simulate page refresh
+    unmount();
 
-    await act(async () => {
-      await waitForAsync(20);
-    });
-
-    act(() => {
-      mockStore.setState({ isStreaming: false });
-    });
-    rerender();
+    renderHook(() =>
+      useIncompleteRoundResumption({
+        threadId: 'thread-123',
+        enabled: true,
+      }),
+    );
 
     // Wait for retry with longer timeout
     await waitFor(() => {

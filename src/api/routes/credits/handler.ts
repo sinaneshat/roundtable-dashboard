@@ -8,11 +8,11 @@ import {
   getUserTransactionHistory,
 } from '@/api/services/credit.service';
 import {
-  CREDIT_CONFIG,
   estimateStreamingCredits,
   tokensToCredits,
 } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
+import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 import type {
   estimateCreditCostRoute,
