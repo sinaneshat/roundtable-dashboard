@@ -200,7 +200,7 @@ describe('getParticipantCompletionStatus - participant failures', () => {
     expect(status.streamingCount).toBe(0);
   });
 
-  it('bUG: participant with finishReason=unknown but no content should be complete', () => {
+  it('participant with finishReason=unknown but no content is NOT complete (interrupted stream)', () => {
     const participants = [createParticipant('p1', 0)];
 
     const messages: UIMessage[] = [
@@ -210,7 +210,25 @@ describe('getParticipantCompletionStatus - participant failures', () => {
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
-    // 'unknown' finishReason means stream ended abnormally but is no longer active
+    // ✅ FIX: 'unknown' finishReason with NO content = INTERRUPTED stream
+    // This stream needs to be resumed, NOT counted as complete
+    // Gate should BLOCK to allow stream resumption to detect and re-trigger
+    expect(status.allComplete).toBe(false);
+    expect(status.completedCount).toBe(0);
+    expect(status.streamingCount).toBe(1);
+  });
+
+  it('participant with finishReason=unknown WITH content IS complete', () => {
+    const participants = [createParticipant('p1', 0)];
+
+    const messages: UIMessage[] = [
+      createUserMessage(1),
+      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'unknown' }),
+    ];
+
+    const status = getParticipantCompletionStatus(messages, participants, 1);
+
+    // 'unknown' finishReason WITH content = stream has usable content, can proceed
     expect(status.allComplete).toBe(true);
     expect(status.completedCount).toBe(1);
     expect(status.streamingCount).toBe(0);

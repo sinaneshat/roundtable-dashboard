@@ -1,4 +1,4 @@
-import type { StoragePurpose } from '@/api/common/storage-keys';
+import type { StoragePurpose } from '@/api/core/enums';
 import type { Session, User } from '@/lib/auth/types';
 
 declare module 'hono' {

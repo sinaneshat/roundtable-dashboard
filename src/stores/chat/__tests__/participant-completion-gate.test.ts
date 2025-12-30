@@ -310,6 +310,162 @@ describe('areAllParticipantsCompleteForRound', () => {
 });
 
 // ============================================================================
+// finishReason: 'unknown' Handling (Interrupted Stream Fix)
+// ============================================================================
+
+describe('finishReason: unknown handling', () => {
+  describe('isMessageComplete', () => {
+    it('returns true when finishReason is "unknown" but HAS content', () => {
+      // finishReason: 'unknown' indicates interrupted stream, BUT if content exists,
+      // the message can still be displayed. Content alone is sufficient for completion.
+      const message = createAssistantMessage('p1', 1, {
+        partState: 'done',
+        hasText: true, // Has content
+        finishReason: 'unknown',
+      });
+      expect(isMessageComplete(message)).toBe(true);
+    });
+
+    it('returns false when finishReason is "unknown" and NO content', () => {
+      // finishReason: 'unknown' with no content = definitely incomplete
+      // This is the key case we're trying to catch - interrupted before any content
+      const message = createAssistantMessage('p1', 1, {
+        partState: 'done',
+        hasText: false, // No content!
+        finishReason: 'unknown',
+      });
+      expect(isMessageComplete(message)).toBe(false);
+    });
+
+    it('returns true when finishReason is "stop" (valid completion)', () => {
+      const message = createAssistantMessage('p1', 1, {
+        partState: 'done',
+        hasText: true,
+        finishReason: 'stop',
+      });
+      expect(isMessageComplete(message)).toBe(true);
+    });
+
+    it('returns true when finishReason is "length" (valid completion)', () => {
+      const message = createAssistantMessage('p1', 1, {
+        partState: 'done',
+        hasText: true,
+        finishReason: 'length',
+      });
+      expect(isMessageComplete(message)).toBe(true);
+    });
+
+    it('returns true when message has content but no finishReason', () => {
+      // Content alone is sufficient for completion (backward compat)
+      const message = createAssistantMessage('p1', 1, {
+        partState: 'done',
+        hasText: true,
+        finishReason: null,
+      });
+      expect(isMessageComplete(message)).toBe(true);
+    });
+
+    it('returns true when message has valid finishReason but no content (error case)', () => {
+      // Failed streams with finishReason but no content should be complete
+      // (e.g., timeout, error before any content was generated)
+      const message = createAssistantMessage('p1', 1, {
+        partState: 'done',
+        hasText: false,
+        finishReason: 'error',
+      });
+      expect(isMessageComplete(message)).toBe(true);
+    });
+  });
+
+  describe('getParticipantCompletionStatus', () => {
+    it('marks participant as incomplete when finishReason is "unknown" and NO content', () => {
+      // finishReason: 'unknown' with no content = definitely interrupted, NOT complete
+      const participants = [
+        createParticipant('p1', 0),
+        createParticipant('p2', 1),
+      ];
+      const messages: UIMessage[] = [
+        createAssistantMessage('p1', 1, { partState: 'done', finishReason: 'stop' }),
+        createAssistantMessage('p2', 1, {
+          partState: 'done',
+          hasText: false, // No content!
+          finishReason: 'unknown', // Interrupted stream
+          participantIndex: 1,
+        }),
+      ];
+
+      const status = getParticipantCompletionStatus(messages, participants, 1);
+
+      expect(status.allComplete).toBe(false);
+      expect(status.completedCount).toBe(1);
+      expect(status.streamingCount).toBe(1);
+      expect(status.streamingParticipantIds).toContain('p2');
+      expect(status.completedParticipantIds).toContain('p1');
+    });
+
+    it('marks participant as COMPLETE when finishReason is "unknown" but HAS content', () => {
+      // If there's content, the message can be displayed even if finishReason is unknown
+      // This handles edge case where content was generated but metadata is incomplete
+      const participants = [
+        createParticipant('p1', 0),
+        createParticipant('p2', 1),
+      ];
+      const messages: UIMessage[] = [
+        createAssistantMessage('p1', 1, { partState: 'done', finishReason: 'stop' }),
+        createAssistantMessage('p2', 1, {
+          partState: 'done',
+          hasText: true, // Has content!
+          finishReason: 'unknown', // Unknown but has content
+          participantIndex: 1,
+        }),
+      ];
+
+      const status = getParticipantCompletionStatus(messages, participants, 1);
+
+      // p2 is complete because it has content (regardless of finishReason)
+      expect(status.allComplete).toBe(true);
+      expect(status.completedCount).toBe(2);
+      expect(status.streamingCount).toBe(0);
+    });
+
+    it('sCENARIO: Page refresh during last participant streaming - finishReason: unknown, NO content', () => {
+      // This is the exact bug scenario:
+      // 1. 4 participants in a round
+      // 2. Page refreshes during last participant (p3) streaming BEFORE any content
+      // 3. p3 gets finishReason: 'unknown' (interrupted) with NO content
+      // 4. GATE should report 3/4 complete (not 4/4)
+      // 5. Moderator should NOT trigger until p3 resumes and completes
+      const participants = [
+        createParticipant('gemini', 0),
+        createParticipant('gpt-nano', 1),
+        createParticipant('claude-opus', 2),
+        createParticipant('grok-fast', 3),
+      ];
+
+      const messages: UIMessage[] = [
+        createAssistantMessage('gemini', 0, { partState: 'done', finishReason: 'stop' }),
+        createAssistantMessage('gpt-nano', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+        createAssistantMessage('claude-opus', 0, { partState: 'done', finishReason: 'stop', participantIndex: 2 }),
+        createAssistantMessage('grok-fast', 0, {
+          partState: 'done', // Parts might show done after state reset
+          hasText: false, // NO content - interrupted before generating any
+          finishReason: 'unknown', // finishReason indicates interruption
+          participantIndex: 3,
+        }),
+      ];
+
+      const status = getParticipantCompletionStatus(messages, participants, 0);
+
+      // MUST be false - grok-fast has finishReason: 'unknown' and NO content
+      expect(status.allComplete).toBe(false);
+      expect(status.completedCount).toBe(3);
+      expect(status.streamingCount).toBe(1);
+      expect(status.streamingParticipantIds).toContain('grok-fast');
+    });
+  });
+});
+
+// ============================================================================
 // Race Condition Scenarios
 // ============================================================================
 

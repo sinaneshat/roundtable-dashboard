@@ -74,8 +74,8 @@ type ChatListProps = {
   chatGroups: ChatGroup[];
   favorites: Chat[];
   searchTerm: string;
+  /** @deprecated Sidebar close is now handled by chat-nav.tsx via pathname change detection */
   isMobile?: boolean;
-  onNavigate?: () => void;
   disableAnimations?: boolean;
 };
 const EMPTY_FAVORITES: Chat[] = [];
@@ -83,15 +83,11 @@ const EMPTY_FAVORITES: Chat[] = [];
 function ChatItem({
   chat,
   isActive,
-  isMobile,
-  onNavigate,
   onDeleteClick,
   disableAnimation,
 }: {
   chat: Chat;
   isActive: boolean;
-  isMobile: boolean;
-  onNavigate?: () => void;
   onDeleteClick: (chat: Chat) => void;
   disableAnimation?: boolean;
 }) {
@@ -111,11 +107,6 @@ function ChatItem({
           href={chatUrl}
           prefetch={shouldPrefetch ? null : false}
           onMouseEnter={handleMouseEnter}
-          onClick={() => {
-            if (isMobile && onNavigate) {
-              onNavigate();
-            }
-          }}
         >
           <div
             className="truncate overflow-hidden text-ellipsis whitespace-nowrap"
@@ -150,8 +141,6 @@ export function ChatList({
   chatGroups,
   favorites = EMPTY_FAVORITES,
   searchTerm = '',
-  isMobile = false,
-  onNavigate,
   disableAnimations = false,
 }: ChatListProps) {
   // Use custom hook that reacts to history.replaceState/pushState URL changes
@@ -238,8 +227,6 @@ export function ChatList({
                           key={chat.id}
                           chat={chat}
                           isActive={isActive}
-                          isMobile={isMobile}
-                          onNavigate={onNavigate}
                           onDeleteClick={handleDeleteClick}
                           disableAnimation={false}
                         />
@@ -257,8 +244,6 @@ export function ChatList({
                         key={chat.id}
                         chat={chat}
                         isActive={isActive}
-                        isMobile={isMobile}
-                        onNavigate={onNavigate}
                         onDeleteClick={handleDeleteClick}
                         disableAnimation={true}
                       />
@@ -325,8 +310,6 @@ export function ChatList({
                             key={chat.id}
                             chat={chat}
                             isActive={isActive}
-                            isMobile={isMobile}
-                            onNavigate={onNavigate}
                             onDeleteClick={handleDeleteClick}
                             disableAnimation={false}
                           />
@@ -344,8 +327,6 @@ export function ChatList({
                           key={chat.id}
                           chat={chat}
                           isActive={isActive}
-                          isMobile={isMobile}
-                          onNavigate={onNavigate}
                           onDeleteClick={handleDeleteClick}
                           disableAnimation={true}
                         />

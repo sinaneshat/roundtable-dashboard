@@ -2,7 +2,7 @@
 
 import { AlertCircle, ArrowLeft, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -136,7 +136,6 @@ export function ModelSelectionModal({
 }: ModelSelectionModalProps) {
   const t = useTranslations('chat.models.modal');
   const tModels = useTranslations('chat.models');
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -775,12 +774,14 @@ export function ModelSelectionModal({
                               <AlertCircle className="size-3 shrink-0" />
                               <span className="flex-1">{t('customRolesPaidOnly')}</span>
                               <Button
+                                asChild
                                 variant="default"
                                 size="sm"
                                 className="h-6 rounded-full text-[10px] font-medium shrink-0"
-                                onClick={() => router.push('/chat/pricing')}
                               >
-                                {t('upgrade')}
+                                <Link href="/chat/pricing">
+                                  {t('upgrade')}
+                                </Link>
                               </Button>
                             </div>
                           )

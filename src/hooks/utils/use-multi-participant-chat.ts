@@ -1636,12 +1636,18 @@ export function useMultiParticipantChat(
       const existingMessage = messages.find(m => m.id === expectedMessageId);
 
       if (existingMessage) {
-        // Check if the existing message is complete (has content)
+        // Check if the existing message is TRULY complete (has finishReason AND content)
+        const existingMetadata = getAssistantMetadata(existingMessage.metadata);
+        const hasFinishReason = !!existingMetadata?.finishReason
+          && existingMetadata.finishReason !== FinishReasons.UNKNOWN;
         const hasContent = existingMessage.parts?.some(
           p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
         ) || false;
 
-        if (hasContent) {
+        // ✅ CONTENT DUPLICATION FIX: Only skip if message is TRULY complete
+        // A message is truly complete if it has BOTH valid finishReason AND content.
+        // If it only has partial content (no finishReason), we need to re-stream.
+        if (hasFinishReason && hasContent) {
           // ✅ RACE CONDITION FIX: Notify store when skipping a completed participant
           // Previously, this would return early without notifying anyone, leaving
           // the system stuck with nextParticipantToTrigger set but no streaming starting.
@@ -1652,6 +1658,26 @@ export function useMultiParticipantChat(
           onResumedStreamComplete?.(roundNumber, fromIndex);
           return;
         }
+
+        // ✅ CONTENT DUPLICATION FIX (AGGRESSIVE): ALWAYS clear parts when resuming
+        // This is necessary because:
+        // 1. Cross-contamination can occur if AI SDK picks up from wrong stream position
+        // 2. Partial content from interrupted streams MUST be cleared before re-streaming
+        // 3. Even "empty" messages might have stale state from previous session
+        // 4. The AI SDK appends to existing parts - we need a clean slate
+        //
+        // ✅ CRITICAL: Use flushSync to ensure AI SDK sees cleared state BEFORE streaming starts
+        // Without flushSync, setMessages is async and AI SDK may use stale internal state
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required for race condition fix: AI SDK must see cleared state synchronously
+        flushSync(() => {
+          setMessages(currentMessages =>
+            currentMessages.map(m =>
+              m.id === expectedMessageId
+                ? { ...m, parts: [], metadata: { ...m.metadata as object, finishReason: undefined } }
+                : m,
+            ),
+          );
+        });
       }
     }
 
@@ -2010,6 +2036,14 @@ export function useMultiParticipantChat(
       return false; // Normal round transition, not a page refresh
     }
 
+    // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T let AI SDK take over
+    // The server knows which participant needs to be triggered, and custom resumption
+    // (incomplete-round-resumption.ts → use-round-resumption.ts) will handle it.
+    // AI SDK resume would interfere by streaming wrong participant's data and corrupting messages.
+    if (streamResumptionPrefilled) {
+      return 'blocked'; // Don't set streaming state, let custom resumption handle
+    }
+
     // Detected resumed stream - set streaming flag
     // This ensures store.isStreaming reflects the actual state
     isStreamingRef.current = true;
@@ -2021,14 +2055,6 @@ export function useMultiParticipantChat(
     if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
       const enabled = getEnabledParticipants(participantsRef.current);
       roundParticipantsRef.current = enabled;
-    }
-
-    // ✅ FIX: Return 'prefilled' to indicate server already knows about stream
-    // When streamResumptionPrefilled=true, the AI SDK successfully resumed the stream
-    // We MUST set isExplicitlyStreaming=true for message sync to work
-    // BUT we skip the phantom timeout since server already has stream state
-    if (streamResumptionPrefilled) {
-      return 'prefilled'; // Stream acknowledged, skip phantom timeout
     }
 
     return true;
@@ -2046,19 +2072,17 @@ export function useMultiParticipantChat(
   // If no new messages arrive in that time, the resume was phantom (204 response or stale stream).
   // Clear isExplicitlyStreaming to allow incomplete round resumption to take over.
   //
-  // ✅ PREFILLED FIX: When streamResumptionPrefilled=true, server has buffered stream data.
-  // Skip phantom timeout since data WILL flow - the server already knows about the stream.
+  // ✅ BLOCKED FIX: When streamResumptionPrefilled=true, DON'T let AI SDK take over.
+  // Custom resumption will handle triggering the correct participant.
   useLayoutEffect(() => {
     // Only act when AI SDK says it's streaming but we haven't acknowledged it
     if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
       const streamResult = handleResumedStreamDetection();
 
-      // ✅ FIX: Handle 'prefilled' - server has stream, skip phantom timeout
-      // When streamResumptionPrefilled=true, server already has buffered data
-      // Data will flow, no need for phantom detection
-      if (streamResult === 'prefilled') {
-        // Stream acknowledged, no phantom timeout needed
-        // The streaming flag is already set by handleResumedStreamDetection
+      // ✅ FIX: Handle 'blocked' - server prefilled, let custom resumption handle
+      // Don't set any streaming state, let incomplete-round-resumption.ts handle it
+      if (streamResult === 'blocked') {
+        // AI SDK resume blocked, custom resumption will trigger correct participant
         return;
       }
 

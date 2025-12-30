@@ -1,7 +1,7 @@
 'use client';
 
 import { Lock, SlidersHorizontal, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
 
@@ -42,7 +42,6 @@ export const ModelPresetCard = memo(({
   onDelete,
 }: ModelPresetCardProps) => {
   const t = useTranslations('chat.models');
-  const router = useRouter();
   const isLocked = !canAccessPreset(preset, userTier);
 
   const compatibleModelCount = useMemo(() => {
@@ -55,11 +54,8 @@ export const ModelPresetCard = memo(({
   const isFullyDisabled = compatibleModelCount === 0;
 
   const handleClick = () => {
-    if (isLocked) {
-      router.push('/chat/pricing');
-      return;
-    }
-    if (isFullyDisabled) {
+    // Locked presets have upgrade button at bottom - don't navigate on card click
+    if (isLocked || isFullyDisabled) {
       return;
     }
     onSelect({ preset });
@@ -164,15 +160,14 @@ export const ModelPresetCard = memo(({
       {isLocked && (
         <div className="mt-3">
           <Button
+            asChild
             variant="outline"
             size="sm"
             className="w-full h-7 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push('/chat/pricing');
-            }}
           >
-            {t('upgradeToTier', { tier: SUBSCRIPTION_TIER_NAMES[preset.requiredTier] })}
+            <Link href="/chat/pricing" onClick={e => e.stopPropagation()}>
+              {t('upgradeToTier', { tier: SUBSCRIPTION_TIER_NAMES[preset.requiredTier] })}
+            </Link>
           </Button>
         </div>
       )}

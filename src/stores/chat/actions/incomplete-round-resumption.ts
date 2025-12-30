@@ -201,6 +201,11 @@ export function useIncompleteRoundResumption(
   // ✅ FAILED TRIGGER RECOVERY: Track trigger state for retry detection
   const wasWaitingRef = useRef(false);
   const sawStreamingRef = useRef(false);
+  // ✅ DOUBLE-TRIGGER FIX: Round-level guard to prevent race condition
+  // When trigger fires, React batches state updates. Before waitingToStartStreaming=true
+  // propagates, the effect may re-run with updated respondedParticipantIndices.
+  // This ref is set SYNCHRONOUSLY before any state updates to block subsequent triggers.
+  const roundTriggerInProgressRef = useRef<string | null>(null);
 
   // Calculate incomplete round state (moved up for use in pending round recovery)
   const enabledParticipants = getEnabledParticipants(participants);
@@ -562,6 +567,8 @@ export function useIncompleteRoundResumption(
     // ✅ FAILED TRIGGER RECOVERY: Reset trigger tracking refs
     wasWaitingRef.current = false;
     sawStreamingRef.current = false;
+    // ✅ DOUBLE-TRIGGER FIX: Reset round-level guard
+    roundTriggerInProgressRef.current = null;
   }, [threadId]);
 
   // ============================================================================
@@ -849,6 +856,13 @@ export function useIncompleteRoundResumption(
     // Use local calculation for next participant (no longer depends on backend ref)
     const effectiveNextParticipant = nextParticipantIndex;
 
+    // ✅ DOUBLE-TRIGGER FIX: Round-level guard - check FIRST before any other guards
+    // This prevents React batching race condition where effect re-runs before state propagates
+    const roundKey = `${threadId}_r${currentRoundNumber}`;
+    if (roundTriggerInProgressRef.current === roundKey) {
+      return;
+    }
+
     // Skip if already attempted for this specific participant
     // ✅ FIX: Track per-participant, not per-thread, so we can trigger subsequent participants
     // Previously used threadId which blocked ALL subsequent participants after first trigger
@@ -953,6 +967,10 @@ export function useIncompleteRoundResumption(
       // Allow triggering to resume/retry this participant
     }
 
+    // ✅ DOUBLE-TRIGGER FIX: Set round-level guard SYNCHRONOUSLY before ANY state updates
+    // This prevents React batching race where effect re-runs before waitingToStartStreaming propagates
+    roundTriggerInProgressRef.current = roundKey;
+
     // Mark as attempted to prevent duplicate triggers for this specific participant
     resumptionAttemptedRef.current = resumptionKey;
 
@@ -1008,28 +1026,64 @@ export function useIncompleteRoundResumption(
   // Fix: Track if we set waitingToStartStreaming. If it transitions to false
   // without streaming starting, clear resumptionAttemptedRef to allow retry.
   // ============================================================================
+  // ✅ FIX: Track retry toggle to distinguish from actual failure
+  // Retry mechanism toggles waitingToStartStreaming false→true quickly
+  // We should NOT clear guards during retry - only on actual failure
+  const retryToggleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (waitingToStartStreaming) {
       // We just set waitingToStartStreaming - track it
       wasWaitingRef.current = true;
       sawStreamingRef.current = false;
+      // Clear any pending retry toggle timeout
+      if (retryToggleTimeoutRef.current) {
+        clearTimeout(retryToggleTimeoutRef.current);
+        retryToggleTimeoutRef.current = null;
+      }
     } else if (wasWaitingRef.current) {
       // waitingToStartStreaming just went false
-      wasWaitingRef.current = false;
+      // Don't clear guards immediately - wait to see if this is a retry toggle
+      // Retry mechanism sets it true again within ~50ms via queueMicrotask
+      retryToggleTimeoutRef.current = setTimeout(() => {
+        // If we get here, waitingToStartStreaming stayed false for 100ms
+        // This is a real trigger failure, not a retry toggle
+        wasWaitingRef.current = false;
 
-      if (!sawStreamingRef.current && !isStreaming) {
-        // Trigger failed - waitingToStartStreaming was cleared but streaming never started
-        // Clear resumptionAttemptedRef to allow retry
-        if (resumptionAttemptedRef.current !== null) {
-          resumptionAttemptedRef.current = null;
+        if (!sawStreamingRef.current && !isStreaming) {
+          // Trigger failed - waitingToStartStreaming was cleared but streaming never started
+          // Clear refs to allow retry
+          if (resumptionAttemptedRef.current !== null) {
+            resumptionAttemptedRef.current = null;
+          }
+          // ✅ DOUBLE-TRIGGER FIX: Also clear round-level guard on ACTUAL trigger failure
+          if (roundTriggerInProgressRef.current !== null) {
+            roundTriggerInProgressRef.current = null;
+          }
         }
-      }
+      }, 100); // Wait 100ms to distinguish retry toggle from actual failure
     }
 
     if (isStreaming) {
       // Streaming started successfully
       sawStreamingRef.current = true;
+      wasWaitingRef.current = false;
+      // ✅ DOUBLE-TRIGGER FIX: Clear round-level guard when streaming starts
+      // This allows subsequent participant triggers after the first one completes
+      roundTriggerInProgressRef.current = null;
+      // Clear retry toggle timeout
+      if (retryToggleTimeoutRef.current) {
+        clearTimeout(retryToggleTimeoutRef.current);
+        retryToggleTimeoutRef.current = null;
+      }
     }
+
+    return () => {
+      if (retryToggleTimeoutRef.current) {
+        clearTimeout(retryToggleTimeoutRef.current);
+        retryToggleTimeoutRef.current = null;
+      }
+    };
   }, [waitingToStartStreaming, isStreaming]);
 
   // ============================================================================

@@ -137,38 +137,30 @@ export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
 // ============================================================================
 
 export const ResumableStreamContextOptionsSchema = z.object({
-  waitUntil: z.function(),
-  env: z.any(),
-  executionCtx: z.any().optional(),
+  waitUntil: z.custom<(promise: Promise<unknown>) => void>(),
+  env: z.custom<ApiEnv['Bindings']>(),
+  executionCtx: z.custom<ExecutionContext>().optional(),
 }).describe('Options for ResumableStreamContext');
 
-export type ResumableStreamContextOptions = {
-  waitUntil: (promise: Promise<unknown>) => void;
-  env: ApiEnv['Bindings'];
-  executionCtx?: ExecutionContext;
-};
+export type ResumableStreamContextOptions = z.infer<typeof ResumableStreamContextOptionsSchema>;
 
-export type ResumableStreamContext = {
-  createNewResumableStream: (
+export const ResumableStreamContextSchema = z.object({
+  createNewResumableStream: z.custom<(
     streamId: string,
     threadId: string,
     roundNumber: number,
     participantIndex: number,
     getStream: () => ReadableStream<string>,
-  ) => Promise<void>;
+  ) => Promise<void>>(),
+  resumeExistingStream: z.custom<(streamId: string) => Promise<ReadableStream<Uint8Array> | null>>(),
+  isStreamActive: z.custom<(streamId: string) => Promise<boolean>>(),
+  getMetadata: z.custom<(streamId: string) => Promise<StreamBufferMetadata | null>>(),
+  getChunks: z.custom<(streamId: string) => Promise<StreamChunk[] | null>>(),
+  complete: z.custom<(streamId: string) => Promise<void>>(),
+  fail: z.custom<(streamId: string, error: string) => Promise<void>>(),
+});
 
-  resumeExistingStream: (streamId: string) => Promise<ReadableStream<Uint8Array> | null>;
-
-  isStreamActive: (streamId: string) => Promise<boolean>;
-
-  getMetadata: (streamId: string) => Promise<StreamBufferMetadata | null>;
-
-  getChunks: (streamId: string) => Promise<StreamChunk[] | null>;
-
-  complete: (streamId: string) => Promise<void>;
-
-  fail: (streamId: string, error: string) => Promise<void>;
-};
+export type ResumableStreamContext = z.infer<typeof ResumableStreamContextSchema>;
 
 // ============================================================================
 // STREAM BUFFER SERVICE TYPES

@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -21,6 +22,7 @@ import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 
 export default function PricingScreen() {
+  const router = useRouter();
   const t = useTranslations();
   const [processingPriceId, setProcessingPriceId] = useState<string | null>(null);
   const [cancelingSubscriptionId, setCancelingSubscriptionId] = useState<string | null>(null);
@@ -72,9 +74,9 @@ export default function PricingScreen() {
               newProductId: changeDetails.newPrice.productId,
             });
 
-            window.location.href = `/chat/billing/subscription-changed?${params.toString()}`;
+            router.push(`/chat/billing/subscription-changed?${params.toString()}`);
           } else {
-            window.location.href = '/chat/billing/subscription-changed';
+            router.push('/chat/billing/subscription-changed');
           }
         }
       } else {

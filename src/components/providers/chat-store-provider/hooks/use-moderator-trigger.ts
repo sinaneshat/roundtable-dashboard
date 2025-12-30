@@ -284,6 +284,10 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const participants = useStore(store, s => s.participants);
   const resumptionTriggerAttemptedRef = useRef<string | null>(null);
 
+  // ✅ PREMATURE MODERATOR FIX: Subscribe to resumption state
+  const waitingToStartStreaming = useStore(store, s => s.waitingToStartStreaming);
+  const nextParticipantToTrigger = useStore(store, s => s.nextParticipantToTrigger);
+
   useEffect(() => {
     if (!isModeratorStreaming || currentResumptionPhase !== RoundPhases.MODERATOR) {
       return;
@@ -294,6 +298,12 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     }
 
     if (triggeringRoundRef.current !== null) {
+      return;
+    }
+
+    // ✅ PREMATURE MODERATOR FIX: Don't trigger if participant resumption in progress
+    // Messages from DB might show all participants "complete" but they're about to be re-streamed
+    if (waitingToStartStreaming || nextParticipantToTrigger !== null) {
       return;
     }
 
@@ -345,6 +355,9 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     participants,
     store,
     triggerModerator,
+    // ✅ PREMATURE MODERATOR FIX: Include resumption state in dependencies
+    waitingToStartStreaming,
+    nextParticipantToTrigger,
   ]);
 
   return {

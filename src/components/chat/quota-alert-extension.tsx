@@ -9,7 +9,7 @@
  */
 'use client';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,6 @@ import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
 export function QuotaAlertExtension() {
-  const router = useRouter();
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
   // ✅ CREDITS-ONLY: Check if user has run out of credits
@@ -62,12 +61,14 @@ export function QuotaAlertExtension() {
             {getDescription()}
           </p>
           <Button
+            asChild
             variant="destructive"
             size="sm"
             className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full"
-            onClick={() => router.push('/chat/pricing')}
           >
-            {getButtonText()}
+            <Link href="/chat/pricing">
+              {getButtonText()}
+            </Link>
           </Button>
         </div>
       </motion.div>

@@ -163,10 +163,38 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             return;
           }
 
+          // ✅ PREMATURE MODERATOR FIX: Don't trigger moderator if resumption is in progress
+          // When page refreshes mid-stream, participants are triggered sequentially via resumption.
+          // The AI SDK's onComplete fires after each participant, but we shouldn't trigger moderator
+          // until ALL participants have ACTUALLY finished streaming in THIS session.
+          // Check: waitingToStartStreaming or nextParticipantToTrigger indicates pending resumption.
+          if (currentState.waitingToStartStreaming || currentState.nextParticipantToTrigger !== null) {
+            return;
+          }
+
           await waitForStoreSync(sdkMessages, roundNumber);
           await currentState.waitForAllAnimations();
 
           const latestState = store.getState();
+
+          // ✅ PREMATURE MODERATOR FIX: Re-check after await in case resumption started
+          if (latestState.waitingToStartStreaming || latestState.nextParticipantToTrigger !== null) {
+            return;
+          }
+
+          // ✅ STREAMING PARTS CHECK: Don't trigger moderator if ANY participant is still streaming
+          // This is a direct check on the actual message parts, not relying on state flags
+          const hasAnyStreamingParts = sdkMessages.some((m) => {
+            const meta = getMessageMetadata(m.metadata);
+            if (!meta || meta.role !== MessageRoles.ASSISTANT || 'isModerator' in meta) {
+              return false;
+            }
+            return m.parts?.some(p => 'state' in p && p.state === 'streaming') ?? false;
+          });
+          if (hasAnyStreamingParts) {
+            return;
+          }
+
           const webSearchEnabled = latestState.thread?.enableWebSearch || latestState.enableWebSearch;
           if (webSearchEnabled) {
             const preSearchForRound = latestState.preSearches.find(ps => ps.roundNumber === roundNumber);

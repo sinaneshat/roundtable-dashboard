@@ -6,7 +6,7 @@
  */
 'use client';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
@@ -17,7 +17,6 @@ import { cn } from '@/lib/ui/cn';
 
 export function CardConnectionAlert() {
   const t = useTranslations();
-  const router = useRouter();
   const { data: statsData, isLoading } = useUsageStatsQuery();
 
   // Show alert when user is on free plan without payment method connected
@@ -56,12 +55,14 @@ export function CardConnectionAlert() {
             {t('usage.cardAlert.description', { credits: freeCredits })}
           </p>
           <Button
+            asChild
             variant="outline"
             size="sm"
             className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30"
-            onClick={() => router.push('/chat/pricing')}
           >
-            {t('usage.cardAlert.connectCard')}
+            <Link href="/chat/pricing">
+              {t('usage.cardAlert.connectCard')}
+            </Link>
           </Button>
         </div>
       </motion.div>

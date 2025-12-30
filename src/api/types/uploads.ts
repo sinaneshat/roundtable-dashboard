@@ -116,16 +116,14 @@ export type ModelFilePartWithData = z.infer<typeof ModelFilePartWithDataSchema>;
 /**
  * Parameters for loading attachment content
  */
-export type LoadAttachmentContentParams = {
-  /** Upload IDs to load */
-  attachmentIds: string[];
-  /** R2 bucket for file retrieval */
-  r2Bucket: R2Bucket | undefined;
-  /** Database instance */
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  /** Optional logger */
-  logger?: TypedLogger;
-};
+export const LoadAttachmentContentParamsSchema = z.object({
+  attachmentIds: z.array(z.string()),
+  r2Bucket: z.custom<R2Bucket | undefined>(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  logger: z.custom<TypedLogger>().optional(),
+});
+
+export type LoadAttachmentContentParams = z.infer<typeof LoadAttachmentContentParamsSchema>;
 
 /**
  * Error that occurred during attachment loading
@@ -152,28 +150,25 @@ export type AttachmentLoadStats = z.infer<typeof AttachmentLoadStatsSchema>;
 /**
  * Result of loading attachment content
  */
-export type LoadAttachmentContentResult = {
-  /** File parts ready for AI model consumption */
-  fileParts: ModelFilePart[];
-  /** Any errors that occurred during loading */
-  errors: AttachmentLoadError[];
-  /** Statistics about the load operation */
-  stats: AttachmentLoadStats;
-};
+export const LoadAttachmentContentResultSchema = z.object({
+  fileParts: z.array(ModelFilePartSchema),
+  errors: z.array(AttachmentLoadErrorSchema),
+  stats: AttachmentLoadStatsSchema,
+});
+
+export type LoadAttachmentContentResult = z.infer<typeof LoadAttachmentContentResultSchema>;
 
 /**
  * Parameters for loading attachment content for multiple messages
  */
-export type LoadMessageAttachmentsParams = {
-  /** Message IDs to load attachments for */
-  messageIds: string[];
-  /** R2 bucket for file retrieval */
-  r2Bucket: R2Bucket | undefined;
-  /** Database instance */
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  /** Optional logger */
-  logger?: TypedLogger;
-};
+export const LoadMessageAttachmentsParamsSchema = z.object({
+  messageIds: z.array(z.string()),
+  r2Bucket: z.custom<R2Bucket | undefined>(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  logger: z.custom<TypedLogger>().optional(),
+});
+
+export type LoadMessageAttachmentsParams = z.infer<typeof LoadMessageAttachmentsParamsSchema>;
 
 /**
  * Error that occurred during message attachment loading
@@ -202,14 +197,13 @@ export type MessageAttachmentLoadStats = z.infer<typeof MessageAttachmentLoadSta
 /**
  * Result of loading message attachments
  */
-export type LoadMessageAttachmentsResult = {
-  /** Map of message ID → file parts (base64 data URLs) */
-  filePartsByMessageId: Map<string, ModelFilePart[]>;
-  /** Any errors that occurred during loading */
-  errors: MessageAttachmentLoadError[];
-  /** Statistics about the load operation */
-  stats: MessageAttachmentLoadStats;
-};
+export const LoadMessageAttachmentsResultSchema = z.object({
+  filePartsByMessageId: z.custom<Map<string, ModelFilePart[]>>(),
+  errors: z.array(MessageAttachmentLoadErrorSchema),
+  stats: MessageAttachmentLoadStatsSchema,
+});
+
+export type LoadMessageAttachmentsResult = z.infer<typeof LoadMessageAttachmentsResultSchema>;
 
 // ============================================================================
 // SIGNED URL TYPES

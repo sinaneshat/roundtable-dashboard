@@ -134,6 +134,16 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     viewport.addEventListener('scroll', handleScroll);
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
+
+  // ✅ Close mobile sidebar AFTER navigation completes (when pathname changes)
+  // This ensures sidebar stays open during navigation for visual feedback
+  const prevPathnameRef = useRef(pathname);
+  useEffect(() => {
+    if (isMobile && pathname !== prevPathnameRef.current) {
+      setOpenMobile(false);
+    }
+    prevPathnameRef.current = pathname;
+  }, [pathname, isMobile, setOpenMobile]);
   return (
     <>
       <TooltipProvider>
@@ -262,11 +272,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       favorites={favorites}
                       searchTerm=""
                       isMobile={isMobile}
-                      onNavigate={() => {
-                        if (isMobile) {
-                          setOpenMobile(false);
-                        }
-                      }}
                     />
                   </>
                 )}
@@ -315,11 +320,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                       favorites={[]}
                       searchTerm=""
                       isMobile={isMobile}
-                      onNavigate={() => {
-                        if (isMobile) {
-                          setOpenMobile(false);
-                        }
-                      }}
                     />
                     {isFetchingNextPage && (
                       <SidebarGroup className="group-data-[collapsible=icon]:hidden">

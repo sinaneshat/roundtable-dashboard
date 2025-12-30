@@ -12,7 +12,7 @@
 
 import type { z } from 'zod';
 
-import type { storagePurposeSchema } from '@/api/common/storage-keys';
+import type { StoragePurposeSchema as storagePurposeSchema } from '@/api/core/enums';
 import type { Session, User } from '@/lib/auth/types';
 
 // ============================================================================

@@ -48,6 +48,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
+import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/schemas/chat-metadata';
 import type {
   ChatCustomRole,
 } from '@/db/validation';
@@ -890,8 +891,12 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
         if (existingModeChange) {
           // Existing entry found - use its oldMode as the baseline
-          const existingData = existingModeChange.changeData as { type: 'mode_change'; oldMode: string; newMode: string };
-          const baselineMode = existingData.oldMode;
+          // ✅ TYPE-SAFE: Use Zod validation + type guard instead of type cast
+          const parsedData = safeParseChangelogData(existingModeChange.changeData);
+          if (!parsedData || !isModeChange(parsedData)) {
+            throw createError.internal('Invalid changelog data structure', ErrorContextBuilders.database('select', 'chatThreadChangelog'));
+          }
+          const baselineMode = parsedData.oldMode;
 
           if (baselineMode === body.mode) {
             // ✅ NO NET CHANGE: Mode changed back to baseline - delete the entry
@@ -960,8 +965,12 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         if (existingWebSearchChange) {
           // Existing entry found - infer baseline from it
           // Since web_search is a boolean toggle, baseline = opposite of what was changed TO
-          const existingData = existingWebSearchChange.changeData as { type: 'web_search'; enabled: boolean };
-          const baselineEnabled = !existingData.enabled;
+          // ✅ TYPE-SAFE: Use Zod validation + type guard instead of type cast
+          const parsedWebSearchData = safeParseChangelogData(existingWebSearchChange.changeData);
+          if (!parsedWebSearchData || !isWebSearchChange(parsedWebSearchData)) {
+            throw createError.internal('Invalid web search changelog data structure', ErrorContextBuilders.database('select', 'chatThreadChangelog'));
+          }
+          const baselineEnabled = !parsedWebSearchData.enabled;
 
           if (baselineEnabled === body.enableWebSearch) {
             // ✅ NO NET CHANGE: Web search toggled back to baseline - delete the entry

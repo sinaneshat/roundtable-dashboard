@@ -484,6 +484,7 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       // moderator messages can leak into participant message slots, or participant
       // content can get concatenated (e.g., "Hi\n" becomes "Hi\nHi")
       const messageDedupeMap = new Map<string, typeof mergedMessages[0]>();
+
       for (const msg of mergedMessages) {
         const existing = messageDedupeMap.get(msg.id);
         if (existing) {

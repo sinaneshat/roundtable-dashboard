@@ -443,18 +443,22 @@ export const StreamResumptionSliceStateSchema = z.object({
   resumptionRoundNumber: z.number().nullable(),
 });
 
-export type StreamResumptionPrefillUpdate = {
-  streamResumptionPrefilled: boolean;
-  prefilledForThreadId: string;
-  currentResumptionPhase: z.infer<typeof RoundPhaseSchema>;
-  resumptionRoundNumber: number | null;
-  preSearchResumption?: PreSearchResumptionState | null;
-  moderatorResumption?: ModeratorResumptionState | null;
-  nextParticipantToTrigger?: number | null;
-  waitingToStartStreaming?: boolean;
-  // ✅ FIX: Allow setting isModeratorStreaming during moderator phase prefill
-  isModeratorStreaming?: boolean;
-};
+/**
+ * Schema for stream resumption prefill update - Zod-first pattern
+ */
+export const StreamResumptionPrefillUpdateSchema = z.object({
+  streamResumptionPrefilled: z.boolean(),
+  prefilledForThreadId: z.string(),
+  currentResumptionPhase: RoundPhaseSchema,
+  resumptionRoundNumber: z.number().nullable(),
+  preSearchResumption: PreSearchResumptionStateSchema.nullable().optional(),
+  moderatorResumption: ModeratorResumptionStateSchema.nullable().optional(),
+  nextParticipantToTrigger: z.number().nullable().optional(),
+  waitingToStartStreaming: z.boolean().optional(),
+  isModeratorStreaming: z.boolean().optional(),
+});
+
+export type StreamResumptionPrefillUpdate = z.infer<typeof StreamResumptionPrefillUpdateSchema>;
 
 export const StreamResumptionActionsSchema = z.object({
   setStreamResumptionState: z.custom<(state: StreamResumptionState | null) => void>(),

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
@@ -50,7 +50,6 @@ function NavigationHeaderComponent({
   showScrollButton = false,
 }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
-  const router = useRouter();
   const t = useTranslations();
 
   // ✅ ZUSTAND PATTERN: Thread title comes from store, not context
@@ -121,16 +120,9 @@ function NavigationHeaderComponent({
                   <>
                     <BreadcrumbItem className="hidden md:block">
                       <BreadcrumbLink asChild>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            router.push(currentPage.parent!);
-                          }}
-                          className="cursor-pointer"
-                        >
+                        <Link href={currentPage.parent!}>
                           {t(parentPage.titleKey)}
-                        </button>
+                        </Link>
                       </BreadcrumbLink>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator className="hidden md:block" />

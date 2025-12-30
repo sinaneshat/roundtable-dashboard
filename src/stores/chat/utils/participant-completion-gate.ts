@@ -25,7 +25,7 @@
 
 import type { UIMessage } from 'ai';
 
-import { MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
+import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { getAssistantMetadata, getModeratorMetadata, getParticipantId, getRoundNumber, isNonEmptyString, isObject } from '@/lib/utils';
 
@@ -82,8 +82,11 @@ export type ParticipantDebugInfo = {
  *
  * A message is complete when:
  * 1. It has NO parts with `state: 'streaming'`
- * 2. It has a finishReason in metadata (streaming ended)
+ * 2. It has a VALID finishReason in metadata (NOT 'unknown')
  * 3. It has actual text content (not just placeholders)
+ *
+ * ✅ CRITICAL: finishReason: 'unknown' indicates an INTERRUPTED stream, NOT completion.
+ * Interrupted streams should be re-triggered, not counted as complete.
  */
 export function isMessageComplete(message: UIMessage): boolean {
   // Check for streaming parts - if ANY part is streaming, message is not complete
@@ -101,21 +104,29 @@ export function isMessageComplete(message: UIMessage): boolean {
   );
 
   // Check for finishReason (streaming complete signal)
+  // ✅ FIX: 'unknown' finishReason indicates interrupted stream, NOT completion
+  // Other finishReasons ('stop', 'error', 'length') indicate stream has definitively ended
   const metadata = getAssistantMetadata(message.metadata);
-  const hasFinishReason = !!metadata?.finishReason;
+  const hasValidFinishReason = !!metadata?.finishReason
+    && metadata.finishReason !== FinishReasons.UNKNOWN;
 
   // ✅ FALLBACK: Check finishReason directly when Zod validation fails
   // When streams fail, metadata may have finishReason but lack required fields (e.g., usage)
   // causing getAssistantMetadata() to return null. This fallback prevents failed
   // participants from blocking moderator creation.
+  // ✅ FIX: Exclude 'unknown' from fallback as well
   let hasFallbackFinishReason = false;
   if (!metadata && isObject(message.metadata)) {
     const rawFinishReason = message.metadata.finishReason;
-    hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
+    hasFallbackFinishReason = isNonEmptyString(rawFinishReason)
+      && rawFinishReason !== FinishReasons.UNKNOWN;
   }
 
-  // Complete if has text content OR has finish reason (handles error cases)
-  return hasTextContent || hasFinishReason || hasFallbackFinishReason;
+  // Complete if:
+  // - Has valid finishReason (stream definitively ended, even if error with no content), OR
+  // - Has text content (backward compat for messages without metadata)
+  // ✅ CRITICAL: finishReason: 'unknown' is EXCLUDED - indicates interrupted stream
+  return hasValidFinishReason || hasFallbackFinishReason || !!hasTextContent;
 }
 
 /**
@@ -189,23 +200,32 @@ export function getParticipantCompletionStatus(
     );
 
     const metadata = getAssistantMetadata(participantMessage.metadata);
-    const hasFinishReason = !!metadata?.finishReason;
+    // ✅ FIX: 'unknown' finishReason indicates interrupted stream, NOT completion
+    // Other finishReasons ('stop', 'error', 'length') indicate stream has definitively ended
+    const hasValidFinishReason = !!metadata?.finishReason
+      && metadata.finishReason !== FinishReasons.UNKNOWN;
 
     // ✅ FALLBACK: Check finishReason directly when Zod validation fails
+    // ✅ FIX: Exclude 'unknown' from fallback as well
     let hasFallbackFinishReason = false;
     if (!metadata && isObject(participantMessage.metadata)) {
       const rawFinishReason = participantMessage.metadata.finishReason;
-      hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
+      hasFallbackFinishReason = isNonEmptyString(rawFinishReason)
+        && rawFinishReason !== FinishReasons.UNKNOWN;
     }
 
-    const isComplete = !hasStreamingParts && (hasTextContent || hasFinishReason || hasFallbackFinishReason);
+    // Complete if:
+    // - No streaming parts AND
+    // - (Has valid finishReason OR has text content)
+    // ✅ CRITICAL: finishReason: 'unknown' is EXCLUDED - indicates interrupted stream
+    const isComplete = !hasStreamingParts && (hasValidFinishReason || hasFallbackFinishReason || !!hasTextContent);
 
     debugInfo.push({
       participantId: participant.id,
       participantIndex: participant.priority,
       hasMessage: true,
       hasStreamingParts,
-      hasFinishReason: hasFinishReason || hasFallbackFinishReason,
+      hasFinishReason: hasValidFinishReason || hasFallbackFinishReason,
       hasContent: !!hasTextContent,
       isComplete,
     });

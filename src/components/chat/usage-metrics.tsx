@@ -5,7 +5,7 @@ import {
   CreditCard,
   Gift,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { UsageStatuses, UsageStatusMetadata } from '@/api/core/enums';
@@ -23,7 +23,6 @@ import { cn } from '@/lib/ui/cn';
  */
 export function UsageMetrics() {
   const t = useTranslations();
-  const router = useRouter();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
 
   if (isLoading) {
@@ -49,10 +48,6 @@ export function UsageMetrics() {
   // Calculate credit usage percentage
   const totalCredits = isPaidPlan ? (plan?.monthlyCredits || 1_000_000) : 10_000;
   const usedPercentage = Math.min(100, Math.round(((totalCredits - credits.available) / totalCredits) * 100));
-
-  const handleUpgrade = () => {
-    router.push('/chat/pricing');
-  };
 
   return (
     <div className="space-y-3">
@@ -135,10 +130,9 @@ export function UsageMetrics() {
             </div>
           )}
 
-          {/* Glass-style button */}
-          <button
-            type="button"
-            onClick={handleUpgrade}
+          {/* Glass-style link */}
+          <Link
+            href="/chat/pricing"
             className={cn(
               'w-full flex items-center justify-center gap-1.5 h-8 rounded-full text-xs font-medium',
               'backdrop-blur-sm transition-all duration-200',
@@ -161,7 +155,7 @@ export function UsageMetrics() {
                     {t('usage.connectCard')}
                   </>
                 )}
-          </button>
+          </Link>
         </div>
       )}
     </div>
