@@ -243,6 +243,18 @@ export const REGENERATION_STATE_RESET = {
   regeneratingRoundNumber: null,
 } satisfies Pick<FlagsState, 'isRegenerating'> & Pick<DataState, 'regeneratingRoundNumber'>;
 
+/**
+ * Stream resumption state that must be cleared when round completes
+ * Prevents stale resumption phase from blocking UI updates in subsequent rounds
+ */
+export const STREAM_RESUMPTION_STATE_RESET = {
+  currentResumptionPhase: null,
+  resumptionRoundNumber: null,
+  preSearchResumption: null,
+  moderatorResumption: null,
+  streamResumptionPrefilled: false,
+} satisfies Pick<StreamResumptionSliceState, 'currentResumptionPhase' | 'resumptionRoundNumber' | 'preSearchResumption' | 'moderatorResumption' | 'streamResumptionPrefilled'>;
+
 // ============================================================================
 // AGGREGATED DEFAULT STATES FOR RESET OPERATIONS
 // ============================================================================

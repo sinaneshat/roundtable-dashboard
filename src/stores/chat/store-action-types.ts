@@ -36,7 +36,7 @@
 
 import type { UIMessage } from 'ai';
 
-import type { ChatMode, FeedbackType, MessageStatus, RoundPhase, ScreenMode } from '@/api/core/enums';
+import type { ChatMode, FeedbackType, MessageStatus, ParticipantStreamStatus, RoundPhase, ScreenMode } from '@/api/core/enums';
 import type {
   PartialPreSearchData,
   PreSearchDataPayload,
@@ -340,7 +340,7 @@ export type PrefillStreamResumptionState = (
     // Pre-search phase status (null if web search not enabled)
     preSearch: {
       enabled: boolean;
-      status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
+      status: MessageStatus | null;
       streamId: string | null;
       preSearchId: string | null;
     } | null;
@@ -350,13 +350,13 @@ export type PrefillStreamResumptionState = (
       streamId: string | null;
       totalParticipants: number | null;
       currentParticipantIndex: number | null;
-      participantStatuses: Record<string, 'active' | 'completed' | 'failed'> | null;
+      participantStatuses: Record<string, ParticipantStreamStatus> | null;
       nextParticipantToTrigger: number | null;
       allComplete: boolean;
     };
     // Moderator/round moderator phase status
     moderator: {
-      status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
+      status: MessageStatus | null;
       streamId: string | null;
       moderatorMessageId: string | null;
     } | null;

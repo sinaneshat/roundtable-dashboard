@@ -98,6 +98,7 @@ import {
   REGENERATION_STATE_RESET,
   SCREEN_DEFAULTS,
   STREAM_RESUMPTION_DEFAULTS,
+  STREAM_RESUMPTION_STATE_RESET,
   STREAMING_STATE_RESET,
   THREAD_DEFAULTS,
   THREAD_NAVIGATION_RESET_STATE,
@@ -1187,6 +1188,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       ...MODERATOR_STATE_RESET,
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
+      // ✅ CRITICAL FIX: Clear stale resumption state to prevent blocking UI updates in next round
+      // Without this, currentResumptionPhase/resumptionRoundNumber from previous round block progressive streaming
+      ...STREAM_RESUMPTION_STATE_RESET,
       // ✅ CRITICAL FIX: Also clear animation state to prevent waitForAllAnimations from blocking
       // If animations are stuck pending when streaming completes, the next round's moderator
       // creation would hang forever waiting for animations that will never complete

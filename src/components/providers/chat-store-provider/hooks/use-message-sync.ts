@@ -669,6 +669,70 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           return keyA.localeCompare(keyB);
         });
 
+        // ✅ DUPLICATION FIX: Dedupe assistant messages by round+participantIndex
+        // This prevents duplicate message boxes when store and chat hook have different IDs
+        // for the same participant in the same round (can happen after config changes)
+        const roundParticipantDedupe = new Map<string, number>(); // key -> best index
+        const indicesToRemove = new Set<number>();
+
+        for (let i = 0; i < mergedMessages.length; i++) {
+          const msg = mergedMessages[i];
+          if (!msg || msg.role !== MessageRoles.ASSISTANT)
+            continue;
+
+          const metadata = getMessageMetadata(msg.metadata);
+          if (!metadata || metadata.role !== 'assistant')
+            continue;
+
+          const round = getRoundNumber(msg.metadata);
+          const pIdx = 'participantIndex' in metadata ? metadata.participantIndex : undefined;
+
+          // Skip moderators - they use participantIndex: -1
+          if (pIdx === undefined || pIdx < 0)
+            continue;
+
+          const key = `r${round}_p${pIdx}`;
+          const existingIdx = roundParticipantDedupe.get(key);
+
+          if (existingIdx !== undefined) {
+            const existingMsg = mergedMessages[existingIdx];
+            if (!existingMsg)
+              continue;
+
+            // Compare content lengths to decide which to keep
+            const existingLen = existingMsg.parts?.reduce((len, p) => {
+              if (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string') {
+                return len + p.text.length;
+              }
+              return len;
+            }, 0) ?? 0;
+
+            const newLen = msg.parts?.reduce((len, p) => {
+              if (p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string') {
+                return len + p.text.length;
+              }
+              return len;
+            }, 0) ?? 0;
+
+            // Keep the one with more content, or the later one (server version) if equal
+            if (newLen >= existingLen) {
+              indicesToRemove.add(existingIdx);
+              roundParticipantDedupe.set(key, i);
+            } else {
+              indicesToRemove.add(i);
+            }
+          } else {
+            roundParticipantDedupe.set(key, i);
+          }
+        }
+
+        // Remove duplicates
+        if (indicesToRemove.size > 0) {
+          const filtered = mergedMessages.filter((_, i) => !indicesToRemove.has(i));
+          mergedMessages.length = 0;
+          mergedMessages.push(...filtered);
+        }
+
         const sortedOrder = mergedMessages.map(m => m.id).join(',');
 
         if (originalOrder === sortedOrder && isSameMessages) {

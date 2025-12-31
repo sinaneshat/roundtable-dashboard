@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { RoundPhase } from '@/api/core/enums';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers';
 import { getAssistantMetadata, getCurrentRoundNumber, getEnabledParticipantModelIdSet, getEnabledParticipants, getParticipantIndex, getParticipantModelIds, getRoundNumber, isObject, rlog } from '@/lib/utils';
@@ -51,7 +52,7 @@ export type UseIncompleteRoundResumptionReturn = {
   isIncomplete: boolean;
   nextParticipantIndex: number | null;
   resumingRoundNumber: number | null;
-  currentResumptionPhase: 'idle' | 'pre_search' | 'participants' | 'moderator' | 'complete' | null;
+  currentResumptionPhase: RoundPhase | null;
 };
 
 export function useIncompleteRoundResumption(
