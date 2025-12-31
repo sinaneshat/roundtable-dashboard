@@ -68,17 +68,30 @@ export type ParticipantDebugInfo = {
  * Check if a single message is complete (finished streaming)
  *
  * A message is complete when:
- * 1. It has NO parts with `state: 'streaming'`
+ * 1. It has NO parts with `state: 'streaming'` (CHECKED FIRST for UI consistency)
  * 2. It has a VALID finishReason in metadata (NOT 'unknown')
  * 3. It has actual text content (not just placeholders)
+ *
+ * ✅ CRITICAL: Streaming parts state is checked FIRST for UI consistency.
+ * If parts are visually streaming, the message is NOT complete - even if finishReason exists.
+ * This prevents premature moderator triggering during active streaming.
  *
  * ✅ CRITICAL: finishReason: 'unknown' indicates an INTERRUPTED stream, NOT completion.
  * Interrupted streams should be re-triggered, not counted as complete.
  */
 export function isMessageComplete(message: UIMessage): boolean {
-  // ✅ FIRST: Check if finishReason exists (any value means stream is OVER)
-  // If finishReason exists, the AI SDK has stopped - even if onFinish didn't run
-  // to clean up part states from 'streaming' to 'done'
+  // ✅ FIRST: Check streaming parts for UI consistency
+  // If ANY part is streaming, the message is NOT visually complete
+  // This takes precedence over finishReason to ensure UI consistency
+  const hasStreamingParts = message.parts?.some(
+    p => 'state' in p && p.state === TextPartStates.STREAMING,
+  ) ?? false;
+
+  if (hasStreamingParts) {
+    return false;
+  }
+
+  // ✅ SECOND: Check finishReason for completion status
   const metadata = getAssistantMetadata(message.metadata);
   const hasAnyFinishReason = !!metadata?.finishReason;
 
@@ -87,19 +100,6 @@ export function isMessageComplete(message: UIMessage): boolean {
   if (!metadata && isObject(message.metadata)) {
     const rawFinishReason = message.metadata.finishReason;
     hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
-  }
-
-  const streamIsOver = hasAnyFinishReason || hasFallbackFinishReason;
-
-  // Check for streaming parts - ONLY matters if stream hasn't finished yet
-  // If finishReason exists, stream is OVER - 'streaming' state on parts is stale
-  const hasStreamingParts = message.parts?.some(
-    p => 'state' in p && p.state === TextPartStates.STREAMING,
-  ) ?? false;
-
-  // If stream is still active (no finishReason) and has streaming parts, not complete
-  if (!streamIsOver && hasStreamingParts) {
-    return false;
   }
 
   // Check for text content
@@ -185,7 +185,13 @@ export function getParticipantCompletionStatus(
     }
 
     // Check message completion status
-    // ✅ FIRST: Check if finishReason exists (any value means stream is OVER)
+    // ✅ FIRST: Check streaming parts for UI consistency
+    // If ANY part is streaming, the message is NOT visually complete
+    const hasStreamingParts = participantMessage.parts?.some(
+      p => 'state' in p && p.state === TextPartStates.STREAMING,
+    ) ?? false;
+
+    // Check finishReason for debug info
     const metadata = getAssistantMetadata(participantMessage.metadata);
     const hasAnyFinishReason = !!metadata?.finishReason;
 
@@ -195,16 +201,6 @@ export function getParticipantCompletionStatus(
       const rawFinishReason = participantMessage.metadata.finishReason;
       hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
     }
-
-    const streamIsOver = hasAnyFinishReason || hasFallbackFinishReason;
-
-    // Check for streaming parts - ONLY matters if stream hasn't finished yet
-    const hasStreamingParts = participantMessage.parts?.some(
-      p => 'state' in p && p.state === TextPartStates.STREAMING,
-    ) ?? false;
-
-    // If stream is still active (no finishReason) and has streaming parts, not complete
-    const stillStreaming = !streamIsOver && hasStreamingParts;
 
     const hasTextContent = participantMessage.parts?.some(
       p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
@@ -219,10 +215,9 @@ export function getParticipantCompletionStatus(
       hasValidFallbackFinishReason = participantMessage.metadata.finishReason !== FinishReasons.UNKNOWN;
     }
 
-    // Complete if:
-    // - Not still streaming AND
-    // - (Has valid finishReason OR has text content)
-    const isComplete = !stillStreaming && (hasValidFinishReason || hasValidFallbackFinishReason || !!hasTextContent);
+    // If streaming, message is NOT complete - streaming parts takes precedence over finishReason
+    // (But we still compute all values for accurate debug info above)
+    const isComplete = !hasStreamingParts && (hasValidFinishReason || hasValidFallbackFinishReason || !!hasTextContent);
 
     debugInfo.push({
       participantId: participant.id,

@@ -10,7 +10,7 @@
  * **REFACTOR NOTES**:
  * - Removed callback-based performPreSearches() function
  * - Direct integration with streamSearchQuery() and performWebSearch()
- * - Aligned with AI SDK v6 streamObject pattern
+ * - Aligned with AI SDK v6 streamText with Output.object() pattern
  * - Maintained PreSearchDataPayloadSchema compatibility
  *
  * Architecture matches: src/api/routes/chat/handlers/moderator.handler.ts
@@ -335,10 +335,10 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
     // ============================================================================
-    // ✅ REFACTORED: Direct streamObject integration (no callbacks)
+    // ✅ REFACTORED: Direct streamText with Output.object() integration (no callbacks)
     // ============================================================================
     // Pattern from moderator.handler.ts:91-120
-    // Uses AI SDK v6 streamObject with partialObjectStream iterator
+    // Uses AI SDK v6 streamText with Output.object() and partialOutputStream iterator
     // ✅ STREAM BUFFER: Generate stream ID and initialize buffer for resumption
     const streamId = generatePreSearchStreamId(threadId, roundNum);
     await initializePreSearchStreamBuffer(streamId, threadId, roundNum, existingSearch.id, c.env);
@@ -439,7 +439,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             // ✅ RESILIENT STREAMING: Wrap iteration in try-catch to preserve partial progress
             try {
-              for await (const partialResult of queryStream.partialObjectStream) {
+              for await (const partialResult of queryStream.partialOutputStream) {
                 // Track best partial result seen (most complete version)
                 if (partialResult.queries && partialResult.queries.length > 0) {
                   bestPartialResult = partialResult;
@@ -492,7 +492,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             // ✅ GRACEFUL OBJECT RETRIEVAL: Try to get final object, fall back to partial
             try {
-              multiQueryResult = await queryStream.object;
+              multiQueryResult = await queryStream.output;
             } catch (_objectError) {
               // ✅ FALLBACK TO PARTIAL: If final validation fails but we have partial queries, use them
               if (bestPartialResult?.queries && bestPartialResult.queries.length > 0) {

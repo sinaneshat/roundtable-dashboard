@@ -27,9 +27,8 @@
 
 import {
   generateId,
-  generateObject,
   generateText,
-  streamObject,
+  Output,
   streamText,
 } from 'ai';
 
@@ -140,7 +139,7 @@ function htmlToMarkdown(html: string): string {
 /**
  * Stream search query generation (gradual)
  *
- * Uses streamObject for progressive query generation like summary streaming.
+ * Uses streamText with Output.object() for progressive query generation like summary streaming.
  * Returns stream iterator that yields partial query as it's generated.
  *
  * Pattern from: /src/api/routes/chat/handlers/summary.handler.ts:91-120
@@ -171,30 +170,28 @@ export function streamSearchQuery(
     initializeOpenRouter(env);
     const client = openRouterService.getClient();
 
-    return streamObject({
+    return streamText({
       model: client.chat(modelId),
-      schema: MultiQueryGenerationSchema,
+      output: Output.object({ schema: MultiQueryGenerationSchema }),
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
-      onFinish: ({ error }) => {
-        if (error) {
-          // ✅ DETAILED ERROR LOGGING: Helps diagnose schema failures
-          console.error('[Web Search] Stream generation error:', {
-            modelId,
-            errorType: error.constructor?.name || 'Unknown',
-            errorMessage:
-              error instanceof Error ? error.message : String(error),
-            userMessage: userMessage.substring(0, 100),
-          });
+      onError: (error) => {
+        // ✅ DETAILED ERROR LOGGING: Helps diagnose schema failures
+        console.error('[Web Search] Stream generation error:', {
+          modelId,
+          errorType: error.constructor?.name || 'Unknown',
+          errorMessage:
+            error instanceof Error ? error.message : String(error),
+          userMessage: userMessage.substring(0, 100),
+        });
 
-          if (logger) {
-            logger.error('Stream generation error', {
-              error: normalizeError(error),
-              modelId,
-              operation: 'streamSearchQuery',
-            });
-          }
+        if (logger) {
+          logger.error('Stream generation error', {
+            error: normalizeError(error),
+            modelId,
+            operation: 'streamSearchQuery',
+          });
         }
       },
     });
@@ -229,7 +226,7 @@ export function streamSearchQuery(
 /**
  * Non-streaming search query generation (fallback)
  *
- * Uses generateObject for single-shot query generation when streaming fails.
+ * Uses generateText with Output.object() for single-shot query generation when streaming fails.
  * More reliable than streaming but doesn't provide progressive updates.
  *
  * ✅ MODEL VALIDATION: Checks model capabilities before generation
@@ -259,9 +256,9 @@ export async function generateSearchQuery(
     initializeOpenRouter(env);
     const client = openRouterService.getClient();
 
-    const result = await generateObject({
+    const result = await generateText({
       model: client.chat(modelId),
-      schema: MultiQueryGenerationSchema,
+      output: Output.object({ schema: MultiQueryGenerationSchema }),
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
@@ -269,9 +266,9 @@ export async function generateSearchQuery(
 
     // ✅ VALIDATE: Ensure result matches schema and constraints
     if (
-      !result.object
-      || !result.object.queries
-      || result.object.queries.length === 0
+      !result.output
+      || !result.output.queries
+      || result.output.queries.length === 0
     ) {
       throw new Error('Generated object does not contain valid queries');
     }
@@ -280,20 +277,20 @@ export async function generateSearchQuery(
     // Anthropic doesn't support min/max in schema, so validate after generation
     // Coerce string to number if needed
     const totalQueriesNum
-      = typeof result.object.totalQueries === 'string'
-        ? Number.parseInt(result.object.totalQueries, 10)
-        : result.object.totalQueries;
+      = typeof result.output.totalQueries === 'string'
+        ? Number.parseInt(result.output.totalQueries, 10)
+        : result.output.totalQueries;
 
     // Clamp totalQueries to valid range (1-3)
-    result.object.totalQueries = Math.max(1, Math.min(3, totalQueriesNum || 1));
+    result.output.totalQueries = Math.max(1, Math.min(3, totalQueriesNum || 1));
 
     // ✅ VALIDATE: Trim queries array if exceeds limit (max 3 queries)
-    if (result.object.queries.length > 3) {
-      result.object.queries = result.object.queries.slice(0, 3);
+    if (result.output.queries.length > 3) {
+      result.output.queries = result.output.queries.slice(0, 3);
     }
 
     // ✅ VALIDATE: Clamp sourceCount per query to max 3
-    result.object.queries = result.object.queries.map((q) => {
+    result.output.queries = result.output.queries.map((q) => {
       const sourceCount
         = typeof q.sourceCount === 'string'
           ? Number.parseInt(q.sourceCount, 10)
@@ -304,7 +301,7 @@ export async function generateSearchQuery(
       return q;
     });
 
-    return result.object;
+    return result.output;
   } catch (error) {
     // ✅ LOG: Query generation failure with full context
     const errorDetails = {

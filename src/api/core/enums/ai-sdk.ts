@@ -35,6 +35,17 @@ export const AiSdkStatuses = {
 // ============================================================================
 // FINISH REASON (AI SDK Response Completion Status)
 // ============================================================================
+//
+// ⚠️ AI SDK v6 MIGRATION NOTE:
+// The AI SDK v6 merged 'unknown' into 'other' for model responses.
+// However, THIS CODEBASE uses 'unknown' as an APPLICATION-LEVEL concept
+// to indicate interrupted/incomplete streams (not an AI SDK return value).
+// See: stream-buffer.service.ts (synthetic finish events for interrupted streams)
+//
+// Summary:
+// - AI SDK models return: 'stop' | 'length' | 'tool-calls' | 'content-filter' | 'error' | 'other'
+// - Application adds: 'unknown' (interrupted stream) | 'failed' (application-level failure)
+//
 
 export const FINISH_REASONS = [
   'stop',
@@ -44,7 +55,7 @@ export const FINISH_REASONS = [
   'error',
   'failed',
   'other',
-  'unknown',
+  'unknown', // ⚠️ APPLICATION-LEVEL: indicates interrupted stream, NOT an AI SDK return value
 ] as const;
 
 export const FinishReasonSchema = z.enum(FINISH_REASONS).openapi({
@@ -64,7 +75,7 @@ export const FinishReasons = {
   ERROR: 'error' as const,
   FAILED: 'failed' as const,
   OTHER: 'other' as const,
-  UNKNOWN: 'unknown' as const,
+  UNKNOWN: 'unknown' as const, // ⚠️ Application-level: interrupted stream (not AI SDK return value)
 } as const;
 
 export function isCompletionFinishReason(

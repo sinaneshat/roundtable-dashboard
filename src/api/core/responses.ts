@@ -854,7 +854,7 @@ export function noContentWithHeaders(
 }
 
 /**
- * Standard text stream headers for AI SDK streamObject responses
+ * Standard text stream headers for AI SDK streamText with Output.object() responses
  * Used for streaming JSON text (round summaries, object generation)
  */
 export const TEXT_STREAM_HEADERS = {
@@ -897,7 +897,7 @@ function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<st
 }
 
 /**
- * Create a text streaming response (for AI SDK streamObject)
+ * Create a text streaming response (for AI SDK streamText with Output.object())
  * Returns a Response with standard text stream headers and optional metadata
  *
  * @example

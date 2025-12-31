@@ -510,9 +510,13 @@ export async function trackLLMGeneration(
     }
 
     // =========================================================================
-    // REASONING TOKENS
+    // REASONING TOKENS (AI SDK v6: use outputTokenDetails.reasoningTokens)
     // =========================================================================
-    const reasoningTokens = options?.reasoningTokens || 0;
+    // Priority: SDK's outputTokenDetails > options.reasoningTokens fallback
+    const reasoningTokens
+      = finishResult.usage?.outputTokenDetails?.reasoningTokens
+        ?? options?.reasoningTokens
+        ?? 0;
     const hasReasoning = reasoningTokens > 0;
 
     // =========================================================================

@@ -633,7 +633,7 @@ export const streamChatHandler = createHandler(
       threadId: id,
       userMessage: body.content,
       systemPrompt: participant.settings?.systemPrompt,
-      previousMessages: coreMessages,
+      previousMessages: modelMessages,
       model,
       temperature: 0.7,
       callbacks: {
@@ -680,7 +680,7 @@ export const StreamingEventSchema = z.discriminatedUnion('type', [
 **5. Streaming Utilities** (`src/api/common/streaming.ts`):
 - `createOpenRouterProvider()` - Initialize OpenRouter with AI SDK
 - `streamAIResponse()` - Main SSE streaming function with callbacks
-- `buildCoreMessages()` - Convert DB messages to AI SDK format
+- `buildModelMessages()` - Convert DB messages to AI SDK format (async in v6)
 - `parseSSEEvent()` - Zod-based event parsing (client-side)
 
 **Frontend Integration** (EventSource):

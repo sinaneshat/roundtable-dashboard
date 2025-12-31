@@ -1280,7 +1280,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                     finishResult.usage.totalTokens
                     ?? (finishResult.usage.inputTokens ?? 0)
                     + (finishResult.usage.outputTokens ?? 0),
-                  cacheReadTokens: finishResult.usage.inputTokenDetails?.cacheReadTokens,
+                  // AI SDK v6: inputTokenDetails replaces deprecated cachedInputTokens
+                  inputTokenDetails: finishResult.usage.inputTokenDetails,
+                  // AI SDK v6: outputTokenDetails replaces deprecated reasoningTokens
+                  outputTokenDetails: finishResult.usage.outputTokenDetails,
                 }
               : undefined;
 
@@ -1299,17 +1302,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   }
                 : usage; // Fallback to usage if totalUsage not available
 
-            // ✅ REASONING TOKENS: Use AI SDK's reasoning token count if available
-            // AI SDK v6 tracks reasoning tokens for o1/o3/DeepSeek models
-            // Fallback to manual calculation from reasoningDeltas if SDK doesn't provide it
+            // ✅ REASONING TOKENS: Use AI SDK v6's outputTokenDetails.reasoningTokens when available
+            // Priority: SDK token count > manual calculation from reasoning parts > estimate from deltas
             const reasoningText = reasoningDeltas.join('');
+            const sdkReasoningTokens = finishResult.usage?.outputTokenDetails?.reasoningTokens;
             const reasoningTokens
-              = finishResult.reasoning && finishResult.reasoning.length > 0
-                ? finishResult.reasoning.reduce(
-                    (acc, r) => acc + Math.ceil(r.text.length / 4),
-                    0,
-                  )
-                : Math.ceil(reasoningText.length / 4);
+              = sdkReasoningTokens
+                ?? (finishResult.reasoning && finishResult.reasoning.length > 0
+                  ? finishResult.reasoning.reduce(
+                      (acc, r) => acc + Math.ceil(r.text.length / 4),
+                      0,
+                    )
+                  : Math.ceil(reasoningText.length / 4));
 
             // ✅ PERFORMANCE OPTIMIZATION: Non-blocking analytics tracking
             // PostHog tracking runs asynchronously via waitUntil() to avoid blocking response

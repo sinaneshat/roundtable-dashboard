@@ -32,7 +32,7 @@ const JSON_QUALITY_ORDER: Record<JsonModeQuality, number> = {
  * Model capability flags
  */
 export const ModelCapabilitiesSchema = z.object({
-  /** Supports structured JSON output (streamObject/generateObject) */
+  /** Supports structured JSON output (streamText/generateText with Output.object()) */
   structuredOutput: z.boolean(),
   /** Supports streaming responses */
   streaming: z.boolean(),

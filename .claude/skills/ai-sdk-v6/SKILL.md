@@ -10,7 +10,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write
 
 **Official Documentation:**
 - [AI SDK Overview](https://ai-sdk.dev/docs) - Primary reference
-- [AI SDK Core](https://ai-sdk.dev/docs/ai-sdk-core) - generateText, streamText, generateObject
+- [AI SDK Core](https://ai-sdk.dev/docs/ai-sdk-core) - generateText, streamText, Output.object
 - [AI SDK UI](https://ai-sdk.dev/docs/ai-sdk-ui) - useChat, useCompletion, useObject
 - [Tool Calling](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
 - [Streaming](https://ai-sdk.dev/docs/ai-sdk-core/streaming)
@@ -28,7 +28,7 @@ allowed-tools: Read, Grep, Glob, Edit, Write
 **Project-Specific Reference:**
 - `.context/ai-sdk-v6-crash-course-full-digest.txt` - Comprehensive crash course with exercises
 
-**Fetch latest docs:** Use `mcp__context7__get-library-docs` with topics like "streamText", "useChat tools", "generateObject", "streaming"
+**Fetch latest docs:** Use `mcp__context7__get-library-docs` with topics like "streamText", "useChat tools", "Output.object", "streaming"
 
 ## Core Concepts
 
@@ -327,51 +327,57 @@ export default function Chat() {
 }
 ```
 
-## Structured Output (generateObject/streamObject)
+## Structured Output (AI SDK v6 Output.object Pattern)
 
-### generateObject
+**NOTE:** `generateObject` and `streamObject` are deprecated in AI SDK v6. Use `generateText`/`streamText` with `Output.object()` instead.
+
+### generateText with Output.object
 
 ```tsx
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
-const { object } = await generateObject({
+const { output } = await generateText({
   model: openai('gpt-4o'),
-  schema: z.object({
-    recipe: z.object({
-      name: z.string(),
-      ingredients: z.array(z.object({
+  output: Output.object({
+    schema: z.object({
+      recipe: z.object({
         name: z.string(),
-        amount: z.string(),
-      })),
-      steps: z.array(z.string()),
+        ingredients: z.array(z.object({
+          name: z.string(),
+          amount: z.string(),
+        })),
+        steps: z.array(z.string()),
+      }),
     }),
   }),
   prompt: 'Generate a recipe for chocolate chip cookies.',
 })
 
-console.log(object.recipe.name)
+console.log(output.recipe.name)
 ```
 
-### streamObject
+### streamText with Output.object
 
 ```tsx
-import { streamObject } from 'ai'
+import { streamText, Output } from 'ai'
 import { z } from 'zod'
 
-const { partialObjectStream } = streamObject({
+const { partialOutputStream } = streamText({
   model: openai('gpt-4o'),
-  schema: z.object({
-    characters: z.array(z.object({
-      name: z.string(),
-      class: z.string(),
-      description: z.string(),
-    })),
+  output: Output.object({
+    schema: z.object({
+      characters: z.array(z.object({
+        name: z.string(),
+        class: z.string(),
+        description: z.string(),
+      })),
+    }),
   }),
   prompt: 'Generate 3 RPG characters.',
 })
 
-for await (const partialObject of partialObjectStream) {
+for await (const partialObject of partialOutputStream) {
   console.log(partialObject) // Partial object as it streams
 }
 ```

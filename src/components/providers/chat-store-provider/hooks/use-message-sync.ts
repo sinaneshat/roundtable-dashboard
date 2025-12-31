@@ -153,6 +153,10 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
       return; // Fast path - nothing changed, skip all processing
     }
 
+    // eslint-disable-next-line no-console -- DEBUG: Track main sync entry
+    const lastMsgIdForLog = lastChatMsg?.id?.replace(/^01[A-Z0-9]+_/, '') || 'none';
+    console.log('[DBG:MAIN_SYNC]', { msgCnt: currentMsgCount, textLen: currentTextLength, strm: chatIsStreaming, lastId: lastMsgIdForLog });
+
     // Update refs for next comparison
     prevChatMessagesLengthRef.current = currentMsgCount;
     prevLastMessageTextLengthRef.current = currentTextLength;
@@ -833,9 +837,15 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
     // Combined with 250ms throttle, this significantly reduces update frequency
     const POLL_INTERVAL_MS = 300;
 
+    // eslint-disable-next-line no-console -- DEBUG: Track polling start
+    console.log('[DBG:POLL_START]', { chatMsgCnt: chatMessages.length, strm: chatIsStreaming });
+
     const syncInterval = setInterval(() => {
-      if (!chatIsStreaming || chatMessages.length === 0)
+      if (!chatIsStreaming || chatMessages.length === 0) {
+        // eslint-disable-next-line no-console -- DEBUG: Track polling skip
+        console.log('[DBG:POLL_SKIP]', { strm: chatIsStreaming, msgCnt: chatMessages.length });
         return;
+      }
 
       // ✅ OPTIMIZATION: Skip if we just synced (throttle)
       const now = Date.now();
@@ -875,6 +885,12 @@ export function useMessageSync({ store, chat }: UseMessageSyncParams) {
           needsSync = true;
         }
       }
+
+      // eslint-disable-next-line no-console -- DEBUG: Track poll sync check
+      const lastMsgId = lastHookMessage.id.replace(/^01[A-Z0-9]+_/, '');
+      const hookTextLen = lastHookMessage.parts?.reduce((len, p) => (p.type === 'text' && 'text' in p ? len + String(p.text).length : len), 0) || 0;
+      const storeTextLen = correspondingStoreMessage?.parts?.reduce((len, p) => (p.type === 'text' && 'text' in p ? len + String(p.text).length : len), 0) || 0;
+      console.log('[DBG:POLL_CHECK]', { msgId: lastMsgId, needsSync, hookLen: hookTextLen, storeLen: storeTextLen, hasCorr: !!correspondingStoreMessage });
 
       if (needsSync) {
         lastStreamActivityRef.current = Date.now();
