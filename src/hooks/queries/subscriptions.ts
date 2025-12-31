@@ -61,27 +61,3 @@ export function useSubscriptionQuery(subscriptionId: string) {
     throwOnError: false,
   });
 }
-
-/**
- * Hook to get current active subscription
- * Reuses subscriptions list cache
- *
- * Returns the full subscriptions list response.
- * Components should transform data to find active subscription if needed.
- *
- * @param options - Optional query options
- * @param options.forceEnabled - Force enable query regardless of auth state
- */
-export function useCurrentSubscriptionQuery(options?: { forceEnabled?: boolean }) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
-  return useQuery({
-    queryKey: queryKeys.subscriptions.list(), // Reuse list cache
-    queryFn: () => getSubscriptionsService(),
-    staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
-    enabled: options?.forceEnabled ?? isAuthenticated,
-    retry: false,
-    throwOnError: false,
-  });
-}

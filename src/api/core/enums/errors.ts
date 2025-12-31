@@ -373,3 +373,38 @@ export const ErrorCodes = {
   BATCH_FAILED: 'BATCH_FAILED' as const,
   BATCH_SIZE_EXCEEDED: 'BATCH_SIZE_EXCEEDED' as const,
 } as const;
+
+// ============================================================================
+// ERROR CONTEXT TYPE (Discriminated Union Error Context)
+// ============================================================================
+
+export const ERROR_CONTEXT_TYPES = [
+  'validation',
+  'authentication',
+  'authorization',
+  'database',
+  'external_service',
+  'resource',
+  'resource_unavailable',
+  'configuration',
+] as const;
+
+export const DEFAULT_ERROR_CONTEXT_TYPE: ErrorContextType = 'validation';
+
+export const ErrorContextTypeSchema = z.enum(ERROR_CONTEXT_TYPES).openapi({
+  description: 'Error context type for discriminated union',
+  example: 'validation',
+});
+
+export type ErrorContextType = z.infer<typeof ErrorContextTypeSchema>;
+
+export const ErrorContextTypes = {
+  VALIDATION: 'validation' as const,
+  AUTHENTICATION: 'authentication' as const,
+  AUTHORIZATION: 'authorization' as const,
+  DATABASE: 'database' as const,
+  EXTERNAL_SERVICE: 'external_service' as const,
+  RESOURCE: 'resource' as const,
+  RESOURCE_UNAVAILABLE: 'resource_unavailable' as const,
+  CONFIGURATION: 'configuration' as const,
+} as const;

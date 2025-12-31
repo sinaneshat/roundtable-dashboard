@@ -27,9 +27,6 @@ type PreSearchStreamProps = {
   preSearch: StoredPreSearch;
   onStreamComplete?: (completedSearchData?: PreSearchDataPayload) => void;
   onStreamStart?: () => void;
-  // ✅ PROGRESSIVE UI FIX: Removed providerTriggered prop
-  // Component now always handles its own stream for progressive UI updates
-  // Deduplication handled internally via store's hasPreSearchBeenTriggered
 };
 
 // ✅ ZUSTAND PATTERN: Pre-search deduplication moved to store
@@ -118,11 +115,6 @@ function PreSearchStreamComponent({
   isAutoRetryingOnTrueRef.current = isAutoRetrying.onTrue;
   const isAutoRetryingOnFalseRef = useRef(isAutoRetrying.onFalse);
   isAutoRetryingOnFalseRef.current = isAutoRetrying.onFalse;
-
-  useEffect(() => {
-    return () => {
-    };
-  }, []);
 
   useEffect(() => {
     if (preSearch.status !== MessageStatuses.PENDING && preSearch.status !== MessageStatuses.STREAMING) {
@@ -795,9 +787,6 @@ function PreSearchStreamComponent({
 }
 
 export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextProps) => {
-  // ✅ Memo optimization: Prevent re-renders when props haven't changed
-  // Callbacks are stored in refs internally, so callback equality checks prevent unnecessary work
-  // ✅ FIX: Removed providerTriggered - no longer used for stream execution decisions
   return (
     prevProps.preSearch.id === nextProps.preSearch.id
     && prevProps.preSearch.status === nextProps.preSearch.status

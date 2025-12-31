@@ -7,12 +7,13 @@ import { Suspense } from 'react';
 
 import type { SubscriptionChangeType, SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES, subscriptionTierSchema } from '@/api/services/product-logic.service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import { useCurrentSubscriptionQuery, useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
 function ChangeBadge({ changeType, t }: {
@@ -60,17 +61,15 @@ function SubscriptionChangedContent() {
   const oldProductId = searchParams.get('oldProductId');
 
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
-  const { data: currentSubscription, isFetching: isCurrentSubscriptionFetching } = useCurrentSubscriptionQuery();
 
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
   const displaySubscription
-    = currentSubscription?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
-      || currentSubscription?.data?.items?.[0]
+    = subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
       || subscriptionData?.data?.items?.[0]
       || null;
 
-  const isLoadingData = isSubscriptionsFetching || isCurrentSubscriptionFetching || isUsageStatsFetching;
+  const isLoadingData = isSubscriptionsFetching || isUsageStatsFetching;
 
   // ✅ React 19: Timer-based redirect extracted to shared hook
   const { countdown } = useCountdownRedirect({

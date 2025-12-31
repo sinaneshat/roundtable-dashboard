@@ -5,12 +5,16 @@ import {
   ChangelogTypeSchema,
   ChatModes,
   ChatModeSchema,
+  CoreAssumptionFocusTypeSchema,
   DEFAULT_CHAT_MODE,
+  MessagePartTypeSchema,
   MessageStatusSchema,
   ParticipantStreamStatusSchema,
   PreSearchQueryStatusSchema,
+  PreSearchStreamingEventTypeSchema,
   QueryResultStatusSchema,
   RoundPhaseSchema,
+  SharedAssumptionTypeSchema,
   UIMessageRoleSchema,
   WebSearchAnswerModeSchema,
   WebSearchComplexitySchema,
@@ -334,6 +338,23 @@ export type ParticipantDetailResponse = z.infer<typeof ParticipantDetailResponse
  *
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-ui/ui-message
  */
+const UIMessageTextPartSchema = z.object({
+  type: MessagePartTypeSchema.extract(['text']),
+  text: z.string(),
+});
+
+const UIMessageReasoningPartSchema = z.object({
+  type: MessagePartTypeSchema.extract(['reasoning']),
+  text: z.string(),
+});
+
+const UIMessageFilePartSchema = z.object({
+  type: MessagePartTypeSchema.extract(['file']),
+  url: z.string(),
+  filename: z.string().optional(),
+  mediaType: z.string().default('application/octet-stream'),
+});
+
 const UIMessageSchema = z.object({
   id: z.string().openapi({
     description: 'Unique message identifier',
@@ -344,20 +365,9 @@ const UIMessageSchema = z.object({
     example: 'user',
   }),
   parts: z.array(z.union([
-    z.object({
-      type: z.literal('text'),
-      text: z.string(),
-    }),
-    z.object({
-      type: z.literal('reasoning'),
-      text: z.string(),
-    }),
-    z.object({
-      type: z.literal('file'),
-      url: z.string(),
-      filename: z.string().optional(),
-      mediaType: z.string().default('application/octet-stream'),
-    }),
+    UIMessageTextPartSchema,
+    UIMessageReasoningPartSchema,
+    UIMessageFilePartSchema,
   ])).openapi({
     description: 'Message parts array (text, reasoning, file, etc.)',
     example: [{ type: 'text', text: 'What are the best practices for API design?' }],
@@ -370,10 +380,6 @@ const UIMessageSchema = z.object({
     description: 'Message metadata (discriminated by role: user | assistant | system)',
   }),
 }).openapi('UIMessage');
-
-// ============================================================================
-// WEB SEARCH SCHEMAS (Domain-Specific)
-// ============================================================================
 
 export const WebSearchParametersSchema = z.object({
   query: z.string().min(1),
@@ -443,10 +449,6 @@ export const WebSearchResultMetaSchema = z.object({
 
 export type WebSearchResultMeta = z.infer<typeof WebSearchResultMetaSchema>;
 
-/**
- * Auto-detected search parameters schema
- * Used when LLM automatically determines optimal search parameters
- */
 export const WebSearchAutoParametersSchema = z.object({
   topic: WebSearchTopicSchema.optional(),
   timeRange: WebSearchTimeRangeSchema.optional(),
@@ -498,14 +500,6 @@ export const MultiQueryGenerationSchema = z.object({
 
 export type MultiQueryGeneration = z.infer<typeof MultiQueryGenerationSchema>;
 
-// ============================================================================
-// SERVICE LAYER SCHEMAS (Moved from services - Single Source of Truth)
-// ============================================================================
-
-/**
- * Search context options schema
- * Used by search-context-builder.ts for context generation
- */
 export const SearchContextOptionsSchema = z.object({
   currentRoundNumber: RoundNumberSchema.openapi({
     description: 'Current round number for determining context detail level (0-based: first round is 0)',
@@ -517,10 +511,6 @@ export const SearchContextOptionsSchema = z.object({
 
 export type SearchContextOptions = z.infer<typeof SearchContextOptionsSchema>;
 
-/**
- * Validated pre-search data schema
- * Used by search-context-builder.ts for metadata extraction
- */
 export const ValidatedPreSearchDataSchema = z.object({
   queries: z.array(z.object({
     query: z.string(),
@@ -545,15 +535,6 @@ export const ValidatedPreSearchDataSchema = z.object({
 
 export type ValidatedPreSearchData = z.infer<typeof ValidatedPreSearchDataSchema>;
 
-// ============================================================================
-// PRE-SEARCH API SCHEMAS
-// ============================================================================
-
-/**
- * Pre-search request schema (unified with summary pattern)
- * ✅ FOLLOWS: Moderator summary request pattern
- * Executes web search BEFORE participant streaming
- */
 export const PreSearchRequestSchema = z.object({
   userQuery: z.string().min(1).max(5000).openapi({
     description: 'User query for web search',
@@ -870,14 +851,6 @@ export const ModeratorDetailPayloadSchema = z.object({
 
 export const ModeratorResponseSchema = createApiResponseSchema(ModeratorDetailPayloadSchema).openapi('ModeratorResponse');
 
-// ============================================================================
-// MODERATOR PROMPT CONFIGURATION SCHEMAS (5-part pattern enforcement)
-// ============================================================================
-
-/**
- * ParticipantResponseSchema - Schema for participant response data in moderator prompt
- * Enforces structure of participant data passed to moderator for summarization
- */
 export const ParticipantResponseSchema = z.object({
   participantIndex: z.number().int().nonnegative().openapi({
     description: 'Participant index (0-based)',
@@ -902,10 +875,6 @@ export const ParticipantResponseSchema = z.object({
 
 export type ParticipantResponse = z.infer<typeof ParticipantResponseSchema>;
 
-/**
- * ModeratorPromptConfigSchema - Complete configuration for building moderator prompt
- * Enforces all required data through schema validation
- */
 export const ModeratorPromptConfigSchema = z.object({
   roundNumber: RoundNumberSchema.openapi({
     description: 'Round number being summarized (0-based)',
@@ -925,13 +894,6 @@ export const ModeratorPromptConfigSchema = z.object({
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
 
-// ============================================================================
-// MODERATOR OUTPUT STRUCTURE SCHEMAS
-// ============================================================================
-
-/**
- * Summary sections that are REQUIRED in every moderator output
- */
 export const MODERATOR_REQUIRED_SECTIONS = [
   'summaryConclusion',
   'questionOverview',
@@ -945,9 +907,6 @@ export const ModeratorRequiredSectionSchema = z.enum(MODERATOR_REQUIRED_SECTIONS
 
 export type ModeratorRequiredSection = z.infer<typeof ModeratorRequiredSectionSchema>;
 
-/**
- * Summary sections that are OPTIONAL based on discussion content
- */
 export const MODERATOR_OPTIONAL_SECTIONS = [
   'primaryPerspectives',
   'areasOfAgreement',
@@ -967,9 +926,6 @@ export const ModeratorOptionalSectionSchema = z.enum(MODERATOR_OPTIONAL_SECTIONS
 
 export type ModeratorOptionalSection = z.infer<typeof ModeratorOptionalSectionSchema>;
 
-/**
- * All moderator summary sections (required + optional)
- */
 export const MODERATOR_ALL_SECTIONS = [
   ...MODERATOR_REQUIRED_SECTIONS,
   ...MODERATOR_OPTIONAL_SECTIONS,
@@ -981,9 +937,6 @@ export const ModeratorSectionSchema = z.enum(MODERATOR_ALL_SECTIONS).openapi({
 
 export type ModeratorSection = z.infer<typeof ModeratorSectionSchema>;
 
-/**
- * Consensus status values for the discussion
- */
 export const CONSENSUS_STATUSES = [
   'clear_consensus',
   'conditional_consensus',
@@ -1005,9 +958,6 @@ export const ConsensusStatuses = {
   NO_CONSENSUS: 'no_consensus' as const,
 } as const;
 
-/**
- * Limitation importance levels for blind spots section
- */
 export const LIMITATION_IMPORTANCE_LEVELS = [
   'critical',
   'secondary',
@@ -1027,10 +977,6 @@ export const LimitationImportances = {
   OUT_OF_SCOPE: 'out_of_scope' as const,
 } as const;
 
-/**
- * ModeratorSummarySectionsSchema - Defines the structure of moderator output
- * Used for validation and documentation, not for AI structured output
- */
 export const ModeratorSummarySectionsSchema = z.object({
   // Required sections
   summaryConclusion: z.object({
@@ -1070,17 +1016,13 @@ export const ModeratorSummarySectionsSchema = z.object({
   areasOfAgreement: z.object({
     required: z.literal(false),
     description: z.literal('Substantive alignment summary'),
-    includes: z.array(z.enum(['shared assumptions', 'common objectives', 'overlapping conclusions'])),
+    includes: z.array(SharedAssumptionTypeSchema),
     excludes: z.literal('trivial agreement'),
   }).optional(),
   coreAssumptionsAndTensions: z.object({
     required: z.literal(false),
     description: z.literal('Foundational assumptions and conflicts'),
-    includes: z.array(z.enum([
-      'foundational assumptions behind each perspective',
-      'where assumptions conflict',
-      'why disagreements remain unresolved',
-    ])),
+    includes: z.array(CoreAssumptionFocusTypeSchema),
   }).optional(),
   tradeOffsAndImplications: z.object({
     required: z.literal(false),
@@ -1129,9 +1071,6 @@ export const ModeratorSummarySectionsSchema = z.object({
 
 export type ModeratorSummarySections = z.infer<typeof ModeratorSummarySectionsSchema>;
 
-/**
- * ModeratorStyleConstraintsSchema - Style rules for moderator output
- */
 export const MODERATOR_STYLE_CONSTRAINTS = [
   'precise_restrained_non_performative',
   'no_emotional_language',
@@ -1168,13 +1107,13 @@ export const ChatThreadCacheSchema = z.object({
   title: z.string().optional(),
   slug: z.string().optional(),
   previousSlug: z.string().nullable().optional(),
-  mode: z.string().optional(),
+  mode: ChatModeSchema.optional(),
   status: z.string().optional(),
   isFavorite: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   isAiGeneratedTitle: z.boolean().optional(),
   enableWebSearch: z.boolean().optional(),
-  metadata: z.unknown().optional(),
+  metadata: DbThreadMetadataSchema.nullable().optional(),
   createdAt: z.union([z.string(), z.date()]).optional(),
   updatedAt: z.union([z.string(), z.date()]).optional(),
   lastMessageAt: z.union([z.string(), z.date()]).nullable().optional(),
@@ -1182,10 +1121,6 @@ export const ChatThreadCacheSchema = z.object({
 
 export type ChatThreadCache = z.infer<typeof ChatThreadCacheSchema>;
 
-/**
- * ChatSidebarItem - Simplified thread representation for sidebar lists
- * Used in chat-list.tsx and chat-nav.tsx for efficient sidebar rendering
- */
 export const ChatSidebarItemSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -1193,7 +1128,7 @@ export const ChatSidebarItemSchema = z.object({
   previousSlug: z.string().nullable().optional(),
   createdAt: z.date(),
   updatedAt: z.date(),
-  messages: z.never().array(),
+  messages: z.array(z.never()),
   isActive: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
   isPublic: z.boolean().optional(),
@@ -1348,8 +1283,6 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
 
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
-// StreamState type is exported from @/api/types/streaming (single source of truth)
-
 export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
 
 export type StreamStatusResponse = z.infer<typeof StreamStatusResponseSchema>;
@@ -1478,7 +1411,7 @@ export const ThreadStreamResumptionStateResponseSchema = createApiResponseSchema
 export type ThreadStreamResumptionStateResponse = z.infer<typeof ThreadStreamResumptionStateResponseSchema>;
 
 export const PreSearchStartDataSchema = z.object({
-  type: z.literal('pre_search_start'),
+  type: PreSearchStreamingEventTypeSchema.extract(['pre_search_start']),
   timestamp: z.number(),
   userQuery: z.string(),
   totalQueries: z.union([z.number(), z.string()]),
@@ -1487,7 +1420,7 @@ export const PreSearchStartDataSchema = z.object({
 export type PreSearchStartData = z.infer<typeof PreSearchStartDataSchema>;
 
 export const PreSearchQueryGeneratedDataSchema = z.object({
-  type: z.literal('pre_search_query_generated'),
+  type: PreSearchStreamingEventTypeSchema.extract(['pre_search_query_generated']),
   timestamp: z.number(),
   query: z.string(),
   rationale: z.string(),
@@ -1499,7 +1432,7 @@ export const PreSearchQueryGeneratedDataSchema = z.object({
 export type PreSearchQueryGeneratedData = z.infer<typeof PreSearchQueryGeneratedDataSchema>;
 
 export const PreSearchQueryDataSchema = z.object({
-  type: z.literal('pre_search_query'),
+  type: PreSearchStreamingEventTypeSchema.extract(['pre_search_query']),
   timestamp: z.number(),
   query: z.string(),
   rationale: z.string(),
@@ -1510,12 +1443,8 @@ export const PreSearchQueryDataSchema = z.object({
 
 export type PreSearchQueryData = z.infer<typeof PreSearchQueryDataSchema>;
 
-/**
- * Pre-search result event
- * Sent when individual search completes
- */
 export const PreSearchResultDataSchema = z.object({
-  type: z.literal('pre_search_result'),
+  type: PreSearchStreamingEventTypeSchema.extract(['pre_search_result']),
   timestamp: z.number(),
   query: z.string(),
   answer: z.string().nullable(),
@@ -1526,12 +1455,8 @@ export const PreSearchResultDataSchema = z.object({
 
 export type PreSearchResultData = z.infer<typeof PreSearchResultDataSchema>;
 
-/**
- * Pre-search complete event
- * Sent when all initial searches complete
- */
 export const PreSearchCompleteDataSchema = z.object({
-  type: z.literal('pre_search_complete'),
+  type: PreSearchStreamingEventTypeSchema.extract(['pre_search_complete']),
   timestamp: z.number(),
   totalSearches: RoundNumberSchema,
   successfulSearches: RoundNumberSchema,
@@ -1541,22 +1466,14 @@ export const PreSearchCompleteDataSchema = z.object({
 
 export type PreSearchCompleteData = z.infer<typeof PreSearchCompleteDataSchema>;
 
-/**
- * Pre-search error event
- * Sent when pre-search phase fails
- */
 export const PreSearchErrorDataSchema = z.object({
-  type: z.literal('pre_search_error'),
+  type: PreSearchStreamingEventTypeSchema.extract(['pre_search_error']),
   timestamp: z.number(),
   error: z.string(),
 }).openapi('PreSearchErrorData');
 
 export type PreSearchErrorData = z.infer<typeof PreSearchErrorDataSchema>;
 
-/**
- * Discriminated union of all pre-search data events
- * Used for type-safe streaming data handling
- */
 export const PreSearchStreamDataSchema = z.discriminatedUnion('type', [
   PreSearchStartDataSchema,
   PreSearchQueryGeneratedDataSchema,
@@ -1568,20 +1485,6 @@ export const PreSearchStreamDataSchema = z.discriminatedUnion('type', [
 
 export type PreSearchStreamData = z.infer<typeof PreSearchStreamDataSchema>;
 
-// ============================================================================
-// PRE-SEARCH STATE SCHEMAS (Store Types)
-// ============================================================================
-// Following Single Source of Truth pattern - schemas defined here, types inferred
-
-/**
- * Pre-search status and query status schemas
- * Import PreSearchStatusSchema and PreSearchQueryStatusSchema from @/api/core/enums
- */
-
-/**
- * Pre-search query state schema
- * Represents a single search query in the store
- */
 export const PreSearchQuerySchema = z.object({
   query: z.string(),
   rationale: z.string(),
@@ -1595,29 +1498,10 @@ export const PreSearchQuerySchema = z.object({
 
 export type PreSearchQuery = z.infer<typeof PreSearchQuerySchema>;
 
-// ============================================================================
-// PRE-SEARCH SSE EVENT SCHEMAS
-// ============================================================================
-// Server-Sent Event type definitions for pre-search streaming
-// Frontend: Import these types for EventSource handlers
-
-// ============================================================================
-// PRE-SEARCH SSE EVENT SCHEMAS
-// ============================================================================
-// Server-Sent Event type definitions for pre-search streaming
-// Frontend: Import these types for EventSource handlers
-// NOTE: These use 'event' discriminator (SSE event names), distinct from PreSearchStreamEvent in message-metadata (uses 'type')
-
-/**
- * Base event data with timestamp
- */
 const BaseSSEEventDataSchema = z.object({
   timestamp: z.number(),
 });
 
-/**
- * Start event - sent when pre-search begins
- */
 export const PreSearchStartEventSchema = z.object({
   event: z.literal('start'),
   data: BaseSSEEventDataSchema.extend({
@@ -1628,9 +1512,6 @@ export const PreSearchStartEventSchema = z.object({
 
 export type PreSearchStartEvent = z.infer<typeof PreSearchStartEventSchema>;
 
-/**
- * Query event - streams AI-generated search query incrementally
- */
 export const PreSearchQueryEventSchema = z.object({
   event: z.literal('query'),
   data: BaseSSEEventDataSchema.extend({
@@ -1645,9 +1526,6 @@ export const PreSearchQueryEventSchema = z.object({
 
 export type PreSearchQueryEvent = z.infer<typeof PreSearchQueryEventSchema>;
 
-/**
- * Result event - streams search results as fetched
- */
 export const PreSearchResultEventSchema = z.object({
   event: z.literal('result'),
   data: BaseSSEEventDataSchema.extend({
@@ -1673,9 +1551,6 @@ export const PreSearchResultEventSchema = z.object({
 
 export type PreSearchResultEvent = z.infer<typeof PreSearchResultEventSchema>;
 
-/**
- * Answer chunk event - streams AI answer progressively (buffered 100ms)
- */
 export const PreSearchAnswerChunkEventSchema = z.object({
   event: z.literal('answer_chunk'),
   data: z.object({
@@ -1685,9 +1560,6 @@ export const PreSearchAnswerChunkEventSchema = z.object({
 
 export type PreSearchAnswerChunkEvent = z.infer<typeof PreSearchAnswerChunkEventSchema>;
 
-/**
- * Answer complete event - signals answer streaming finished
- */
 export const PreSearchAnswerCompleteEventSchema = z.object({
   event: z.literal('answer_complete'),
   data: z.object({
@@ -1699,9 +1571,6 @@ export const PreSearchAnswerCompleteEventSchema = z.object({
 
 export type PreSearchAnswerCompleteEvent = z.infer<typeof PreSearchAnswerCompleteEventSchema>;
 
-/**
- * Answer error event - non-blocking answer generation failure
- */
 export const PreSearchAnswerErrorEventSchema = z.object({
   event: z.literal('answer_error'),
   data: z.object({
@@ -1712,9 +1581,6 @@ export const PreSearchAnswerErrorEventSchema = z.object({
 
 export type PreSearchAnswerErrorEvent = z.infer<typeof PreSearchAnswerErrorEventSchema>;
 
-/**
- * Complete event - all searches executed (before answer streaming)
- */
 export const PreSearchCompleteEventSchema = z.object({
   event: z.literal('complete'),
   data: BaseSSEEventDataSchema.extend({
@@ -1727,9 +1593,6 @@ export const PreSearchCompleteEventSchema = z.object({
 
 export type PreSearchCompleteEvent = z.infer<typeof PreSearchCompleteEventSchema>;
 
-/**
- * Done event - final event with complete searchData payload
- */
 export const PreSearchDoneEventSchema = z.object({
   event: z.literal('done'),
   data: z.object({
@@ -1765,9 +1628,6 @@ export const PreSearchDoneEventSchema = z.object({
 
 export type PreSearchDoneEvent = z.infer<typeof PreSearchDoneEventSchema>;
 
-/**
- * Failed event - critical search failure
- */
 export const PreSearchFailedEventSchema = z.object({
   event: z.literal('failed'),
   data: z.object({
@@ -1779,9 +1639,6 @@ export const PreSearchFailedEventSchema = z.object({
 
 export type PreSearchFailedEvent = z.infer<typeof PreSearchFailedEventSchema>;
 
-/**
- * Union of all pre-search SSE events
- */
 export const PreSearchSSEEventSchema = z.discriminatedUnion('event', [
   PreSearchStartEventSchema,
   PreSearchQueryEventSchema,
@@ -1796,33 +1653,18 @@ export const PreSearchSSEEventSchema = z.discriminatedUnion('event', [
 
 export type PreSearchSSEEvent = z.infer<typeof PreSearchSSEEventSchema>;
 
-/**
- * Type guard: check if event is answer chunk
- */
 export function isAnswerChunkEvent(event: PreSearchSSEEvent): event is PreSearchAnswerChunkEvent {
   return event.event === 'answer_chunk';
 }
 
-/**
- * Type guard: check if event is answer complete
- */
 export function isAnswerCompleteEvent(event: PreSearchSSEEvent): event is PreSearchAnswerCompleteEvent {
   return event.event === 'answer_complete';
 }
 
-/**
- * Type guard: check if event is answer error
- */
 export function isAnswerErrorEvent(event: PreSearchSSEEvent): event is PreSearchAnswerErrorEvent {
   return event.event === 'answer_error';
 }
 
-/**
- * Parse SSE event data with type safety using Zod validation
- *
- * Uses discriminated union schema for runtime validation.
- * Returns null on parse failure rather than throwing.
- */
 export function parsePreSearchEvent<T extends PreSearchSSEEvent>(
   messageEvent: MessageEvent,
   expectedType: T['event'],
@@ -1841,18 +1683,6 @@ export function parsePreSearchEvent<T extends PreSearchSSEEvent>(
   }
 }
 
-// ============================================================================
-// DATABASE QUERY RESULT SCHEMAS
-// ============================================================================
-
-/**
- * Schema for chat messages with their associated participants
- * Used in moderator and streaming handlers to validate query results
- *
- * Pattern: Combines chatMessageSelectSchema with nested participant relation
- * This replaces complex type extraction like:
- * type MessageWithParticipant = Awaited<ReturnType<typeof db.query.chatMessage.findMany>>[number] & {...}
- */
 export const MessageWithParticipantSchema = chatMessageSelectSchema
   .extend({
     participant: ChatParticipantSchema.nullable(),
@@ -1861,14 +1691,6 @@ export const MessageWithParticipantSchema = chatMessageSelectSchema
 
 export type MessageWithParticipant = z.infer<typeof MessageWithParticipantSchema>;
 
-// ============================================================================
-// COMPONENT PROP SCHEMAS (UI Layer)
-// ============================================================================
-
-/**
- * Web search display component props schema
- * Single source of truth for component prop validation
- */
 export const WebSearchDisplayPropsSchema = z.object({
   results: z.array(WebSearchResultItemSchema),
   answer: z.string().nullable().optional(),
@@ -1879,10 +1701,6 @@ export const WebSearchDisplayPropsSchema = z.object({
 
 export type WebSearchDisplayProps = z.infer<typeof WebSearchDisplayPropsSchema>;
 
-/**
- * Extended web search display component props with streaming state
- * Extends WebSearchDisplayPropsSchema with streaming-specific fields
- */
 export const WebSearchDisplayExtendedPropsSchema = WebSearchDisplayPropsSchema.extend({
   isStreaming: z.boolean().optional(),
   requestId: z.string().optional(),
@@ -1892,10 +1710,6 @@ export const WebSearchDisplayExtendedPropsSchema = WebSearchDisplayPropsSchema.e
 
 export type WebSearchDisplayExtendedProps = z.infer<typeof WebSearchDisplayExtendedPropsSchema>;
 
-/**
- * Individual image item in search results
- * Used for rendering image galleries
- */
 export const WebSearchImageItemSchema = z.object({
   url: z.string(),
   title: z.string(),
@@ -1906,9 +1720,6 @@ export const WebSearchImageItemSchema = z.object({
 
 export type WebSearchImageItem = z.infer<typeof WebSearchImageItemSchema>;
 
-/**
- * Web search image gallery component props schema
- */
 export const WebSearchImageGalleryPropsSchema = z.object({
   results: z.array(WebSearchResultItemSchema),
   className: z.string().optional(),
@@ -1916,10 +1727,6 @@ export const WebSearchImageGalleryPropsSchema = z.object({
 
 export type WebSearchImageGalleryProps = z.infer<typeof WebSearchImageGalleryPropsSchema>;
 
-/**
- * Web search result item component props schema (simple variant)
- * Used for rendering individual search results with avatar
- */
 export const WebSearchResultItemPropsSchema = z.object({
   result: WebSearchResultItemSchema,
   showDivider: z.boolean().optional().default(true),

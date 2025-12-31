@@ -213,26 +213,20 @@ export const ChatInput = memo(({
     onChange(newValue);
   });
 
-  // ✅ CONSOLIDATED: Speech recognition state transitions (start/stop)
-  // React 19: useEffectEvent removes onChange from deps - no re-subscription on parent re-render
   const prevIsListening = useRef(false);
   useEffect(() => {
     const wasListening = prevIsListening.current;
     prevIsListening.current = isListening;
 
     if (!wasListening && isListening) {
-      // Recording STARTED - save base text and reset hook
       baseTextRef.current = value;
       resetTranscripts();
     } else if (wasListening && !isListening) {
-      // Recording STOPPED - commit final result
       const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
       onChangeEvent(parts.join(' ').trim());
     }
-  }, [isListening, value, finalTranscript, resetTranscripts]); // ✅ onChange removed - accessed via useEffectEvent
+  }, [isListening, value, finalTranscript, resetTranscripts]);
 
-  // Real-time display during listening: baseText + finalTranscript + interimTranscript
-  // React 19: useEffectEvent removes onChange from deps
   useEffect(() => {
     if (!isListening)
       return;
@@ -243,9 +237,7 @@ export const ChatInput = memo(({
     if (displayText !== value) {
       onChangeEvent(displayText);
     }
-  }, [isListening, finalTranscript, interimTranscript, value]); // ✅ onChange removed - accessed via useEffectEvent
-
-  // Focus textarea after DOM renders and paints
+  }, [isListening, finalTranscript, interimTranscript, value]);
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
       return afterPaint(() => textareaRef.current?.focus({ preventScroll: true }));

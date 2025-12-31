@@ -27,6 +27,7 @@ import {
   AuthFailureReasonSchema,
   AuthModeSchema,
   DatabaseOperationSchema,
+  ErrorContextTypes,
   HealthStatusSchema,
   HttpMethodSchema,
   ResourceUnavailableReasonSchema,
@@ -231,7 +232,7 @@ export const CoreSchemas = {
  */
 export const LoggerDataSchema = z.discriminatedUnion('logType', [
   z.object({
-    logType: z.literal('operation'),
+    logType: z.literal('operation' as const),
     operationName: z.string(),
     duration: z.number().optional(),
     requestId: z.string().optional(),
@@ -239,7 +240,7 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
     resource: z.string().optional(),
   }),
   z.object({
-    logType: z.literal('performance'),
+    logType: z.literal('performance' as const),
     marks: z.record(z.string(), z.number()).optional(),
     duration: z.number(),
     memoryUsage: z.number().optional(),
@@ -247,27 +248,27 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
     cacheHits: z.number().optional(),
   }),
   z.object({
-    logType: z.literal('validation'),
+    logType: z.literal('validation' as const),
     fieldCount: z.number().optional(),
     schemaName: z.string().optional(),
     validationErrors: z.array(ValidationErrorSchema).optional(),
   }),
   z.object({
-    logType: z.literal('auth'),
+    logType: z.literal('auth' as const),
     mode: AuthModeSchema,
     userId: z.string().optional(),
     sessionId: z.string().optional(),
     ipAddress: z.string().optional(),
   }),
   z.object({
-    logType: z.literal('database'),
+    logType: z.literal('database' as const),
     operation: DatabaseOperationSchema,
     table: z.string().optional(),
     affected: z.number().optional(),
     transactionId: z.string().optional(),
   }),
   z.object({
-    logType: z.literal('api'),
+    logType: z.literal('api' as const),
     method: HttpMethodSchema,
     path: z.string(),
     statusCode: z.number().optional(),
@@ -275,11 +276,11 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
     userAgent: z.string().optional(),
   }),
   z.object({
-    logType: z.literal('system'),
+    logType: z.literal('system' as const),
     component: z.string(),
     action: z.string(),
     result: z.string().optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    details: z.unknown().optional(),
   }),
 ]).optional().openapi({
   example: {
@@ -343,7 +344,7 @@ export const ResponseMetadataSchema = z.discriminatedUnion('metaType', [
  */
 export const ErrorContextSchema = z.discriminatedUnion('errorType', [
   z.object({
-    errorType: z.literal('validation'),
+    errorType: z.literal(ErrorContextTypes.VALIDATION),
     field: z.string().optional(),
     fieldErrors: z.array(z.object({
       field: z.string(),
@@ -355,7 +356,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     schemaName: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal('authentication'),
+    errorType: z.literal(ErrorContextTypes.AUTHENTICATION),
     attemptedEmail: z.string().email().optional(),
     failureReason: AuthFailureReasonSchema.optional(),
     operation: z.string().optional(),
@@ -364,7 +365,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     service: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal('authorization'),
+    errorType: z.literal(ErrorContextTypes.AUTHORIZATION),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
     userId: z.string().optional(),
@@ -372,7 +373,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     actualPermission: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal('database'),
+    errorType: z.literal(ErrorContextTypes.DATABASE),
     operation: DatabaseOperationSchema,
     table: z.string().optional(),
     constraint: z.string().optional(),
@@ -381,7 +382,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     userId: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal('external_service'),
+    errorType: z.literal(ErrorContextTypes.EXTERNAL_SERVICE),
     serviceName: z.string().optional(),
     service: z.string().optional(),
     operation: z.string().optional(),
@@ -393,14 +394,14 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     userId: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal('resource'),
+    errorType: z.literal(ErrorContextTypes.RESOURCE),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
     userId: z.string().optional(),
     service: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal('resource_unavailable'),
+    errorType: z.literal(ErrorContextTypes.RESOURCE_UNAVAILABLE),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
     resourceStatus: z.string().optional(),
@@ -408,14 +409,14 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     unavailabilityReason: ResourceUnavailableReasonSchema.optional(),
   }),
   z.object({
-    errorType: z.literal('configuration'),
+    errorType: z.literal(ErrorContextTypes.CONFIGURATION),
     service: z.string().optional(),
     configKey: z.string().optional(),
     operation: z.string().optional(),
   }),
 ]).optional().openapi({
   example: {
-    errorType: 'validation',
+    errorType: ErrorContextTypes.VALIDATION,
     fieldErrors: [{
       field: 'email',
       message: 'Invalid email format',
@@ -620,10 +621,11 @@ export const CommonFieldSchemas = {
   }),
 
   /**
-   * Record/metadata field (JSON objects)
+   * JSON metadata field - use specific schemas when possible
+   * Only use for truly dynamic data that cannot be typed
    */
-  metadata: () => z.record(z.string(), z.unknown()).nullable().optional().openapi({
-    description: 'Custom metadata object',
+  metadata: () => z.unknown().nullable().optional().openapi({
+    description: 'Custom metadata (prefer specific schemas)',
     example: { key: 'value' },
   }),
 
@@ -862,8 +864,8 @@ export const HealthDependencySchema = z.object({
     description: 'Response time in milliseconds',
     example: 45,
   }),
-  details: z.record(z.string(), z.unknown()).optional().openapi({
-    description: 'Additional details',
+  details: z.unknown().optional().openapi({
+    description: 'Additional health details',
     example: { version: '1.0.0' },
   }),
 }).openapi('HealthDependency');

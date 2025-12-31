@@ -18,6 +18,7 @@ import type {
   UpdateAttachmentResponse,
   UploadPartRequestWithBody,
   UploadPartResponse,
+  UploadWithTicketResponse,
 } from '@/services/api';
 import {
   abortMultipartUploadService,
@@ -29,12 +30,10 @@ import {
   uploadPartService,
 } from '@/services/api';
 
-type SecureUploadResponse = Awaited<ReturnType<typeof secureUploadService>>;
-
 export function useSecureUploadMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<SecureUploadResponse, Error, File>({
+  return useMutation<UploadWithTicketResponse, Error, File>({
     mutationFn: secureUploadService,
     onSuccess: () => {
       invalidationPatterns.afterUpload().forEach((key) => {

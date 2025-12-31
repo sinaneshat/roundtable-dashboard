@@ -13,6 +13,7 @@ import {
   chatProjectSelectSchema,
   chatProjectUpdateSchema,
   projectAttachmentSelectSchema,
+  ProjectMemoryMetadataSchema,
   projectMemorySelectSchema,
 } from '@/db/validation/project';
 import { uploadSelectSchema } from '@/db/validation/upload';
@@ -48,9 +49,6 @@ export const CreateProjectRequestSchema = z.object({
   }).optional().openapi({
     description: 'Project settings',
   }),
-  metadata: z.record(z.string(), z.unknown()).optional().openapi({
-    description: 'Custom metadata (tags, category, etc.)',
-  }),
 }).openapi('CreateProjectRequest');
 
 /**
@@ -64,7 +62,6 @@ export const UpdateProjectRequestSchema = chatProjectUpdateSchema
     customInstructions: true,
     autoragInstanceId: true,
     settings: true,
-    metadata: true,
   })
   .partial()
   .openapi('UpdateProjectRequest');
@@ -182,11 +179,8 @@ export const CreateProjectMemoryRequestSchema = z.object({
     description: 'Importance level (1-10) for retrieval prioritization',
     example: 7,
   }),
-  metadata: z.object({
-    keywords: z.array(z.string()).optional(),
-    category: z.string().optional(),
-  }).optional().openapi({
-    description: 'Optional metadata for the memory',
+  metadata: ProjectMemoryMetadataSchema.optional().openapi({
+    description: 'Optional metadata for categorization and extraction tracking',
   }),
 }).openapi('CreateProjectMemoryRequest');
 
@@ -198,10 +192,7 @@ export const UpdateProjectMemoryRequestSchema = z.object({
   summary: z.string().max(500).optional().nullable(),
   importance: z.number().int().min(1).max(10).optional(),
   isActive: z.boolean().optional(),
-  metadata: z.object({
-    keywords: z.array(z.string()).optional(),
-    category: z.string().optional(),
-  }).optional(),
+  metadata: ProjectMemoryMetadataSchema.optional().nullable(),
 }).openapi('UpdateProjectMemoryRequest');
 
 /**

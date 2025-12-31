@@ -115,7 +115,8 @@ describe('MyComponent', () => {
 ### Testing User Interactions
 
 ```tsx
-import { render, screen, userEvent } from '@/lib/testing';
+import { render, screen } from '@/lib/testing';
+import userEvent from '@testing-library/user-event';
 import { Button } from '@/components/ui/button';
 import { vi } from 'vitest';
 

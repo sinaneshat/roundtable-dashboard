@@ -25,6 +25,7 @@
 import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
+import { LogHelpers } from '@/api/types/logger';
 import type { StreamBufferMetadata, StreamChunk } from '@/api/types/streaming';
 import {
   parseSSEEventType,
@@ -72,10 +73,11 @@ export async function initializeStreamBuffer(
 ): Promise<void> {
   // ✅ LOCAL DEV: Skip buffering if KV not available
   if (!env?.KV) {
-    logger?.warn('KV not available - skipping stream buffer initialization', {
-      logType: 'edge_case',
+    logger?.warn('KV not available - skipping stream buffer initialization', LogHelpers.operation({
+      operationName: 'initializeStreamBuffer',
       streamId,
-    });
+      edgeCase: 'kv_not_available',
+    }));
     return;
   }
 
@@ -109,19 +111,19 @@ export async function initializeStreamBuffer(
       { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
     );
 
-    logger?.info('Initialized stream buffer', {
-      logType: 'operation',
+    logger?.info('Initialized stream buffer', LogHelpers.operation({
+      operationName: 'initializeStreamBuffer',
       streamId,
       threadId,
       roundNumber,
       participantIndex,
-    });
+    }));
   } catch (error) {
-    logger?.error('Failed to initialize stream buffer', {
-      logType: 'error',
+    logger?.error('Failed to initialize stream buffer', LogHelpers.operation({
+      operationName: 'initializeStreamBuffer',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
     throw error;
   }
 }
@@ -163,11 +165,11 @@ export async function appendStreamChunk(
       // ✅ FIX: If chunks don't exist, wait and retry (KV eventual consistency)
       if (!existingChunks) {
         if (retryCount < maxRetries - 1) {
-          logger?.info('Stream chunks not found, waiting for KV consistency', {
-            logType: 'operation',
+          logger?.info('Stream chunks not found, waiting for KV consistency', LogHelpers.operation({
+            operationName: 'appendStreamChunk',
             streamId,
             retryCount: retryCount + 1,
-          });
+          }));
           await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms
           retryCount++;
           continue;
@@ -177,11 +179,12 @@ export async function appendStreamChunk(
         // This handles race condition where appendStreamChunk is called before initializeStreamBuffer completes
         logger?.warn(
           'Stream chunks not found after retries, initializing empty array',
-          {
-            logType: 'edge_case',
+          LogHelpers.operation({
+            operationName: 'appendStreamChunk',
             streamId,
             retriesAttempted: retryCount,
-          },
+            edgeCase: 'chunks_not_found',
+          }),
         );
         existingChunks = [];
       }
@@ -212,14 +215,14 @@ export async function appendStreamChunk(
       retryCount++;
       if (retryCount >= maxRetries) {
         // ✅ FIX: Log error with more context for debugging stream resumption issues
-        logger?.error('Failed to append stream chunk after retries', {
-          logType: 'error',
+        logger?.error('Failed to append stream chunk after retries', LogHelpers.operation({
+          operationName: 'appendStreamChunk',
           streamId,
           retriesAttempted: retryCount,
           chunkDataLength: data.length,
           error: error instanceof Error ? error.message : 'Unknown error',
           errorStack: error instanceof Error ? error.stack : undefined,
-        });
+        }));
       } else {
         // Wait before retry
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -248,10 +251,11 @@ export async function completeStreamBuffer(
     const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
     if (!metadata) {
-      logger?.warn('Stream metadata not found during completion', {
-        logType: 'edge_case',
+      logger?.warn('Stream metadata not found during completion', LogHelpers.operation({
+        operationName: 'completeStreamBuffer',
         streamId,
-      });
+        edgeCase: 'metadata_not_found',
+      }));
       return;
     }
 
@@ -266,17 +270,17 @@ export async function completeStreamBuffer(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    logger?.info('Completed stream buffer', {
-      logType: 'operation',
+    logger?.info('Completed stream buffer', LogHelpers.operation({
+      operationName: 'completeStreamBuffer',
       streamId,
       chunkCount: updatedMetadata.chunkCount,
-    });
+    }));
   } catch (error) {
-    logger?.error('Failed to complete stream buffer', {
-      logType: 'error',
+    logger?.error('Failed to complete stream buffer', LogHelpers.operation({
+      operationName: 'completeStreamBuffer',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -301,10 +305,11 @@ export async function failStreamBuffer(
     const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
     if (!metadata) {
-      logger?.warn('Stream metadata not found during failure', {
-        logType: 'edge_case',
+      logger?.warn('Stream metadata not found during failure', LogHelpers.operation({
+        operationName: 'failStreamBuffer',
         streamId,
-      });
+        edgeCase: 'metadata_not_found',
+      }));
       return;
     }
 
@@ -343,29 +348,29 @@ export async function failStreamBuffer(
         };
       }
     } catch (chunkError) {
-      logger?.warn('Failed to append error chunk', {
-        logType: 'edge_case',
+      logger?.warn('Failed to append error chunk', LogHelpers.operation({
+        operationName: 'failStreamBuffer',
         streamId,
-        error:
-          chunkError instanceof Error ? chunkError.message : 'Unknown error',
-      });
+        edgeCase: 'append_error_chunk_failed',
+        error: chunkError instanceof Error ? chunkError.message : 'Unknown error',
+      }));
     }
 
     await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    logger?.info('Marked stream buffer as failed', {
-      logType: 'operation',
+    logger?.info('Marked stream buffer as failed', LogHelpers.operation({
+      operationName: 'failStreamBuffer',
       streamId,
       errorMessage,
-    });
+    }));
   } catch (error) {
-    logger?.error('Failed to mark stream as failed', {
-      logType: 'error',
+    logger?.error('Failed to mark stream as failed', LogHelpers.operation({
+      operationName: 'failStreamBuffer',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -392,24 +397,24 @@ export async function getActiveStreamId(
     );
 
     if (streamId) {
-      logger?.info('Found active stream', {
-        logType: 'operation',
+      logger?.info('Found active stream', LogHelpers.operation({
+        operationName: 'getActiveStreamId',
         threadId,
         roundNumber,
         participantIndex,
         streamId,
-      });
+      }));
     }
 
     return streamId;
   } catch (error) {
-    logger?.error('Failed to get active stream ID', {
-      logType: 'error',
+    logger?.error('Failed to get active stream ID', LogHelpers.operation({
+      operationName: 'getActiveStreamId',
       threadId,
       roundNumber,
       participantIndex,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
     return null;
   }
 }
@@ -432,21 +437,21 @@ export async function getStreamMetadata(
     const metadata = parseStreamBufferMetadata(await env.KV.get(getMetadataKey(streamId), 'json'));
 
     if (metadata) {
-      logger?.info('Retrieved stream metadata', {
-        logType: 'operation',
+      logger?.info('Retrieved stream metadata', LogHelpers.operation({
+        operationName: 'getStreamMetadata',
         streamId,
         status: metadata.status,
         chunkCount: metadata.chunkCount,
-      });
+      }));
     }
 
     return metadata;
   } catch (error) {
-    logger?.error('Failed to get stream metadata', {
-      logType: 'error',
+    logger?.error('Failed to get stream metadata', LogHelpers.operation({
+      operationName: 'getStreamMetadata',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
     return null;
   }
 }
@@ -470,20 +475,20 @@ export async function getStreamChunks(
     const chunks = parseStreamChunksArray(await env.KV.get(getChunksKey(streamId), 'json'));
 
     if (chunks) {
-      logger?.info('Retrieved stream chunks', {
-        logType: 'operation',
+      logger?.info('Retrieved stream chunks', LogHelpers.operation({
+        operationName: 'getStreamChunks',
         streamId,
         chunkCount: chunks.length,
-      });
+      }));
     }
 
     return chunks;
   } catch (error) {
-    logger?.error('Failed to get stream chunks', {
-      logType: 'error',
+    logger?.error('Failed to get stream chunks', LogHelpers.operation({
+      operationName: 'getStreamChunks',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
     return null;
   }
 }
@@ -507,20 +512,21 @@ export async function clearActiveStream(
   try {
     await env.KV.delete(getActiveKey(threadId, roundNumber, participantIndex));
 
-    logger?.info('Cleared active stream tracking', {
-      logType: 'operation',
+    logger?.info('Cleared active stream tracking', LogHelpers.operation({
+      operationName: 'clearActiveStream',
       threadId,
       roundNumber,
       participantIndex,
-    });
+    }));
   } catch (error) {
-    logger?.warn('Failed to clear active stream', {
-      logType: 'edge_case',
+    logger?.warn('Failed to clear active stream', LogHelpers.operation({
+      operationName: 'clearActiveStream',
       threadId,
       roundNumber,
       participantIndex,
+      edgeCase: 'clear_failed',
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 
@@ -548,16 +554,17 @@ export async function deleteStreamBuffer(
       env.KV.delete(getActiveKey(threadId, roundNumber, participantIndex)),
     ]);
 
-    logger?.info('Deleted stream buffer', {
-      logType: 'operation',
+    logger?.info('Deleted stream buffer', LogHelpers.operation({
+      operationName: 'deleteStreamBuffer',
       streamId,
-    });
+    }));
   } catch (error) {
-    logger?.warn('Failed to delete stream buffer', {
-      logType: 'edge_case',
+    logger?.warn('Failed to delete stream buffer', LogHelpers.operation({
+      operationName: 'deleteStreamBuffer',
       streamId,
+      edgeCase: 'delete_failed',
       error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    }));
   }
 }
 

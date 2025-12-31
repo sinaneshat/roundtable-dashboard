@@ -77,7 +77,8 @@ You are a Testing Expert specializing in Jest, React Testing Library, and Next.j
 
 **Test Structure:**
 ```tsx
-import { render, screen, userEvent } from '@/lib/testing';
+import { render, screen } from '@/lib/testing';
+import userEvent from '@testing-library/user-event';
 import { MyComponent } from '@/components/MyComponent';
 
 describe('MyComponent', () => {

@@ -9,7 +9,8 @@ import { useTranslations } from 'next-intl';
 import { cn } from "@/lib/ui/cn"
 
 function Breadcrumb({ ...props }: ComponentProps<"nav">) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />
+  const tAccessibility = useTranslations('accessibility');
+  return <nav aria-label={tAccessibility('breadcrumb')} data-slot="breadcrumb" {...props} />
 }
 
 function BreadcrumbList({ className, ...props }: ComponentProps<"ol">) {
@@ -54,12 +55,15 @@ function BreadcrumbLink({
 }
 
 function BreadcrumbPage({ className, ...props }: ComponentProps<"span">) {
+  const tAccessibility = useTranslations('accessibility');
+
   return (
     <span
       data-slot="breadcrumb-page"
       role="link"
       aria-disabled="true"
       aria-current="page"
+      aria-label={tAccessibility('currentPage')}
       className={cn("text-foreground font-normal", className)}
       {...props}
     />

@@ -551,7 +551,7 @@ export function customResponse<T>(
   c: Context,
   data: T,
   status: number,
-  headers: Record<string, string> = {},
+  headers: { [key: string]: string } = {},
 ): Response {
   const response = {
     success: status < 400,
@@ -604,14 +604,14 @@ export function redirect(
  *   tierGroups: [...]
  * });
  */
-export function collection<T, M extends Record<string, unknown> = Record<string, never>>(
+export function collection<T, M = never>(
   c: Context,
   items: T[],
   metadata?: M,
   additionalMeta?: ResponseMetadata,
 ): Response {
   const data = {
-    ...(metadata && Object.keys(metadata).length > 0 ? metadata : {}),
+    ...(metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0 ? metadata : {}),
     items,
     count: items.length,
   };
@@ -682,7 +682,7 @@ export function health(
 export function detailedHealth(
   c: Context,
   status: HealthStatus,
-  dependencies: Record<string, HealthDependency>,
+  dependencies: { [key: string]: HealthDependency },
   duration?: number,
 ): Response {
   // Calculate summary
@@ -750,8 +750,8 @@ export const SSE_HEADERS = {
  * Build SSE metadata headers from stream metadata
  * @internal
  */
-function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, string> {
-  const headers: Record<string, string> = {};
+function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): { [key: string]: string } {
+  const headers: { [key: string]: string } = {};
 
   if (metadata.streamId !== undefined) {
     headers['X-Stream-Id'] = metadata.streamId;
@@ -871,8 +871,8 @@ export const TEXT_STREAM_HEADERS = {
  * Build text stream metadata headers
  * @internal
  */
-function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<string, string> {
-  const headers: Record<string, string> = {};
+function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): { [key: string]: string } {
+  const headers: { [key: string]: string } = {};
 
   if (metadata.streamId !== undefined) {
     headers['X-Stream-Id'] = metadata.streamId;

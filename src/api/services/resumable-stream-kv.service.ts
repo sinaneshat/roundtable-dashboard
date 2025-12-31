@@ -120,6 +120,7 @@ export async function setThreadActiveStream(
     if (logger) {
       logger.info('Set thread active stream', {
         logType: 'operation',
+        operationName: 'setThreadActiveStream',
         threadId,
         streamId,
         roundNumber,
@@ -132,6 +133,7 @@ export async function setThreadActiveStream(
     if (logger) {
       logger.warn('Failed to set thread active stream', {
         logType: 'edge_case',
+        scenario: 'setThreadActiveStream_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -170,6 +172,7 @@ export async function getThreadActiveStream(
     if (activeStream && logger) {
       logger.info('Retrieved thread active stream', {
         logType: 'operation',
+        operationName: 'getThreadActiveStream',
         threadId,
         streamId: activeStream.streamId,
         roundNumber: activeStream.roundNumber,
@@ -181,7 +184,8 @@ export async function getThreadActiveStream(
   } catch (error) {
     if (logger) {
       logger.error('Failed to get thread active stream', {
-        logType: 'error',
+        logType: 'edge_case',
+        scenario: 'getThreadActiveStream_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -223,6 +227,7 @@ export async function updateParticipantStatus(
     if (!existing) {
       logger?.warn('No active stream to update participant status', {
         logType: 'edge_case',
+        scenario: 'updateParticipantStatus_noActiveStream',
         threadId,
         roundNumber,
         participantIndex,
@@ -246,6 +251,7 @@ export async function updateParticipantStatus(
       await env.KV.delete(getThreadActiveStreamKey(threadId));
       logger?.info('All participants finished - cleared thread active stream', {
         logType: 'operation',
+        operationName: 'updateParticipantStatus_allFinished',
         threadId,
         roundNumber,
         totalParticipants: existing.totalParticipants,
@@ -268,6 +274,7 @@ export async function updateParticipantStatus(
 
     logger?.info('Updated participant status', {
       logType: 'operation',
+      operationName: 'updateParticipantStatus',
       threadId,
       roundNumber,
       participantIndex,
@@ -280,6 +287,7 @@ export async function updateParticipantStatus(
   } catch (error) {
     logger?.warn('Failed to update participant status', {
       logType: 'edge_case',
+      scenario: 'updateParticipantStatus_failed',
       threadId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
@@ -328,7 +336,8 @@ export async function getNextParticipantToStream(
     return null;
   } catch (error) {
     logger?.error('Failed to get next participant to stream', {
-      logType: 'error',
+      logType: 'edge_case',
+      scenario: 'getNextParticipantToStream_failed',
       threadId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
@@ -363,6 +372,7 @@ export async function clearThreadActiveStream(
     if (logger) {
       logger.info('Cleared thread active stream', {
         logType: 'operation',
+        operationName: 'clearThreadActiveStream',
         threadId,
       });
     }
@@ -370,6 +380,7 @@ export async function clearThreadActiveStream(
     if (logger) {
       logger.warn('Failed to clear thread active stream', {
         logType: 'edge_case',
+        scenario: 'clearThreadActiveStream_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -424,6 +435,7 @@ export async function markStreamActive(
     if (logger) {
       logger.info('Marked stream as active', {
         logType: 'operation',
+        operationName: 'markStreamActive',
         threadId,
         roundNumber,
         participantIndex,
@@ -433,6 +445,7 @@ export async function markStreamActive(
     if (logger) {
       logger.warn('Failed to mark stream as active', {
         logType: 'edge_case',
+        scenario: 'markStreamActive_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -492,6 +505,7 @@ export async function markStreamCompleted(
     if (logger) {
       logger.info('Marked stream as completed', {
         logType: 'operation',
+        operationName: 'markStreamCompleted',
         threadId,
         roundNumber,
         participantIndex,
@@ -502,6 +516,7 @@ export async function markStreamCompleted(
     if (logger) {
       logger.warn('Failed to mark stream as completed', {
         logType: 'edge_case',
+        scenario: 'markStreamCompleted_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -560,6 +575,7 @@ export async function markStreamFailed(
     if (logger) {
       logger.info('Marked stream as failed', {
         logType: 'operation',
+        operationName: 'markStreamFailed',
         threadId,
         roundNumber,
         participantIndex,
@@ -570,6 +586,7 @@ export async function markStreamFailed(
     if (logger) {
       logger.warn('Failed to mark stream as failed', {
         logType: 'edge_case',
+        scenario: 'markStreamFailed_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -609,6 +626,7 @@ export async function getStreamState(
     if (state && logger) {
       logger.info('Retrieved stream state', {
         logType: 'operation',
+        operationName: 'getStreamState',
         threadId,
         roundNumber,
         participantIndex,
@@ -620,7 +638,8 @@ export async function getStreamState(
   } catch (error) {
     if (logger) {
       logger.error('Failed to get stream state', {
-        logType: 'error',
+        logType: 'edge_case',
+        scenario: 'getStreamState_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -657,6 +676,7 @@ export async function clearStreamState(
     if (logger) {
       logger.info('Cleared stream state', {
         logType: 'operation',
+        operationName: 'clearStreamState',
         threadId,
         roundNumber,
         participantIndex,
@@ -666,6 +686,7 @@ export async function clearStreamState(
     if (logger) {
       logger.warn('Failed to clear stream state', {
         logType: 'edge_case',
+        scenario: 'clearStreamState_failed',
         threadId,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
@@ -727,6 +748,7 @@ export async function updateStreamHeartbeat(
     if (logger) {
       logger.warn('Failed to update stream heartbeat', {
         logType: 'edge_case',
+        scenario: 'updateStreamHeartbeat_failed',
         threadId,
         roundNumber,
         participantIndex,
@@ -779,6 +801,7 @@ export async function incrementStreamChunkCount(
     if (logger) {
       logger.warn('Failed to increment stream chunk count', {
         logType: 'edge_case',
+        scenario: 'incrementStreamChunkCount_failed',
         threadId,
         roundNumber,
         participantIndex,

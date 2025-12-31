@@ -14,7 +14,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import type { getSubscriptionsService } from '@/services/api';
+import type { GetSubscriptionsResponse } from '@/services/api';
 import {
   cancelSubscriptionService,
   switchSubscriptionService,
@@ -40,9 +40,9 @@ export function useSwitchSubscriptionMutation() {
       if (response.success && response.data?.subscription) {
         const updatedSubscription = response.data.subscription;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
+        queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
-          (oldData: Awaited<ReturnType<typeof getSubscriptionsService>> | undefined) => {
+          (oldData: GetSubscriptionsResponse | undefined) => {
             if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
@@ -107,9 +107,9 @@ export function useCancelSubscriptionMutation() {
       if (response.success && response.data?.subscription) {
         const updatedSubscription = response.data.subscription;
 
-        queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
+        queryClient.setQueryData<GetSubscriptionsResponse>(
           queryKeys.subscriptions.list(),
-          (oldData: Awaited<ReturnType<typeof getSubscriptionsService>> | undefined) => {
+          (oldData: GetSubscriptionsResponse | undefined) => {
             if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }

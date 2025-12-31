@@ -49,6 +49,7 @@ import type {
   ThreadAttachmentWithContent,
 } from '@/api/types/citations';
 import type { TypedLogger } from '@/api/types/logger';
+import { LogHelpers } from '@/api/types/logger';
 import { isModelFilePartWithData } from '@/api/types/uploads';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -211,14 +212,13 @@ export async function loadThreadAttachmentContext(params: {
 
     const processedUploadIds = new Set<string>();
 
-    logger?.info('Loading thread attachment context', {
-      logType: 'operation',
+    logger?.info('Loading thread attachment context', LogHelpers.operation({
       operationName: 'loadThreadAttachmentContext',
       threadId,
       messageCount: threadMessages.length,
       attachmentCount: messageUploadsRaw.length,
       currentAttachmentCount: currentAttachmentIds.length,
-    });
+    }));
 
     for (const row of messageUploadsRaw) {
       processedUploadIds.add(row.upload.id);
@@ -241,22 +241,20 @@ export async function loadThreadAttachmentContext(params: {
               withContent++;
             }
           } catch (error) {
-            logger?.warn('Failed to extract content from attachment', {
-              logType: 'operation',
+            logger?.warn('Failed to extract content from attachment', LogHelpers.operation({
               operationName: 'loadThreadAttachmentContext',
               uploadId: upload.id,
               error: getErrorMessage(error),
-            });
+            }));
           }
         } else {
           skipped++;
-          logger?.debug('Skipping large file for content extraction', {
-            logType: 'operation',
+          logger?.debug('Skipping large file for content extraction', LogHelpers.operation({
             operationName: 'loadThreadAttachmentContext',
             uploadId: upload.id,
             fileSize: upload.fileSize,
             maxSize: MAX_TEXT_CONTENT_SIZE,
-          });
+          }));
         }
       }
 
@@ -308,12 +306,11 @@ export async function loadThreadAttachmentContext(params: {
         ),
       });
 
-      logger?.info('Loading current message attachments for citation context', {
-        logType: 'operation',
+      logger?.info('Loading current message attachments for citation context', LogHelpers.operation({
         operationName: 'loadThreadAttachmentContext',
         currentAttachmentIds: unprocessedAttachmentIds,
         foundUploads: currentUploads.length,
-      });
+      }));
 
       for (const upload of currentUploads) {
         const citationId = generateAttachmentCitationId(upload.id);
@@ -334,12 +331,11 @@ export async function loadThreadAttachmentContext(params: {
             } catch (error) {
               logger?.warn(
                 'Failed to extract content from current attachment',
-                {
-                  logType: 'operation',
+                LogHelpers.operation({
                   operationName: 'loadThreadAttachmentContext',
                   uploadId: upload.id,
                   error: getErrorMessage(error),
-                },
+                }),
               );
             }
           } else {
@@ -386,12 +382,11 @@ export async function loadThreadAttachmentContext(params: {
 
     const formattedPrompt = formatThreadAttachmentPrompt(attachments);
 
-    logger?.info('Thread attachment context loaded', {
-      logType: 'operation',
+    logger?.info('Thread attachment context loaded', LogHelpers.operation({
       operationName: 'loadThreadAttachmentContext',
       threadId,
       stats: { total: attachments.length, withContent, skipped },
-    });
+    }));
 
     return {
       attachments,
@@ -400,12 +395,11 @@ export async function loadThreadAttachmentContext(params: {
       stats: { total: attachments.length, withContent, skipped },
     };
   } catch (error) {
-    logger?.error('Failed to load thread attachment context', {
-      logType: 'operation',
+    logger?.error('Failed to load thread attachment context', LogHelpers.operation({
       operationName: 'loadThreadAttachmentContext',
       threadId,
       error: getErrorMessage(error),
-    });
+    }));
 
     return {
       attachments: [],
@@ -450,12 +444,11 @@ export async function loadParticipantConfiguration(
   let participants: ChatParticipant[];
 
   if (hasPersistedParticipants && participantIndex === 0) {
-    logger?.info('Reloading participants after persistence', {
-      logType: 'operation',
+    logger?.info('Reloading participants after persistence', LogHelpers.operation({
       operationName: 'loadParticipantConfiguration',
       threadId,
       participantIndex,
-    });
+    }));
 
     const reloadedThread = await db.query.chatThread.findFirst({
       where: eq(tables.chatThread.id, threadId),
@@ -611,24 +604,22 @@ export async function buildSystemPromptWithContext(
 
               systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\nUse the above knowledge from indexed project files when relevant. Cite sources using [rag_xxxxx] markers when referencing specific files.`;
 
-              logger?.info('AutoRAG retrieved context', {
-                logType: 'operation',
+              logger?.info('AutoRAG retrieved context', LogHelpers.operation({
                 operationName: 'buildSystemPromptWithContext',
                 projectId: thread.projectId,
                 resultCount: ragResponse.data.length,
                 hasAiResponse: !!ragResponse.response,
                 citableSourcesAdded: ragResponse.data.length,
-              });
+              }));
             } else if (ragResponse.response) {
               systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Files)\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from uploaded project files when relevant to the conversation.`;
             }
           } catch (error) {
-            logger?.warn('AutoRAG retrieval failed', {
-              logType: 'operation',
+            logger?.warn('AutoRAG retrieval failed', LogHelpers.operation({
               operationName: 'buildSystemPromptWithContext',
               projectId: thread.projectId,
               error: getErrorMessage(error),
-            });
+            }));
           }
         }
 
@@ -651,29 +642,26 @@ export async function buildSystemPromptWithContext(
             systemPrompt = `${systemPrompt}${citableContext.formattedPrompt}`;
           }
 
-          logger?.info('Built citable project context', {
-            logType: 'operation',
+          logger?.info('Built citable project context', LogHelpers.operation({
             operationName: 'buildSystemPromptWithContext',
             projectId: thread.projectId,
             sourceCount: citableContext.sources.length,
             stats: citableContext.stats,
-          });
+          }));
         } catch (error) {
-          logger?.warn('Citable project context loading failed', {
-            logType: 'operation',
+          logger?.warn('Citable project context loading failed', LogHelpers.operation({
             operationName: 'buildSystemPromptWithContext',
             projectId: thread.projectId,
             error: getErrorMessage(error),
-          });
+          }));
         }
       }
     } catch (error) {
-      logger?.warn('Project context loading failed', {
-        logType: 'operation',
+      logger?.warn('Project context loading failed', LogHelpers.operation({
         operationName: 'buildSystemPromptWithContext',
         projectId: thread.projectId,
         error: getErrorMessage(error),
-      });
+      }));
     }
   }
 
@@ -688,11 +676,10 @@ export async function buildSystemPromptWithContext(
         systemPrompt = `${systemPrompt}${searchContext}`;
       }
     } catch (error) {
-      logger?.warn('Search context building failed', {
-        logType: 'operation',
+      logger?.warn('Search context building failed', LogHelpers.operation({
         operationName: 'buildSystemPromptWithContext',
         error: getErrorMessage(error),
-      });
+      }));
     }
   }
 
@@ -715,21 +702,19 @@ export async function buildSystemPromptWithContext(
         citationSourceMap.set(source.id, source);
       }
 
-      logger?.info('Added thread attachment context for RAG', {
-        logType: 'operation',
+      logger?.info('Added thread attachment context for RAG', LogHelpers.operation({
         operationName: 'buildSystemPromptWithContext',
         threadId: thread.id,
         attachmentStats: threadAttachmentContext.stats,
         citableSourcesAdded: threadAttachmentContext.citableSources.length,
-      });
+      }));
     }
   } catch (error) {
-    logger?.warn('Thread attachment context loading failed', {
-      logType: 'operation',
+    logger?.warn('Thread attachment context loading failed', LogHelpers.operation({
       operationName: 'buildSystemPromptWithContext',
       threadId: thread.id,
       error: getErrorMessage(error),
-    });
+    }));
   }
 
   return {
@@ -916,12 +901,11 @@ export async function prepareValidatedMessages(
           parts: [...fileParts, ...nonFileParts],
         };
 
-        logger?.info('Injected file parts into message for AI model', {
-          logType: 'operation',
+        logger?.info('Injected file parts into message for AI model', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           filePartsCount: fileParts.length,
           stats,
-        });
+        }));
       }
 
       if (errors.length > 0) {
@@ -930,11 +914,10 @@ export async function prepareValidatedMessages(
           errors: errors.slice(0, 5),
           attachmentIds,
         });
-        logger?.warn('Some attachments failed to load', {
-          logType: 'operation',
+        logger?.warn('Some attachments failed to load', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           errors,
-        });
+        }));
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
@@ -943,12 +926,11 @@ export async function prepareValidatedMessages(
         attachmentIds,
         stack: error instanceof Error ? error.stack : undefined,
       });
-      logger?.error('Failed to load attachment content', {
-        logType: 'operation',
+      logger?.error('Failed to load attachment content', LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         error: errorMessage,
         attachmentIds,
-      });
+      }));
     }
   }
 
@@ -980,12 +962,11 @@ export async function prepareValidatedMessages(
       if (uploadIdsFromUrls.length > 0) {
         logger?.debug(
           'Participant 1+ detected HTTP URLs in newMessage, extracting uploadIds',
-          {
-            logType: 'operation',
+          LogHelpers.operation({
             operationName: 'prepareValidatedMessages',
             uploadIdsCount: uploadIdsFromUrls.length,
             uploadIds: uploadIdsFromUrls,
-          },
+          }),
         );
 
         try {
@@ -1008,12 +989,11 @@ export async function prepareValidatedMessages(
 
             logger?.info(
               'Converted HTTP URL file parts to base64 for participant 1+',
-              {
-                logType: 'operation',
+              LogHelpers.operation({
                 operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
                 stats,
-              },
+              }),
             );
           }
 
@@ -1038,12 +1018,11 @@ export async function prepareValidatedMessages(
           );
           logger?.error(
             'Failed to load participant 1+ attachment content',
-            {
-              logType: 'operation',
+            LogHelpers.operation({
               operationName: 'prepareValidatedMessages',
               error: errorMessage,
               uploadIds: uploadIdsFromUrls,
-            },
+            }),
           );
         }
       }
@@ -1065,12 +1044,11 @@ export async function prepareValidatedMessages(
       if (uploadIdsFromParts.length > 0) {
         logger?.debug(
           'Participant 1+ detected uploadId on file parts, loading content directly',
-          {
-            logType: 'operation',
+          LogHelpers.operation({
             operationName: 'prepareValidatedMessages',
             uploadIdsCount: uploadIdsFromParts.length,
             uploadIds: uploadIdsFromParts,
-          },
+          }),
         );
 
         try {
@@ -1093,12 +1071,11 @@ export async function prepareValidatedMessages(
 
             logger?.info(
               'Converted uploadId file parts to base64 for participant 1+',
-              {
-                logType: 'operation',
+              LogHelpers.operation({
                 operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
                 stats,
-              },
+              }),
             );
           }
 
@@ -1123,12 +1100,11 @@ export async function prepareValidatedMessages(
           );
           logger?.error(
             'Failed to load participant 1+ uploadId attachment content',
-            {
-              logType: 'operation',
+            LogHelpers.operation({
               operationName: 'prepareValidatedMessages',
               error: errorMessage,
               uploadIds: uploadIdsFromParts,
-            },
+            }),
           );
         }
       }
@@ -1158,25 +1134,12 @@ export async function prepareValidatedMessages(
         })
         .map(msg => msg.id);
 
-      logger?.debug('Checking messages for attachment conversion', {
-        logType: 'operation',
+      logger?.debug('Checking messages for attachment conversion', LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         messageIdsToCheck,
         totalPreviousMessages: previousMessages.length,
-        userMessages: previousMessages
-          .filter(m => m.role === MessageRoles.USER)
-          .map(m => ({
-            id: m.id,
-            hasFileParts:
-              Array.isArray(m.parts) && m.parts.some(p => p.type === 'file'),
-            filePartUrls: Array.isArray(m.parts)
-              ? m.parts
-                  .map(extractUrlFromFilePart)
-                  .filter((url): url is string => url !== null)
-                  .map(url => url.substring(0, 50))
-              : [],
-          })),
-      });
+        userMessages: previousMessages.filter(m => m.role === MessageRoles.USER).length,
+      }));
 
       if (messageIdsToCheck.length > 0) {
         const { filePartsByMessageId, errors, stats }
@@ -1227,29 +1190,26 @@ export async function prepareValidatedMessages(
 
           logger?.info(
             'Converted HTTP file URLs to base64 for previous messages',
-            {
-              logType: 'operation',
+            LogHelpers.operation({
               operationName: 'prepareValidatedMessages',
               messagesConverted: filePartsByMessageId.size,
               stats,
-            },
+            }),
           );
         }
 
         if (errors.length > 0) {
-          logger?.warn('Some previous message attachments failed to load', {
-            logType: 'operation',
+          logger?.warn('Some previous message attachments failed to load', LogHelpers.operation({
             operationName: 'prepareValidatedMessages',
             errors: errors.slice(0, 5),
-          });
+          }));
         }
       }
     } catch (error) {
-      logger?.warn('Failed to load previous message attachments', {
-        logType: 'operation',
+      logger?.warn('Failed to load previous message attachments', LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         error: getErrorMessage(error),
-      });
+      }));
     }
   }
 
@@ -1273,12 +1233,11 @@ export async function prepareValidatedMessages(
   if (isDuplicateUserMessage) {
     logger?.debug(
       'Skipping duplicate user message with potentially invalid URLs',
-      {
-        logType: 'operation',
+      LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         roundNumber: newMessageRoundNumber,
         reason: 'DB already has user message with proper signed URLs',
-      },
+      }),
     );
   }
 
@@ -1296,13 +1255,12 @@ export async function prepareValidatedMessages(
     && fileDataFromNewMessage.size === 0
     && fileDataFromHistory.size === 0
   ) {
-    logger?.warn('File parts detected but no file data collected', {
-      logType: 'operation',
+    logger?.warn('File parts detected but no file data collected', LogHelpers.operation({
       operationName: 'prepareValidatedMessages',
       filePartsCount: newMessageFileParts.length,
       isDuplicateUserMessage,
       attachmentIdsCount: attachmentIds?.length ?? 0,
-    });
+    }));
   }
 
   const needsFallback
@@ -1360,18 +1318,16 @@ export async function prepareValidatedMessages(
           }
         }
 
-        logger?.info('Loaded file data via uploadId fallback', {
-          logType: 'operation',
+        logger?.info('Loaded file data via uploadId fallback', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           uploadIdsCount: uploadIdsFromFileParts.length,
           loadedCount: fileDataFromHistory.size,
-        });
+        }));
       } catch (error) {
-        logger?.warn('Fallback file data loading failed', {
-          logType: 'operation',
+        logger?.warn('Fallback file data loading failed', LogHelpers.operation({
           operationName: 'prepareValidatedMessages',
           error: getErrorMessage(error),
-        });
+        }));
       }
     }
   }
@@ -1407,12 +1363,11 @@ export async function prepareValidatedMessages(
   }
 
   if (fileDataMap.size > 0) {
-    logger?.debug('Collected file data for post-processing', {
-      logType: 'operation',
+    logger?.debug('Collected file data for post-processing', LogHelpers.operation({
       operationName: 'prepareValidatedMessages',
       fileCount: fileDataMap.size,
       filenames: Array.from(fileDataMap.keys()),
-    });
+    }));
   }
 
   let modelMessages;
@@ -1441,22 +1396,20 @@ export async function prepareValidatedMessages(
       return true;
     }
     if (msg.content.length === 0) {
-      logger?.info('Filtering out message with empty content after SDK conversion', {
-        logType: 'validation',
+      logger?.info('Filtering out message with empty content after SDK conversion', LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
         role: msg.role,
-      });
+      }));
       return false;
     }
     return true;
   });
 
   if (fileDataMap.size > 0) {
-    logger?.debug('Injected file data into model messages', {
-      logType: 'operation',
+    logger?.debug('Injected file data into model messages', LogHelpers.operation({
       operationName: 'prepareValidatedMessages',
       processedMessageCount: modelMessages.length,
-    });
+    }));
   }
 
   const lastModelMessage = modelMessages[modelMessages.length - 1];

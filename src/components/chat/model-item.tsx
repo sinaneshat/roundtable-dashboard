@@ -34,6 +34,7 @@ type RoleBadgeDisplayProps = {
   onOpenRolePanel?: () => void;
   onClearRole: () => void;
   tModels: (key: string) => string;
+  tAccessibility: (key: string) => string;
 };
 
 function RoleBadgeDisplay({
@@ -41,6 +42,7 @@ function RoleBadgeDisplay({
   onOpenRolePanel,
   onClearRole,
   tModels,
+  tAccessibility,
 }: RoleBadgeDisplayProps) {
   return (
     <div
@@ -71,7 +73,7 @@ function RoleBadgeDisplay({
                   onClearRole();
                 }}
                 className="shrink-0 p-0.5 rounded-full hover:bg-black/20 transition-colors"
-                aria-label="Clear role"
+                aria-label={tAccessibility('clearRole')}
               >
                 <X className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               </button>
@@ -118,6 +120,7 @@ export function ModelItem({
   pendingRole,
 }: ModelItemProps) {
   const tModels = useTranslations('chat.models');
+  const tAccessibility = useTranslations('accessibility');
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
   const { model, participant } = orderedModel;
@@ -184,6 +187,7 @@ export function ModelItem({
                 onOpenRolePanel={onOpenRolePanel}
                 onClearRole={onClearRole}
                 tModels={tModels}
+                tAccessibility={tAccessibility}
               />
             )}
           </div>

@@ -29,7 +29,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { UserCreditBalance } from '@/db/validation';
+import type { CreditTransactionMetadata, UserCreditBalance } from '@/db/validation';
 import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 
 // ============================================================================
@@ -865,7 +865,7 @@ type TransactionRecord = {
   action?: CreditAction;
   modelId?: string;
   description?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: CreditTransactionMetadata;
 };
 
 /**

@@ -301,3 +301,39 @@ export const PollingStatuses = {
   STREAMING: 'streaming' as const,
   PROCESSING: 'processing' as const,
 } as const;
+
+// ============================================================================
+// PRE-SEARCH STREAMING EVENT TYPES
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const PRE_SEARCH_STREAMING_EVENT_TYPES = [
+  'pre_search_start',
+  'pre_search_query_generated',
+  'pre_search_query',
+  'pre_search_result',
+  'pre_search_complete',
+  'pre_search_error',
+] as const;
+
+// 2. ZOD SCHEMA
+export const PreSearchStreamingEventTypeSchema = z.enum(PRE_SEARCH_STREAMING_EVENT_TYPES).openapi({
+  description: 'Pre-search streaming event type for web search lifecycle',
+  example: 'pre_search_query_generated',
+});
+
+// 3. TYPESCRIPT TYPE
+export type PreSearchStreamingEventType = z.infer<typeof PreSearchStreamingEventTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_PRE_SEARCH_STREAMING_EVENT_TYPE: PreSearchStreamingEventType = 'pre_search_start';
+
+// 5. CONSTANT OBJECT
+export const PreSearchStreamingEventTypes = {
+  PRE_SEARCH_START: 'pre_search_start' as const,
+  PRE_SEARCH_QUERY_GENERATED: 'pre_search_query_generated' as const,
+  PRE_SEARCH_QUERY: 'pre_search_query' as const,
+  PRE_SEARCH_RESULT: 'pre_search_result' as const,
+  PRE_SEARCH_COMPLETE: 'pre_search_complete' as const,
+  PRE_SEARCH_ERROR: 'pre_search_error' as const,
+} as const;

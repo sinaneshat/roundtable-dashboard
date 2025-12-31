@@ -20,7 +20,6 @@ import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
-  getAttachmentService,
   getDownloadUrlService,
   listAttachmentsService,
 } from '@/services/api';
@@ -54,27 +53,6 @@ export function useUploadsQuery(status?: ChatAttachmentStatus) {
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
-    retry: false,
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to fetch a specific upload by ID
- * Protected endpoint - requires authentication
- *
- * @param uploadId - Upload ID
- * @param enabled - Optional control over whether to fetch
- */
-export function useUploadQuery(uploadId: string, enabled?: boolean) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
-  return useQuery({
-    queryKey: queryKeys.uploads.detail(uploadId),
-    queryFn: () => getAttachmentService({ param: { id: uploadId } }),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds
-    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!uploadId),
     retry: false,
     throwOnError: false,
   });

@@ -51,6 +51,16 @@ function createLocalDevEnv(processEnv: NodeJS.ProcessEnv): CloudflareEnv {
 /**
  * Creates a local development ExecutionContext
  * Tracks background promises for local testing
+ *
+ * Type safety: ExecutionContext.props is a Cloudflare-specific property for
+ * passing data between middleware/handlers. In local dev, we provide an empty
+ * object since we don't use this feature outside of production Workers.
+ *
+ * The type assertion is necessary because:
+ * 1. ExecutionContext interface requires 'props' property
+ * 2. Cloudflare Workers runtime auto-populates this in production
+ * 3. Local dev doesn't have Cloudflare Workers runtime, so we provide a stub
+ * 4. The API code doesn't rely on 'props' - it uses Hono's context instead
  */
 function createLocalDevExecutionContext(
   pendingPromises: Promise<unknown>[],
@@ -62,6 +72,8 @@ function createLocalDevExecutionContext(
     passThroughOnException: () => {
       // No-op in local dev
     },
+    // Type assertion required: Local dev stub for Cloudflare Workers 'props' property
+    // Production uses actual Cloudflare runtime - this is only for local development fallback
     props: {} as Record<string, unknown>,
   } as ExecutionContext;
 }

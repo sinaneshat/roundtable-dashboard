@@ -116,7 +116,6 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
         userId: user.id,
         expiresIn: body.expiresIn ? body.expiresIn * 24 * 60 * 60 : undefined, // Convert days to seconds
         remaining: body.remaining ?? undefined, // Convert null to undefined
-        metadata: body.metadata || undefined,
         prefix: 'rpnd_',
         rateLimitEnabled: true,
         rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 24 hours
@@ -163,7 +162,6 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
         remaining: body.remaining ?? undefined, // Convert null to undefined
         refillAmount: body.refillAmount ?? undefined, // Convert null to undefined
         refillInterval: body.refillInterval ?? undefined, // Convert null to undefined
-        metadata: body.metadata,
         rateLimitEnabled: body.rateLimitEnabled,
         rateLimitTimeWindow: body.rateLimitTimeWindow ?? undefined, // Convert null to undefined
         rateLimitMax: body.rateLimitMax ?? undefined, // Convert null to undefined

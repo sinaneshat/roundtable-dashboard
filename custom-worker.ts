@@ -19,6 +19,20 @@ import type { TitleGenerationQueueMessage } from './src/api/types/queues';
 // Import queue consumer handler (same directory as other custom workers)
 import { handleTitleGenerationQueue } from './src/workers/title-generation-queue';
 
+/**
+ * ARCHITECTURAL REQUIREMENT: Durable Object Re-Exports
+ *
+ * Cloudflare Workers requires all Durable Object classes to be exported
+ * from the main worker entry point (wrangler.jsonc "main": "custom-worker.ts").
+ *
+ * These re-exports are necessary and CANNOT use barrel pattern because:
+ * 1. wrangler.jsonc durable_objects.bindings references class names by export
+ * 2. OpenNext classes are build-time artifacts (.open-next/worker.js)
+ * 3. Worker runtime requires direct export from entry point
+ *
+ * See wrangler.jsonc lines 73-87 for Durable Object configuration.
+ */
+
 // Re-export OpenNext's Durable Object classes (required for caching)
 // @ts-expect-error - .open-next/worker.js is generated at build time
 export { BucketCachePurge, DOQueueHandler } from './.open-next/worker.js';

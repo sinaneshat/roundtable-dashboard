@@ -38,9 +38,16 @@ const HealthCheckResultSchema = z.object({
     example: 25,
     description: 'Health check execution time in milliseconds',
   }),
-  details: z.record(z.string(), z.unknown()).optional().openapi({
-    example: { missingVars: ['VAR_1', 'VAR_2'] },
-    description: 'Additional health check details',
+  details: z.object({
+    detailType: z.enum(['health_check']).openapi({
+      description: 'Type discriminator for health check details',
+    }),
+    missingVars: z.array(z.string()).openapi({
+      description: 'List of missing environment variables',
+      example: ['VAR_1', 'VAR_2'],
+    }),
+  }).optional().openapi({
+    description: 'Typed health check details for environment validation',
   }),
 }).openapi('HealthCheckResult');
 

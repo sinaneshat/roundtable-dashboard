@@ -211,7 +211,6 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
         autoragInstanceId,
         r2FolderPrefix,
         settings: body.settings,
-        metadata: body.metadata,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -267,7 +266,6 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       customInstructions?: string | null;
       autoragInstanceId?: string | null;
       settings?: typeof body.settings;
-      metadata?: typeof body.metadata;
       updatedAt: Date;
     } = { updatedAt: new Date() };
 
@@ -283,8 +281,6 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       updateData.autoragInstanceId = body.autoragInstanceId;
     if (body.settings !== undefined)
       updateData.settings = body.settings;
-    if (body.metadata !== undefined)
-      updateData.metadata = body.metadata;
 
     const [updated] = await db
       .update(tables.chatProject)

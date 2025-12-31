@@ -4,8 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ChatMode } from '@/api/core/enums';
-import { UploadStatuses } from '@/api/core/enums';
+import { ChatModeSchema, UploadStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
@@ -16,6 +15,7 @@ import { useBoolean, useChatAttachments } from '@/hooks/utils';
 import { toastManager } from '@/lib/toast';
 import {
   chatMessagesToUIMessages,
+  getCurrentRoundNumber,
   getIncompatibleModelIds,
   isVisionRequiredMimeType,
   threadHasVisionRequiredFiles,
@@ -24,6 +24,10 @@ import {
   useChatFormActions,
   useScreenInitialization,
 } from '@/stores/chat';
+import {
+  areAllParticipantsCompleteForRound,
+  getModeratorMessageForRound,
+} from '@/stores/chat/utils/participant-completion-gate';
 
 import { ChatView } from './ChatView';
 
@@ -192,18 +196,37 @@ export default function ChatThreadScreen({
     })),
   );
 
+  const chatMode = useMemo(() => {
+    if (selectedMode)
+      return selectedMode;
+    const parsed = ChatModeSchema.safeParse(thread.mode);
+    return parsed.success ? parsed.data : undefined;
+  }, [selectedMode, thread.mode]);
+
   useScreenInitialization({
     mode: 'thread',
     thread,
     participants,
     initialMessages: uiMessages,
-    chatMode: selectedMode || (thread.mode as ChatMode),
+    chatMode,
     isRegeneration: regeneratingRoundNumber !== null,
     regeneratingRoundNumber,
     enableOrchestrator: !isRegenerating && !isModeratorStreaming,
   });
 
-  const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage);
+  const isAwaitingModerator = useMemo(() => {
+    if (messages.length === 0 || participants.length === 0)
+      return false;
+
+    const currentRound = getCurrentRoundNumber(messages);
+    const allParticipantsComplete = areAllParticipantsCompleteForRound(messages, participants, currentRound);
+    const moderatorExists = getModeratorMessageForRound(messages, currentRound) !== undefined;
+
+    // Block if all participants are done but moderator hasn't been created yet
+    return allParticipantsComplete && !moderatorExists;
+  }, [messages, participants]);
+
+  const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || isAwaitingModerator;
 
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {

@@ -1,32 +1,59 @@
 /**
  * Standardized Error Handling Patterns for API Routes
  *
- * This module provides comprehensive, standardized error handling patterns
- * across all API routes with consistent error formatting, logging, and
- * response structures.
- *
- * Uses Zod for schema validation and type inference to avoid hard-coded types.
- *
- * Features:
- * - Zod-based error schemas and validation
- * - Type inference instead of manual type definitions
- * - Consistent error response formatting
- * - Proper error logging without sensitive data
- * - HTTP status code mapping
- * - Error context and metadata handling
- * - Request tracing and correlation IDs
+ * Uses Zod for schema validation and type inference.
+ * ErrorContext uses discriminated unions from core/schemas.
  */
 
-// Using Stoker's HttpStatusCodes for maximum reusability
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { z } from 'zod';
 
-import type { ApiErrorSeverity, ErrorCode } from '@/api/core/enums';
-import { ApiErrorSeverities, ApiErrorSeveritySchema, ErrorCodes, ErrorCodeSchema } from '@/api/core/enums';
+import type { ApiErrorSeverity, ErrorCategory, ErrorCode } from '@/api/core/enums';
+import { ApiErrorSeverities, ApiErrorSeveritySchema, ErrorCategories, ErrorCategorySchema, ErrorCodes, ErrorCodeSchema } from '@/api/core/enums';
 import type { ErrorContext } from '@/api/core/schemas';
 import { ErrorContextSchema } from '@/api/core/schemas';
 
 import { extractAISdkError, getErrorMessage, getErrorName } from './error-types';
+
+// ============================================================================
+// ERROR DETAILS SCHEMA (Discriminated Union)
+// ============================================================================
+
+const ServiceErrorDetailsSchema = z.object({
+  detailType: z.literal('service_error'),
+  serviceName: z.string(),
+  originalError: z.string().optional(),
+});
+
+const ValidationErrorDetailsSchema = z.object({
+  detailType: z.literal('validation_error'),
+  fields: z.array(z.object({
+    field: z.string(),
+    message: z.string(),
+    code: z.string().optional(),
+  })),
+});
+
+const GenericErrorDetailsSchema = z.object({
+  detailType: z.literal('generic'),
+  info: z.string().optional(),
+});
+
+const BatchErrorDetailsSchema = z.object({
+  detailType: z.literal('batch'),
+  currentSize: z.number().optional(),
+  statementCount: z.number().optional(),
+  originalError: z.string().optional(),
+});
+
+export const ErrorDetailsSchema = z.discriminatedUnion('detailType', [
+  ServiceErrorDetailsSchema,
+  ValidationErrorDetailsSchema,
+  GenericErrorDetailsSchema,
+  BatchErrorDetailsSchema,
+]);
+
+export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
 
 // ============================================================================
 // ERROR CONFIGURATION SCHEMA
@@ -37,7 +64,7 @@ export const AppErrorConfigSchema = z.object({
   code: ErrorCodeSchema,
   statusCode: z.number().int().min(100).max(599),
   severity: ApiErrorSeveritySchema.optional().default('medium'),
-  details: z.unknown().optional(),
+  details: ErrorDetailsSchema.optional(),
   context: ErrorContextSchema.optional(),
   correlationId: z.string().optional(),
 });
@@ -52,7 +79,7 @@ class AppError extends Error {
   public readonly code: ErrorCode;
   public readonly statusCode: number;
   public readonly severity: ApiErrorSeverity;
-  public readonly details?: unknown;
+  public readonly details?: ErrorDetails;
   public readonly context?: ErrorContext;
   public readonly timestamp: Date;
   public readonly correlationId?: string;
@@ -297,50 +324,69 @@ export function normalizeError(error: unknown): Error {
 // AI PROVIDER ERROR METADATA
 // ============================================================================
 
-export const AI_PROVIDER_ERROR_CATEGORIES = [
-  'provider_rate_limit', // Rate limiting (429, quota exceeded) - retry aggressively
-  'provider_network', // Network/connectivity issues (502, 503, 504) - retry aggressively
-  'provider_service', // Service unavailable - retry aggressively
-  'model_not_found', // Model unavailable (404) - don't retry
-  'model_content_filter', // Content policy violation - don't retry
-  'authentication', // API key invalid (401, 403) - don't retry
-  'validation', // Bad request (400) - don't retry
-  'unknown', // Unknown error - cautious retry
-] as const;
+/**
+ * Provider error metadata schema
+ * Uses typed discriminated union for metadata instead of z.unknown()
+ */
+const ProviderMetadataSchema = z.discriminatedUnion('metaType', [
+  z.object({
+    metaType: z.literal('rate_limit'),
+    retryAfter: z.number().optional(),
+    remaining: z.number().optional(),
+    limit: z.number().optional(),
+  }),
+  z.object({
+    metaType: z.literal('model_info'),
+    modelId: z.string().optional(),
+    provider: z.string().optional(),
+    reason: z.string().optional(),
+  }),
+  z.object({
+    metaType: z.literal('raw'),
+    data: z.record(z.string(), z.string()).optional(),
+  }),
+]);
 
-export const AIProviderErrorCategorySchema = z.enum(AI_PROVIDER_ERROR_CATEGORIES);
-
-export type AIProviderErrorCategory = z.infer<typeof AIProviderErrorCategorySchema>;
-
-export const AIProviderErrorCategories = {
-  PROVIDER_RATE_LIMIT: 'provider_rate_limit' as const,
-  PROVIDER_NETWORK: 'provider_network' as const,
-  PROVIDER_SERVICE: 'provider_service' as const,
-  MODEL_NOT_FOUND: 'model_not_found' as const,
-  MODEL_CONTENT_FILTER: 'model_content_filter' as const,
-  AUTHENTICATION: 'authentication' as const,
-  VALIDATION: 'validation' as const,
-  UNKNOWN: 'unknown' as const,
-} as const;
+// Type exported for internal schema validation - used by ProviderErrorDetailsSchema
+type ProviderMetadata = z.infer<typeof ProviderMetadataSchema>;
+export type { ProviderMetadata };
 
 export const ProviderErrorDetailsSchema = z.object({
   message: z.string().optional(),
   code: z.string().optional(),
   type: z.string().optional(),
-  metadata: z.unknown().optional(),
+  metadata: ProviderMetadataSchema.optional(),
 });
 
 export type ProviderErrorDetails = z.infer<typeof ProviderErrorDetailsSchema>;
 
+// ============================================================================
+// PROVIDER ERROR RESPONSE SCHEMAS (type-safe JSON parsing)
+// ============================================================================
+
+const ProviderNestedErrorResponseSchema = z.object({
+  error: z.object({
+    message: z.string().optional(),
+    code: z.string().optional(),
+    type: z.string().optional(),
+    metadata: ProviderMetadataSchema.optional(),
+  }),
+});
+
+const ProviderFlatErrorResponseSchema = z.object({
+  message: z.string(),
+  code: z.string().optional(),
+});
+
 export const AIProviderErrorMetadataSchema = z.object({
   errorName: z.string(),
   errorType: z.string(),
-  errorCategory: AIProviderErrorCategorySchema,
+  errorCategory: ErrorCategorySchema,
   errorMessage: z.string(),
   openRouterError: z.string().optional(),
   openRouterCode: z.string().optional(),
   openRouterType: z.string().optional(),
-  openRouterMetadata: z.unknown().optional(),
+  openRouterMetadata: ProviderMetadataSchema.optional(),
   statusCode: z.number().optional(),
   requestId: z.string().optional(),
   rawErrorMessage: z.string(),
@@ -370,16 +416,12 @@ export function structureAIProviderError(
   const responseBody = aiError?.responseBody;
   const cause = aiError?.cause;
 
-  let responseHeaders: Record<string, string> | undefined;
+  const ResponseHeadersSchema = z.record(z.string(), z.string());
+  let responseHeaders: z.infer<typeof ResponseHeadersSchema> | undefined;
   if (error instanceof Error && 'responseHeaders' in error) {
-    const headers = (error as { responseHeaders?: unknown }).responseHeaders;
-    // ✅ TYPE GUARD: Validate headers is a string record
-    if (headers && typeof headers === 'object' && !Array.isArray(headers)) {
-      // Validate each value is a string before casting
-      const isValidHeaders = Object.values(headers).every(v => typeof v === 'string');
-      if (isValidHeaders) {
-        responseHeaders = headers as Record<string, string>;
-      }
+    const result = ResponseHeadersSchema.safeParse(error.responseHeaders);
+    if (result.success) {
+      responseHeaders = result.data;
     }
   }
 
@@ -388,32 +430,34 @@ export function structureAIProviderError(
   if (responseBody) {
     try {
       const parsed: unknown = JSON.parse(responseBody);
-      // ✅ TYPE GUARD: Validate parsed structure before access
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const parsedObj = parsed as Record<string, unknown>;
-        // Provider standard error format: { error: { message, code, metadata } }
-        if (parsedObj.error && typeof parsedObj.error === 'object' && !Array.isArray(parsedObj.error)) {
-          const errorObj = parsedObj.error as Record<string, unknown>;
-          providerError = ProviderErrorDetailsSchema.parse({
-            message: typeof errorObj.message === 'string' ? errorObj.message : String(parsedObj.error),
-            code: typeof errorObj.code === 'string' ? errorObj.code : undefined,
-            type: typeof errorObj.type === 'string' ? errorObj.type : undefined,
-            metadata: errorObj.metadata,
-          });
-          if (providerError.message) {
-            errorMessage = providerError.message;
-          }
-        } else if (typeof parsedObj.message === 'string') {
-          // Alternative format: { message, code }
-          providerError = ProviderErrorDetailsSchema.parse({
-            message: parsedObj.message,
-            code: typeof parsedObj.code === 'string' ? parsedObj.code : undefined,
-          });
-          errorMessage = parsedObj.message;
+
+      // ✅ ZOD-BASED PARSING: Use schema validation instead of manual type guards
+      // Try nested error format first: { error: { message, code, type, metadata } }
+      const nestedResult = ProviderNestedErrorResponseSchema.safeParse(parsed);
+      if (nestedResult.success) {
+        const { error } = nestedResult.data;
+        providerError = {
+          message: error.message ?? String(nestedResult.data.error),
+          code: error.code,
+          type: error.type,
+          metadata: error.metadata,
+        };
+        if (providerError.message) {
+          errorMessage = providerError.message;
+        }
+      } else {
+        // Try flat format: { message, code }
+        const flatResult = ProviderFlatErrorResponseSchema.safeParse(parsed);
+        if (flatResult.success) {
+          providerError = {
+            message: flatResult.data.message,
+            code: flatResult.data.code,
+          };
+          errorMessage = flatResult.data.message;
         }
       }
     } catch {
-      // responseBody is not valid JSON or schema parse failed - use as plain text
+      // responseBody is not valid JSON - use as plain text
       if (responseBody.length > 0 && responseBody.length < 500) {
         errorMessage = responseBody;
       }
@@ -421,7 +465,7 @@ export function structureAIProviderError(
   }
 
   // Categorize error and determine retry strategy
-  let errorCategory: AIProviderErrorCategory = 'unknown';
+  let errorCategory: ErrorCategory = ErrorCategories.UNKNOWN;
   let errorIsTransient: boolean;
   let shouldRetry: boolean;
 
@@ -436,7 +480,7 @@ export function structureAIProviderError(
     || errorLower.includes('quota')
     || errorLower.includes('too many requests')
   ) {
-    errorCategory = AIProviderErrorCategories.PROVIDER_RATE_LIMIT;
+    errorCategory = ErrorCategories.PROVIDER_RATE_LIMIT;
     errorIsTransient = true;
     shouldRetry = true;
   } else if (
@@ -453,7 +497,7 @@ export function structureAIProviderError(
     || errorLower.includes('service unavailable')
     || errorLower.includes('gateway')
   ) {
-    errorCategory = AIProviderErrorCategories.PROVIDER_NETWORK;
+    errorCategory = ErrorCategories.PROVIDER_NETWORK;
     errorIsTransient = true;
     shouldRetry = true;
   } else if (
@@ -466,7 +510,7 @@ export function structureAIProviderError(
     || errorLower.includes('model is not available')
     || errorLower.includes('model does not support')
   ) {
-    errorCategory = AIProviderErrorCategories.MODEL_NOT_FOUND;
+    errorCategory = ErrorCategories.MODEL_NOT_FOUND;
     errorIsTransient = false;
     shouldRetry = false;
   } else if (
@@ -477,7 +521,7 @@ export function structureAIProviderError(
     || errorLower.includes('policy')
     || errorLower.includes('inappropriate')
   ) {
-    errorCategory = AIProviderErrorCategories.MODEL_CONTENT_FILTER;
+    errorCategory = ErrorCategories.MODEL_CONTENT_FILTER;
     errorIsTransient = false;
     shouldRetry = false;
   } else if (
@@ -490,7 +534,7 @@ export function structureAIProviderError(
     || errorLower.includes('api key')
     || errorLower.includes('authentication')
   ) {
-    errorCategory = AIProviderErrorCategories.AUTHENTICATION;
+    errorCategory = ErrorCategories.AUTHENTICATION;
     errorIsTransient = false;
     shouldRetry = false;
   } else if (
@@ -500,11 +544,11 @@ export function structureAIProviderError(
     || errorLower.includes('malformed')
     || errorLower.includes('bad request')
   ) {
-    errorCategory = AIProviderErrorCategories.VALIDATION;
+    errorCategory = ErrorCategories.VALIDATION;
     errorIsTransient = false;
     shouldRetry = false;
   } else {
-    errorCategory = AIProviderErrorCategories.UNKNOWN;
+    errorCategory = ErrorCategories.UNKNOWN;
     errorIsTransient = true;
     shouldRetry = true;
   }

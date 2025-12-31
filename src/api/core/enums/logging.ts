@@ -10,17 +10,22 @@ import { z } from '@hono/zod-openapi';
 // LOG LEVEL (API/Backend)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const;
 
-export const DEFAULT_LOG_LEVEL: LogLevel = 'INFO';
-
+// 2. ZOD SCHEMA
 export const LogLevelSchema = z.enum(LOG_LEVELS).openapi({
   description: 'API log level',
   example: 'INFO',
 });
 
+// 3. TYPESCRIPT TYPE
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_LOG_LEVEL: LogLevel = 'INFO';
+
+// 5. CONSTANT OBJECT
 export const LogLevels = {
   DEBUG: 'DEBUG' as const,
   INFO: 'INFO' as const,
@@ -32,17 +37,22 @@ export const LogLevels = {
 // DEV LOG LEVEL (Development Logger)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const DEV_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 
-export const DEFAULT_DEV_LOG_LEVEL: DevLogLevel = 'info';
-
+// 2. ZOD SCHEMA
 export const DevLogLevelSchema = z.enum(DEV_LOG_LEVELS).openapi({
   description: 'Development logger level',
   example: 'info',
 });
 
+// 3. TYPESCRIPT TYPE
 export type DevLogLevel = z.infer<typeof DevLogLevelSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_DEV_LOG_LEVEL: DevLogLevel = 'info';
+
+// 5. CONSTANT OBJECT
 export const DevLogLevels = {
   DEBUG: 'debug' as const,
   INFO: 'info' as const,
@@ -102,15 +112,22 @@ export const DEV_LOG_LEVEL_VALUES: Record<DevLogLevel, number> = {
 // RLOG CATEGORY (Resumption Debug Logger)
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const RLOG_CATEGORIES = ['PHASE', 'RESUME', 'STREAM', 'MSG', 'GATE', 'TRIGGER', 'PRESRCH', 'MOD'] as const;
 
+// 2. ZOD SCHEMA
 export const RlogCategorySchema = z.enum(RLOG_CATEGORIES).openapi({
   description: 'Resumption debug log category',
   example: 'PHASE',
 });
 
+// 3. TYPESCRIPT TYPE
 export type RlogCategory = z.infer<typeof RlogCategorySchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_RLOG_CATEGORY: RlogCategory = 'PHASE';
+
+// 5. CONSTANT OBJECT
 export const RlogCategories = {
   PHASE: 'PHASE' as const,
   RESUME: 'RESUME' as const,
@@ -126,15 +143,22 @@ export const RlogCategories = {
 // RLOG STREAM ACTION
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const RLOG_STREAM_ACTIONS = ['start', 'end', 'resume', 'check'] as const;
 
+// 2. ZOD SCHEMA
 export const RlogStreamActionSchema = z.enum(RLOG_STREAM_ACTIONS).openapi({
   description: 'Stream action for resumption debug logging',
   example: 'start',
 });
 
+// 3. TYPESCRIPT TYPE
 export type RlogStreamAction = z.infer<typeof RlogStreamActionSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_RLOG_STREAM_ACTION: RlogStreamAction = 'start';
+
+// 5. CONSTANT OBJECT
 export const RlogStreamActions = {
   START: 'start' as const,
   END: 'end' as const,
@@ -146,15 +170,22 @@ export const RlogStreamActions = {
 // DEV LOG MOD EVENT
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const DEV_LOG_MOD_EVENTS = ['start', 'text', 'done', 'add', 'err'] as const;
 
+// 2. ZOD SCHEMA
 export const DevLogModEventSchema = z.enum(DEV_LOG_MOD_EVENTS).openapi({
   description: 'Moderator event type for dev logging',
   example: 'start',
 });
 
+// 3. TYPESCRIPT TYPE
 export type DevLogModEvent = z.infer<typeof DevLogModEventSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_DEV_LOG_MOD_EVENT: DevLogModEvent = 'start';
+
+// 5. CONSTANT OBJECT
 export const DevLogModEvents = {
   START: 'start' as const,
   TEXT: 'text' as const,
@@ -167,18 +198,57 @@ export const DevLogModEvents = {
 // DEV LOG MSG EVENT
 // ============================================================================
 
+// 1. ARRAY CONSTANT
 export const DEV_LOG_MSG_EVENTS = ['sync', 'flash'] as const;
 
+// 2. ZOD SCHEMA
 export const DevLogMsgEventSchema = z.enum(DEV_LOG_MSG_EVENTS).openapi({
   description: 'Message event type for dev logging',
   example: 'sync',
 });
 
+// 3. TYPESCRIPT TYPE
 export type DevLogMsgEvent = z.infer<typeof DevLogMsgEventSchema>;
 
+// 4. DEFAULT VALUE
+export const DEFAULT_DEV_LOG_MSG_EVENT: DevLogMsgEvent = 'sync';
+
+// 5. CONSTANT OBJECT
 export const DevLogMsgEvents = {
   SYNC: 'sync' as const,
   FLASH: 'flash' as const,
+} as const;
+
+// ============================================================================
+// LOG TYPE (Logger Context Types)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const LOG_TYPES = ['request', 'database', 'auth', 'validation', 'performance', 'api', 'operation', 'system', 'edge_case'] as const;
+
+// 2. ZOD SCHEMA
+export const LogTypeSchema = z.enum(LOG_TYPES).openapi({
+  description: 'Log context type for discriminated union',
+  example: 'request',
+});
+
+// 3. TYPESCRIPT TYPE
+export type LogType = z.infer<typeof LogTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_LOG_TYPE: LogType = 'operation';
+
+// 5. CONSTANT OBJECT
+export const LogTypes = {
+  REQUEST: 'request' as const,
+  DATABASE: 'database' as const,
+  AUTH: 'auth' as const,
+  VALIDATION: 'validation' as const,
+  PERFORMANCE: 'performance' as const,
+  API: 'api' as const,
+  OPERATION: 'operation' as const,
+  SYSTEM: 'system' as const,
+  EDGE_CASE: 'edge_case' as const,
 } as const;
 
 // ============================================================================

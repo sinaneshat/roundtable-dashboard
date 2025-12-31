@@ -450,7 +450,7 @@ export function processParticipantChanges(
         operationName: 'participant_config_changes',
         threadId,
         roundNumber,
-        error: normalizeError(error),
+        error: normalizeError(error).message,
       });
     }
 

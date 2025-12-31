@@ -42,6 +42,7 @@ export const ModelPresetCard = memo(({
   onDelete,
 }: ModelPresetCardProps) => {
   const t = useTranslations('chat.models');
+  const tAccessibility = useTranslations('accessibility');
   const isLocked = !canAccessPreset(preset, userTier);
 
   const compatibleModelCount = useMemo(() => {
@@ -100,7 +101,7 @@ export const ModelPresetCard = memo(({
                 onCustomize({ preset });
               }}
               className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-all"
-              aria-label="Customize preset"
+              aria-label={tAccessibility('customizePreset')}
             >
               <SlidersHorizontal className="size-4 text-muted-foreground" />
             </button>
@@ -115,7 +116,7 @@ export const ModelPresetCard = memo(({
                 onDelete();
               }}
               className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
-              aria-label="Delete preset"
+              aria-label={tAccessibility('deletePreset')}
             >
               <Trash2 className="size-4 text-destructive" />
             </button>

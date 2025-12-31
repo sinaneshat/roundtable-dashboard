@@ -13,7 +13,7 @@ import type {
 } from '@/api/routes/chat/schema';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation/chat';
 
-export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
+export function createBaseMockThread(overrides?: Partial<ChatThread>): ChatThread {
   const now = new Date();
 
   return {
@@ -38,7 +38,7 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   };
 }
 
-export function createMockParticipant(overrides?: Partial<ChatParticipant>): ChatParticipant {
+export function createBaseMockParticipant(overrides?: Partial<ChatParticipant>): ChatParticipant {
   const now = new Date();
 
   return {
@@ -119,10 +119,10 @@ export function createMockThreadDetailResponse(
   threadOverrides?: Partial<ChatThread>,
   participantsOverrides?: Partial<ChatParticipant>[],
 ): ThreadDetailResponse {
-  const thread = createMockThread(threadOverrides);
+  const thread = createBaseMockThread(threadOverrides);
   const participants = participantsOverrides
-    ? participantsOverrides.map(p => createMockParticipant({ ...p, threadId: thread.id }))
-    : [createMockParticipant({ threadId: thread.id })];
+    ? participantsOverrides.map(p => createBaseMockParticipant({ ...p, threadId: thread.id }))
+    : [createBaseMockParticipant({ threadId: thread.id })];
 
   return {
     success: true,

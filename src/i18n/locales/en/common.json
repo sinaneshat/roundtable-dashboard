@@ -1,5 +1,10 @@
 {
   "accessibility": {
+    "breadcrumb": "breadcrumb",
+    "clearRole": "Clear role",
+    "currentPage": "Current page",
+    "customizePreset": "Customize preset",
+    "deletePreset": "Delete preset",
     "morePages": "More pages",
     "nextPage": "Go to next page",
     "pagination": "pagination",

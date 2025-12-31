@@ -35,7 +35,7 @@ pnpm test $ARGUMENTS
 **Use testing utilities:**
 ```typescript
 import { render, screen } from '@/lib/testing';
-import { userEvent } from '@testing-library/user-event';
+import userEvent from '@testing-library/user-event';
 ```
 
 **Query priority (most to least preferred):**

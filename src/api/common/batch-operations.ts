@@ -81,17 +81,18 @@ type RunnableQuery = {
  *
  * TYPE SAFETY NOTE:
  * - Accepts both D1 and Better-SQLite3 database types
- * - Schema is generic Record<string, unknown> following Drizzle ORM patterns
+ * - Schema type parameter allows type-safe schema access
  * - $client property is typed as `unknown` since we only need the batch() method
  * - This union type represents all valid database configurations from getDbAsync()
  *
- * JUSTIFICATION for Record<string, unknown>:
- * - Drizzle ORM schema objects are dynamic based on project configuration
- * - Using generic schema type allows this utility to work with any Drizzle setup
- * - Runtime operations only require batch() method, not schema introspection
- * - Pattern matches official Drizzle ORM type definitions
+ * PATTERN JUSTIFICATION:
+ * - Drizzle ORM DbSchema is defined as: type DbSchema = Record<string, unknown>
+ * - This matches the official Drizzle ORM internal type definitions
+ * - Using object index signature allows this utility to work with any schema
+ * - Runtime batch operations don't require schema introspection
+ * - Type safety is maintained through the operations array type parameter
  */
-type BatchCapableDatabase<TSchema extends Record<string, unknown> = Record<string, unknown>>
+type BatchCapableDatabase<TSchema extends { [key: string]: unknown } = { [key: string]: unknown }>
   = | DrizzleD1Database<TSchema>
     | BetterSQLite3Database<TSchema>
     | (DrizzleD1Database<TSchema> & { $client: unknown })
@@ -147,7 +148,7 @@ type BatchCapableDatabase<TSchema extends Record<string, unknown> = Record<strin
  * ```
  */
 export async function executeBatch<
-  TSchema extends Record<string, unknown> = Record<string, unknown>,
+  TSchema extends { [key: string]: unknown } = { [key: string]: unknown },
   T extends BatchQuery[] = BatchQuery[],
 >(
   db: BatchCapableDatabase<TSchema>,

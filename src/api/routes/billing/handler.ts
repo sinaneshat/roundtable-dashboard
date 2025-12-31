@@ -6,7 +6,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, IdParamSchema, Responses } from '@/api/core';
 import type { BillingInterval } from '@/api/core/enums';
-import { BillingIntervals, BillingIntervalSchema, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
+import { BillingIntervals, BillingIntervalSchema, PurchaseTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@/api/core/enums';
 import { getUserCreditBalance, grantCardConnectionCredits, grantCredits } from '@/api/services/credit.service';
 import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
@@ -604,7 +604,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         const balance = await getUserCreditBalance(user.id);
         return Responses.ok(c, {
           synced: false,
-          purchaseType: 'none' as const,
+          purchaseType: PurchaseTypes.NONE,
           subscription: null,
           creditPurchase: null,
           tierChange: {
@@ -648,7 +648,7 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
 
       return Responses.ok(c, {
         synced: true,
-        purchaseType: syncedState.status !== 'none' ? 'subscription' as const : 'none' as const,
+        purchaseType: syncedState.status !== 'none' ? PurchaseTypes.SUBSCRIPTION : PurchaseTypes.NONE,
         subscription: syncedState.status !== 'none'
           ? {
               status: syncedState.status,
@@ -664,15 +664,12 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         },
         creditsBalance: balance.available,
       });
-    } catch (error) {
-      // Log error for debugging but return graceful response
-      console.error('syncAfterCheckout error:', error);
-
+    } catch {
       // Return graceful error response instead of 500
       const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
       return Responses.ok(c, {
         synced: false,
-        purchaseType: 'none' as const,
+        purchaseType: PurchaseTypes.NONE,
         subscription: null,
         creditPurchase: null,
         tierChange: {
@@ -1297,9 +1294,7 @@ export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAft
         },
         creditsBalance: balance.available,
       });
-    } catch (error) {
-      console.error('syncCreditsAfterCheckout error:', error);
-
+    } catch {
       // Return graceful error response
       const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
       return Responses.ok(c, {

@@ -152,6 +152,7 @@ export async function getCachedSearch(
       // Invalid cache data format - treat as cache miss
       logger?.warn('Invalid cache data format, treating as cache miss', {
         logType: 'edge_case',
+        scenario: 'invalidCacheDataFormat',
         query: query.substring(0, 50),
       });
       await trackCacheMiss(env, logger);
@@ -180,6 +181,7 @@ export async function getCachedSearch(
     if (logger) {
       logger.warn('KV cache read failed', {
         logType: 'edge_case',
+        scenario: 'kvCacheReadFailed',
         error: error instanceof Error ? error.message : 'Unknown error',
         query: query.substring(0, 50),
       });
@@ -241,6 +243,7 @@ export async function cacheSearchResult(
     if (logger) {
       logger.warn('KV cache write failed', {
         logType: 'edge_case',
+        scenario: 'kvCacheWriteFailed',
         error: error instanceof Error ? error.message : 'Unknown error',
         query: query.substring(0, 50),
       });
@@ -282,6 +285,7 @@ export async function getCachedImageDescription(
     if (logger) {
       logger.warn('Image cache read failed', {
         logType: 'edge_case',
+        scenario: 'imageCacheReadFailed',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -323,6 +327,7 @@ export async function cacheImageDescription(
     if (logger) {
       logger.warn('Image cache write failed', {
         logType: 'edge_case',
+        scenario: 'imageCacheWriteFailed',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -351,6 +356,8 @@ async function trackCacheHit(env: ApiEnv['Bindings'], logger?: TypedLogger): Pro
     // Ignore analytics errors - shouldn't affect core functionality
     if (logger) {
       logger.debug('Cache hit tracking failed', {
+        logType: 'edge_case',
+        scenario: 'cacheHitTrackingFailed',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -375,6 +382,8 @@ async function trackCacheMiss(env: ApiEnv['Bindings'], logger?: TypedLogger): Pr
     // Ignore analytics errors
     if (logger) {
       logger.debug('Cache miss tracking failed', {
+        logType: 'edge_case',
+        scenario: 'cacheMissTrackingFailed',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -519,6 +528,7 @@ export async function warmSearchCache(
   if (logger) {
     logger.info('Starting cache warming', {
       logType: 'operation',
+      operationName: 'startCacheWarming',
       count: commonQueries.length,
     });
   }
@@ -531,6 +541,7 @@ export async function warmSearchCache(
         if (logger) {
           logger.info('Query already cached, skipping', {
             logType: 'operation',
+            operationName: 'cacheWarming_queryAlreadyCached',
             query: query.substring(0, 50),
           });
         }
@@ -546,6 +557,7 @@ export async function warmSearchCache(
       if (logger) {
         logger.info('Cache warmed for query', {
           logType: 'operation',
+          operationName: 'cacheWarming_queryWarmed',
           query: query.substring(0, 50),
         });
       }
@@ -556,6 +568,7 @@ export async function warmSearchCache(
       if (logger) {
         logger.warn('Failed to warm cache for query', {
           logType: 'edge_case',
+          scenario: 'cacheWarming_failed',
           query: query.substring(0, 50),
           error: error instanceof Error ? error.message : 'Unknown error',
         });
@@ -566,6 +579,7 @@ export async function warmSearchCache(
   if (logger) {
     logger.info('Cache warming complete', {
       logType: 'operation',
+      operationName: 'cacheWarming_complete',
     });
   }
 }

@@ -12,6 +12,10 @@ import { FinishReasons, MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 
+// Type aliases for test messages - these are UIMessage with specific metadata shapes
+export type TestUserMessage = UIMessage;
+export type TestAssistantMessage = UIMessage;
+
 export function createUserMetadata(roundNumber: number): DbUserMessageMetadata {
   return {
     role: MessageRoles.USER,

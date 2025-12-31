@@ -218,28 +218,28 @@ export const openAIFunctionsRoute = createRoute({
       content: {
         'application/json': {
           schema: {
-            type: 'object' as const,
+            type: 'object',
             properties: {
-              success: { type: 'boolean' as const },
+              success: { type: 'boolean' },
               data: {
-                type: 'array' as const,
+                type: 'array',
                 items: {
-                  type: 'object' as const,
+                  type: 'object',
                   properties: {
-                    type: { type: 'string' as const, enum: ['function'] },
+                    type: { type: 'string', enum: ['function'] },
                     function: {
-                      type: 'object' as const,
+                      type: 'object',
                       properties: {
-                        name: { type: 'string' as const },
-                        description: { type: 'string' as const },
-                        parameters: { type: 'object' as const },
+                        name: { type: 'string' },
+                        description: { type: 'string' },
+                        parameters: { type: 'object' },
                       },
                     },
                   },
                 },
               },
             },
-          },
+          } as const,
         },
       },
     },

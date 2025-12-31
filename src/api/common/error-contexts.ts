@@ -17,6 +17,7 @@
 
 import type { ErrorContext } from '@/api/core';
 import type { DatabaseOperation } from '@/api/core/enums';
+import { ErrorContextTypes } from '@/api/core/enums';
 
 export const ErrorContextBuilders = {
   /**
@@ -24,7 +25,7 @@ export const ErrorContextBuilders = {
    * Used when session is required but missing or invalid
    */
   auth: (operation?: string): ErrorContext => ({
-    errorType: 'authentication',
+    errorType: ErrorContextTypes.AUTHENTICATION,
     operation: operation || 'session_required',
   }),
 
@@ -37,7 +38,7 @@ export const ErrorContextBuilders = {
     resourceId?: string,
     userId?: string,
   ): ErrorContext => ({
-    errorType: 'resource',
+    errorType: ErrorContextTypes.RESOURCE,
     resource,
     resourceId,
     userId,
@@ -52,7 +53,7 @@ export const ErrorContextBuilders = {
     resourceId?: string,
     userId?: string,
   ): ErrorContext => ({
-    errorType: 'authorization',
+    errorType: ErrorContextTypes.AUTHORIZATION,
     resource,
     resourceId,
     userId,
@@ -63,7 +64,7 @@ export const ErrorContextBuilders = {
    * Used when request validation fails
    */
   validation: (field?: string): ErrorContext => ({
-    errorType: 'validation',
+    errorType: ErrorContextTypes.VALIDATION,
     field,
   }),
 
@@ -75,7 +76,7 @@ export const ErrorContextBuilders = {
     operation: DatabaseOperation,
     table?: string,
   ): ErrorContext => ({
-    errorType: 'database',
+    errorType: ErrorContextTypes.DATABASE,
     operation,
     table,
   }),
@@ -89,7 +90,7 @@ export const ErrorContextBuilders = {
     operation?: string,
     resourceId?: string,
   ): ErrorContext => ({
-    errorType: 'external_service',
+    errorType: ErrorContextTypes.EXTERNAL_SERVICE,
     service,
     operation,
     resourceId,
@@ -103,7 +104,7 @@ export const ErrorContextBuilders = {
     operation?: string,
     resourceId?: string,
   ): ErrorContext => ({
-    errorType: 'external_service',
+    errorType: ErrorContextTypes.EXTERNAL_SERVICE,
     service: 'stripe',
     operation,
     resourceId,

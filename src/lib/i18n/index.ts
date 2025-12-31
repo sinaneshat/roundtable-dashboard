@@ -1,5 +1,5 @@
 /**
  * i18n Utilities Barrel Export
  *
- * Currently English-only. Locale management utilities removed as unused.
+ * English-only application. Translation keys maintained for consistency.
  */

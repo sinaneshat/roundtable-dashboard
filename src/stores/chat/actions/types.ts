@@ -282,7 +282,7 @@ export function validateInfiniteQueryCache(data: unknown): InfiniteQueryCache | 
 
       console.error('[DEBUG-1] validateInfiniteQueryCache failed:', {
         pageParams: rawData.pageParams,
-        pagesCount: Array.isArray(rawData.pages) ? (rawData.pages as unknown[]).length : 0,
+        pagesCount: Array.isArray(rawData.pages) ? rawData.pages.length : 0,
         error: queryData.error.issues.slice(0, 3),
       });
     }

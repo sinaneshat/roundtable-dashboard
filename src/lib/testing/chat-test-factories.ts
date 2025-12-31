@@ -10,13 +10,10 @@ import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
-import {
-  createMockParticipant as createApiMockParticipant,
-  createMockThread as createApiMockThread,
-} from './api-mocks';
+import { createBaseMockParticipant, createBaseMockThread } from './api-mocks';
 
 export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
-  return createApiMockThread({
+  return createBaseMockThread({
     id: 'thread-123',
     userId: 'user-123',
     title: 'Test Thread',
@@ -29,7 +26,7 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
 
 export function createMockParticipant(index: number, overrides?: Partial<ChatParticipant>): ChatParticipant {
   const models = ['gpt-4o', 'claude-3-opus', 'gemini-pro', 'mistral-large'] as const;
-  return createApiMockParticipant({
+  return createBaseMockParticipant({
     id: `participant-${index}`,
     threadId: 'thread-123',
     modelId: models[index % models.length],

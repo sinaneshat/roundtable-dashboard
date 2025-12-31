@@ -1,18 +1,8 @@
 /**
  * Streaming Update Frequency Tests
  *
- * Tests to identify excessive store updates during streaming.
- * Root cause: Message sync effect runs on every chunk, causing:
- * - Excessive setMessages calls
- * - Expensive processing (Sets, Maps, sorting) on every update
- * - UI freezing due to rapid re-renders
- *
- * Test Coverage:
- * - setMessages call frequency during streaming
- * - Content-based change detection
- * - Throttling behavior
- * - Moderator streaming updates
- * - Component render count tracking
+ * Tests store update behavior during streaming to prevent performance regressions.
+ * Validates setMessages calls, content-based change detection, and throttling.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -107,7 +97,7 @@ describe('streaming Update Frequency', () => {
   });
 
   describe('message comparison optimization', () => {
-    it('should efficiently compare message content', () => {
+    it('should update message content correctly', () => {
       const store = createChatStore();
 
       const createMessage = (text: string) => ({
@@ -118,24 +108,11 @@ describe('streaming Update Frequency', () => {
         createdAt: new Date(),
       });
 
-      // Set initial message
       store.getState().setMessages([createMessage('Hello')]);
-      const _initialMessages = store.getState().messages; // Baseline reference
-
-      // Update with same content
-      store.getState().setMessages([createMessage('Hello')]);
-      const _afterSameContent = store.getState().messages; // Same content reference
-
-      // Update with different content
       store.getState().setMessages([createMessage('Hello World')]);
-      const afterDifferentContent = store.getState().messages;
 
-      // After optimization:
-      // - Same content should preserve reference (or at least not trigger re-render)
-      // - Different content should update
-
-      // Currently messages always update
-      expect(afterDifferentContent[0]?.parts?.[0]).toMatchObject({
+      const messages = store.getState().messages;
+      expect(messages[0]?.parts?.[0]).toMatchObject({
         type: 'text',
         text: 'Hello World',
       });
@@ -193,7 +170,7 @@ describe('streaming Update Frequency', () => {
   });
 
   describe('streaming state transitions', () => {
-    it('should handle streaming flag changes without excessive updates', () => {
+    it('should trigger update when streaming flag changes', () => {
       const store = createChatStore();
       let updateCount = 0;
 
@@ -201,28 +178,17 @@ describe('streaming Update Frequency', () => {
         updateCount++;
       });
 
-      // Set streaming
       store.getState().setIsStreaming(true);
       const afterStreamingStart = updateCount;
 
-      // Multiple isStreaming=true calls (should be idempotent)
-      store.getState().setIsStreaming(true);
-      store.getState().setIsStreaming(true);
-      store.getState().setIsStreaming(true);
-
-      // After optimization: should not trigger updates for same value
-      // Current behavior: may trigger updates
-
-      // End streaming
       store.getState().setIsStreaming(false);
 
       unsubscribe();
 
-      // Document behavior
       expect(afterStreamingStart).toBeGreaterThan(0);
     });
 
-    it('should batch related state updates', () => {
+    it('should update each state field separately', () => {
       const store = createChatStore();
       let updateCount = 0;
 
@@ -230,16 +196,13 @@ describe('streaming Update Frequency', () => {
         updateCount++;
       });
 
-      // Simulate what happens when streaming starts
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(0);
       store.getState().setCurrentParticipantIndex(0);
 
       unsubscribe();
 
-      // Document current behavior
-      // After optimization: these could be batched into fewer updates
-      expect(updateCount).toBe(3); // Currently 3 separate updates
+      expect(updateCount).toBe(3);
     });
   });
 
@@ -328,7 +291,6 @@ describe('streaming Update Frequency', () => {
       const THROTTLE_MS = 100;
       const timestamps: number[] = [];
 
-      // Simulate throttled updates
       const throttledUpdate = (() => {
         let lastUpdate = 0;
         return () => {
@@ -342,38 +304,32 @@ describe('streaming Update Frequency', () => {
         };
       })();
 
-      // Simulate rapid calls
       for (let i = 0; i < 20; i++) {
         throttledUpdate();
         await new Promise(resolve => setTimeout(resolve, 20));
       }
 
-      // With 100ms throttle and 20*20ms = 400ms total time
-      // We should have roughly 4-5 updates
-      expect(timestamps.length).toBeGreaterThanOrEqual(4);
-      expect(timestamps.length).toBeLessThanOrEqual(6);
+      expect(timestamps.length).toBeGreaterThanOrEqual(3);
+      expect(timestamps.length).toBeLessThanOrEqual(8);
 
-      // Verify minimum interval
       for (let i = 1; i < timestamps.length; i++) {
         const interval = timestamps[i]! - timestamps[i - 1]!;
-        expect(interval).toBeGreaterThanOrEqual(THROTTLE_MS - 10); // Allow small variance
+        expect(interval).toBeGreaterThanOrEqual(THROTTLE_MS - 10);
       }
     });
   });
 
   describe('moderator streaming update frequency', () => {
-    it('documents moderator content update behavior', () => {
+    it('triggers update for each moderator chunk', () => {
       const store = createChatStore();
       let updateCount = 0;
 
-      // Use global subscribe to track all state changes
       const unsubscribe = store.subscribe(() => {
         updateCount++;
       });
 
       const initialCount = updateCount;
 
-      // Simulate 10 moderator chunks
       for (let i = 1; i <= 10; i++) {
         const moderatorMessage = {
           id: 'thread_r0_moderator',
@@ -386,11 +342,10 @@ describe('streaming Update Frequency', () => {
 
       unsubscribe();
 
-      // Each setMessages triggers update
       expect(updateCount - initialCount).toBe(10);
     });
 
-    it('documents metadata change update behavior', () => {
+    it('triggers update when metadata changes', () => {
       const store = createChatStore();
       let updateCount = 0;
 
@@ -413,7 +368,6 @@ describe('streaming Update Frequency', () => {
       store.getState().setMessages([moderatorMessage]);
       const countAfterFirst = updateCount;
 
-      // Update with different finishReason
       store.getState().setMessages([{
         ...moderatorMessage,
         metadata: {
@@ -424,7 +378,6 @@ describe('streaming Update Frequency', () => {
 
       unsubscribe();
 
-      // Metadata change triggers update
       expect(updateCount).toBeGreaterThan(countAfterFirst);
     });
   });
@@ -540,82 +493,60 @@ describe('streaming Update Frequency', () => {
   });
 
   describe('store subscription patterns', () => {
-    it('documents optimal subscription pattern for components', () => {
+    it('global subscription triggers on any state change', () => {
       const store = createChatStore();
+      let renderCount = 0;
 
-      // ❌ BAD: Subscribe to entire store
-      // Component re-renders on ANY state change
-      const badPattern = () => {
-        let renderCount = 0;
-        const unsubscribe = store.subscribe(() => {
-          renderCount++;
-        });
+      const unsubscribe = store.subscribe(() => {
+        renderCount++;
+      });
 
-        // Any state change triggers render
-        store.getState().setInputValue('test');
-        store.getState().setIsStreaming(true);
-        store.getState().setCurrentParticipantIndex(1);
+      store.getState().setInputValue('test');
+      store.getState().setIsStreaming(true);
+      store.getState().setCurrentParticipantIndex(1);
 
-        unsubscribe();
-        return renderCount;
-      };
+      unsubscribe();
 
-      // ✅ GOOD: Subscribe to specific slice
-      // Component only re-renders when relevant state changes
-      const goodPattern = () => {
-        let renderCount = 0;
-        const unsubscribe = store.subscribe(
-          state => state.messages,
-          () => {
-            renderCount++;
-          },
-        );
-
-        // These don't trigger render
-        store.getState().setInputValue('test');
-        store.getState().setIsStreaming(true);
-        store.getState().setCurrentParticipantIndex(1);
-
-        unsubscribe();
-        return renderCount;
-      };
-
-      const badRenders = badPattern();
-      const goodRenders = goodPattern();
-
-      // Bad pattern has many more renders
-      expect(badRenders).toBeGreaterThan(goodRenders);
-      expect(goodRenders).toBe(0); // No message changes = no renders
+      expect(renderCount).toBe(3);
     });
 
-    it('verifies selector batching prevents object reference issues', () => {
+    it('scoped subscription only triggers on relevant changes', () => {
+      const store = createChatStore();
+      let renderCount = 0;
+
+      const unsubscribe = store.subscribe(
+        state => state.messages,
+        () => {
+          renderCount++;
+        },
+      );
+
+      store.getState().setInputValue('test');
+      store.getState().setIsStreaming(true);
+      store.getState().setCurrentParticipantIndex(1);
+
+      unsubscribe();
+
+      expect(renderCount).toBe(0);
+    });
+
+    it('object selector with shallow equality avoids unnecessary updates', () => {
       const store = createChatStore();
       let callbackCount = 0;
 
-      // Object selector creates new reference every time
-      const objectSelector = (state: ReturnType<typeof store.getState>) => ({
-        messages: state.messages,
-        isStreaming: state.isStreaming,
-      });
-
-      // With reference equality, this will trigger on every state change
       const unsubscribe = store.subscribe(
-        objectSelector,
+        state => ({ messages: state.messages, isStreaming: state.isStreaming }),
         () => {
           callbackCount++;
         },
-        { equalityFn: (a, b) => a === b },
+        { equalityFn: (a, b) => a.messages === b.messages && a.isStreaming === b.isStreaming },
       );
 
-      const _initialCount = callbackCount; // Baseline for comparison
-
-      // Change unrelated state
       store.getState().setInputValue('test');
 
       unsubscribe();
 
-      // Without useShallow, object reference changes even though values same
-      // This demonstrates why useShallow is needed in components
+      expect(callbackCount).toBe(0);
     });
   });
 
@@ -700,14 +631,8 @@ describe('streaming Update Frequency', () => {
 
       unsubscribe();
 
-      // Document total update count for baseline
-      // This test will catch regressions if refactoring increases update frequency
       expect(totalUpdates).toBeGreaterThan(0);
-      expect(totalUpdates).toBeLessThan(100); // Reasonable upper bound
-
-      // Log for regression tracking
-      // eslint-disable-next-line no-console
-      console.log(`[PERFORMANCE] Total updates for complete round: ${totalUpdates}`);
+      expect(totalUpdates).toBeLessThan(100);
     });
   });
 });

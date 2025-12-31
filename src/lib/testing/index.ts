@@ -7,11 +7,11 @@
  */
 
 // ============================================================================
-// API Response Mocks (low-level factories)
+// API Response Mocks (low-level base factories)
 // ============================================================================
-// Note: createMockParticipant and createMockThread are NOT exported here
-// because chat-test-factories exports wrapped versions with better defaults
 export {
+  createBaseMockParticipant,
+  createBaseMockThread,
   createMockAssistantMessage,
   createMockMessage,
   createMockMessagesListResponse,
@@ -26,9 +26,8 @@ export {
 export * from './chat-store-helpers';
 
 // ============================================================================
-// Chat Test Factories (preferred high-level factories with test-friendly defaults)
+// Chat Test Factories (high-level factories with test-friendly defaults)
 // ============================================================================
-// Export these FIRST so they take precedence over api-mocks versions
 export * from './chat-test-factories';
 export * from './helpers';
 export { render, renderHook } from './render';
@@ -38,5 +37,3 @@ export * from './test-providers';
 // Testing Library Utilities (imported from canonical sources)
 // ============================================================================
 export { act, screen, waitFor, within } from '@testing-library/react';
-// External library re-export: userEvent is exported from @testing-library/user-event as default
-export { default as userEvent } from '@testing-library/user-event';

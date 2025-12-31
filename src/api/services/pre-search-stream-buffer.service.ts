@@ -85,10 +85,17 @@ export async function initializePreSearchStreamBuffer(
       }),
     ]);
 
-    logger?.debug('Initialized pre-search stream buffer', { streamId, threadId, roundNumber });
+    logger?.debug('Initialized pre-search stream buffer', {
+      logType: 'operation',
+      operationName: 'initializePreSearchStreamBuffer',
+      streamId,
+      threadId,
+      roundNumber,
+    });
   } catch (error) {
     logger?.warn('Failed to initialize pre-search stream buffer', {
       logType: 'edge_case',
+      scenario: 'pre_search_buffer_init_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
@@ -145,6 +152,7 @@ export async function appendPreSearchStreamChunk(
   } catch (error) {
     logger?.warn('Failed to append pre-search stream chunk', {
       logType: 'edge_case',
+      scenario: 'pre_search_chunk_append_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
@@ -182,10 +190,15 @@ export async function completePreSearchStreamBuffer(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    logger?.debug('Completed pre-search stream buffer', { streamId });
+    logger?.debug('Completed pre-search stream buffer', {
+      logType: 'operation',
+      operationName: 'completePreSearchStreamBuffer',
+      streamId,
+    });
   } catch (error) {
     logger?.warn('Failed to complete pre-search stream buffer', {
       logType: 'edge_case',
+      scenario: 'pre_search_buffer_complete_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
@@ -225,10 +238,16 @@ export async function failPreSearchStreamBuffer(
       expirationTtl: STREAM_BUFFER_TTL_SECONDS,
     });
 
-    logger?.debug('Failed pre-search stream buffer', { streamId, errorMessage });
+    logger?.debug('Failed pre-search stream buffer', {
+      logType: 'operation',
+      operationName: 'failPreSearchStreamBuffer',
+      streamId,
+      errorMessage,
+    });
   } catch (error) {
     logger?.warn('Failed to fail pre-search stream buffer', {
       logType: 'edge_case',
+      scenario: 'pre_search_buffer_fail_failed',
       streamId,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
@@ -250,10 +269,16 @@ export async function clearActivePreSearchStream(
 
   try {
     await env.KV.delete(getActiveKey(threadId, roundNumber));
-    logger?.debug('Cleared active pre-search stream', { threadId, roundNumber });
+    logger?.debug('Cleared active pre-search stream', {
+      logType: 'operation',
+      operationName: 'clearActivePreSearchStream',
+      threadId,
+      roundNumber,
+    });
   } catch (error) {
     logger?.warn('Failed to clear active pre-search stream', {
       logType: 'edge_case',
+      scenario: 'pre_search_clear_failed',
       threadId,
       roundNumber,
       error: error instanceof Error ? error.message : 'Unknown error',

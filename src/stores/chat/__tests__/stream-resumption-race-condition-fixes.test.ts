@@ -410,12 +410,15 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       await waitForAsync(150);
     });
 
-    // After timeout clears guards, unmount and remount the hook
-    // This simulates a page refresh/navigation which is the real-world scenario
-    // where retry recovery would occur
+    // After timeout clears guards, unmount the hook
     unmount();
 
-    const { result: _result2 } = renderHook(() =>
+    // Clear all action mocks to start fresh count
+    mockStore.actions.setNextParticipantToTrigger.mockClear();
+    mockStore.actions.setWaitingToStartStreaming.mockClear();
+
+    // Remount the hook - this simulates a page refresh
+    renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
         enabled: true,
@@ -423,11 +426,10 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     );
 
     // Wait for the remounted hook to detect incomplete round and trigger
+    // After the retry recovery cleared the guards, a fresh mount should trigger again
     await waitFor(() => {
-      const callsAfterFailure = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
-        call => call[0] === 1,
-      ).length;
-      expect(callsAfterFailure).toBeGreaterThan(callsBeforeFailure);
+      expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
+      expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
     }, { timeout: 500 });
   });
 
@@ -446,7 +448,10 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     }, { timeout: 200 });
 
     mockStore.actions.setNextParticipantToTrigger.mockClear();
+    mockStore.actions.setStreamingRoundNumber.mockClear();
+    mockStore.actions.setCurrentParticipantIndex.mockClear();
 
+    // Simulate streaming starting
     act(() => {
       mockStore.setState({
         isStreaming: true,
@@ -459,6 +464,7 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       await waitForAsync(50);
     });
 
+    // Add participant 1's complete response
     const messagesWithP1Complete = [
       ...mockStore.getState().messages || [],
       createTestAssistantMessage({
@@ -471,6 +477,7 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
       }),
     ];
 
+    // Streaming completes
     act(() => {
       mockStore.setState({
         messages: messagesWithP1Complete,
@@ -479,8 +486,11 @@ describe('double-Trigger Prevention (roundTriggerInProgressRef)', () => {
     });
     rerender();
 
+    // Wait for the hook to detect participant 2 is next
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
+      expect(mockStore.actions.setStreamingRoundNumber).toHaveBeenCalledWith(1);
+      expect(mockStore.actions.setCurrentParticipantIndex).toHaveBeenCalledWith(2);
     }, { timeout: 300 });
   });
 });
@@ -598,6 +608,9 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       call => call[0] === 1,
     ).length;
 
+    expect(initialTriggerCount).toBeGreaterThan(0);
+
+    // Simulate retry toggle: false → true within 100ms
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
@@ -612,10 +625,12 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
     });
     rerender();
 
+    // Wait to ensure guards are NOT cleared during retry toggle
     await act(async () => {
-      await waitForAsync(50);
+      await waitForAsync(150);
     });
 
+    // No new trigger should have occurred because guards remain set
     const finalTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
       call => call[0] === 1,
     ).length;
@@ -653,9 +668,12 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       await waitForAsync(150);
     });
 
-    // Unmount and remount to simulate page refresh
+    // Unmount and clear mocks
     unmount();
+    mockStore.actions.setNextParticipantToTrigger.mockClear();
+    mockStore.actions.setWaitingToStartStreaming.mockClear();
 
+    // Remount to simulate page refresh
     renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
@@ -663,12 +681,10 @@ describe('retry Toggle Timeout (retryToggleTimeoutRef)', () => {
       }),
     );
 
-    // Wait for retry trigger
+    // Wait for retry trigger - after guards cleared, fresh mount should trigger
     await waitFor(() => {
-      const callsAfterWait = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
-        call => call[0] === 1,
-      ).length;
-      expect(callsAfterWait).toBeGreaterThan(callsBeforeWait);
+      expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
+      expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
     }, { timeout: 500 });
   });
 
@@ -923,9 +939,12 @@ describe('integration: All Race Condition Fixes Together', () => {
       await waitForAsync(150);
     });
 
-    // Unmount and remount to simulate page refresh
+    // Unmount and clear mocks
     unmount();
+    mockStore.actions.setNextParticipantToTrigger.mockClear();
+    mockStore.actions.setWaitingToStartStreaming.mockClear();
 
+    // Remount to simulate page refresh
     renderHook(() =>
       useIncompleteRoundResumption({
         threadId: 'thread-123',
@@ -933,12 +952,10 @@ describe('integration: All Race Condition Fixes Together', () => {
       }),
     );
 
-    // Wait for retry with longer timeout
+    // Wait for retry - after timeout cleared guards, fresh mount should trigger
     await waitFor(() => {
-      const finalCallCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
-        call => call[0] === 1,
-      ).length;
-      expect(finalCallCount).toBeGreaterThan(initialCallCount);
+      expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
+      expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
     }, { timeout: 500 });
   });
 
@@ -952,12 +969,14 @@ describe('integration: All Race Condition Fixes Together', () => {
       }),
     );
 
+    // Wait for initial trigger for participant 2 in round 1
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
     }, { timeout: 200 });
 
     const round1TriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.length;
 
+    // Complete participant 2
     const messagesWithP2Complete = [
       ...mockStore.getState().messages || [],
       createTestAssistantMessage({
@@ -983,6 +1002,7 @@ describe('integration: All Race Condition Fixes Together', () => {
       await waitForAsync(150);
     });
 
+    // Start round 2 with new user message
     const round2Messages = [
       ...messagesWithP2Complete,
       createTestUserMessage({
@@ -997,9 +1017,16 @@ describe('integration: All Race Condition Fixes Together', () => {
     });
     rerender();
 
+    // Wait for round 2 participant 0 to be triggered
     await waitFor(() => {
-      const finalTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.length;
-      expect(finalTriggerCount).toBeGreaterThanOrEqual(round1TriggerCount);
+      const round2Calls = mockStore.actions.setNextParticipantToTrigger.mock.calls.filter(
+        call => call[0] === 0,
+      );
+      expect(round2Calls.length).toBeGreaterThan(0);
     }, { timeout: 300 });
+
+    // Verify we didn't re-trigger round 1 participants
+    const finalTriggerCount = mockStore.actions.setNextParticipantToTrigger.mock.calls.length;
+    expect(finalTriggerCount).toBeGreaterThan(round1TriggerCount);
   });
 });

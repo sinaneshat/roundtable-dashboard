@@ -10,13 +10,10 @@ import type {
   DeleteApiKeyRequest,
   DeleteApiKeyResponse,
   ListApiKeysResponse,
-  UpdateApiKeyRequest,
-  UpdateApiKeyResponse,
 } from '@/services/api';
 import {
   createApiKeyService,
   deleteApiKeyService,
-  updateApiKeyService,
 } from '@/services/api';
 
 export function useCreateApiKeyMutation() {
@@ -31,44 +28,6 @@ export function useCreateApiKeyMutation() {
       });
     },
     retry: false,
-    throwOnError: false,
-  });
-}
-
-export function useUpdateApiKeyMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation<UpdateApiKeyResponse, Error, UpdateApiKeyRequest>({
-    mutationFn: updateApiKeyService,
-    onSuccess: (response) => {
-      if (response.success && response.data?.apiKey) {
-        const updatedApiKey = response.data.apiKey;
-
-        queryClient.setQueryData<ListApiKeysResponse>(
-          queryKeys.apiKeys.list(),
-          (oldData) => {
-            if (!oldData?.success || !oldData.data?.items)
-              return oldData;
-
-            return {
-              ...oldData,
-              data: {
-                ...oldData.data,
-                items: oldData.data.items.map(
-                  key => (key.id === updatedApiKey.id ? updatedApiKey : key),
-                ),
-              },
-            };
-          },
-        );
-      }
-
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.apiKeys.all,
-        refetchType: 'active',
-      });
-    },
-    retry: shouldRetryMutation,
     throwOnError: false,
   });
 }

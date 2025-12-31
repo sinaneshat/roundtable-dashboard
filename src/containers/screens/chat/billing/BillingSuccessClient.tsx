@@ -6,10 +6,11 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/core/enums';
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
+import type { Subscription } from '@/api/routes/billing/schema';
 import { getMaxModelsForTier, getMonthlyCreditsForTier } from '@/api/services/product-logic.service';
 import { PlanOverviewCard, StatusPage, StatusPageActions } from '@/components/billing';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
-import { useCurrentSubscriptionQuery, useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 
 /**
@@ -37,14 +38,12 @@ export function BillingSuccessClient() {
   const syncMutation = useSyncAfterCheckoutMutation();
 
   const subscriptionsQuery = useSubscriptionsQuery({ forceEnabled: true });
-  const currentSubscriptionQuery = useCurrentSubscriptionQuery({ forceEnabled: true });
   const usageStatsQuery = useUsageStatsQuery({ forceEnabled: true });
 
   const hasInitiatedSync = useRef(false);
   const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const subscriptionData = subscriptionsQuery.data;
-  const currentSubscription = currentSubscriptionQuery.data;
   const usageStats = usageStatsQuery.data;
 
   // Extract sync result - use this as source of truth for tier
@@ -54,12 +53,11 @@ export function BillingSuccessClient() {
 
   const displaySubscription = useMemo(() => {
     return (
-      currentSubscription?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
-      ?? currentSubscription?.data?.items?.[0]
+      subscriptionData?.data?.items?.find((sub: Subscription) => sub.status === StripeSubscriptionStatuses.ACTIVE)
       ?? subscriptionData?.data?.items?.[0]
       ?? null
     );
-  }, [currentSubscription, subscriptionData]);
+  }, [subscriptionData]);
 
   useEffect(() => {
     if (!hasInitiatedSync.current) {

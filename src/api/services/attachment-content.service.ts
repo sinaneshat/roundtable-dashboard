@@ -18,6 +18,7 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { IMAGE_MIME_TYPES, MessagePartTypes } from '@/api/core/enums';
 import { getFile } from '@/api/services/storage.service';
+import { LogHelpers } from '@/api/types/logger';
 import type {
   LoadAttachmentContentParams,
   LoadAttachmentContentResult,
@@ -101,23 +102,21 @@ export async function loadAttachmentContent(
     );
   }
 
-  logger?.info('Loading attachment content for AI model', {
-    logType: 'operation',
+  logger?.info('Loading attachment content for AI model', LogHelpers.operation({
     operationName: 'loadAttachmentContent',
     attachmentCount: attachmentIds.length,
     foundUploads: uploads.length,
-  });
+  }));
 
   for (const upload of uploads) {
     try {
       // Skip files that AI models can't process visually
       if (!VISUAL_MIME_TYPES.has(upload.mimeType)) {
-        logger?.debug('Skipping non-visual file', {
-          logType: 'operation',
+        logger?.debug('Skipping non-visual file', LogHelpers.operation({
           operationName: 'loadAttachmentContent',
           uploadId: upload.id,
           mimeType: upload.mimeType,
-        });
+        }));
         skipped++;
         continue;
       }
@@ -132,13 +131,12 @@ export async function loadAttachmentContent(
           maxSize: MAX_BASE64_FILE_SIZE,
           error: errorMsg,
         });
-        logger?.warn('File too large for base64 conversion', {
-          logType: 'operation',
+        logger?.warn('File too large for base64 conversion', LogHelpers.operation({
           operationName: 'loadAttachmentContent',
           uploadId: upload.id,
           fileSize: upload.fileSize,
           maxSize: MAX_BASE64_FILE_SIZE,
-        });
+        }));
         errors.push({
           uploadId: upload.id,
           error: errorMsg,
@@ -155,12 +153,11 @@ export async function loadAttachmentContent(
           filename: upload.filename,
           r2Key: upload.r2Key,
         });
-        logger?.warn('File not found in storage', {
-          logType: 'operation',
+        logger?.warn('File not found in storage', LogHelpers.operation({
           operationName: 'loadAttachmentContent',
           uploadId: upload.id,
           r2Key: upload.r2Key,
-        });
+        }));
         errors.push({
           uploadId: upload.id,
           error: 'File not found in storage',
@@ -187,14 +184,13 @@ export async function loadAttachmentContent(
         mediaType: upload.mimeType,
       });
 
-      logger?.debug('Loaded attachment content', {
-        logType: 'operation',
+      logger?.debug('Loaded attachment content', LogHelpers.operation({
         operationName: 'loadAttachmentContent',
         uploadId: upload.id,
         filename: upload.filename,
         mimeType: upload.mimeType,
         sizeKB: Math.round(upload.fileSize / 1024),
-      });
+      }));
     } catch (error) {
       const errorMessage
         = error instanceof Error ? error.message : 'Unknown error';
@@ -204,12 +200,11 @@ export async function loadAttachmentContent(
         mimeType: upload.mimeType,
         error: errorMessage,
       });
-      logger?.error('Failed to load attachment content', {
-        logType: 'operation',
+      logger?.error('Failed to load attachment content', LogHelpers.operation({
         operationName: 'loadAttachmentContent',
         uploadId: upload.id,
         error: errorMessage,
-      });
+      }));
       errors.push({
         uploadId: upload.id,
         error: errorMessage,
@@ -224,11 +219,10 @@ export async function loadAttachmentContent(
     skipped,
   };
 
-  logger?.info('Attachment content loading complete', {
-    logType: 'operation',
+  logger?.info('Attachment content loading complete', LogHelpers.operation({
     operationName: 'loadAttachmentContent',
     stats,
-  });
+  }));
 
   return { fileParts, errors, stats };
 }
@@ -362,11 +356,10 @@ export async function loadMessageAttachments(
     .where(inArray(tables.messageUpload.messageId, messageIds));
 
   if (messageUploadsRaw.length === 0) {
-    logger?.debug('No attachments found for messages', {
-      logType: 'operation',
+    logger?.debug('No attachments found for messages', LogHelpers.operation({
       operationName: 'loadMessageAttachments',
       messageCount: messageIds.length,
-    });
+    }));
     return {
       filePartsByMessageId,
       errors: [],
@@ -404,13 +397,12 @@ export async function loadMessageAttachments(
 
   totalUploads = messageUploadsRaw.length;
 
-  logger?.info('Loading attachment content for messages', {
-    logType: 'operation',
+  logger?.info('Loading attachment content for messages', LogHelpers.operation({
     operationName: 'loadMessageAttachments',
     messageCount: messageIds.length,
     messagesWithAttachments: uploadsByMessageId.size,
     totalUploads,
-  });
+  }));
 
   // Process each message's attachments
   for (const [messageId, uploads] of uploadsByMessageId) {
@@ -423,13 +415,12 @@ export async function loadMessageAttachments(
       try {
         // Skip files that AI models can't process visually
         if (!VISUAL_MIME_TYPES.has(upload.mimeType)) {
-          logger?.debug('Skipping non-visual file in message', {
-            logType: 'operation',
+          logger?.debug('Skipping non-visual file in message', LogHelpers.operation({
             operationName: 'loadMessageAttachments',
             messageId,
             uploadId,
             mimeType: upload.mimeType,
-          });
+          }));
           skipped++;
           continue;
         }
@@ -445,14 +436,13 @@ export async function loadMessageAttachments(
             maxSize: MAX_BASE64_FILE_SIZE,
             error: errorMsg,
           });
-          logger?.warn('File too large for base64 conversion', {
-            logType: 'operation',
+          logger?.warn('File too large for base64 conversion', LogHelpers.operation({
             operationName: 'loadMessageAttachments',
             messageId,
             uploadId,
             fileSize: upload.fileSize,
             maxSize: MAX_BASE64_FILE_SIZE,
-          });
+          }));
           errors.push({
             messageId,
             uploadId,
@@ -472,13 +462,12 @@ export async function loadMessageAttachments(
             filename: upload.filename,
             r2Key: upload.r2Key,
           });
-          logger?.warn('File not found in storage', {
-            logType: 'operation',
+          logger?.warn('File not found in storage', LogHelpers.operation({
             operationName: 'loadMessageAttachments',
             messageId,
             uploadId,
             r2Key: upload.r2Key,
-          });
+          }));
           errors.push({
             messageId,
             uploadId,
@@ -509,15 +498,14 @@ export async function loadMessageAttachments(
 
         loaded++;
 
-        logger?.debug('Loaded attachment content for message', {
-          logType: 'operation',
+        logger?.debug('Loaded attachment content for message', LogHelpers.operation({
           operationName: 'loadMessageAttachments',
           messageId,
           uploadId,
           filename: upload.filename,
           mimeType: upload.mimeType,
           sizeKB: Math.round(upload.fileSize / 1024),
-        });
+        }));
       } catch (error) {
         const errorMessage
           = error instanceof Error ? error.message : 'Unknown error';
@@ -527,13 +515,12 @@ export async function loadMessageAttachments(
           filename: upload.filename,
           error: errorMessage,
         });
-        logger?.error('Failed to load attachment content for message', {
-          logType: 'operation',
+        logger?.error('Failed to load attachment content for message', LogHelpers.operation({
           operationName: 'loadMessageAttachments',
           messageId,
           uploadId,
           error: errorMessage,
-        });
+        }));
         errors.push({
           messageId,
           uploadId,
@@ -556,11 +543,10 @@ export async function loadMessageAttachments(
     skipped,
   };
 
-  logger?.info('Message attachment loading complete', {
-    logType: 'operation',
+  logger?.info('Message attachment loading complete', LogHelpers.operation({
     operationName: 'loadMessageAttachments',
     stats,
-  });
+  }));
 
   return { filePartsByMessageId, errors, stats };
 }

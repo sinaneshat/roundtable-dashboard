@@ -158,6 +158,8 @@ export const ChangelogChangeTypeSchema = z.enum(CHANGELOG_CHANGE_TYPES).openapi(
 
 export type ChangelogChangeType = z.infer<typeof ChangelogChangeTypeSchema>;
 
+export const DEFAULT_CHANGELOG_CHANGE_TYPE: ChangelogChangeType = 'participant';
+
 export const ChangelogChangeTypes = {
   PARTICIPANT: 'participant' as const,
   PARTICIPANT_ROLE: 'participant_role' as const,
@@ -213,4 +215,97 @@ export const DEFAULT_PARTICIPANT_COMPARISON_MODE: ParticipantComparisonMode = 's
 export const ParticipantComparisonModes = {
   MODEL_IDS: 'modelIds' as const,
   STRICT: 'strict' as const,
+} as const;
+
+// ============================================================================
+// TIMELINE ELEMENT TYPE
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const TIMELINE_ELEMENT_TYPES = [
+  'pre_search',
+  'moderator',
+  'participant_message',
+  'user_message',
+] as const;
+
+// 2. ZOD SCHEMA
+export const TimelineElementTypeSchema = z.enum(TIMELINE_ELEMENT_TYPES).openapi({
+  description: 'Timeline element type for chat UI rendering',
+  example: 'participant_message',
+});
+
+// 3. TYPESCRIPT TYPE
+export type TimelineElementType = z.infer<typeof TimelineElementTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_TIMELINE_ELEMENT_TYPE: TimelineElementType = 'user_message';
+
+// 5. CONSTANT OBJECT
+export const TimelineElementTypes = {
+  PRE_SEARCH: 'pre_search' as const,
+  MODERATOR: 'moderator' as const,
+  PARTICIPANT_MESSAGE: 'participant_message' as const,
+  USER_MESSAGE: 'user_message' as const,
+} as const;
+
+// ============================================================================
+// SHARED ASSUMPTION TYPE (Moderator Summary - Areas of Agreement)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const SHARED_ASSUMPTION_TYPES = [
+  'shared assumptions',
+  'common objectives',
+  'overlapping conclusions',
+] as const;
+
+// 2. ZOD SCHEMA
+export const SharedAssumptionTypeSchema = z.enum(SHARED_ASSUMPTION_TYPES).openapi({
+  description: 'Types of substantive alignment in moderator summaries',
+  example: 'shared assumptions',
+});
+
+// 3. TYPESCRIPT TYPE
+export type SharedAssumptionType = z.infer<typeof SharedAssumptionTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_SHARED_ASSUMPTION_TYPE: SharedAssumptionType = 'shared assumptions';
+
+// 5. CONSTANT OBJECT
+export const SharedAssumptionTypes = {
+  SHARED_ASSUMPTIONS: 'shared assumptions' as const,
+  COMMON_OBJECTIVES: 'common objectives' as const,
+  OVERLAPPING_CONCLUSIONS: 'overlapping conclusions' as const,
+} as const;
+
+// ============================================================================
+// CORE ASSUMPTION FOCUS TYPE (Moderator Summary - Assumptions and Tensions)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const CORE_ASSUMPTION_FOCUS_TYPES = [
+  'foundational assumptions behind each perspective',
+  'where assumptions conflict',
+  'why disagreements remain unresolved',
+] as const;
+
+// 2. ZOD SCHEMA
+export const CoreAssumptionFocusTypeSchema = z.enum(CORE_ASSUMPTION_FOCUS_TYPES).openapi({
+  description: 'Focus areas for foundational assumptions and conflicts in moderator summaries',
+  example: 'foundational assumptions behind each perspective',
+});
+
+// 3. TYPESCRIPT TYPE
+export type CoreAssumptionFocusType = z.infer<typeof CoreAssumptionFocusTypeSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_CORE_ASSUMPTION_FOCUS_TYPE: CoreAssumptionFocusType
+  = 'foundational assumptions behind each perspective';
+
+// 5. CONSTANT OBJECT
+export const CoreAssumptionFocusTypes = {
+  FOUNDATIONAL_ASSUMPTIONS: 'foundational assumptions behind each perspective' as const,
+  ASSUMPTION_CONFLICTS: 'where assumptions conflict' as const,
+  UNRESOLVED_DISAGREEMENTS: 'why disagreements remain unresolved' as const,
 } as const;

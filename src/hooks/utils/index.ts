@@ -1,12 +1,3 @@
-/**
- * Utility Hooks - General Purpose
- *
- * Reusable utilities not specific to any store or domain.
- * Store-specific action hooks live in @/stores/{domain}/actions/
- *
- * Pattern: Utilities here, domain logic in stores
- */
-
 export { shouldRetryMutation } from './mutation-retry';
 export type { UseAutoResizeTextareaOptions, UseAutoResizeTextareaReturn } from './use-auto-resize-textarea';
 export { useAutoResizeTextarea } from './use-auto-resize-textarea';

@@ -42,7 +42,6 @@ export const ApiKeyIdParamSchema = z.object({
 export const CreateApiKeyRequestSchema = apiKeyInsertSchema
   .pick({
     name: true,
-    metadata: true,
   })
   .extend({
     // Additional user-facing fields not in table
@@ -58,10 +57,6 @@ export const CreateApiKeyRequestSchema = apiKeyInsertSchema
       description: 'Maximum number of requests (null for unlimited)',
       example: 1000,
     }),
-    metadata: z.record(z.string(), z.unknown()).nullable().optional().openapi({
-      description: 'Custom metadata for the API key',
-      example: { environment: 'production', project: 'main' },
-    }),
   })
   .openapi('CreateApiKeyRequest');
 
@@ -76,7 +71,6 @@ export const UpdateApiKeyRequestSchema = apiKeyUpdateSchema
     remaining: true,
     refillAmount: true,
     refillInterval: true,
-    metadata: true,
     rateLimitEnabled: true,
     rateLimitTimeWindow: true,
     rateLimitMax: true,
@@ -101,10 +95,6 @@ export const UpdateApiKeyRequestSchema = apiKeyUpdateSchema
     refillInterval: z.number().int().positive().nullable().optional().openapi({
       description: 'Refill interval in milliseconds',
       example: 86400000, // 24 hours
-    }),
-    metadata: z.record(z.string(), z.unknown()).nullable().optional().openapi({
-      description: 'Update custom metadata',
-      example: { environment: 'staging' },
     }),
     rateLimitEnabled: z.boolean().optional().openapi({
       description: 'Enable or disable rate limiting for this API key',

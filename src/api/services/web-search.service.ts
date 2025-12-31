@@ -189,9 +189,9 @@ export function streamSearchQuery(
 
         if (logger) {
           logger.error('Stream generation error', {
-            error: normalizeError(error),
-            modelId,
-            operation: 'streamSearchQuery',
+            logType: 'operation',
+            operationName: 'streamSearchQuery',
+            error: normalizeError(error).message,
           });
         }
       },
@@ -207,7 +207,9 @@ export function streamSearchQuery(
 
     if (logger) {
       logger.error('Search query generation failed', {
-        error: normalizeError(error),
+        logType: 'operation',
+        operationName: 'streamSearchQuery',
+        error: normalizeError(error).message,
         ...errorDetails,
       });
     }
@@ -318,7 +320,9 @@ export async function generateSearchQuery(
 
     if (logger) {
       logger.error('Search query generation failed (non-streaming)', {
-        error: normalizeError(error),
+        logType: 'operation',
+        operationName: 'generateSearchQuery',
+        error: normalizeError(error).message,
         ...errorDetails,
       });
     }
@@ -1127,8 +1131,10 @@ async function generateImageDescriptions(
           } catch (error) {
             if (logger) {
               logger.warn('Failed to generate image description', {
-                url: image.url,
-                error: normalizeError(error),
+                logType: 'edge_case',
+                scenario: 'image_description_failed',
+                context: `URL: ${image.url}`,
+                error: normalizeError(error).message,
               });
             }
             return {
@@ -1146,7 +1152,9 @@ async function generateImageDescriptions(
   } catch (error) {
     if (logger) {
       logger.error('Image description generation failed', {
-        error: normalizeError(error),
+        logType: 'operation',
+        operationName: 'generateImageDescriptions',
+        error: normalizeError(error).message,
       });
     }
     // Return images without descriptions on error
@@ -1215,9 +1223,10 @@ export function streamAnswerSummary(
   } catch (error) {
     if (logger) {
       logger.error('Answer summary streaming failed', {
+        logType: 'operation',
+        operationName: 'streamAnswerSummary',
         query,
-        mode,
-        error: normalizeError(error),
+        error: normalizeError(error).message,
       });
     }
 
@@ -1292,9 +1301,10 @@ async function generateAnswerSummary(
   } catch (error) {
     if (logger) {
       logger.error('Answer summary generation failed', {
+        logType: 'operation',
+        operationName: 'generateAnswerSummary',
         query,
-        mode,
-        error: normalizeError(error),
+        error: normalizeError(error).message,
       });
     }
     return null;
@@ -1358,8 +1368,10 @@ async function detectSearchParameters(
   } catch (error) {
     if (logger) {
       logger.warn('Auto-parameter detection failed', {
+        logType: 'edge_case',
+        scenario: 'auto_parameter_detection_failed',
         query,
-        error: normalizeError(error),
+        error: normalizeError(error).message,
       });
     }
     return null;
@@ -1499,7 +1511,6 @@ export async function* streamSearchResults(
       logType: 'operation',
       operationName: 'streamSearchResults',
       query,
-      maxResults,
     });
 
     const searchResults = await withRetry(
@@ -1649,9 +1660,10 @@ export async function* streamSearchResults(
         }
       } catch (extractError) {
         logger?.warn('Content extraction failed for result', {
-          url: result.url,
-          index: i,
-          error: normalizeError(extractError),
+          logType: 'edge_case',
+          scenario: 'content_extraction_failed',
+          context: `URL: ${result.url}, index: ${i}`,
+          error: normalizeError(extractError).message,
         });
         // Basic result already sent - continue to next
       }
@@ -1670,9 +1682,10 @@ export async function* streamSearchResults(
     };
   } catch (error) {
     logger?.error('Progressive search streaming failed', {
+      logType: 'operation',
+      operationName: 'streamSearchResults',
       query,
-      requestId,
-      error: normalizeError(error),
+      error: normalizeError(error).message,
     });
 
     // Yield error event
@@ -1733,7 +1746,7 @@ export async function performWebSearch(
     logger?.info('Cache hit for search query', {
       logType: 'performance',
       query: params.query.substring(0, 50),
-      responseTime: performance.now() - startTime,
+      duration: performance.now() - startTime,
     });
 
     return {
@@ -1782,9 +1795,9 @@ export async function performWebSearch(
       if (logger) {
         logger.warn('Web search returned no results', {
           logType: 'edge_case',
+          scenario: 'no_search_results',
           query: params.query,
-          params,
-          complexity,
+          context: `Search depth: ${params.searchDepth || 'advanced'}`,
         });
       }
 
@@ -1937,8 +1950,9 @@ export async function performWebSearch(
           if (logger) {
             logger.warn('Failed to extract page content', {
               logType: 'edge_case',
-              url: result.url,
-              error: normalizeError(extractError),
+              scenario: 'page_content_extraction_failed',
+              context: `URL: ${result.url}`,
+              error: normalizeError(extractError).message,
             });
           }
 
@@ -2018,10 +2032,10 @@ export async function performWebSearch(
     if (logger) {
       logger.error('Web search failed completely', {
         logType: 'edge_case',
+        scenario: 'complete_search_failure',
         query: params.query,
-        params,
-        complexity,
-        error: normalizeError(error),
+        context: `Search depth: ${params.searchDepth || 'advanced'}`,
+        error: normalizeError(error).message,
       });
     }
 
